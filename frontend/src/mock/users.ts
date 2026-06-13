@@ -1,0 +1,88 @@
+// Dữ liệu fix cứng (mock) cho module Quản lý người dùng.
+// Các trường khớp với bảng `users` trong VitaFamily_Database.sql.
+// Khi có database thật, XÓA file này — dữ liệu sẽ đến từ API.
+
+import type { User } from '@/types'
+
+export const mockUsers: User[] = [
+  {
+    id: 1,
+    ho_ten: 'Nguyễn Văn An',
+    email: 'an.nguyen@gmail.com',
+    so_dien_thoai: '0901234567',
+    anh_dai_dien: null,
+    role: 'user',
+    status: 'active',
+    ngay_tao: '2026-01-15T08:30:00',
+  },
+  {
+    id: 2,
+    ho_ten: 'Trần Thị Bình',
+    email: 'binh.tran@gmail.com',
+    so_dien_thoai: '0902345678',
+    anh_dai_dien: null,
+    role: 'user',
+    status: 'active',
+    ngay_tao: '2026-02-03T10:15:00',
+  },
+  {
+    id: 3,
+    ho_ten: 'BS. Lê Hoàng Cường',
+    email: 'cuong.le@vitafamily.vn',
+    so_dien_thoai: '0903456789',
+    anh_dai_dien: null,
+    role: 'doctor',
+    status: 'active',
+    ngay_tao: '2026-01-20T09:00:00',
+  },
+  {
+    id: 4,
+    ho_ten: 'BS. Phạm Thu Dung',
+    email: 'dung.pham@vitafamily.vn',
+    so_dien_thoai: '0904567890',
+    anh_dai_dien: null,
+    role: 'doctor',
+    status: 'active',
+    ngay_tao: '2026-03-12T14:20:00',
+  },
+  {
+    id: 5,
+    ho_ten: 'Hoàng Văn Em',
+    email: 'em.hoang@gmail.com',
+    so_dien_thoai: '0905678901',
+    anh_dai_dien: null,
+    role: 'user',
+    status: 'locked',
+    ngay_tao: '2026-02-28T16:45:00',
+  },
+  {
+    id: 6,
+    ho_ten: 'Võ Thị Hoa',
+    email: 'hoa.vo@gmail.com',
+    so_dien_thoai: '0906789012',
+    anh_dai_dien: null,
+    role: 'user',
+    status: 'active',
+    ngay_tao: '2026-04-01T07:50:00',
+  },
+  {
+    id: 7,
+    ho_ten: 'Quản trị viên',
+    email: 'admin@vitafamily.vn',
+    so_dien_thoai: '0900000000',
+    anh_dai_dien: null,
+    role: 'admin',
+    status: 'active',
+    ngay_tao: '2026-01-01T00:00:00',
+  },
+  {
+    id: 8,
+    ho_ten: 'BS. Đỗ Minh Khoa',
+    email: 'khoa.do@vitafamily.vn',
+    so_dien_thoai: '0907890123',
+    anh_dai_dien: null,
+    role: 'doctor',
+    status: 'locked',
+    ngay_tao: '2026-03-25T11:30:00',
+  },
+]

@@ -1,0 +1,116 @@
+interface IconProps {
+  name: string
+  className?: string
+}
+
+const ICONS: Record<string, string[]> = {
+  dashboard: [
+    'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+    'M9 22V12h6v10',
+  ],
+  users: [
+    'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2',
+    'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+    'M23 21v-2a4 4 0 0 0-3-3.87',
+    'M16 3.13a4 4 0 0 1 0 7.75',
+  ],
+  doctor: ['M22 12h-4l-3 9L9 3l-3 9H2'],
+  hospital: [
+    'M3 21h18',
+    'M5 21V7l8-4v18',
+    'M19 21V11l-6-4',
+  ],
+  service: [
+    'M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z',
+    'M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2',
+  ],
+  calendar: [
+    'M8 2v4',
+    'M16 2v4',
+    'M3 10h18',
+    'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+  ],
+  star: [
+    'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z',
+  ],
+  bell: [
+    'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9',
+    'M13.73 21a2 2 0 0 1-3.46 0',
+  ],
+  payment: [
+    'M1 4h22v16H1z',
+    'M1 10h22',
+  ],
+  logout: [
+    'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4',
+    'M16 17l5-5-5-5',
+    'M21 12H9',
+  ],
+  menu: ['M3 12h18', 'M3 6h18', 'M3 18h18'],
+  search: [
+    'M21 21l-4.35-4.35',
+    'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z',
+  ],
+  check: ['M20 6L9 17l-5-5'],
+  x: ['M18 6L6 18', 'M6 6l12 12'],
+  eye: [
+    'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z',
+    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  ],
+  'eye-off': [
+    'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94',
+    'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19',
+    'M1 1l22 22',
+  ],
+  send: [
+    'M22 2L11 13',
+    'M22 2L15 22 11 13 2 9l20-7z',
+  ],
+  plus: ['M12 5v14', 'M5 12h14'],
+  clock: [
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M12 6v6l4 2',
+  ],
+  ban: [
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M4.93 4.93l14.14 14.14',
+  ],
+  'chevron-down': ['M6 9l6 6 6-6'],
+  'file-text': [
+    'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
+    'M14 2v6h6',
+    'M16 13H8',
+    'M16 17H8',
+    'M10 9H8',
+  ],
+  'alert-circle': [
+    'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z',
+    'M12 8v4',
+    'M12 16h.01',
+  ],
+  trending: [
+    'M23 6l-9.5 9.5-5-5L1 18',
+    'M17 6h6v6',
+  ],
+}
+
+export default function Icon({ name, className = 'h-5 w-5' }: IconProps) {
+  const paths = ICONS[name] ?? ICONS.dashboard
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      {paths.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
+    </svg>
+  )
+}

@@ -1,0 +1,16 @@
+{
+  "name": "vitafamily",
+  "version": "1.0.0",
+  "description": "VitaFamily - Website quản lý chăm sóc sức khỏe gia đình",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --names \"FE,BE\" --prefix-colors \"cyan,yellow\" --kill-others-on-fail \"npm run frontend\" \"npm run backend\"",
+    "frontend": "npm run dev --prefix frontend",
+    "backend": "npm run dev --prefix backend",
+    "build": "npm run build --prefix frontend",
+    "install:all": "npm install && npm install --prefix frontend && npm install --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

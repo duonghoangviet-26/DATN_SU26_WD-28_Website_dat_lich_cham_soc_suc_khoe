@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+
+# Environment variables (KHÔNG commit secrets)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code / Agent tools (chỉ trên máy local)
+.claude
+.agents/
+.temp_ag_kit/
+ag-kit-doc
+tests
+others
+
+# Ag-kit framework internals (không phải code dự án)
+cli/
+web/
+AGENT_FLOW.md
+CHANGELOG.md
+.github/
