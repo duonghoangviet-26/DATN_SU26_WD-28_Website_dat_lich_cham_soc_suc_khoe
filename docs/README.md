@@ -19,6 +19,7 @@
 | Hiểu tổng quan dự án | `CLAUDE.md` |
 | Biết chi tiết 1 chức năng (vd: Đặt lịch) | `docs/features.md` → mục A5 |
 | Thiết kế bảng / viết model | `docs/database.md` |
+| Phân tích chi tiết C4 — Quản lý dịch vụ | `docs/Admin/Chi tiết quản lý dịch vụ.md` |
 | Đặc tả gốc đầy đủ nhất | `Tài liệu dự án/Đặc tả/Dac_Ta_Du_An_VitaFamily.md` |
 | Chi tiết từng chức năng (PDF) | `Tài liệu dự án/Chức Năng Chính/*.pdf` |
 | SQL schema gốc (MySQL) | `Tài liệu dự án/Cơ sở dữ liệu/VitaFamily_Database.sql` |

@@ -1,33 +1,39 @@
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import { NguoiDung } from '../models/index.js'
 import { ok, created, fail } from '../utils/response.js'
 
 // ============================================================
-// CONTROLLER MẪU: Xác thực (A1)
-// ============================================================
-// Đây là KHUNG MẪU cho cả nhóm. Mọi controller theo cấu trúc:
-//   - Hàm async, luôn bọc try/catch
-//   - Lấy dữ liệu từ req.body / req.params
-//   - Xử lý nghiệp vụ (gọi model/service)
-//   - Trả về qua ok() / created() / fail()
-//
-// Phần kết nối DB còn bỏ trống — sẽ điền khi gắn MongoDB.
+// CONTROLLER: Xác thực (A1)
+// POST /api/auth/register — Đăng ký
+// POST /api/auth/login    — Đăng nhập → JWT
 // ============================================================
 
 export async function register(req, res) {
   try {
-    const { email, mat_khau, ho_ten } = req.body
+    const { email, mat_khau, ho_ten, so_dien_thoai } = req.body
 
-    // Validate cơ bản (luôn kiểm tra ở backend, không chỉ tin frontend)
     if (!email || !mat_khau || !ho_ten) {
       return fail(res, 400, 'Vui lòng nhập đầy đủ email, mật khẩu và họ tên')
     }
 
-    // TODO (khi có DB):
-    //   1. Kiểm tra email đã tồn tại chưa
-    //   2. Hash mật khẩu bằng bcrypt
-    //   3. Lưu user mới
-    //   4. Tạo JWT trả về
+    const exists = await NguoiDung.findOne({ email: email.toLowerCase().trim() })
+    if (exists) return fail(res, 409, 'Email đã được sử dụng')
 
-    return created(res, { email, ho_ten }, 'Đăng ký thành công (khung mẫu)')
+    const hash = await bcrypt.hash(mat_khau, 10)
+    const user = await NguoiDung.create({
+      email, mat_khau: hash, ho_ten,
+      so_dien_thoai: so_dien_thoai || null,
+    })
+
+    return created(res, {
+      id:   user._id,
+      email: user.email,
+      ho_ten: user.ho_ten,
+      role:   user.role,
+      status: user.status,
+      ngay_tao: user.ngay_tao,
+    }, 'Đăng ký thành công')
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -40,12 +46,35 @@ export async function login(req, res) {
       return fail(res, 400, 'Vui lòng nhập email và mật khẩu')
     }
 
-    // TODO (khi có DB):
-    //   1. Tìm user theo email
-    //   2. So sánh mật khẩu bằng bcrypt.compare
-    //   3. Tạo JWT, trả về { token, user }
+    // select('+mat_khau') vì field này bị ẩn mặc định
+    const user = await NguoiDung.findOne({ email: email.toLowerCase().trim() })
+      .select('+mat_khau')
 
-    return ok(res, { token: 'mau-jwt', user: { email } }, 'Đăng nhập thành công (khung mẫu)')
+    if (!user) return fail(res, 401, 'Email hoặc mật khẩu không đúng')
+    if (user.status === 'locked') return fail(res, 403, 'Tài khoản đã bị khóa')
+
+    const match = await bcrypt.compare(mat_khau, user.mat_khau)
+    if (!match) return fail(res, 401, 'Email hoặc mật khẩu không đúng')
+
+    const token = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' },
+    )
+
+    return ok(res, {
+      token,
+      user: {
+        id:             user._id,
+        email:          user.email,
+        ho_ten:         user.ho_ten,
+        so_dien_thoai:  user.so_dien_thoai,
+        anh_dai_dien:   user.anh_dai_dien,
+        role:           user.role,
+        status:         user.status,
+        ngay_tao:       user.ngay_tao,
+      },
+    }, 'Đăng nhập thành công')
   } catch (err) {
     return fail(res, 500, err.message)
   }
