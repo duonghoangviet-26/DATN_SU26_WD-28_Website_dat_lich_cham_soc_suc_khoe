@@ -8,7 +8,7 @@ export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancell
 export type PaymentStatus = 'unpaid' | 'paid' | 'refunded'
 
 export interface User {
-  id: number
+  id: string
   email: string
   mat_khau?: string
   ho_ten: string
@@ -127,16 +127,56 @@ export interface SpecialtyItem {
   status: 'active' | 'hidden'
 }
 
-export type ServiceType = 'clinic' | 'home' | 'video'
+// ─── Dịch vụ ─────────────────────────────────────────────────────────────────
+export type ServiceType   = 'clinic' | 'home'
+export type ServiceStatus = 'active' | 'inactive'
+
+export interface ServiceChangeLog {
+  id: string
+  thoi_gian: string                                      // ISO datetime
+  hanh_dong: 'tao_moi' | 'cap_nhat' | 'an' | 'hien'
+  nguoi_thay_doi: string
+  mo_ta?: string
+}
 
 export interface ServiceItem {
-  id: number
+  id: string
+  ma_dich_vu: string                    // "DV001" — auto-gen bởi BE
   ten: string
   loai: ServiceType
-  gia_co_ban: number
-  mo_ta: string
+  gia: number                           // giá thực tế bệnh nhân trả
+  mo_ta_ngan?: string | null
+  mo_ta?: string | null
   thoi_gian_phut: number
-  status: 'active' | 'hidden'
+  gio_dat_truoc_toi_thieu: number       // đơn vị: giờ
+  ngay_ap_dung?: string | null          // "T2–T7"
+  gio_bat_dau?: string | null           // "08:00"
+  gio_ket_thuc?: string | null          // "17:00"
+  specialty_id?: string | null
+  specialty_ten?: string | null         // joined — chỉ dùng để hiển thị
+  khu_vuc?: string[]                    // home only — map tới bảng service_areas
+  so_bac_si?: number                    // computed từ doctor_services
+  so_luot_dat?: number                  // computed từ appointments
+  nguoi_tao?: string | null             // ho_ten của admin tạo dịch vụ
+  status: ServiceStatus
+  ngay_tao?: string
+  ngay_cap_nhat?: string
+  lich_su_thay_doi?: ServiceChangeLog[]
+}
+
+export interface ServiceFormData {
+  ten: string
+  loai: ServiceType
+  gia: number
+  mo_ta_ngan?: string
+  mo_ta?: string
+  thoi_gian_phut: number
+  gio_dat_truoc_toi_thieu: number
+  ngay_ap_dung?: string
+  gio_bat_dau?: string
+  gio_ket_thuc?: string
+  specialty_id?: string | null
+  khu_vuc?: string[]                    // home only — map tới bảng service_areas
 }
 
 // ViewModel lịch hẹn (kết hợp bệnh nhân + bác sĩ)
@@ -147,7 +187,7 @@ export interface AppointmentItem {
   chuyen_khoa: string
   ngay_kham: string
   gio_kham: string
-  loai_kham: 'clinic' | 'home' | 'video'
+  loai_kham: 'clinic' | 'home'
   status: AppointmentStatus
   payment_status: PaymentStatus
   gia_kham: number

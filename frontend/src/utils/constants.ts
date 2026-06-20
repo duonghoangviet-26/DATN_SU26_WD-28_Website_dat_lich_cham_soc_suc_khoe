@@ -56,9 +56,8 @@ export const DOCTOR_APPROVAL_LABEL: Record<string, string> = {
 }
 
 export const SERVICE_TYPE_LABEL: Record<string, string> = {
-  clinic: 'Khám phòng khám',
-  home: 'Khám tại nhà',
-  video: 'Tư vấn video',
+  clinic: 'Phòng khám',
+  home:   'Tại nhà',
 }
 
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {
