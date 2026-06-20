@@ -56,7 +56,17 @@ export async function getAllUsers(req, res) {
  * Lấy chi tiết một người dùng
  */
 export async function getUserById(req, res) {
-  // Sẽ làm ở bước sau
+  try {
+    const user = await NguoiDung.findById(req.params.id)
+    
+    if (!user) {
+      return fail(res, 404, 'Không tìm thấy người dùng')
+    }
+
+    return ok(res, user, 'Lấy chi tiết người dùng thành công')
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
 }
 
 /**
