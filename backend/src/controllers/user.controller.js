@@ -7,10 +7,17 @@ import { ok, fail } from '../utils/response.js'
  */
 export async function getAllUsers(req, res) {
   try {
-    const { keyword, role, status, page = 1, limit = 10, sort = '-ngay_tao' } = req.query
+    const { keyword, role, status, page = 1, limit = 10, sort = '-ngay_tao', isDeleted } = req.query
 
     // Xây dựng filter
-    const query = { ngay_xoa: null } // Không lấy user đã bị xóa mềm
+    const query = {}
+    
+    // Xử lý lọc xóa mềm
+    if (isDeleted === 'true') {
+      query.ngay_xoa = { $ne: null } // Lấy những người đã xóa
+    } else {
+      query.ngay_xoa = null // Mặc định lấy những người chưa xóa
+    }
 
     if (keyword) {
       query.$or = [
@@ -196,12 +203,53 @@ export async function softDeleteUser(req, res) {
  * Khôi phục người dùng đã xóa
  */
 export async function restoreUser(req, res) {
-  // Sẽ làm ở bước sau
+  try {
+    const user = await NguoiDung.findByIdAndUpdate(
+      req.params.id,
+      { ngay_xoa: null },
+      { new: true }
+    )
+
+    if (!user) {
+      return fail(res, 404, 'Không tìm thấy người dùng')
+    }
+
+    return ok(res, user, 'Khôi phục người dùng thành công')
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
 }
 
 /**
  * Thống kê người dùng
  */
 export async function getUserStatistics(req, res) {
-  // Sẽ làm ở bước sau
+  try {
+    const [
+      total,
+      admins,
+      doctors,
+      users,
+      active,
+      locked,
+      deleted
+    ] = await Promise.all([
+      NguoiDung.countDocuments({ ngay_xoa: null }),
+      NguoiDung.countDocuments({ role: 'admin', ngay_xoa: null }),
+      NguoiDung.countDocuments({ role: 'doctor', ngay_xoa: null }),
+      NguoiDung.countDocuments({ role: 'user', ngay_xoa: null }),
+      NguoiDung.countDocuments({ status: 'active', ngay_xoa: null }),
+      NguoiDung.countDocuments({ status: 'locked', ngay_xoa: null }),
+      NguoiDung.countDocuments({ ngay_xoa: { $ne: null } })
+    ])
+
+    return ok(res, {
+      total,
+      roles: { admin: admins, doctor: doctors, user: users },
+      status: { active, locked },
+      deleted
+    }, 'Lấy thống kê người dùng thành công')
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
 }

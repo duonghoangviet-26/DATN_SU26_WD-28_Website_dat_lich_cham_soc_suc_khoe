@@ -1,38 +1,48 @@
+import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
+import { NguoiDung } from '../models/index.js'
 import { ok, created, fail } from '../utils/response.js'
 
-// ============================================================
-// CONTROLLER MẪU: Xác thực (A1)
-// ============================================================
-// Đây là KHUNG MẪU cho cả nhóm. Mọi controller theo cấu trúc:
-//   - Hàm async, luôn bọc try/catch
-//   - Lấy dữ liệu từ req.body / req.params
-//   - Xử lý nghiệp vụ (gọi model/service)
-//   - Trả về qua ok() / created() / fail()
-//
-// Phần kết nối DB còn bỏ trống — sẽ điền khi gắn MongoDB.
-// ============================================================
-
+/**
+ * Đăng ký tài khoản (A1)
+ */
 export async function register(req, res) {
   try {
-    const { email, mat_khau, ho_ten } = req.body
+    const { email, mat_khau, ho_ten, so_dien_thoai } = req.body
 
-    // Validate cơ bản (luôn kiểm tra ở backend, không chỉ tin frontend)
     if (!email || !mat_khau || !ho_ten) {
       return fail(res, 400, 'Vui lòng nhập đầy đủ email, mật khẩu và họ tên')
     }
 
-    // TODO (khi có DB):
-    //   1. Kiểm tra email đã tồn tại chưa
-    //   2. Hash mật khẩu bằng bcrypt
-    //   3. Lưu user mới
-    //   4. Tạo JWT trả về
+    const existed = await NguoiDung.findOne({ email })
+    if (existed) return fail(res, 400, 'Email này đã được đăng ký')
 
-    return created(res, { email, ho_ten }, 'Đăng ký thành công (khung mẫu)')
+    const salt = await bcrypt.genSalt(10)
+    const passwordHash = await bcrypt.hash(mat_khau, salt)
+
+    const newUser = await NguoiDung.create({
+      email,
+      mat_khau: passwordHash,
+      ho_ten,
+      so_dien_thoai,
+      role: 'user'
+    })
+
+    const token = jwt.sign(
+      { id: newUser._id, role: newUser.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    )
+
+    return created(res, { token, user: newUser }, 'Đăng ký thành công')
   } catch (err) {
-    return fail(res, 500, err.message)
+    return fail(res, 500, 'Lỗi server: ' + err.message)
   }
 }
 
+/**
+ * Đăng nhập (A1)
+ */
 export async function login(req, res) {
   try {
     const { email, mat_khau } = req.body
@@ -40,13 +50,28 @@ export async function login(req, res) {
       return fail(res, 400, 'Vui lòng nhập email và mật khẩu')
     }
 
-    // TODO (khi có DB):
-    //   1. Tìm user theo email
-    //   2. So sánh mật khẩu bằng bcrypt.compare
-    //   3. Tạo JWT, trả về { token, user }
+    // Tìm user và lấy luôn mật khẩu (vì select: false trong schema)
+    const user = await NguoiDung.findOne({ email }).select('+mat_khau')
+    if (!user) return fail(res, 401, 'Email hoặc mật khẩu không chính xác')
 
-    return ok(res, { token: 'mau-jwt', user: { email } }, 'Đăng nhập thành công (khung mẫu)')
+    if (user.status === 'locked') {
+      return fail(res, 403, 'Tài khoản này hiện đang bị khóa')
+    }
+
+    const isMatch = await bcrypt.compare(mat_khau, user.mat_khau)
+    if (!isMatch) return fail(res, 401, 'Email hoặc mật khẩu không chính xác')
+
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    )
+
+    // Ẩn mật khẩu khi trả về
+    user.mat_khau = undefined
+
+    return ok(res, { token, user }, 'Đăng nhập thành công')
   } catch (err) {
-    return fail(res, 500, err.message)
+    return fail(res, 500, 'Lỗi server: ' + err.message)
   }
 }

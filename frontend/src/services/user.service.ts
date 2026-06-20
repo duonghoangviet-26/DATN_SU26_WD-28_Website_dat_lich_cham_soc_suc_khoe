@@ -1,66 +1,76 @@
 // ============================================================
 // SERVICE: Quản lý người dùng (chức năng C1 của Admin)
 // ============================================================
-// ĐÂY LÀ FILE MẪU cho cả nhóm. Mọi page CHỈ gọi service, KHÔNG đụng mock trực tiếp.
-//
-// Cách hoạt động:
-//   - Bây giờ:  trả về dữ liệu mock (fix cứng) sau một khoảng delay giả lập mạng.
-//   - Sau này:  chỉ cần thay phần thân hàm bằng lời gọi axios (đã có ví dụ trong comment),
-//               UI và page KHÔNG cần sửa gì.
-// ============================================================
-
-import type { User } from '@/types'
-import { mockUsers } from '@/mock/users'
-import { delay } from '@/utils/format'
-// import axios from './axiosInstance'   // ← bật khi có backend thật
+import type { User, ApiResponse } from '@/types'
+import axios from './axiosInstance'
 
 interface UserFilters {
   keyword?: string
   role?: string
   status?: string
+  page?: number
+  limit?: number
 }
 
-// Bản sao mock để có thể "khóa / mở khóa" trong bộ nhớ (giả lập thay đổi dữ liệu)
-let users: User[] = [...mockUsers]
+interface PaginationData {
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
+interface UserListResponse {
+  success: boolean
+  message: string
+  data: User[]
+  pagination: PaginationData
+}
 
 export const userService = {
-  // Lấy danh sách người dùng — có hỗ trợ tìm kiếm + lọc theo vai trò / trạng thái
-  async getAll({ keyword = '', role = '', status = '' }: UserFilters = {}): Promise<User[]> {
-    await delay()
-
-    // ── SAU NÀY thay toàn bộ khối dưới bằng:
-    // const { data } = await axios.get('/admin/users', { params: { keyword, role, status } })
-    // return data.data
-    let result = [...users]
-
-    if (keyword) {
-      const kw = keyword.trim().toLowerCase()
-      result = result.filter(
-        (u) =>
-          u.ho_ten.toLowerCase().includes(kw) ||
-          u.email.toLowerCase().includes(kw),
-      )
-    }
-    if (role) result = result.filter((u) => u.role === role)
-    if (status) result = result.filter((u) => u.status === status)
-
-    return result
+  // Lấy danh sách người dùng — có phân trang + lọc
+  async getAll(params: UserFilters = {}): Promise<UserListResponse> {
+    const { data } = await axios.get('/admin/users', { params })
+    return data
   },
 
-  // Khóa / mở khóa một tài khoản (C1). Trả về user sau khi đổi trạng thái.
-  async toggleLock(id: number): Promise<User> {
-    await delay(200)
-
-    // ── SAU NÀY thay bằng:
-    // const { data } = await axios.patch(`/admin/users/${id}/toggle-lock`)
-    // return data.data
-    users = users.map((u): User =>
-      u.id === id
-        ? { ...u, status: u.status === 'active' ? 'locked' : 'active' }
-        : u,
-    )
-    const updated = users.find((u) => u.id === id)
-    if (!updated) throw new Error('Không tìm thấy người dùng')
-    return updated
+  // Lấy chi tiết một người dùng
+  async getById(id: string): Promise<User> {
+    const { data } = await axios.get(`/admin/users/${id}`)
+    return data.data
   },
+
+  // Admin tạo user mới
+  async create(userData: Partial<User>): Promise<User> {
+    const { data } = await axios.post('/admin/users', userData)
+    return data.data
+  },
+
+  // Cập nhật thông tin (ho_ten, so_dien_thoai, role, status)
+  async update(id: string, userData: Partial<User>): Promise<User> {
+    const { data } = await axios.put(`/admin/users/${id}`, userData)
+    return data.data
+  },
+
+  // Khóa / mở khóa một tài khoản
+  async toggleStatus(id: string): Promise<User> {
+    const { data } = await axios.patch(`/admin/users/${id}/status`)
+    return data.data
+  },
+
+  // Xóa mềm người dùng
+  async softDelete(id: string): Promise<void> {
+    await axios.patch(`/admin/users/${id}/delete`)
+  },
+
+  // Khôi phục người dùng đã xóa
+  async restore(id: string): Promise<User> {
+    const { data } = await axios.patch(`/admin/users/${id}/restore`)
+    return data.data
+  },
+
+  // Lấy thống kê người dùng
+  async getStatistics(): Promise<any> {
+    const { data } = await axios.get('/admin/users/statistics')
+    return data.data
+  }
 }

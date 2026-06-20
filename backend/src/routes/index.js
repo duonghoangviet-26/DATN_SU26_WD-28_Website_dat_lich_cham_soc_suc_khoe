@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import authRoutes from './auth.routes.js'
+import userRoutes from './user.routes.js'
 
 // Gom toàn bộ route con vào đây. Thêm module mới: import rồi router.use('/ten', ...).
 const router = Router()
@@ -9,7 +10,7 @@ router.get('/health', (req, res) => {
 })
 
 router.use('/auth', authRoutes)
-// router.use('/admin/users', userRoutes)   // ví dụ thêm module sau
+router.use('/admin/users', userRoutes)  
 // router.use('/appointments', appointmentRoutes)
 
 export default router
