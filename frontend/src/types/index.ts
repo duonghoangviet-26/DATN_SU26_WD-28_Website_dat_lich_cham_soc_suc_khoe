@@ -157,6 +157,7 @@ export interface ServiceItem {
   khu_vuc?: string[]                    // home only — map tới bảng service_areas
   so_bac_si?: number                    // computed từ doctor_services
   so_luot_dat?: number                  // computed từ appointments
+  nguoi_tao?: string | null             // ho_ten của admin tạo dịch vụ
   status: ServiceStatus
   ngay_tao?: string
   ngay_cap_nhat?: string

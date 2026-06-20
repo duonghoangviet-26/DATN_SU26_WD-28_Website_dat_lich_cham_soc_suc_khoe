@@ -1,19 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ServiceItem, ServiceFormData, ServiceType } from '@/types'
 import Icon from '@/components/admin/icons'
-
-// ─── Specialties mock ─────────────────────────────────────────────────────────
-// Khi gắn BE: fetch từ GET /api/specialties?status=active
-const SPECIALTIES = [
-  { id: 1, ten: 'Nội tổng quát' },
-  { id: 2, ten: 'Nhi khoa' },
-  { id: 3, ten: 'Tim mạch' },
-  { id: 4, ten: 'Da liễu' },
-  { id: 5, ten: 'Thần kinh' },
-  { id: 6, ten: 'Cơ xương khớp' },
-  { id: 7, ten: 'Tai mũi họng' },
-  { id: 8, ten: 'Mắt' },
-]
+import { specialtyService } from '@/services/specialty.service'
 
 // 13 quận/huyện nội thành Hà Nội
 // Khi gắn BE: có thể mở rộng thành 30 quận/huyện
@@ -63,6 +51,11 @@ export default function ServiceFormModal({ open, service, onClose, onSave }: Pro
   const [errors, setErrors]       = useState<Record<string, string>>({})
   const [motaThayDoi, setMotaThayDoi] = useState('')
   const [submitting, setSubmitting]   = useState(false)
+  const [specialties, setSpecialties] = useState<{ id: string; ten: string }[]>([])
+
+  useEffect(() => {
+    specialtyService.getAll().then(setSpecialties).catch(() => {})
+  }, [])
 
   // Populate form khi mở / đổi service
   useEffect(() => {
@@ -214,7 +207,7 @@ export default function ServiceFormModal({ open, service, onClose, onSave }: Pro
               className="input w-full"
             >
               <option value="">Không chọn</option>
-              {SPECIALTIES.map((sp) => (
+              {specialties.map((sp) => (
                 <option key={sp.id} value={sp.id}>{sp.ten}</option>
               ))}
             </select>
