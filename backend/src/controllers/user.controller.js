@@ -168,7 +168,28 @@ export async function toggleStatus(req, res) {
  * Xóa mềm người dùng
  */
 export async function softDeleteUser(req, res) {
-  // Sẽ làm ở bước sau
+  try {
+    const userId = req.params.id
+    const adminId = req.user.id
+
+    if (userId === adminId) {
+      return fail(res, 400, 'Bạn không thể tự xóa tài khoản của chính mình')
+    }
+
+    const user = await NguoiDung.findByIdAndUpdate(
+      userId,
+      { ngay_xoa: new Date() },
+      { new: true }
+    )
+
+    if (!user) {
+      return fail(res, 404, 'Không tìm thấy người dùng')
+    }
+
+    return ok(res, null, 'Đã xóa người dùng thành công')
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
 }
 
 /**
