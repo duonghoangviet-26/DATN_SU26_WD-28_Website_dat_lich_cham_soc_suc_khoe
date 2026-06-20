@@ -140,7 +140,28 @@ export async function updateUser(req, res) {
  * Khóa / mở khóa tài khoản
  */
 export async function toggleStatus(req, res) {
-  // Sẽ làm ở bước sau
+  try {
+    const userId = req.params.id
+    const adminId = req.user.id
+
+    // 1. Ngăn admin tự khóa chính mình
+    if (userId === adminId) {
+      return fail(res, 400, 'Bạn không thể tự khóa tài khoản của chính mình')
+    }
+
+    const user = await NguoiDung.findById(userId)
+    if (!user) {
+      return fail(res, 404, 'Không tìm thấy người dùng')
+    }
+
+    // 2. Đảo ngược trạng thái
+    user.status = user.status === 'active' ? 'locked' : 'active'
+    await user.save()
+
+    return ok(res, user, `Đã ${user.status === 'active' ? 'mở khóa' : 'khóa'} tài khoản thành công`)
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
 }
 
 /**
