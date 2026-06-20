@@ -1,34 +1,40 @@
 import type { HospitalItem, SpecialtyItem } from '@/types'
-import { mockHospitals, mockSpecialties } from '@/mock/hospitals'
-import { delay, findOrThrow } from '@/utils/format'
+import axiosInstance from './axiosInstance'
 
-let hospitals: HospitalItem[] = [...mockHospitals]
-let specialties: SpecialtyItem[] = [...mockSpecialties]
+// Gọi API thật từ backend. Tất cả response có dạng { success, message, data }.
 
 export const hospitalService = {
-  async getHospitals(): Promise<HospitalItem[]> {
-    await delay()
-    return [...hospitals]
+  // ---- Phòng Khám (Singleton) ----
+
+  async getClinicInfo(): Promise<HospitalItem> {
+    const res = await axiosInstance.get('/admin/clinic')
+    return res.data.data
   },
 
-  async toggleHospital(id: number): Promise<HospitalItem> {
-    await delay(200)
-    hospitals = hospitals.map((h) =>
-      h.id === id ? { ...h, status: h.status === 'active' ? 'hidden' : 'active' } : h,
-    )
-    return findOrThrow(hospitals, id, 'Bệnh viện')
+  async updateClinicInfo(data: Partial<HospitalItem>): Promise<HospitalItem> {
+    const res = await axiosInstance.put('/admin/clinic', data)
+    return res.data.data
   },
+
+  // ---- Chuyên Khoa ----
 
   async getSpecialties(): Promise<SpecialtyItem[]> {
-    await delay()
-    return [...specialties]
+    const res = await axiosInstance.get('/admin/clinic/specialties')
+    return res.data.data
   },
 
-  async toggleSpecialty(id: number): Promise<SpecialtyItem> {
-    await delay(200)
-    specialties = specialties.map((s) =>
-      s.id === id ? { ...s, status: s.status === 'active' ? 'hidden' : 'active' } : s,
-    )
-    return findOrThrow(specialties, id, 'Chuyên khoa')
+  async createSpecialty(data: { ten: string; mo_ta?: string; icon_url?: string; thu_tu?: number }): Promise<SpecialtyItem> {
+    const res = await axiosInstance.post('/admin/clinic/specialties', data)
+    return res.data.data
+  },
+
+  async updateSpecialty(id: string, data: { ten: string; mo_ta?: string; icon_url?: string; thu_tu?: number }): Promise<SpecialtyItem> {
+    const res = await axiosInstance.put(`/admin/clinic/specialties/${id}`, data)
+    return res.data.data
+  },
+
+  async toggleSpecialty(id: string): Promise<SpecialtyItem> {
+    const res = await axiosInstance.patch(`/admin/clinic/specialties/${id}/toggle`)
+    return res.data.data
   },
 }

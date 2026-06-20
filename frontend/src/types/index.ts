@@ -109,22 +109,29 @@ export interface DoctorProfile {
 }
 
 export interface HospitalItem {
-  id: number
+  _id: string
+  ma: string
   ten: string
-  dia_chi: string
-  so_dien_thoai: string
-  gio_lam_viec: string
-  status: 'active' | 'hidden'
+  dia_chi: string | null
+  so_dien_thoai: string | null
+  email: string | null
+  gio_lam_viec: string | null
+  mo_ta: string | null
+  logo_url: string | null
+  ban_do_url: string | null
   ngay_tao: string
+  ngay_cap_nhat: string
 }
 
 export interface SpecialtyItem {
-  id: number
+  _id: string
   ten: string
-  mo_ta: string
-  icon: string
+  mo_ta: string | null
+  icon_url: string | null
+  slug: string
   thu_tu: number
   status: 'active' | 'hidden'
+  ngay_tao: string
 }
 
 export type ServiceType = 'clinic' | 'home' | 'video'
