@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs'
 import { NguoiDung } from '../models/index.js'
 import { ok, fail } from '../utils/response.js'
 
@@ -69,18 +70,70 @@ export async function getUserById(req, res) {
   }
 }
 
+
 /**
  * Admin tạo user mới
  */
 export async function createUser(req, res) {
-  // Sẽ làm ở bước sau
+  try {
+    const { email, mat_khau, ho_ten, so_dien_thoai, role } = req.body
+
+    // 1. Validate dữ liệu
+    if (!email || !mat_khau || !ho_ten) {
+      return fail(res, 400, 'Vui lòng nhập đầy đủ email, mật khẩu và họ tên')
+    }
+
+    // 2. Kiểm tra email tồn tại
+    const existed = await NguoiDung.findOne({ email })
+    if (existed) {
+      return fail(res, 400, 'Email này đã được đăng ký trong hệ thống')
+    }
+
+    // 3. Hash mật khẩu
+    const salt = await bcrypt.genSalt(10)
+    const hashedPassword = await bcrypt.hash(mat_khau, salt)
+
+    // 4. Tạo user
+    const newUser = await NguoiDung.create({
+      email,
+      mat_khau: hashedPassword,
+      ho_ten,
+      so_dien_thoai,
+      role: role || 'user'
+    })
+
+    return res.status(201).json({
+      success: true,
+      message: 'Người dùng đã được tạo thành công',
+      data: newUser
+    })
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
 }
 
 /**
  * Cập nhật thông tin người dùng
  */
 export async function updateUser(req, res) {
-  // Sẽ làm ở bước sau
+  try {
+    const { ho_ten, so_dien_thoai, role, status } = req.body
+    
+    // Tìm và cập nhật (chỉ cập nhật các trường được gửi lên)
+    const user = await NguoiDung.findByIdAndUpdate(
+      req.params.id,
+      { ho_ten, so_dien_thoai, role, status },
+      { new: true, runValidators: true }
+    )
+
+    if (!user) {
+      return fail(res, 404, 'Không tìm thấy người dùng để cập nhật')
+    }
+
+    return ok(res, user, 'Cập nhật thông tin người dùng thành công')
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
 }
 
 /**
