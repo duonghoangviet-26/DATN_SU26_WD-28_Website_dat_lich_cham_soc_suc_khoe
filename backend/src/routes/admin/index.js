@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import servicesRoutes from './services.routes.js'
+import specialtiesRoutes from './specialties.routes.js'
 
 // ============================================================
 // Admin routes — mount tại /api/admin
@@ -21,5 +22,6 @@ import servicesRoutes from './services.routes.js'
 const router = Router()
 
 router.use('/services', servicesRoutes)
+router.use('/specialties', specialtiesRoutes)
 
 export default router

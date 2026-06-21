@@ -117,8 +117,14 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
               </div>
             )}
 
-            {/* Ngày tạo / cập nhật */}
-            <div className="mt-4 flex gap-5 text-xs text-slate-400">
+            {/* Người tạo + Ngày tạo / cập nhật */}
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-400">
+              {service.nguoi_tao && (
+                <span>
+                  Người tạo:{' '}
+                  <span className="font-medium text-slate-600">{service.nguoi_tao}</span>
+                </span>
+              )}
               {service.ngay_tao      && <span>Tạo: {formatDateTime(service.ngay_tao)}</span>}
               {service.ngay_cap_nhat && <span>Cập nhật: {formatDateTime(service.ngay_cap_nhat)}</span>}
             </div>
@@ -134,7 +140,7 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
             ) : logs.length === 0 ? (
               <p className="text-sm text-slate-400">Chưa có lịch sử.</p>
             ) : (
-              <div className="space-y-3">
+              <div className="max-h-48 overflow-y-auto pr-1 space-y-3">
                 {logs.map((log) => {
                   const cfg = LOG_CONFIG[log.hanh_dong]
                   return (

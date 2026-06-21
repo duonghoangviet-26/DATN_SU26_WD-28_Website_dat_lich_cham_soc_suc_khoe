@@ -1,7 +1,7 @@
 # C4 — Quản lý dịch vụ (ManageServices)
 
-> Tài liệu phân tích chi tiết để xây dựng giao diện hoàn chỉnh trước khi gắn database.
-> **Phiên bản 5** — Thêm: Xem chi tiết dịch vụ, Lịch sử thay đổi (audit log), Mô tả cập nhật khi sửa.
+> Tài liệu phân tích chi tiết chức năng C4 — Quản lý dịch vụ.
+> **Phiên bản 6** — Cập nhật: Kết nối backend MongoDB hoàn tất, đổi id → `string` (ObjectId), thêm `specialty.service.ts`, ghi lại 6 bug tìm & sửa.
 
 ---
 
@@ -285,7 +285,7 @@ export type ServiceStatus = 'active' | 'inactive'
 
 // ─── Lịch sử thay đổi ─────────────────────────────────────────
 export interface ServiceChangeLog {
-  id: number
+  id: string                                            // MongoDB ObjectId (đổi từ number V6)
   thoi_gian: string                                     // ISO datetime
   hanh_dong: 'tao_moi' | 'cap_nhat' | 'an' | 'hien'  // loại thao tác
   nguoi_thay_doi: string                                // tên admin thực hiện
@@ -293,8 +293,8 @@ export interface ServiceChangeLog {
 }
 
 export interface ServiceItem {
-  id: number
-  ma_dich_vu: string                   // "DV001"
+  id: string                           // MongoDB ObjectId — KHÔNG phải number (V6)
+  ma_dich_vu: string                   // "DV001" — BE auto-gen
   ten: string
   loai: ServiceType
   gia: number                          // giá thực tế bệnh nhân trả
@@ -302,18 +302,18 @@ export interface ServiceItem {
   mo_ta?: string | null                // mô tả chi tiết
   thoi_gian_phut: number
   gio_dat_truoc_toi_thieu: number
-  ngay_ap_dung?: string | null         // "T2–T7"
-  gio_bat_dau?: string | null          // "08:00"
-  gio_ket_thuc?: string | null         // "17:00"
-  specialty_id?: number | null
-  specialty_ten?: string | null        // joined
+  ngay_ap_dung?: string | null         // "T2–T7" — null khi để trống (không phải "")
+  gio_bat_dau?: string | null          // "08:00" — null khi để trống
+  gio_ket_thuc?: string | null         // "17:00" — null khi để trống
+  specialty_id?: string | null         // ObjectId string hoặc null (V6)
+  specialty_ten?: string | null        // joined từ ChuyenKhoa.ten
   khu_vuc?: string[]                   // home only — ["Cầu Giấy", "Nam Từ Liêm"]
   so_bac_si?: number                   // computed — số bác sĩ cung cấp dịch vụ này
   so_luot_dat?: number                 // computed — tổng lượt đặt
   status: ServiceStatus
   ngay_tao?: string
   ngay_cap_nhat?: string
-  lich_su_thay_doi?: ServiceChangeLog[]  // audit log — thêm V5
+  lich_su_thay_doi?: ServiceChangeLog[]  // audit log
 }
 
 export interface ServiceFormData {
@@ -327,7 +327,7 @@ export interface ServiceFormData {
   ngay_ap_dung?: string
   gio_bat_dau?: string
   gio_ket_thuc?: string
-  specialty_id?: number | null
+  specialty_id?: string | null         // ObjectId string hoặc null (V6)
   khu_vuc?: string[]                   // home only
 }
 
@@ -743,15 +743,18 @@ Response: {
 - [x] Trường **Mô tả cập nhật** trong form Sửa → ghi vào audit log (V5)
 - [x] Service tự động ghi log khi create / update / toggle (V5)
 
-### Giai đoạn 3 — Backend & Database
-- [ ] SQL: Bảng `services` theo schema V5 (thêm cột `lich_su_thay_doi` hoặc bảng riêng)
-- [ ] SQL: Bảng `service_areas` mới
-- [ ] SQL: Bảng `doctor_services` mới
-- [ ] SQL: Sửa `appointments.loai_kham` (bỏ video), `hospital_id NULL`, thêm `dia_chi_kham`
-- [ ] API: CRUD services + service_areas (transactional)
-- [ ] Logic: Auto-generate `ma_dich_vu` khi tạo
-- [ ] Logic: `appointment.gia_kham = service.gia` lúc tạo appointment
-- [ ] Logic: Ghi audit log với `nguoi_thay_doi` lấy từ JWT token thật
+### Giai đoạn 3 — Backend & Database ✅ Hoàn thành (V6)
+- [x] **MongoDB** (thay SQL): Mongoose Schema `DichVu` với `ma_dich_vu` auto-gen, index `{ten, specialty_id}` unique
+- [x] **Bảng `NhatKyThaoTac`** (audit log toàn hệ thống) — dùng chung, không tạo bảng riêng cho service
+- [x] **`khu_vuc[]`** lưu thẳng vào mảng trong document `DichVu` (MongoDB linh hoạt hơn SQL)
+- [x] **API CRUD**: `GET /` · `GET /:id` · `POST /` · `PUT /:id` · `PATCH /:id/toggle`
+- [x] **Logic auto-gen** `ma_dich_vu`: hook `pre('validate')` tìm số lớn nhất + 1, pad 3 chữ số
+- [x] **`appointment.gia_kham`**: snapshot khi tạo appointment — xử lý tầng ứng dụng
+- [x] **Audit log** `nguoi_thay_doi` lấy từ `req.user` (JWT token thật)
+- [x] **`specialty.service.ts`** + `GET /api/admin/specialties` — dropdown chuyên khoa từ DB thật
+- [ ] `doctor_services` — chờ B1 bác sĩ đăng ký dịch vụ
+- [ ] `so_bac_si` computed từ `doctor_services` — chờ B1
+- [ ] `so_luot_dat` computed từ `appointments` — chờ A5
 
 ---
 
@@ -1046,3 +1049,147 @@ useEffect(() => {
 ```
 
 **UI không cần sửa gì thêm.**
+
+---
+
+## 17. Kết nối Backend — Phiên bản 6 (20/06/2026)
+
+> Ghi lại chính xác những gì đã thực hiện khi chuyển từ mock data sang MongoDB thật.
+
+---
+
+### 17.1 Danh sách file đã tạo / sửa (V6)
+
+| File | Hành động | Mô tả |
+|---|---|---|
+| `backend/src/controllers/auth.controller.js` | **Viết lại** | Real login: `findOne().select('+mat_khau')` → `bcrypt.compare` → `jwt.sign` 7 ngày |
+| `backend/src/controllers/admin/services.controller.js` | **Tạo mới** | 5 hàm: `list`, `getById`, `create`, `update`, `toggle` + helper `formatService`, `getAuditLogs` |
+| `backend/src/controllers/admin/specialties.controller.js` | **Tạo mới** | `list` — trả `[{ id, ten }]` từ collection `ChuyenKhoa` |
+| `backend/src/routes/admin/services.routes.js` | **Tạo mới** | 5 route, middleware `verifyToken → requireRole('admin')` |
+| `backend/src/routes/admin/specialties.routes.js` | **Tạo mới** | 1 route GET `/`, cùng middleware |
+| `backend/src/routes/admin/index.js` | **Sửa** | Mount `servicesRoutes` tại `/services`, `specialtiesRoutes` tại `/specialties` |
+| `frontend/src/services/auth.service.ts` | **Viết lại** | Bỏ DEMO_ACCOUNTS, gọi thật `axiosInstance.post('/auth/login', ...)` |
+| `frontend/src/services/service.service.ts` | **Viết lại** | 5 hàm dùng `axiosInstance`, trả `res.data.data` |
+| `frontend/src/services/specialty.service.ts` | **Tạo mới** | `getAll()` — GET `/admin/specialties`, trả `SpecialtyOption[]` |
+| `frontend/src/services/axiosInstance.ts` | **Sửa** | Bật lại `window.location.href = '/login'` khi nhận 401 |
+| `frontend/src/types/index.ts` | **Sửa** | `id: string`, `specialty_id: string \| null` (tất cả ObjectId dùng string) |
+| `frontend/src/components/admin/services/ServiceFormModal.tsx` | **Sửa** | Bỏ mock SPECIALTIES array, dùng `specialtyService.getAll()` |
+| `frontend/src/pages/admin/ManageServices.tsx` | **Sửa** | Toast state, `viewLoading`, `handleView` async, fix filter logic |
+
+---
+
+### 17.2 Kiến trúc data flow (sau V6)
+
+```
+[Login] ─→ auth.service.ts ─→ POST /auth/login
+             ─→ JWT token → localStorage
+                  ↓
+[ManageServices]
+   ↓
+serviceService.getAll(loai, search)
+   ↓ axiosInstance (tự đính Bearer token từ localStorage)
+   ↓ GET /api/admin/services?loai=clinic&search=khám
+   ↓ verifyToken (giải mã JWT, gắn req.user)
+   ↓ requireRole('admin')
+   ↓ services.controller.list()
+      └─ DichVu.find(filter).populate('specialty_id', 'ten').lean()
+      └─ map: { ...s, id: s._id, specialty_ten, specialty_id: _id }
+   ↓ { success: true, data: ServiceItem[] }
+   ↓ res.data.data → setServices([...])
+```
+
+---
+
+### 17.3 Pipeline Audit Log
+
+```
+Admin sửa dịch vụ → POST /api/admin/services/:id
+   ↓ controller update()
+   ↓ service.save()   ← nếu fail ở đây → 500, audit log không chạy
+   ↓ NhatKyThaoTac.create({  ← isolated try-catch, fail không ảnh hưởng response
+       nguoi_thuc_hien_id: req.user.id,
+       vai_tro: 'admin',
+       hanh_dong: 'UPDATE_SERVICE',
+       loai_doi_tuong: 'service',
+       doi_tuong_id: service._id,
+       ly_do: req.body.mo_ta_thay_doi || 'Cập nhật dịch vụ "..."'
+     })
+   ↓ formatService(service)  ← re-fetch + populate specialty
+   ↓ 200 OK { success: true, data: ServiceItem }
+```
+
+**Mapping hanh_dong:**
+
+| NhatKyThaoTac (lưu DB) | ServiceChangeLog (FE hiển thị) | Badge |
+|---|---|---|
+| `CREATE_SERVICE` | `tao_moi` | Xanh lá |
+| `UPDATE_SERVICE` | `cap_nhat` | Xanh dương |
+| `HIDE_SERVICE` | `an` | Đỏ |
+| `SHOW_SERVICE` | `hien` | Xanh lá |
+
+---
+
+### 17.4 Lý do đổi `id` từ `number` → `string`
+
+MongoDB không dùng auto-increment integer. `_id` là BSON ObjectId — 12 bytes, biểu diễn dưới dạng 24-ký-tự hex string (VD: `"6856b2f9c3d1a4e0b8f12345"`).
+
+**Hệ quả kỹ thuật:**
+- Tất cả `id` trong TypeScript types phải là `string`
+- So sánh dùng `===` (string equality) — không dùng `==` hay cast số
+- `axiosInstance` URL: `\`/admin/services/${id}\`` — id là string, không phải number
+- Mongoose: dùng `mongoose.Types.ObjectId.isValid(id)` để kiểm tra trước khi query
+
+**Files đã sửa:** `types/index.ts` — `User.id`, `ServiceItem.id`, `ServiceChangeLog.id`, `ServiceItem.specialty_id`, `ServiceFormData.specialty_id` đều đổi sang `string`.
+
+---
+
+### 17.5 Vấn đề `specialty_id` CastError — Nguyên nhân & Fix
+
+**Nguyên nhân gốc:** Form mock dùng `SPECIALTIES = [{ id: 1 }, { id: 2 }]` (integer). Khi người dùng chọn, form gửi `specialty_id: "1"` lên backend. Mongoose cố cast `"1"` sang ObjectId → **CastError** → `service.save()` throw → toàn bộ create/update fail, audit log không được tạo.
+
+**Fix:**
+```js
+// Backend: helper validate trước khi lưu
+const isValidId = (id) => id && mongoose.Types.ObjectId.isValid(id)
+
+// Dùng trong create:
+specialty_id: isValidId(specialty_id) ? specialty_id : null
+
+// Dùng trong update:
+if (req.body.specialty_id !== undefined) {
+  service.specialty_id = isValidId(req.body.specialty_id) ? req.body.specialty_id : null
+}
+```
+
+```ts
+// Frontend: fetch real ObjectId từ API thay vì hardcode integer
+useEffect(() => {
+  specialtyService.getAll().then(setSpecialties).catch(() => {})
+}, [])
+// Form onChange: e.target.value || null  (string, KHÔNG Number(e.target.value))
+```
+
+---
+
+### 17.6 Sáu bug tìm và sửa (V6 — sau khi kiểm tra kỹ)
+
+| # | Mức độ | File | Vấn đề | Fix |
+|---|---|---|---|---|
+| 1 | Critical | `ManageServices.tsx` | `handleToggleConfirm` không có try-catch → lỗi API bị nuốt im lặng, user không biết | Wrap trong `try { } catch { showToast(error, 'error') }` |
+| 2 | Critical | `ManageServices.tsx` | Create thêm dịch vụ vào list bất kể tab đang lọc → tạo "Tại nhà" khi đang xem tab "Phòng khám" thì item xuất hiện sai tab | Kiểm tra `activeType && created.loai !== activeType` trước khi `setServices` |
+| 3 | Critical | `ManageServices.tsx` | Update không xóa khỏi list khi `loai` thay đổi → sửa từ "Phòng khám" sang "Tại nhà" vẫn thấy trong tab "Phòng khám" | `prev.filter(s => s.id !== updated.id)` nếu loai không khớp `activeType` |
+| 4 | Medium | `ManageServices.tsx` | `handleView` bắt lỗi `getById` nhưng không thông báo → spinner tắt, hiện "Chưa có lịch sử" thay vì báo lỗi | Thêm `catch { showToast('Không thể tải lịch sử', 'error') }` |
+| 5 | Medium | `services.controller.js` | `formatService()` không null-check `s` sau `findById` → crash `s._id` nếu doc bị xóa đồng thời | Thêm `if (!s) throw new Error('Không tìm thấy dịch vụ sau khi lưu')` |
+| 6 | Medium | `services.controller.js` | `create` và `update` lưu empty string `""` vào MongoDB cho `ngay_ap_dung`, `gio_bat_dau`, `gio_ket_thuc`, `mo_ta_ngan`, `mo_ta` | Chuẩn hóa: `value?.trim() \|\| null` trong cả 2 hàm |
+
+---
+
+### 17.7 Những gì vẫn CHƯA làm (còn lại sau V6)
+
+| Hạng mục | Ghi chú |
+|---|---|
+| `so_bac_si` computed từ `doctor_services` | Chờ B1 — bác sĩ tự đăng ký dịch vụ |
+| `so_luot_dat` computed từ `appointments` | Chờ A5 — flow đặt lịch |
+| Kiểm tra active appointments trước khi ẩn | ConfirmDialog chưa hiện con số thật — chờ `appointments` collection có data |
+| Số lượt đặt trong modal Xem hiện là 0 | `so_luot_dat` chưa có dữ liệu thật |
+| Public endpoint `GET /api/services` | Cho bệnh nhân xem danh sách — chưa cần trong giai đoạn Admin |

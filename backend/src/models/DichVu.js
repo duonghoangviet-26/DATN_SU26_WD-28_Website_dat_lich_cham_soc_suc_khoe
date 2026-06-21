@@ -42,6 +42,7 @@ const serviceSchema = new mongoose.Schema(
     gio_ket_thuc: { type: String, default: null }, // "17:00"
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', default: null },
     khu_vuc:      { type: [String], default: [] }, // home only
+    nguoi_tao_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     status: {
       type: String,
       enum: ['active', 'inactive'],
