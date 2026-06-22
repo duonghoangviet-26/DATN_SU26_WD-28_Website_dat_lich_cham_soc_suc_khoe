@@ -31,13 +31,22 @@ export const scheduleService = {
   async lockSlot(id: number): Promise<DoctorSlot> {
     await delay(200)
     const slot = findOrThrow(slots, id, 'Slot')
-    if (slot.benh_nhan_id != null) throw new Error('Không thể khóa slot đã có bệnh nhân đặt')
+    if (slot.benh_nhan_id != null) {
+      throw new Error('Không thể khóa slot đã có bệnh nhân đặt')
+    }
+    if (slot.status === 'expired' || slot.status === 'cancelled') {
+      throw new Error('Không thể khóa slot đã hết hạn hoặc đã hủy')
+    }
     slots = slots.map((s) => s.id === id ? { ...s, status: 'locked' } : s)
     return findOrThrow(slots, id, 'Slot')
   },
 
   async unlockSlot(id: number): Promise<DoctorSlot> {
     await delay(200)
+    const slot = findOrThrow(slots, id, 'Slot')
+    if (slot.status !== 'locked') {
+      throw new Error('Chỉ bỏ khóa slot đang bị khóa')
+    }
     slots = slots.map((s) => s.id === id ? { ...s, status: 'active' } : s)
     return findOrThrow(slots, id, 'Slot')
   },

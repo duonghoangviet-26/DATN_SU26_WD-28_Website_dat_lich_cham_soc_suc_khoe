@@ -26,14 +26,22 @@ export const doctorAppointmentService = {
 
   async confirm(id: number): Promise<DoctorAppointmentDetail> {
     await delay(200)
+    const appt = findOrThrow(appointments, id, 'Lịch hẹn')
+    if (appt.status !== 'pending') {
+      throw new Error('Chỉ xác nhận lịch hẹn đang chờ xác nhận')
+    }
     appointments = appointments.map((a) =>
-      a.id === id ? { ...a, status: 'confirmed', payment_status: a.payment_status } : a,
+      a.id === id ? { ...a, status: 'confirmed' } : a,
     )
     return findOrThrow(appointments, id, 'Lịch hẹn')
   },
 
   async reject(id: number, ly_do: string): Promise<DoctorAppointmentDetail> {
     await delay(200)
+    const appt = findOrThrow(appointments, id, 'Lịch hẹn')
+    if (appt.status !== 'pending') {
+      throw new Error('Chỉ từ chối lịch hẹn đang chờ xác nhận')
+    }
     appointments = appointments.map((a) =>
       a.id === id
         ? {
@@ -49,6 +57,10 @@ export const doctorAppointmentService = {
 
   async complete(id: number): Promise<DoctorAppointmentDetail> {
     await delay(200)
+    const appt = findOrThrow(appointments, id, 'Lịch hẹn')
+    if (appt.status !== 'confirmed') {
+      throw new Error('Chỉ hoàn thành lịch hẹn đã xác nhận')
+    }
     appointments = appointments.map((a) =>
       a.id === id ? { ...a, status: 'completed' } : a,
     )
@@ -57,6 +69,10 @@ export const doctorAppointmentService = {
 
   async cancelConfirmed(id: number, ly_do: string): Promise<DoctorAppointmentDetail> {
     await delay(200)
+    const appt = findOrThrow(appointments, id, 'Lịch hẹn')
+    if (appt.status !== 'confirmed') {
+      throw new Error('Chỉ hủy lịch hẹn đã xác nhận bằng thao tác này')
+    }
     appointments = appointments.map((a) =>
       a.id === id
         ? { ...a, status: 'cancelled', payment_status: 'refunded', ly_do_huy: ly_do }
