@@ -5,12 +5,14 @@ import mongoose from 'mongoose'
 // SQL tương đương: appointments
 // ============================================================
 // Phòng khám tư 1 cơ sở → ĐÃ BỎ hospital_id và loại 'video'.
-//   loai_kham='clinic' → khám tại phòng khám, dia_chi_kham=null
-//   loai_kham='home'   → bác sĩ đến nhà, dia_chi_kham BẮT BUỘC
+//   loai_kham='clinic' → khám tại phòng khám, phong_kham = snapshot slots[].phong_kham
+//   loai_kham='home'   → bác sĩ đến nhà, dia_chi_kham BẮT BUỘC, phong_kham=null
 // gia_kham = snapshot service.gia lúc đặt (không đổi khi giá dịch vụ thay đổi sau này).
 // member_id=null → là khách (guest): dùng ten_khach / so_dien_thoai_khach / nam_sinh_khach.
 // schedule_id + slot_id: trỏ tới slot embed trong doctor_schedules để cập nhật số lượng (atomic).
 // Cron 15': unpaid quá timeout → tự hủy. Home: luôn pending, bác sĩ confirm thủ công.
+// phong_kham: khi bác sĩ đổi slot.phong_kham trong lịch làm việc →
+//             phải propagate sang lich_hen.phong_kham của các lịch pending/confirmed liên quan.
 
 const appointmentSchema = new mongoose.Schema(
   {
@@ -29,6 +31,9 @@ const appointmentSchema = new mongoose.Schema(
     ngay_kham: { type: Date, required: true },
     gio_kham:  { type: String, required: true }, // "08:30"
     ly_do_kham:   { type: String, default: null, maxlength: 500 },
+    // clinic: snapshot từ slots[].phong_kham lúc đặt lịch — null khi home
+    // Khi bác sĩ đổi slot.phong_kham trong B2, cần propagate sang các lich_hen pending/confirmed liên quan
+    phong_kham:   { type: String, default: null },
     dia_chi_kham: { type: String, default: null }, // bắt buộc khi home
 
     status: {
@@ -70,8 +75,9 @@ appointmentSchema.pre('validate', function () {
     if (!this.dia_chi_kham) {
       throw new Error('Khám tại nhà (home) bắt buộc có dia_chi_kham')
     }
+    this.phong_kham = null // home không có phòng khám
   } else if (this.loai_kham === 'clinic') {
-    this.dia_chi_kham = null // clinic không cần địa chỉ
+    this.dia_chi_kham = null // clinic không cần địa chỉ nhà
   }
   if (!this.member_id && !this.ten_khach) {
     throw new Error('Lịch khách (không có member_id) phải có ten_khach')

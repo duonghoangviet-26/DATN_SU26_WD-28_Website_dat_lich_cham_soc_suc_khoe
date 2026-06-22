@@ -13,14 +13,15 @@ import { formatDate, formatPrice } from '@/utils/format'
 
 // ─── Hằng số ──────────────────────────────────────────────────────────────────
 
-type Tab = 'today' | 'upcoming' | 'past' | 'all'
+type Tab = 'unconfirmed' | 'today' | 'upcoming' | 'past' | 'all'
 type SortKey = 'ngay_kham' | 'benh_nhan' | 'gia_kham'
 
 const TIME_TABS: { key: Tab; label: string }[] = [
-  { key: 'today',    label: 'Hôm nay'  },
-  { key: 'upcoming', label: 'Sắp tới'  },
-  { key: 'past',     label: 'Đã qua'   },
-  { key: 'all',      label: 'Tất cả'   },
+  { key: 'unconfirmed', label: 'Chưa xác nhận' },
+  { key: 'today',       label: 'Hôm nay'       },
+  { key: 'upcoming',    label: 'Sắp tới'        },
+  { key: 'past',        label: 'Đã qua'         },
+  { key: 'all',         label: 'Tất cả'         },
 ]
 
 const STATUS_COLOR: Record<string, 'yellow' | 'blue' | 'green' | 'red' | 'gray'> = {
@@ -32,14 +33,15 @@ const PAYMENT_COLOR: Record<string, 'yellow' | 'blue' | 'gray'> = {
 }
 
 const LOAI_LABEL: Record<string, string> = {
-  clinic: 'Tại phòng khám', home: 'Tại nhà', video: 'Video',
+  clinic: 'Tại phòng khám', home: 'Tại nhà',
 }
 
 const TH_SORT = 'cursor-pointer select-none whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 transition-colors hover:bg-slate-100'
 const TH_PLAIN = 'whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500'
 
 const EMPTY_DRUG: Omit<PrescriptionDrug, 'id'> = {
-  ten_thuoc: '', lieu_dung: '', tan_suat: '2 lần/ngày', so_ngay: 7, ghi_chu: '',
+  ten_thuoc: '', lieu_luong: '', tan_suat: '2 lần/ngày',
+  gio_uong: ['07:00'], ngay_bat_dau: '', ngay_ket_thuc: '', ghi_chu: '',
 }
 
 // ─── ExamModal ────────────────────────────────────────────────────────────────
@@ -55,8 +57,13 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
   const [existing, setExisting] = useState<ExaminationResult | null>(null)
   const [chan_doan, setChanDoan] = useState('')
   const [huong_dan, setHuongDan] = useState('')
+  const [ghi_chu, setGhiChu] = useState('')
   const [ngay_tai_kham, setNgayTaiKham] = useState('')
-  const [drugs, setDrugs] = useState<Omit<PrescriptionDrug, 'id'>[]>([{ ...EMPTY_DRUG }])
+  const [drugs, setDrugs] = useState<Omit<PrescriptionDrug, 'id'>[]>(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const d30 = new Date(); d30.setDate(d30.getDate() + 30)
+    return [{ ...EMPTY_DRUG, ngay_bat_dau: today, ngay_ket_thuc: d30.toISOString().slice(0, 10) }]
+  })
   const [saving, setSaving] = useState(false)
   const topRef = useRef<HTMLDivElement>(null)
 
@@ -66,9 +73,10 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
         setExisting(res)
         setChanDoan(res.chan_doan)
         setHuongDan(res.huong_dan_dieu_tri)
+        setGhiChu(res.ghi_chu ?? '')
         setNgayTaiKham(res.ngay_tai_kham)
-        setDrugs(res.thuoc.map(({ ten_thuoc, lieu_dung, tan_suat, so_ngay, ghi_chu }) => ({
-          ten_thuoc, lieu_dung, tan_suat, so_ngay, ghi_chu,
+        setDrugs(res.thuoc.map(({ ten_thuoc, lieu_luong, tan_suat, gio_uong, ngay_bat_dau, ngay_ket_thuc, ghi_chu }) => ({
+          ten_thuoc, lieu_luong, tan_suat, gio_uong, ngay_bat_dau, ngay_ket_thuc, ghi_chu,
         })))
       }
     }).finally(() => setLoading(false))
@@ -84,6 +92,7 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
         appointment_id: appt.id,
         chan_doan,
         huong_dan_dieu_tri: huong_dan,
+        ghi_chu: ghi_chu || null,
         ngay_tai_kham,
         thuoc: drugs,
       })
@@ -93,7 +102,15 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
     }
   }
 
-  function addDrug() { setDrugs((prev) => [...prev, { ...EMPTY_DRUG }]) }
+  function addDrug() {
+    const today = new Date().toISOString().slice(0, 10)
+    const d30 = new Date(); d30.setDate(d30.getDate() + 30)
+    setDrugs((prev) => [...prev, {
+      ...EMPTY_DRUG,
+      ngay_bat_dau: today,
+      ngay_ket_thuc: d30.toISOString().slice(0, 10),
+    }])
+  }
   function removeDrug(i: number) { setDrugs((prev) => prev.filter((_, idx) => idx !== i)) }
   function updateDrug<K extends keyof Omit<PrescriptionDrug, 'id'>>(
     i: number, key: K, val: Omit<PrescriptionDrug, 'id'>[K],
@@ -141,6 +158,13 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
                 placeholder="Hướng dẫn, lưu ý về chế độ ăn uống, nghỉ ngơi..." />
             </div>
 
+            <div>
+              <label className="input-label">Ghi chú bổ sung</label>
+              <textarea className="input resize-none" rows={2} readOnly={isReadOnly}
+                value={ghi_chu} onChange={(e) => setGhiChu(e.target.value)}
+                placeholder="Ghi chú thêm cho bệnh nhân (nếu có)..." />
+            </div>
+
             <div className="sm:w-48">
               <label className="input-label">Ngày tái khám</label>
               <input type="date" className="input" readOnly={isReadOnly}
@@ -169,10 +193,10 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
                           placeholder="VD: Paracetamol 500mg" />
                       </div>
                       <div>
-                        <label className="input-label text-[10px]">Liều dùng</label>
+                        <label className="input-label text-[10px]">Liều lượng</label>
                         <input className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.lieu_dung}
-                          onChange={(e) => updateDrug(i, 'lieu_dung', e.target.value)}
+                          value={drug.lieu_luong}
+                          onChange={(e) => updateDrug(i, 'lieu_luong', e.target.value)}
                           placeholder="VD: 1 viên/lần" />
                       </div>
                       <div>
@@ -183,18 +207,32 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
                           placeholder="VD: 3 lần/ngày" />
                       </div>
                       <div>
-                        <label className="input-label text-[10px]">Số ngày</label>
-                        <input type="number" min={1} className="input py-1.5 text-sm"
-                          readOnly={isReadOnly}
-                          value={drug.so_ngay}
-                          onChange={(e) => updateDrug(i, 'so_ngay', Number(e.target.value))} />
+                        <label className="input-label text-[10px]">Giờ uống <span className="font-normal text-slate-400">(cách nhau bằng dấu phẩy)</span></label>
+                        <input className="input py-1.5 text-sm" readOnly={isReadOnly}
+                          value={drug.gio_uong.join(', ')}
+                          onChange={(e) => updateDrug(i, 'gio_uong',
+                            e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
+                          )}
+                          placeholder="VD: 07:00, 12:00, 19:00" />
+                      </div>
+                      <div>
+                        <label className="input-label text-[10px]">Ngày bắt đầu</label>
+                        <input type="date" className="input py-1.5 text-sm" readOnly={isReadOnly}
+                          value={drug.ngay_bat_dau}
+                          onChange={(e) => updateDrug(i, 'ngay_bat_dau', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="input-label text-[10px]">Ngày kết thúc</label>
+                        <input type="date" className="input py-1.5 text-sm" readOnly={isReadOnly}
+                          value={drug.ngay_ket_thuc}
+                          onChange={(e) => updateDrug(i, 'ngay_ket_thuc', e.target.value)} />
                       </div>
                     </div>
                     <div className="mt-2 flex items-end gap-2">
                       <div className="flex-1">
                         <label className="input-label text-[10px]">Ghi chú</label>
                         <input className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.ghi_chu}
+                          value={drug.ghi_chu ?? ''}
                           onChange={(e) => updateDrug(i, 'ghi_chu', e.target.value)}
                           placeholder="Uống sau ăn, tránh ánh nắng..." />
                       </div>
@@ -275,6 +313,8 @@ export default function DoctorAppointments() {
 
   // ── Filter & search (pattern từ ManageServices) ───────────────────────────────
   const [tab, setTab] = useState<Tab>('today')
+  const [filterStatus, setFilterStatus] = useState<'' | 'pending' | 'confirmed' | 'cancelled'>('')
+  const [filterLoai, setFilterLoai] = useState<'' | 'clinic' | 'home'>('')
   const [searchInput, setSearchInput] = useState('')   // giá trị đang gõ
   const [search, setSearch] = useState('')              // debounced 300ms
 
@@ -326,9 +366,10 @@ export default function DoctorAppointments() {
   // Badge count tab — KHÔNG bị ảnh hưởng bởi search hay status filter
   // ─────────────────────────────────────────────────────────────────────────────
   function tabCount(t: Tab) {
-    if (t === 'today')    return all.filter((a) => a.ngay_kham === todayStr).length
-    if (t === 'upcoming') return all.filter((a) => a.ngay_kham > todayStr).length
-    if (t === 'past')     return all.filter((a) => a.ngay_kham < todayStr).length
+    if (t === 'unconfirmed') return all.filter((a) => a.status === 'pending').length
+    if (t === 'today')       return all.filter((a) => a.ngay_kham === todayStr).length
+    if (t === 'upcoming')    return all.filter((a) => a.ngay_kham > todayStr).length
+    if (t === 'past')        return all.filter((a) => a.ngay_kham < todayStr).length
     return all.length
   }
 
@@ -338,15 +379,26 @@ export default function DoctorAppointments() {
   const displayed = useMemo(() => {
     let list = [...all]
 
-    // Lọc theo tab thời gian
-    if (tab === 'today')    list = list.filter((a) => a.ngay_kham === todayStr)
-    else if (tab === 'upcoming') list = list.filter((a) => a.ngay_kham > todayStr)
-    else if (tab === 'past')     list = list.filter((a) => a.ngay_kham < todayStr)
+    // Lọc theo tab
+    if (tab === 'unconfirmed')    list = list.filter((a) => a.status === 'pending')
+    else if (tab === 'today')     list = list.filter((a) => a.ngay_kham === todayStr)
+    else if (tab === 'upcoming')  list = list.filter((a) => a.ngay_kham > todayStr)
+    else if (tab === 'past')      list = list.filter((a) => a.ngay_kham < todayStr)
 
-    // Tìm kiếm theo tên bệnh nhân (debounced)
+    // Lọc trạng thái (ẩn khi đang ở tab 'unconfirmed' vì đã mặc định = pending)
+    if (filterStatus && tab !== 'unconfirmed') {
+      list = list.filter((a) => a.status === filterStatus)
+    }
+
+    // Lọc hình thức
+    if (filterLoai) list = list.filter((a) => a.loai_kham === filterLoai)
+
+    // Tìm kiếm theo tên hoặc số điện thoại (debounced)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
-      list = list.filter((a) => a.benh_nhan.toLowerCase().includes(q))
+      list = list.filter(
+        (a) => a.benh_nhan.toLowerCase().includes(q) || a.so_dien_thoai.includes(q),
+      )
     }
 
     // Sắp xếp theo cột đang chọn
@@ -363,13 +415,13 @@ export default function DoctorAppointments() {
     })
 
     return list
-  }, [all, tab, search, sortKey, sortDir, todayStr])
+  }, [all, tab, filterStatus, filterLoai, search, sortKey, sortDir, todayStr])
 
   function handleTabChange(newTab: Tab) {
     setTab(newTab)
     setSortKey('ngay_kham')
-    // "Đã qua" → mới nhất lên đầu; các tab khác → sớm nhất lên đầu
     setSortDir(newTab === 'past' ? 'desc' : 'asc')
+    if (newTab === 'unconfirmed') setFilterStatus('')
   }
 
   function handleSort(key: SortKey) {
@@ -478,10 +530,10 @@ export default function DoctorAppointments() {
           <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
             <Icon name="alert-circle" className="h-4 w-4 shrink-0" />
             <span className="flex-1">
-              Có <strong>{urgentCount}</strong> lịch hôm nay chưa xác nhận — vui lòng xử lý.
+              Có <strong>{urgentCount}</strong> lịch hẹn chưa tiến hành xác nhận — vui lòng xử lý.
             </span>
             <button
-              onClick={() => handleTabChange('today')}
+              onClick={() => handleTabChange('unconfirmed')}
               className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100"
             >
               Xem ngay
@@ -489,35 +541,71 @@ export default function DoctorAppointments() {
           </div>
         )}
 
-        {/* ── Filter: Tab thời gian + Status tab + Search (pattern ManageServices) ── */}
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-
-          {/* Tab thời gian */}
-          <div className="card flex gap-1 p-1.5">
-            {TIME_TABS.map(({ key, label }) => (
+        {/* ── Filter row 1: Tab thời gian ── */}
+        <div className="mb-2 card flex gap-1 p-1.5 w-fit">
+          {TIME_TABS.map(({ key, label }) => {
+            const count   = tabCount(key)
+            const isActive  = tab === key
+            const isUrgent  = key === 'unconfirmed' && count > 0
+            return (
               <button
                 key={key}
                 onClick={() => handleTabChange(key)}
                 className={`relative whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  tab === key ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  isActive
+                    ? isUrgent ? 'bg-amber-500 text-white' : 'bg-brand-500 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 {label}
                 <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                  tab === key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                  isActive
+                    ? 'bg-white/20 text-white'
+                    : isUrgent
+                      ? 'bg-amber-100 text-amber-600'
+                      : 'bg-slate-100 text-slate-500'
                 }`}>
-                  {tabCount(key)}
+                  {count}
                 </span>
               </button>
-            ))}
-          </div>
+            )
+          })}
+        </div>
 
-          {/* Search input */}
+        {/* ── Filter row 2: Trạng thái + Hình thức + Tìm kiếm ── */}
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+
+          {/* Trạng thái — ẩn khi tab Chưa xác nhận (đã ngầm lọc pending) */}
+          {tab !== 'unconfirmed' && (
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+              className="input w-auto min-w-[170px]"
+            >
+              <option value="">Tất cả trạng thái</option>
+              <option value="pending">Chờ xác nhận</option>
+              <option value="confirmed">Đã xác nhận</option>
+              <option value="cancelled">Đã hủy</option>
+            </select>
+          )}
+
+          {/* Hình thức */}
+          <select
+            value={filterLoai}
+            onChange={(e) => setFilterLoai(e.target.value as typeof filterLoai)}
+            className="input w-auto min-w-[170px]"
+          >
+            <option value="">Tất cả hình thức</option>
+            <option value="clinic">Tại phòng khám</option>
+            <option value="home">Tại nhà</option>
+          </select>
+
+          {/* Tìm kiếm */}
           <div className="relative min-w-[200px] flex-1">
             <Icon name="search" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Tìm theo tên bệnh nhân..."
+              placeholder="Tìm theo tên hoặc số điện thoại..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="input w-full pl-9"
@@ -594,15 +682,41 @@ export default function DoctorAppointments() {
                             </div>
                           </td>
 
-                          {/* Ngày / Giờ */}
+                          {/* Ngày / Giờ + Dịch vụ */}
                           <td className="px-4 py-3 text-slate-600">
                             <div className="font-medium">{formatDate(appt.ngay_kham)}</div>
                             <div className="text-xs text-slate-400">{appt.gio_kham}</div>
+                            {appt.ten_dich_vu && (
+                              <div className="mt-0.5 text-xs text-brand-500">{appt.ten_dich_vu}</div>
+                            )}
                           </td>
 
-                          {/* Hình thức */}
-                          <td className="px-4 py-3 text-slate-600">
-                            {LOAI_LABEL[appt.loai_kham]}
+                          {/* Hình thức + địa điểm */}
+                          <td className="px-4 py-3">
+                            {appt.loai_kham === 'home' ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex w-fit items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                                  <Icon name="home" className="h-3 w-3" />
+                                  Tại nhà
+                                </span>
+                                {appt.dia_chi_kham && (
+                                  <span className="max-w-[160px] text-[10px] leading-tight text-purple-500">
+                                    <Icon name="map-pin" className="mr-0.5 inline h-2.5 w-2.5" />
+                                    {appt.dia_chi_kham}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-sm text-slate-600">{LOAI_LABEL[appt.loai_kham]}</span>
+                                {appt.phong_kham && (
+                                  <span className="text-[10px] font-medium text-green-600">
+                                    <Icon name="hospital" className="mr-0.5 inline h-2.5 w-2.5" />
+                                    {appt.phong_kham}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </td>
 
                           {/* Trạng thái */}
@@ -632,9 +746,10 @@ export default function DoctorAppointments() {
                           {/* Thao tác */}
                           <td className="px-4 py-3">
                             <div
-                              className="flex items-center justify-end gap-1.5"
+                              className="flex flex-col items-end gap-1.5"
                               onClick={(e) => e.stopPropagation()}
                             >
+                              <div className="flex items-center gap-1.5">
                               {/* PENDING */}
                               {appt.status === 'pending' && (
                                 <>
@@ -700,6 +815,7 @@ export default function DoctorAppointments() {
                                   {appt.da_co_ket_qua ? 'Xem kết quả' : 'Nhập kết quả'}
                                 </button>
                               )}
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -721,6 +837,12 @@ export default function DoctorAppointments() {
                                     </Badge>
                                   </p>
                                 </div>
+                                {appt.ten_dich_vu && (
+                                  <div>
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Dịch vụ</p>
+                                    <p className="mt-0.5 text-slate-700">{appt.ten_dich_vu}</p>
+                                  </div>
+                                )}
                                 {appt.tuoi !== undefined && (
                                   <div>
                                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tuổi / Giới tính</p>
@@ -737,6 +859,24 @@ export default function DoctorAppointments() {
                                   <div>
                                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Bệnh nền</p>
                                     <p className="mt-0.5 text-slate-700">{appt.benh_nen}</p>
+                                  </div>
+                                )}
+                                {appt.loai_kham === 'clinic' && appt.phong_kham && (
+                                  <div className="sm:col-span-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Phòng khám</p>
+                                    <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-green-800">
+                                      <Icon name="hospital" className="h-3.5 w-3.5 shrink-0" />
+                                      {appt.phong_kham}
+                                    </p>
+                                  </div>
+                                )}
+                                {appt.loai_kham === 'home' && appt.dia_chi_kham && (
+                                  <div className="sm:col-span-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Địa chỉ bác sĩ đến</p>
+                                    <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-purple-800">
+                                      <Icon name="map-pin" className="h-3.5 w-3.5 shrink-0" />
+                                      {appt.dia_chi_kham}
+                                    </p>
                                   </div>
                                 )}
                                 {appt.ly_do_kham && (

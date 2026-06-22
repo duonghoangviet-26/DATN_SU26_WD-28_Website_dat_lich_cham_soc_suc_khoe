@@ -49,6 +49,10 @@ const doctorSchema = new mongoose.Schema(
     },
     tong_danh_gia: { type: Number, default: 0, min: 0 },
 
+    // Phòng khám mặc định — tự điền vào slots[].phong_kham khi bác sĩ tạo slot mới (B2)
+    // Admin gán khi duyệt hồ sơ (C2). null = chưa được gán phòng cố định.
+    phong_kham_mac_dinh: { type: String, default: null },
+
     // === EMBED thay 2 bảng join SQL ===
     specialties: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa' }],
     services:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'DichVu' }],

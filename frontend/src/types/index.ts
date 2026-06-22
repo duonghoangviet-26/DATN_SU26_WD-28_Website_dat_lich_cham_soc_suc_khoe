@@ -64,12 +64,12 @@ export interface Appointment {
   user_id: number
   member_id?: number | null
   doctor_id: number
-  hospital_id: number
   slot_id: number
-  loai_kham: 'clinic' | 'home' | 'video'
+  loai_kham: 'clinic' | 'home'
   ngay_kham: string
   gio_kham: string
   ly_do_kham?: string
+  dia_chi_kham?: string | null
   status: AppointmentStatus
   payment_status: PaymentStatus
   gia_kham: number
@@ -254,26 +254,31 @@ export interface DoctorAppointmentDetail {
   so_dien_thoai: string
   ngay_kham: string
   gio_kham: string
-  loai_kham: 'clinic' | 'home' | 'video'
+  loai_kham: 'clinic' | 'home'
   status: AppointmentStatus
   payment_status: PaymentStatus
   gia_kham: number
   ly_do_kham?: string
+  phong_kham?: string | null         // clinic: snapshot từ slots[].phong_kham — backend trả về
+  dia_chi_kham?: string | null       // BẮT BUỘC khi loai_kham='home' — backend trả về
+  ten_dich_vu?: string | null        // joined từ dich_vu.ten — backend trả về
   tuoi?: number
   gioi_tinh?: 'Nam' | 'Nữ' | 'Khác'
   di_ung?: string | null
   benh_nen?: string | null
-  da_co_ket_qua: boolean
+  da_co_ket_qua: boolean             // computed bởi backend (exists in ket_qua_kham)
   ly_do_huy?: string | null
 }
 
 export interface PrescriptionDrug {
   id: number
   ten_thuoc: string
-  lieu_dung: string
-  tan_suat: string   // '3 lần/ngày'
-  so_ngay: number
-  ghi_chu: string
+  lieu_luong: string            // liều lượng mỗi lần uống (khớp DB don_thuoc.items.lieu_luong)
+  tan_suat: string              // '3 lần/ngày' — mô tả hiển thị
+  gio_uong: string[]            // ['07:00', '12:00', '19:00'] — cron dùng để tạo nhac_nho
+  ngay_bat_dau: string          // 'YYYY-MM-DD'
+  ngay_ket_thuc: string         // 'YYYY-MM-DD' (max ngay_bat_dau + 90 ngày)
+  ghi_chu?: string | null
 }
 
 export interface ExaminationResult {
@@ -281,9 +286,10 @@ export interface ExaminationResult {
   appointment_id: number
   chan_doan: string
   huong_dan_dieu_tri: string
+  ghi_chu?: string | null        // ghi chú bổ sung — field trong DB ket_qua_kham
   ngay_tai_kham: string
-  co_the_sua: boolean
-  thuoc: PrescriptionDrug[]
+  co_the_sua: boolean            // false sau 24h — cron set, FE chỉ đọc
+  thuoc: PrescriptionDrug[]      // joined từ don_thuoc (backend trả gộp)
   ngay_tao: string
 }
 

@@ -11,7 +11,7 @@ export const mockAppointments: AppointmentItem[] = [
   {
     id: 2, benh_nhan: 'Trần Thị Bình', bac_si: 'BS. Phạm Thu Dung',
     chuyen_khoa: 'Nhi khoa', ngay_kham: TODAY, gio_kham: '10:00',
-    loai_kham: 'video', status: 'pending', payment_status: 'unpaid', gia_kham: 250000,
+    loai_kham: 'clinic', status: 'pending', payment_status: 'unpaid', gia_kham: 250000,
   },
   {
     id: 3, benh_nhan: 'Hoàng Văn Em', bac_si: 'BS. Lê Hoàng Cường',
@@ -26,7 +26,7 @@ export const mockAppointments: AppointmentItem[] = [
   {
     id: 5, benh_nhan: 'Lý Minh Tuấn', bac_si: 'BS. Lê Hoàng Cường',
     chuyen_khoa: 'Tim mạch', ngay_kham: '2026-06-10', gio_kham: '11:30',
-    loai_kham: 'video', status: 'cancelled', payment_status: 'refunded', gia_kham: 350000,
+    loai_kham: 'home', status: 'cancelled', payment_status: 'refunded', gia_kham: 350000,
   },
   {
     id: 6, benh_nhan: 'Phạm Thị Ngọc', bac_si: 'BS. Phạm Thu Dung',

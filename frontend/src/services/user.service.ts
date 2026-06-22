@@ -48,7 +48,7 @@ export const userService = {
   },
 
   // Khóa / mở khóa một tài khoản (C1). Trả về user sau khi đổi trạng thái.
-  async toggleLock(id: number): Promise<User> {
+  async toggleLock(id: string): Promise<User> {
     await delay(200)
 
     // ── SAU NÀY thay bằng:

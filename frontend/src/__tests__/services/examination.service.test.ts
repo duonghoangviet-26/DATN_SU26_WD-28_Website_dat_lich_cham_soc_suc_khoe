@@ -11,7 +11,15 @@ async function freshService() {
   return mod.examinationService
 }
 
-const DRUG = { ten_thuoc: 'Paracetamol 500mg', lieu_dung: '1 viên', tan_suat: '3 lần/ngày', so_ngay: 5, ghi_chu: '' }
+const DRUG = {
+  ten_thuoc: 'Paracetamol 500mg',
+  lieu_luong: '1 viên',
+  tan_suat: '3 lần/ngày',
+  gio_uong: ['07:00', '12:00', '19:00'],
+  ngay_bat_dau: '2026-06-22',
+  ngay_ket_thuc: '2026-06-27',
+  ghi_chu: '',
+}
 
 // ─── getByAppointment() ───────────────────────────────────────────────────────
 
@@ -85,8 +93,8 @@ describe('save() — tạo kết quả mới', () => {
       huong_dan_dieu_tri: '',
       ngay_tai_kham: '',
       thuoc: [
-        { ten_thuoc: 'Thuốc A', lieu_dung: '1v', tan_suat: '2l/n', so_ngay: 5, ghi_chu: '' },
-        { ten_thuoc: 'Thuốc B', lieu_dung: '2v', tan_suat: '1l/n', so_ngay: 3, ghi_chu: '' },
+        { ten_thuoc: 'Thuốc A', lieu_luong: '1v', tan_suat: '2l/n', gio_uong: ['07:00', '19:00'], ngay_bat_dau: '2026-06-22', ngay_ket_thuc: '2026-06-27', ghi_chu: '' },
+        { ten_thuoc: 'Thuốc B', lieu_luong: '2v', tan_suat: '1l/n', gio_uong: ['12:00'], ngay_bat_dau: '2026-06-22', ngay_ket_thuc: '2026-06-25', ghi_chu: '' },
       ],
     })
     expect(result.thuoc[0].id).toBe(1)

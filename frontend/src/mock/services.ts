@@ -1,10 +1,8 @@
 import type { ServiceItem } from '@/types'
 
-// ID audit log 1–10 được dùng ở đây.
-// service.service.ts bắt đầu nextLogId = 11 để tránh trùng.
 export const mockServices: ServiceItem[] = [
   {
-    id: 1, ma_dich_vu: 'DV001',
+    id: 'mock-svc-001', ma_dich_vu: 'DV001',
     ten: 'Khám tổng quát tại viện',
     loai: 'clinic', gia: 200000,
     mo_ta_ngan: 'Khám sức khỏe tổng quát tại cơ sở y tế.',
@@ -16,13 +14,13 @@ export const mockServices: ServiceItem[] = [
     ngay_tao: '2026-01-10T00:00:00.000Z',
     ngay_cap_nhat: '2026-03-15T14:00:00.000Z',
     lich_su_thay_doi: [
-      { id: 1, thoi_gian: '2026-01-10T08:00:00.000Z', hanh_dong: 'tao_moi',  nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Tạo dịch vụ mới' },
-      { id: 2, thoi_gian: '2026-02-05T10:30:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Cập nhật giá và mô tả dịch vụ' },
-      { id: 3, thoi_gian: '2026-03-15T14:00:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Trần Thị Admin',   mo_ta: 'Điều chỉnh thời gian áp dụng' },
+      { id: 'log-001', thoi_gian: '2026-01-10T08:00:00.000Z', hanh_dong: 'tao_moi',  nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Tạo dịch vụ mới' },
+      { id: 'log-002', thoi_gian: '2026-02-05T10:30:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Cập nhật giá và mô tả dịch vụ' },
+      { id: 'log-003', thoi_gian: '2026-03-15T14:00:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Trần Thị Admin',   mo_ta: 'Điều chỉnh thời gian áp dụng' },
     ],
   },
   {
-    id: 2, ma_dich_vu: 'DV002',
+    id: 'mock-svc-002', ma_dich_vu: 'DV002',
     ten: 'Khám chuyên khoa tại viện',
     loai: 'clinic', gia: 350000,
     mo_ta_ngan: 'Khám chuyên sâu với bác sĩ chuyên khoa.',
@@ -34,12 +32,12 @@ export const mockServices: ServiceItem[] = [
     ngay_tao: '2026-01-12T00:00:00.000Z',
     ngay_cap_nhat: '2026-02-20T09:00:00.000Z',
     lich_su_thay_doi: [
-      { id: 4, thoi_gian: '2026-01-12T09:00:00.000Z', hanh_dong: 'tao_moi',  nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Tạo dịch vụ mới' },
-      { id: 5, thoi_gian: '2026-02-20T09:00:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Trần Thị Admin',   mo_ta: 'Cập nhật khung giờ và giá dịch vụ' },
+      { id: 'log-004', thoi_gian: '2026-01-12T09:00:00.000Z', hanh_dong: 'tao_moi',  nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Tạo dịch vụ mới' },
+      { id: 'log-005', thoi_gian: '2026-02-20T09:00:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Trần Thị Admin',   mo_ta: 'Cập nhật khung giờ và giá dịch vụ' },
     ],
   },
   {
-    id: 3, ma_dich_vu: 'DV003',
+    id: 'mock-svc-003', ma_dich_vu: 'DV003',
     ten: 'Khám sức khỏe tại nhà',
     loai: 'home', gia: 500000,
     mo_ta_ngan: 'Bác sĩ đến tận nhà thăm khám. Giá đã bao gồm phí đi lại.',
@@ -52,12 +50,12 @@ export const mockServices: ServiceItem[] = [
     ngay_tao: '2026-01-15T00:00:00.000Z',
     ngay_cap_nhat: '2026-04-10T11:00:00.000Z',
     lich_su_thay_doi: [
-      { id: 6, thoi_gian: '2026-01-15T10:00:00.000Z', hanh_dong: 'tao_moi',  nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Tạo dịch vụ mới' },
-      { id: 7, thoi_gian: '2026-04-10T11:00:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Trần Thị Admin',   mo_ta: 'Mở rộng khu vực phục vụ thêm Hoàng Mai' },
+      { id: 'log-006', thoi_gian: '2026-01-15T10:00:00.000Z', hanh_dong: 'tao_moi',  nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Tạo dịch vụ mới' },
+      { id: 'log-007', thoi_gian: '2026-04-10T11:00:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Trần Thị Admin',   mo_ta: 'Mở rộng khu vực phục vụ thêm Hoàng Mai' },
     ],
   },
   {
-    id: 4, ma_dich_vu: 'DV004',
+    id: 'mock-svc-004', ma_dich_vu: 'DV004',
     ten: 'Khám chuyên khoa tại nhà',
     loai: 'home', gia: 700000,
     mo_ta_ngan: 'Bác sĩ chuyên khoa đến nhà tư vấn và điều trị.',
@@ -70,9 +68,9 @@ export const mockServices: ServiceItem[] = [
     ngay_tao: '2026-01-20T00:00:00.000Z',
     ngay_cap_nhat: '2026-04-01T11:00:00.000Z',
     lich_su_thay_doi: [
-      { id: 8,  thoi_gian: '2026-01-20T09:00:00.000Z', hanh_dong: 'tao_moi',  nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Tạo dịch vụ mới' },
-      { id: 9,  thoi_gian: '2026-03-01T14:30:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Trần Thị Admin',   mo_ta: 'Thu hẹp khu vực phục vụ' },
-      { id: 10, thoi_gian: '2026-04-01T11:00:00.000Z', hanh_dong: 'an',       nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Ẩn tạm thời — chưa có bác sĩ đảm nhận' },
+      { id: 'log-008', thoi_gian: '2026-01-20T09:00:00.000Z', hanh_dong: 'tao_moi',  nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Tạo dịch vụ mới' },
+      { id: 'log-009', thoi_gian: '2026-03-01T14:30:00.000Z', hanh_dong: 'cap_nhat', nguoi_thay_doi: 'Trần Thị Admin',   mo_ta: 'Thu hẹp khu vực phục vụ' },
+      { id: 'log-010', thoi_gian: '2026-04-01T11:00:00.000Z', hanh_dong: 'an',       nguoi_thay_doi: 'Nguyễn Văn Admin', mo_ta: 'Ẩn tạm thời — chưa có bác sĩ đảm nhận' },
     ],
   },
 ]

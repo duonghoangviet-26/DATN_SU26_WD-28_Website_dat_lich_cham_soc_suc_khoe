@@ -29,9 +29,13 @@ const slotSchema = new mongoose.Schema(
       min: [1, 'Số bệnh nhân tối đa tối thiểu là 1'],
     },
     so_benh_nhan_hien_tai: { type: Number, default: 0, min: 0 },
+    // Phòng khám cho slot này — mặc định copy từ bac_si.phong_kham_mac_dinh khi bác sĩ tạo slot (B2)
+    // Bác sĩ có thể sửa riêng từng slot. Khi sửa → propagate sang lich_hen.phong_kham của lịch liên quan.
+    phong_kham: { type: String, default: null },
     status: {
       type: String,
-      enum: ['active', 'locked', 'cancelled'],
+      // active: còn chỗ | booked: đã đầy (so_hien_tai >= toi_da) | locked: bác sĩ khóa | cancelled: hủy | expired: quá ngày
+      enum: ['active', 'booked', 'locked', 'cancelled', 'expired'],
       default: 'active',
     },
   },

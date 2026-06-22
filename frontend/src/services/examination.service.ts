@@ -9,6 +9,7 @@ interface ExamPayload {
   appointment_id: number
   chan_doan: string
   huong_dan_dieu_tri: string
+  ghi_chu?: string | null
   ngay_tai_kham: string
   thuoc: Omit<PrescriptionDrug, 'id'>[]
 }

@@ -33,6 +33,7 @@ const itemSchema = new mongoose.Schema(
     },
     ngay_bat_dau:  { type: Date, required: true },
     ngay_ket_thuc: { type: Date, required: true },
+    ghi_chu: { type: String, default: null, maxlength: 500 }, // ghi chú riêng cho từng thuốc
   },
   { _id: true }
 )
