@@ -30,6 +30,9 @@ export const doctorAppointmentService = {
     if (appt.status !== 'pending') {
       throw new Error('Chỉ xác nhận lịch hẹn đang chờ xác nhận')
     }
+    if (appt.payment_status !== 'paid') {
+      throw new Error('Không thể xác nhận lịch hẹn chưa thanh toán')
+    }
     appointments = appointments.map((a) =>
       a.id === id ? { ...a, status: 'confirmed' } : a,
     )

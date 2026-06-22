@@ -93,6 +93,11 @@ describe('confirm() — xác nhận lịch hẹn', () => {
     expect(updated.payment_status).toBe(before.payment_status)
   })
 
+  it('TC-C02: pending+unpaid → service phải từ chối xác nhận', async () => {
+    // id=3: pending + unpaid — không được xác nhận khi chưa thanh toán
+    await expect(svc.confirm(3)).rejects.toThrow(/chưa thanh toán/i)
+  })
+
   it('BUG-GUARD: confirm appointment không tồn tại → throw', async () => {
     await expect(svc.confirm(999)).rejects.toThrow()
   })

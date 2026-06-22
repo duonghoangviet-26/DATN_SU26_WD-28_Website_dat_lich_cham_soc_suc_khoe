@@ -23,14 +23,6 @@ const TIME_TABS: { key: Tab; label: string }[] = [
   { key: 'all',      label: 'Tất cả'   },
 ]
 
-const STATUS_TABS = [
-  { value: '',           label: 'Tất cả'       },
-  { value: 'pending',    label: 'Chờ xác nhận' },
-  { value: 'confirmed',  label: 'Đã xác nhận'  },
-  { value: 'completed',  label: 'Hoàn thành'   },
-  { value: 'cancelled',  label: 'Đã hủy'       },
-]
-
 const STATUS_COLOR: Record<string, 'yellow' | 'blue' | 'green' | 'red' | 'gray'> = {
   pending: 'yellow', confirmed: 'blue', completed: 'green', cancelled: 'red',
 }
@@ -283,7 +275,6 @@ export default function DoctorAppointments() {
 
   // ── Filter & search (pattern từ ManageServices) ───────────────────────────────
   const [tab, setTab] = useState<Tab>('today')
-  const [activeStatus, setActiveStatus] = useState('')
   const [searchInput, setSearchInput] = useState('')   // giá trị đang gõ
   const [search, setSearch] = useState('')              // debounced 300ms
 
@@ -352,9 +343,6 @@ export default function DoctorAppointments() {
     else if (tab === 'upcoming') list = list.filter((a) => a.ngay_kham > todayStr)
     else if (tab === 'past')     list = list.filter((a) => a.ngay_kham < todayStr)
 
-    // Lọc theo trạng thái
-    if (activeStatus) list = list.filter((a) => a.status === activeStatus)
-
     // Tìm kiếm theo tên bệnh nhân (debounced)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
@@ -375,14 +363,13 @@ export default function DoctorAppointments() {
     })
 
     return list
-  }, [all, tab, activeStatus, search, sortKey, sortDir, todayStr])
+  }, [all, tab, search, sortKey, sortDir, todayStr])
 
   function handleTabChange(newTab: Tab) {
     setTab(newTab)
     setSortKey('ngay_kham')
     // "Đã qua" → mới nhất lên đầu; các tab khác → sớm nhất lên đầu
     setSortDir(newTab === 'past' ? 'desc' : 'asc')
-    setActiveStatus('')
   }
 
   function handleSort(key: SortKey) {
@@ -488,11 +475,17 @@ export default function DoctorAppointments() {
 
         {/* Banner cảnh báo urgent */}
         {urgentCount > 0 && (
-          <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
             <Icon name="alert-circle" className="h-4 w-4 shrink-0" />
-            <span>
+            <span className="flex-1">
               Có <strong>{urgentCount}</strong> lịch hôm nay chưa xác nhận — vui lòng xử lý.
             </span>
+            <button
+              onClick={() => handleTabChange('today')}
+              className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100"
+            >
+              Xem ngay
+            </button>
           </div>
         )}
 
@@ -530,23 +523,6 @@ export default function DoctorAppointments() {
               className="input w-full pl-9"
             />
           </div>
-        </div>
-
-        {/* Status tab */}
-        <div className="mb-4 card flex gap-1 p-1.5 w-fit">
-          {STATUS_TABS.map((s) => (
-            <button
-              key={s.value}
-              onClick={() => setActiveStatus(s.value)}
-              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                activeStatus === s.value
-                  ? 'bg-brand-500 text-white'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
         </div>
 
         {/* ── Bảng ── */}
