@@ -102,4 +102,34 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     da_co_ket_qua: false,
     ly_do_huy: 'Bệnh nhân bận đột xuất, xin hủy lịch.',
   },
+  // id 11 — test TC-C01: pending + paid → nút "Xác nhận" xuất hiện
+  {
+    id: 11, benh_nhan: 'Bùi Thị Cẩm', benh_nhan_id: 11,
+    so_dien_thoai: '0911111111',
+    ngay_kham: TODAY, gio_kham: '10:00',
+    loai_kham: 'clinic', status: 'pending', payment_status: 'paid', gia_kham: 400000,
+    ly_do_kham: 'Đau đầu kéo dài, chóng mặt.',
+    tuoi: 35, gioi_tinh: 'Nữ', di_ung: null, benh_nen: 'Migraine mãn tính',
+    da_co_ket_qua: false,
+  },
+  // id 12 — test TC-EDG09: pending đã qua ngày → badge "Hết hạn"
+  {
+    id: 12, benh_nhan: 'Trương Văn Bình', benh_nhan_id: 12,
+    so_dien_thoai: '0912222222',
+    ngay_kham: d(-4), gio_kham: '14:00',
+    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 600000,
+    ly_do_kham: 'Kiểm tra sau phẫu thuật.',
+    tuoi: 67, gioi_tinh: 'Nam', di_ung: 'Ibuprofen', benh_nen: 'Sau phẫu thuật tim',
+    da_co_ket_qua: false,
+  },
+  // id 13 — test TC-CO03: completed chưa có kết quả → nút "Nhập kết quả"
+  {
+    id: 13, benh_nhan: 'Hoàng Thị Dung', benh_nhan_id: 13,
+    so_dien_thoai: '0913333333',
+    ngay_kham: d(-1), gio_kham: '11:00',
+    loai_kham: 'video', status: 'completed', payment_status: 'paid', gia_kham: 250000,
+    ly_do_kham: 'Hỏi về kết quả xét nghiệm máu.',
+    tuoi: 44, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
+    da_co_ket_qua: false,
+  },
 ]

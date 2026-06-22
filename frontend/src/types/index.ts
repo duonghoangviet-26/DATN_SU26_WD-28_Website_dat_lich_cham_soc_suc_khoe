@@ -238,12 +238,13 @@ export interface ApiResponse<T = unknown> {
 
 export interface DoctorSlot {
   id: number
-  ngay: string           // 'YYYY-MM-DD'
-  gio_bat_dau: string    // 'HH:MM'
+  ngay: string              // 'YYYY-MM-DD'
+  gio_bat_dau: string       // 'HH:MM'
   gio_ket_thuc: string
-  so_benh_nhan_toi_da: number
-  so_benh_nhan_hien_tai: number
-  status: 'active' | 'locked' | 'cancelled'
+  phong_kham?: string | null
+  benh_nhan?: string | null
+  benh_nhan_id?: number | null
+  status: 'active' | 'booked' | 'locked' | 'cancelled' | 'expired'
 }
 
 export interface DoctorAppointmentDetail {

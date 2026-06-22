@@ -35,7 +35,14 @@ export const doctorAppointmentService = {
   async reject(id: number, ly_do: string): Promise<DoctorAppointmentDetail> {
     await delay(200)
     appointments = appointments.map((a) =>
-      a.id === id ? { ...a, status: 'cancelled', ly_do_huy: ly_do } : a,
+      a.id === id
+        ? {
+            ...a,
+            status: 'cancelled',
+            ly_do_huy: ly_do,
+            payment_status: a.payment_status === 'paid' ? 'refunded' : a.payment_status,
+          }
+        : a,
     )
     return findOrThrow(appointments, id, 'Lịch hẹn')
   },
@@ -43,7 +50,17 @@ export const doctorAppointmentService = {
   async complete(id: number): Promise<DoctorAppointmentDetail> {
     await delay(200)
     appointments = appointments.map((a) =>
-      a.id === id ? { ...a, status: 'completed', da_co_ket_qua: true } : a,
+      a.id === id ? { ...a, status: 'completed' } : a,
+    )
+    return findOrThrow(appointments, id, 'Lịch hẹn')
+  },
+
+  async cancelConfirmed(id: number, ly_do: string): Promise<DoctorAppointmentDetail> {
+    await delay(200)
+    appointments = appointments.map((a) =>
+      a.id === id
+        ? { ...a, status: 'cancelled', payment_status: 'refunded', ly_do_huy: ly_do }
+        : a,
     )
     return findOrThrow(appointments, id, 'Lịch hẹn')
   },
