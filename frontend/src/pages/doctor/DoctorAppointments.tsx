@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
@@ -377,6 +377,14 @@ export default function DoctorAppointments() {
     return list
   }, [all, tab, activeStatus, search, sortKey, sortDir, todayStr])
 
+  function handleTabChange(newTab: Tab) {
+    setTab(newTab)
+    setSortKey('ngay_kham')
+    // "Đã qua" → mới nhất lên đầu; các tab khác → sớm nhất lên đầu
+    setSortDir(newTab === 'past' ? 'desc' : 'asc')
+    setActiveStatus('')
+  }
+
   function handleSort(key: SortKey) {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
@@ -496,7 +504,7 @@ export default function DoctorAppointments() {
             {TIME_TABS.map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => setTab(key)}
+                onClick={() => handleTabChange(key)}
                 className={`relative whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   tab === key ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-100'
                 }`}
@@ -589,10 +597,9 @@ export default function DoctorAppointments() {
                     </tr>
                   ) : (
                     displayed.map((appt) => (
-                      <>
+                      <React.Fragment key={appt.id}>
                         {/* ── Row chính ── */}
                         <tr
-                          key={appt.id}
                           className={`cursor-pointer transition-colors hover:bg-slate-50 ${
                             expandedId === appt.id ? 'bg-brand-50/60' : ''
                           }`}
@@ -723,7 +730,7 @@ export default function DoctorAppointments() {
 
                         {/* ── Expanded detail row ── */}
                         {expandedId === appt.id && (
-                          <tr key={`${appt.id}-detail`} className="bg-brand-50/30">
+                          <tr className="bg-brand-50/30">
                             <td colSpan={6} className="px-6 py-4">
                               <div className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                                 <div>
@@ -772,7 +779,7 @@ export default function DoctorAppointments() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>
