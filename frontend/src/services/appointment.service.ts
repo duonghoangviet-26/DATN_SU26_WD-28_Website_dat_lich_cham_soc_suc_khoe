@@ -1,8 +1,5 @@
 import type { AppointmentItem, AppointmentStatus } from '@/types'
-import { mockAppointments } from '@/mock/appointments'
-import { delay, findOrThrow } from '@/utils/format'
-
-let appointments: AppointmentItem[] = [...mockAppointments]
+import axiosInstance from './axiosInstance'
 
 interface AppointmentFilters {
   keyword?: string
@@ -11,25 +8,47 @@ interface AppointmentFilters {
 }
 
 export const appointmentService = {
-  async getAll({ keyword = '', status = '', loai_kham = '' }: AppointmentFilters = {}): Promise<AppointmentItem[]> {
-    await delay()
-    let result = [...appointments]
-    if (keyword) {
-      const kw = keyword.toLowerCase()
-      result = result.filter(
-        (a) => a.benh_nhan.toLowerCase().includes(kw) || a.bac_si.toLowerCase().includes(kw),
-      )
-    }
-    if (status) result = result.filter((a) => a.status === status)
-    if (loai_kham) result = result.filter((a) => a.loai_kham === loai_kham)
-    return result
+  async getAll(params?: { 
+    keyword?: string, 
+    status?: string, 
+    loai_kham?: string,
+    startDate?: string,
+    endDate?: string,
+    page?: number,
+    limit?: number
+  }): Promise<{ data: AppointmentItem[], pagination: any }> {
+    const res = await axiosInstance.get('/admin/appointments', { params })
+    return { data: res.data.data, pagination: res.data.pagination }
   },
 
-  async cancel(id: number): Promise<AppointmentItem> {
-    await delay(200)
-    appointments = appointments.map((a) =>
-      a.id === id ? { ...a, status: 'cancelled', payment_status: a.payment_status === 'paid' ? 'refunded' : a.payment_status } : a,
-    )
-    return findOrThrow(appointments, id, 'Lịch hẹn')
+  async getById(id: string): Promise<AppointmentItem> {
+    const res = await axiosInstance.get(`/admin/appointments/${id}`)
+    return res.data.data
   },
+
+  async cancel(id: string, ly_do_huy: string): Promise<AppointmentItem> {
+    const res = await axiosInstance.patch(`/admin/appointments/${id}/cancel`, { ly_do_huy })
+    return res.data.data
+  },
+
+  async reschedule(id: string, data: { doctor_id: string, schedule_id: string, slot_id: string, ngay_kham: string, gio_kham: string }): Promise<AppointmentItem> {
+    const res = await axiosInstance.patch(`/admin/appointments/${id}/reschedule`, data)
+    return res.data.data
+  },
+
+  async create(data: Partial<AppointmentItem>): Promise<AppointmentItem> {
+    const res = await axiosInstance.post('/admin/appointments', data)
+    return res.data.data
+  },
+
+  // ---- Hỗ trợ Đặt lịch hộ ----
+  async getActiveDoctors(): Promise<any[]> {
+    const res = await axiosInstance.get('/admin/appointments/doctors/active')
+    return res.data.data
+  },
+
+  async getDoctorSchedules(doctorId: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/appointments/doctors/${doctorId}/schedules`)
+    return res.data.data
+  }
 }

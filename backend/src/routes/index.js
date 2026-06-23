@@ -2,17 +2,19 @@ import { Router } from 'express'
 import authRoutes from './auth.routes.js'
 import clinicRoutes from './clinic.routes.js'
 import adminRoutes from './admin/index.js'
+import appointmentRoutes from './appointment.routes.js'
 
 // Gom toàn bộ route con vào đây. Thêm module mới: import rồi router.use('/ten', ...).
 const router = Router()
 
+// Kiểm tra health-check cơ bản
 router.get('/health', (req, res) => {
-  res.json({ success: true, message: 'API khỏe mạnh', data: { time: new Date() } })
+  res.status(200).json({ success: true, message: 'API is working fine' })
 })
 
 router.use('/auth', authRoutes)
 router.use('/admin/clinic', clinicRoutes) // C3: Phòng Khám & Chuyên Khoa
+router.use('/admin/appointments', appointmentRoutes)
 router.use('/admin', adminRoutes)
 
 export default router
-

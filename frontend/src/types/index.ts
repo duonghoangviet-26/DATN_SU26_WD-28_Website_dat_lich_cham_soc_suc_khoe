@@ -188,8 +188,9 @@ export interface ServiceFormData {
 
 // ViewModel lịch hẹn (kết hợp bệnh nhân + bác sĩ)
 export interface AppointmentItem {
-  id: number
+  _id: string
   benh_nhan: string
+  sdt_benh_nhan?: string | null
   bac_si: string
   chuyen_khoa: string
   ngay_kham: string
@@ -198,6 +199,8 @@ export interface AppointmentItem {
   status: AppointmentStatus
   payment_status: PaymentStatus
   gia_kham: number
+  dia_chi_kham?: string | null
+  ly_do_kham?: string | null
 }
 
 export interface ReviewItem {
