@@ -505,9 +505,12 @@ export default function DoctorAppointments() {
 
   async function handleCancelConfirmed(id: number, ly_do: string) {
     try {
-      await doctorAppointmentService.cancelConfirmed(id, ly_do)
-      updateAppt(id, { status: 'cancelled', payment_status: 'refunded', ly_do_huy: ly_do })
-      showToast('Đã hủy lịch — bệnh nhân được hoàn 100%')
+      const updated = await doctorAppointmentService.cancelConfirmed(id, ly_do)
+      updateAppt(id, { status: 'cancelled', payment_status: updated.payment_status, ly_do_huy: ly_do, payment_deadline: null })
+      const msg = updated.payment_status === 'refunded'
+        ? 'Đã hủy lịch — bệnh nhân được hoàn 100%'
+        : 'Đã hủy lịch hẹn'
+      showToast(msg)
     } catch {
       showToast('Không thể hủy lịch hẹn', 'error')
     }
@@ -999,15 +1002,21 @@ export default function DoctorAppointments() {
           />
         )}
 
-        {cancelId !== null && (
-          <ReasonModal
-            title="Hủy lịch đã xác nhận"
-            description="Bác sĩ hủy → bệnh nhân được hoàn tiền 100% bất kể thời điểm."
-            confirmLabel="Xác nhận hủy"
-            onConfirm={(ly_do) => handleCancelConfirmed(cancelId, ly_do)}
-            onClose={() => setCancelId(null)}
-          />
-        )}
+        {cancelId !== null && (() => {
+          const appt = all.find((a) => a.id === cancelId)
+          const hasPaid = appt?.payment_status === 'paid'
+          return (
+            <ReasonModal
+              title="Hủy lịch đã xác nhận"
+              description={hasPaid
+                ? 'Bác sĩ hủy → bệnh nhân được hoàn tiền 100% bất kể thời điểm.'
+                : 'Bác sĩ hủy → lịch hẹn sẽ bị hủy. Bệnh nhân chưa thanh toán nên không có hoàn tiền.'}
+              confirmLabel="Xác nhận hủy"
+              onConfirm={(ly_do) => handleCancelConfirmed(cancelId, ly_do)}
+              onClose={() => setCancelId(null)}
+            />
+          )
+        })()}
 
         {examAppt && (
           <ExamModal

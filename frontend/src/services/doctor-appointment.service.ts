@@ -85,9 +85,11 @@ export const doctorAppointmentService = {
     if (appt.status !== 'confirmed') {
       throw new Error('Chỉ hủy lịch hẹn đã xác nhận bằng thao tác này')
     }
+    // Chỉ refund khi BN đã thanh toán — unpaid không có gì để hoàn
+    const new_payment_status = appt.payment_status === 'paid' ? 'refunded' : appt.payment_status
     appointments = appointments.map((a) =>
       a.id === id
-        ? { ...a, status: 'cancelled', payment_status: 'refunded', ly_do_huy: ly_do }
+        ? { ...a, status: 'cancelled', payment_status: new_payment_status, ly_do_huy: ly_do, payment_deadline: null }
         : a,
     )
     return findOrThrow(appointments, id, 'Lịch hẹn')

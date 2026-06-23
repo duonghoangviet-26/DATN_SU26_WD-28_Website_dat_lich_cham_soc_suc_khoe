@@ -46,9 +46,9 @@ describe('getAll() — filter theo tab', () => {
     expect(result.every((a) => a.ngay_kham < TODAY)).toBe(true)
   })
 
-  it('tab=all trả tất cả 13 record', async () => {
+  it('tab=all trả tất cả 16 record', async () => {
     const result = await svc.getAll({ tab: 'all' })
-    expect(result.length).toBe(13)
+    expect(result.length).toBe(16)
   })
 
   it('filter status=pending chỉ trả pending', async () => {
@@ -93,9 +93,13 @@ describe('confirm() — xác nhận lịch hẹn', () => {
     expect(updated.payment_status).toBe(before.payment_status)
   })
 
-  it('TC-C02: pending+unpaid → service phải từ chối xác nhận', async () => {
-    // id=3: pending + unpaid — không được xác nhận khi chưa thanh toán
-    await expect(svc.confirm(3)).rejects.toThrow(/chưa thanh toán/i)
+  it('TC-C02 (Luồng C): pending+unpaid → confirm thành công + payment_deadline được set', async () => {
+    // Luồng C: BS xác nhận trước, BN thanh toán sau trong deadline
+    // id=3: pending + unpaid — PHẢI xác nhận được, service set payment_deadline
+    const updated = await svc.confirm(3)
+    expect(updated.status).toBe('confirmed')
+    expect(updated.payment_deadline).toBeTruthy()
+    expect(new Date(updated.payment_deadline!).getTime()).toBeGreaterThan(Date.now())
   })
 
   it('BUG-GUARD: confirm appointment không tồn tại → throw', async () => {
@@ -207,11 +211,12 @@ describe('cancelConfirmed() — bác sĩ hủy lịch đã xác nhận', () => {
     expect(updated.ly_do_huy).toBe('Bác sĩ cấp cứu')
   })
 
-  it('TC-CC02: confirmed+unpaid → cancelled+refunded (100% bất kể)', async () => {
-    // Giả sử có confirmed+unpaid (dù thực tế UI ngăn, backend vẫn phải xử lý đúng)
-    // id=1: confirmed+paid, ta test refunded
-    const updated = await svc.cancelConfirmed(1, 'Lý do')
-    expect(updated.payment_status).toBe('refunded')
+  it('TC-CC02 (Luồng C): confirmed+unpaid → cancelled, payment_status giữ unpaid (không hoàn tiền)', async () => {
+    // id=16: confirmed+unpaid — Luồng C scenario, chưa thanh toán nên không có gì để hoàn
+    const updated = await svc.cancelConfirmed(16, 'Bác sĩ bận đột xuất')
+    expect(updated.status).toBe('cancelled')
+    expect(updated.payment_status).toBe('unpaid')
+    expect(updated.payment_deadline).toBeNull()
   })
 
   it('cancelConfirmed không tồn tại → throw', async () => {
