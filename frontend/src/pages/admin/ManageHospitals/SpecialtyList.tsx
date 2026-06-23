@@ -77,11 +77,9 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
                   {/* Icon */}
                   <td className="px-5 py-3">
                     {s.icon_url ? (
-                      <img src={s.icon_url} alt={s.ten} className="h-8 w-8 rounded object-cover" />
+                      <img src={s.icon_url} alt={s.ten} className="h-8 w-8 rounded object-cover border border-slate-200 bg-white" />
                     ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded bg-brand-100">
-                        <Icon name="service" className="h-4 w-4 text-brand-500" />
-                      </div>
+                      <span className="text-slate-400 text-xs italic">Không có</span>
                     )}
                   </td>
 

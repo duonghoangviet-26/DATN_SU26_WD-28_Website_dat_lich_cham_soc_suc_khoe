@@ -46,8 +46,9 @@ export default function ClinicDetail({ clinic, onEdit }: Props) {
         <div className="sm:col-span-2">
           <Field icon="file-text" label="Mô tả" value={clinic.mo_ta} />
         </div>
-        <Field icon="search" label="URL Logo" value={clinic.logo_url} truncate />
-        <Field icon="calendar" label="URL Bản đồ (Google Maps embed)" value={clinic.ban_do_url} truncate />
+        <div className="sm:col-span-2">
+          <Field icon="calendar" label="URL Bản đồ (Google Maps embed)" value={clinic.ban_do_url} truncate />
+        </div>
       </div>
     </div>
   )

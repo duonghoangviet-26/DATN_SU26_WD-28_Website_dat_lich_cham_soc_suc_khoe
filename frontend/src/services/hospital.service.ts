@@ -7,12 +7,12 @@ export const hospitalService = {
   // ---- Phòng Khám (Singleton) ----
 
   async getClinicInfo(): Promise<HospitalItem> {
-    const res = await axiosInstance.get('/admin/clinic')
+    const res = await axiosInstance.get('/admin/clinic-info')
     return res.data.data
   },
 
   async updateClinicInfo(data: Partial<HospitalItem>): Promise<HospitalItem> {
-    const res = await axiosInstance.put('/admin/clinic', data)
+    const res = await axiosInstance.put('/admin/clinic-info', data)
     return res.data.data
   },
 
@@ -37,4 +37,14 @@ export const hospitalService = {
     const res = await axiosInstance.patch(`/admin/clinic/specialties/${id}/toggle`)
     return res.data.data
   },
+
+  // ---- Upload Ảnh ----
+  async uploadImage(file: File): Promise<string> {
+    const formData = new FormData()
+    formData.append('image', file)
+    const res = await axiosInstance.post('/admin/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return res.data.data.url
+  }
 }

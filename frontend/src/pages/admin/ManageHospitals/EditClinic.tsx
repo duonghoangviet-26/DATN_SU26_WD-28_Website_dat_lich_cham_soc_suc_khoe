@@ -22,10 +22,26 @@ export default function EditClinic({ clinic, onSaved, onCancel }: Props) {
     ban_do_url: clinic.ban_do_url ?? '',
   })
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setUploading(true)
+      setError(null)
+      const url = await hospitalService.uploadImage(file)
+      setForm((prev) => ({ ...prev, logo_url: url }))
+    } catch (err) {
+      setError('Lỗi khi tải ảnh lên')
+    } finally {
+      setUploading(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -139,19 +155,6 @@ export default function EditClinic({ clinic, onSaved, onCancel }: Props) {
           />
         </div>
 
-        {/* Logo URL */}
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">URL Logo</label>
-          <input
-            name="logo_url"
-            value={form.logo_url}
-            onChange={handleChange}
-            className="input w-full"
-            placeholder="https://..."
-          />
-        </div>
-
-        {/* Bản đồ URL */}
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-slate-700">URL Bản đồ (Google Maps embed)</label>
           <input
