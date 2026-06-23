@@ -26,15 +26,20 @@ export const doctorAppointmentService = {
 
   async confirm(id: number): Promise<DoctorAppointmentDetail> {
     await delay(200)
+    const todayStr = new Date().toISOString().slice(0, 10)
     const appt = findOrThrow(appointments, id, 'Lịch hẹn')
     if (appt.status !== 'pending') {
       throw new Error('Chỉ xác nhận lịch hẹn đang chờ xác nhận')
     }
-    if (appt.payment_status !== 'paid') {
-      throw new Error('Không thể xác nhận lịch hẹn chưa thanh toán')
+    if (appt.ngay_kham < todayStr) {
+      throw new Error('Không thể xác nhận lịch hẹn đã quá ngày khám')
     }
+    // Luồng C: nếu chưa thanh toán → set deadline 2 giờ để BN thanh toán
+    const payment_deadline = appt.payment_status === 'unpaid'
+      ? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+      : null
     appointments = appointments.map((a) =>
-      a.id === id ? { ...a, status: 'confirmed' } : a,
+      a.id === id ? { ...a, status: 'confirmed', payment_deadline } : a,
     )
     return findOrThrow(appointments, id, 'Lịch hẹn')
   },
@@ -60,9 +65,13 @@ export const doctorAppointmentService = {
 
   async complete(id: number): Promise<DoctorAppointmentDetail> {
     await delay(200)
+    const todayStr = new Date().toISOString().slice(0, 10)
     const appt = findOrThrow(appointments, id, 'Lịch hẹn')
     if (appt.status !== 'confirmed') {
       throw new Error('Chỉ hoàn thành lịch hẹn đã xác nhận')
+    }
+    if (appt.ngay_kham > todayStr) {
+      throw new Error('Không thể hoàn thành lịch hẹn chưa đến ngày khám')
     }
     appointments = appointments.map((a) =>
       a.id === id ? { ...a, status: 'completed' } : a,

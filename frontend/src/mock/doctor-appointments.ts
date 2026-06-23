@@ -158,4 +158,41 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     tuoi: 44, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
     da_co_ket_qua: false,
   },
+  // id 14 — test: pending + paid + tương lai → nút "Xác nhận" PHẢI hiện (confirm trước ngày khám là hợp lệ)
+  {
+    id: 14, benh_nhan: 'Vũ Thị Mai', benh_nhan_id: 14,
+    so_dien_thoai: '0914444444',
+    ngay_kham: d(3), gio_kham: '09:30',
+    loai_kham: 'clinic', status: 'pending', payment_status: 'paid', gia_kham: 400000,
+    ten_dich_vu: 'Khám tim mạch',
+    phong_kham: 'Phòng 201, Tầng 2, Tòa A',
+    ly_do_kham: 'Tái khám định kỳ 3 tháng.',
+    tuoi: 50, gioi_tinh: 'Nữ', di_ung: null, benh_nen: 'Rối loạn nhịp tim',
+    da_co_ket_qua: false,
+  },
+  // id 15 — test: confirmed + đã qua → nút "Hoàn thành" + "Kết quả" PHẢI hiện, "Hủy" PHẢI hiện (kịch bản bệnh nhân không đến)
+  {
+    id: 15, benh_nhan: 'Đinh Văn Sơn', benh_nhan_id: 15,
+    so_dien_thoai: '0915555555',
+    ngay_kham: d(-1), gio_kham: '15:00',
+    loai_kham: 'clinic', status: 'confirmed', payment_status: 'paid', gia_kham: 350000,
+    ten_dich_vu: 'Khám tim mạch',
+    phong_kham: 'Phòng 201, Tầng 2, Tòa A',
+    ly_do_kham: 'Kiểm tra huyết áp định kỳ.',
+    tuoi: 58, gioi_tinh: 'Nam', di_ung: null, benh_nen: 'Cao huyết áp',
+    da_co_ket_qua: false,
+  },
+  // id 16 — test Luồng C: BS đã xác nhận, BN chưa thanh toán → warning + deadline
+  {
+    id: 16, benh_nhan: 'Nguyễn Thị Phương', benh_nhan_id: 16,
+    so_dien_thoai: '0916666666',
+    ngay_kham: d(1), gio_kham: '10:30',
+    loai_kham: 'clinic', status: 'confirmed', payment_status: 'unpaid', gia_kham: 350000,
+    ten_dich_vu: 'Khám tim mạch',
+    phong_kham: 'Phòng 201, Tầng 2, Tòa A',
+    ly_do_kham: 'Tái khám sau điều trị 2 tuần.',
+    tuoi: 40, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
+    da_co_ket_qua: false,
+    payment_deadline: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+  },
 ]

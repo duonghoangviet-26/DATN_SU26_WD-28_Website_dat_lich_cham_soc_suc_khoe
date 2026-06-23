@@ -268,6 +268,7 @@ export interface DoctorAppointmentDetail {
   benh_nen?: string | null
   da_co_ket_qua: boolean             // computed bởi backend (exists in ket_qua_kham)
   ly_do_huy?: string | null
+  payment_deadline?: string | null   // ISO datetime — deadline BN thanh toán sau khi BS confirm (Luồng C)
 }
 
 export interface PrescriptionDrug {

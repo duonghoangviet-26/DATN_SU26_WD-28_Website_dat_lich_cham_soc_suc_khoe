@@ -54,6 +54,12 @@ const appointmentSchema = new mongoose.Schema(
     nam_sinh_khach:      { type: Number, default: null },
 
     ly_do_huy: { type: String, default: null },
+
+    // Luồng C — BS confirm trước, BN thanh toán sau
+    // Set = thời điểm BS confirm + X giờ (config) khi payment_status='unpaid'
+    // null khi: chưa confirm | đã thanh toán | đã hủy
+    // Cron: { status:'confirmed', payment_status:'unpaid', payment_deadline:{ $lt: new Date() } } → auto-cancel
+    payment_deadline: { type: Date, default: null },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
