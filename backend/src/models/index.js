@@ -1,5 +1,5 @@
 // ============================================================
-// BARREL — Đăng ký & export toàn bộ Model Mongoose (25 collection)
+// BARREL — Đăng ký & export toàn bộ Model Mongoose (26 collection)
 // ============================================================
 // import { NguoiDung, LichHen } from './models/index.js'
 // hoặc: import models from './models/index.js'
@@ -17,6 +17,7 @@ export { default as ThanhVien }          from './ThanhVien.js'
 
 export { default as BacSi }              from './BacSi.js'
 export { default as LichLamViec }        from './LichLamViec.js'
+export { default as PhongKham }          from './PhongKham.js'
 
 export { default as LichHen }            from './LichHen.js'
 export { default as ThanhToan }          from './ThanhToan.js'

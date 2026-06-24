@@ -122,7 +122,7 @@ export interface SpecialtyItem {
   id: number
   ten: string
   mo_ta: string
-  icon: string
+  icon_url: string        // khớp backend ChuyenKhoa.icon_url (GAP-18)
   thu_tu: number
   status: 'active' | 'hidden'
 }
@@ -197,13 +197,14 @@ export interface ReviewItem {
   id: number
   benh_nhan: string
   bac_si: string
-  diem: number
+  so_sao: number          // khớp backend DanhGia.so_sao (GAP-19, đổi từ 'diem')
   noi_dung: string
   status: 'visible' | 'hidden'
   ngay_tao: string
 }
 
-export type NotificationTarget = 'all' | 'user' | 'doctor'
+// Khớp backend ThongBaoHeThong.doi_tuong — dùng tên tiếng Việt để nhất quán (GAP-20)
+export type NotificationTarget = 'tat_ca' | 'benh_nhan' | 'bac_si'
 
 export interface NotificationItem {
   id: number
@@ -214,16 +215,20 @@ export interface NotificationItem {
   ngay_gui: string
 }
 
-export type PaymentMethod = 'momo' | 'vnpay' | 'cash' | 'bank'
+export type PaymentMethod = 'momo' | 'vnpay' | 'cash' | 'bank' | 'mock'
+
+// Trạng thái giao dịch thanh toán — KHÁC với LichHen.payment_status (GAP-21)
+// LichHen dùng PaymentStatus ('unpaid'|'paid'|'refunded'), ThanhToan dùng TransactionStatus
+export type TransactionStatus = 'pending' | 'paid' | 'failed' | 'refunded'
 
 export interface PaymentItem {
   id: number
-  ma_giao_dich: string
+  ma_giao_dich: string    // "TXN0001" — auto-gen bởi backend (GAP-21)
   benh_nhan: string
   bac_si: string
   so_tien: number
   phuong_thuc: PaymentMethod
-  status: PaymentStatus
+  status: TransactionStatus
   ngay_tao: string
 }
 

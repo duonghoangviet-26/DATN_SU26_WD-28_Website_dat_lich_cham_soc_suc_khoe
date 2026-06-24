@@ -2,293 +2,474 @@
 
 > **Route:** `/doctor/schedule`
 > **Actor:** Bác sĩ (đăng nhập + trạng thái duyệt = `approved`)
-> **Trạng thái:** ✅ **Hoàn chỉnh với mock data** — toàn bộ UI + logic nghiệp vụ đã được triển khai và kiểm thử.
+> **Cập nhật:** 2026-06-24 (v3 — THIẾT KẾ LẠI HOÀN TOÀN)
+> **Trạng thái:** ✅ Đã implement (frontend mock) — TBD-1=C, TBD-2=A đã giải đáp và áp dụng
+
+---
+
+## ⚠️ Thay đổi lớn so với v2 (2026-06-23)
+
+| Điểm thay đổi | v2 (cũ) | v3 (mới) |
+|---|---|---|
+| Ai tạo slot? | Bác sĩ tự thêm | Hệ thống auto-generate |
+| Bác sĩ có thể xóa slot? | Có (nút "Xóa") | Không |
+| Bác sĩ có thể thêm slot? | Có (nút "Thêm ca mới") | Không |
+| Lịch hiển thị | 14 ngày từ hôm nay | Rolling 6 ngày (T2–T7) |
+| Slot mỗi ngày | Bác sĩ tự thêm thủ công | Full 8:00–17:30, 30 phút/slot |
+| UI layout | Flat list cuộn dài | Accordion: mỗi ngày collapse/expand |
+| Quyền bác sĩ | Add, Lock, Unlock, Delete, Edit phòng | Chỉ Lock, Unlock, Yêu cầu hủy, Edit phòng |
 
 ---
 
 ## 1. Tổng quan nghiệp vụ
 
-Bác sĩ cần quản lý ca làm việc của mình để:
+Lịch làm việc của bác sĩ là **do hệ thống quản lý**, không phải bác sĩ tự tạo. Mục tiêu:
 
-- Bệnh nhân biết khung giờ nào còn trống để đặt lịch.
-- Bác sĩ có thể chủ động khóa giờ khi bận, không cần xóa ca.
-- Hệ thống đảm bảo không ai đặt vào slot đã bận hoặc chưa có phòng.
+- **Chuẩn hóa**: mọi bác sĩ đều có lịch đồng nhất T2–T7, 8:00–17:30
+- **Chống gian lận**: bác sĩ không thể tự khai khống ngày làm việc để nhận lịch hẹn ảo
+- **Trải nghiệm bệnh nhân**: bệnh nhân chỉ thấy 6 ngày tới → không đặt quá xa rồi quên
+- **Tự động cập nhật**: hệ thống tự cuộn thêm ngày mới mỗi khi ngày hết hạn
 
 ---
 
-## 2. Khái niệm cốt lõi — Slot là gì?
+## 2. Cơ chế sinh lịch — Rolling Window T2–T7
 
-**Slot** = một ca làm việc cụ thể của bác sĩ:
+### 2.1 Nguyên tắc
 
-| Trường | Ví dụ |
-|---|---|
-| Ngày | 20/06/2026 |
-| Giờ bắt đầu | 08:00 |
-| Giờ kết thúc | 08:30 |
-| Phòng | Phòng 201, Tầng 2, Tòa A |
+> **Bệnh nhân luôn thấy đúng 6 ngày làm việc phía trước (T2–T7), cuộn theo ngày.**
 
-**Quy tắc quan trọng nhất:**
+```
+Hôm nay: T4, 25/6/2026
 
-> Mỗi slot = đúng 1 bệnh nhân. Không cho nhiều bệnh nhân vào cùng 1 slot.
+Window bệnh nhân thấy:
+  T4 25/6 ← hôm nay (nếu còn giờ làm việc)
+  T5 26/6
+  T6 27/6
+  T7 28/6
+  T2 29/6 ← tự sinh vì T2 tuần này (23/6) đã qua
+  T3 30/6 ← tự sinh vì T3 tuần này (24/6) đã qua
 
-Khi bệnh nhân đặt và thanh toán thành công → slot chuyển sang `booked` → không ai khác đặt được nữa.
+Khi T4 25/6 kết thúc (23:59):
+  → Hệ thống auto-generate T4 2/7 với đầy đủ slot 8:00–17:30
+  → Window mới: T5 26/6, T6 27/6, T7 28/6, T2 29/6, T3 30/6, T4 2/7
+```
+
+### 2.2 Quy tắc sinh slot mỗi ngày mới
+
+Mỗi ngày được tạo tự động với **16 slot** — nghỉ trưa 12:00–13:30 **(TBD-1 = C)**:
+
+```
+08:00–08:30  08:30–09:00  09:00–09:30  09:30–10:00
+10:00–10:30  10:30–11:00  11:00–11:30  11:30–12:00
+── nghỉ trưa 12:00–13:30 ──
+13:30–14:00  14:00–14:30  14:30–15:00  15:00–15:30
+15:30–16:00  16:00–16:30  16:30–17:00  17:00–17:30
+```
+
+Tất cả slot sinh ra mặc định: `status = 'active'`, `phong_kham = null`, `benh_nhan_id = null`
+
+### 2.3 Ai trigger sinh lịch? — **TBD-2 = A (Cron tự động)**
+
+| Phương án | Cơ chế | Ưu điểm | Nhược điểm |
+|---|---|---|---|
+| **✅ A — Cron tự động** | `node-cron` chạy 23:55 mỗi ngày, sinh slot cho T+7 | Không cần thao tác thủ công | Cần đảm bảo cron không fail |
+| B — Admin kích hoạt | Admin nhấn "Kích hoạt lịch" trong C2 | Kiểm soát được | Dễ quên, mất ngày |
+| C — Hybrid | Admin approve → sinh lần đầu; cron duy trì | Ổn định + kiểm soát | Phức tạp hơn |
+
+> **Quyết định:** Phương án A. Mỗi ngày 23:55, cron job sinh slot mới cho T+7 đối với tất cả bác sĩ đã được duyệt (`trang_thai_duyet = 'approved'`). Nếu cron fail → Admin có thể trigger thủ công qua `POST /api/admin/slots/generate`.
+
+### 2.4 Bác sĩ mới được duyệt
+
+Khi Admin duyệt bác sĩ (C2):
+- Hệ thống sinh lịch cho **6 ngày T2–T7 tiếp theo** với đầy đủ slot
+- Bác sĩ vào `/doctor/schedule` thấy ngay lịch đã có sẵn
 
 ---
 
 ## 3. Data Model
 
+### 3.1 Frontend type — `DoctorSlot` (giữ nguyên)
+
 ```ts
 interface DoctorSlot {
-  id: number
-  ngay: string              // 'YYYY-MM-DD'
-  gio_bat_dau: string       // 'HH:MM'
-  gio_ket_thuc: string      // 'HH:MM'
-  phong_kham?: string | null  // "Phòng 201, Tầng 2, Tòa A" — để null nếu chưa xác định
-  benh_nhan?: string | null   // Tên bệnh nhân đã đặt (null = chưa ai đặt)
-  benh_nhan_id?: number | null
+  id: number                       // int (mock) → MongoDB ObjectId (thật)
+  ngay: string                     // 'YYYY-MM-DD'
+  gio_bat_dau: string              // 'HH:MM'
+  gio_ket_thuc: string             // 'HH:MM'
+  phong_kham?: string | null       // null = chưa gán phòng → BN không thấy slot này
+  benh_nhan?: string | null        // Tên BN đã đặt; null = chưa ai
+  benh_nhan_id?: number | null     // ID BN đã đặt
   status: 'active' | 'booked' | 'locked' | 'cancelled' | 'expired'
 }
 ```
 
-### So với model cũ — những gì thay đổi
+### 3.2 Thay đổi Backend — `LichLamViec.js`
 
-| Field | Cũ | Mới | Lý do |
-|---|---|---|---|
-| `so_benh_nhan_toi_da` | Có (default 5) | **Bỏ** | Không cần, slot = 1 người |
-| `so_benh_nhan_hien_tai` | Có | **Bỏ** | Thay bằng `status === 'booked'` |
-| `phong_kham` | Không có | **Thêm** | Bệnh nhân cần biết đến phòng nào |
-| `benh_nhan` | Không có | **Thêm** | Bác sĩ cần xem ai đã đặt |
-| `status` | 3 giá trị | **5 giá trị** | Đủ để phân biệt mọi trạng thái |
+Xem mục 11 — giữ nguyên so với v2, chưa cần thay đổi thêm.
 
 ---
 
-## 4. Trạng thái Slot
+## 4. Quyền hạn bác sĩ — CHỈ 3 VIỆC
 
-| Status | Nhãn hiển thị | Màu | Ý nghĩa | Bệnh nhân thấy? |
+> **Bác sĩ KHÔNG được tạo slot mới, KHÔNG được xóa slot.**
+> Slot do hệ thống sinh ra, hệ thống quản lý vòng đời.
+
+| Thao tác | Bác sĩ được phép? | Điều kiện |
+|---|---|---|
+| Xem lịch làm việc | ✅ | Luôn |
+| **Lock slot** ("Tôi bận giờ này") | ✅ | Slot `active`, chưa có BN, ngày ≥ hôm nay |
+| **Unlock slot** ("Mở lại") | ✅ | Slot `locked` |
+| **Sửa phòng khám** | ✅ | Slot `active` hoặc `locked`, chưa có BN |
+| **Yêu cầu hủy slot booked** | ✅ | Slot `booked` — gửi request lên Admin |
+| Thêm slot mới | ❌ | Không bao giờ |
+| Xóa slot | ❌ | Không bao giờ |
+| Đổi giờ slot | ❌ | Không bao giờ |
+
+---
+
+## 5. Trạng thái Slot — State Machine (v3)
+
+### 5.1 Bảng trạng thái
+
+| Status | Nhãn UI | Màu | Ý nghĩa | BN thấy để đặt? |
 |---|---|---|---|---|
-| `active` | Còn trống | Xanh lá | Mở, bệnh nhân có thể đặt | **Có** (khi có phòng) |
-| `booked` | Đã có lịch | Xanh dương | Bệnh nhân đã đặt + thanh toán | Không (đã kín) |
-| `locked` | Bác sĩ bận | Vàng cam | Bác sĩ tự đánh dấu bận | Không |
-| `cancelled` | Đã hủy | Đỏ | Ca bị hủy | Không |
-| `expired` | Hết hạn | Xám | Đã qua ngày, không ai đặt | Không |
+| `active` | Còn trống | Xanh lá | Hệ thống sinh ra, chờ đặt | **Có** (khi có `phong_kham`) |
+| `booked` | Đã có lịch | Xanh dương | BN đã đặt | Không |
+| `locked` | Bác sĩ bận | Vàng cam | BS đánh dấu bận tạm thời | Không |
+| `cancelled` | Đã hủy | Đỏ | Admin hủy sau khi xử lý BN | Không |
+| `expired` | Hết hạn | Xám | Tính toán frontend — qua ngày chưa ai đặt | Không |
 
-### Quy tắc bệnh nhân thấy slot `active`
+### 5.2 State machine (v3 — không có nhánh thêm/xóa bởi BS)
 
-Bệnh nhân chỉ thấy slot này để đặt khi **đồng thời** thỏa mãn:
+```
+[Hệ thống sinh slot lúc 23:55]
+            ↓
+         active
+        /       \
+  [BN đặt]   [BS lock]
+      ↓             ↓
+   booked         locked
+      |              |
+      |         [BS unlock]
+      |              ↓
+      |           active
+      |
+  [BS yêu cầu hủy] → Admin xử lý → cancelled
+  [Admin hủy]      → cancelled
+
+  active/locked (qua ngày, chưa ai đặt)
+      ↓ (frontend computed)
+   expired   ← KHÔNG lưu vào DB, chỉ tính toán hiển thị
+```
+
+### 5.3 Điều kiện BN thấy slot
+
 ```
 status = 'active'
 AND ngay >= hôm nay
-AND phong_kham != null  (đã có phòng)
+AND phong_kham IS NOT NULL
+AND ngay ∈ rolling window T2–T7
 ```
 
-Nếu `phong_kham = null` → slot vẫn active nhưng bệnh nhân không thấy.
-
 ---
 
-## 5. Quy tắc nghiệp vụ (Business Rules)
-
-### 5.1 Bác sĩ được làm gì?
-
-| Thao tác | Điều kiện |
-|---|---|
-| Xem toàn bộ slot của mình | Luôn được |
-| Thêm slot mới | `ngay >= hôm nay` |
-| Khóa slot (Bác sĩ bận) | `status = 'active'` + `benh_nhan = null` |
-| Bỏ khóa | `status = 'locked'` → trở về `active` |
-| Xóa slot | `status = 'active'` + `benh_nhan = null` (chưa ai đặt) |
-| Hủy slot | Chỉ khi `status ≠ 'booked'` và `status ≠ 'cancelled'` |
-
-### 5.2 Bác sĩ KHÔNG được làm gì?
-
-> **Slot đã có bệnh nhân (`booked`) không được xóa hoặc sửa giờ trực tiếp.**
->
-> Lý do: bệnh nhân đã thanh toán 100%. Nếu cần hủy, phải qua Admin để xử lý hoàn tiền.
-
-### 5.3 Slot quá ngày
-
-- Quá ngày + chưa có ai đặt (`status = 'active'`) → tự động hiển thị là `expired`
-- Quá ngày + có bệnh nhân (`status = 'booked'`) → giữ nguyên, thuộc lịch sử
-
----
-
-## 6. Luồng chính (User Flows)
+## 6. Tính năng — Luồng chi tiết
 
 ### F1: Xem lịch làm việc
+
 ```
 Vào /doctor/schedule
-→ Load danh sách slot của bác sĩ (7 ngày tới + các ngày đã qua có slot)
-→ Nhóm theo ngày
-→ Mỗi slot hiển thị: Giờ | Phòng | Trạng thái | Tên bệnh nhân (nếu booked)
-→ Slot quá ngày → mờ đi, không hiển thị nút thao tác
+→ Load tất cả slot của BS đang đăng nhập (rolling window T2–T7)
+→ Accordion: mỗi ngày là 1 row có thể expand/collapse
+→ Auto-expand ngày hôm nay
+→ Header mỗi ngày: tên ngày + số ca + dot indicator (● booked, ◐ locked, ○ active)
+→ Khi expand: danh sách slot với Giờ | Phòng | Badge | Tên BN | Nút thao tác
+→ Slot phong_kham=null: warning "⚠ Chưa có phòng — BN không thể đặt ca này"
 ```
 
-### F2: Thêm ca mới
+### F2: ~~Thêm ca mới~~ — ĐÃ XÓA
+
+> **Bác sĩ không có quyền thêm ca. Lịch do hệ thống sinh tự động.**
+> Nút "Thêm ca mới" và modal form bị xóa hoàn toàn khỏi UI.
+
+### F3: Tạm nghỉ (Lock slot)
+
 ```
-Click "Thêm ca mới"
-→ Modal: chọn Ngày, Giờ bắt đầu, Giờ kết thúc, điền Phòng khám (tuỳ chọn)
-→ Validate:
-   - Ngày >= hôm nay
-   - Giờ kết thúc > giờ bắt đầu
-→ Tạo slot mới với status = 'active'
-→ Nếu phong_kham = null → hiển thị warning "Bệnh nhân chưa thể đặt"
+Click "Tạm nghỉ" (chỉ hiện trên slot active + chưa có BN + ngày ≥ hôm nay)
+→ Guard: status = 'active' VÀ benh_nhan_id = null
+→ lockSlot() → status = 'locked'
+→ Badge: "Bác sĩ bận", nút đổi sang "Mở lại"
+→ Slot KHÔNG còn hiển thị cho BN
 ```
 
-### F3: Khóa ca
+### F4: Mở lại (Unlock slot)
+
 ```
-Click "Khóa" trên slot active + chưa có bệnh nhân
-→ Xác nhận: "Đánh dấu bận ca này?"
-→ status → 'locked'
-→ Badge chuyển "Bác sĩ bận", nút "Bỏ khóa" xuất hiện
-→ Slot không còn hiển thị cho bệnh nhân
+Click "Mở lại" (chỉ hiện khi locked)
+→ Guard: status = 'locked'
+→ unlockSlot() → status = 'active'
+→ Slot mở lại (BN thấy nếu có phòng)
 ```
 
-### F4: Bỏ khóa
+### F5: ~~Xóa slot~~ — ĐÃ XÓA
+
+> **Bác sĩ không có quyền xóa slot.** Slot do hệ thống sinh, hệ thống quản lý.
+> Nếu bác sĩ không cần slot nào, dùng "Tạm nghỉ" để lock.
+
+### F6: Sửa phòng khám (inline edit)
+
 ```
-Click "Bỏ khóa" trên slot locked
-→ status → 'active'
-→ Slot mở lại (bệnh nhân có thể đặt nếu có phòng)
+Click icon bút chì cạnh tên phòng (hoặc "⚠ Chưa có phòng")
+→ Inline input thay thế text tĩnh
+→ Nhập tên phòng → Enter để lưu, Esc để hủy
+→ Guard: status ∈ ['active', 'locked'] VÀ benh_nhan_id = null
+→ updatePhongKham(id, phong_kham_moi)
+→ Nếu phong_kham_moi = null → warning "BN sẽ không thấy slot này"
+
+⚠ Giới hạn hiện tại (mock): phòng nhập tay tự do
+→ Cần cải thiện (xem mục 10 — Roadmap):
+   Dropdown chọn từ danh sách phòng Admin quản lý + check conflict theo giờ
 ```
 
-### F5: Xóa ca
+### F7: Yêu cầu hủy slot đã có bệnh nhân (NEW)
+
 ```
-Click "Xóa" trên slot active + chưa có bệnh nhân
-→ Xác nhận
-→ Xóa slot khỏi danh sách
+Click "Yêu cầu hủy" (chỉ hiện trên slot booked + ngày ≥ hôm nay)
+→ Dialog: nhập lý do hủy (bắt buộc)
+→ requestCancelSlot(id, ly_do) → tạo notification cho Admin
+→ Slot giữ nguyên status 'booked' cho đến khi Admin xử lý xong
+→ Admin xử lý: thông báo BN + hoàn tiền → slot → 'cancelled'
+
+Luồng Admin xử lý (C5):
+  Admin nhận request → liên hệ BN → BN chọn:
+    ├── Dời sang bác sĩ khác → Admin assign lại
+    ├── Dời sang ngày khác → Admin tạo slot mới
+    └── Hoàn tiền hoàn toàn → Admin refund → slot 'cancelled'
 ```
 
 ---
 
-## 7. UI Layout chi tiết
+## 7. UI Layout — Accordion (v3)
 
 ### 7.1 Trang chính
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Lịch làm việc                           [+ Thêm ca mới] │
-│  Quản lý ca làm việc trong 7 ngày tới                    │
-├──────────────────────────────────────────────────────────┤
+│  Lịch làm việc                                           │
+│  Hệ thống tự sinh lịch T2–T7, cập nhật hàng ngày.       │
 │                                                          │
-│  [20] 20/06 Thứ Sáu   Hôm nay                   3 ca   │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │ 🕐 08:00 – 08:30  📍 Phòng 201, T2, Tòa A        │  │
-│  │                    [Đã có lịch]  Nguyễn Văn An    │  │
-│  ├────────────────────────────────────────────────────┤  │
-│  │ 🕐 08:30 – 09:00  📍 Phòng 201, T2, Tòa A        │  │
-│  │                    [Còn trống]   [🔒 Khóa] [🗑 Xóa]│ │
-│  ├────────────────────────────────────────────────────┤  │
-│  │ 🕐 09:00 – 09:30  ⚠️ Chưa có phòng               │  │
-│  │                    [Còn trống]   [🔒 Khóa] [🗑 Xóa]│ │
-│  └────────────────────────────────────────────────────┘  │
+│  ┌─ T4 25/6/2026  Hôm nay  ●●○○○○○○○○○○○○○○○○○ ──── ▼ ┐│
+│  │ 08:00–08:30  Phòng 201, T2, Tòa A [Đã có lịch]      ││
+│  │              👤 Trần Thị Bình                         ││
+│  ├───────────────────────────────────────────────────────┤│
+│  │ 08:30–09:00  Phòng 201, T2, Tòa A ✏  [Còn trống]    ││
+│  │                                [Tạm nghỉ]            ││
+│  ├───────────────────────────────────────────────────────┤│
+│  │ 09:00–09:30  ⚠ Chưa có phòng ✏    [Còn trống]       ││
+│  │                                [Tạm nghỉ]            ││
+│  ├───────────────────────────────────────────────────────┤│
+│  │ 09:30–10:00  Phòng 305, T3, Tòa B  [Bác sĩ bận]     ││
+│  │                                [Mở lại]              ││
+│  │ ... (thêm 15 slot nữa)                               ││
+│  └─────────────────────────────────────────────────────┘ │
 │                                                          │
-│  [21] 21/06 Thứ Bảy                              2 ca   │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │ 🕐 14:00 – 14:30  📍 Phòng 305, T3, Tòa B        │  │
-│  │                    [Bác sĩ bận]  [Bỏ khóa]       │  │
-│  └────────────────────────────────────────────────────┘  │
+│  ┌─ T5 26/6/2026          ○○○○○○○○○○○○○○○○○○○ ─────  ▶ ┐│  ← collapsed
+│  └──────────────────────────────────────────────────────┘│
+│                                                          │
+│  ┌─ T6 27/6/2026          ○○○○○○○○○○○○○○○○○○○ ─────  ▶ ┐│  ← collapsed
+│  └──────────────────────────────────────────────────────┘│
+│                                                          │
+│  (T7 28/6, T2 29/6, T3 30/6 tương tự)                   │
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 7.2 Màu sắc và badge
+### 7.2 Dot indicator (header mỗi ngày)
 
-| Status | Badge | Màu nền badge |
+```
+● xanh = booked  ◑ vàng = locked  ○ xám = active/expired
+Ví dụ: ●●○○○○○○○○○○○○○○○○○ = 2 booked, 17 active/trống
+```
+
+→ Nhìn một cái biết ngay ngày đó bận thế nào, không cần expand.
+
+### 7.3 Nút thao tác theo trạng thái (v3)
+
+| Status | Ngày | Nút hiển thị |
 |---|---|---|
-| `active` | Còn trống | Xanh lá (`green`) |
-| `booked` | Đã có lịch | Xanh dương (`blue`) |
-| `locked` | Bác sĩ bận | Vàng cam (`yellow`) |
-| `cancelled` | Đã hủy | Đỏ (`red`) |
-| `expired` | Hết hạn | Xám (`gray`) |
-
-### 7.3 Nút thao tác theo trạng thái
-
-| Status | Nút hiển thị |
-|---|---|
-| `active` + chưa có BN + ngày tương lai | `🔒 Khóa` + `🗑 Xóa` |
-| `booked` | _(không có nút — không được sửa)_ |
-| `locked` | `Bỏ khóa` |
-| `cancelled` hoặc `expired` | _(không có nút)_ |
-| Ngày đã qua | _(không có nút — dù status nào)_ |
-
-### 7.4 Form thêm ca mới
-
-```
-Ngày làm việc    [date picker, min = hôm nay]
-Giờ bắt đầu     [select: 07:00, 07:30 ... 17:00]
-Giờ kết thúc    [select: 07:30, 08:00 ... 17:30]
-Phòng khám      [text: "VD: Phòng 201, Tầng 2, Tòa A"]  ← tuỳ chọn
-
-Ghi chú dưới form:
-⚠️ Nếu chưa điền phòng, bệnh nhân sẽ chưa thể đặt lịch vào ca này.
-```
+| `active` + BN=null | Hôm nay / Tương lai | `✏ (sửa phòng)` + `[Tạm nghỉ]` |
+| `booked` | Hôm nay / Tương lai | `[Yêu cầu hủy]` (màu cam) |
+| `booked` | Đã qua | _(không có nút — lịch sử)_ |
+| `locked` | Hôm nay / Tương lai | `✏ (sửa phòng)` + `[Mở lại]` |
+| `cancelled` | Bất kỳ | _(không có nút)_ |
+| `expired` | Bất kỳ | _(không có nút)_ |
+| Bất kỳ | Đã qua | _(không có nút)_ |
 
 ---
 
-## 8. Hiện trạng code — ✅ Hoàn chỉnh
-
-### 8.1 Đã triển khai đầy đủ
-
-| Thành phần | File | Chi tiết |
-|---|---|---|
-| `DoctorSlot` type đầy đủ | `types/index.ts` | `id, ngay, gio_bat_dau, gio_ket_thuc, phong_kham, benh_nhan, benh_nhan_id, status` |
-| 5 trạng thái slot | `types/index.ts` | `active \| booked \| locked \| cancelled \| expired` |
-| Mock data 18 slot | `mock/doctor-schedule.ts` | Span -1 đến +4 ngày (hôm qua, hôm nay, 5 ngày tới), đủ mọi trạng thái |
-| Service CRUD đầy đủ | `services/schedule.service.ts` | `getAll, addSlot, lockSlot, unlockSlot, cancelSlot, deleteSlot` |
-| Layout nhóm theo ngày | `DoctorSchedule.tsx` | 7 ngày tới + các ngày quá khứ có slot |
-| Header ngày nổi bật | `DoctorSchedule.tsx` | Badge số ngày, highlight "Hôm nay", mờ ngày đã qua |
-| Hiển thị giờ + phòng + bệnh nhân | `DoctorSchedule.tsx` (SlotRow) | Icon clock, icon hospital, warning "Chưa có phòng" |
-| Badge trạng thái màu | `DoctorSchedule.tsx` | `SLOT_STATUS_COLOR` + `SLOT_STATUS_LABEL` map |
-| Hiển thị tên bệnh nhân (booked) | `DoctorSchedule.tsx` (SlotRow) | Badge xanh dương với icon user |
-| Nút Khóa / Bỏ khóa / Xóa | `DoctorSchedule.tsx` (SlotRow) | Ẩn nút khi ngày đã qua hoặc slot có BN |
-| Form thêm ca | `DoctorSchedule.tsx` | Ngày (date picker min=today), giờ BĐ/KT (select), phòng (text tùy chọn) |
-| Validation form | `DoctorSchedule.tsx` | `gio_bat_dau >= gio_ket_thuc` → lỗi inline |
-| Warning thiếu phòng | `DoctorSchedule.tsx` | Trong form + trong SlotRow nếu `phong_kham = null` |
-| Reset form khi mở modal | `DoctorSchedule.tsx` | `setForm(EMPTY_FORM)` + `setFormError('')` trong onClick |
-| Error handling đầy đủ | `DoctorSchedule.tsx` | `formError` (trong modal) + `actionError` (thanh đỏ trên trang) |
-| Icon lock, trash, user | `components/admin/icons.tsx` | Đã thêm vào ICONS dictionary |
-| Guard slot có BN | `schedule.service.ts` | `lockSlot`, `deleteSlot` throw Error nếu `benh_nhan != null` |
-| Helper `canModify(slot)` | `DoctorSchedule.tsx` | Kiểm tra ngày tương lai + status không phải booked/cancelled/expired |
-
-### 8.2 Lưu ý kỹ thuật đã giải quyết
-
-| Vấn đề | Giải pháp |
-|---|---|
-| `handleAdd` không có `catch` block | Đã thêm — nếu service throw, hiển thị `formError` |
-| Modal không reset khi mở lại | `onClick={() => { setForm(EMPTY_FORM); setFormError(''); setShowModal(true) }}` |
-| Icon `lock`, `trash`, `user` hiển thị sai (fallback dashboard) | Đã thêm 3 SVG path vào `icons.tsx` |
-| Ngày đã qua nhưng có slot `active` | `isPast(ngay)` → hiển thị mờ, không có nút thao tác |
-| `cancelSlot` tồn tại trong service nhưng chưa dùng ở UI | Giữ để sẵn sàng khi cần — UI dùng `deleteSlot` thay |
-
----
-
-## 9. Gắn backend — Chỉ cần đổi thân hàm trong service
-
-Toàn bộ UI giữ nguyên. Khi gắn MongoDB, chỉ thay nội dung từng hàm trong `schedule.service.ts`:
+## 8. Service API — v3
 
 ```ts
-// Hiện tại — mock in-memory
-async getAll(): Promise<DoctorSlot[]> {
-  await delay()
-  return [...slots].sort(...)
-}
+scheduleService = {
+  // ✅ Giữ
+  getAll(): Promise<DoctorSlot[]>
+  // → rolling window T2–T7, sort ngay ASC + gio_bat_dau ASC
 
-// Sau khi gắn backend — chỉ đổi phần thân
-async getAll(): Promise<DoctorSlot[]> {
-  const res = await axiosInstance.get('/api/doctor/slots')
-  return res.data.data
+  // ✅ Giữ
+  lockSlot(id): Promise<DoctorSlot>
+  // Guard: status = 'active'          → reject 'Chỉ tạm nghỉ slot đang active'
+  // Guard: benh_nhan_id = null        → reject 'Không thể khóa slot đã có BN'
+  // → status: 'active' → 'locked'
+
+  // ✅ Giữ
+  unlockSlot(id): Promise<DoctorSlot>
+  // Guard: status = 'locked'          → reject 'Chỉ mở lại slot đang bị khóa'
+  // → status: 'locked' → 'active'
+
+  // ✅ Giữ
+  updatePhongKham(id, phong_kham: string | null): Promise<DoctorSlot>
+  // Guard: benh_nhan_id = null        → reject 'Không sửa phòng khi đã có BN'
+  // Guard: status ∈ ['active','locked'] → reject 'Chỉ sửa phòng khi active/locked'
+  // → cập nhật phong_kham
+
+  // 🆕 MỚI — thay thế cancelSlot() expose trực tiếp
+  requestCancelSlot(id, ly_do: string): Promise<void>
+  // Guard: status = 'booked'          → chỉ slot booked mới cần request
+  // Guard: ly_do không được rỗng     → reject 'Bắt buộc nhập lý do'
+  // → tạo CancelRequest cho Admin, slot giữ nguyên 'booked'
+
+  // ❌ XÓA — bác sĩ không được thêm slot
+  // addSlot(...)  → REMOVED từ doctor service
+
+  // ❌ XÓA — bác sĩ không được xóa slot
+  // deleteSlot(id)  → REMOVED từ doctor service
+
+  // 🔒 Internal only — Admin dùng sau khi xử lý xong request hủy
+  // cancelSlot(id)  → chỉ gọi từ Admin flow, không expose trong doctor service
 }
 ```
 
-Mapping đầy đủ các hàm:
+---
 
-| Hàm service hiện tại | Endpoint backend |
-|---|---|
-| `getAll()` | `GET /api/doctor/slots` |
-| `addSlot(data)` | `POST /api/doctor/slots` |
-| `lockSlot(id)` | `PATCH /api/doctor/slots/:id/lock` |
-| `unlockSlot(id)` | `PATCH /api/doctor/slots/:id/unlock` |
-| `deleteSlot(id)` | `DELETE /api/doctor/slots/:id` |
-| `cancelSlot(id)` | `PATCH /api/doctor/slots/:id/cancel` _(dùng khi cần)_ |
+## 9. Mock Data — Cần viết lại
 
-**Quy tắc bảo mật backend:**
-- `verifyToken` → lấy `doctor_id` từ JWT
-- Tất cả endpoint chỉ trả slot của bác sĩ đang đăng nhập (không trả slot người khác)
-- Backend kiểm tra lại guard: không cho xóa/khóa slot có `benh_nhan_id != null`
+### 9.1 Cấu trúc mock mới
+
+```ts
+// Tính rolling window: 6 ngày T2–T7 phía trước
+function getRollingWindow(): string[] {
+  // → trả về mảng 6 ngày YYYY-MM-DD gần nhất (T2–T7)
+  // Ví dụ hôm nay T4 25/6: ['2026-06-25','2026-06-26','2026-06-27','2026-06-28','2026-06-29','2026-06-30']
+}
+
+// Sinh full slots cho 1 ngày
+function generateDaySlots(ngay: string, startId: number): DoctorSlot[] {
+  // → 19 slot (hoặc 17 nếu bỏ trưa) mỗi slot status='active', phong_kham=null
+}
+
+// mockSlots = toàn bộ 6 ngày × 19 slot = ~114 slot
+// Vài slot được set thủ công: booked (có BN), locked, phong_kham có sẵn
+```
+
+### 9.2 Slots điển hình cần có trong mock để test UI
+
+| Ngày | Giờ | Status | Phòng | BN | Mục đích test |
+|---|---|---|---|---|---|
+| Hôm nay | 08:00–08:30 | `booked` | Phòng 201 | Trần Thị Bình | Nút "Yêu cầu hủy" |
+| Hôm nay | 09:00–09:30 | `locked` | Phòng 201 | — | Nút "Mở lại" |
+| Hôm nay | 10:00–10:30 | `active` | null | — | Warning chưa có phòng |
+| Ngày mai | 08:00–08:30 | `booked` | Phòng 305 | Phạm Minh Quân | Lịch sử |
+| +2 ngày | all | `active` | null | — | Ngày chưa có gì |
+
+---
+
+## 10. Roadmap — Cần làm thêm (không block MVP)
+
+### P1 — Phòng khám từ dropdown (thay free-text)
+
+**Vấn đề hiện tại:** Bác sĩ tự nhập tên phòng → có thể sai, trùng với bác sĩ khác cùng giờ.
+
+**Giải pháp:**
+```
+Admin (C3 — Quản lý bệnh viện) → quản lý danh sách phòng:
+  [{ id, ten_phong: 'Phòng 201', tang: 2, toa: 'A', loai: 'Khám thông thường' }]
+
+Bác sĩ chọn phòng → dropdown → hệ thống check xem phòng đó đã bị slot khác chiếm chưa:
+  Điều kiện conflict: cùng phòng + trùng giờ + status ∈ ['active','booked','locked']
+```
+
+### P2 — Undo khi lock nhầm
+
+Hiện tại lock nhầm → bấm "Mở lại" để undo. Đủ dùng cho MVP.
+
+### P3 — Thống kê ngày làm việc
+
+Admin xem được bác sĩ trong tháng có bao nhiêu slot booked/locked/expired → dùng cho đánh giá hiệu suất.
+
+---
+
+## 11. Backend — Thay đổi khi gắn DB thật
+
+### 11.1 `LichLamViec.js` — giữ nguyên từ v2
+
+```js
+// Đã xóa so_benh_nhan_toi_da, so_benh_nhan_hien_tai
+// Đã thêm benh_nhan_id: ObjectId ref NguoiDung
+```
+
+### 11.2 Endpoint bổ sung cho v3
+
+| Method | Endpoint | Mô tả | Role |
+|---|---|---|---|
+| `GET` | `/api/doctor/slots` | Rolling window T2–T7 của BS | Doctor |
+| `PATCH` | `/api/doctor/slots/:id/lock` | Tạm nghỉ | Doctor |
+| `PATCH` | `/api/doctor/slots/:id/unlock` | Mở lại | Doctor |
+| `PATCH` | `/api/doctor/slots/:id/phong-kham` | Sửa phòng | Doctor |
+| `POST` | `/api/doctor/slots/:id/request-cancel` | Yêu cầu hủy slot booked | Doctor |
+| `POST` | `/api/admin/slots/generate` | Sinh lịch thủ công | Admin |
+| — | node-cron 23:55 | Auto-sinh slot ngày mới | System |
+
+### 11.3 Endpoint bị xóa (bác sĩ không còn dùng)
+
+| Method | Endpoint cũ | Lý do xóa |
+|---|---|---|
+| `POST` | `/api/doctor/slots` | Bác sĩ không được tạo slot |
+| `DELETE` | `/api/doctor/slots/:id` | Bác sĩ không được xóa slot |
+
+### 11.4 Atomic slot booking (giữ nguyên từ v2)
+
+```js
+LichLamViec.findOneAndUpdate(
+  { _id: schedule_id, 'slots._id': slot_id, 'slots.status': 'active', 'slots.benh_nhan_id': null },
+  { $set: { 'slots.$.status': 'booked', 'slots.$.benh_nhan_id': user_id } },
+  { new: true }
+)
+```
+
+---
+
+## 12. Quyết định thiết kế — Đã giải đáp
+
+### [TBD-1] Giờ nghỉ trưa → **C: Nghỉ 12:00–13:30 (16 slot/ngày)**
+
+| Phương án | Số slot/ngày | Tổng thời gian làm | Kết quả |
+|---|---|---|---|
+| A — Không nghỉ | 19 slot | 9.5h (8:00–17:30) | |
+| B — Nghỉ 12:00–13:00 | 17 slot | 8.5h | |
+| **C — Nghỉ 12:00–13:30** | **16 slot** | **8h** | **✅ Đã chọn** |
+
+Áp dụng: mock data, service test (count=96), backend cron job.
+
+### [TBD-2] Cơ chế trigger sinh lịch → **A: Cron job 23:55**
+
+Xem chi tiết tại mục 2.3. Áp dụng: backend `node-cron`, endpoint `/api/admin/slots/generate`.
+
+---
+
+## 13. Checklist implement
+
+- [x] **1.** Viết lại `frontend/src/mock/doctor-schedule.ts` — rolling window 6 ngày, 16 slot/ngày (96 slot)
+- [x] **2.** Cập nhật `frontend/src/services/schedule.service.ts` — xóa `addSlot`, `deleteSlot`; thêm `requestCancelSlot`
+- [x] **3.** Viết lại `frontend/src/pages/doctor/DoctorSchedule.tsx` — accordion UI, xóa modal/nút thêm, thêm F7 "Yêu cầu hủy"
+- [x] **4.** Cập nhật `frontend/src/__tests__/services/schedule.service.test.ts` — 50 tests, xóa addSlot/deleteSlot, thêm requestCancelSlot
+- [ ] **5.** Cập nhật `docs/DB_GAP_ANALYSIS.md` — bổ sung endpoint mới, endpoint xóa
+- [ ] **6.** Backend: cron job `node-cron` 23:55 sinh slot + endpoint `POST /api/admin/slots/generate`

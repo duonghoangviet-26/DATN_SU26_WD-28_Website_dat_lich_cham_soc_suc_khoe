@@ -27,7 +27,7 @@ async function seedAll() {
     // Đã import models ở đầu file
     const {
       NguoiDung, ThongTinPhongKham, ChuyenKhoa, DichVu, CaiDatThanhToan,
-      GiaDinh, ThanhVien, BacSi, LichLamViec, LichHen, ThanhToan, HoanTien,
+      GiaDinh, ThanhVien, BacSi, LichLamViec, PhongKham, LichHen, ThanhToan, HoanTien,
       HoSoYTe, KetQuaKham, DonThuoc, NhacNho, DanhGia, ThongBao, PhienChat,
       TinNhanChat, LichSuLichHen, NhatKyThaoTac, DatLaiMatKhau, ThongBaoHeThong
     } = models;
@@ -70,7 +70,21 @@ async function seedAll() {
       { ten: 'Da liễu', mo_ta: 'Điều trị các bệnh về da', icon_url: 'https://example.com/da-lieu.jpg' }
     ]);
 
-    // 4. Người dùng (Admin, Doctors, Users)
+    // 4. Phòng khám vật lý (8 phòng — khớp với frontend/src/mock/rooms.ts)
+    // Khi gắn DB: frontend gọi GET /api/phong-kham thay vì dùng mockRooms.ts hardcode
+    const phongKhamList = await PhongKham.create([
+      { ten: 'Phòng 101', tang: 1, toa: 'A', loai: 'Khám thông thường' },
+      { ten: 'Phòng 102', tang: 1, toa: 'A', loai: 'Khám thông thường' },
+      { ten: 'Phòng 201', tang: 2, toa: 'A', loai: 'Khám chuyên khoa'  },
+      { ten: 'Phòng 202', tang: 2, toa: 'A', loai: 'Khám chuyên khoa'  },
+      { ten: 'Phòng 305', tang: 3, toa: 'B', loai: 'Siêu âm / Nội soi' },
+      { ten: 'Phòng 306', tang: 3, toa: 'B', loai: 'Siêu âm / Nội soi' },
+      { ten: 'Phòng 401', tang: 4, toa: 'B', loai: 'Xét nghiệm'        },
+      { ten: 'Phòng 402', tang: 4, toa: 'B', loai: 'Xét nghiệm'        },
+    ])
+    // full_name virtual: "Phòng 101, Tầng 1, Tòa A" — khớp với slots[].phong_kham String
+
+    // 5. Người dùng (Admin, Doctors, Users)
     const users = await NguoiDung.create([
       { ho_ten: 'Admin Tổng', email: 'admin@vitafamily.vn', mat_khau: passwordHash, so_dien_thoai: '0901000000', role: 'admin' },
       { ho_ten: 'BS. Trần Văn A', email: 'bacsi_a@vitafamily.vn', mat_khau: passwordHash, so_dien_thoai: '0901000001', role: 'doctor' },
@@ -99,13 +113,15 @@ async function seedAll() {
       services.push(await DichVu.create(data));
     }
 
-    // 6. Bác sĩ (liên kết User và Chuyên khoa)
+    // 7. Bác sĩ (liên kết User và Chuyên khoa, gán phòng mặc định từ PhongKham.full_name)
+    const phong101 = `${phongKhamList[0].ten}, Tầng ${phongKhamList[0].tang}, Tòa ${phongKhamList[0].toa}` // "Phòng 101, Tầng 1, Tòa A"
+    const phong201 = `${phongKhamList[2].ten}, Tầng ${phongKhamList[2].tang}, Tòa ${phongKhamList[2].toa}` // "Phòng 201, Tầng 2, Tòa A"
     const doctors = await BacSi.create([
-      { user_id: docUserA._id, specialties: [specializations[0]._id], services: [services[0]._id], so_nam_kinh_nghiem: 10, trang_thai_duyet: 'approved' },
-      { user_id: docUserB._id, specialties: [specializations[1]._id], services: [services[1]._id], so_nam_kinh_nghiem: 5, trang_thai_duyet: 'approved' }
+      { user_id: docUserA._id, specialties: [specializations[0]._id], services: [services[0]._id], so_nam_kinh_nghiem: 10, trang_thai_duyet: 'approved', phong_kham_mac_dinh: phong101 },
+      { user_id: docUserB._id, specialties: [specializations[1]._id], services: [services[1]._id], so_nam_kinh_nghiem: 5,  trang_thai_duyet: 'approved', phong_kham_mac_dinh: phong201 }
     ]);
 
-    // 7. Gia đình (Của bệnh nhân)
+    // 8. Gia đình (Của bệnh nhân)
     const families = await GiaDinh.create([
       { user_id: patientC._id, ten_nhom: 'Gia đình Lê C' },
       { user_id: patientD._id, ten_nhom: 'Gia đình Phạm D' }
@@ -113,7 +129,7 @@ async function seedAll() {
 
     console.log('🌱 Đang chèn dữ liệu Mức 2 (Phụ thuộc cấp 1)...');
 
-    // 8. Thành viên gia đình
+    // 9. Thành viên gia đình
     const members = await ThanhVien.create([
       { family_id: families[0]._id, ho_ten: 'Lê C', ngay_sinh: new Date('1990-01-01'), gioi_tinh: 'nam', la_chu_ho: true },
       { family_id: families[0]._id, ho_ten: 'Trần Thị Vợ', ngay_sinh: new Date('1992-05-05'), gioi_tinh: 'nu', la_chu_ho: false },
@@ -121,7 +137,8 @@ async function seedAll() {
       { family_id: families[1]._id, ho_ten: 'Phạm Con', ngay_sinh: new Date('2015-08-08'), gioi_tinh: 'nam', la_chu_ho: false }
     ]);
 
-    // 9. Lịch làm việc (Doctor Schedules) - cho hôm qua (để tạo được HoSoYTe đã khám)
+    // 10. Lịch làm việc (Doctor Schedules) - cho hôm qua (để tạo được HoSoYTe đã khám)
+    // slots dùng fields mới: status + benh_nhan_id + phong_kham (không dùng so_benh_nhan_toi_da cũ)
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const dayStr = yesterday.toISOString().split('T')[0];
@@ -131,40 +148,44 @@ async function seedAll() {
         doctor_id: doctors[0]._id,
         ngay: new Date(dayStr),
         slots: [
-          { gio_bat_dau: '08:00', gio_ket_thuc: '08:30', so_benh_nhan_toi_da: 1, so_benh_nhan_hien_tai: 1 },
-          { gio_bat_dau: '08:30', gio_ket_thuc: '09:00', so_benh_nhan_toi_da: 1, so_benh_nhan_hien_tai: 0 }
+          // slot[0]: đã có BN → booked (liên kết với appointment[0] completed)
+          { gio_bat_dau: '08:00', gio_ket_thuc: '08:30', phong_kham: phong101, status: 'booked', benh_nhan_id: null },
+          // slot[1]: trống (liên kết với appointment[2] cancelled, đã reset)
+          { gio_bat_dau: '08:30', gio_ket_thuc: '09:00', phong_kham: phong101, status: 'active', benh_nhan_id: null }
         ]
       },
       {
         doctor_id: doctors[1]._id,
         ngay: new Date(dayStr),
         slots: [
-          { gio_bat_dau: '14:00', gio_ket_thuc: '14:30', so_benh_nhan_toi_da: 1, so_benh_nhan_hien_tai: 1 },
-          { gio_bat_dau: '14:30', gio_ket_thuc: '15:00', so_benh_nhan_toi_da: 1, so_benh_nhan_hien_tai: 0 }
+          // slot[0]: đang có BN pending
+          { gio_bat_dau: '14:00', gio_ket_thuc: '14:30', phong_kham: phong201, status: 'booked', benh_nhan_id: null },
+          // slot[1]: trống
+          { gio_bat_dau: '14:30', gio_ket_thuc: '15:00', phong_kham: phong201, status: 'active', benh_nhan_id: null }
         ]
       }
     ]);
 
     console.log('🌱 Đang chèn dữ liệu Mức 3 (Lịch hẹn, Đánh giá)...');
 
-    // 10. Lịch hẹn (Appointments)
+    // 11. Lịch hẹn (Appointments) — phong_kham là snapshot từ slots[].phong_kham lúc đặt
     const appointments = await LichHen.create([
       {
         user_id: patientC._id, member_id: members[0]._id, doctor_id: doctors[0]._id,
         schedule_id: schedules[0]._id, slot_id: schedules[0].slots[0]._id, service_id: services[0]._id,
-        loai_kham: 'clinic', ngay_kham: new Date(dayStr), gio_kham: '08:00',
+        loai_kham: 'clinic', ngay_kham: new Date(dayStr), gio_kham: '08:00', phong_kham: phong101,
         status: 'completed', payment_status: 'paid', gia_kham: 200000, ly_do_kham: 'Đau đầu'
       },
       {
         user_id: patientD._id, member_id: members[3]._id, doctor_id: doctors[1]._id,
         schedule_id: schedules[1]._id, slot_id: schedules[1].slots[0]._id, service_id: services[1]._id,
-        loai_kham: 'clinic', ngay_kham: new Date(dayStr), gio_kham: '14:00',
+        loai_kham: 'clinic', ngay_kham: new Date(dayStr), gio_kham: '14:00', phong_kham: phong201,
         status: 'pending', payment_status: 'unpaid', gia_kham: 250000, ly_do_kham: 'Sốt cao'
       },
       {
         user_id: patientC._id, ten_khach: 'Khách vãng lai E', so_dien_thoai_khach: '0999999999',
         doctor_id: doctors[0]._id, schedule_id: schedules[0]._id, slot_id: schedules[0].slots[1]._id,
-        loai_kham: 'clinic', ngay_kham: new Date(dayStr), gio_kham: '08:30',
+        loai_kham: 'clinic', ngay_kham: new Date(dayStr), gio_kham: '08:30', phong_kham: phong101,
         status: 'cancelled', payment_status: 'refunded', gia_kham: 200000, ly_do_huy: 'Bận đột xuất'
       }
     ]);
@@ -248,7 +269,7 @@ async function seedAll() {
       { user_id: patientD._id, ma_otp: '123456', het_han: new Date(Date.now() + 15*60000) }
     ]);
 
-    console.log('\n🎉 ĐÃ CHÈN THÀNH CÔNG DỮ LIỆU MẪU CHO 25 BẢNG!');
+    console.log('\n🎉 ĐÃ CHÈN THÀNH CÔNG DỮ LIỆU MẪU CHO 26 BẢNG (thêm PhongKham)!');
 
     
   } catch (error) {
