@@ -1,9 +1,9 @@
-// ============================================================
-// SERVICE: Xác thực (Đăng nhập / Đăng ký) — chức năng A1
-// ============================================================
+import axiosInstance from './axiosInstance'
+import type { User, ApiResponse } from '@/types'
 
-import type { User } from '@/types'
-import axios from './axiosInstance'
+/**
+ * SERVICE: Xác thực (Đăng nhập / Đăng ký)
+ */
 
 interface LoginCredentials {
   email: string
@@ -23,26 +23,26 @@ interface LoginResult {
 }
 
 export const authService = {
-
-  // Đăng nhập hệ thống
-
+  /**
+   * Đăng nhập hệ thống
+   */
   async login({ email, password }: LoginCredentials): Promise<LoginResult> {
-    // Gọi API thật đến Backend
-    const { data } = await axios.post('/auth/login', {
+    const res = await axiosInstance.post<ApiResponse<LoginResult>>('/auth/login', {
       email,
-      mat_khau: password // Backend dùng mat_khau
+      mat_khau: password,
     })
-
-    return data.data // Trả về { token, user }
+    return res.data.data
   },
 
   /**
-   * Đăng ký tài khoản mới (User)
+   * Đăng ký tài khoản mới (Bệnh nhân)
    */
-  async register(registerData: RegisterData): Promise<void> {
-    await axios.post('/auth/register', {
-      ...registerData,
-      mat_khau: registerData.password // Map password sang mat_khau
+  async register(data: RegisterData): Promise<void> {
+    await axiosInstance.post<ApiResponse<unknown>>('/auth/register', {
+      email:         data.email,
+      mat_khau:      data.password,
+      ho_ten:        data.ho_ten,
+      so_dien_thoai: data.so_dien_thoai,
     })
   },
 }

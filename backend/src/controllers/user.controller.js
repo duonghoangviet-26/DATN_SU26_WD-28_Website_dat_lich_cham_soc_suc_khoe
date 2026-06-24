@@ -1,6 +1,26 @@
 import bcrypt from 'bcryptjs'
-import { NguoiDung } from '../models/index.js'
+import { NguoiDung, NhatKyThaoTac } from '../models/index.js'
 import { ok, fail } from '../utils/response.js'
+
+/**
+ * Hàm trợ giúp ghi nhật ký thao tác
+ */
+async function logActivity(req, action, targetId, oldData = null, newData = null, reason = null) {
+  try {
+    await NhatKyThaoTac.create({
+      nguoi_thuc_hien_id: req.user.id,
+      vai_tro: req.user.role,
+      hanh_dong: action,
+      loai_doi_tuong: 'user',
+      doi_tuong_id: targetId,
+      du_lieu_cu: oldData,
+      du_lieu_moi: newData,
+      ly_do: reason
+    })
+  } catch (error) {
+    console.error('Lỗi ghi nhật ký thao tác:', error)
+  }
+}
 
 /**
  * Lấy danh sách người dùng cho Admin
@@ -109,6 +129,11 @@ export async function createUser(req, res) {
       role: role || 'user'
     })
 
+    // 5. Ghi nhật ký
+    await logActivity(req, 'CREATE_USER', newUser._id, null, {
+      email, ho_ten, role: role || 'user'
+    })
+
     return res.status(201).json({
       success: true,
       message: 'Người dùng đã được tạo thành công',
@@ -137,6 +162,9 @@ export async function updateUser(req, res) {
       return fail(res, 404, 'Không tìm thấy người dùng để cập nhật')
     }
 
+    // Ghi nhật ký
+    await logActivity(req, 'UPDATE_USER', user._id, null, { ho_ten, so_dien_thoai, role, status })
+
     return ok(res, user, 'Cập nhật thông tin người dùng thành công')
   } catch (error) {
     return fail(res, 500, 'Lỗi server: ' + error.message)
@@ -162,8 +190,13 @@ export async function toggleStatus(req, res) {
     }
 
     // 2. Đảo ngược trạng thái
+    const oldStatus = user.status
     user.status = user.status === 'active' ? 'locked' : 'active'
     await user.save()
+
+    // 3. Ghi nhật ký
+    const action = user.status === 'active' ? 'UNLOCK_USER' : 'LOCK_USER'
+    await logActivity(req, action, user._id, { status: oldStatus }, { status: user.status })
 
     return ok(res, user, `Đã ${user.status === 'active' ? 'mở khóa' : 'khóa'} tài khoản thành công`)
   } catch (error) {
@@ -193,7 +226,10 @@ export async function softDeleteUser(req, res) {
       return fail(res, 404, 'Không tìm thấy người dùng')
     }
 
-    return ok(res, null, 'Đã xóa người dùng thành công')
+    // Ghi nhật ký
+    await logActivity(req, 'SOFT_DELETE_USER', user._id)
+
+    return ok(res, null, 'Đã xóa người dùng vào thùng rác thành công')
   } catch (error) {
     return fail(res, 500, 'Lỗi server: ' + error.message)
   }
@@ -213,6 +249,9 @@ export async function restoreUser(req, res) {
     if (!user) {
       return fail(res, 404, 'Không tìm thấy người dùng')
     }
+
+    // Ghi nhật ký
+    await logActivity(req, 'RESTORE_USER', user._id)
 
     return ok(res, user, 'Khôi phục người dùng thành công')
   } catch (error) {
@@ -249,6 +288,58 @@ export async function getUserStatistics(req, res) {
       status: { active, locked },
       deleted
     }, 'Lấy thống kê người dùng thành công')
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
+}
+
+/**
+ * Xóa vĩnh viễn người dùng (Hard Delete)
+ */
+export async function hardDeleteUser(req, res) {
+  try {
+    const userId = req.params.id
+    const adminId = req.user.id
+
+    if (userId === adminId) {
+      return fail(res, 400, 'Bạn không thể tự xóa vĩnh viễn tài khoản của chính mình')
+    }
+
+    const user = await NguoiDung.findById(userId)
+    if (!user) {
+      return fail(res, 404, 'Không tìm thấy người dùng')
+    }
+
+    // Chỉ cho phép xóa vĩnh viễn nếu đã nằm trong thùng rác
+    if (user.ngay_xoa === null) {
+      return fail(res, 400, 'Người dùng phải được xóa vào thùng rác trước khi xóa vĩnh viễn')
+    }
+
+    await NguoiDung.findByIdAndDelete(userId)
+
+    // Ghi nhật ký
+    await logActivity(req, 'HARD_DELETE_USER', userId, { email: user.email, ho_ten: user.ho_ten })
+
+    return ok(res, null, 'Đã xóa vĩnh viễn người dùng khỏi hệ thống')
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
+}
+
+/**
+ * Lấy danh sách nhật ký thao tác
+ */
+export async function getAuditLogs(req, res) {
+  try {
+    const { targetId, limit = 50 } = req.query
+    const query = targetId ? { doi_tuong_id: targetId } : {}
+
+    const logs = await NhatKyThaoTac.find(query)
+      .populate('nguoi_thuc_hien_id', 'ho_ten email')
+      .sort('-ngay_tao')
+      .limit(parseInt(limit))
+
+    return ok(res, logs, 'Lấy nhật ký thao tác thành công')
   } catch (error) {
     return fail(res, 500, 'Lỗi server: ' + error.message)
   }

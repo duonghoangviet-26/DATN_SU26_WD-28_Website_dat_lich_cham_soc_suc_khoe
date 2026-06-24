@@ -53,7 +53,7 @@ export const userService = {
 
   // Khóa / mở khóa một tài khoản
   async toggleStatus(id: string): Promise<User> {
-    const { data } = await axios.patch(`/admin/users/${id}/status`)
+    const { data } = await axios.patch(`/admin/users/${id}/toggle-lock`)
     return data.data
   },
 
@@ -71,6 +71,17 @@ export const userService = {
   // Lấy thống kê người dùng
   async getStatistics(): Promise<any> {
     const { data } = await axios.get('/admin/users/statistics')
+    return data.data
+  },
+
+  // Xóa vĩnh viễn người dùng (trong thùng rác)
+  async hardDelete(id: string): Promise<void> {
+    await axios.delete(`/admin/users/${id}/permanently`)
+  },
+
+  // Lấy nhật ký thao tác (Audit Logs)
+  async getLogs(targetId?: string): Promise<any[]> {
+    const { data } = await axios.get('/admin/users/logs', { params: { targetId } })
     return data.data
   }
 }

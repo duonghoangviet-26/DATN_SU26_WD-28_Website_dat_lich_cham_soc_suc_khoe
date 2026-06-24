@@ -2,7 +2,7 @@ import type { DoctorProfile, DoctorApproval } from '@/types'
 import { mockDoctors } from '@/mock/doctors'
 import { delay, findOrThrow } from '@/utils/format'
 
-let doctors: DoctorProfile[] = [...mockDoctors]
+let doctors: DoctorProfile[] = [...mockDoctors] as any
 
 export const doctorService = {
   async getAll(trang_thai?: DoctorApproval | ''): Promise<DoctorProfile[]> {

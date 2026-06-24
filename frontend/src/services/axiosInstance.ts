@@ -23,10 +23,10 @@ axiosInstance.interceptors.request.use((config) => {
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      // window.location.href = '/login'  // bật khi đã có luồng đăng nhập thật
+      window.location.href = '/login'
     }
     return Promise.reject(error)
   },

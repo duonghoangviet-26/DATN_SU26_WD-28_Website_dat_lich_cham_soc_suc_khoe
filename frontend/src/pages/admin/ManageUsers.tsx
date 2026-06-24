@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { userService } from '@/services/user.service'
 import { useAuth } from '@/context/AuthContext'
-import type { User } from '@/types'
+import type { User, Role } from '@/types'
 import {
   ROLE_LABEL,
   USER_STATUS_LABEL,
@@ -14,6 +14,37 @@ import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
 
+const LOG_CONFIG: Record<string, { label: string; color: 'green' | 'red' | 'blue' | 'yellow' | 'gray' }> = {
+  CREATE_USER: {
+    label: 'Tạo',
+    color: 'green',
+  },
+  UPDATE_USER: {
+    label: 'Cập nhật',
+    color: 'blue',
+  },
+  SOFT_DELETE_USER: {
+    label: 'Đã xóa',
+    color: 'red',
+  },
+  RESTORE_USER: {
+    label: 'Khôi phục',
+    color: 'green',
+  },
+  LOCK_USER: {
+    label: 'Khóa',
+    color: 'yellow',
+  },
+  UNLOCK_USER: {
+    label: 'Mở khóa',
+    color: 'green',
+  },
+  HARD_DELETE_USER: {
+    label: 'Xóa vĩnh viễn',
+    color: 'red',
+  },
+}
+
 // ============================================================
 // TRANG: QUẢN LÝ NGƯỜI DÙNG (ADMIN) - HOÀN THIỆN 100%
 // ============================================================
@@ -23,7 +54,7 @@ export default function ManageUsers() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  
+
   // Lọc & Phân trang
   const [keyword, setKeyword] = useState('')
   const [role, setRole] = useState('')
@@ -36,10 +67,18 @@ export default function ManageUsers() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'delete' | 'restore', user: User } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'delete' | 'restore' | 'hard-delete', user: User } | null>(null)
+  const [detailLogs, setDetailLogs] = useState<any[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
 
   // Form state
-  const [formData, setFormData] = useState({ ho_ten: '', email: '', mat_khau: '', so_dien_thoai: '', role: 'user' })
+  const [formData, setFormData] = useState<{
+    ho_ten: string
+    email: string
+    mat_khau: string
+    so_dien_thoai: string
+    role: Role
+  }>({ ho_ten: '', email: '', mat_khau: '', so_dien_thoai: '', role: 'user' })
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -60,6 +99,25 @@ export default function ManageUsers() {
   useEffect(() => {
     loadUsers()
   }, [keyword, role, status, page, isDeleted])
+
+  useEffect(() => {
+    if (selectedUser) {
+      setLoadingLogs(true)
+      userService.getLogs(selectedUser.id)
+        .then(logs => {
+          setDetailLogs(logs)
+        })
+        .catch(err => {
+          console.error('Không thể tải lịch sử thao tác:', err)
+          setDetailLogs([])
+        })
+        .finally(() => {
+          setLoadingLogs(false)
+        })
+    } else {
+      setDetailLogs([])
+    }
+  }, [selectedUser])
 
   // --- HANDLERS ---
 
@@ -100,10 +158,44 @@ export default function ManageUsers() {
         await userService.softDelete(user.id)
       } else if (type === 'restore') {
         await userService.restore(user.id)
+      } else if (type === 'hard-delete') {
+        await userService.hardDelete(user.id)
       }
       loadUsers()
     } catch (err: any) {
       alert(err.response?.data?.message || 'Thao tác thất bại')
+    }
+  }
+
+
+
+  const getLogDescription = (log: any) => {
+    if (log.mo_ta) return log.mo_ta
+
+    switch (log.hanh_dong) {
+      case 'CREATE_USER':
+        return 'Tạo tài khoản'
+
+      case 'UPDATE_USER':
+        return 'Cập nhật thông tin'
+
+      case 'SOFT_DELETE_USER':
+        return 'Đã xóa người dùng vào thùng rác'
+
+      case 'RESTORE_USER':
+        return 'Khôi phục tài khoản'
+
+      case 'LOCK_USER':
+        return 'Khóa tài khoản'
+
+      case 'UNLOCK_USER':
+        return 'Mở khóa tài khoản'
+
+      case 'HARD_DELETE_USER':
+        return 'Xóa vĩnh viễn tài khoản khỏi hệ thống'
+
+      default:
+        return 'Thực hiện thao tác'
     }
   }
 
@@ -133,8 +225,8 @@ export default function ManageUsers() {
           </select>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-600">
-           <input type="checkbox" id="trash" checked={isDeleted} onChange={e => { setIsDeleted(e.target.checked); setPage(1); }} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
-           <label htmlFor="trash" className="cursor-pointer font-medium selection:bg-none">Xem tài khoản đã xóa (Thùng rác)</label>
+          <input type="checkbox" id="trash" checked={isDeleted} onChange={e => { setIsDeleted(e.target.checked); setPage(1); }} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+          <label htmlFor="trash" className="cursor-pointer font-medium selection:bg-none">Xem tài khoản đã xóa (Thùng rác)</label>
         </div>
       </div>
 
@@ -175,25 +267,33 @@ export default function ManageUsers() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4"><Badge color={u.role==='admin' ? 'yellow' : u.role==='doctor' ? 'blue' : 'gray'}>{ROLE_LABEL[u.role]}</Badge></td>
-                    <td className="px-4 py-4"><Badge color={u.status==='active' ? 'green' : 'red'}>{USER_STATUS_LABEL[u.status]}</Badge></td>
-                    <td className="px-4 py-4 text-slate-500">{formatDate(isDeleted ? u.ngay_xoa : u.ngay_tao)}</td>
+                    <td className="px-4 py-4"><Badge color={u.role === 'admin' ? 'yellow' : u.role === 'doctor' ? 'blue' : 'gray'}>{ROLE_LABEL[u.role]}</Badge></td>
+                    <td className="px-4 py-4"><Badge color={u.status === 'active' ? 'green' : 'red'}>{USER_STATUS_LABEL[u.status]}</Badge></td>
+                    <td className="px-4 py-4 text-slate-500">
+                      <div className="text-xs font-medium text-slate-900">{formatDate(isDeleted ? u.ngay_xoa : u.ngay_tao)}</div>
+                      <div className="text-[10px] text-slate-400">
+                        {new Date(isDeleted ? (u.ngay_xoa as any) : (u.ngay_tao as any)).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-1">
                         <button onClick={() => setSelectedUser(u)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Xem"><Icon name="eye" className="h-4 w-4" /></button>
-                        
+
                         {!isDeleted ? (
                           <>
                             <button onClick={() => setEditingUser(u)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Sửa"><Icon name="edit" className="h-4 w-4" /></button>
                             {u.id !== currentUser?.id && (
                               <>
-                                <button onClick={() => setConfirmAction({type:'lock', user:u})} className={`p-2 rounded-lg transition-colors ${u.status==='active' ? 'text-slate-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 bg-orange-50'}`} title={u.status==='active'?'Khóa':'Mở khóa'}><Icon name="ban" className="h-4 w-4" /></button>
-                                <button onClick={() => setConfirmAction({type:'delete', user:u})} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa"><Icon name="trash" className="h-4 w-4" /></button>
+                                <button onClick={() => setConfirmAction({ type: 'lock', user: u })} className={`p-2 rounded-lg transition-colors ${u.status === 'active' ? 'text-slate-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 bg-orange-50'}`} title={u.status === 'active' ? 'Khóa' : 'Mở khóa'}><Icon name="ban" className="h-4 w-4" /></button>
+                                <button onClick={() => setConfirmAction({ type: 'delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa"><Icon name="trash" className="h-4 w-4" /></button>
                               </>
                             )}
                           </>
                         ) : (
-                          <button onClick={() => setConfirmAction({type:'restore', user:u})} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Khôi phục"><Icon name="check" className="h-4 w-4" /></button>
+                          <div className="flex justify-end gap-1">
+                            <button onClick={() => setConfirmAction({ type: 'restore', user: u })} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Khôi phục"><Icon name="check" className="h-4 w-4" /></button>
+                            <button onClick={() => setConfirmAction({ type: 'hard-delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa vĩnh viễn"><Icon name="trash" className="h-4 w-4" /></button>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -220,22 +320,72 @@ export default function ManageUsers() {
       {/* Modal Xem chi tiết */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedUser(null)}>
-          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><Icon name="user" className="h-5 w-5" /> Thông tin chi tiết</h3>
-            <div className="space-y-4">
-              <div className="flex justify-center mb-4 text-center">
-                <div className="h-20 w-20 bg-brand-100 text-brand-700 rounded-full flex items-center justify-center font-bold text-3xl mb-2">{selectedUser.ho_ten?.charAt(0).toUpperCase()}</div>
+          <div className="bg-white w-full max-w-xl rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 pb-2 border-b">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Icon name="user" className="h-5 w-5 text-brand-600" /> Thông tin chi tiết
+              </h3>
+              <button onClick={() => setSelectedUser(null)} className="p-1 rounded-lg hover:bg-slate-100">
+                <Icon name="x" className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto pr-1 space-y-6 flex-1">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 bg-brand-100 text-brand-700 rounded-full flex items-center justify-center font-bold text-2xl">
+                  {selectedUser.ho_ten?.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-slate-900">{selectedUser.ho_ten}</h4>
+                  <p className="text-sm text-slate-500">{selectedUser.email}</p>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 border-t pt-4">
-                <div><label className="text-xs text-slate-400 font-bold uppercase">Họ tên</label><p className="text-sm font-bold">{selectedUser.ho_ten}</p></div>
-                <div><label className="text-xs text-slate-400 font-bold uppercase">Email</label><p className="text-sm font-bold truncate">{selectedUser.email}</p></div>
-                <div><label className="text-xs text-slate-400 font-bold uppercase">Điện thoại</label><p className="text-sm font-bold">{selectedUser.so_dien_thoai || '—'}</p></div>
-                <div><label className="text-xs text-slate-400 font-bold uppercase">Vai trò</label><div><Badge color={selectedUser.role==='admin'?'yellow':selectedUser.role==='doctor'?'blue':'gray'}>{ROLE_LABEL[selectedUser.role]}</Badge></div></div>
-                <div><label className="text-xs text-slate-400 font-bold uppercase">Trạng thái</label><div><Badge color={selectedUser.status==='active'?'green':'red'}>{USER_STATUS_LABEL[selectedUser.status]}</Badge></div></div>
-                <div><label className="text-xs text-slate-400 font-bold uppercase">Ngày tham gia</label><p className="text-sm font-bold">{formatDate(selectedUser.ngay_tao)}</p></div>
+
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl">
+                <div><label className="text-xs text-slate-400 font-bold uppercase">Điện thoại</label><p className="text-sm font-bold text-slate-800">{selectedUser.so_dien_thoai || '—'}</p></div>
+                <div><label className="text-xs text-slate-400 font-bold uppercase">Vai trò</label><div><Badge color={selectedUser.role === 'admin' ? 'yellow' : selectedUser.role === 'doctor' ? 'blue' : 'gray'}>{ROLE_LABEL[selectedUser.role]}</Badge></div></div>
+                <div><label className="text-xs text-slate-400 font-bold uppercase">Trạng thái</label><div><Badge color={selectedUser.status === 'active' ? 'green' : 'red'}>{USER_STATUS_LABEL[selectedUser.status]}</Badge></div></div>
+                <div><label className="text-xs text-slate-400 font-bold uppercase">Ngày tham gia</label><p className="text-sm font-bold text-slate-800">{formatDate(selectedUser.ngay_tao)}</p></div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Icon name="clock" className="h-4 w-4 text-slate-500" /> Lịch sử hoạt động
+                </h4>
+                
+                {loadingLogs ? (
+                  <div className="py-8 text-center text-sm text-slate-400 animate-pulse">Đang tải lịch sử...</div>
+                ) : detailLogs.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-slate-400">Chưa có lịch sử hoạt động.</p>
+                ) : (
+                  <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                    {detailLogs.map((log: any) => {
+                      const cfg = LOG_CONFIG[log.hanh_dong as keyof typeof LOG_CONFIG] || { label: log.hanh_dong, color: 'gray' }
+                      return (
+                        <div key={log._id} className="flex gap-3 text-sm bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
+                          <div className="shrink-0"><Badge color={cfg.color}>{cfg.label}</Badge></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-slate-700">{getLogDescription(log)}</p>
+                            <div className="flex gap-1.5 mt-0.5 text-xs text-slate-400">
+                              <span>Bởi: {log.nguoi_thuc_hien_id?.ho_ten || 'Hệ thống'}</span>
+                              <span>•</span>
+                              <span>{new Date(log.ngay_tao).toLocaleString('vi-VN')}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
-            <button onClick={() => setSelectedUser(null)} className="w-full mt-8 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold transition-colors">Đóng lại</button>
+
+            <div className="mt-4 pt-3 border-t flex gap-3">
+              <button onClick={() => setSelectedUser(null)} className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold transition-colors">Đóng lại</button>
+              {!isDeleted && (
+                <button onClick={() => { setEditingUser(selectedUser); setSelectedUser(null); }} className="flex-1 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold transition-colors">Chỉnh sửa</button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -247,12 +397,12 @@ export default function ManageUsers() {
             <h3 className="text-xl font-bold mb-4">Thêm thành viên mới</h3>
             {formError && <div className="mb-4 p-2 bg-red-50 text-red-600 text-xs rounded border border-red-100">{formError}</div>}
             <div className="space-y-3">
-              <div><label className="text-xs font-bold mb-1 block">Họ tên *</label><input required className="input" value={formData.ho_ten} onChange={e => setFormData({...formData, ho_ten: e.target.value})} /></div>
-              <div><label className="text-xs font-bold mb-1 block">Email *</label><input required type="email" className="input" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
-              <div><label className="text-xs font-bold mb-1 block">Mật khẩu *</label><input required type="password" className="input" value={formData.mat_khau} onChange={e => setFormData({...formData, mat_khau: e.target.value})} /></div>
+              <div><label className="text-xs font-bold mb-1 block">Họ tên *</label><input required className="input" value={formData.ho_ten} onChange={e => setFormData({ ...formData, ho_ten: e.target.value })} /></div>
+              <div><label className="text-xs font-bold mb-1 block">Email *</label><input required type="email" className="input" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} /></div>
+              <div><label className="text-xs font-bold mb-1 block">Mật khẩu *</label><input required type="password" className="input" value={formData.mat_khau} onChange={e => setFormData({ ...formData, mat_khau: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={formData.so_dien_thoai} onChange={e => setFormData({...formData, so_dien_thoai: e.target.value})} /></div>
-                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
+                <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={formData.so_dien_thoai} onChange={e => setFormData({ ...formData, so_dien_thoai: e.target.value })} /></div>
+                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
               </div>
             </div>
             <div className="flex gap-3 mt-8">
@@ -270,12 +420,12 @@ export default function ManageUsers() {
             <h3 className="text-xl font-bold mb-4">Cập nhật thông tin</h3>
             <div className="space-y-3">
               <div><label className="text-xs font-bold mb-1 block text-slate-400">Email (Không thể sửa)</label><input disabled className="input bg-slate-50" value={editingUser.email} /></div>
-              <div><label className="text-xs font-bold mb-1 block">Họ tên *</label><input required className="input" value={editingUser.ho_ten} onChange={e => setEditingUser({...editingUser, ho_ten: e.target.value})} /></div>
+              <div><label className="text-xs font-bold mb-1 block">Họ tên *</label><input required className="input" value={editingUser.ho_ten} onChange={e => setEditingUser({ ...editingUser, ho_ten: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={editingUser.so_dien_thoai || ''} onChange={e => setEditingUser({...editingUser, so_dien_thoai: e.target.value})} /></div>
-                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value as any})}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
+                <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={editingUser.so_dien_thoai || ''} onChange={e => setEditingUser({ ...editingUser, so_dien_thoai: e.target.value })} /></div>
+                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
               </div>
-              <div><label className="text-xs font-bold mb-1 block">Trạng thái</label><select className="input" value={editingUser.status} onChange={e => setEditingUser({...editingUser, status: e.target.value as any})}><option value="active">Hoạt động</option><option value="locked">Đang khóa</option></select></div>
+              <div><label className="text-xs font-bold mb-1 block">Trạng thái</label><select className="input" value={editingUser.status} onChange={e => setEditingUser({ ...editingUser, status: e.target.value as any })}><option value="active">Hoạt động</option><option value="locked">Đang khóa</option></select></div>
             </div>
             <div className="flex gap-3 mt-8">
               <button disabled={submitting} type="button" onClick={() => setEditingUser(null)} className="flex-1 py-2 bg-slate-100 rounded-xl font-bold">Hủy</button>
@@ -288,13 +438,14 @@ export default function ManageUsers() {
       {/* Hộp thoại xác nhận */}
       <ConfirmDialog
         open={!!confirmAction}
-        danger={confirmAction?.type === 'delete' || (confirmAction?.type === 'lock' && confirmAction.user.status === 'active')}
-        title={confirmAction?.type === 'delete' ? 'Xóa người dùng' : confirmAction?.type === 'restore' ? 'Khôi phục' : confirmAction?.user.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-        message={confirmAction ? `Bạn có chắc muốn ${confirmAction.type==='delete'?'xóa':confirmAction.type==='restore'?'khôi phục':confirmAction.user.status==='active'?'khóa':'mở khóa'} người dùng "${confirmAction.user.ho_ten}"?` : ''}
+        danger={confirmAction?.type === 'delete' || confirmAction?.type === 'hard-delete' || (confirmAction?.type === 'lock' && confirmAction.user.status === 'active')}
+        title={confirmAction?.type === 'hard-delete' ? 'XÓA VĨNH VIỄN' : confirmAction?.type === 'delete' ? 'Xóa người dùng' : confirmAction?.type === 'restore' ? 'Khôi phục' : confirmAction?.user.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
+        message={confirmAction ? `Bạn có chắc muốn ${confirmAction.type === 'hard-delete' ? 'XÓA VĨNH VIỄN (không thể khôi phục)' : confirmAction.type === 'delete' ? 'xóa' : confirmAction.type === 'restore' ? 'khôi phục' : confirmAction.user.status === 'active' ? 'khóa' : 'mở khóa'} người dùng "${confirmAction.user.ho_ten}"?` : ''}
         confirmText="Xác nhận"
         onConfirm={onConfirmAction}
         onCancel={() => setConfirmAction(null)}
       />
+
     </div>
   )
 }

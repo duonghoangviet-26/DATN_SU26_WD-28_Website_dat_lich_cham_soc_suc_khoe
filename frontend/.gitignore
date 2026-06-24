@@ -9,6 +9,8 @@ logs
 *.log
 npm-debug.log*
 
+mock
+
 # Editor
 .vscode/*
 !.vscode/extensions.json
