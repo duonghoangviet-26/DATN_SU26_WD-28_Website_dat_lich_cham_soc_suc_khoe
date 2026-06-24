@@ -23,7 +23,7 @@ export default function ManageAppointments() {
   const [endDate, setEndDate] = useState('')
 
   const [page, setPage] = useState(1)
-  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, page: 1 })
 
   const [detail, setDetail] = useState<AppointmentItem | null>(null)
   const [rescheduleData, setRescheduleData] = useState<AppointmentItem | null>(null)
