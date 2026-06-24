@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
-import { NguoiDung, NhatKyThaoTac } from '../models/index.js'
-import { ok, fail } from '../utils/response.js'
+import { NguoiDung, NhatKyThaoTac } from '../../models/index.js'
+import { ok, fail } from '../../utils/response.js'
 
 /**
  * Hàm trợ giúp ghi nhật ký thao tác

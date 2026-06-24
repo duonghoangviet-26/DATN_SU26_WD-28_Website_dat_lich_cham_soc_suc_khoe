@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { NguoiDung } from '../models/index.js'
-import { ok, created, fail } from '../utils/response.js'
+import { NguoiDung } from '../../models/index.js'
+import { ok, created, fail } from '../../utils/response.js'
 
 // ============================================================
 // CONTROLLER: Xác thực (A1)
