@@ -29,4 +29,9 @@ export const notificationService = {
     const { data } = await axios.put(`${BASE_URL}/${id}`, payload)
     return data.data
   },
+
+  async delete(id: string): Promise<boolean> {
+    await axios.delete(`${BASE_URL}/${id}`)
+    return true
+  },
 }

@@ -12,4 +12,7 @@ router.post('/', notificationController.sendNotification)
 // PUT /api/admin/notifications/:id - Cập nhật nội dung thông báo đã gửi
 router.put('/:id', notificationController.updateNotification)
 
+// DELETE /api/admin/notifications/:id - Xóa thông báo đã gửi
+router.delete('/:id', notificationController.deleteNotification)
+
 export default router

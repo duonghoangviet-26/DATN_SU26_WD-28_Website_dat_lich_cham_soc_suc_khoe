@@ -56,3 +56,17 @@ export async function updateNotification(req, res) {
     return fail(res, 500, err.message)
   }
 }
+
+export async function deleteNotification(req, res) {
+  try {
+    const { id } = req.params
+    await notificationService.deleteSystemNotification(id)
+    return ok(res, null, 'Xóa thông báo thành công', 200)
+  } catch (err) {
+    if (err.message === 'Không tìm thấy thông báo') return fail(res, 404, err.message)
+    if (err.message.includes('không hợp lệ')) {
+      return fail(res, 400, err.message)
+    }
+    return fail(res, 500, err.message)
+  }
+}

@@ -90,3 +90,17 @@ export async function updateSystemNotification(id, { tieu_de, noi_dung }) {
 
   return updatedNotification
 }
+
+export async function deleteSystemNotification(id) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new Error('ID thông báo không hợp lệ')
+  }
+
+  const notification = await ThongBaoHeThong.findById(id)
+  if (!notification) {
+    throw new Error('Không tìm thấy thông báo')
+  }
+
+  await ThongBaoHeThong.findByIdAndDelete(id)
+  return true
+}

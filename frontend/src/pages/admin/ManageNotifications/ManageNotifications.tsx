@@ -99,6 +99,23 @@ export default function ManageNotifications() {
     }
   }
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage > 0 && newPage <= totalPages) {
+      setPage(newPage)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này? Hành động này không thể hoàn tác.')) {
+      try {
+        await notificationService.delete(id)
+        loadData()
+      } catch (err: any) {
+        alert(err?.response?.data?.message || err.message || 'Xóa thất bại')
+      }
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -230,6 +247,12 @@ export default function ManageNotifications() {
                         className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
                       >
                         <Icon name="edit" className="h-3.5 w-3.5" /> Sửa
+                      </button>
+                      <button
+                        onClick={() => handleDelete(n._id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-100"
+                      >
+                        <Icon name="trash-2" className="h-3.5 w-3.5" /> Xóa
                       </button>
                     </div>
                   </td>
