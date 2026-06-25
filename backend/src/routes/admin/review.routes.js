@@ -10,4 +10,7 @@ router.use(verifyToken, requireRole('admin'))
 // Lấy danh sách đánh giá
 router.get('/', reviews.getReviews)
 
+// Lấy chi tiết đánh giá & lịch sử
+router.get('/:id', reviews.getReviewDetail)
+
 export default router
