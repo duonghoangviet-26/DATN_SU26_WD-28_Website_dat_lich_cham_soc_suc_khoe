@@ -6,11 +6,9 @@ const router = Router()
 
 // Tất cả route yêu cầu: đăng nhập + role admin
 router.use(verifyToken, requireRole('admin'))
-
-// Lấy danh sách đánh giá
 router.get('/', reviews.getReviews)
-
-// Lấy chi tiết đánh giá & lịch sử
 router.get('/:id', reviews.getReviewDetail)
+router.patch('/:id/hide', reviews.hideReview)
+router.patch('/:id/show', reviews.showReview)
 
 export default router

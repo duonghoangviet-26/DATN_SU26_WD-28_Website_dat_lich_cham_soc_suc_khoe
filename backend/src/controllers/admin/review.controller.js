@@ -26,3 +26,37 @@ export async function getReviewDetail(req, res) {
     return fail(res, status, err.message)
   }
 }
+
+/**
+ * Ẩn đánh giá
+ */
+export async function hideReview(req, res) {
+  try {
+    const { id } = req.params
+    const { ly_do } = req.body
+    const adminId = req.user.id
+
+    const data = await reviewService.hideReview(id, adminId, ly_do)
+    return ok(res, data, 'Ẩn đánh giá thành công')
+  } catch (err) {
+    const status = err.message.includes('không tồn tại') ? 404 : 400
+    return fail(res, status, err.message)
+  }
+}
+
+/**
+ * Hiện đánh giá
+ */
+export async function showReview(req, res) {
+  try {
+    const { id } = req.params
+    const { ly_do } = req.body
+    const adminId = req.user.id
+
+    const data = await reviewService.showReview(id, adminId, ly_do)
+    return ok(res, data, 'Hiển thị đánh giá thành công')
+  } catch (err) {
+    const status = err.message.includes('không tồn tại') ? 404 : 400
+    return fail(res, status, err.message)
+  }
+}
