@@ -65,3 +65,28 @@ export async function sendSystemNotification({ tieu_de, noi_dung, doi_tuong, adm
 
   return populatedNotification
 }
+
+export async function updateSystemNotification(id, { tieu_de, noi_dung }) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new Error('ID thông báo không hợp lệ')
+  }
+
+  if (!tieu_de || !noi_dung) {
+    throw new Error('Vui lòng cung cấp đủ tiêu đề và nội dung cần sửa')
+  }
+
+  const notification = await ThongBaoHeThong.findById(id)
+  if (!notification) {
+    throw new Error('Không tìm thấy thông báo')
+  }
+
+  notification.tieu_de = tieu_de
+  notification.noi_dung = noi_dung
+  await notification.save()
+
+  const updatedNotification = await ThongBaoHeThong.findById(id)
+    .populate({ path: 'tao_boi', select: 'ho_ten email' })
+    .lean()
+
+  return updatedNotification
+}

@@ -24,4 +24,9 @@ export const notificationService = {
     const { data } = await axios.post(BASE_URL, payload)
     return data.data
   },
+
+  async update(id: string, payload: { tieu_de: string; noi_dung: string }): Promise<NotificationItemAPI> {
+    const { data } = await axios.put(`${BASE_URL}/${id}`, payload)
+    return data.data
+  },
 }

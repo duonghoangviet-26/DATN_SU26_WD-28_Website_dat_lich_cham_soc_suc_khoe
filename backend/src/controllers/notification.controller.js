@@ -36,3 +36,23 @@ export async function sendNotification(req, res) {
     return fail(res, 500, err.message)
   }
 }
+
+export async function updateNotification(req, res) {
+  try {
+    const { id } = req.params
+    const { tieu_de, noi_dung } = req.body
+    
+    const updatedNotif = await notificationService.updateSystemNotification(id, {
+      tieu_de,
+      noi_dung
+    })
+    
+    return ok(res, updatedNotif, 'Cập nhật thông báo thành công', 200)
+  } catch (err) {
+    if (err.message === 'Không tìm thấy thông báo') return fail(res, 404, err.message)
+    if (err.message.includes('không hợp lệ') || err.message.includes('Vui lòng cung cấp')) {
+      return fail(res, 400, err.message)
+    }
+    return fail(res, 500, err.message)
+  }
+}

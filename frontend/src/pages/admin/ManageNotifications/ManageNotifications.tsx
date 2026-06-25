@@ -5,6 +5,7 @@ import { formatDateTime } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
+import UpdateNotification from './UpdateNotification'
 
 const TARGET_COLOR: Record<NotificationTargetAPI, 'gray' | 'blue' | 'green'> = {
   tat_ca: 'gray', benh_nhan: 'blue', bac_si: 'green',
@@ -37,6 +38,7 @@ export default function ManageNotifications() {
   const [sendSuccess, setSendSuccess] = useState(false)
 
   const [detail, setDetail] = useState<NotificationItemAPI | null>(null)
+  const [targetEdit, setTargetEdit] = useState<NotificationItemAPI | null>(null)
 
   const loadData = async (ignore = false) => {
     setLoading(true)
@@ -216,12 +218,20 @@ export default function ManageNotifications() {
                     {formatDateTime(n.ngay_gui)}
                   </td>
                   <td className="px-5 py-4 text-right whitespace-nowrap">
-                    <button
-                      onClick={() => setDetail(n)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-brand-600 hover:border-brand-200 ml-auto"
-                    >
-                      <Icon name="eye" className="h-3.5 w-3.5" /> Chi tiết
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => setDetail(n)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-brand-600 hover:border-brand-200"
+                      >
+                        <Icon name="eye" className="h-3.5 w-3.5" /> Chi tiết
+                      </button>
+                      <button
+                        onClick={() => setTargetEdit(n)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
+                      >
+                        <Icon name="edit" className="h-3.5 w-3.5" /> Sửa
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -300,6 +310,18 @@ export default function ManageNotifications() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Sửa thông báo */}
+      {targetEdit && (
+        <UpdateNotification 
+          notification={targetEdit}
+          onClose={() => setTargetEdit(null)}
+          onSuccess={() => {
+            setTargetEdit(null)
+            loadData()
+          }}
+        />
       )}
     </div>
   )

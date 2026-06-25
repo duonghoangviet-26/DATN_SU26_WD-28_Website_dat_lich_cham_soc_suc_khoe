@@ -325,3 +325,8 @@ export interface DoctorUpdatePayload {
   admin_id: string
 }
 
+export interface NotificationUpdatePayload {
+  tieu_de: string
+  noi_dung: string
+}
+

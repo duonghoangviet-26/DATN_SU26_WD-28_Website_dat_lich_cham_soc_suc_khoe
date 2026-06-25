@@ -9,4 +9,7 @@ router.get('/', notificationController.getNotifications)
 // POST /api/admin/notifications - Gửi thông báo hệ thống mới
 router.post('/', notificationController.sendNotification)
 
+// PUT /api/admin/notifications/:id - Cập nhật nội dung thông báo đã gửi
+router.put('/:id', notificationController.updateNotification)
+
 export default router
