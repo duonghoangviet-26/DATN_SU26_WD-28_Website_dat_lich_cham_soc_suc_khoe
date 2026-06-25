@@ -1,13 +1,17 @@
 import mongoose from 'mongoose'
 
 // ============================================================
-// SERVICE — Gói dịch vụ khám (C4)
+// SERVICE — Dịch vụ y tế (C4)
 // SQL tương đương: bảng services (+ mở rộng C4 V4)
 // ============================================================
-// loai: 'clinic' (tại phòng khám) | 'home' (bác sĩ đến nhà) — KHÔNG có 'video'.
-// gia: được snapshot vào appointment.gia_kham lúc đặt → đổi giá sau không ảnh hưởng lịch cũ.
+// loai: 'home'    → bác sĩ đến nhà — đặt được, có thoi_gian_phut, khu_vuc[].
+//        'related' → dịch vụ liên quan theo chuyên khoa (X-quang, MRI, xét nghiệm...)
+//                    CHỈ hiển thị thông tin "Theo chỉ định bác sĩ", KHÔNG đặt lịch riêng.
+//                    Bắt buộc có specialty_id. Không cần thoi_gian_phut.
+// gia: 'home' → snapshot vào LichHen.gia_kham lúc đặt.
+//      'related' → chỉ hiển thị tham khảo.
 // ma_dich_vu: backend tự sinh "DV001", "DV002"... (client KHÔNG truyền vào).
-// khu_vuc[]: chỉ có ý nghĩa khi loai='home'; clinic → mảng rỗng.
+// Giá khám clinic (30 phút/slot) lưu trực tiếp ở BacSi.gia_kham — KHÔNG phải DichVu.
 
 const serviceSchema = new mongoose.Schema(
   {
@@ -20,7 +24,7 @@ const serviceSchema = new mongoose.Schema(
     },
     loai: {
       type: String,
-      enum: ['clinic', 'home'],
+      enum: ['home', 'related'],
       required: [true, 'Loại dịch vụ là bắt buộc'],
     },
     mo_ta_ngan: { type: String, default: null, maxlength: 500 },
@@ -30,18 +34,20 @@ const serviceSchema = new mongoose.Schema(
       required: [true, 'Giá dịch vụ là bắt buộc'],
       min: [0, 'Giá không được âm'],
     },
+    // home: required (validate trong hook) | related: null — không đặt lịch
     thoi_gian_phut: {
       type: Number,
-      required: [true, 'Thời gian thực hiện là bắt buộc'],
+      default: null,
       min: [10, 'Thời gian tối thiểu 10 phút'],
       max: [480, 'Thời gian tối đa 480 phút'],
     },
-    gio_dat_truoc_toi_thieu: { type: Number, default: 2 }, // giờ
-    ngay_ap_dung: { type: String, default: null, maxlength: 100 }, // "T2-T7"
-    gio_bat_dau:  { type: String, default: null }, // "08:00"
-    gio_ket_thuc: { type: String, default: null }, // "17:00"
+    gio_dat_truoc_toi_thieu: { type: Number, default: 2 }, // giờ — home only
+    ngay_ap_dung: { type: String, default: null, maxlength: 100 }, // "T2-T7" — home only
+    gio_bat_dau:  { type: String, default: null }, // "08:00" — home only
+    gio_ket_thuc: { type: String, default: null }, // "17:00" — home only
+    // related: required | home: optional (phục vụ lọc theo khoa)
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', default: null },
-    khu_vuc:      { type: [String], default: [] }, // home only
+    khu_vuc:      { type: [String], default: [] }, // home only — khu vực phục vụ tại nhà
     nguoi_tao_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     status: {
       type: String,
@@ -71,8 +77,15 @@ serviceSchema.pre('validate', async function () {
     const lastNum = last ? parseInt(last.ma_dich_vu.slice(2), 10) : 0
     this.ma_dich_vu = 'DV' + String(lastNum + 1).padStart(3, '0')
   }
-  // clinic không có khu vực
-  if (this.loai === 'clinic') this.khu_vuc = []
+  if (this.loai === 'home') {
+    if (!this.thoi_gian_phut) throw new Error('Dịch vụ tại nhà (home) bắt buộc có thoi_gian_phut')
+    if (this.thoi_gian_phut > 480) throw new Error('Thời gian tối đa 480 phút')
+  }
+  if (this.loai === 'related') {
+    if (!this.specialty_id) throw new Error('Dịch vụ liên quan (related) bắt buộc có specialty_id')
+    this.thoi_gian_phut = null
+    this.khu_vuc = []
+  }
 })
 
 export default mongoose.model('DichVu', serviceSchema)

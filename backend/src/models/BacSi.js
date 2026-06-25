@@ -23,11 +23,12 @@ const doctorSchema = new mongoose.Schema(
     bang_cap:    { type: String, default: null },
     kinh_nghiem: { type: String, default: null },
     so_nam_kinh_nghiem: { type: Number, default: 0, min: 0 },
-    phi_tu_van: {
+    gia_kham: {
       type: Number,
       default: 0,
-      min: [0, 'Phí tư vấn không được âm'],
-    }, // thông tin trên profile, KHÔNG dùng để tính tiền (tiền lấy từ service.gia)
+      min: [0, 'Giá khám không được âm'],
+    }, // snapshot vào LichHen.gia_kham khi BN đặt clinic — mỗi BS tự định giá
+    tuoi_nhan_kham_tu: { type: Number, default: 0, min: 0 }, // 0 = không giới hạn tuổi
     trang_thai_duyet: {
       type: String,
       enum: ['pending', 'approved', 'rejected', 'suspended'],
@@ -53,8 +54,9 @@ const doctorSchema = new mongoose.Schema(
     // Admin gán khi duyệt hồ sơ (C2). null = chưa được gán phòng cố định.
     phong_kham_mac_dinh: { type: String, default: null },
 
-    // === EMBED thay 2 bảng join SQL ===
+    // specialties: BS thuộc chuyên khoa nào → dùng để lọc BS theo khoa (flow đặt lịch)
     specialties: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa' }],
+    // services: chỉ ref DichVu loai='home' — dịch vụ tại nhà BS này đảm nhận
     services:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'DichVu' }],
   },
   {

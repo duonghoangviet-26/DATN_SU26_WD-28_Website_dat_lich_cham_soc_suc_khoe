@@ -27,7 +27,8 @@ export interface Doctor {
   bang_cap?: string
   kinh_nghiem?: string
   so_nam_kinh_nghiem: number
-  phi_tu_van: number
+  gia_kham: number            // giá mỗi slot 30 phút — snapshot vào LichHen.gia_kham
+  tuoi_nhan_kham_tu: number   // 0 = không giới hạn tuổi
   trang_thai_duyet: DoctorApproval
   ly_do_tu_choi?: string | null
   so_lan_nop: number
@@ -64,16 +65,23 @@ export interface Appointment {
   user_id: number
   member_id?: number | null
   doctor_id: number
-  slot_id: number
+  // clinic: required | home: null
+  schedule_id?: string | null
+  slot_id?: string | null
+  // null khi clinic | ref DichVu loai='home' khi home
+  service_id?: string | null
   loai_kham: 'clinic' | 'home'
   ngay_kham: string
   gio_kham: string
   ly_do_kham?: string
-  dia_chi_kham?: string | null
+  phong_kham?: string | null      // clinic: snapshot slot.phong_kham | home: null
+  dia_chi_kham?: string | null    // home: bắt buộc | clinic: null
   status: AppointmentStatus
   payment_status: PaymentStatus
-  gia_kham: number
+  gia_kham: number                // clinic: snapshot BacSi.gia_kham | home: snapshot DichVu.gia
+  ten_dich_vu?: string | null     // clinic: snapshot ChuyenKhoa.ten | home: snapshot DichVu.ten
   ly_do_huy?: string | null
+  payment_deadline?: string | null
   ngay_tao: string
 }
 
@@ -97,13 +105,16 @@ export interface DoctorProfile {
   user_id: number
   ho_ten: string
   email: string
-  chuyen_khoa: string
+  anh_dai_dien?: string | null
+  chuyen_khoa: string           // tên chuyên khoa — joined từ ChuyenKhoa.ten
   so_nam_kinh_nghiem: number
-  phi_tu_van: number
+  gia_kham: number              // giá mỗi slot 30 phút
+  tuoi_nhan_kham_tu?: number    // 0 = không giới hạn
   trang_thai_duyet: DoctorApproval
   diem_danh_gia: number
   so_danh_gia: number
   bang_cap: string
+  kinh_nghiem?: string
   ly_do_tu_choi?: string | null
   ngay_tao: string
 }
@@ -118,6 +129,22 @@ export interface HospitalItem {
   ngay_tao: string
 }
 
+// Thông tin phòng khám (singleton — ThongTinPhongKham)
+export interface ClinicInfo {
+  ten: string
+  dia_chi?: string | null
+  so_dien_thoai?: string | null
+  email?: string | null
+  gio_lam_viec?: string | null  // "8:00-17:00 Thứ2-Thứ7"
+  mo_ta?: string | null
+  logo_url?: string | null
+  ban_do_url?: string | null    // embed Google Maps
+  bao_hiem: {
+    nha_nuoc: boolean           // Bảo hiểm y tế nhà nước
+    bao_lanh: boolean           // Bảo hiểm bảo lãnh
+  }
+}
+
 export interface SpecialtyItem {
   id: number
   ten: string
@@ -128,7 +155,9 @@ export interface SpecialtyItem {
 }
 
 // ─── Dịch vụ ─────────────────────────────────────────────────────────────────
-export type ServiceType   = 'clinic' | 'home'
+// 'home'    → bác sĩ đến nhà, đặt được, có thoi_gian_phut
+// 'related' → dịch vụ liên quan theo chuyên khoa (X-quang, MRI...), chỉ hiển thị thông tin
+export type ServiceType   = 'home' | 'related'
 export type ServiceStatus = 'active' | 'inactive'
 
 export interface ServiceChangeLog {
@@ -144,20 +173,22 @@ export interface ServiceItem {
   ma_dich_vu: string                    // "DV001" — auto-gen bởi BE
   ten: string
   loai: ServiceType
-  gia: number                           // giá thực tế bệnh nhân trả
+  gia: number                           // home: BN trả | related: giá tham khảo
   mo_ta_ngan?: string | null
   mo_ta?: string | null
-  thoi_gian_phut: number
-  gio_dat_truoc_toi_thieu: number       // đơn vị: giờ
-  ngay_ap_dung?: string | null          // "T2–T7"
-  gio_bat_dau?: string | null           // "08:00"
-  gio_ket_thuc?: string | null          // "17:00"
+  // home: required | related: null (không đặt lịch)
+  thoi_gian_phut?: number | null
+  gio_dat_truoc_toi_thieu?: number      // home only — đơn vị: giờ
+  ngay_ap_dung?: string | null          // home only — "T2–T7"
+  gio_bat_dau?: string | null           // home only — "08:00"
+  gio_ket_thuc?: string | null          // home only — "17:00"
+  // related: required | home: optional
   specialty_id?: string | null
   specialty_ten?: string | null         // joined — chỉ dùng để hiển thị
-  khu_vuc?: string[]                    // home only — map tới bảng service_areas
-  so_bac_si?: number                    // computed từ doctor_services
-  so_luot_dat?: number                  // computed từ appointments
-  nguoi_tao?: string | null             // ho_ten của admin tạo dịch vụ
+  khu_vuc?: string[]                    // home only
+  so_bac_si?: number                    // computed từ BacSi.services[]
+  so_luot_dat?: number                  // computed từ LichHen (home only)
+  nguoi_tao?: string | null
   status: ServiceStatus
   ngay_tao?: string
   ngay_cap_nhat?: string
@@ -170,27 +201,30 @@ export interface ServiceFormData {
   gia: number
   mo_ta_ngan?: string
   mo_ta?: string
-  thoi_gian_phut: number
-  gio_dat_truoc_toi_thieu: number
+  // home: required | related: bỏ trống
+  thoi_gian_phut?: number
+  gio_dat_truoc_toi_thieu?: number
   ngay_ap_dung?: string
   gio_bat_dau?: string
   gio_ket_thuc?: string
+  // related: required | home: optional
   specialty_id?: string | null
-  khu_vuc?: string[]                    // home only — map tới bảng service_areas
+  khu_vuc?: string[]                    // home only
 }
 
-// ViewModel lịch hẹn (kết hợp bệnh nhân + bác sĩ)
+// ViewModel lịch hẹn (kết hợp bệnh nhân + bác sĩ — dùng cho trang danh sách admin/BN)
 export interface AppointmentItem {
   id: number
   benh_nhan: string
   bac_si: string
-  chuyen_khoa: string
+  chuyen_khoa: string           // tên chuyên khoa của BS
   ngay_kham: string
   gio_kham: string
   loai_kham: 'clinic' | 'home'
   status: AppointmentStatus
   payment_status: PaymentStatus
   gia_kham: number
+  ten_dich_vu?: string | null   // clinic: tên chuyên khoa | home: tên dịch vụ
 }
 
 export interface ReviewItem {

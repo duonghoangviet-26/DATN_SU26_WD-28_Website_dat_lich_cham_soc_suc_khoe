@@ -7,9 +7,11 @@ import mongoose from 'mongoose'
 // Phòng khám tư 1 cơ sở → ĐÃ BỎ hospital_id và loại 'video'.
 //   loai_kham='clinic' → khám tại phòng khám, phong_kham = snapshot slots[].phong_kham
 //   loai_kham='home'   → bác sĩ đến nhà, dia_chi_kham BẮT BUỘC, phong_kham=null
-// gia_kham = snapshot service.gia lúc đặt (không đổi khi giá dịch vụ thay đổi sau này).
+// gia_kham: clinic → snapshot BacSi.gia_kham | home → snapshot DichVu.gia (không đổi sau khi đặt).
+// ten_dich_vu: clinic → snapshot ChuyenKhoa.ten | home → snapshot DichVu.ten (hiển thị trên UI).
 // member_id=null → là khách (guest): dùng ten_khach / so_dien_thoai_khach / nam_sinh_khach.
-// schedule_id + slot_id: trỏ tới slot embed trong doctor_schedules để cập nhật số lượng (atomic).
+// schedule_id + slot_id: chỉ có khi clinic — trỏ tới slot embed, atomic update.
+//   home: schedule_id=null, slot_id=null — BS confirm thủ công, không chiếm slot.
 // Cron 15': unpaid quá timeout → tự hủy. Home: luôn pending, bác sĩ confirm thủ công.
 // phong_kham: khi bác sĩ đổi slot.phong_kham trong lịch làm việc →
 //             phải propagate sang lich_hen.phong_kham của các lịch pending/confirmed liên quan.
@@ -19,8 +21,10 @@ const appointmentSchema = new mongoose.Schema(
     user_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', required: true },
     member_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ThanhVien', default: null },
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', required: true },
-    schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', required: true },
-    slot_id:     { type: mongoose.Schema.Types.ObjectId, required: true }, // subdoc slot._id
+    // clinic: required (validate hook) | home: null — không dùng slot system
+    schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', default: null },
+    slot_id:     { type: mongoose.Schema.Types.ObjectId, default: null },
+    // null khi clinic | ref DichVu loai='home' khi home
     service_id:  { type: mongoose.Schema.Types.ObjectId, ref: 'DichVu', default: null },
 
     loai_kham: {
@@ -46,7 +50,8 @@ const appointmentSchema = new mongoose.Schema(
       enum: ['unpaid', 'paid', 'refunded'],
       default: 'unpaid',
     },
-    gia_kham: { type: Number, required: true, min: 0 }, // snapshot
+    gia_kham:    { type: Number, required: true, min: 0 }, // snapshot (nguồn: xem comment trên)
+    ten_dich_vu: { type: String, default: null, maxlength: 255 }, // snapshot tên để hiển thị
 
     // Thông tin khách (member_id = null)
     ten_khach:           { type: String, default: null, maxlength: 255 },
@@ -78,12 +83,16 @@ appointmentSchema.index({ doctor_id: 1, status: 1, ngay_kham: 1 }) // màn hình
 // Ràng buộc clinic/home + khách
 appointmentSchema.pre('validate', function () {
   if (this.loai_kham === 'home') {
-    if (!this.dia_chi_kham) {
-      throw new Error('Khám tại nhà (home) bắt buộc có dia_chi_kham')
-    }
-    this.phong_kham = null // home không có phòng khám
+    if (!this.dia_chi_kham) throw new Error('Khám tại nhà (home) bắt buộc có dia_chi_kham')
+    if (!this.service_id)    throw new Error('Khám tại nhà (home) bắt buộc có service_id')
+    this.phong_kham  = null
+    this.schedule_id = null
+    this.slot_id     = null
   } else if (this.loai_kham === 'clinic') {
-    this.dia_chi_kham = null // clinic không cần địa chỉ nhà
+    if (!this.schedule_id) throw new Error('Khám tại phòng khám (clinic) bắt buộc có schedule_id')
+    if (!this.slot_id)     throw new Error('Khám tại phòng khám (clinic) bắt buộc có slot_id')
+    this.dia_chi_kham = null
+    this.service_id   = null
   }
   if (!this.member_id && !this.ten_khach) {
     throw new Error('Lịch khách (không có member_id) phải có ten_khach')

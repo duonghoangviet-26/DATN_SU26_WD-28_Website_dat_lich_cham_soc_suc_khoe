@@ -28,6 +28,10 @@ const clinicInfoSchema = new mongoose.Schema(
     mo_ta:         { type: String, default: null },
     logo_url:      { type: String, default: null, maxlength: 500 },
     ban_do_url:    { type: String, default: null, maxlength: 500 }, // embed Google Maps
+    bao_hiem: {
+      nha_nuoc: { type: Boolean, default: false }, // Bảo hiểm y tế nhà nước
+      bao_lanh: { type: Boolean, default: false }, // Bảo hiểm bảo lãnh
+    },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
