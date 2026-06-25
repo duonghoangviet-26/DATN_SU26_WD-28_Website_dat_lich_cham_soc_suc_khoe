@@ -53,4 +53,10 @@ export const doctorService = {
     const { data } = await axios.put(`${BASE_URL}/${id}/restore`, { admin_id: adminId })
     return data.data
   },
+
+  // Cập nhật thông tin chuyên môn bác sĩ
+  async update(id: string, payload: any): Promise<DoctorDetailAPI> {
+    const { data } = await axios.put(`${BASE_URL}/${id}`, payload)
+    return data.data
+  },
 }

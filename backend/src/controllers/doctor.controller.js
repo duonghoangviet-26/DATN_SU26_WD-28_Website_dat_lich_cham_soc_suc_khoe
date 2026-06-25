@@ -134,3 +134,21 @@ export async function restoreDoctor(req, res) {
     return fail(res, status, err.message)
   }
 }
+
+// PUT /api/admin/doctors/:id
+// Body: { admin_id, tieu_su, bang_cap, kinh_nghiem, so_nam_kinh_nghiem, phi_tu_van, la_hien }
+export async function updateDoctor(req, res) {
+  try {
+    const { id } = req.params
+    const { admin_id, ...updateData } = req.body
+
+    if (!admin_id) return fail(res, 400, 'admin_id là bắt buộc để ghi log thao tác')
+
+    const doctor = await doctorService.updateDoctorInfo(id, updateData, admin_id)
+    return ok(res, doctor, 'Cập nhật thông tin bác sĩ thành công')
+  } catch (err) {
+    if (err.message === 'Không tìm thấy bác sĩ') return fail(res, 404, err.message)
+    const status = err.message.includes('không hợp lệ') ? 400 : 500
+    return fail(res, status, err.message)
+  }
+}

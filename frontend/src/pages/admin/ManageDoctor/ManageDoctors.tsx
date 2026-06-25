@@ -7,6 +7,7 @@ import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
 import DoctorDetailDrawer from './DoctorDetailDrawer'
+import UpdateDoctor from './UpdateDoctor'
 
 const APPROVAL_COLOR: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
   approved: 'green', pending: 'yellow', rejected: 'red', suspended: 'gray',
@@ -38,6 +39,7 @@ export default function ManageDoctors() {
 
   // Drawer & Actions
   const [targetDetailId, setTargetDetailId] = useState<string | null>(null)
+  const [targetEdit, setTargetEdit] = useState<DoctorProfileAPI | DoctorDetailAPI | null>(null)
   const [target, setTarget] = useState<DoctorProfileAPI | DoctorDetailAPI | null>(null)
   const [action, setAction] = useState<Action>('approve')
   const [reason, setReason] = useState('')
@@ -205,6 +207,13 @@ export default function ManageDoctors() {
                       >
                         <Icon name="eye" className="h-3 w-3" /> Chi tiết
                       </button>
+
+                      <button 
+                        onClick={() => setTargetEdit(doc)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
+                      >
+                        <Icon name="edit" className="h-3 w-3" /> Sửa
+                      </button>
                       
                       {doc.trang_thai_duyet === 'pending' && (
                         <button
@@ -294,6 +303,18 @@ export default function ManageDoctors() {
         onClose={() => setTargetDetailId(null)} 
         onAction={openAction} 
       />
+
+      {/* Modal Cập nhật bác sĩ */}
+      {targetEdit && (
+        <UpdateDoctor 
+          doctor={targetEdit} 
+          onClose={() => setTargetEdit(null)} 
+          onSuccess={() => {
+            setTargetEdit(null)
+            loadData()
+          }} 
+        />
+      )}
     </div>
   )
 }

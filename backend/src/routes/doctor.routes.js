@@ -32,4 +32,7 @@ router.put('/:id/suspend', doctorController.suspendDoctor)
 // Khôi phục bác sĩ (suspended → approved)
 router.put('/:id/restore', doctorController.restoreDoctor)
 
+// Cập nhật thông tin chuyên môn bác sĩ
+router.put('/:id', doctorController.updateDoctor)
+
 export default router

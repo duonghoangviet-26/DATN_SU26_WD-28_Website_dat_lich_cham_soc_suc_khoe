@@ -280,6 +280,7 @@ export interface DoctorProfileAPI {
   trang_thai_duyet: DoctorApproval
   ly_do_tu_choi?: string | null
   so_lan_nop: number
+  la_hien: boolean
   diem_danh_gia: number
   tong_danh_gia: number
   specialties: DoctorSpecialty[]
@@ -311,6 +312,16 @@ export interface NotificationItemAPI {
   doi_tuong: NotificationTargetAPI
   so_nguoi_nhan: number
   ngay_gui: string
-  tao_boi: { _id: string; ho_ten: string; email: string }
+  tao_boi: { _id: string; ho_ten: string; email: string } | null
+}
+
+export interface DoctorUpdatePayload {
+  tieu_su?: string | null
+  bang_cap?: string | null
+  kinh_nghiem?: string | null
+  so_nam_kinh_nghiem?: number
+  phi_tu_van?: number
+  la_hien?: boolean
+  admin_id: string
 }
 

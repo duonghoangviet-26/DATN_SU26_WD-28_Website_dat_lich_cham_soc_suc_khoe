@@ -282,3 +282,39 @@ export async function getDoctorAuditLogs(doctorId) {
 
   return logs
 }
+
+// ── 8. Cập nhật thông tin bác sĩ ────────────────────────────
+export async function updateDoctorInfo(doctorId, updateData, adminId) {
+  if (!mongoose.Types.ObjectId.isValid(doctorId)) throw new Error('doctorId không hợp lệ')
+
+  const doctor = await BacSi.findById(doctorId)
+  if (!doctor) throw new Error('Không tìm thấy bác sĩ')
+
+  const allowedFields = ['tieu_su', 'bang_cap', 'kinh_nghiem', 'so_nam_kinh_nghiem', 'phi_tu_van', 'la_hien']
+  const duLieuCu = {}
+  const duLieuMoi = {}
+  let hasChanges = false
+
+  for (const field of allowedFields) {
+    if (updateData[field] !== undefined && updateData[field] !== doctor[field]) {
+      duLieuCu[field] = doctor[field]
+      duLieuMoi[field] = updateData[field]
+      doctor[field] = updateData[field]
+      hasChanges = true
+    }
+  }
+
+  if (hasChanges) {
+    await doctor.save()
+
+    await ghiLog({
+      adminId,
+      hanhDong: 'UPDATE_INFO',
+      doiTuongId: doctorId,
+      duLieuCu,
+      duLieuMoi,
+    })
+  }
+
+  return await getDoctorDetail(doctorId)
+}
