@@ -4,22 +4,22 @@ import { hospitalService } from '@/services/hospital.service'
 import Icon from '@/components/admin/icons'
 
 interface Props {
-  clinic: HospitalItem
+  clinic?: HospitalItem | null
   onSaved: (updated: HospitalItem) => void
   onCancel: () => void
 }
 
-// Form chỉnh sửa thông tin phòng khám (singleton).
+// Form thêm/sửa thông tin chi nhánh
 export default function EditClinic({ clinic, onSaved, onCancel }: Props) {
   const [form, setForm] = useState({
-    ten: clinic.ten ?? '',
-    dia_chi: clinic.dia_chi ?? '',
-    so_dien_thoai: clinic.so_dien_thoai ?? '',
-    email: clinic.email ?? '',
-    gio_lam_viec: clinic.gio_lam_viec ?? '',
-    mo_ta: clinic.mo_ta ?? '',
-    logo_url: clinic.logo_url ?? '',
-    ban_do_url: clinic.ban_do_url ?? '',
+    ten: clinic?.ten ?? '',
+    dia_chi: clinic?.dia_chi ?? '',
+    so_dien_thoai: clinic?.so_dien_thoai ?? '',
+    email: clinic?.email ?? '',
+    gio_lam_viec: clinic?.gio_lam_viec ?? '',
+    mo_ta: clinic?.mo_ta ?? '',
+    logo_url: clinic?.logo_url ?? '',
+    ban_do_url: clinic?.ban_do_url ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -47,13 +47,18 @@ export default function EditClinic({ clinic, onSaved, onCancel }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.ten.trim()) {
-      setError('Tên phòng khám là bắt buộc')
+      setError('Tên chi nhánh là bắt buộc')
       return
     }
     try {
       setSaving(true)
       setError(null)
-      const updated = await hospitalService.updateClinicInfo(form)
+      let updated: HospitalItem
+      if (clinic && clinic._id) {
+        updated = await hospitalService.updateClinicInfo(clinic._id, form)
+      } else {
+        updated = await hospitalService.createClinic(form)
+      }
       onSaved(updated)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Lỗi khi lưu thông tin'

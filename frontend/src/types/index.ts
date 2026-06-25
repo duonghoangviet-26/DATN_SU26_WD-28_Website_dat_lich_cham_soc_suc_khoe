@@ -110,17 +110,17 @@ export interface DoctorProfile {
 
 export interface HospitalItem {
   _id: string
-  ma: string
   ten: string
-  dia_chi: string | null
-  so_dien_thoai: string | null
-  email: string | null
-  gio_lam_viec: string | null
-  mo_ta: string | null
-  logo_url: string | null
-  ban_do_url: string | null
-  ngay_tao: string
-  ngay_cap_nhat: string
+  dia_chi?: string | null
+  so_dien_thoai?: string | null
+  email?: string | null
+  gio_lam_viec?: string | null
+  mo_ta?: string | null
+  logo_url?: string | null
+  ban_do_url?: string | null
+  trang_thai?: 'active' | 'inactive'
+  ngay_tao?: string
+  ngay_cap_nhat?: string
 }
 
 export interface SpecialtyItem {

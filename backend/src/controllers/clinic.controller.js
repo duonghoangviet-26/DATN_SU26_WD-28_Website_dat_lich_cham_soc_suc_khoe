@@ -3,49 +3,9 @@ import ChuyenKhoa from '../models/ChuyenKhoa.js'
 import { ok, created, fail } from '../utils/response.js'
 
 // ============================================================
-// CLINIC CONTROLLER — Phòng Khám & Chuyên Khoa (C3)
+// CLINIC CONTROLLER — Chuyên Khoa (C3)
+// (Quản lý chi nhánh đã chuyển sang clinic-info.controller.js)
 // ============================================================
-
-// ---- PHÒNG KHÁM (Singleton: chỉ 1 document duy nhất) ----
-
-// GET /api/admin/clinic
-// Lấy thông tin phòng khám. Nếu chưa tồn tại thì tạo document mặc định.
-export async function getClinic(req, res) {
-  try {
-    let clinic = await ThongTinPhongKham.findOne({ ma: 'MAIN' }).lean()
-    if (!clinic) {
-      clinic = await ThongTinPhongKham.create({ ma: 'MAIN', ten: 'VitaFamily Clinic' })
-    }
-    return ok(res, clinic)
-  } catch (err) {
-    return fail(res, 500, err.message)
-  }
-}
-
-// PUT /api/admin/clinic
-// Cập nhật thông tin phòng khám (singleton, luôn update doc MAIN).
-export async function updateClinic(req, res) {
-  try {
-    const { ten, dia_chi, so_dien_thoai, email, gio_lam_viec, mo_ta, logo_url, ban_do_url } = req.body
-    if (!ten || !ten.trim()) {
-      return fail(res, 400, 'Tên phòng khám là bắt buộc')
-    }
-
-    const updated = await ThongTinPhongKham.findOneAndUpdate(
-      { ma: 'MAIN' },
-      { ten: ten.trim(), dia_chi, so_dien_thoai, email, gio_lam_viec, mo_ta, logo_url, ban_do_url },
-      { new: true, upsert: true, runValidators: true }
-    ).lean()
-
-    return ok(res, updated, 'Đã cập nhật thông tin phòng khám')
-  } catch (err) {
-    if (err.name === 'ValidationError') {
-      const msg = Object.values(err.errors).map((e) => e.message).join(', ')
-      return fail(res, 400, msg)
-    }
-    return fail(res, 500, err.message)
-  }
-}
 
 // ---- CHUYÊN KHOA ----
 

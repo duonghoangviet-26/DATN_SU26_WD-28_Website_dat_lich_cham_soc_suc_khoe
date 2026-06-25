@@ -1,42 +1,75 @@
 import ThongTinPhongKham from '../models/ThongTinPhongKham.js'
 import { ok, fail } from '../utils/response.js'
 
-// GET /api/admin/clinic-info
-export async function getClinicInfo(req, res) {
+// Lấy danh sách tất cả các chi nhánh (bao gồm cả active và inactive, hoặc có thể lọc)
+export const getAllClinics = async (req, res) => {
   try {
-    let info = await ThongTinPhongKham.findOne({ ma: 'MAIN' })
-    if (!info) {
-      // Nếu chưa có, tạo mặc định
-      info = await ThongTinPhongKham.create({
-        ma: 'MAIN',
-        ten: 'VitaFamily Clinic',
-        dia_chi: '123 Đường ABC, Quận XYZ, TP.HCM',
-        so_dien_thoai: '0901234567',
-        email: 'contact@vitafamily.vn',
-        gio_lam_viec: '8:00 - 17:00 (Thứ 2 - Thứ 7)',
-        mo_ta: 'Phòng khám gia đình hiện đại',
-      })
-    }
-    return ok(res, info)
-  } catch (err) {
-    return fail(res, 500, err.message)
+    const status = req.query.status
+    const filter = status ? { trang_thai: status } : {}
+    const clinics = await ThongTinPhongKham.find(filter).sort({ ngay_tao: 1 })
+    return ok(res, clinics)
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server khi lấy danh sách phòng khám: ' + error.message)
   }
 }
 
-// PUT /api/admin/clinic-info
-export async function updateClinicInfo(req, res) {
+// Lấy thông tin 1 chi nhánh
+export const getClinicById = async (req, res) => {
   try {
-    const { ten, dia_chi, so_dien_thoai, email, gio_lam_viec, mo_ta, logo_url, ban_do_url } = req.body
+    const clinic = await ThongTinPhongKham.findById(req.params.id)
+    if (!clinic) return fail(res, 404, 'Không tìm thấy chi nhánh')
+    return ok(res, clinic)
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
+}
 
-    if (!ten) return fail(res, 400, 'Tên phòng khám là bắt buộc')
+// Thêm 1 chi nhánh mới
+export const createClinic = async (req, res) => {
+  try {
+    const { ten } = req.body
+    if (!ten) return fail(res, 400, 'Tên chi nhánh là bắt buộc')
 
-    const info = await ThongTinPhongKham.findOneAndUpdate(
-      { ma: 'MAIN' },
-      { ten, dia_chi, so_dien_thoai, email, gio_lam_viec, mo_ta, logo_url, ban_do_url },
-      { new: true, upsert: true }
+    const newClinic = new ThongTinPhongKham(req.body)
+    await newClinic.save()
+    return ok(res, newClinic, 'Thêm chi nhánh thành công')
+  } catch (error) {
+    return fail(res, 400, 'Dữ liệu không hợp lệ: ' + error.message)
+  }
+}
+
+// Cập nhật thông tin 1 chi nhánh
+export const updateClinicInfo = async (req, res) => {
+  try {
+    const { ten } = req.body
+    if (ten !== undefined && !ten) return fail(res, 400, 'Tên chi nhánh không được để trống')
+
+    const updated = await ThongTinPhongKham.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true, runValidators: true }
     )
-    return ok(res, info, 'Cập nhật thông tin phòng khám thành công')
-  } catch (err) {
-    return fail(res, 500, err.message)
+    
+    if (!updated) {
+      return fail(res, 404, 'Không tìm thấy chi nhánh để cập nhật')
+    }
+    return ok(res, updated, 'Cập nhật thành công')
+  } catch (error) {
+    return fail(res, 400, 'Dữ liệu cập nhật không hợp lệ: ' + error.message)
+  }
+}
+
+// Xóa mềm 1 chi nhánh (chuyển trang_thai thành inactive)
+export const deleteClinic = async (req, res) => {
+  try {
+    const deleted = await ThongTinPhongKham.findByIdAndUpdate(
+      req.params.id,
+      { trang_thai: 'inactive' },
+      { new: true }
+    )
+    if (!deleted) return fail(res, 404, 'Không tìm thấy chi nhánh')
+    return ok(res, deleted, 'Đã ngừng hoạt động chi nhánh')
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server khi xóa: ' + error.message)
   }
 }

@@ -1,13 +1,22 @@
 import { Router } from 'express'
-import * as controller from '../controllers/clinic-info.controller.js'
+import {
+  getAllClinics,
+  getClinicById,
+  createClinic,
+  updateClinicInfo,
+  deleteClinic
+} from '../controllers/clinic-info.controller.js'
 import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
 
 const router = Router()
 
-// Bắt buộc quyền admin
+// Chỉ cho phép admin quản lý
 router.use(verifyToken, requireRole('admin'))
 
-router.get('/', controller.getClinicInfo)
-router.put('/', controller.updateClinicInfo)
+router.get('/', getAllClinics)
+router.post('/', createClinic)
+router.get('/:id', getClinicById)
+router.put('/:id', updateClinicInfo)
+router.delete('/:id', deleteClinic)
 
 export default router
