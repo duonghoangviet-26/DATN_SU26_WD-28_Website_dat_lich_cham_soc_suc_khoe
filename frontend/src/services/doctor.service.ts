@@ -1,44 +1,56 @@
-import type { DoctorProfile, DoctorApproval } from '@/types'
-import { mockDoctors } from '@/mock/doctors'
-import { delay, findOrThrow } from '@/utils/format'
+import axios from 'axios'
+import type { DoctorApproval, DoctorProfileAPI, DoctorDetailAPI, DoctorAuditLog } from '@/types'
 
-let doctors: DoctorProfile[] = [...mockDoctors]
+// Note: Ensure your environment variable VITE_API_URL is set correctly (e.g. http://localhost:5000/api)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const BASE_URL = `${API_URL}/admin/doctors`
 
 export const doctorService = {
-  async getAll(trang_thai?: DoctorApproval | ''): Promise<DoctorProfile[]> {
-    await delay()
-    // SAU NÀY: const { data } = await axios.get('/admin/doctors', { params: { trang_thai } })
-    if (!trang_thai) return [...doctors]
-    return doctors.filter((d) => d.trang_thai_duyet === trang_thai)
+  // Lấy danh sách bác sĩ (có phân trang, tìm kiếm, lọc)
+  async getAll(params?: {
+    trang_thai?: DoctorApproval | ''
+    chuyen_khoa?: string
+    keyword?: string
+    page?: number
+    limit?: number
+  }): Promise<{ doctors: DoctorProfileAPI[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
+    const { data } = await axios.get(BASE_URL, { params })
+    return data.data
   },
 
-  async approve(id: number): Promise<DoctorProfile> {
-    await delay(200)
-    // SAU NÀY: const { data } = await axios.patch(`/admin/doctors/${id}/approve`)
-    doctors = doctors.map((d) => d.id === id ? { ...d, trang_thai_duyet: 'approved' } : d)
-    return findOrThrow(doctors, id, 'Bác sĩ')
+  // Lấy chi tiết một bác sĩ
+  async getById(id: string): Promise<DoctorDetailAPI> {
+    const { data } = await axios.get(`${BASE_URL}/${id}`)
+    return data.data
   },
 
-  async reject(id: number, ly_do: string): Promise<DoctorProfile> {
-    await delay(200)
-    // SAU NÀY: const { data } = await axios.patch(`/admin/doctors/${id}/reject`, { ly_do })
-    doctors = doctors.map((d) =>
-      d.id === id ? { ...d, trang_thai_duyet: 'rejected', ly_do_tu_choi: ly_do } : d,
-    )
-    return findOrThrow(doctors, id, 'Bác sĩ')
+  // Lấy lịch sử thao tác của bác sĩ
+  async getLogs(id: string): Promise<DoctorAuditLog[]> {
+    const { data } = await axios.get(`${BASE_URL}/${id}/logs`)
+    return data.data
   },
 
-  async suspend(id: number): Promise<DoctorProfile> {
-    await delay(200)
-    // SAU NÀY: const { data } = await axios.patch(`/admin/doctors/${id}/suspend`)
-    doctors = doctors.map((d) => d.id === id ? { ...d, trang_thai_duyet: 'suspended' } : d)
-    return findOrThrow(doctors, id, 'Bác sĩ')
+  // Duyệt hồ sơ bác sĩ
+  async approve(id: string, adminId: string): Promise<DoctorDetailAPI> {
+    const { data } = await axios.put(`${BASE_URL}/${id}/approve`, { admin_id: adminId })
+    return data.data
   },
 
-  async restore(id: number): Promise<DoctorProfile> {
-    await delay(200)
-    // SAU NÀY: const { data } = await axios.patch(`/admin/doctors/${id}/restore`)
-    doctors = doctors.map((d) => d.id === id ? { ...d, trang_thai_duyet: 'approved' } : d)
-    return findOrThrow(doctors, id, 'Bác sĩ')
+  // Từ chối hồ sơ bác sĩ
+  async reject(id: string, adminId: string, ly_do: string): Promise<DoctorDetailAPI> {
+    const { data } = await axios.put(`${BASE_URL}/${id}/reject`, { admin_id: adminId, ly_do })
+    return data.data
+  },
+
+  // Tạm ngưng bác sĩ
+  async suspend(id: string, adminId: string, ly_do: string): Promise<DoctorDetailAPI & { canh_bao?: string | null }> {
+    const { data } = await axios.put(`${BASE_URL}/${id}/suspend`, { admin_id: adminId, ly_do })
+    return data.data
+  },
+
+  // Khôi phục bác sĩ
+  async restore(id: string, adminId: string): Promise<DoctorDetailAPI> {
+    const { data } = await axios.put(`${BASE_URL}/${id}/restore`, { admin_id: adminId })
+    return data.data
   },
 }

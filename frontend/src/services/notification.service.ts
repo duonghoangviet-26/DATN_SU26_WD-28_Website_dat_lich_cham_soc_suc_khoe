@@ -1,37 +1,27 @@
-import type { NotificationItem, NotificationTarget } from '@/types'
-import { mockNotifications } from '@/mock/notifications'
-import { delay } from '@/utils/format'
+import axios from 'axios'
+import type { NotificationItemAPI, NotificationTargetAPI } from '@/types'
 
-let notifications: NotificationItem[] = [...mockNotifications]
-let nextId = notifications.length + 1
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const BASE_URL = `${API_URL}/admin/notifications`
 
-interface SendPayload {
+interface SendPayloadAPI {
   tieu_de: string
   noi_dung: string
-  doi_tuong: NotificationTarget
-}
-
-const RECIPIENT_COUNT: Record<NotificationTarget, number> = {
-  all: 1248,
-  user: 1162,
-  doctor: 86,
+  doi_tuong: NotificationTargetAPI
+  admin_id: string
 }
 
 export const notificationService = {
-  async getAll(): Promise<NotificationItem[]> {
-    await delay()
-    return [...notifications]
+  async getAll(page = 1, limit = 10): Promise<{ data: NotificationItemAPI[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
+    const { data } = await axios.get(BASE_URL, { params: { page, limit } })
+    return {
+      data: data.data,
+      pagination: data.pagination
+    }
   },
 
-  async send(payload: SendPayload): Promise<NotificationItem> {
-    await delay(500)
-    const newItem: NotificationItem = {
-      id: nextId++,
-      ...payload,
-      so_nguoi_nhan: RECIPIENT_COUNT[payload.doi_tuong],
-      ngay_gui: new Date().toISOString(),
-    }
-    notifications = [newItem, ...notifications]
-    return newItem
+  async send(payload: SendPayloadAPI): Promise<NotificationItemAPI> {
+    const { data } = await axios.post(BASE_URL, payload)
+    return data.data
   },
 }
