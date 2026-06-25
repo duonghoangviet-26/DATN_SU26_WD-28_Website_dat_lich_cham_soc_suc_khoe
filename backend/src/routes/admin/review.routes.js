@@ -11,5 +11,7 @@ router.get('/:id', reviews.getReviewDetail)
 router.patch('/:id/hide', reviews.hideReview)
 router.patch('/:id/show', reviews.showReview)
 router.patch('/:id/delete', reviews.softDeleteReview)
+router.patch('/:id/restore', reviews.restoreReview)
+router.delete('/:id/permanently', reviews.hardDeleteReview)
 
 export default router

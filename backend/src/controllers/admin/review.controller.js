@@ -94,3 +94,19 @@ export async function restoreReview(req, res) {
     return fail(res, status, err.message)
   }
 }
+
+/**
+ * Xóa vĩnh viễn đánh giá (xóa cứng)
+ */
+export async function hardDeleteReview(req, res) {
+  try {
+    const { id } = req.params
+    const adminId = req.user.id
+
+    await reviewService.hardDeleteReview(id, adminId)
+    return ok(res, null, 'Xóa vĩnh viễn đánh giá thành công')
+  } catch (err) {
+    const status = err.message.includes('trạng thái xóa mềm') ? 400 : 500
+    return fail(res, status, err.message)
+  }
+}
