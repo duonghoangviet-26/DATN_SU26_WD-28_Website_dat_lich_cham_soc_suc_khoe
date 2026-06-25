@@ -56,7 +56,7 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
           <section>
             <div className="mb-3 flex flex-wrap items-start gap-2">
               <h3 className="text-base font-semibold text-slate-800">{service.ten}</h3>
-              <Badge color={service.loai === 'clinic' ? 'blue' : 'yellow'}>
+              <Badge color={service.loai === 'related' ? 'blue' : 'yellow'}>
                 {SERVICE_TYPE_LABEL[service.loai]}
               </Badge>
               <Badge color={service.status === 'active' ? 'green' : 'gray'}>
@@ -66,15 +66,27 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
 
             {/* Grid thông số chính */}
             <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
-              <InfoCell label="Giá dịch vụ"  value={formatPrice(service.gia)} />
-              <InfoCell label="Thời lượng"   value={`${service.thoi_gian_phut} phút`} />
-              <InfoCell label="Đặt trước"    value={`${service.gio_dat_truoc_toi_thieu} giờ`} />
-              <InfoCell label="Chuyên khoa"  value={service.specialty_ten ?? '—'} />
-              <InfoCell label="Số bác sĩ"   value={`${service.so_bac_si ?? 0} bác sĩ`} />
-              <InfoCell label="Lượt đặt"    value={`${service.so_luot_dat ?? 0} lần`} />
+              <InfoCell label="Giá dịch vụ" value={formatPrice(service.gia)} />
+              <InfoCell label="Thời lượng"  value={service.thoi_gian_phut != null ? `${service.thoi_gian_phut} phút` : '—'} />
+              {service.loai === 'home' ? (
+                <>
+                  <InfoCell label="Đặt trước tối thiểu" value={service.gio_dat_truoc_toi_thieu != null ? `${service.gio_dat_truoc_toi_thieu} giờ` : '—'} />
+                  <InfoCell label="Bác sĩ đăng ký"      value={`${service.so_bac_si ?? 0} bác sĩ`} />
+                  <InfoCell label="Lượt đặt"             value={`${service.so_luot_dat ?? 0} lần`} />
+                </>
+              ) : (
+                <InfoCell label="Chuyên khoa" value={service.specialty_ten ?? '—'} />
+              )}
             </dl>
 
-            {/* Lịch áp dụng */}
+            {/* Ghi chú giá tham khảo — related only */}
+            {service.loai === 'related' && (
+              <p className="mt-2 text-xs text-slate-400">
+                * Giá trên là tham khảo — bệnh nhân thanh toán theo chỉ định bác sĩ, không đặt lịch riêng cho dịch vụ này.
+              </p>
+            )}
+
+            {/* Lịch áp dụng — cả 2 loại đều có lịch cố định T2–T7 */}
             {(service.ngay_ap_dung || service.gio_bat_dau) && (
               <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
                 <span className="font-medium">Lịch áp dụng:</span>{' '}
@@ -99,6 +111,16 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Hướng dẫn chuẩn bị — related only */}
+            {service.loai === 'related' && service.chuan_bi_truoc && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-700">
+                  Hướng dẫn chuẩn bị cho bệnh nhân
+                </p>
+                <p className="text-sm leading-relaxed text-amber-900">{service.chuan_bi_truoc}</p>
               </div>
             )}
 

@@ -1,49 +1,63 @@
-import type { ExaminationResult, PrescriptionDrug } from '@/types'
 import { mockExaminations } from '@/mock/examinations'
-import { delay } from '@/utils/format'
+import type { ExaminationResult, PrescriptionDrug } from '@/types'
 
-let exams: ExaminationResult[] = [...mockExaminations]
-let nextId = exams.length + 1
+const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+
+let examinations = [...mockExaminations]
+let nextId = examinations.length + 1
 
 interface ExamPayload {
   appointment_id: number
   chan_doan: string
-  huong_dan_dieu_tri: string
+  huong_dan_dieu_tri?: string | null
   ghi_chu?: string | null
-  ngay_tai_kham: string
-  thuoc: Omit<PrescriptionDrug, 'id'>[]
+  ngay_tai_kham?: string | null
+  thuoc?: Omit<PrescriptionDrug, 'id'>[]
 }
 
 export const examinationService = {
-  async getByAppointment(appointment_id: number): Promise<ExaminationResult | null> {
-    await delay(150)
-    return exams.find((e) => e.appointment_id === appointment_id) ?? null
+  async getByAppointment(appointmentId: number): Promise<ExaminationResult | null> {
+    await delay()
+    const exam = examinations.find(e => e.appointment_id === appointmentId)
+    return exam ? { ...exam } : null
+    // Real API:
+    // try {
+    //   const res = await axiosInstance.get<ApiResponse<ExaminationResult>>(`/doctor/appointments/${appointmentId}/result`)
+    //   return res.data.data
+    // } catch (err: unknown) {
+    //   if ((err as { response?: { status?: number } }).response?.status === 404) return null
+    //   throw err
+    // }
   },
 
-  async save(payload: ExamPayload): Promise<ExaminationResult> {
-    await delay(300)
-    const existing = exams.find((e) => e.appointment_id === payload.appointment_id)
-    if (existing && !existing.co_the_sua) {
-      throw new Error('Kết quả khám đã bị khóa (quá 24h)')
+  async save(data: ExamPayload): Promise<ExaminationResult> {
+    await delay()
+    const thuoc = (data.thuoc ?? []).map((t, i) => ({ ...t, id: i + 1 }))
+    const idx = examinations.findIndex(e => e.appointment_id === data.appointment_id)
+    if (idx !== -1) {
+      const updated: ExaminationResult = { ...examinations[idx], ...data, thuoc }
+      examinations[idx] = updated
+      return { ...updated }
     }
-
-    const drugs: PrescriptionDrug[] = payload.thuoc.map((d, i) => ({ ...d, id: i + 1 }))
-    const ngayTao = new Date().toISOString()
-
-    if (existing) {
-      const updated = { ...existing, ...payload, thuoc: drugs }
-      exams = exams.map((e) => (e.appointment_id === payload.appointment_id ? updated : e))
-      return updated
-    }
-
     const newExam: ExaminationResult = {
       id: nextId++,
-      ...payload,
-      thuoc: drugs,
+      appointment_id: data.appointment_id,
+      chan_doan: data.chan_doan,
+      huong_dan_dieu_tri: data.huong_dan_dieu_tri ?? '',
+      ghi_chu: data.ghi_chu ?? null,
+      ngay_tai_kham: data.ngay_tai_kham ?? '',
       co_the_sua: true,
-      ngay_tao: ngayTao,
+      thuoc,
+      ngay_tao: new Date().toISOString(),
     }
-    exams = [...exams, newExam]
+    examinations = [...examinations, newExam]
     return newExam
+    // Real API:
+    // const isUpdate = idx !== -1
+    // const url = `/doctor/appointments/${data.appointment_id}/result`
+    // const res = isUpdate
+    //   ? await axiosInstance.put<ApiResponse<ExaminationResult>>(url, data)
+    //   : await axiosInstance.post<ApiResponse<ExaminationResult>>(url, data)
+    // return res.data.data
   },
 }

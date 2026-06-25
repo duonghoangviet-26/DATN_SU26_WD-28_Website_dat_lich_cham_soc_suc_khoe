@@ -1,8 +1,8 @@
 import mongoose from 'mongoose'
+import Counter from './Counter.js'
 
 // ============================================================
 // SERVICE — Dịch vụ y tế (C4)
-// SQL tương đương: bảng services (+ mở rộng C4 V4)
 // ============================================================
 // loai: 'home'    → bác sĩ đến nhà — đặt được, có thoi_gian_phut, khu_vuc[].
 //        'related' → dịch vụ liên quan theo chuyên khoa (X-quang, MRI, xét nghiệm...)
@@ -20,7 +20,7 @@ const serviceSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Tên dịch vụ là bắt buộc'],
       trim: true,
-      maxlength: 255,
+      maxlength: [255, 'Tên dịch vụ không vượt quá 255 ký tự'],
     },
     loai: {
       type: String,
@@ -32,22 +32,36 @@ const serviceSchema = new mongoose.Schema(
     gia: {
       type: Number,
       required: [true, 'Giá dịch vụ là bắt buộc'],
-      min: [0, 'Giá không được âm'],
+      min:      [1, 'Giá phải lớn hơn 0'],
+      max:      [100_000_000, 'Giá không vượt quá 100 triệu'],
+      validate: {
+        validator: (v) => Number.isInteger(v),
+        message:   'Giá phải là số nguyên (VNĐ)',
+      },
     },
-    // home: required (validate trong hook) | related: null — không đặt lịch
+    // Cố định theo loại: related=30ph | home=60ph — hook set, controller không nhận từ body
     thoi_gian_phut: {
       type: Number,
       default: null,
       min: [10, 'Thời gian tối thiểu 10 phút'],
       max: [480, 'Thời gian tối đa 480 phút'],
     },
-    gio_dat_truoc_toi_thieu: { type: Number, default: 2 }, // giờ — home only
-    ngay_ap_dung: { type: String, default: null, maxlength: 100 }, // "T2-T7" — home only
-    gio_bat_dau:  { type: String, default: null }, // "08:00" — home only
-    gio_ket_thuc: { type: String, default: null }, // "17:00" — home only
-    // related: required | home: optional (phục vụ lọc theo khoa)
+    // home only — validate range trong controller (1–48)
+    gio_dat_truoc_toi_thieu: {
+      type: Number,
+      default: 4,
+      min: [1,  'Đặt trước tối thiểu 1 giờ'],
+      max: [48, 'Đặt trước tối đa 48 giờ'],
+    },
+    // Lịch cố định T2–T7 08:00–17:00, set bởi hook nếu chưa có
+    ngay_ap_dung: { type: String, default: null, maxlength: 100 },
+    gio_bat_dau:  { type: String, default: null },
+    gio_ket_thuc: { type: String, default: null },
+    // related only — hướng dẫn chuẩn bị cho bệnh nhân trước khi thực hiện dịch vụ
+    chuan_bi_truoc: { type: String, default: null, maxlength: 1000 },
+    // related: required (validate controller) | home: không dùng
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', default: null },
-    khu_vuc:      { type: [String], default: [] }, // home only — khu vực phục vụ tại nhà
+    khu_vuc:      { type: [String], default: [] }, // home only
     nguoi_tao_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     status: {
       type: String,
@@ -65,26 +79,27 @@ const serviceSchema = new mongoose.Schema(
 serviceSchema.index({ ten: 1, specialty_id: 1 }, { unique: true })
 serviceSchema.index({ status: 1, loai: 1 })
 
-// Tự sinh ma_dich_vu "DVxxx" nếu chưa có (lấy số lớn nhất hiện có + 1)
-// Mongoose 9: hook async KHÔNG nhận next → throw để báo lỗi.
+// Tự sinh ma_dich_vu dùng atomic counter — tránh race condition khi tạo đồng thời
+// Chú ý: validation nghiệp vụ (specialty_id required cho related) được xử lý ở controller
+//        để trả 400 thay vì 500
 serviceSchema.pre('validate', async function () {
   if (!this.ma_dich_vu) {
-    const last = await this.constructor
-      .findOne({ ma_dich_vu: /^DV\d+$/ })
-      .sort({ ma_dich_vu: -1 })
-      .select('ma_dich_vu')
-      .lean()
-    const lastNum = last ? parseInt(last.ma_dich_vu.slice(2), 10) : 0
-    this.ma_dich_vu = 'DV' + String(lastNum + 1).padStart(3, '0')
+    const seq = await Counter.nextSeq('dich_vu')
+    this.ma_dich_vu = 'DV' + String(seq).padStart(3, '0')
   }
+  // Đặt lịch cố định T2–T7 08:00–17:00 nếu chưa có
+  if (!this.ngay_ap_dung) this.ngay_ap_dung = 'T2–T7'
+  if (!this.gio_bat_dau)  this.gio_bat_dau  = '08:00'
+  if (!this.gio_ket_thuc) this.gio_ket_thuc = '17:00'
+
   if (this.loai === 'home') {
-    if (!this.thoi_gian_phut) throw new Error('Dịch vụ tại nhà (home) bắt buộc có thoi_gian_phut')
-    if (this.thoi_gian_phut > 480) throw new Error('Thời gian tối đa 480 phút')
+    if (!this.thoi_gian_phut) this.thoi_gian_phut = 60
+    this.chuan_bi_truoc = null // home không dùng chuan_bi_truoc
   }
   if (this.loai === 'related') {
-    if (!this.specialty_id) throw new Error('Dịch vụ liên quan (related) bắt buộc có specialty_id')
-    this.thoi_gian_phut = null
-    this.khu_vuc = []
+    this.thoi_gian_phut = 30  // cố định 30 phút cho related
+    this.khu_vuc        = []
+    // specialty_id required for related — validated in controller trả 400, không throw ở đây
   }
 })
 

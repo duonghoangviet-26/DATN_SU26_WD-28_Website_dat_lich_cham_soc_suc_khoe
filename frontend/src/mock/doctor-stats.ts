@@ -7,7 +7,7 @@ export const mockDoctorProfile: DoctorProfile = {
   email: 'doctor@vitafamily.vn',
   chuyen_khoa: 'Tim mạch',
   so_nam_kinh_nghiem: 8,
-  phi_tu_van: 350000,
+  gia_kham: 350000,
   trang_thai_duyet: 'approved',
   diem_danh_gia: 4.8,
   so_danh_gia: 124,

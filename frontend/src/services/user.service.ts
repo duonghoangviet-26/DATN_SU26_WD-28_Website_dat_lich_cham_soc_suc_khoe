@@ -1,18 +1,9 @@
-// ============================================================
-// SERVICE: Quản lý người dùng (chức năng C1 của Admin)
-// ============================================================
-// ĐÂY LÀ FILE MẪU cho cả nhóm. Mọi page CHỈ gọi service, KHÔNG đụng mock trực tiếp.
-//
-// Cách hoạt động:
-//   - Bây giờ:  trả về dữ liệu mock (fix cứng) sau một khoảng delay giả lập mạng.
-//   - Sau này:  chỉ cần thay phần thân hàm bằng lời gọi axios (đã có ví dụ trong comment),
-//               UI và page KHÔNG cần sửa gì.
-// ============================================================
-
-import type { User } from '@/types'
 import { mockUsers } from '@/mock/users'
-import { delay } from '@/utils/format'
-// import axios from './axiosInstance'   // ← bật khi có backend thật
+import type { User } from '@/types'
+
+const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+
+let users = [...mockUsers]
 
 interface UserFilters {
   keyword?: string
@@ -20,47 +11,34 @@ interface UserFilters {
   status?: string
 }
 
-// Bản sao mock để có thể "khóa / mở khóa" trong bộ nhớ (giả lập thay đổi dữ liệu)
-let users: User[] = [...mockUsers]
-
 export const userService = {
-  // Lấy danh sách người dùng — có hỗ trợ tìm kiếm + lọc theo vai trò / trạng thái
   async getAll({ keyword = '', role = '', status = '' }: UserFilters = {}): Promise<User[]> {
     await delay()
-
-    // ── SAU NÀY thay toàn bộ khối dưới bằng:
-    // const { data } = await axios.get('/admin/users', { params: { keyword, role, status } })
-    // return data.data
-    let result = [...users]
-
+    let list = [...users]
     if (keyword) {
-      const kw = keyword.trim().toLowerCase()
-      result = result.filter(
-        (u) =>
-          u.ho_ten.toLowerCase().includes(kw) ||
-          u.email.toLowerCase().includes(kw),
-      )
+      const q = keyword.toLowerCase()
+      list = list.filter(u => u.ho_ten.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
     }
-    if (role) result = result.filter((u) => u.role === role)
-    if (status) result = result.filter((u) => u.status === status)
-
-    return result
+    if (role)   list = list.filter(u => u.role === role)
+    if (status) list = list.filter(u => u.status === status)
+    return list
+    // Real API:
+    // const params: Record<string, string> = {}
+    // if (keyword) params.keyword = keyword
+    // if (role)    params.role    = role
+    // if (status)  params.status  = status
+    // const res = await axiosInstance.get<ApiResponse<User[]>>('/admin/users', { params })
+    // return res.data.data
   },
 
-  // Khóa / mở khóa một tài khoản (C1). Trả về user sau khi đổi trạng thái.
   async toggleLock(id: string): Promise<User> {
-    await delay(200)
-
-    // ── SAU NÀY thay bằng:
-    // const { data } = await axios.patch(`/admin/users/${id}/toggle-lock`)
-    // return data.data
-    users = users.map((u): User =>
-      u.id === id
-        ? { ...u, status: u.status === 'active' ? 'locked' : 'active' }
-        : u,
-    )
-    const updated = users.find((u) => u.id === id)
-    if (!updated) throw new Error('Không tìm thấy người dùng')
-    return updated
+    await delay()
+    const user = users.find(u => u.id === id)
+    if (!user) throw new Error('Không tìm thấy người dùng')
+    user.status = user.status === 'active' ? 'locked' : 'active'
+    return { ...user }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<User>>(`/admin/users/${id}/toggle-lock`)
+    // return res.data.data
   },
 }

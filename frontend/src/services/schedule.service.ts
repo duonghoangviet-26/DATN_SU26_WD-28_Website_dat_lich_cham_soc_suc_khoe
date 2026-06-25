@@ -1,78 +1,89 @@
-import type { DoctorSlot } from '@/types'
 import { mockSlots } from '@/mock/doctor-schedule'
-import { delay, findOrThrow } from '@/utils/format'
+import type { DoctorSlot } from '@/types'
 
-let slots: DoctorSlot[] = [...mockSlots]
+const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+
+let slots = [...mockSlots]
+let slotIdCounter = slots.length + 1
+
+interface CreateSchedulePayload {
+  ngay: string
+  slots: { gio_bat_dau: string; gio_ket_thuc: string; phong_kham?: string }[]
+}
 
 export const scheduleService = {
-  async getAll(): Promise<DoctorSlot[]> {
+  async getAll(params?: { from?: string; to?: string }): Promise<DoctorSlot[]> {
     await delay()
-    return [...slots].sort(
-      (a, b) => a.ngay.localeCompare(b.ngay) || a.gio_bat_dau.localeCompare(b.gio_bat_dau),
-    )
+    let list = [...slots]
+    if (params?.from) list = list.filter(s => s.ngay >= params.from!)
+    if (params?.to)   list = list.filter(s => s.ngay <= params.to!)
+    return list
+    // Real API:
+    // const res = await axiosInstance.get<ApiResponse<DoctorSlot[]>>('/doctor/schedule', { params })
+    // return res.data.data
   },
 
-  async lockSlot(id: number): Promise<DoctorSlot> {
-    await delay(200)
-    const slot = findOrThrow(slots, id, 'Slot')
-    if (slot.status === 'booked') {
-      throw new Error('Không thể khóa slot đã có bệnh nhân đặt')
-    }
-    if (slot.status !== 'active') {
-      throw new Error('Chỉ khóa được slot đang active')
-    }
-    slots = slots.map((s) => s.id === id ? { ...s, status: 'locked' } : s)
-    return findOrThrow(slots, id, 'Slot')
+  async create(payload: CreateSchedulePayload): Promise<DoctorSlot[]> {
+    await delay()
+    const scheduleId = `sched-new-${Date.now()}`
+    const newSlots: DoctorSlot[] = payload.slots.map(s => ({
+      id: String(slotIdCounter++),
+      schedule_id: scheduleId,
+      ngay: payload.ngay,
+      gio_bat_dau: s.gio_bat_dau,
+      gio_ket_thuc: s.gio_ket_thuc,
+      phong_kham: s.phong_kham ?? null,
+      benh_nhan: null,
+      benh_nhan_id: null,
+      status: 'active' as const,
+    }))
+    slots = [...slots, ...newSlots]
+    return newSlots
+    // Real API:
+    // const res = await axiosInstance.post<ApiResponse<DoctorSlot[]>>('/doctor/schedule', payload)
+    // return res.data.data
   },
 
-  async unlockSlot(id: number): Promise<DoctorSlot> {
-    await delay(200)
-    const slot = findOrThrow(slots, id, 'Slot')
-    if (slot.status !== 'locked') {
-      throw new Error('Chỉ bỏ khóa slot đang bị khóa')
-    }
-    slots = slots.map((s) => s.id === id ? { ...s, status: 'active' } : s)
-    return findOrThrow(slots, id, 'Slot')
+  async lockSlot(slot: DoctorSlot): Promise<DoctorSlot> {
+    await delay()
+    const s = slots.find(x => x.id === slot.id)
+    if (s) s.status = 'locked'
+    return { ...slot, status: 'locked' }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<DoctorSlot>>(`/doctor/schedule/${slot.schedule_id}/slots/${slot.id}`, { status: 'locked' })
+    // return res.data.data
   },
 
-  // Dùng nội bộ (Admin trigger). UI không expose trực tiếp.
-  async cancelSlot(id: number): Promise<DoctorSlot> {
-    await delay(200)
-    const slot = findOrThrow(slots, id, 'Slot')
-    if (slot.status === 'booked') {
-      throw new Error('Slot đã có bệnh nhân — hủy qua quy trình Admin để hoàn tiền')
-    }
-    if (slot.status === 'cancelled') {
-      throw new Error('Slot đã bị hủy rồi')
-    }
-    slots = slots.map((s) => s.id === id ? { ...s, status: 'cancelled' } : s)
-    return findOrThrow(slots, id, 'Slot')
+  async unlockSlot(slot: DoctorSlot): Promise<DoctorSlot> {
+    await delay()
+    const s = slots.find(x => x.id === slot.id)
+    if (s) s.status = 'active'
+    return { ...slot, status: 'active' }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<DoctorSlot>>(`/doctor/schedule/${slot.schedule_id}/slots/${slot.id}`, { status: 'active' })
+    // return res.data.data
   },
 
-  // Bác sĩ gửi yêu cầu hủy slot đã có bệnh nhân → Admin xử lý → hoàn tiền BN
-  async requestCancelSlot(id: number, ly_do: string): Promise<void> {
-    await delay(300)
-    const slot = findOrThrow(slots, id, 'Slot')
-    if (slot.status !== 'booked') {
-      throw new Error('Chỉ yêu cầu hủy slot đã có bệnh nhân đặt lịch')
-    }
-    if (!ly_do.trim()) {
-      throw new Error('Vui lòng nhập lý do yêu cầu hủy')
-    }
-    // Mock: slot vẫn giữ nguyên 'booked'. Admin nhận yêu cầu, xử lý riêng.
-    console.log(`[Mock] Yêu cầu hủy slot ${id}: "${ly_do}"`)
+  async updatePhongKham(slot: DoctorSlot, phong_kham: string | null): Promise<DoctorSlot> {
+    await delay()
+    const s = slots.find(x => x.id === slot.id)
+    if (s) s.phong_kham = phong_kham
+    return { ...slot, phong_kham }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<DoctorSlot>>(`/doctor/schedule/${slot.schedule_id}/slots/${slot.id}`, { phong_kham })
+    // return res.data.data
   },
 
-  async updatePhongKham(id: number, phong_kham: string | null): Promise<DoctorSlot> {
-    await delay(200)
-    const slot = findOrThrow(slots, id, 'Slot')
-    if (slot.benh_nhan_id != null) {
-      throw new Error('Không thể sửa phòng khi slot đã có bệnh nhân')
-    }
-    if (!['active', 'locked'].includes(slot.status)) {
-      throw new Error('Chỉ sửa phòng khi slot đang active hoặc locked')
-    }
-    slots = slots.map((s) => (s.id === id ? { ...s, phong_kham } : s))
-    return findOrThrow(slots, id, 'Slot')
+  async requestCancelSlot(slotId: string, ly_do: string): Promise<void> {
+    await delay()
+    // Real API:
+    // await axiosInstance.post(`/doctor/schedule/slots/${slotId}/cancel-request`, { ly_do })
+  },
+
+  async deleteSchedule(scheduleId: string): Promise<void> {
+    await delay()
+    slots = slots.filter(s => s.schedule_id !== scheduleId)
+    // Real API:
+    // await axiosInstance.delete(`/doctor/schedule/${scheduleId}`)
   },
 }

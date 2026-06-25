@@ -1,8 +1,15 @@
-import type { NotificationItem, NotificationTarget } from '@/types'
 import { mockNotifications } from '@/mock/notifications'
-import { delay } from '@/utils/format'
+import type { NotificationItem, NotificationTarget } from '@/types'
 
-let notifications: NotificationItem[] = [...mockNotifications]
+const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+
+const RECIPIENT_COUNT: Record<NotificationTarget, number> = {
+  tat_ca: 1248,
+  benh_nhan: 1162,
+  bac_si: 86,
+}
+
+let notifications = [...mockNotifications]
 let nextId = notifications.length + 1
 
 interface SendPayload {
@@ -11,27 +18,29 @@ interface SendPayload {
   doi_tuong: NotificationTarget
 }
 
-const RECIPIENT_COUNT: Record<NotificationTarget, number> = {
-  all: 1248,
-  user: 1162,
-  doctor: 86,
-}
-
 export const notificationService = {
   async getAll(): Promise<NotificationItem[]> {
     await delay()
-    return [...notifications]
+    return [...notifications].reverse()
+    // Real API:
+    // const res = await axiosInstance.get<ApiResponse<NotificationItem[]>>('/admin/notifications')
+    // return res.data.data
   },
 
   async send(payload: SendPayload): Promise<NotificationItem> {
-    await delay(500)
+    await delay()
     const newItem: NotificationItem = {
       id: nextId++,
-      ...payload,
-      so_nguoi_nhan: RECIPIENT_COUNT[payload.doi_tuong],
+      tieu_de: payload.tieu_de,
+      noi_dung: payload.noi_dung,
+      doi_tuong: payload.doi_tuong,
+      so_nguoi_nhan: RECIPIENT_COUNT[payload.doi_tuong] ?? 0,
       ngay_gui: new Date().toISOString(),
     }
     notifications = [newItem, ...notifications]
     return newItem
+    // Real API:
+    // const res = await axiosInstance.post<ApiResponse<NotificationItem>>('/admin/notifications', payload)
+    // return res.data.data
   },
 }

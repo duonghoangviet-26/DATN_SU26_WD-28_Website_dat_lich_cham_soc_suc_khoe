@@ -30,16 +30,19 @@ function getRollingWindow(): string[] {
 function buildSlots(): DoctorSlot[] {
   const window = getRollingWindow()
   const all: DoctorSlot[] = []
-  let id = 1
+  let slotNum = 1
 
   window.forEach((ngay, dayIdx) => {
+    const scheduleId = `sched-mock-${String(dayIdx + 1).padStart(3, '0')}`
+
     SLOT_TIMES.forEach(([bat_dau, ket_thuc], slotIdx) => {
       const base: DoctorSlot = {
-        id,
+        id: String(slotNum),
+        schedule_id: scheduleId,
         ngay,
         gio_bat_dau: bat_dau,
         gio_ket_thuc: ket_thuc,
-        phong_kham: PHONG[id % 3],
+        phong_kham: PHONG[slotNum % 3],
         benh_nhan: null,
         benh_nhan_id: null,
         status: 'active',
@@ -49,12 +52,12 @@ function buildSlots(): DoctorSlot[] {
 
       if (dayIdx === 0) {
         // Hôm nay — id 1–16
-        // id=1 (slotIdx=0):  booked  — test Yêu cầu hủy, guard lockSlot/updatePhongKham booked
-        // id=5 (slotIdx=4):  active phong=null — test warning chưa có phòng + lock null phong
-        // id=9 (slotIdx=8):  locked  — test Mở lại, guard unlockSlot
-        // id=16 (slotIdx=15): cancelled — test guard cancelSlot/lockSlot/unlockSlot/updatePhongKham
+        // slotIdx=0:  booked  — test Yêu cầu hủy, guard lockSlot/updatePhongKham booked
+        // slotIdx=4:  active phong=null — test warning chưa có phòng + lock null phong
+        // slotIdx=8:  locked  — test Mở lại, guard unlockSlot
+        // slotIdx=15: cancelled — test guard cancelSlot/lockSlot/unlockSlot/updatePhongKham
         if (slotIdx === 0) {
-          slot = { ...base, status: 'booked', benh_nhan: 'Trần Thị Bình', benh_nhan_id: 2, phong_kham: PHONG[0] }
+          slot = { ...base, status: 'booked', benh_nhan: 'Trần Thị Bình', benh_nhan_id: '2', phong_kham: PHONG[0] }
         } else if (slotIdx === 4) {
           slot = { ...base, phong_kham: null }
         } else if (slotIdx === 8) {
@@ -64,17 +67,13 @@ function buildSlots(): DoctorSlot[] {
         }
       } else if (dayIdx === 1) {
         // Ngày mai — id 17–32
-        // id=17 (slotIdx=0): booked  — test 2nd booked slot
-        // id=19 (slotIdx=2): active phong=null
         if (slotIdx === 0) {
-          slot = { ...base, status: 'booked', benh_nhan: 'Phạm Minh Quân', benh_nhan_id: 5, phong_kham: PHONG[0] }
+          slot = { ...base, status: 'booked', benh_nhan: 'Phạm Minh Quân', benh_nhan_id: '5', phong_kham: PHONG[0] }
         } else if (slotIdx === 2) {
           slot = { ...base, phong_kham: null }
         }
       } else if (dayIdx === 2) {
         // +2 ngày — id 33–48
-        // id=33 (slotIdx=0): locked  — test unlockSlot tương lai, cancelSlot locked
-        // id=36 (slotIdx=3): active phong=null
         if (slotIdx === 0) {
           slot = { ...base, status: 'locked', phong_kham: PHONG[0] }
         } else if (slotIdx === 3) {
@@ -86,7 +85,7 @@ function buildSlots(): DoctorSlot[] {
       }
 
       all.push(slot)
-      id++
+      slotNum++
     })
   })
 

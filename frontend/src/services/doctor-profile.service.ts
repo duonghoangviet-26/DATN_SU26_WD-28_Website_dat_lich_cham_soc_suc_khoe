@@ -1,46 +1,55 @@
-import type { DoctorProfile } from '@/types'
-import { mockDoctorProfile, mockDoctorProfileExtra, mockDoctorStats, mockDoctorReviews } from '@/mock/doctor-stats'
+import { mockDoctorStats, mockDoctorReviews, mockDoctorProfile, mockDoctorProfileExtra } from '@/mock/doctor-stats'
 import type { DoctorStats, DoctorReview } from '@/types'
-import { delay } from '@/utils/format'
 
-let profile = { ...mockDoctorProfile }
-let extra = { ...mockDoctorProfileExtra }
+const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+
+let profile = { ...mockDoctorProfile, ...mockDoctorProfileExtra }
 
 interface ProfileUpdateData {
   ho_ten?: string
-  chuyen_khoa?: string
+  so_dien_thoai?: string | null
+  anh_dai_dien?: string | null
+  tieu_su?: string | null
+  bang_cap?: string | null
+  kinh_nghiem?: string | null
   so_nam_kinh_nghiem?: number
-  phi_tu_van?: number
-  bang_cap?: string
-  tieu_su?: string
+  gia_kham?: number
+  tuoi_nhan_kham_tu?: number
+  specialties?: string[]
+  services?: string[]
 }
 
 export const doctorProfileService = {
-  async get(): Promise<{ profile: DoctorProfile; tieu_su: string; benh_vien_chinh: string }> {
+  async get() {
     await delay()
-    return { profile: { ...profile }, tieu_su: extra.tieu_su, benh_vien_chinh: extra.benh_vien_chinh }
+    return { ...profile }
+    // Real API:
+    // const res = await axiosInstance.get<ApiResponse<Record<string, unknown>>>('/doctor/profile')
+    // return res.data.data
   },
 
-  async update(data: ProfileUpdateData): Promise<DoctorProfile> {
-    await delay(300)
+  async update(data: ProfileUpdateData) {
+    await delay()
     profile = { ...profile, ...data }
-    if (data.tieu_su !== undefined) extra = { ...extra, tieu_su: data.tieu_su }
     return { ...profile }
-  },
-
-  async submitForReview(): Promise<DoctorProfile> {
-    await delay(400)
-    profile = { ...profile, trang_thai_duyet: 'pending' }
-    return { ...profile }
+    // Real API:
+    // const res = await axiosInstance.put<ApiResponse<Record<string, unknown>>>('/doctor/profile', data)
+    // return res.data.data
   },
 
   async getStats(): Promise<DoctorStats> {
     await delay()
     return { ...mockDoctorStats }
+    // Real API:
+    // const res = await axiosInstance.get<ApiResponse<DoctorStats>>('/doctor/stats')
+    // return res.data.data
   },
 
   async getReviews(): Promise<DoctorReview[]> {
     await delay()
     return [...mockDoctorReviews]
+    // Real API:
+    // const res = await axiosInstance.get<ApiResponse<DoctorReview[]>>('/doctor/stats/reviews')
+    // return res.data.data
   },
 }

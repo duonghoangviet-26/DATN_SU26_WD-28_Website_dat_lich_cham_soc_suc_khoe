@@ -1,5 +1,6 @@
-import axiosInstance from './axiosInstance'
-import type { ApiResponse } from '@/types'
+import { mockSpecialties } from '@/mock/hospitals'
+
+const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
 
 export interface SpecialtyOption {
   id: string
@@ -8,7 +9,12 @@ export interface SpecialtyOption {
 
 export const specialtyService = {
   async getAll(): Promise<SpecialtyOption[]> {
-    const res = await axiosInstance.get<ApiResponse<SpecialtyOption[]>>('/admin/specialties')
-    return res.data.data
+    await delay()
+    return mockSpecialties
+      .filter(s => s.status === 'active')
+      .map(s => ({ id: String(s.id), ten: s.ten }))
+    // Real API:
+    // const res = await axiosInstance.get<ApiResponse<SpecialtyOption[]>>('/admin/specialties')
+    // return res.data.data
   },
 }

@@ -1,34 +1,61 @@
-import type { PaymentItem, PaymentStatus } from '@/types'
 import { mockPayments } from '@/mock/payments'
-import { delay, findOrThrow } from '@/utils/format'
+import type { PaymentItem } from '@/types'
 
-let payments: PaymentItem[] = [...mockPayments]
+const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+
+let payments = [...mockPayments]
 
 interface PaymentFilters {
   keyword?: string
-  status?: PaymentStatus | ''
+  status?: string
+  from?: string
+  to?: string
 }
 
 export const paymentService = {
-  async getAll({ keyword = '', status = '' }: PaymentFilters = {}): Promise<PaymentItem[]> {
+  async getAll({ keyword = '', status = '', from = '', to = '' }: PaymentFilters = {}): Promise<PaymentItem[]> {
     await delay()
-    let result = [...payments]
+    let list = [...payments]
     if (keyword) {
-      const kw = keyword.toLowerCase()
-      result = result.filter(
-        (p) =>
-          p.benh_nhan.toLowerCase().includes(kw) ||
-          p.bac_si.toLowerCase().includes(kw) ||
-          p.ma_giao_dich.toLowerCase().includes(kw),
+      const q = keyword.toLowerCase()
+      list = list.filter(p =>
+        p.benh_nhan.toLowerCase().includes(q) ||
+        p.bac_si.toLowerCase().includes(q) ||
+        p.ma_giao_dich.toLowerCase().includes(q),
       )
     }
-    if (status) result = result.filter((p) => p.status === status)
-    return result
+    if (status) list = list.filter(p => p.status === status)
+    if (from)   list = list.filter(p => p.ngay_tao >= from)
+    if (to)     list = list.filter(p => p.ngay_tao <= to)
+    return list
+    // Real API:
+    // const params: Record<string, string> = {}
+    // if (keyword) params.search = keyword
+    // if (status)  params.status = status
+    // if (from)    params.from   = from
+    // if (to)      params.to     = to
+    // const res = await axiosInstance.get<ApiResponse<PaymentItem[]>>('/admin/payments', { params })
+    // return res.data.data
   },
 
-  async refund(id: number): Promise<PaymentItem> {
-    await delay(300)
-    payments = payments.map((p) => p.id === id ? { ...p, status: 'refunded' } : p)
-    return findOrThrow(payments, id, 'Giao dịch')
+  async getById(id: string): Promise<PaymentItem> {
+    await delay()
+    const item = payments.find(p => String(p.id) === String(id))
+    if (!item) throw new Error('Không tìm thấy giao dịch')
+    return { ...item }
+    // Real API:
+    // const res = await axiosInstance.get<ApiResponse<PaymentItem>>(`/admin/payments/${id}`)
+    // return res.data.data
+  },
+
+  async refund(id: string): Promise<PaymentItem> {
+    await delay()
+    const item = payments.find(p => String(p.id) === String(id))
+    if (!item) throw new Error('Không tìm thấy giao dịch')
+    item.status = 'refunded'
+    return { ...item }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<PaymentItem>>(`/admin/payments/${id}/refund`)
+    // return res.data.data
   },
 }

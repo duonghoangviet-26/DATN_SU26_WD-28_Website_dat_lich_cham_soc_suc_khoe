@@ -39,3 +39,4 @@ export { default as TinNhanChat }        from './TinNhanChat.js'
 
 export { default as LichSuLichHen }      from './LichSuLichHen.js'
 export { default as NhatKyThaoTac }      from './NhatKyThaoTac.js'
+export { default as Counter }            from './Counter.js'

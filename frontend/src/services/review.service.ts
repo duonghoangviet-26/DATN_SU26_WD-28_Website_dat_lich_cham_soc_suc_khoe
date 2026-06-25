@@ -1,28 +1,44 @@
-import type { ReviewItem } from '@/types'
 import { mockReviews } from '@/mock/reviews'
-import { delay, findOrThrow } from '@/utils/format'
+import type { ReviewItem } from '@/types'
 
-let reviews: ReviewItem[] = [...mockReviews]
+const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+
+let reviews = [...mockReviews]
 
 interface ReviewFilters {
-  diem?: string
   status?: string
+  search?: string
 }
 
 export const reviewService = {
-  async getAll({ diem = '', status = '' }: ReviewFilters = {}): Promise<ReviewItem[]> {
+  async getAll({ status = '', search = '' }: ReviewFilters = {}): Promise<ReviewItem[]> {
     await delay()
-    let result = [...reviews]
-    if (diem) result = result.filter((r) => r.diem === Number(diem))
-    if (status) result = result.filter((r) => r.status === status)
-    return result
+    let list = [...reviews]
+    if (status) list = list.filter(r => r.status === status)
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter(r =>
+        r.benh_nhan.toLowerCase().includes(q) ||
+        r.bac_si.toLowerCase().includes(q) ||
+        r.noi_dung.toLowerCase().includes(q),
+      )
+    }
+    return list
+    // Real API:
+    // const params: Record<string, string> = {}
+    // if (status) params.status = status
+    // if (search) params.search = search
+    // const res = await axiosInstance.get<ApiResponse<ReviewItem[]>>('/admin/reviews', { params })
+    // return res.data.data
   },
 
-  async toggle(id: number): Promise<ReviewItem> {
-    await delay(200)
-    reviews = reviews.map((r) =>
-      r.id === id ? { ...r, status: r.status === 'visible' ? 'hidden' : 'visible' } : r,
-    )
-    return findOrThrow(reviews, id, 'Đánh giá')
+  async toggle(id: string): Promise<{ id: string; status: string }> {
+    await delay()
+    const review = reviews.find(r => String(r.id) === String(id))
+    if (review) review.status = review.status === 'visible' ? 'hidden' : 'visible'
+    return { id, status: review?.status ?? 'visible' }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<{ id: string; status: string }>>(`/admin/reviews/${id}/toggle`)
+    // return res.data.data
   },
 }

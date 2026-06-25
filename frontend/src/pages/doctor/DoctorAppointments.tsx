@@ -345,7 +345,7 @@ export default function DoctorAppointments() {
   // Load dữ liệu lần đầu
   // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    doctorAppointmentService.getAll({ tab: 'all' })
+    doctorAppointmentService.getAll()
       .then(setAll)
       .finally(() => setLoading(false))
   }, [])
@@ -465,7 +465,7 @@ export default function DoctorAppointments() {
     setActionLoading(id)
     try {
       const updated = await doctorAppointmentService.confirm(id)
-      updateAppt(id, { status: updated.status })
+      updateAppt(id, { status: updated.status, payment_deadline: updated.payment_deadline })
       showToast('Đã xác nhận lịch hẹn')
     } catch {
       showToast('Không thể xác nhận lịch hẹn', 'error')

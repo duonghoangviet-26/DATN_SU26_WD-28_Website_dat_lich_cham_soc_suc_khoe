@@ -29,13 +29,13 @@ export const mockPayments: PaymentItem[] = [
     id: 5, ma_giao_dich: 'VF240617001',
     benh_nhan: 'Võ Thị Hoa', bac_si: 'BS. Phạm Thu Dung',
     so_tien: 280000, phuong_thuc: 'momo',
-    status: 'unpaid', ngay_tao: '2026-06-17T00:00:00',
+    status: 'pending', ngay_tao: '2026-06-17T00:00:00',
   },
   {
     id: 6, ma_giao_dich: 'VF240617002',
     benh_nhan: 'Trần Thị Bình', bac_si: 'BS. Phạm Thu Dung',
     so_tien: 250000, phuong_thuc: 'vnpay',
-    status: 'unpaid', ngay_tao: '2026-06-17T00:00:00',
+    status: 'pending', ngay_tao: '2026-06-17T00:00:00',
   },
   {
     id: 7, ma_giao_dich: 'VF240611001',
@@ -47,6 +47,6 @@ export const mockPayments: PaymentItem[] = [
     id: 8, ma_giao_dich: 'VF240618001',
     benh_nhan: 'Ngô Thị Tú', bac_si: 'BS. Phạm Thu Dung',
     so_tien: 500000, phuong_thuc: 'bank',
-    status: 'unpaid', ngay_tao: '2026-06-18T00:00:00',
+    status: 'pending', ngay_tao: '2026-06-18T00:00:00',
   },
 ]

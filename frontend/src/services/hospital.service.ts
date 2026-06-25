@@ -1,34 +1,38 @@
-import type { HospitalItem, SpecialtyItem } from '@/types'
 import { mockHospitals, mockSpecialties } from '@/mock/hospitals'
-import { delay, findOrThrow } from '@/utils/format'
+import type { HospitalItem, SpecialtyItem } from '@/types'
 
-let hospitals: HospitalItem[] = [...mockHospitals]
-let specialties: SpecialtyItem[] = [...mockSpecialties]
+const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
 
+let specialties = [...mockSpecialties]
+
+// Phòng khám tư 1 cơ sở — getHospitals/toggleHospital giữ lại để không phá vỡ UI placeholder C3.
 export const hospitalService = {
   async getHospitals(): Promise<HospitalItem[]> {
     await delay()
-    return [...hospitals]
+    return [...mockHospitals]
   },
 
-  async toggleHospital(id: number): Promise<HospitalItem> {
-    await delay(200)
-    hospitals = hospitals.map((h) =>
-      h.id === id ? { ...h, status: h.status === 'active' ? 'hidden' : 'active' } : h,
-    )
-    return findOrThrow(hospitals, id, 'Bệnh viện')
+  async toggleHospital(_id: number): Promise<HospitalItem | null> {
+    await delay()
+    return null
   },
 
   async getSpecialties(): Promise<SpecialtyItem[]> {
     await delay()
     return [...specialties]
+    // Real API:
+    // const res = await axiosInstance.get<ApiResponse<SpecialtyItem[]>>('/admin/specialties')
+    // return res.data.data
   },
 
-  async toggleSpecialty(id: number): Promise<SpecialtyItem> {
-    await delay(200)
-    specialties = specialties.map((s) =>
-      s.id === id ? { ...s, status: s.status === 'active' ? 'hidden' : 'active' } : s,
-    )
-    return findOrThrow(specialties, id, 'Chuyên khoa')
+  async toggleSpecialty(id: string): Promise<SpecialtyItem> {
+    await delay()
+    const item = specialties.find(s => String(s.id) === String(id))
+    if (!item) throw new Error('Không tìm thấy chuyên khoa')
+    item.status = item.status === 'active' ? 'hidden' : 'active'
+    return { ...item }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<SpecialtyItem>>(`/admin/specialties/${id}/toggle`)
+    // return res.data.data
   },
 }

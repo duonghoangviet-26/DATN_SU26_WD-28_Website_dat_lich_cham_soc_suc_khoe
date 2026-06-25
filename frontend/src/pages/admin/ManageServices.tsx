@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { serviceService } from '@/services/service.service'
-import type { ServiceItem, ServiceType, ServiceFormData } from '@/types'
+import type { ServiceItem, ServiceType, ServiceStatus, ServiceFormData } from '@/types'
 import { SERVICE_TYPE_LABEL } from '@/utils/constants'
 import { formatPrice } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader'
@@ -10,219 +10,176 @@ import Icon from '@/components/admin/icons'
 import ServiceFormModal from '@/components/admin/services/ServiceFormModal'
 import ServiceViewModal from '@/components/admin/services/ServiceViewModal'
 
-// ─── Hằng số dùng trong trang ─────────────────────────────────────────────────
+// ─── Hằng số ──────────────────────────────────────────────────────────────────
 
-// Các tab lọc theo loại hình dịch vụ
+const PAGE_SIZE = 10
+
 const TYPE_TABS = [
-  { value: '' as const,       label: 'Tất cả' },
-  { value: 'clinic' as const, label: 'Phòng khám' },
-  { value: 'home' as const,   label: 'Tại nhà' },
+  { value: '' as const,        label: 'Tất cả' },
+  { value: 'related' as const, label: 'Dịch vụ liên quan' },
+  { value: 'home' as const,    label: 'Tại nhà' },
 ]
 
-// Màu badge tương ứng với từng loại hình
+const STATUS_TABS: { value: ServiceStatus | ''; label: string }[] = [
+  { value: '',         label: 'Tất cả' },
+  { value: 'active',   label: 'Hoạt động' },
+  { value: 'inactive', label: 'Đã ẩn' },
+]
+
 const TYPE_BADGE_COLOR: Record<ServiceType, 'blue' | 'yellow'> = {
-  clinic: 'blue',
-  home:   'yellow',
+  related: 'blue',
+  home:    'yellow',
 }
 
-// CSS dùng chung cho ô header có thể click sort
-const TH_SORT = 'cursor-pointer select-none whitespace-nowrap px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 transition-colors hover:bg-slate-100'
-
-// CSS cho ô header không sort (Lịch áp dụng, cột actions)
+const TH_SORT  = 'cursor-pointer select-none whitespace-nowrap px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 transition-colors hover:bg-slate-100'
 const TH_PLAIN = 'whitespace-nowrap px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500'
-
-// Các cột sắp xếp theo số (thay vì so sánh chữ)
 const NUMERIC_COLS = ['gia', 'thoi_gian_phut', 'so_bac_si']
 
 // ─── Component chính ──────────────────────────────────────────────────────────
 export default function ManageServices() {
 
   // ── Dữ liệu ─────────────────────────────────────────────────────────────────
-  const [services, setServices]       = useState<ServiceItem[]>([]) // danh sách đang hiển thị trong bảng
-  const [allServices, setAllServices] = useState<ServiceItem[]>([]) // toàn bộ (dùng để tính stats góc trên)
+  const [services, setServices]       = useState<ServiceItem[]>([])
+  const [allServices, setAllServices] = useState<ServiceItem[]>([]) // cho stats (không lọc)
   const [loading, setLoading]         = useState(true)
 
   // ── Filter và tìm kiếm ──────────────────────────────────────────────────────
-  const [activeType, setActiveType]   = useState<ServiceType | ''>('')
-  const [searchInput, setSearchInput] = useState('') // giá trị đang gõ trong ô tìm kiếm
-  const [search, setSearch]           = useState('') // giá trị thực sự gửi lên API (cập nhật sau 300ms)
+  const [activeType, setActiveType]     = useState<ServiceType | ''>('')
+  const [activeStatus, setActiveStatus] = useState<ServiceStatus | ''>('')
+  const [searchInput, setSearchInput]   = useState('')
+  const [search, setSearch]             = useState('')
 
-  // ── Trạng thái các Modal ────────────────────────────────────────────────────
-  // formTarget = null → modal đóng
-  // formTarget = 'new' → mở form thêm mới
-  // formTarget = ServiceItem → mở form sửa dịch vụ đó
+  // ── Pagination ───────────────────────────────────────────────────────────────
+  const [page, setPage]             = useState(1)
+  const [total, setTotal]           = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [reloadKey, setReloadKey]   = useState(0)
+  function triggerReload() { setReloadKey(k => k + 1) }
+
+  // ── Modal state ──────────────────────────────────────────────────────────────
   const [formTarget, setFormTarget]     = useState<ServiceItem | 'new' | null>(null)
-  const [viewTarget, setViewTarget]     = useState<ServiceItem | null>(null) // modal xem chi tiết
-  const [viewLoading, setViewLoading]   = useState(false)                    // đang tải lịch sử
-  const [toggleTarget, setToggleTarget] = useState<ServiceItem | null>(null) // đang chờ xác nhận ẩn/hiện
+  const [viewTarget, setViewTarget]     = useState<ServiceItem | null>(null)
+  const [viewLoading, setViewLoading]   = useState(false)
+  const [toggleTarget, setToggleTarget] = useState<ServiceItem | null>(null)
 
-  // ── Thông báo toast ─────────────────────────────────────────────────────────
+  // ── Toast ────────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
-  // ── Sắp xếp theo cột ────────────────────────────────────────────────────────
-  const [sortKey, setSortKey] = useState('ma_dich_vu') // tên field đang sort
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc') // chiều sort
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Hiện thông báo toast rồi tự tắt sau 3 giây
-  // ─────────────────────────────────────────────────────────────────────────────
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Debounce tìm kiếm: đợi 300ms sau khi gõ phím cuối mới gửi API
-  // Tránh gọi API liên tục khi người dùng đang gõ từng chữ
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ── Sắp xếp ─────────────────────────────────────────────────────────────────
+  const [sortKey, setSortKey] = useState('ma_dich_vu')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  // ─── Debounce tìm kiếm 300ms ─────────────────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => setSearch(searchInput), 300)
-    return () => clearTimeout(timer) // hủy timer nếu người dùng tiếp tục gõ
+    return () => clearTimeout(timer)
   }, [searchInput])
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Tải danh sách dịch vụ mỗi khi tab loại hoặc từ khoá tìm kiếm thay đổi
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ─── Reset về trang 1 khi đổi filter ─────────────────────────────────────────
+  useEffect(() => { setPage(1) }, [activeType, activeStatus, search])
+
+  // ─── Tải danh sách (có phân trang) ───────────────────────────────────────────
   useEffect(() => {
     setLoading(true)
     serviceService
-      .getAll(activeType, search)
-      .then((data) => setServices(data))
+      .getAll(activeType, search, activeStatus, page, PAGE_SIZE)
+      .then(({ items, total, totalPages }) => {
+        setServices(items)
+        setTotal(total)
+        setTotalPages(totalPages)
+      })
       .catch(() => showToast('Không thể tải danh sách dịch vụ', 'error'))
       .finally(() => setLoading(false))
-  }, [activeType, search])
+  }, [activeType, activeStatus, search, page, reloadKey])
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Tải toàn bộ dịch vụ (không lọc) để tính số liệu thống kê góc trên
-  // Gọi khi trang mở lần đầu và sau mỗi lần thêm/sửa/ẩn/hiện
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ─── Tải toàn bộ (không lọc) để tính stats ───────────────────────────────────
   function loadStats() {
-    serviceService.getAll().then((data) => setAllServices(data))
+    serviceService.getAll('', '', '', 1, 9999).then(({ items }) => setAllServices(items))
   }
+  useEffect(() => { loadStats() }, [])
 
-  useEffect(() => {
-    loadStats()
-  }, []) // [] = chỉ chạy 1 lần khi trang được mở
-
-  // Tính các con số thống kê từ toàn bộ danh sách
   const stats = {
     total:    allServices.length,
-    active:   allServices.filter((s) => s.status === 'active').length,
-    inactive: allServices.filter((s) => s.status === 'inactive').length,
-    clinic:   allServices.filter((s) => s.loai === 'clinic').length,
-    home:     allServices.filter((s) => s.loai === 'home').length,
+    active:   allServices.filter(s => s.status === 'active').length,
+    inactive: allServices.filter(s => s.status === 'inactive').length,
+    related:  allServices.filter(s => s.loai === 'related').length,
+    home:     allServices.filter(s => s.loai === 'home').length,
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Sắp xếp danh sách theo cột đang chọn (client-side, không gọi API thêm)
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ─── Sort client-side (trên trang hiện tại) ──────────────────────────────────
   function getSortedServices() {
-    // Tạo bản sao để không làm thay đổi mảng gốc
     return [...services].sort((a, b) => {
-      // Lấy giá trị của 2 dòng tại cột đang sort
       const av = (a as unknown as Record<string, unknown>)[sortKey]
       const bv = (b as unknown as Record<string, unknown>)[sortKey]
-
       let cmp: number
-      if (NUMERIC_COLS.includes(sortKey)) {
-        // Cột số: so sánh bằng phép trừ
+      if (sortKey === 'ma_dich_vu') {
+        // Numeric sort: DV001→1, DV010→10, DV1000→1000 (không phải string sort)
+        const toNum = (s: unknown) => parseInt(String(s ?? '').replace(/\D/g, ''), 10) || 0
+        cmp = toNum(av) - toNum(bv)
+      } else if (NUMERIC_COLS.includes(sortKey)) {
         cmp = (Number(av) || 0) - (Number(bv) || 0)
       } else {
-        // Cột chữ: so sánh có hỗ trợ tiếng Việt
         cmp = String(av ?? '').localeCompare(String(bv ?? ''), 'vi', { sensitivity: 'base' })
       }
-
-      // Đảo chiều nếu đang sort giảm dần
       return sortDir === 'asc' ? cmp : -cmp
     })
   }
 
-  // Click vào tên cột: nếu đang sort cột đó thì đảo chiều, nếu không thì chuyển sang cột mới
   function handleSort(key: string) {
-    if (sortKey === key) {
-      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortKey(key)
-      setSortDir('asc')
-    }
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
   }
 
-  // Trả về icon chỉ hướng sort cho từng cột
   function sortIcon(key: string) {
-    if (sortKey !== key) {
-      return <span className="text-[11px] text-slate-300">⇅</span> // cột chưa chọn
-    }
-    return (
-      <span className="text-[11px] text-brand-500">
-        {sortDir === 'asc' ? '▲' : '▼'}
-      </span>
-    )
+    if (sortKey !== key) return <span className="text-[11px] text-slate-300">⇅</span>
+    return <span className="text-[11px] text-brand-500">{sortDir === 'asc' ? '▲' : '▼'}</span>
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Lưu dịch vụ: xử lý cả trường hợp Thêm mới và Cập nhật
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ─── Lưu dịch vụ (thêm mới / cập nhật) ──────────────────────────────────────
   async function handleSave(data: ServiceFormData, mo_ta?: string) {
     try {
       if (formTarget === 'new') {
-        // --- Thêm mới ---
-        const created = await serviceService.create(data)
-
-        // Chỉ thêm dịch vụ mới vào bảng nếu khớp với tab đang lọc
-        // VD: đang ở tab "Phòng khám" mà tạo dịch vụ "Tại nhà" → không hiện trong tab này
-        if (!activeType || created.loai === activeType) {
-          setServices((prev) => [...prev, created])
-        }
+        await serviceService.create(data)
         showToast('Tạo dịch vụ thành công')
-
       } else if (formTarget) {
-        // --- Cập nhật ---
-        const updated = await serviceService.update(formTarget.id, data, mo_ta)
-
-        if (activeType && updated.loai !== activeType) {
-          // Người dùng đổi loại hình dịch vụ → không còn khớp tab hiện tại → xóa khỏi bảng
-          setServices((prev) => prev.filter((s) => s.id !== updated.id))
-        } else {
-          // Cập nhật thông tin dịch vụ trong bảng
-          setServices((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
-        }
+        await serviceService.update(formTarget.id, data, mo_ta)
         showToast('Cập nhật dịch vụ thành công')
       }
-
-      setFormTarget(null) // đóng modal
-      loadStats()         // cập nhật lại số liệu thống kê
+      setFormTarget(null)
+      triggerReload()
+      loadStats()
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Có lỗi xảy ra', 'error')
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Ẩn / Hiện dịch vụ: chạy sau khi người dùng xác nhận trong dialog
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ─── Ẩn / Hiện dịch vụ ───────────────────────────────────────────────────────
   async function handleToggleConfirm() {
     if (!toggleTarget) return
-    const id = toggleTarget.id
-    setToggleTarget(null) // đóng dialog xác nhận
+    const wasActive = toggleTarget.status === 'active'
+    const id        = toggleTarget.id
+    setToggleTarget(null)
     try {
-      const updated = await serviceService.toggle(id)
-      // Cập nhật trạng thái dòng đó ngay trong bảng
-      setServices((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+      await serviceService.toggle(id)
+      showToast(wasActive ? 'Đã ẩn dịch vụ' : 'Đã hiện dịch vụ')
+      triggerReload()
       loadStats()
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Không thể thay đổi trạng thái', 'error')
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Xem chi tiết: mở modal ngay với dữ liệu cơ bản, sau đó gọi API để lấy
-  // đầy đủ thông tin bao gồm lịch sử thao tác (audit log)
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ─── Xem chi tiết ────────────────────────────────────────────────────────────
   async function handleView(service: ServiceItem) {
-    setViewTarget(service)  // mở modal ngay, tránh người dùng chờ
+    setViewTarget(service)
     setViewLoading(true)
     try {
       const full = await serviceService.getById(service.id)
-      setViewTarget(full)   // cập nhật với dữ liệu đầy đủ (kèm lịch sử)
+      setViewTarget(full)
     } catch {
       showToast('Không thể tải lịch sử thao tác', 'error')
     } finally {
@@ -230,21 +187,31 @@ export default function ManageServices() {
     }
   }
 
-  // Bấm "Sửa dịch vụ này" trong modal Xem → chuyển sang modal Sửa
   function handleEditFromView(service: ServiceItem) {
     setViewTarget(null)
     setFormTarget(service)
   }
 
-  // Danh sách đã được sắp xếp, dùng để render bảng
   const sortedServices = getSortedServices()
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // GIAO DIỆN
+  // ─── Thông báo empty state rõ nguyên nhân ────────────────────────────────────
+  function emptyMessage(): string {
+    if (search) return `Không tìm thấy dịch vụ khớp với "${search}"`
+    if (activeStatus === 'active')   return 'Không có dịch vụ nào đang hoạt động'
+    if (activeStatus === 'inactive') return 'Không có dịch vụ nào đang bị ẩn'
+    if (activeType) return `Chưa có dịch vụ loại "${TYPE_TABS.find(t => t.value === activeType)?.label ?? activeType}"`
+    return 'Chưa có dịch vụ nào'
+  }
+
+  function emptyHint(): string {
+    if (search || activeStatus || activeType) return 'Thử xóa bộ lọc hoặc tìm kiếm với từ khóa khác'
+    return 'Nhấn "+ Thêm dịch vụ" để tạo dịch vụ đầu tiên'
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Thông báo toast — hiện góc trên phải, tự mất sau 3 giây */}
+      {/* Toast */}
       {toast && (
         <div className={`fixed right-6 top-6 z-[100] flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-lg ${
           toast.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
@@ -265,7 +232,7 @@ export default function ManageServices() {
             { label: 'Tổng dịch vụ', value: stats.total,    color: 'text-slate-700'  },
             { label: 'Hoạt động',    value: stats.active,   color: 'text-green-600'  },
             { label: 'Đã ẩn',        value: stats.inactive, color: 'text-slate-400'  },
-            { label: 'Phòng khám',   value: stats.clinic,   color: 'text-blue-600'   },
+            { label: 'Liên quan',    value: stats.related,  color: 'text-blue-600'   },
             { label: 'Tại nhà',      value: stats.home,     color: 'text-yellow-600' },
           ].map((item) => (
             <div key={item.label} className="card p-4 text-center">
@@ -275,7 +242,7 @@ export default function ManageServices() {
           ))}
         </div>
 
-        {/* ── Tab lọc + Ô tìm kiếm + Nút thêm mới ── */}
+        {/* ── Filter + Search + Nút thêm ── */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
 
           {/* Tab lọc loại hình */}
@@ -285,8 +252,25 @@ export default function ManageServices() {
                 key={tab.value}
                 onClick={() => setActiveType(tab.value)}
                 className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  activeType === tab.value
-                    ? 'bg-brand-500 text-white'
+                  activeType === tab.value ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab lọc trạng thái */}
+          <div className="card flex gap-1 p-1.5">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setActiveStatus(tab.value)}
+                className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  activeStatus === tab.value
+                    ? tab.value === 'inactive' ? 'bg-slate-500 text-white'
+                      : tab.value === 'active' ? 'bg-green-500 text-white'
+                      : 'bg-brand-500 text-white'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
@@ -307,7 +291,6 @@ export default function ManageServices() {
             />
           </div>
 
-          {/* Nút thêm dịch vụ mới */}
           <button
             onClick={() => setFormTarget('new')}
             className="btn-primary flex items-center gap-1.5"
@@ -317,12 +300,10 @@ export default function ManageServices() {
           </button>
         </div>
 
-        {/* ── Bảng danh sách dịch vụ ── */}
+        {/* ── Bảng ── */}
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-
-              {/* Header bảng — click vào tiêu đề cột để sắp xếp */}
               <thead className="bg-slate-50 text-left">
                 <tr>
                   <th onClick={() => handleSort('ma_dich_vu')} className={TH_SORT}>
@@ -350,44 +331,30 @@ export default function ManageServices() {
                   <th onClick={() => handleSort('status')} className={TH_SORT}>
                     <div className="flex items-center gap-1">Trạng thái {sortIcon('status')}</div>
                   </th>
-                  <th className="px-4 py-3" /> {/* cột nút hành động */}
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-
-                {/* Trường hợp 1: Đang tải dữ liệu */}
                 {loading && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-slate-400">
-                      Đang tải...
-                    </td>
+                    <td colSpan={10} className="px-4 py-10 text-center text-slate-400">Đang tải...</td>
                   </tr>
                 )}
 
-                {/* Trường hợp 2: Không có dữ liệu */}
                 {!loading && sortedServices.length === 0 && (
                   <tr>
                     <td colSpan={10} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <span className="text-5xl">📋</span>
-                        <p className="text-base font-medium text-slate-600">
-                          {search
-                            ? `Không tìm thấy dịch vụ khớp với "${search}"`
-                            : 'Chưa có dịch vụ nào'}
-                        </p>
-                        <p className="text-sm text-slate-400">
-                          {search
-                            ? 'Thử tìm với từ khoá khác hoặc xoá bộ lọc'
-                            : 'Nhấn "+ Thêm dịch vụ" để tạo dịch vụ đầu tiên'}
-                        </p>
-                        {/* Nút xoá tìm kiếm — chỉ hiện khi đang tìm kiếm */}
-                        {search && (
+                        <p className="text-base font-medium text-slate-600">{emptyMessage()}</p>
+                        <p className="text-sm text-slate-400">{emptyHint()}</p>
+                        {(search || activeStatus || activeType) && (
                           <button
-                            onClick={() => setSearchInput('')}
+                            onClick={() => { setSearchInput(''); setActiveType(''); setActiveStatus('') }}
                             className="mt-1 rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
                           >
-                            Xoá tìm kiếm
+                            Xóa tất cả bộ lọc
                           </button>
                         )}
                       </div>
@@ -395,53 +362,37 @@ export default function ManageServices() {
                   </tr>
                 )}
 
-                {/* Trường hợp 3: Có dữ liệu — render từng dòng */}
                 {!loading && sortedServices.map((s) => {
-                  // Dịch vụ đang ẩn → làm mờ phần thông tin, cột actions giữ nguyên
                   const dim = s.status === 'inactive' ? 'opacity-40' : ''
-
                   return (
                     <tr key={s.id} className="hover:bg-slate-50">
-
-                      <td className={`px-4 py-3 font-mono text-xs text-slate-500 ${dim}`}>
-                        {s.ma_dich_vu}
-                      </td>
+                      <td className={`px-4 py-3 font-mono text-xs text-slate-500 ${dim}`}>{s.ma_dich_vu}</td>
 
                       <td className={`px-4 py-3 ${dim}`}>
                         <div className="font-medium text-slate-800">{s.ten}</div>
                         {s.mo_ta_ngan && (
-                          <div className="mt-0.5 line-clamp-1 text-xs text-slate-400">
-                            {s.mo_ta_ngan}
-                          </div>
+                          <div className="mt-0.5 line-clamp-1 text-xs text-slate-400">{s.mo_ta_ngan}</div>
                         )}
                       </td>
 
                       <td className={`px-4 py-3 ${dim}`}>
-                        <Badge color={TYPE_BADGE_COLOR[s.loai]}>
-                          {SERVICE_TYPE_LABEL[s.loai]}
-                        </Badge>
+                        <Badge color={TYPE_BADGE_COLOR[s.loai]}>{SERVICE_TYPE_LABEL[s.loai]}</Badge>
+                      </td>
+
+                      <td className={`px-4 py-3 text-slate-500 ${dim}`}>{s.specialty_ten ?? '—'}</td>
+
+                      <td className={`px-4 py-3 font-semibold text-slate-800 ${dim}`}>{formatPrice(s.gia)}</td>
+
+                      <td className={`px-4 py-3 text-slate-600 ${dim}`}>
+                        {s.thoi_gian_phut != null ? `${s.thoi_gian_phut} ph` : '—'}
                       </td>
 
                       <td className={`px-4 py-3 text-slate-500 ${dim}`}>
-                        {s.specialty_ten ?? '—'}
-                      </td>
-
-                      <td className={`px-4 py-3 font-semibold text-slate-800 ${dim}`}>
-                        {formatPrice(s.gia)}
+                        {s.ngay_ap_dung ? `${s.ngay_ap_dung}, ${s.gio_bat_dau}–${s.gio_ket_thuc}` : '—'}
                       </td>
 
                       <td className={`px-4 py-3 text-slate-600 ${dim}`}>
-                        {s.thoi_gian_phut} ph
-                      </td>
-
-                      <td className={`px-4 py-3 text-slate-500 ${dim}`}>
-                        {s.ngay_ap_dung
-                          ? `${s.ngay_ap_dung}, ${s.gio_bat_dau}–${s.gio_ket_thuc}`
-                          : '—'}
-                      </td>
-
-                      <td className={`px-4 py-3 text-slate-600 ${dim}`}>
-                        {s.so_bac_si ?? 0} BS
+                        {s.loai === 'home' ? `${s.so_bac_si ?? 0} BS` : '—'}
                       </td>
 
                       <td className={`px-4 py-3 ${dim}`}>
@@ -450,7 +401,6 @@ export default function ManageServices() {
                         </Badge>
                       </td>
 
-                      {/* Cột nút hành động — KHÔNG làm mờ dù dịch vụ đang ẩn */}
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <button
@@ -477,19 +427,57 @@ export default function ManageServices() {
                           </button>
                         </div>
                       </td>
-
                     </tr>
                   )
                 })}
-
               </tbody>
             </table>
           </div>
+
+          {/* ── Pagination ── */}
+          {!loading && total > 0 && (
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <span className="text-xs text-slate-500">
+                {total} dịch vụ · Trang {page}/{totalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                  className="rounded px-2 py-1 text-xs text-slate-500 disabled:opacity-30 hover:bg-slate-100"
+                >
+                  «
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="rounded border px-3 py-1.5 text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50"
+                >
+                  ← Trước
+                </button>
+                <span className="min-w-[32px] px-2 text-center text-sm font-medium text-slate-700">
+                  {page}
+                </span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="rounded border px-3 py-1.5 text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50"
+                >
+                  Tiếp →
+                </button>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  disabled={page === totalPages}
+                  className="rounded px-2 py-1 text-xs text-slate-500 disabled:opacity-30 hover:bg-slate-100"
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ── Các Modal ── */}
-
-        {/* Modal thêm mới / sửa dịch vụ */}
+        {/* ── Modals ── */}
         <ServiceFormModal
           open={formTarget !== null}
           service={formTarget === 'new' ? null : formTarget}
@@ -497,7 +485,6 @@ export default function ManageServices() {
           onSave={handleSave}
         />
 
-        {/* Modal xem chi tiết + lịch sử thao tác */}
         <ServiceViewModal
           open={viewTarget !== null}
           service={viewTarget}
@@ -506,7 +493,6 @@ export default function ManageServices() {
           onEdit={handleEditFromView}
         />
 
-        {/* Dialog xác nhận ẩn / hiện dịch vụ */}
         <ConfirmDialog
           open={toggleTarget !== null}
           title={toggleTarget?.status === 'active' ? 'Ẩn dịch vụ?' : 'Hiện dịch vụ?'}
@@ -520,7 +506,6 @@ export default function ManageServices() {
           onConfirm={handleToggleConfirm}
           onCancel={() => setToggleTarget(null)}
         />
-
       </div>
     </>
   )

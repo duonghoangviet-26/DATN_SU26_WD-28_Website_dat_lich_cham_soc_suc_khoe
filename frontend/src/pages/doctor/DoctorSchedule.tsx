@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
+import Toast from '@/components/common/Toast'
 import Icon from '@/components/admin/icons'
 import { scheduleService } from '@/services/schedule.service'
 import { mockRooms } from '@/mock/rooms'
@@ -135,38 +136,32 @@ export default function DoctorSchedule() {
     })
   }
 
-  function showError(msg: string) {
-    setActionError(msg)
-    setTimeout(() => setActionError(''), 4000)
-  }
-  function showSuccess(msg: string) {
-    setActionSuccess(msg)
-    setTimeout(() => setActionSuccess(''), 3000)
-  }
+  function showError(msg: string) { setActionError(msg) }
+  function showSuccess(msg: string) { setActionSuccess(msg) }
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
-  async function handleLock(id: number) {
+  async function handleLock(slot: DoctorSlot) {
     try {
-      const updated = await scheduleService.lockSlot(id)
-      setSlots((prev) => prev.map((s) => s.id === id ? updated : s))
+      const updated = await scheduleService.lockSlot(slot)
+      setSlots((prev) => prev.map((s) => s.id === slot.id ? updated : s))
       showSuccess('Đã đặt ca Tạm nghỉ.')
     } catch (err) { showError((err as Error).message) }
   }
 
-  async function handleUnlock(id: number) {
+  async function handleUnlock(slot: DoctorSlot) {
     try {
-      const updated = await scheduleService.unlockSlot(id)
-      setSlots((prev) => prev.map((s) => s.id === id ? updated : s))
+      const updated = await scheduleService.unlockSlot(slot)
+      setSlots((prev) => prev.map((s) => s.id === slot.id ? updated : s))
       showSuccess('Đã mở lại ca làm việc.')
     } catch (err) { showError((err as Error).message) }
   }
 
-  async function selectRoom(slotId: number, fullName: string | null) {
+  async function selectRoom(slot: DoctorSlot, fullName: string | null) {
     setSavingRoom(true)
     try {
-      const updated = await scheduleService.updatePhongKham(slotId, fullName)
-      setSlots((prev) => prev.map((s) => s.id === slotId ? updated : s))
+      const updated = await scheduleService.updatePhongKham(slot, fullName)
+      setSlots((prev) => prev.map((s) => s.id === slot.id ? updated : s))
       // Cập nhật roomPickerSlot để UI phản ánh ngay phòng vừa chọn
       setRoomPickerSlot((prev) => prev ? { ...prev, phong_kham: fullName } : null)
       showSuccess(fullName ? `Đã chọn ${fullName}.` : 'Đã xóa phòng khám.')
@@ -183,7 +178,9 @@ export default function DoctorSchedule() {
     }
     setCancelSubmitting(true)
     try {
-      await scheduleService.requestCancelSlot(cancelDialog.slot.id, cancelDialog.ly_do)
+      const targetId = cancelDialog.slot.id
+      await scheduleService.requestCancelSlot(targetId, cancelDialog.ly_do)
+      setSlots((prev) => prev.map((s) => s.id === targetId ? { ...s, cancel_requested: true } : s))
       setCancelDialog(null)
       showSuccess('Đã gửi yêu cầu hủy ca tới Admin. Chờ xử lý.')
     } catch (err) { showError((err as Error).message) }
@@ -199,16 +196,12 @@ export default function DoctorSchedule() {
         description="6 ngày làm việc tiếp theo (Thứ 2–Thứ 7). Hệ thống tự sinh đầy đủ slot — bạn chỉ cần đánh dấu Tạm nghỉ khi bận."
       />
 
-      {/* Toast thông báo */}
+      {/* Toast thông báo góc phải */}
       {actionError && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-600">
-          {actionError}
-        </div>
+        <Toast key={actionError} message={actionError} type="error" onClose={() => setActionError('')} />
       )}
       {actionSuccess && (
-        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">
-          {actionSuccess}
-        </div>
+        <Toast key={actionSuccess} message={actionSuccess} type="success" onClose={() => setActionSuccess('')} />
       )}
 
       {loading ? (
@@ -313,7 +306,7 @@ export default function DoctorSchedule() {
                           <div className="ml-auto flex items-center gap-2">
                             {slot.status === 'active' && (
                               <button
-                                onClick={() => handleLock(slot.id)}
+                                onClick={() => handleLock(slot)}
                                 className="inline-flex items-center gap-1 rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-semibold text-yellow-700 hover:bg-yellow-100"
                               >
                                 <Icon name="ban" className="h-3 w-3" /> Tạm nghỉ
@@ -321,19 +314,25 @@ export default function DoctorSchedule() {
                             )}
                             {slot.status === 'locked' && (
                               <button
-                                onClick={() => handleUnlock(slot.id)}
+                                onClick={() => handleUnlock(slot)}
                                 className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
                               >
                                 <Icon name="check" className="h-3 w-3" /> Mở lại
                               </button>
                             )}
                             {slot.status === 'booked' && (
-                              <button
-                                onClick={() => setCancelDialog({ slot, ly_do: '' })}
-                                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
-                              >
-                                <Icon name="alert-circle" className="h-3 w-3" /> Yêu cầu hủy
-                              </button>
+                              slot.cancel_requested ? (
+                                <span className="inline-flex cursor-default items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-500">
+                                  <Icon name="clock" className="h-3 w-3" /> Chờ Admin duyệt
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => setCancelDialog({ slot, ly_do: '' })}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
+                                >
+                                  <Icon name="alert-circle" className="h-3 w-3" /> Yêu cầu hủy
+                                </button>
+                              )
                             )}
                           </div>
                         </div>
@@ -389,7 +388,7 @@ export default function DoctorSchedule() {
                     return (
                       <tr
                         key={room.id}
-                        onClick={() => !isBusy && !savingRoom && selectRoom(roomPickerSlot.id, room.full_name)}
+                        onClick={() => !isBusy && !savingRoom && selectRoom(roomPickerSlot, room.full_name)}
                         className={`transition-colors ${
                           isBusy
                             ? 'cursor-not-allowed bg-slate-50 opacity-40'

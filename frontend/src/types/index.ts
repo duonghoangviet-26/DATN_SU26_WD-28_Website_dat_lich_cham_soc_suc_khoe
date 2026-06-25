@@ -176,12 +176,14 @@ export interface ServiceItem {
   gia: number                           // home: BN trả | related: giá tham khảo
   mo_ta_ngan?: string | null
   mo_ta?: string | null
-  // home: required | related: null (không đặt lịch)
+  // Cố định theo loại: related=30ph | home=60ph (không cấu hình từ form)
   thoi_gian_phut?: number | null
   gio_dat_truoc_toi_thieu?: number      // home only — đơn vị: giờ
-  ngay_ap_dung?: string | null          // home only — "T2–T7"
-  gio_bat_dau?: string | null           // home only — "08:00"
-  gio_ket_thuc?: string | null          // home only — "17:00"
+  ngay_ap_dung?: string | null          // cố định 'T2–T7'
+  gio_bat_dau?: string | null           // cố định '08:00'
+  gio_ket_thuc?: string | null          // cố định '17:00'
+  // related only — hướng dẫn chuẩn bị trước (nhịn ăn, tháo kim loại, v.v.)
+  chuan_bi_truoc?: string | null
   // related: required | home: optional
   specialty_id?: string | null
   specialty_ten?: string | null         // joined — chỉ dùng để hiển thị
@@ -201,15 +203,11 @@ export interface ServiceFormData {
   gia: number
   mo_ta_ngan?: string
   mo_ta?: string
-  // home: required | related: bỏ trống
-  thoi_gian_phut?: number
-  gio_dat_truoc_toi_thieu?: number
-  ngay_ap_dung?: string
-  gio_bat_dau?: string
-  gio_ket_thuc?: string
+  chuan_bi_truoc?: string              // related only — hướng dẫn chuẩn bị trước
+  gio_dat_truoc_toi_thieu?: number     // home only
   // related: required | home: optional
   specialty_id?: string | null
-  khu_vuc?: string[]                    // home only
+  khu_vuc?: string[]                   // home only
 }
 
 // ViewModel lịch hẹn (kết hợp bệnh nhân + bác sĩ — dùng cho trang danh sách admin/BN)
@@ -276,14 +274,16 @@ export interface ApiResponse<T = unknown> {
 // ─── Doctor Panel types (B1–B5) ───────────────────────────────
 
 export interface DoctorSlot {
-  id: number
+  id: string
+  schedule_id: string       // cần để update slot qua API
   ngay: string              // 'YYYY-MM-DD'
   gio_bat_dau: string       // 'HH:MM'
   gio_ket_thuc: string
   phong_kham?: string | null
   benh_nhan?: string | null
-  benh_nhan_id?: number | null
+  benh_nhan_id?: string | null
   status: 'active' | 'booked' | 'locked' | 'cancelled' | 'expired'
+  cancel_requested?: boolean
 }
 
 export interface DoctorAppointmentDetail {

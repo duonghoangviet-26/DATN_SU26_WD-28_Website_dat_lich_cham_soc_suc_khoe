@@ -40,12 +40,12 @@ export const mockHospitals: HospitalItem[] = [
 ]
 
 export const mockSpecialties: SpecialtyItem[] = [
-  { id: 1, ten: 'Tim mạch', mo_ta: 'Khám và điều trị bệnh tim mạch', icon: '❤️', thu_tu: 1, status: 'active' },
-  { id: 2, ten: 'Nhi khoa', mo_ta: 'Chăm sóc sức khỏe trẻ em', icon: '👶', thu_tu: 2, status: 'active' },
-  { id: 3, ten: 'Da liễu', mo_ta: 'Các bệnh về da, tóc, móng', icon: '🧴', thu_tu: 3, status: 'active' },
-  { id: 4, ten: 'Sản phụ khoa', mo_ta: 'Sức khỏe sinh sản và thai kỳ', icon: '🌸', thu_tu: 4, status: 'active' },
-  { id: 5, ten: 'Thần kinh', mo_ta: 'Bệnh lý hệ thần kinh', icon: '🧠', thu_tu: 5, status: 'active' },
-  { id: 6, ten: 'Nội tổng quát', mo_ta: 'Khám và điều trị bệnh nội khoa', icon: '🩺', thu_tu: 6, status: 'active' },
-  { id: 7, ten: 'Mắt', mo_ta: 'Các bệnh về mắt và thị lực', icon: '👁️', thu_tu: 7, status: 'active' },
-  { id: 8, ten: 'Tai Mũi Họng', mo_ta: 'Khám tai, mũi, họng', icon: '👂', thu_tu: 8, status: 'hidden' },
+  { id: 1, ten: 'Tim mạch', mo_ta: 'Khám và điều trị bệnh tim mạch', icon_url: '❤️', thu_tu: 1, status: 'active' },
+  { id: 2, ten: 'Nhi khoa', mo_ta: 'Chăm sóc sức khỏe trẻ em', icon_url: '👶', thu_tu: 2, status: 'active' },
+  { id: 3, ten: 'Da liễu', mo_ta: 'Các bệnh về da, tóc, móng', icon_url: '🧴', thu_tu: 3, status: 'active' },
+  { id: 4, ten: 'Sản phụ khoa', mo_ta: 'Sức khỏe sinh sản và thai kỳ', icon_url: '🌸', thu_tu: 4, status: 'active' },
+  { id: 5, ten: 'Thần kinh', mo_ta: 'Bệnh lý hệ thần kinh', icon_url: '🧠', thu_tu: 5, status: 'active' },
+  { id: 6, ten: 'Nội tổng quát', mo_ta: 'Khám và điều trị bệnh nội khoa', icon_url: '🩺', thu_tu: 6, status: 'active' },
+  { id: 7, ten: 'Mắt', mo_ta: 'Các bệnh về mắt và thị lực', icon_url: '👁️', thu_tu: 7, status: 'active' },
+  { id: 8, ten: 'Tai Mũi Họng', mo_ta: 'Khám tai, mũi, họng', icon_url: '👂', thu_tu: 8, status: 'hidden' },
 ]
