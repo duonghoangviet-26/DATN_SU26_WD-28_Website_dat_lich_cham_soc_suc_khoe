@@ -10,5 +10,6 @@ router.get('/', reviews.getReviews)
 router.get('/:id', reviews.getReviewDetail)
 router.patch('/:id/hide', reviews.hideReview)
 router.patch('/:id/show', reviews.showReview)
+router.patch('/:id/delete', reviews.softDeleteReview)
 
 export default router

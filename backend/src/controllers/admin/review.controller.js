@@ -60,3 +60,37 @@ export async function showReview(req, res) {
     return fail(res, status, err.message)
   }
 }
+
+/**
+ * Xóa mềm đánh giá
+ */
+export async function softDeleteReview(req, res) {
+  try {
+    const { id } = req.params
+    const { ly_do } = req.body
+    const adminId = req.user.id
+
+    await reviewService.softDeleteReview(id, adminId, ly_do)
+    return ok(res, null, 'Xóa mềm đánh giá thành công')
+  } catch (err) {
+    const status = err.message.includes('không tồn tại') ? 404 : 400
+    return fail(res, status, err.message)
+  }
+}
+
+/**
+ * Khôi phục đánh giá
+ */
+export async function restoreReview(req, res) {
+  try {
+    const { id } = req.params
+    const { ly_do } = req.body
+    const adminId = req.user.id
+
+    const data = await reviewService.restoreReview(id, adminId, ly_do)
+    return ok(res, data, 'Khôi phục đánh giá thành công')
+  } catch (err) {
+    const status = err.message.includes('Không tìm thấy') ? 404 : 400
+    return fail(res, status, err.message)
+  }
+}
