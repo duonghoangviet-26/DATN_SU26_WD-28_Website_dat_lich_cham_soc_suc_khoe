@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react'
 import { doctorService } from '@/services/doctor.service'
-import type { DoctorDetailAPI, DoctorAuditLog, DoctorApproval } from '@/types'
-import { DOCTOR_APPROVAL_LABEL } from '@/utils/constants'
+import type { DoctorDetailAPI, DoctorAuditLog, DoctorApproval, DoctorAppointmentHistory } from '@/types'
+import { DOCTOR_APPROVAL_LABEL, APPOINTMENT_STATUS_LABEL } from '@/utils/constants'
 import { formatPrice, formatDateTime, formatDate } from '@/utils/format'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
+
+const STATUS_COLOR: Record<string, 'yellow' | 'blue' | 'green' | 'red' | 'gray'> = {
+  pending: 'yellow', confirmed: 'blue', completed: 'green', cancelled: 'red',
+}
 
 const APPROVAL_COLOR: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
   approved: 'green', pending: 'yellow', rejected: 'red', suspended: 'gray',
@@ -17,10 +21,18 @@ interface Props {
 }
 
 export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Props) {
-  const [activeTab, setActiveTab] = useState<'profile' | 'logs'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'logs' | 'appointments'>('profile')
   const [loading, setLoading] = useState(false)
   const [doctor, setDoctor] = useState<DoctorDetailAPI | null>(null)
   const [logs, setLogs] = useState<DoctorAuditLog[]>([])
+
+  // Appointments state
+  const [appointments, setAppointments] = useState<DoctorAppointmentHistory[]>([])
+  const [aptKeyword, setAptKeyword] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [aptPage, setAptPage] = useState(1)
+  const [aptTotalPages, setAptTotalPages] = useState(1)
+  const [aptLoading, setAptLoading] = useState(false)
 
   useEffect(() => {
     if (!doctorId) return
@@ -47,6 +59,38 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
     load()
     return () => { ignore = true }
   }, [doctorId])
+
+  useEffect(() => {
+    if (!doctorId || activeTab !== 'appointments') return
+    let ignore = false
+
+    async function loadApts() {
+      setAptLoading(true)
+      try {
+        const { data, pagination } = await doctorService.getAppointments(doctorId!, {
+          keyword: aptKeyword,
+          page: aptPage,
+          limit: 10
+        })
+        if (!ignore) {
+          setAppointments(data)
+          setAptTotalPages(pagination.totalPages)
+        }
+      } catch (err) {
+        console.error('Failed to load appointments', err)
+      } finally {
+        if (!ignore) setAptLoading(false)
+      }
+    }
+    loadApts()
+    return () => { ignore = true }
+  }, [doctorId, activeTab, aptPage, aptKeyword])
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    setAptPage(1)
+    setAptKeyword(searchInput)
+  }
 
   if (!doctorId) return null
 
@@ -99,6 +143,14 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                   <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">
                     {logs.length}
                   </span>
+                </button>
+                <button 
+                  onClick={() => setActiveTab('appointments')}
+                  className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                    activeTab === 'appointments' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Lịch sử đặt lịch
                 </button>
               </div>
 
@@ -235,6 +287,101 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                           </div>
                         )
                       })
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'appointments' && (
+                  <div className="space-y-4">
+                    <form onSubmit={handleSearch} className="flex gap-3 mb-4">
+                      <div className="relative flex-1">
+                        <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input 
+                          type="text" 
+                          placeholder="Tìm theo tên hoặc SĐT bệnh nhân..." 
+                          className="input w-full pl-9 bg-white"
+                          value={searchInput}
+                          onChange={(e) => setSearchInput(e.target.value)}
+                        />
+                      </div>
+                      <button type="submit" className="btn-primary whitespace-nowrap px-6">
+                        Tìm kiếm
+                      </button>
+                    </form>
+
+                    <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50/80 text-left text-slate-500 border-b border-slate-100">
+                            <tr>
+                              <th className="px-5 py-3 font-medium whitespace-nowrap">Bệnh nhân</th>
+                              <th className="px-5 py-3 font-medium whitespace-nowrap">Lịch khám</th>
+                              <th className="px-5 py-3 font-medium whitespace-nowrap">Loại khám</th>
+                              <th className="px-5 py-3 font-medium whitespace-nowrap">Trạng thái</th>
+                              <th className="px-5 py-3 font-medium whitespace-nowrap text-right">Phí</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {aptLoading ? (
+                              <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400">Đang tải lịch sử...</td></tr>
+                            ) : appointments.length === 0 ? (
+                              <tr><td colSpan={5} className="px-5 py-8 text-center text-slate-400">Không tìm thấy lịch khám nào.</td></tr>
+                            ) : (
+                              appointments.map(apt => (
+                                <tr key={apt._id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-5 py-3">
+                                    <p className="font-semibold text-slate-800 whitespace-nowrap">{apt.patient_name || 'Khách'}</p>
+                                    {apt.patient_phone && <p className="text-xs text-slate-500">{apt.patient_phone}</p>}
+                                  </td>
+                                  <td className="px-5 py-3 whitespace-nowrap">
+                                    <p className="text-slate-800">{formatDate(apt.ngay_kham)}</p>
+                                    <p className="text-xs font-medium text-brand-600">{apt.gio_kham}</p>
+                                  </td>
+                                  <td className="px-5 py-3 whitespace-nowrap">
+                                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
+                                      apt.loai_kham === 'home' ? 'bg-purple-50 text-purple-700' : 'bg-slate-100 text-slate-700'
+                                    }`}>
+                                      <Icon name={apt.loai_kham === 'home' ? 'home' : 'map-pin'} className="w-3 h-3" />
+                                      {apt.loai_kham === 'home' ? 'Tại nhà' : 'Phòng khám'}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-3 whitespace-nowrap">
+                                    <Badge color={STATUS_COLOR[apt.status] || 'gray'}>
+                                      {APPOINTMENT_STATUS_LABEL[apt.status] || apt.status}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-5 py-3 whitespace-nowrap text-right font-medium text-slate-700">
+                                    {formatPrice(apt.gia_kham)}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    
+                    {/* Pagination */}
+                    {!aptLoading && aptTotalPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 px-1">
+                        <p className="text-sm text-slate-500">Trang {aptPage} / {aptTotalPages}</p>
+                        <div className="flex gap-2">
+                          <button 
+                            disabled={aptPage === 1} 
+                            onClick={() => setAptPage(p => p - 1)}
+                            className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                          >
+                            Trước
+                          </button>
+                          <button 
+                            disabled={aptPage === aptTotalPages} 
+                            onClick={() => setAptPage(p => p + 1)}
+                            className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                          >
+                            Sau
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}

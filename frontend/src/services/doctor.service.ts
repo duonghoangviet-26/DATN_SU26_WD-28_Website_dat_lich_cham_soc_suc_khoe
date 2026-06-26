@@ -59,4 +59,14 @@ export const doctorService = {
     const { data } = await axios.put(`${BASE_URL}/${id}`, payload)
     return data.data
   },
+
+  // Lấy lịch sử đặt lịch của bác sĩ
+  async getAppointments(id: string, params?: {
+    keyword?: string
+    page?: number
+    limit?: number
+  }): Promise<{ data: any[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
+    const { data } = await axios.get(`${BASE_URL}/${id}/appointments`, { params })
+    return { data: data.data, pagination: data.pagination }
+  }
 }

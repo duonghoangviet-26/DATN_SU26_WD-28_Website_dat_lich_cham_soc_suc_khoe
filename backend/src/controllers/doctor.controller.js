@@ -152,3 +152,22 @@ export async function updateDoctor(req, res) {
     return fail(res, status, err.message)
   }
 }
+
+export async function getDoctorAppointments(req, res) {
+  try {
+    const { id } = req.params
+    const { keyword, page, limit } = req.query
+    
+    const result = await doctorService.getDoctorAppointments(id, keyword, page, limit)
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Lấy danh sách lịch hẹn thành công',
+      data: result.data,
+      pagination: result.pagination
+    })
+  } catch (err) {
+    const status = err.message.includes('không hợp lệ') ? 400 : 500
+    return fail(res, status, err.message)
+  }
+}

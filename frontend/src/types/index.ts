@@ -330,3 +330,14 @@ export interface NotificationUpdatePayload {
   noi_dung: string
 }
 
+export interface DoctorAppointmentHistory {
+  _id: string
+  patient_name: string
+  patient_phone: string
+  ngay_kham: string
+  gio_kham: string
+  loai_kham: 'clinic' | 'home' | 'video'
+  status: AppointmentStatus
+  gia_kham: number
+  payment_status: PaymentStatus
+}

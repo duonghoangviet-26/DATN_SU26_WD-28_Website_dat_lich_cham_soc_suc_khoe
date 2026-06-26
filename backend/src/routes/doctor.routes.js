@@ -35,4 +35,7 @@ router.put('/:id/restore', doctorController.restoreDoctor)
 // Cập nhật thông tin chuyên môn bác sĩ
 router.put('/:id', doctorController.updateDoctor)
 
+// Lịch sử đặt lịch của bác sĩ
+router.get('/:id/appointments', doctorController.getDoctorAppointments)
+
 export default router

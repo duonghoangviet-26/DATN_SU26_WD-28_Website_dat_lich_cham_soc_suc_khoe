@@ -318,3 +318,83 @@ export async function updateDoctorInfo(doctorId, updateData, adminId) {
 
   return await getDoctorDetail(doctorId)
 }
+
+// ── 9. Danh sách lịch hẹn của bác sĩ ────────────────────────────
+export async function getDoctorAppointments(doctorId, keyword, page = 1, limit = 10) {
+  if (!mongoose.Types.ObjectId.isValid(doctorId)) throw new Error('doctorId không hợp lệ')
+
+  const skip = (Number(page) - 1) * Number(limit)
+  
+  // Base query: Tìm theo doctorId
+  const filter = { doctor_id: doctorId }
+
+  if (keyword) {
+    const kw = keyword.trim()
+    const regex = new RegExp(kw, 'i')
+
+    // Tìm user khớp
+    const matchedUsers = await NguoiDung.find({ ho_ten: regex }).select('_id').lean()
+    const userIds = matchedUsers.map(u => u._id)
+    
+    // Tìm member khớp
+    const matchedMembers = await mongoose.model('ThanhVien').find({ ho_ten: regex }).select('_id').lean()
+    const memberIds = matchedMembers.map(m => m._id)
+
+    filter.$or = [
+      { user_id: { $in: userIds } },
+      { member_id: { $in: memberIds } },
+      { ten_khach: regex },
+      { so_dien_thoai_khach: regex }
+    ]
+  }
+
+  const [appointments, total] = await Promise.all([
+    LichHen.find(filter)
+      .populate({ path: 'user_id', select: 'ho_ten so_dien_thoai email' })
+      .populate({ path: 'member_id', select: 'ho_ten so_dien_thoai' })
+      .sort({ ngay_kham: -1, gio_kham: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean(),
+    LichHen.countDocuments(filter)
+  ])
+
+  // Chuẩn hóa tên bệnh nhân trả về Frontend
+  const formattedAppointments = appointments.map(apt => {
+    let patientName = ''
+    let patientPhone = ''
+
+    if (apt.member_id) {
+      patientName = apt.member_id.ho_ten
+      patientPhone = apt.member_id.so_dien_thoai || apt.user_id?.so_dien_thoai || ''
+    } else if (apt.ten_khach) {
+      patientName = apt.ten_khach
+      patientPhone = apt.so_dien_thoai_khach || ''
+    } else if (apt.user_id) {
+      patientName = apt.user_id.ho_ten
+      patientPhone = apt.user_id.so_dien_thoai || ''
+    }
+
+    return {
+      _id: apt._id,
+      patient_name: patientName,
+      patient_phone: patientPhone,
+      ngay_kham: apt.ngay_kham,
+      gio_kham: apt.gio_kham,
+      loai_kham: apt.loai_kham,
+      status: apt.status,
+      gia_kham: apt.gia_kham,
+      payment_status: apt.payment_status
+    }
+  })
+
+  return {
+    data: formattedAppointments,
+    pagination: {
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      totalPages: Math.ceil(total / Number(limit))
+    }
+  }
+}
