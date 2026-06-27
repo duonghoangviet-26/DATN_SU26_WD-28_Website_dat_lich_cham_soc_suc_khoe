@@ -24,11 +24,42 @@ export const getClinicById = async (req, res) => {
   }
 }
 
+// Hàm helper kiểm tra trùng lặp thông tin quan trọng
+const checkDuplicateClinicInfo = async (data, excludeId = null) => {
+  const { dia_chi, so_dien_thoai, email, ban_do_url } = data
+  const query = excludeId ? { _id: { $ne: excludeId } } : {}
+  const errors = []
+
+  if (dia_chi && dia_chi.trim()) {
+    const exists = await ThongTinPhongKham.findOne({ dia_chi: dia_chi.trim(), ...query })
+    if (exists) errors.push('Địa chỉ này đã được sử dụng ở chi nhánh khác')
+  }
+  if (so_dien_thoai && so_dien_thoai.trim()) {
+    const exists = await ThongTinPhongKham.findOne({ so_dien_thoai: so_dien_thoai.trim(), ...query })
+    if (exists) errors.push('Số điện thoại này đã được sử dụng ở chi nhánh khác')
+  }
+  if (email && email.trim()) {
+    const exists = await ThongTinPhongKham.findOne({ email: email.trim().toLowerCase(), ...query })
+    if (exists) errors.push('Email này đã được sử dụng ở chi nhánh khác')
+  }
+  if (ban_do_url && ban_do_url.trim()) {
+    const exists = await ThongTinPhongKham.findOne({ ban_do_url: ban_do_url.trim(), ...query })
+    if (exists) errors.push('URL Bản đồ này đã được sử dụng ở chi nhánh khác')
+  }
+  
+  return errors
+}
+
 // Thêm 1 chi nhánh mới
 export const createClinic = async (req, res) => {
   try {
     const { ten } = req.body
     if (!ten) return fail(res, 400, 'Tên chi nhánh là bắt buộc')
+
+    const duplicateErrors = await checkDuplicateClinicInfo(req.body)
+    if (duplicateErrors.length > 0) {
+      return fail(res, 400, duplicateErrors.join(', '))
+    }
 
     const newClinic = new ThongTinPhongKham(req.body)
     await newClinic.save()
@@ -43,6 +74,11 @@ export const updateClinicInfo = async (req, res) => {
   try {
     const { ten } = req.body
     if (ten !== undefined && !ten) return fail(res, 400, 'Tên chi nhánh không được để trống')
+
+    const duplicateErrors = await checkDuplicateClinicInfo(req.body, req.params.id)
+    if (duplicateErrors.length > 0) {
+      return fail(res, 400, duplicateErrors.join(', '))
+    }
 
     const updated = await ThongTinPhongKham.findByIdAndUpdate(
       req.params.id,
