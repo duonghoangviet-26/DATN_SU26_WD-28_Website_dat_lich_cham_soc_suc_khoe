@@ -23,6 +23,9 @@ export const reviewService = {
     if (params.endDate) queryParams.endDate = params.endDate
     if (params.search?.trim()) queryParams.search = params.search.trim()
     if (params.deleted !== undefined) queryParams.deleted = params.deleted.toString()
+    
+    // Thêm timestamp để chống trình duyệt cache kết quả GET
+    queryParams._t = Date.now()
 
     const res = await axiosInstance.get<ApiResponse<ReviewListResponse>>('/admin/reviews', { params: queryParams })
     return res.data.data
@@ -85,7 +88,9 @@ export const reviewService = {
    * GET /api/admin/reviews/doctors
    */
   async getDoctors(): Promise<Array<{ id: string; ho_ten: string }>> {
-    const res = await axiosInstance.get<ApiResponse<Array<{ id: string; ho_ten: string }>>>('/admin/reviews/doctors')
+    const res = await axiosInstance.get<ApiResponse<Array<{ id: string; ho_ten: string }>>>('/admin/reviews/doctors', {
+      params: { _t: Date.now() }
+    })
     return res.data.data
   },
 }
