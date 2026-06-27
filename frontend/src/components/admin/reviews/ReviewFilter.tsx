@@ -126,7 +126,7 @@ export default function ReviewFilter({ filters, onChange }: Props) {
               htmlFor="checkbox-deleted"
               className="text-xs font-semibold text-slate-500 cursor-pointer select-none whitespace-nowrap"
             >
-              Xem đánh giá đã xóa mềm
+              Xem lại đã xóa
             </label>
           </div>
 

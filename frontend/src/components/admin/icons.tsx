@@ -92,6 +92,16 @@ const ICONS: Record<string, string[]> = {
     'M23 6l-9.5 9.5-5-5L1 18',
     'M17 6h6v6',
   ],
+  trash: [
+    'M3 6h18',
+    'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
+  ],
+  'refresh-cw': [
+    'M23 4v6h-6',
+    'M1 20v-6h6',
+    'M3.51 9a9 9 0 0 1 14.85-3.36L23 10',
+    'M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
+  ],
 }
 
 export default function Icon({ name, className = 'h-5 w-5' }: IconProps) {

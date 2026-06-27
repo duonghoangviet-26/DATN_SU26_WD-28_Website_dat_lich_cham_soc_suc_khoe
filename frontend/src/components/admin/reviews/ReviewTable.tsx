@@ -37,17 +37,24 @@ export default function ReviewTable({
   const { page, totalPages, total } = pagination
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
-  const handleDirectAction = async (review: ReviewItem, action: 'hide' | 'show' | 'delete' | 'restore') => {
+  const handleDirectAction = async (review: ReviewItem, action: 'hide' | 'show' | 'delete' | 'restore' | 'hard-delete') => {
     const actionNames: Record<string, string> = {
       hide: 'ẩn',
       show: 'hiển thị',
       delete: 'xóa mềm',
-      restore: 'khôi phục'
+      restore: 'khôi phục',
+      'hard-delete': 'xóa vĩnh viễn'
     }
     
-    const reason = window.prompt(`Nhập lý do ${actionNames[action]} đánh giá này (không bắt buộc):`, '')
-    if (reason === null) return // Hủy bỏ
-    const trimmedReason = reason.trim()
+    let trimmedReason = ''
+    if (action === 'hard-delete') {
+      const confirmDelete = window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn đánh giá này ra khỏi cơ sở dữ liệu? Thao tác này không thể phục hồi!')
+      if (!confirmDelete) return
+    } else {
+      const reason = window.prompt(`Nhập lý do ${actionNames[action]} đánh giá này (không bắt buộc):`, '')
+      if (reason === null) return // Hủy bỏ
+      trimmedReason = reason.trim()
+    }
 
     try {
       if (action === 'hide') {
@@ -58,6 +65,8 @@ export default function ReviewTable({
         await reviewService.softDelete(review.id, trimmedReason)
       } else if (action === 'restore') {
         await reviewService.restore(review.id, trimmedReason)
+      } else if (action === 'hard-delete') {
+        await reviewService.hardDelete(review.id)
       }
       
       alert('Thực hiện thao tác thành công!')
@@ -70,7 +79,7 @@ export default function ReviewTable({
   return (
     <div>
       {/* Bảng đánh giá */}
-      <div className="card bg-white rounded-xl shadow-sm border border-slate-100">
+      <div className="card bg-white rounded-xl shadow-sm border border-slate-100 relative z-10">
         <div className="overflow-x-auto md:overflow-x-visible">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase tracking-wider text-[11px] font-semibold">
@@ -101,83 +110,85 @@ export default function ReviewTable({
                   </td>
                 </tr>
               ) : (
-                reviews.map((r) => (
-                  <tr
-                    key={r.id}
-                    className={`hover:bg-slate-50/80 transition-colors ${
-                      r.ngay_xoa ? 'bg-red-50/20 opacity-75' : r.status === 'hidden' ? 'bg-slate-50/50 opacity-80' : ''
-                    }`}
-                  >
-                    {/* Bệnh nhân */}
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        {r.user?.anh_dai_dien ? (
-                          <img
-                            src={r.user.anh_dai_dien}
-                            alt={r.user.ho_ten}
-                            className="h-9 w-9 rounded-full object-cover ring-1 ring-slate-100"
-                          />
-                        ) : (
-                          <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 text-sm">
-                            {(r.user?.ho_ten || 'U').charAt(0).toUpperCase()}
+                reviews.map((r) => {
+                  const fadeClass = r.ngay_xoa ? 'opacity-60' : r.status === 'hidden' ? 'opacity-75' : ''
+                  return (
+                    <tr
+                      key={r.id}
+                      className={`hover:bg-slate-50/80 transition-colors ${
+                        r.ngay_xoa ? 'bg-red-50/20' : r.status === 'hidden' ? 'bg-slate-50/50' : ''
+                      }`}
+                    >
+                      {/* Bệnh nhân */}
+                      <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
+                        <div className="flex items-center gap-3">
+                          {r.user?.anh_dai_dien ? (
+                            <img
+                              src={r.user.anh_dai_dien}
+                              alt={r.user.ho_ten}
+                              className="h-9 w-9 rounded-full object-cover ring-1 ring-slate-100"
+                            />
+                          ) : (
+                            <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 text-sm">
+                              {(r.user?.ho_ten || 'U').charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-semibold text-slate-800 leading-tight">
+                              {r.user?.ho_ten || 'Không rõ bệnh nhân'}
+                            </p>
+                            <p className="text-xs text-slate-400 font-normal">
+                              {r.user?.email || 'Chưa có email'}
+                            </p>
                           </div>
-                        )}
-                        <div>
-                          <p className="font-semibold text-slate-800 leading-tight">
-                            {r.user?.ho_ten || 'Không rõ bệnh nhân'}
-                          </p>
-                          <p className="text-xs text-slate-400 font-normal">
-                            {r.user?.email || 'Chưa có email'}
-                          </p>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Bác sĩ */}
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <Icon name="doctor" className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="text-slate-700">
-                          {r.doctor?.ho_ten || 'Không rõ bác sĩ'}
-                        </span>
-                      </div>
-                    </td>
+                      {/* Bác sĩ */}
+                      <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
+                        <div className="flex items-center gap-1.5">
+                          <Icon name="doctor" className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="text-slate-700">
+                            {r.doctor?.ho_ten || 'Không rõ bác sĩ'}
+                          </span>
+                        </div>
+                      </td>
 
-                    {/* Điểm số */}
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      <StarDisplay count={r.so_sao} />
-                    </td>
+                      {/* Điểm số */}
+                      <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
+                        <StarDisplay count={r.so_sao} />
+                      </td>
 
-                    {/* Nội dung */}
-                    <td className="px-5 py-4 max-w-[300px]">
-                      <p
-                        className={`text-sm truncate hover:text-clip hover:whitespace-normal font-normal ${
-                          r.so_sao <= 2 ? 'text-red-600/90 font-medium' : 'text-slate-600'
-                        }`}
-                        title={r.noi_dung || ''}
-                      >
-                        {r.noi_dung || <em className="text-slate-300">Không có nội dung</em>}
-                      </p>
-                    </td>
+                      {/* Nội dung */}
+                      <td className={`px-5 py-4 max-w-[300px] ${fadeClass}`}>
+                        <p
+                          className={`text-sm truncate hover:text-clip hover:whitespace-normal font-normal ${
+                            r.so_sao <= 2 ? 'text-red-600/90 font-medium' : 'text-slate-600'
+                          }`}
+                          title={r.noi_dung || ''}
+                        >
+                          {r.noi_dung || <em className="text-slate-300">Không có nội dung</em>}
+                        </p>
+                      </td>
 
-                    {/* Ngày tạo */}
-                    <td className="px-5 py-4 whitespace-nowrap text-slate-400 font-normal">
-                      {formatDate(r.ngay_tao)}
-                    </td>
+                      {/* Ngày tạo */}
+                      <td className={`px-5 py-4 whitespace-nowrap text-slate-400 font-normal ${fadeClass}`}>
+                        {formatDate(r.ngay_tao)}
+                      </td>
 
-                    {/* Trạng thái */}
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      {r.ngay_xoa ? (
-                        <Badge color="red">🔴 Đã xóa</Badge>
-                      ) : r.status === 'visible' ? (
-                        <Badge color="green">🟢 Hiển thị</Badge>
-                      ) : (
-                        <Badge color="yellow">🟠 Đã ẩn</Badge>
-                      )}
-                    </td>
+                      {/* Trạng thái */}
+                      <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
+                        {r.ngay_xoa ? (
+                          <Badge color="red">🔴 Đã xóa</Badge>
+                        ) : r.status === 'visible' ? (
+                          <Badge color="green">🟢 Hiển thị</Badge>
+                        ) : (
+                          <Badge color="yellow">🟠 Đã ẩn</Badge>
+                        )}
+                      </td>
 
                     {/* Thao tác */}
-                    <td className="px-5 py-4 text-right whitespace-nowrap relative">
+                    <td className={`px-5 py-4 text-right whitespace-nowrap ${openMenuId === r.id ? 'relative z-50' : 'relative'}`}>
                       <div className="inline-block text-left">
                         <button
                           onClick={(e) => {
@@ -197,7 +208,7 @@ export default function ReviewTable({
                               className="fixed inset-0 z-10" 
                               onClick={() => setOpenMenuId(null)}
                             />
-                            <div className="absolute right-0 mt-1 z-20 w-40 origin-top-right rounded-xl bg-white shadow-lg border border-slate-100 py-1.5 focus:outline-none divide-y divide-slate-100 text-left">
+                            <div className="absolute right-0 mt-1 z-20 w-44 origin-top-right rounded-xl bg-white shadow-lg border border-slate-100 py-1.5 focus:outline-none divide-y divide-slate-100 text-left">
                               <div className="py-1">
                                 <button
                                   onClick={() => {
@@ -213,16 +224,28 @@ export default function ReviewTable({
                               
                               <div className="py-1">
                                 {r.ngay_xoa ? (
-                                  <button
-                                    onClick={() => {
-                                      setOpenMenuId(null)
-                                      handleDirectAction(r, 'restore')
-                                    }}
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition-colors"
-                                  >
-                                    <Icon name="refresh-cw" className="h-3.5 w-3.5 text-emerald-500" />
-                                    Khôi phục
-                                  </button>
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setOpenMenuId(null)
+                                        handleDirectAction(r, 'restore')
+                                      }}
+                                      className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                    >
+                                      <Icon name="refresh-cw" className="h-3.5 w-3.5 text-emerald-500" />
+                                      Khôi phục
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setOpenMenuId(null)
+                                        handleDirectAction(r, 'hard-delete')
+                                      }}
+                                      className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                                    >
+                                      <Icon name="trash" className="h-3.5 w-3.5 text-red-500" />
+                                      Xóa vĩnh viễn
+                                    </button>
+                                  </>
                                 ) : (
                                   <>
                                     {r.status === 'visible' ? (
@@ -268,7 +291,7 @@ export default function ReviewTable({
                       </div>
                     </td>
                   </tr>
-                ))
+                )})
               )}
             </tbody>
           </table>
