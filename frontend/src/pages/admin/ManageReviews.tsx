@@ -36,29 +36,13 @@ export default function ManageReviews() {
     deleted: false,
   })
 
-  // Danh sách bác sĩ cho bộ lọc
-  const [doctors, setDoctors] = useState<Array<{ id: string; ho_ten: string }>>([])
-
   // Quản lý Modal chi tiết
   const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null)
   const [openDetail, setOpenDetail] = useState(false)
 
-  // 1. Tải danh sách bác sĩ làm bộ lọc và tự động cập nhật khi người dùng quay lại tab (window focus)
+  // 1. Tự động cập nhật dữ liệu trang hiện tại khi người dùng quay lại tab (window focus)
   useEffect(() => {
-    const loadDoctors = () => {
-      reviewService
-        .getDoctors()
-        .then((data) => {
-          setDoctors(data)
-        })
-        .catch((err) => console.error('Lỗi tải danh sách bác sĩ:', err))
-    }
-
-    loadDoctors()
-
-    // Khi người dùng click quay lại tab này, tự động làm mới danh sách bác sĩ & dữ liệu trang hiện tại
     const handleFocus = () => {
-      loadDoctors()
       fetchReviews(pagination.page)
     }
 
@@ -198,7 +182,6 @@ export default function ManageReviews() {
       <ReviewFilter
         filters={filters}
         onChange={setFilters}
-        doctors={doctors}
       />
 
       {/* Bảng danh sách component */}

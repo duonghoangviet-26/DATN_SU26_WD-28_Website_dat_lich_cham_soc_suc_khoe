@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import Icon from '@/components/admin/icons'
 import Badge from '@/components/common/Badge'
 import { formatDate } from '@/utils/format'
+import { reviewService } from '@/services/review.service'
 import type { ReviewItem, PaginationInfo } from '@/types/review.type'
 
 interface Props {
@@ -33,12 +35,43 @@ export default function ReviewTable({
   onViewDetail,
 }: Props) {
   const { page, totalPages, total } = pagination
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+
+  const handleDirectAction = async (review: ReviewItem, action: 'hide' | 'show' | 'delete' | 'restore') => {
+    const actionNames: Record<string, string> = {
+      hide: 'ẩn',
+      show: 'hiển thị',
+      delete: 'xóa mềm',
+      restore: 'khôi phục'
+    }
+    
+    const reason = window.prompt(`Nhập lý do ${actionNames[action]} đánh giá này (không bắt buộc):`, '')
+    if (reason === null) return // Hủy bỏ
+    const trimmedReason = reason.trim()
+
+    try {
+      if (action === 'hide') {
+        await reviewService.hide(review.id, trimmedReason)
+      } else if (action === 'show') {
+        await reviewService.show(review.id, trimmedReason)
+      } else if (action === 'delete') {
+        await reviewService.softDelete(review.id, trimmedReason)
+      } else if (action === 'restore') {
+        await reviewService.restore(review.id, trimmedReason)
+      }
+      
+      alert('Thực hiện thao tác thành công!')
+      onPageChange(page) // Tải lại danh sách
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Thao tác thất bại.')
+    }
+  }
 
   return (
     <div>
       {/* Bảng đánh giá */}
-      <div className="card overflow-hidden bg-white rounded-xl shadow-sm border border-slate-100">
-        <div className="overflow-x-auto">
+      <div className="card bg-white rounded-xl shadow-sm border border-slate-100">
+        <div className="overflow-x-auto md:overflow-x-visible">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase tracking-wider text-[11px] font-semibold">
               <tr>
@@ -135,24 +168,104 @@ export default function ReviewTable({
                     {/* Trạng thái */}
                     <td className="px-5 py-4 whitespace-nowrap">
                       {r.ngay_xoa ? (
-                        <Badge color="red">Đã xóa mềm</Badge>
+                        <Badge color="red">🔴 Đã xóa</Badge>
                       ) : r.status === 'visible' ? (
-                        <Badge color="green">Hiển thị</Badge>
+                        <Badge color="green">🟢 Hiển thị</Badge>
                       ) : (
-                        <Badge color="gray">Đã ẩn</Badge>
+                        <Badge color="yellow">🟠 Đã ẩn</Badge>
                       )}
                     </td>
 
                     {/* Thao tác */}
-                    <td className="px-5 py-4 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => onViewDetail(r)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900"
-                        title="Xem chi tiết & quản lý lịch sử"
-                      >
-                        <Icon name="eye" className="h-3.5 w-3.5" />
-                        Xem chi tiết
-                      </button>
+                    <td className="px-5 py-4 text-right whitespace-nowrap relative">
+                      <div className="inline-block text-left">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setOpenMenuId(openMenuId === r.id ? null : r.id)
+                          }}
+                          className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                          title="Thao tác"
+                        >
+                          <span className="font-bold text-lg leading-none block px-2">⋮</span>
+                        </button>
+                        
+                        {openMenuId === r.id && (
+                          <>
+                            {/* Backdrop overlay to close menu on click outside */}
+                            <div 
+                              className="fixed inset-0 z-10" 
+                              onClick={() => setOpenMenuId(null)}
+                            />
+                            <div className="absolute right-0 mt-1 z-20 w-40 origin-top-right rounded-xl bg-white shadow-lg border border-slate-100 py-1.5 focus:outline-none divide-y divide-slate-100 text-left">
+                              <div className="py-1">
+                                <button
+                                  onClick={() => {
+                                    setOpenMenuId(null)
+                                    onViewDetail(r)
+                                  }}
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                                >
+                                  <Icon name="eye" className="h-3.5 w-3.5 text-slate-400" />
+                                  Xem chi tiết
+                                </button>
+                              </div>
+                              
+                              <div className="py-1">
+                                {r.ngay_xoa ? (
+                                  <button
+                                    onClick={() => {
+                                      setOpenMenuId(null)
+                                      handleDirectAction(r, 'restore')
+                                    }}
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                  >
+                                    <Icon name="refresh-cw" className="h-3.5 w-3.5 text-emerald-500" />
+                                    Khôi phục
+                                  </button>
+                                ) : (
+                                  <>
+                                    {r.status === 'visible' ? (
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuId(null)
+                                          handleDirectAction(r, 'hide')
+                                        }}
+                                        className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition-colors"
+                                      >
+                                        <Icon name="eye-off" className="h-3.5 w-3.5 text-amber-500" />
+                                        Ẩn đánh giá
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuId(null)
+                                          handleDirectAction(r, 'show')
+                                        }}
+                                        className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                      >
+                                        <Icon name="eye" className="h-3.5 w-3.5 text-emerald-500" />
+                                        Hiện đánh giá
+                                      </button>
+                                    )}
+
+                                    <button
+                                      onClick={() => {
+                                        setOpenMenuId(null)
+                                        handleDirectAction(r, 'delete')
+                                      }}
+                                      className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                                    >
+                                      <Icon name="trash" className="h-3.5 w-3.5 text-red-500" />
+                                      Xóa mềm
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

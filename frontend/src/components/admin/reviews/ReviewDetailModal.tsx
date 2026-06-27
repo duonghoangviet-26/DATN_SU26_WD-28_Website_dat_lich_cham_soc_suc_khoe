@@ -70,11 +70,6 @@ export default function ReviewDetailModal({ open, review, onClose, onActionSucce
         await reviewService.hardDelete(review.id)
       } else {
         const trimmedLyDo = lyDo.trim()
-        if (!trimmedLyDo) {
-          setErrorMsg('Vui lòng nhập lý do thực hiện thao tác.')
-          setSubmitting(false)
-          return
-        }
 
         if (action === 'hide') {
           await reviewService.hide(review.id, trimmedLyDo)
@@ -105,11 +100,11 @@ export default function ReviewDetailModal({ open, review, onClose, onActionSucce
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-slate-800">Chi tiết đánh giá & Lịch sử</h2>
             {review.ngay_xoa ? (
-              <Badge color="red">Đã xóa mềm</Badge>
+              <Badge color="red">🔴 Đã xóa</Badge>
             ) : review.status === 'visible' ? (
-              <Badge color="green">Hiển thị</Badge>
+              <Badge color="green">🟢 Hiển thị</Badge>
             ) : (
-              <Badge color="gray">Đã ẩn</Badge>
+              <Badge color="yellow">🟠 Đã ẩn</Badge>
             )}
           </div>
           <button
@@ -189,11 +184,11 @@ export default function ReviewDetailModal({ open, review, onClose, onActionSucce
           {/* Form nhập lý do thay đổi (Ẩn lý do nếu chỉ xóa cứng) */}
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-3">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Lý do thực hiện thao tác <span className="text-red-500">*</span>
+              Lý do thực hiện thao tác
             </label>
             <input
               type="text"
-              placeholder="Nhập lý do ẩn, hiện, xóa mềm hoặc khôi phục đánh giá..."
+              placeholder="Nhập lý do ẩn, hiện, xóa mềm hoặc khôi phục (không bắt buộc)..."
               className="input w-full bg-white text-sm"
               value={lyDo}
               onChange={(e) => setLyDo(e.target.value)}
