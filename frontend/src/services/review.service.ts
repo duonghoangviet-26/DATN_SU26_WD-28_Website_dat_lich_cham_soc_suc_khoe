@@ -79,4 +79,13 @@ export const reviewService = {
   async hardDelete(id: string): Promise<void> {
     await axiosInstance.delete<ApiResponse<null>>(`/admin/reviews/${id}/permanently`)
   },
+
+  /**
+   * Lấy danh sách bác sĩ cho dropdown lọc.
+   * GET /api/admin/reviews/doctors
+   */
+  async getDoctors(): Promise<Array<{ id: string; ho_ten: string }>> {
+    const res = await axiosInstance.get<ApiResponse<Array<{ id: string; ho_ten: string }>>>('/admin/reviews/doctors')
+    return res.data.data
+  },
 }

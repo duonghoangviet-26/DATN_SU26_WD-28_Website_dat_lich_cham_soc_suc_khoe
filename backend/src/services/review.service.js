@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { DanhGia, BacSi, NhatKyThaoTac } from '../models/index.js'
+import { DanhGia, BacSi, NhatKyThaoTac, NguoiDung } from '../models/index.js'
 
 /**
  * Hàm cập nhật lại điểm đánh giá trung bình & tổng số đánh giá của bác sĩ
@@ -69,9 +69,26 @@ export async function getReviewsList(query) {
     filter.doctor_id = query.doctor
   }
 
-  // Bộ lọc tìm kiếm theo nội dung đánh giá
+  // Bộ lọc tìm kiếm theo nội dung đánh giá, tên bệnh nhân hoặc tên bác sĩ
   if (query.search) {
-    filter.noi_dung = { $regex: query.search, $options: 'i' }
+    // 1. Tìm người dùng (bệnh nhân hoặc bác sĩ) có tên khớp với từ khóa
+    const matchingUsers = await NguoiDung.find({
+      ho_ten: { $regex: query.search, $options: 'i' }
+    }, '_id').lean()
+    const userIds = matchingUsers.map(u => u._id)
+
+    // 2. Tìm hồ sơ bác sĩ liên quan đến người dùng có tên khớp
+    const matchingDoctors = await BacSi.find({
+      user_id: { $in: userIds }
+    }, '_id').lean()
+    const doctorIds = matchingDoctors.map(d => d._id)
+
+    // 3. Tạo bộ lọc OR
+    filter.$or = [
+      { noi_dung: { $regex: query.search, $options: 'i' } },
+      { user_id: { $in: userIds } },
+      { doctor_id: { $in: doctorIds } }
+    ]
   }
 
   // Bộ lọc khoảng ngày
@@ -121,11 +138,11 @@ export async function getReviewsList(query) {
 
   const statistics = statsResult[0]
     ? {
-        averageRating: Math.round(statsResult[0].trungBinhSao * 10) / 10,
-        total: statsResult[0].tongSo,
-        visible: statsResult[0].hienThi,
-        hidden: statsResult[0].an,
-      }
+      averageRating: Math.round(statsResult[0].trungBinhSao * 10) / 10,
+      total: statsResult[0].tongSo,
+      visible: statsResult[0].hienThi,
+      hidden: statsResult[0].an,
+    }
     : { averageRating: 0, total: 0, visible: 0, hidden: 0 }
 
   return {

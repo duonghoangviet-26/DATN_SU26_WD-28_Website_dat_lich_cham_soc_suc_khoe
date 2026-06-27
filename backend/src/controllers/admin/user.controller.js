@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs'
-import { NguoiDung, NhatKyThaoTac } from '../../models/index.js'
+import { NguoiDung, NhatKyThaoTac, BacSi } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 
 /**
@@ -31,7 +31,7 @@ export async function getAllUsers(req, res) {
 
     // Xây dựng filter
     const query = {}
-    
+
     // Xử lý lọc xóa mềm
     if (isDeleted === 'true') {
       query.ngay_xoa = { $ne: null } // Lấy những người đã xóa
@@ -86,7 +86,7 @@ export async function getAllUsers(req, res) {
 export async function getUserById(req, res) {
   try {
     const user = await NguoiDung.findById(req.params.id)
-    
+
     if (!user) {
       return fail(res, 404, 'Không tìm thấy người dùng')
     }
@@ -129,6 +129,18 @@ export async function createUser(req, res) {
       role: role || 'user'
     })
 
+    // Nếu tạo user với vai trò bác sĩ, tự động tạo hồ sơ bác sĩ
+    // if (newUser.role === 'doctor') {
+    //   await BacSi.create({
+    //     user_id: newUser._id,
+    //     trang_thai_duyet: 'approved',
+    //     so_nam_kinh_nghiem: 0,
+    //     phi_tu_van: 0,
+    //     specialties: [],
+    //     services: []
+    //   })
+    // }
+
     // 5. Ghi nhật ký
     await logActivity(req, 'CREATE_USER', newUser._id, null, {
       email, ho_ten, role: role || 'user'
@@ -150,7 +162,7 @@ export async function createUser(req, res) {
 export async function updateUser(req, res) {
   try {
     const { ho_ten, so_dien_thoai, role, status } = req.body
-    
+
     // Tìm và cập nhật (chỉ cập nhật các trường được gửi lên)
     const user = await NguoiDung.findByIdAndUpdate(
       req.params.id,
@@ -160,6 +172,21 @@ export async function updateUser(req, res) {
 
     if (!user) {
       return fail(res, 404, 'Không tìm thấy người dùng để cập nhật')
+    }
+
+    // Nếu vai trò chuyển thành bác sĩ, tự động tạo hoặc kích hoạt lại hồ sơ bác sĩ
+    if (user.role === 'doctor') {
+      const exists = await BacSi.findOne({ user_id: user._id })
+      if (!exists) {
+        await BacSi.create({
+          user_id: user._id,
+          trang_thai_duyet: 'approved',
+          so_nam_kinh_nghiem: 0,
+          phi_tu_van: 0,
+          specialties: [],
+          services: []
+        })
+      }
     }
 
     // Ghi nhật ký

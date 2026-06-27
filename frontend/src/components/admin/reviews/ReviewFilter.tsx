@@ -15,6 +15,26 @@ export default function ReviewFilter({ filters, onChange, doctors }: Props) {
     })
   }
 
+  // Lấy ngày hiện tại ở múi giờ địa phương (timezone-safe YYYY-MM-DD)
+  const getLocalDateString = () => {
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  const todayStr = getLocalDateString()
+
+  // Kiểm tra lỗi ngày
+  let dateError = ''
+  if (filters.startDate && filters.startDate > todayStr) {
+    dateError = 'Từ ngày không được vượt quá ngày hiện tại'
+  } else if (filters.endDate && filters.endDate > todayStr) {
+    dateError = 'Đến ngày không được vượt quá ngày hiện tại'
+  } else if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
+    dateError = 'Từ ngày không được lớn hơn Đến ngày'
+  }
+
   return (
     <div className="card mb-4 p-4 bg-white rounded-xl shadow-sm border border-slate-100">
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
@@ -25,7 +45,7 @@ export default function ReviewFilter({ filters, onChange, doctors }: Props) {
           </span>
           <input
             className="input pl-9 w-full"
-            placeholder="Tìm kiếm nội dung đánh giá..."
+            placeholder="Tìm kiếm nội dung, tên bệnh nhân hoặc bác sĩ..."
             value={filters.search}
             onChange={(e) => handleFilterChange('search', e.target.value)}
           />
@@ -83,8 +103,10 @@ export default function ReviewFilter({ filters, onChange, doctors }: Props) {
           </span>
           <input
             type="date"
-            className="input w-full"
+            className={`input w-full ${filters.startDate && filters.startDate > todayStr ? 'border-red-400 focus:border-red-500 bg-red-50/10' : ''}`}
+            max={todayStr}
             value={filters.startDate}
+            onClick={(e) => e.currentTarget.showPicker?.()}
             onChange={(e) => handleFilterChange('startDate', e.target.value)}
           />
         </div>
@@ -96,8 +118,14 @@ export default function ReviewFilter({ filters, onChange, doctors }: Props) {
           </span>
           <input
             type="date"
-            className="input w-full"
+            className={`input w-full ${
+              (filters.endDate && filters.endDate > todayStr) || (filters.startDate && filters.endDate && filters.startDate > filters.endDate)
+                ? 'border-red-400 focus:border-red-500 bg-red-50/10'
+                : ''
+            }`}
+            max={todayStr}
             value={filters.endDate}
+            onClick={(e) => e.currentTarget.showPicker?.()}
             onChange={(e) => handleFilterChange('endDate', e.target.value)}
           />
         </div>
@@ -134,6 +162,13 @@ export default function ReviewFilter({ filters, onChange, doctors }: Props) {
             Xem đánh giá đã xóa mềm
           </label>
         </div>
+
+        {dateError && (
+          <div className="col-span-full mt-1 text-xs font-semibold text-red-500 flex items-center gap-1.5 pl-1">
+            <Icon name="alert-circle" className="h-4 w-4 text-red-500 flex-shrink-0" />
+            <span>{dateError}</span>
+          </div>
+        )}
       </div>
     </div>
   )

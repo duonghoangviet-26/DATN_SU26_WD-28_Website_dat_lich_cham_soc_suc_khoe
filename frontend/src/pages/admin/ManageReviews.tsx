@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { reviewService } from '@/services/review.service'
-import { doctorService } from '@/services/doctor.service'
 import type { ReviewFilters, ReviewItem, ReviewStatistics, PaginationInfo } from '@/types/review.type'
 import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
@@ -44,22 +43,60 @@ export default function ManageReviews() {
   const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null)
   const [openDetail, setOpenDetail] = useState(false)
 
-  // 1. Tải danh sách bác sĩ làm bộ lọc một lần khi mount
+  // 1. Tải danh sách bác sĩ làm bộ lọc và tự động cập nhật khi người dùng quay lại tab (window focus)
   useEffect(() => {
-    doctorService
-      .getAll()
-      .then((data) => {
-        const mapped = data.map((d) => ({
-          id: d.id.toString(),
-          ho_ten: d.ho_ten || `Bác sĩ #${d.id}`,
-        }))
-        setDoctors(mapped)
-      })
-      .catch((err) => console.error('Lỗi tải danh sách bác sĩ:', err))
-  }, [])
+    const loadDoctors = () => {
+      reviewService
+        .getDoctors()
+        .then((data) => {
+          setDoctors(data)
+        })
+        .catch((err) => console.error('Lỗi tải danh sách bác sĩ:', err))
+    }
+
+    loadDoctors()
+
+    // Khi người dùng click quay lại tab này, tự động làm mới danh sách bác sĩ & dữ liệu trang hiện tại
+    const handleFocus = () => {
+      loadDoctors()
+      fetchReviews(pagination.page)
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [pagination.page])
 
   // 2. Tải danh sách đánh giá từ API dựa trên bộ lọc và trang hiện tại
   const fetchReviews = (pageNumber = 1) => {
+    // Lấy ngày hiện tại ở múi giờ địa phương (timezone-safe YYYY-MM-DD)
+    const getLocalDateString = () => {
+      const d = new Date()
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    const todayStr = getLocalDateString()
+
+    // Validate dates before calling API
+    const isFutureStart = filters.startDate && filters.startDate > todayStr
+    const isFutureEnd = filters.endDate && filters.endDate > todayStr
+    const isStartAfterEnd = filters.startDate && filters.endDate && filters.startDate > filters.endDate
+
+    if (isFutureStart || isFutureEnd || isStartAfterEnd) {
+      setReviews([])
+      setPagination((prev) => ({
+        ...prev,
+        page: 1,
+        total: 0,
+        totalPages: 1,
+      }))
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     reviewService
       .getAll({

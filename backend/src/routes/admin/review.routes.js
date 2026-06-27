@@ -15,4 +15,3 @@ router.patch('/:id/restore', reviews.restoreReview)     // Khôi phục đánh g
 router.delete('/:id/permanently', reviews.hardDeleteReview) // Xóa vĩnh viễn đánh giá
 
 export default router
-    
