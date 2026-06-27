@@ -55,6 +55,11 @@ export const hospitalService = {
     return res.data.data
   },
 
+  async copySpecialty(specialtyId: string, targetClinicIds: string[]): Promise<{ message: string }> {
+    const res = await axiosInstance.post(`/admin/clinic-info/specialties/${specialtyId}/copy`, { targetClinicIds })
+    return { message: res.data.message }
+  },
+
   // ---- Upload Ảnh ----
   async uploadImage(file: File): Promise<string> {
     const formData = new FormData()

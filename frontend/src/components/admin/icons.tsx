@@ -109,6 +109,10 @@ const ICONS: Record<string, string[]> = {
     'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z',
     'M22 6l-10 7L2 6',
   ],
+  copy: [
+    'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2',
+    'M15 2H9c-1.1 0-2 .9-2 2v2h10V4c0-1.1-.9-2-2-2z',
+  ],
 }
 
 export default function Icon({ name, className = 'h-5 w-5' }: IconProps) {

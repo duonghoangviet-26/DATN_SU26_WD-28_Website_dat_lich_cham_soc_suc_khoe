@@ -8,7 +8,8 @@ import {
   getSpecialtiesByClinic,
   createSpecialtyForClinic,
   updateSpecialty,
-  toggleSpecialty
+  toggleSpecialty,
+  copySpecialty
 } from '../controllers/clinic-info.controller.js'
 import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
 
@@ -29,5 +30,6 @@ router.get('/:id/specialties', getSpecialtiesByClinic)
 router.post('/:id/specialties', createSpecialtyForClinic)
 router.put('/specialties/:specialtyId', updateSpecialty)
 router.patch('/specialties/:specialtyId/toggle', toggleSpecialty)
+router.post('/specialties/:specialtyId/copy', copySpecialty)
 
 export default router

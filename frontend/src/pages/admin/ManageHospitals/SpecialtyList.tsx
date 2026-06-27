@@ -4,6 +4,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
 import { useState } from 'react'
 import { hospitalService } from '@/services/hospital.service'
+import CopySpecialtyModal from './CopySpecialtyModal'
 
 interface Props {
   specialties: SpecialtyItem[]
@@ -17,6 +18,7 @@ interface Props {
 export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onChange }: Props) {
   const [confirmItem, setConfirmItem] = useState<SpecialtyItem | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [copyingSpecialty, setCopyingSpecialty] = useState<SpecialtyItem | null>(null)
 
   async function handleToggle() {
     if (!confirmItem) return
@@ -109,6 +111,15 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
                   {/* Thao tác */}
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {/* Nút Sao chép */}
+                      <button
+                        onClick={() => setCopyingSpecialty(s)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-amber-600 transition-colors hover:border-amber-200 hover:bg-amber-50"
+                        title="Sao chép"
+                      >
+                      <Icon name="copy" className="h-3 w-3" /> Copy
+                      </button>
+
                       {/* Nút Sửa */}
                       <button
                         onClick={() => onEdit(s)}
@@ -151,6 +162,15 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
         onConfirm={handleToggle}
         onCancel={() => setConfirmItem(null)}
       />
+
+      {copyingSpecialty && (
+        <CopySpecialtyModal
+          specialty={copyingSpecialty}
+          currentClinicId={copyingSpecialty.phong_kham_id}
+          onClose={() => setCopyingSpecialty(null)}
+          onSuccess={() => setCopyingSpecialty(null)}
+        />
+      )}
     </div>
   )
 }

@@ -169,3 +169,59 @@ export const toggleSpecialty = async (req, res) => {
     return fail(res, 500, 'Lỗi server: ' + err.message)
   }
 }
+
+// Copy chuyên khoa sang nhiều chi nhánh khác
+export const copySpecialty = async (req, res) => {
+  try {
+    const { specialtyId } = req.params
+    const { targetClinicIds } = req.body
+
+    if (!Array.isArray(targetClinicIds) || targetClinicIds.length === 0) {
+      return fail(res, 400, 'Danh sách chi nhánh đích không hợp lệ')
+    }
+
+    const sourceSpecialty = await ChuyenKhoa.findById(specialtyId)
+    if (!sourceSpecialty) return fail(res, 404, 'Không tìm thấy chuyên khoa gốc')
+
+    let copiedCount = 0
+    let skippedCount = 0
+
+    for (const clinicId of targetClinicIds) {
+      // Bỏ qua nếu chính là chi nhánh hiện tại
+      if (clinicId.toString() === sourceSpecialty.phong_kham_id.toString()) {
+        skippedCount++
+        continue
+      }
+
+      // Kiểm tra xem chi nhánh có tồn tại không
+      const clinicExists = await ThongTinPhongKham.exists({ _id: clinicId })
+      if (!clinicExists) {
+        skippedCount++
+        continue
+      }
+
+      // Kiểm tra trùng lặp (dựa vào slug trong phạm vi chi nhánh)
+      const existingSpecialty = await ChuyenKhoa.findOne({ phong_kham_id: clinicId, slug: sourceSpecialty.slug })
+      if (existingSpecialty) {
+        skippedCount++
+        continue
+      }
+
+      // Tạo bản sao
+      await ChuyenKhoa.create({
+        phong_kham_id: clinicId,
+        ten: sourceSpecialty.ten,
+        mo_ta: sourceSpecialty.mo_ta,
+        icon_url: sourceSpecialty.icon_url,
+        slug: sourceSpecialty.slug,
+        thu_tu: sourceSpecialty.thu_tu,
+        status: sourceSpecialty.status
+      })
+      copiedCount++
+    }
+
+    return ok(res, null, `Đã copy thành công sang ${copiedCount} chi nhánh. Bỏ qua ${skippedCount} chi nhánh do đã tồn tại hoặc lỗi.`)
+  } catch (err) {
+    return fail(res, 500, 'Lỗi server: ' + err.message)
+  }
+}
