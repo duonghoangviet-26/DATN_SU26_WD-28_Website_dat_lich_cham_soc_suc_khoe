@@ -4,7 +4,11 @@ import {
   getClinicById,
   createClinic,
   updateClinicInfo,
-  deleteClinic
+  deleteClinic,
+  getSpecialtiesByClinic,
+  createSpecialtyForClinic,
+  updateSpecialty,
+  toggleSpecialty
 } from '../controllers/clinic-info.controller.js'
 import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
 
@@ -13,10 +17,17 @@ const router = Router()
 // Chỉ cho phép admin quản lý
 router.use(verifyToken, requireRole('admin'))
 
+// ---- Quản lý chi nhánh ----
 router.get('/', getAllClinics)
 router.post('/', createClinic)
 router.get('/:id', getClinicById)
 router.put('/:id', updateClinicInfo)
 router.delete('/:id', deleteClinic)
+
+// ---- Quản lý chuyên khoa của chi nhánh ----
+router.get('/:id/specialties', getSpecialtiesByClinic)
+router.post('/:id/specialties', createSpecialtyForClinic)
+router.put('/specialties/:specialtyId', updateSpecialty)
+router.patch('/specialties/:specialtyId/toggle', toggleSpecialty)
 
 export default router

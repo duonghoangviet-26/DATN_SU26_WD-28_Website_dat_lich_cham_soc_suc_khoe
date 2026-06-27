@@ -7,9 +7,10 @@ interface Props {
   onAdd: () => void
   onEdit: (clinic: HospitalItem) => void
   onDelete: (clinic: HospitalItem) => void
+  onViewSpecialties: (clinic: HospitalItem) => void
 }
 
-export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete }: Props) {
+export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, onViewSpecialties }: Props) {
   if (loading) {
     return (
       <div className="card flex items-center justify-center py-20 text-slate-400">
@@ -80,6 +81,13 @@ export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete }
                     </span>
                   </td>
                   <td className="px-5 py-4 text-right">
+                    <button
+                      onClick={() => onViewSpecialties(c)}
+                      className="inline-flex rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 transition-colors mr-1"
+                      title="Quản lý chuyên khoa"
+                    >
+                      <Icon name="service" className="h-4 w-4" />
+                    </button>
                     <button
                       onClick={() => onEdit(c)}
                       className="inline-flex rounded-lg p-2 text-blue-600 hover:bg-blue-50 transition-colors"

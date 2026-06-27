@@ -33,25 +33,25 @@ export const hospitalService = {
     return res.data.data
   },
 
-  // ---- Chuyên Khoa ----
+  // ---- Chuyên Khoa của từng chi nhánh ----
 
-  async getSpecialties(): Promise<SpecialtyItem[]> {
-    const res = await axiosInstance.get('/admin/clinic/specialties')
+  async getSpecialties(clinicId: string): Promise<SpecialtyItem[]> {
+    const res = await axiosInstance.get(`/admin/clinic-info/${clinicId}/specialties`)
     return res.data.data
   },
 
-  async createSpecialty(data: { ten: string; mo_ta?: string; icon_url?: string; thu_tu?: number }): Promise<SpecialtyItem> {
-    const res = await axiosInstance.post('/admin/clinic/specialties', data)
+  async createSpecialty(clinicId: string, payload: Partial<SpecialtyItem>): Promise<SpecialtyItem> {
+    const res = await axiosInstance.post(`/admin/clinic-info/${clinicId}/specialties`, payload)
     return res.data.data
   },
 
-  async updateSpecialty(id: string, data: { ten: string; mo_ta?: string; icon_url?: string; thu_tu?: number }): Promise<SpecialtyItem> {
-    const res = await axiosInstance.put(`/admin/clinic/specialties/${id}`, data)
+  async updateSpecialty(id: string, payload: Partial<SpecialtyItem>): Promise<SpecialtyItem> {
+    const res = await axiosInstance.put(`/admin/clinic-info/specialties/${id}`, payload)
     return res.data.data
   },
 
-  async toggleSpecialty(id: string): Promise<SpecialtyItem> {
-    const res = await axiosInstance.patch(`/admin/clinic/specialties/${id}/toggle`)
+  async toggleSpecialtyStatus(id: string): Promise<SpecialtyItem> {
+    const res = await axiosInstance.patch(`/admin/clinic-info/specialties/${id}/toggle`)
     return res.data.data
   },
 

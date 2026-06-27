@@ -10,22 +10,20 @@ import SpecialtyList from './SpecialtyList'
 import AddSpecialty from './AddSpecialty'
 import EditSpecialty from './EditSpecialty'
 
-type Tab = 'clinic' | 'specialty'
-type ClinicView = 'list' | 'add' | 'edit'
+type ClinicView = 'list' | 'add' | 'edit' | 'specialties'
 type SpecialtyView = 'list' | 'add' | 'edit'
 
 export default function ManageHospitals() {
-  const [tab, setTab] = useState<Tab>('clinic')
-
   // ---- State phòng khám (chi nhánh) ----
   const [clinics, setClinics] = useState<HospitalItem[]>([])
   const [clinicLoading, setClinicLoading] = useState(true)
   const [clinicView, setClinicView] = useState<ClinicView>('list')
   const [editingClinic, setEditingClinic] = useState<HospitalItem | null>(null)
+  const [selectedClinic, setSelectedClinic] = useState<HospitalItem | null>(null)
 
   // ---- State chuyên khoa ----
   const [specialties, setSpecialties] = useState<SpecialtyItem[]>([])
-  const [specialtyLoading, setSpecialtyLoading] = useState(true)
+  const [specialtyLoading, setSpecialtyLoading] = useState(false)
   const [specialtyView, setSpecialtyView] = useState<SpecialtyView>('list')
   const [editingSpecialty, setEditingSpecialty] = useState<SpecialtyItem | null>(null)
 
@@ -42,13 +40,13 @@ export default function ManageHospitals() {
     fetchClinics()
   }, [])
 
-  // ---- Load danh sách chuyên khoa ----
-  useEffect(() => {
+  // ---- Load danh sách chuyên khoa cho 1 chi nhánh ----
+  const fetchSpecialties = (clinicId: string) => {
     setSpecialtyLoading(true)
-    hospitalService.getSpecialties()
+    hospitalService.getSpecialties(clinicId)
       .then(setSpecialties)
       .finally(() => setSpecialtyLoading(false))
-  }, [])
+  }
 
   // ---- Handlers: Chi nhánh ----
   function handleClinicSaved() {
@@ -60,6 +58,13 @@ export default function ManageHospitals() {
   function handleEditClinic(c: HospitalItem) {
     setEditingClinic(c)
     setClinicView('edit')
+  }
+
+  function handleViewSpecialties(c: HospitalItem) {
+    setSelectedClinic(c)
+    setClinicView('specialties')
+    setSpecialtyView('list')
+    fetchSpecialties(c._id)
   }
 
   async function handleDeleteClinic(c: HospitalItem) {
@@ -99,54 +104,40 @@ export default function ManageHospitals() {
         description="Quản lý thông tin các chi nhánh phòng khám và danh sách chuyên khoa trong hệ thống."
       />
 
-      {/* Tab switch */}
-      <div className="card mb-5 flex gap-1 p-1.5">
-        <button
-          onClick={() => { setTab('clinic'); setClinicView('list'); setEditingClinic(null) }}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'clinic' ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Icon name="hospital" className="h-4 w-4" />
-          Phòng Khám ({clinics.length})
-        </button>
-        <button
-          onClick={() => { setTab('specialty'); setSpecialtyView('list'); setEditingSpecialty(null) }}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'specialty' ? 'bg-brand-500 text-white' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Icon name="service" className="h-4 w-4" />
-          Chuyên Khoa ({specialties.length})
-        </button>
-      </div>
-
-      {/* ===== TAB PHÒNG KHÁM ===== */}
-      {tab === 'clinic' && (
-        <>
-          {clinicView === 'list' && (
-            <ClinicList
-              clinics={clinics}
-              loading={clinicLoading}
-              onAdd={() => setClinicView('add')}
-              onEdit={handleEditClinic}
-              onDelete={handleDeleteClinic}
-            />
-          )}
-
-          {(clinicView === 'add' || clinicView === 'edit') && (
-            <EditClinic
-              clinic={editingClinic}
-              onSaved={handleClinicSaved}
-              onCancel={() => { setClinicView('list'); setEditingClinic(null) }}
-            />
-          )}
-        </>
+      {clinicView === 'list' && (
+        <ClinicList
+          clinics={clinics}
+          loading={clinicLoading}
+          onAdd={() => setClinicView('add')}
+          onEdit={handleEditClinic}
+          onDelete={handleDeleteClinic}
+          onViewSpecialties={handleViewSpecialties}
+        />
       )}
 
-      {/* ===== TAB CHUYÊN KHOA ===== */}
-      {tab === 'specialty' && (
-        <>
+      {(clinicView === 'add' || clinicView === 'edit') && (
+        <EditClinic
+          clinic={editingClinic}
+          onSaved={handleClinicSaved}
+          onCancel={() => { setClinicView('list'); setEditingClinic(null) }}
+        />
+      )}
+
+      {clinicView === 'specialties' && selectedClinic && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => { setClinicView('list'); setSelectedClinic(null) }}
+              className="btn-secondary"
+            >
+              <Icon name="chevron-left" className="h-4 w-4 mr-1" />
+              Quay lại danh sách chi nhánh
+            </button>
+            <h2 className="text-xl font-bold text-slate-800">
+              Chuyên Khoa: <span className="text-brand-600">{selectedClinic.ten}</span>
+            </h2>
+          </div>
+
           {specialtyView === 'list' && (
             <SpecialtyList
               specialties={specialties}
@@ -159,6 +150,7 @@ export default function ManageHospitals() {
 
           {specialtyView === 'add' && (
             <AddSpecialty
+              clinicId={selectedClinic._id}
               onSaved={handleSpecialtySaved}
               onCancel={() => setSpecialtyView('list')}
             />
@@ -171,7 +163,7 @@ export default function ManageHospitals() {
               onCancel={() => { setSpecialtyView('list'); setEditingSpecialty(null) }}
             />
           )}
-        </>
+        </div>
       )}
     </div>
   )

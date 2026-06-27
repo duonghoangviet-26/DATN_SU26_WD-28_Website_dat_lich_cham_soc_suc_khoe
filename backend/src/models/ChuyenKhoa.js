@@ -9,6 +9,11 @@ import mongoose from 'mongoose'
 
 const specialtySchema = new mongoose.Schema(
   {
+    phong_kham_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ThongTinPhongKham',
+      required: [true, 'ID Phòng khám là bắt buộc'],
+    },
     ten: {
       type: String,
       required: [true, 'Tên chuyên khoa là bắt buộc'],
@@ -20,7 +25,6 @@ const specialtySchema = new mongoose.Schema(
     slug: {
       type: String,
       required: true,
-      unique: true,
       lowercase: true,
       trim: true,
       maxlength: 255,
@@ -40,6 +44,7 @@ const specialtySchema = new mongoose.Schema(
 
 specialtySchema.index({ status: 1 })
 specialtySchema.index({ thu_tu: 1 })
+specialtySchema.index({ slug: 1, phong_kham_id: 1 }, { unique: true })
 
 // Tự sinh slug từ tên nếu chưa có (bỏ dấu tiếng Việt + kebab-case)
 function toSlug(str) {

@@ -125,13 +125,14 @@ export interface HospitalItem {
 
 export interface SpecialtyItem {
   _id: string
+  phong_kham_id: string
   ten: string
   mo_ta: string | null
   icon_url: string | null
   slug: string
   thu_tu: number
   status: 'active' | 'hidden'
-  ngay_tao: string
+  ngay_tao?: string
 }
 
 // ─── Dịch vụ ─────────────────────────────────────────────────────────────────

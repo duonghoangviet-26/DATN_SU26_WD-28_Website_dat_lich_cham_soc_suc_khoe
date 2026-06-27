@@ -4,12 +4,13 @@ import { hospitalService } from '@/services/hospital.service'
 import Icon from '@/components/admin/icons'
 
 interface Props {
+  clinicId: string
   onSaved: (specialty: SpecialtyItem) => void
   onCancel: () => void
 }
 
 // Form thêm chuyên khoa mới. Slug tự sinh ở backend từ tên.
-export default function AddSpecialty({ onSaved, onCancel }: Props) {
+export default function AddSpecialty({ clinicId, onSaved, onCancel }: Props) {
   const [form, setForm] = useState({ ten: '', mo_ta: '', icon_url: '', thu_tu: 0 })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -44,7 +45,7 @@ export default function AddSpecialty({ onSaved, onCancel }: Props) {
     try {
       setSaving(true)
       setError(null)
-      const created = await hospitalService.createSpecialty({
+      const created = await hospitalService.createSpecialty(clinicId, {
         ten: form.ten.trim(),
         mo_ta: form.mo_ta || undefined,
         icon_url: form.icon_url || undefined,
