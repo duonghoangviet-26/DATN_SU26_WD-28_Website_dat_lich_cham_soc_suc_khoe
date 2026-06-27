@@ -1,6 +1,6 @@
 import { Router } from 'express'
-import * as userController from '../controllers/admin/user.controller.js'
-import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
+import * as userController from '../../controllers/admin/user.controller.js'
+import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js'
 
 const router = Router()
 
