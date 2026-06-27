@@ -42,10 +42,21 @@ const userSchema = new mongoose.Schema(
       enum: ['active', 'locked'],
       default: 'active',
     },
+    ngay_xoa: { type: Date, default: null }, // Hỗ trợ Soft Delete
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
     collection: 'nguoi_dung',
+    toJSON: {
+      virtuals: true,
+      versionKey: false,
+      transform: (doc, ret) => {
+        ret.id = ret._id.toString()
+        delete ret._id
+        delete ret.__v
+        delete ret.mat_khau
+      }
+    }
   }
 )
 

@@ -2,41 +2,15 @@ import type { ExaminationResult } from '@/types'
 
 export const mockExaminations: ExaminationResult[] = [
   {
-    id: 1, appointment_id: 1,
-    chan_doan: 'Tăng huyết áp độ 1, nghi ngờ bệnh mạch vành.',
-    huong_dan_dieu_tri: 'Dùng thuốc hạ huyết áp theo đơn. Hạn chế muối, tránh stress. Tập thể dục nhẹ 30 phút/ngày. Tái khám sau 1 tháng hoặc khi có triệu chứng bất thường.',
-    ngay_tai_kham: '2026-07-14',
-    co_the_sua: false,
+    id: 1,
+    appointment_id: 3,
+    chan_doan: 'Sốt siêu vi, theo dõi sốt xuất huyết.',
+    huong_dan_dieu_tri: 'Nghỉ ngơi, uống nhiều nước, uống thuốc hạ sốt khi sốt trên 38.5 độ.',
+    ngay_tai_kham: '2024-06-23',
+    co_the_sua: true,
     thuoc: [
-      { id: 1, ten_thuoc: 'Amlodipine 5mg', lieu_dung: '1 viên', tan_suat: '1 lần/ngày', so_ngay: 30, ghi_chu: 'Uống buổi sáng sau ăn' },
-      { id: 2, ten_thuoc: 'Aspirin 81mg', lieu_dung: '1 viên', tan_suat: '1 lần/ngày', so_ngay: 30, ghi_chu: 'Uống buổi tối sau ăn' },
+      { id: 1, ten_thuoc: 'Paracetamol 500mg', lieu_dung: '1 viên', tan_suat: '3 lần/ngày', so_ngay: 3, ghi_chu: 'Uống khi sốt' },
     ],
-    ngay_tao: '2026-06-11T09:30:00',
-  },
-  {
-    id: 2, appointment_id: 8,
-    chan_doan: 'Đau thắt ngực ổn định, cần theo dõi thêm.',
-    huong_dan_dieu_tri: 'Uống thuốc đúng giờ. Tránh hoạt động gắng sức mạnh. Nếu đau ngực tăng cường độ hoặc kéo dài > 20 phút, đến cấp cứu ngay.',
-    ngay_tai_kham: '2026-07-10',
-    co_the_sua: false,
-    thuoc: [
-      { id: 1, ten_thuoc: 'Nitrate (ISMN) 20mg', lieu_dung: '1 viên', tan_suat: '2 lần/ngày', so_ngay: 30, ghi_chu: 'Sáng và trưa, không uống buổi tối' },
-      { id: 2, ten_thuoc: 'Metoprolol 25mg', lieu_dung: '1 viên', tan_suat: '2 lần/ngày', so_ngay: 30, ghi_chu: '' },
-      { id: 3, ten_thuoc: 'Rosuvastatin 10mg', lieu_dung: '1 viên', tan_suat: '1 lần/ngày', so_ngay: 30, ghi_chu: 'Uống buổi tối' },
-    ],
-    ngay_tao: '2026-06-09T10:00:00',
-  },
-  {
-    id: 3, appointment_id: 9,
-    chan_doan: 'Suy tim độ 2 (NYHA II), siêu âm tim EF = 42%.',
-    huong_dan_dieu_tri: 'Tiếp tục phác đồ điều trị hiện tại. Hạn chế dịch 1.5L/ngày. Cân mỗi sáng, nếu tăng > 2kg/tuần cần báo ngay bác sĩ.',
-    ngay_tai_kham: '2026-07-09',
-    co_the_sua: false,
-    thuoc: [
-      { id: 1, ten_thuoc: 'Furosemide 40mg', lieu_dung: '1 viên', tan_suat: '1 lần/ngày', so_ngay: 30, ghi_chu: 'Uống buổi sáng' },
-      { id: 2, ten_thuoc: 'Enalapril 5mg', lieu_dung: '1 viên', tan_suat: '2 lần/ngày', so_ngay: 30, ghi_chu: '' },
-      { id: 3, ten_thuoc: 'Carvedilol 6.25mg', lieu_dung: '1 viên', tan_suat: '2 lần/ngày', so_ngay: 30, ghi_chu: 'Uống cùng bữa ăn' },
-    ],
-    ngay_tao: '2026-06-10T09:00:00',
+    ngay_tao: '2024-06-20T15:00:00Z',
   },
 ]
