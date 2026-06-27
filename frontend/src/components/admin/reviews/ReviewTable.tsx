@@ -50,6 +50,9 @@ export default function ReviewTable({
     if (action === 'hard-delete') {
       const confirmDelete = window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn đánh giá này ra khỏi cơ sở dữ liệu? Thao tác này không thể phục hồi!')
       if (!confirmDelete) return
+    } else if (action === 'show') {
+      // Bỏ qua confirm/prompt cho hành động Hiện đánh giá
+      trimmedReason = ''
     } else {
       const reason = window.prompt(`Nhập lý do ${actionNames[action]} đánh giá này (không bắt buộc):`, '')
       if (reason === null) return // Hủy bỏ
