@@ -6,6 +6,8 @@ import ReviewTimeline from './ReviewTimeline'
 import { reviewService } from '@/services/review.service'
 import type { ReviewItem, ReviewHistoryLog } from '@/types/review.type'
 
+// Modal chi tiết đánh giá
+
 interface Props {
   open: boolean
   review: ReviewItem | null
