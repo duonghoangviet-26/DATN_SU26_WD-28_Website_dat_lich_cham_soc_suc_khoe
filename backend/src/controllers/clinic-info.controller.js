@@ -1,4 +1,5 @@
 import ThongTinPhongKham from '../models/ThongTinPhongKham.js'
+import ChuyenKhoa from '../models/ChuyenKhoa.js'
 import { ok, fail } from '../utils/response.js'
 
 // Lấy danh sách tất cả các chi nhánh (bao gồm cả active và inactive, hoặc có thể lọc)
@@ -89,6 +90,15 @@ export const updateClinicInfo = async (req, res) => {
     if (!updated) {
       return fail(res, 404, 'Không tìm thấy chi nhánh để cập nhật')
     }
+
+    // CASCADE: Nếu cập nhật trạng thái chi nhánh thành inactive, ẩn luôn các chuyên khoa
+    if (req.body.trang_thai === 'inactive') {
+      await ChuyenKhoa.updateMany(
+        { phong_kham_id: req.params.id },
+        { status: 'hidden' }
+      )
+    }
+
     return ok(res, updated, 'Cập nhật thành công')
   } catch (error) {
     return fail(res, 400, 'Dữ liệu cập nhật không hợp lệ: ' + error.message)
@@ -104,7 +114,14 @@ export const deleteClinic = async (req, res) => {
       { new: true }
     )
     if (!deleted) return fail(res, 404, 'Không tìm thấy chi nhánh')
-    return ok(res, deleted, 'Đã ngừng hoạt động chi nhánh')
+
+    // CASCADE: Ẩn tất cả chuyên khoa thuộc chi nhánh này
+    await ChuyenKhoa.updateMany(
+      { phong_kham_id: req.params.id },
+      { status: 'hidden' }
+    )
+
+    return ok(res, deleted, 'Đã ngừng hoạt động chi nhánh và các chuyên khoa trực thuộc')
   } catch (error) {
     return fail(res, 500, 'Lỗi server khi xóa: ' + error.message)
   }
@@ -113,15 +130,47 @@ export const deleteClinic = async (req, res) => {
 // ==========================================
 // QUẢN LÝ CHUYÊN KHOA CỦA TỪNG CHI NHÁNH
 // ==========================================
-import ChuyenKhoa from '../models/ChuyenKhoa.js'
+import BacSi from '../models/BacSi.js'
 
 // Lấy danh sách chuyên khoa của 1 chi nhánh
 export const getSpecialtiesByClinic = async (req, res) => {
   try {
     const specialties = await ChuyenKhoa.find({ phong_kham_id: req.params.id }).sort({ thu_tu: 1, ngay_tao: 1 }).lean()
-    return ok(res, specialties)
+    
+    // Đếm số lượng bác sĩ cho từng chuyên khoa
+    const specialtiesWithCount = await Promise.all(
+      specialties.map(async (spec) => {
+        const count = await BacSi.countDocuments({ specialties: spec._id })
+        return { ...spec, doctor_count: count }
+      })
+    )
+    
+    return ok(res, specialtiesWithCount)
   } catch (error) {
     return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
+}
+
+// Lấy danh sách bác sĩ thuộc 1 chuyên khoa cụ thể
+export const getDoctorsBySpecialty = async (req, res) => {
+  try {
+    const { specialtyId } = req.params
+    // Tìm các bác sĩ có specialtyId trong mảng specialties, populate thông tin NguoiDung để lấy tên
+    const doctors = await BacSi.find({ specialties: specialtyId })
+      .populate('user_id', 'ho_ten')
+      .lean()
+      
+    // Format lại dữ liệu trả về
+    const result = doctors.map(doc => ({
+      _id: doc._id,
+      user_id: doc.user_id ? doc.user_id._id : null,
+      ho_ten: doc.user_id ? doc.user_id.ho_ten : 'N/A',
+      bang_cap: doc.bang_cap || 'N/A'
+    }))
+    
+    return ok(res, result)
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server khi lấy danh sách bác sĩ: ' + error.message)
   }
 }
 

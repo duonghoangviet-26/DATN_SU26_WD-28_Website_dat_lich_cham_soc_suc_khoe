@@ -40,6 +40,11 @@ export const hospitalService = {
     return res.data.data
   },
 
+  async getDoctorsBySpecialty(specialtyId: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/clinic-info/specialties/${specialtyId}/doctors`)
+    return res.data.data
+  },
+
   async createSpecialty(clinicId: string, payload: Partial<SpecialtyItem>): Promise<SpecialtyItem> {
     const res = await axiosInstance.post(`/admin/clinic-info/${clinicId}/specialties`, payload)
     return res.data.data

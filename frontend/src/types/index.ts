@@ -131,6 +131,7 @@ export interface SpecialtyItem {
   icon_url: string | null
   slug: string
   thu_tu: number
+  doctor_count?: number
   status: 'active' | 'hidden'
   ngay_tao?: string
 }

@@ -6,6 +6,7 @@ import {
   updateClinicInfo,
   deleteClinic,
   getSpecialtiesByClinic,
+  getDoctorsBySpecialty,
   createSpecialtyForClinic,
   updateSpecialty,
   toggleSpecialty,
@@ -27,6 +28,7 @@ router.delete('/:id', deleteClinic)
 
 // ---- Quản lý chuyên khoa của chi nhánh ----
 router.get('/:id/specialties', getSpecialtiesByClinic)
+router.get('/specialties/:specialtyId/doctors', getDoctorsBySpecialty)
 router.post('/:id/specialties', createSpecialtyForClinic)
 router.put('/specialties/:specialtyId', updateSpecialty)
 router.patch('/specialties/:specialtyId/toggle', toggleSpecialty)
