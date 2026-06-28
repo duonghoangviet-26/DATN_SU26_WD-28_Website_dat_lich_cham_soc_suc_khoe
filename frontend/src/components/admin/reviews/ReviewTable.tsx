@@ -5,6 +5,9 @@ import { formatDate } from '@/utils/format'
 import { reviewService } from '@/services/review.service'
 import type { ReviewItem, PaginationInfo } from '@/types/review.type'
 
+
+// Bảng danh sách đánh giá
+
 interface Props {
   reviews: ReviewItem[]
   loading: boolean
