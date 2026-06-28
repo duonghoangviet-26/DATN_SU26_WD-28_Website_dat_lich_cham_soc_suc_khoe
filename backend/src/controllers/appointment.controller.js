@@ -188,7 +188,6 @@ export async function getAllAppointments(req, res) {
     } = req.query
 
     const query = {}
-    if (status) query.status = status
     if (loai_kham) query.loai_kham = loai_kham
 
     if (startDate || endDate) {
@@ -197,7 +196,7 @@ export async function getAllAppointments(req, res) {
       if (endDate) query.ngay_kham.$lte = toDateOnly(endDate)
     }
 
-    let appointments = await LichHen.find(query)
+    let allAppointments = await LichHen.find(query)
       .populate({ path: 'user_id', select: 'ho_ten email so_dien_thoai' })
       .populate({
         path: 'doctor_id',
@@ -209,7 +208,7 @@ export async function getAllAppointments(req, res) {
 
     if (keyword) {
       const kw = keyword.toLowerCase().trim()
-      appointments = appointments.filter((appointment) => {
+      allAppointments = allAppointments.filter((appointment) => {
         const tenBenhNhan = appointment.ten_khach || appointment.user_id?.ho_ten || ''
         const tenBacSi = appointment.doctor_id?.user_id?.ho_ten || ''
         const sdt = appointment.so_dien_thoai_khach || appointment.user_id?.so_dien_thoai || ''
@@ -221,22 +220,28 @@ export async function getAllAppointments(req, res) {
       })
     }
 
-    const total = appointments.length
+    const todayStr = formatDateOnly(new Date())
+
+    const summary = {
+      today: allAppointments.filter((appointment) => formatDateOnly(appointment.ngay_kham) === todayStr).length,
+      pending: allAppointments.filter((appointment) => appointment.status === 'pending').length,
+      confirmed: allAppointments.filter((appointment) => appointment.status === 'confirmed').length,
+      completed: allAppointments.filter((appointment) => appointment.status === 'completed').length,
+    }
+
+    let displayAppointments = allAppointments
+    if (status) {
+      displayAppointments = displayAppointments.filter((appointment) => appointment.status === status)
+    }
+
+    const total = displayAppointments.length
     const pageNum = Number.parseInt(page, 10)
     const limitNum = Number.parseInt(limit, 10)
     const totalPages = total === 0 ? 1 : Math.ceil(total / limitNum)
     const startIndex = (pageNum - 1) * limitNum
     const endIndex = startIndex + limitNum
-    const today = formatDateOnly(new Date())
 
-    const summary = {
-      today: appointments.filter((appointment) => formatDateOnly(appointment.ngay_kham) === today).length,
-      pending: appointments.filter((appointment) => appointment.status === 'pending').length,
-      confirmed: appointments.filter((appointment) => appointment.status === 'confirmed').length,
-      completed: appointments.filter((appointment) => appointment.status === 'completed').length,
-    }
-
-    const formattedData = appointments
+    const formattedData = displayAppointments
       .slice(startIndex, endIndex)
       .map(formatAppointmentItem)
 
