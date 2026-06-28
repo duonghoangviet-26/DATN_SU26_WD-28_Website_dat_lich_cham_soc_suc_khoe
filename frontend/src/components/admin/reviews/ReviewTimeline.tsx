@@ -2,6 +2,8 @@ import Icon from '@/components/admin/icons'
 import { formatDate } from '@/utils/format'
 import type { ReviewHistoryLog } from '@/types/review.type'
 
+// Timeline hiển thị lịch sử thay đổi đánh giá
+
 interface Props {
   history: ReviewHistoryLog[]
   loading: boolean
