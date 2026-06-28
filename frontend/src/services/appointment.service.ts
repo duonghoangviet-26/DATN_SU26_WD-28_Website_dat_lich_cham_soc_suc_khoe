@@ -1,24 +1,27 @@
-import type { AppointmentItem, AppointmentStatus } from '@/types'
+import type {
+  AppointmentItem,
+  AppointmentListResponse,
+  AdminAppointmentDoctorOption,
+  AdminAppointmentServiceOption,
+} from '@/types'
 import axiosInstance from './axiosInstance'
 
-interface AppointmentFilters {
-  keyword?: string
-  status?: AppointmentStatus | ''
-  loai_kham?: string
-}
-
 export const appointmentService = {
-  async getAll(params?: { 
-    keyword?: string, 
-    status?: string, 
-    loai_kham?: string,
-    startDate?: string,
-    endDate?: string,
-    page?: number,
+  async getAll(params?: {
+    keyword?: string
+    status?: string
+    loai_kham?: string
+    startDate?: string
+    endDate?: string
+    page?: number
     limit?: number
-  }): Promise<{ data: AppointmentItem[], pagination: any }> {
+  }): Promise<AppointmentListResponse> {
     const res = await axiosInstance.get('/admin/appointments', { params })
-    return { data: res.data.data, pagination: res.data.pagination }
+    return {
+      data: res.data.data,
+      pagination: res.data.pagination,
+      summary: res.data.summary,
+    }
   },
 
   async getById(id: string): Promise<AppointmentItem> {
@@ -31,24 +34,44 @@ export const appointmentService = {
     return res.data.data
   },
 
-  async reschedule(id: string, data: { doctor_id: string, schedule_id: string, slot_id: string, ngay_kham: string, gio_kham: string }): Promise<AppointmentItem> {
+  async reschedule(
+    id: string,
+    data: { doctor_id: string, schedule_id: string, slot_id: string }
+  ): Promise<AppointmentItem> {
     const res = await axiosInstance.patch(`/admin/appointments/${id}/reschedule`, data)
     return res.data.data
   },
 
-  async create(data: Partial<AppointmentItem>): Promise<AppointmentItem> {
+  async create(data: {
+    user_id: string
+    ten_khach: string
+    so_dien_thoai_khach: string
+    doctor_id: string
+    schedule_id: string
+    slot_id: string
+    service_id: string
+    loai_kham: 'clinic' | 'home'
+    dia_chi_kham: string
+    ly_do_kham?: string
+  }): Promise<AppointmentItem> {
     const res = await axiosInstance.post('/admin/appointments', data)
     return res.data.data
   },
 
-  // ---- Hỗ trợ Đặt lịch hộ ----
-  async getActiveDoctors(): Promise<any[]> {
+  async getActiveDoctors(): Promise<AdminAppointmentDoctorOption[]> {
     const res = await axiosInstance.get('/admin/appointments/doctors/active')
+    return res.data.data
+  },
+
+  async getActiveServices(loai?: 'clinic' | 'home'): Promise<AdminAppointmentServiceOption[]> {
+    const res = await axiosInstance.get('/admin/appointments/services/active', {
+      params: loai ? { loai } : undefined,
+    })
     return res.data.data
   },
 
   async getDoctorSchedules(doctorId: string): Promise<any[]> {
     const res = await axiosInstance.get(`/admin/appointments/doctors/${doctorId}/schedules`)
     return res.data.data
-  }
+  },
 }

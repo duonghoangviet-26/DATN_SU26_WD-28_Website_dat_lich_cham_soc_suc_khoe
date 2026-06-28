@@ -4,14 +4,15 @@ import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
 
 const router = Router()
 
-// Chỉ Admin mới được truy cập các API này
+// Chi Admin moi duoc truy cap cac API nay
 router.use(verifyToken, requireRole('admin'))
 
-// APIs hỗ trợ Đặt lịch hộ khách (lấy danh sách bác sĩ và khung giờ trống)
+// APIs ho tro dat lich ho
 router.get('/doctors/active', controller.getActiveDoctors)
+router.get('/services/active', controller.getActiveServices)
 router.get('/doctors/:id/schedules', controller.getDoctorSchedules)
 
-// CRUD cơ bản của Lịch hẹn
+// CRUD co ban cua lich hen
 router.get('/', controller.getAllAppointments)
 router.post('/', controller.createAppointment)
 router.get('/:id', controller.getAppointmentById)

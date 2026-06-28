@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { appointmentService } from '@/services/appointment.service'
-import type { AppointmentItem, AppointmentStatus } from '@/types'
+import type {
+  AppointmentItem,
+  AppointmentPagination,
+  AppointmentStatus,
+  AppointmentSummary,
+} from '@/types'
 import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
 
@@ -10,6 +15,19 @@ import AddAppointment from './AddAppointment'
 import RescheduleAppointment from './RescheduleAppointment'
 
 type ViewMode = 'list' | 'add' | 'reschedule'
+
+const EMPTY_SUMMARY: AppointmentSummary = {
+  today: 0,
+  pending: 0,
+  confirmed: 0,
+  completed: 0,
+}
+
+const EMPTY_PAGINATION: AppointmentPagination = {
+  total: 0,
+  totalPages: 1,
+  page: 1,
+}
 
 export default function ManageAppointments() {
   const [view, setView] = useState<ViewMode>('list')
@@ -23,146 +41,190 @@ export default function ManageAppointments() {
   const [endDate, setEndDate] = useState('')
 
   const [page, setPage] = useState(1)
-  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, page: 1 })
+  const [pagination, setPagination] = useState<AppointmentPagination>(EMPTY_PAGINATION)
+  const [summary, setSummary] = useState<AppointmentSummary>(EMPTY_SUMMARY)
 
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [detail, setDetail] = useState<AppointmentItem | null>(null)
   const [rescheduleData, setRescheduleData] = useState<AppointmentItem | null>(null)
 
-  function fetchAppointments() {
+  const fetchAppointments = useCallback(async (nextPage = page) => {
     setLoading(true)
-    appointmentService.getAll({ keyword, status, loai_kham: loaiKham, startDate, endDate, page, limit: 10 })
-      .then((res) => {
-        setAppointments(res.data)
-        setPagination(res.pagination)
+    try {
+      const res = await appointmentService.getAll({
+        keyword,
+        status,
+        loai_kham: loaiKham,
+        startDate,
+        endDate,
+        page: nextPage,
+        limit: 10,
       })
-      .finally(() => setLoading(false))
-  }
+      setAppointments(res.data)
+      setPagination(res.pagination)
+      setSummary(res.summary)
+    } finally {
+      setLoading(false)
+    }
+  }, [endDate, keyword, loaiKham, page, startDate, status])
 
   useEffect(() => {
     fetchAppointments()
-  }, [keyword, status, loaiKham, startDate, endDate, page])
+  }, [fetchAppointments])
 
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const counts = {
-    today: appointments.filter((a) => a.ngay_kham === todayStr).length,
-    pending: appointments.filter((a) => a.status === 'pending').length,
-    confirmed: appointments.filter((a) => a.status === 'confirmed').length,
-    completed: appointments.filter((a) => a.status === 'completed').length,
+  async function handleCancel(appointment: AppointmentItem) {
+    await appointmentService.cancel(appointment._id, 'Admin huy lich')
+    await fetchAppointments()
   }
 
-  async function handleCancel(a: AppointmentItem) {
-    const updated = await appointmentService.cancel(a._id, 'Admin hủy lịch')
-    setAppointments((prev) => prev.map((item) => (item._id === updated._id ? updated : item)))
+  async function handleView(appointment: AppointmentItem) {
+    setDetailOpen(true)
+    setDetailLoading(true)
+    setDetail(null)
+    try {
+      const fullDetail = await appointmentService.getById(appointment._id)
+      setDetail(fullDetail)
+    } finally {
+      setDetailLoading(false)
+    }
   }
 
-  function handleReschedule(a: AppointmentItem) {
-    setRescheduleData(a)
+  function handleReschedule(appointment: AppointmentItem) {
+    setRescheduleData(appointment)
     setView('reschedule')
+  }
+
+  function closeDetail() {
+    setDetailOpen(false)
+    setDetailLoading(false)
+    setDetail(null)
   }
 
   return (
     <div>
       <PageHeader
-        title="Lịch hẹn hệ thống"
-        description="Xem toàn bộ lịch hẹn, theo dõi trạng thái và xử lý các vấn đề phát sinh."
+        title="Lich hen he thong"
+        description="Xem toan bo lich hen, theo doi trang thai va xu ly cac van de phat sinh."
       />
 
       {view === 'list' && (
         <>
-          {/* Thẻ thống kê */}
           <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: 'Lịch hẹn hôm nay', value: counts.today, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', icon: 'calendar' },
-              { label: 'Chờ xác nhận', value: counts.pending, iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600', icon: 'clock' },
-              { label: 'Đã xác nhận', value: counts.confirmed, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', icon: 'check' },
-              { label: 'Hoàn thành', value: counts.completed, iconBg: 'bg-green-100', iconColor: 'text-green-600', icon: 'star' },
-            ].map((s) => (
-              <div key={s.label} className="card p-5">
+              { label: 'Lich hen hom nay', value: summary.today, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', icon: 'calendar' },
+              { label: 'Cho xac nhan', value: summary.pending, iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600', icon: 'clock' },
+              { label: 'Da xac nhan', value: summary.confirmed, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', icon: 'check' },
+              { label: 'Hoan thanh', value: summary.completed, iconBg: 'bg-green-100', iconColor: 'text-green-600', icon: 'star' },
+            ].map((item) => (
+              <div key={item.label} className="card p-5">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-500">{s.label}</p>
-                    <p className="mt-1.5 text-2xl font-bold text-slate-800">{s.value}</p>
+                    <p className="text-sm font-medium text-slate-500">{item.label}</p>
+                    <p className="mt-1.5 text-2xl font-bold text-slate-800">{item.value}</p>
                   </div>
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${s.iconBg}`}>
-                    <Icon name={s.icon} className={`h-6 w-6 ${s.iconColor}`} />
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.iconBg}`}>
+                    <Icon name={item.icon} className={`h-6 w-6 ${item.iconColor}`} />
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Bộ lọc */}
-          <div className="card mb-4 p-4 flex flex-col md:flex-row gap-3 justify-between">
-            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5 flex-1">
+          <div className="card mb-4 flex flex-col justify-between gap-3 p-4 md:flex-row">
+            <div className="grid flex-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">
                   <Icon name="search" className="h-4 w-4" />
                 </span>
                 <input
-                  className="input pl-9 w-full"
-                  placeholder="Tìm bệnh nhân/bác sĩ..."
+                  className="input w-full pl-9"
+                  placeholder="Tim benh nhan/bac si..."
                   value={keyword}
-                  onChange={(e) => { setKeyword(e.target.value); setPage(1) }}
+                  onChange={(e) => {
+                    setKeyword(e.target.value)
+                    setPage(1)
+                  }}
                 />
               </div>
-              <input 
-                type="date" 
-                className="input w-full" 
-                value={startDate} 
-                onChange={(e) => { setStartDate(e.target.value); setPage(1) }} 
-                title="Từ ngày"
+              <input
+                type="date"
+                className="input w-full"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value)
+                  setPage(1)
+                }}
+                title="Tu ngay"
               />
-              <input 
-                type="date" 
-                className="input w-full" 
-                value={endDate} 
-                onChange={(e) => { setEndDate(e.target.value); setPage(1) }} 
-                title="Đến ngày"
+              <input
+                type="date"
+                className="input w-full"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value)
+                  setPage(1)
+                }}
+                title="Den ngay"
               />
-              <select className="input" value={status} onChange={(e) => { setStatus(e.target.value as AppointmentStatus | ''); setPage(1) }}>
-                <option value="">Tất cả trạng thái</option>
-                <option value="pending">Chờ xác nhận</option>
-                <option value="confirmed">Đã xác nhận</option>
-                <option value="completed">Hoàn thành</option>
-                <option value="cancelled">Đã hủy</option>
+              <select
+                className="input"
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value as AppointmentStatus | '')
+                  setPage(1)
+                }}
+              >
+                <option value="">Tat ca trang thai</option>
+                <option value="pending">Cho xac nhan</option>
+                <option value="confirmed">Da xac nhan</option>
+                <option value="completed">Hoan thanh</option>
+                <option value="cancelled">Da huy</option>
               </select>
-              <select className="input" value={loaiKham} onChange={(e) => { setLoaiKham(e.target.value); setPage(1) }}>
-                <option value="">Tất cả loại khám</option>
-                <option value="clinic">Phòng khám</option>
-                <option value="home">Tại nhà</option>
+              <select
+                className="input"
+                value={loaiKham}
+                onChange={(e) => {
+                  setLoaiKham(e.target.value)
+                  setPage(1)
+                }}
+              >
+                <option value="">Tat ca loai kham</option>
+                <option value="clinic">Phong kham</option>
+                <option value="home">Tai nha</option>
               </select>
             </div>
             <button
               onClick={() => setView('add')}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 shrink-0"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
             >
               <Icon name="plus" className="h-4 w-4" />
-              Đặt lịch mới
+              Dat lich moi
             </button>
           </div>
 
           <AppointmentList
             appointments={appointments}
             loading={loading}
-            onView={setDetail}
+            onView={handleView}
             onCancel={handleCancel}
             onReschedule={handleReschedule}
           />
           {!loading && (
             <div className="mt-3 flex items-center justify-between">
               <p className="text-sm text-slate-500">
-                Hiển thị trang {pagination.page}/{pagination.totalPages} (Tổng {pagination.total} lịch hẹn)
+                Hien thi trang {pagination.page}/{pagination.totalPages} (Tong {pagination.total} lich hen)
               </p>
               <div className="flex gap-2">
-                <button 
-                  disabled={page <= 1} 
+                <button
+                  disabled={page <= 1}
                   onClick={() => setPage(page - 1)}
                   className="btn-secondary px-3 py-1"
                 >
-                  Trước
+                  Truoc
                 </button>
-                <button 
-                  disabled={page >= pagination.totalPages} 
+                <button
+                  disabled={page >= pagination.totalPages}
                   onClick={() => setPage(page + 1)}
                   className="btn-secondary px-3 py-1"
                 >
@@ -175,29 +237,29 @@ export default function ManageAppointments() {
       )}
 
       {view === 'add' && (
-        <AddAppointment 
+        <AddAppointment
           onCancel={() => setView('list')}
-          onSaved={() => {
+          onSaved={async () => {
             setView('list')
             setPage(1)
-            fetchAppointments()
+            await fetchAppointments(1)
           }}
         />
       )}
 
       {view === 'reschedule' && rescheduleData && (
-        <RescheduleAppointment 
+        <RescheduleAppointment
           appointment={rescheduleData}
           onCancel={() => setView('list')}
-          onSaved={() => {
+          onSaved={async () => {
             setView('list')
-            fetchAppointments()
+            await fetchAppointments()
           }}
         />
       )}
 
-      {detail && (
-        <AppointmentDetail detail={detail} onClose={() => setDetail(null)} />
+      {detailOpen && (
+        <AppointmentDetail detail={detail} loading={detailLoading} onClose={closeDetail} />
       )}
     </div>
   )
