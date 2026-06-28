@@ -26,8 +26,12 @@ export default function Login() {
       } else {
         navigate(from || '/', { replace: true })
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Đăng nhập thất bại')
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message ||
+        err.message ||
+        'Đăng nhập thất bại'
+      )
     } finally {
       setLoading(false)
     }

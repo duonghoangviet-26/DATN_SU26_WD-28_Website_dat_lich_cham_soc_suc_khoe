@@ -144,7 +144,7 @@ export default function ManageAppointments() {
                     <p className="text-xs text-slate-400">{a.gio_kham}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge color={a.loai_kham === 'clinic' ? 'blue' : a.loai_kham === 'video' ? 'green' : 'yellow'}>
+                    <Badge color={a.loai_kham === 'clinic' ? 'blue' : (a.loai_kham as string) === 'video' ? 'green' : 'yellow'}>
                       {SERVICE_TYPE_LABEL[a.loai_kham]}
                     </Badge>
                   </td>
