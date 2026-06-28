@@ -1,5 +1,7 @@
 import Icon from '@/components/admin/icons'
 
+// Menu action cho đánh giá
+
 interface Props {
   status: 'visible' | 'hidden'
   isDeleted: boolean
