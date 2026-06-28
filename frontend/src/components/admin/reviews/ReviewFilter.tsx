@@ -2,6 +2,8 @@ import { useState } from 'react'
 import Icon from '@/components/admin/icons'
 import type { ReviewFilters } from '@/types/review.type'
 
+// Filter đánh giá
+
 interface Props {
   filters: ReviewFilters
   onChange: (filters: ReviewFilters) => void
