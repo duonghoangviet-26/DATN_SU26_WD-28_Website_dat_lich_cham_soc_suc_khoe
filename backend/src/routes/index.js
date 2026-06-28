@@ -15,5 +15,7 @@ router.get('/health', (req, res) => {
 
 router.use('/auth',  authRoutes)
 router.use('/admin', adminRoutes)
+router.use('/admin/upload', uploadRoutes)
+router.use('/admin/clinic-info', clinicInfoRoutes)
 
 export default router
