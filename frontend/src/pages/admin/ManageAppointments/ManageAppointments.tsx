@@ -104,18 +104,18 @@ export default function ManageAppointments() {
   return (
     <div>
       <PageHeader
-        title="Lich hen he thong"
-        description="Xem toan bo lich hen, theo doi trang thai va xu ly cac van de phat sinh."
+        title="Lịch hẹn hệ thống"
+        description="Xem toàn bộ lịch hẹn, theo dõi trạng thái và xử lý các vấn đề phát sinh."
       />
 
       {view === 'list' && (
         <>
           <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: 'Lich hen hom nay', value: summary.today, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', icon: 'calendar' },
-              { label: 'Cho xac nhan', value: summary.pending, iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600', icon: 'clock' },
-              { label: 'Da xac nhan', value: summary.confirmed, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', icon: 'check' },
-              { label: 'Hoan thanh', value: summary.completed, iconBg: 'bg-green-100', iconColor: 'text-green-600', icon: 'star' },
+              { label: 'Lịch hẹn hôm nay', value: summary.today, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', icon: 'calendar' },
+              { label: 'Chờ xác nhận', value: summary.pending, iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600', icon: 'clock' },
+              { label: 'Đã xác nhận', value: summary.confirmed, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', icon: 'check' },
+              { label: 'Hoàn thành', value: summary.completed, iconBg: 'bg-green-100', iconColor: 'text-green-600', icon: 'star' },
             ].map((item) => (
               <div key={item.label} className="card p-5">
                 <div className="flex items-start justify-between">
@@ -139,7 +139,7 @@ export default function ManageAppointments() {
                 </span>
                 <input
                   className="input w-full pl-9"
-                  placeholder="Tim benh nhan/bac si..."
+                  placeholder="Tìm bệnh nhân/bác sĩ..."
                   value={keyword}
                   onChange={(e) => {
                     setKeyword(e.target.value)
@@ -155,7 +155,7 @@ export default function ManageAppointments() {
                   setStartDate(e.target.value)
                   setPage(1)
                 }}
-                title="Tu ngay"
+                title="Từ ngày"
               />
               <input
                 type="date"
@@ -165,7 +165,7 @@ export default function ManageAppointments() {
                   setEndDate(e.target.value)
                   setPage(1)
                 }}
-                title="Den ngay"
+                title="Đến ngày"
               />
               <select
                 className="input"
@@ -175,11 +175,11 @@ export default function ManageAppointments() {
                   setPage(1)
                 }}
               >
-                <option value="">Tat ca trang thai</option>
-                <option value="pending">Cho xac nhan</option>
-                <option value="confirmed">Da xac nhan</option>
-                <option value="completed">Hoan thanh</option>
-                <option value="cancelled">Da huy</option>
+                <option value="">Tất cả trạng thái</option>
+                <option value="pending">Chờ xác nhận</option>
+                <option value="confirmed">Đã xác nhận</option>
+                <option value="completed">Hoàn thành</option>
+                <option value="cancelled">Đã hủy</option>
               </select>
               <select
                 className="input"
@@ -189,9 +189,9 @@ export default function ManageAppointments() {
                   setPage(1)
                 }}
               >
-                <option value="">Tat ca loai kham</option>
-                <option value="clinic">Phong kham</option>
-                <option value="home">Tai nha</option>
+                <option value="">Tất cả loại khám</option>
+                <option value="clinic">Phòng khám</option>
+                <option value="home">Tại nhà</option>
               </select>
             </div>
             <button
@@ -199,7 +199,7 @@ export default function ManageAppointments() {
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
             >
               <Icon name="plus" className="h-4 w-4" />
-              Dat lich moi
+              Đặt lịch mới
             </button>
           </div>
 
@@ -213,7 +213,7 @@ export default function ManageAppointments() {
           {!loading && (
             <div className="mt-3 flex items-center justify-between">
               <p className="text-sm text-slate-500">
-                Hien thi trang {pagination.page}/{pagination.totalPages} (Tong {pagination.total} lich hen)
+                Hiển thị trang {pagination.page}/{pagination.totalPages} (Tổng {pagination.total} lịch hẹn)
               </p>
               <div className="flex gap-2">
                 <button
@@ -221,7 +221,7 @@ export default function ManageAppointments() {
                   onClick={() => setPage(page - 1)}
                   className="btn-secondary px-3 py-1"
                 >
-                  Truoc
+                  Trước
                 </button>
                 <button
                   disabled={page >= pagination.totalPages}

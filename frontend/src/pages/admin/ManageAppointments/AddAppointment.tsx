@@ -37,13 +37,13 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
   useEffect(() => {
     appointmentService.getActiveDoctors()
       .then(setDoctors)
-      .catch(() => setError('Loi lay danh sach bac si'))
+      .catch(() => setError('Lỗi lấy danh sách bác sĩ'))
   }, [])
 
   useEffect(() => {
     appointmentService.getActiveServices(form.loai_kham)
       .then(setServices)
-      .catch(() => setError('Loi lay danh sach dich vu'))
+      .catch(() => setError('Lỗi lấy danh sách dịch vụ'))
   }, [form.loai_kham])
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
 
     appointmentService.getDoctorSchedules(form.doctor_id)
       .then(setSchedules)
-      .catch(() => setError('Loi lay lich lam viec cua bac si'))
+      .catch(() => setError('Lỗi lấy lịch làm việc của bác sĩ'))
   }, [form.doctor_id])
 
   const selectedDoctor = doctors.find((doctor) => doctor._id === form.doctor_id)
@@ -99,19 +99,19 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
     setError(null)
 
     if (!form.user_id.trim()) {
-      setError('Vui long nhap ID tai khoan benh nhan.')
+      setError('Vui lòng nhập ID tài khoản bệnh nhân.')
       return
     }
     if (!form.ten_khach.trim()) {
-      setError('Vui long nhap ten benh nhan.')
+      setError('Vui lòng nhập tên bệnh nhân.')
       return
     }
     if (!form.doctor_id || !form.service_id || !form.schedule_id || !form.slot_id) {
-      setError('Vui long chon day du Bac si, Dich vu, Ngay kham va Khung gio.')
+      setError('Vui lòng chọn đầy đủ Bác sĩ, Dịch vụ, Ngày khám và Khung giờ.')
       return
     }
     if (form.loai_kham === 'home' && !form.dia_chi_kham.trim()) {
-      setError('Kham tai nha yeu cau nhap dia chi.')
+      setError('Khám tại nhà yêu cầu nhập địa chỉ.')
       return
     }
 
@@ -120,7 +120,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
       await appointmentService.create(form)
       onSaved()
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Loi khi dat lich')
+      setError(err?.response?.data?.message || err.message || 'Lỗi khi đặt lịch')
     } finally {
       setLoading(false)
     }
@@ -129,7 +129,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
   return (
     <div className="card p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-800">Dat lich kham ho</h3>
+        <h3 className="text-lg font-semibold text-slate-800">Đặt lịch khám hộ</h3>
         <button onClick={onCancel} className="text-slate-400 hover:text-slate-700">
           <Icon name="x" className="h-5 w-5" />
         </button>
@@ -144,33 +144,33 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
       <form onSubmit={handleSubmit} className="grid gap-6 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            ID tai khoan benh nhan <span className="text-red-500">*</span>
+            ID tài khoản bệnh nhân <span className="text-red-500">*</span>
           </label>
           <input
             name="user_id"
             value={form.user_id}
             onChange={handleChange}
             className="input w-full"
-            placeholder="Vi du: 64fa..."
+            placeholder="Ví dụ: 64fa..."
             required
           />
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Ten benh nhan <span className="text-red-500">*</span>
+            Tên bệnh nhân <span className="text-red-500">*</span>
           </label>
           <input
             name="ten_khach"
             value={form.ten_khach}
             onChange={handleChange}
             className="input w-full"
-            placeholder="Nguyen Van A"
+            placeholder="Nguyễn Văn A"
             required
           />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">So dien thoai</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Số điện thoại</label>
           <input
             name="so_dien_thoai_khach"
             value={form.so_dien_thoai_khach}
@@ -182,7 +182,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Loai kham <span className="text-red-500">*</span>
+            Loại khám <span className="text-red-500">*</span>
           </label>
           <select
             name="loai_kham"
@@ -190,14 +190,14 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             onChange={handleChange}
             className="input w-full"
           >
-            <option value="clinic">Tai phong kham</option>
-            <option value="home">Tai nha</option>
+            <option value="clinic">Tại phòng khám</option>
+            <option value="home">Tại nhà</option>
           </select>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Bac si phu trach <span className="text-red-500">*</span>
+            Bác sĩ phụ trách <span className="text-red-500">*</span>
           </label>
           <select
             name="doctor_id"
@@ -206,7 +206,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             className="input w-full"
             required
           >
-            <option value="">-- Chon bac si --</option>
+            <option value="">-- Chọn bác sĩ --</option>
             {doctors.map((doctor) => (
               <option key={doctor._id} value={doctor._id}>
                 {doctor.ten} ({doctor.chuyen_khoa})
@@ -217,7 +217,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
 
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Dich vu <span className="text-red-500">*</span>
+            Dịch vụ <span className="text-red-500">*</span>
           </label>
           <select
             name="service_id"
@@ -227,7 +227,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             required
             disabled={!form.doctor_id}
           >
-            <option value="">-- Chon dich vu --</option>
+            <option value="">-- Chọn dịch vụ --</option>
             {availableServices.map((service) => (
               <option key={service._id} value={service._id}>
                 {service.ten}
@@ -238,7 +238,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Ngay kham <span className="text-red-500">*</span>
+            Ngày khám <span className="text-red-500">*</span>
           </label>
           <select
             name="schedule_id"
@@ -248,7 +248,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             required
             disabled={!form.doctor_id}
           >
-            <option value="">-- Chon ngay kham --</option>
+            <option value="">-- Chọn ngày khám --</option>
             {schedules.map((schedule) => (
               <option key={schedule._id} value={schedule._id}>
                 {schedule.ngay}
@@ -258,7 +258,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Khung gio <span className="text-red-500">*</span>
+            Khung giờ <span className="text-red-500">*</span>
           </label>
           <select
             name="slot_id"
@@ -268,17 +268,17 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             required
             disabled={!form.schedule_id}
           >
-            <option value="">-- Chon gio kham --</option>
+            <option value="">-- Chọn giờ khám --</option>
             {selectedSchedule?.slots.map((slot: any) => (
               <option key={slot._id} value={slot._id}>
-                {slot.gio_bat_dau} - {slot.gio_ket_thuc} (Con {slot.so_benh_nhan_toi_da - slot.so_benh_nhan_hien_tai} cho)
+                {slot.gio_bat_dau} - {slot.gio_ket_thuc} (Còn {slot.so_benh_nhan_toi_da - slot.so_benh_nhan_hien_tai} chỗ)
               </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Gia kham</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Giá khám</label>
           <input
             type="number"
             value={selectedService?.gia ?? 0}
@@ -288,20 +288,20 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Ly do kham</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Lý do khám</label>
           <input
             name="ly_do_kham"
             value={form.ly_do_kham}
             onChange={handleChange}
             className="input w-full"
-            placeholder="Nhap ly do kham"
+            placeholder="Nhập lý do khám"
           />
         </div>
 
         {form.loai_kham === 'home' && (
           <div className="sm:col-span-2">
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Dia chi kham <span className="text-red-500">*</span>
+              Địa chỉ khám <span className="text-red-500">*</span>
             </label>
             <textarea
               name="dia_chi_kham"
@@ -315,10 +315,10 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
 
         <div className="sm:col-span-2 mt-4 flex justify-end gap-3">
           <button type="button" onClick={onCancel} disabled={loading} className="btn-secondary px-6">
-            Huy
+            Hủy
           </button>
           <button type="submit" disabled={loading} className="btn-primary px-6">
-            {loading ? 'Dang tao...' : 'Tao lich hen'}
+            {loading ? 'Đang tạo...' : 'Tạo lịch hẹn'}
           </button>
         </div>
       </form>
