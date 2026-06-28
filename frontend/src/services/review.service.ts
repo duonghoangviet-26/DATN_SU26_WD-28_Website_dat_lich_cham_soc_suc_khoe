@@ -1,10 +1,10 @@
 import axiosInstance from './axiosInstance'
 import type { ApiResponse } from '@/types'
-import type { 
-  ReviewItem, 
-  ReviewFilters, 
-  ReviewListResponse, 
-  ReviewDetailResponse 
+import type {
+  ReviewItem,
+  ReviewFilters,
+  ReviewListResponse,
+  ReviewDetailResponse
 } from '@/types/review.type'
 
 export const reviewService = {
@@ -23,7 +23,7 @@ export const reviewService = {
     if (params.endDate) queryParams.endDate = params.endDate
     if (params.search?.trim()) queryParams.search = params.search.trim()
     if (params.deleted !== undefined) queryParams.deleted = params.deleted.toString()
-    
+
     // Thêm timestamp để chống trình duyệt cache kết quả GET
     queryParams._t = Date.now()
 
