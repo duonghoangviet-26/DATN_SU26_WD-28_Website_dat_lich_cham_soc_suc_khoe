@@ -394,3 +394,103 @@ export async function hardDeleteReview(id, adminId) {
 
   return { id }
 }
+
+/**
+ * Thao tác hàng loạt trên nhiều đánh giá
+ */
+export async function batchActionReviews(ids, action, adminId, lyDo) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new Error('Danh sách ID đánh giá không hợp lệ')
+  }
+
+  const validActions = ['hide', 'show', 'delete', 'restore', 'hard-delete']
+  if (!validActions.includes(action)) {
+    throw new Error('Hành động hàng loạt không hợp lệ')
+  }
+
+  let count = 0
+  
+  if (action === 'hard-delete') {
+    // Chỉ cho phép xóa cứng các review đã bị xóa mềm
+    const result = await DanhGia.deleteMany({
+      _id: { $in: ids },
+      ngay_xoa: { $ne: null }
+    })
+    count = result.deletedCount
+
+    if (count > 0) {
+      await NhatKyThaoTac.create({
+        nguoi_thuc_hien_id: adminId,
+        vai_tro: 'admin',
+        hanh_dong: 'DELETE_REVIEW',
+        loai_doi_tuong: 'review',
+        doi_tuong_id: null,
+        ly_do: `Xóa vĩnh viễn hàng loạt ${count} đánh giá khỏi hệ thống`,
+      })
+    }
+  } else {
+    let filter = { _id: { $in: ids } }
+    if (action === 'restore') {
+      filter.ngay_xoa = { $ne: null }
+    } else {
+      filter.ngay_xoa = null
+    }
+
+    const reviews = await DanhGia.find(filter)
+    if (reviews.length === 0) {
+      return { count: 0 }
+    }
+
+    const doctorIds = new Set()
+
+    for (const r of reviews) {
+      doctorIds.add(r.doctor_id.toString())
+
+      if (action === 'hide') {
+        r.status = 'hidden'
+      } else if (action === 'show') {
+        r.status = 'visible'
+      } else if (action === 'delete') {
+        r.ngay_xoa = new Date()
+        r.nguoi_xoa = adminId
+      } else if (action === 'restore') {
+        r.ngay_xoa = null
+        r.nguoi_xoa = null
+      }
+      await r.save()
+      count++
+    }
+
+    // Cập nhật điểm bác sĩ hàng loạt
+    for (const docId of doctorIds) {
+      await updateDoctorRating(docId)
+    }
+
+    const actionLogNames = {
+      hide: 'HIDE_REVIEW',
+      show: 'RESTORE_REVIEW',
+      delete: 'DELETE_REVIEW',
+      restore: 'RESTORE_REVIEW',
+    }
+
+    const actionDescriptions = {
+      hide: 'Ẩn hàng loạt đánh giá',
+      show: 'Hiển thị hàng loạt đánh giá',
+      delete: 'Xóa mềm hàng loạt đánh giá',
+      restore: 'Khôi phục hàng loạt đánh giá',
+    }
+
+    if (count > 0) {
+      await NhatKyThaoTac.create({
+        nguoi_thuc_hien_id: adminId,
+        vai_tro: 'admin',
+        hanh_dong: actionLogNames[action],
+        loai_doi_tuong: 'review',
+        doi_tuong_id: null,
+        ly_do: lyDo || `${actionDescriptions[action]} (Số lượng: ${count})`,
+      })
+    }
+  }
+
+  return { count }
+}

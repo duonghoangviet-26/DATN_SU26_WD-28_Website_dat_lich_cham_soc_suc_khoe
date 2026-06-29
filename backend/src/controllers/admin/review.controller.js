@@ -110,3 +110,18 @@ export async function hardDeleteReview(req, res) {
     return fail(res, status, err.message)
   }
 }
+
+/**
+ * Thao tác hàng loạt trên nhiều đánh giá
+ */
+export async function batchAction(req, res) {
+  try {
+    const { ids, action, ly_do } = req.body
+    const adminId = req.user.id
+    
+    const result = await reviewService.batchActionReviews(ids, action, adminId, ly_do)
+    return ok(res, result, `Thực hiện thao tác hàng loạt thành công (${result.count} đánh giá)`)
+  } catch (err) {
+    return fail(res, 400, err.message)
+  }
+}
