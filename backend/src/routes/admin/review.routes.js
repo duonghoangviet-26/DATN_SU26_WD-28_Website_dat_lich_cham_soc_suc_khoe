@@ -7,6 +7,7 @@ const router = Router()
 // Tất cả route yêu cầu: đăng nhập + role admin
 router.use(verifyToken, requireRole('admin'))
 router.get('/', reviews.getReviews)      // Lấy danh sách đánh giá
+router.post('/batch', reviews.batchAction) // Thao tác hàng loạt
 router.get('/:id', reviews.getReviewDetail) // Lấy chi tiết đánh giá
 router.patch('/:id/hide', reviews.hideReview)   // Ẩn đánh giá
 router.patch('/:id/show', reviews.showReview)   // Hiện lại đánh giá
