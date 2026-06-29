@@ -84,6 +84,15 @@ export const reviewService = {
   },
 
   /**
+   * Thao tác hàng loạt trên nhiều đánh giá.
+   * POST /api/admin/reviews/batch
+   */
+  async batchAction(payload: { ids: string[]; action: 'hide' | 'show' | 'delete' | 'restore' | 'hard-delete'; ly_do?: string }): Promise<{ count: number }> {
+    const res = await axiosInstance.post<ApiResponse<{ count: number }>>('/admin/reviews/batch', payload)
+    return res.data.data
+  },
+
+  /**
    * Lấy danh sách bác sĩ cho dropdown lọc.
    * GET /api/admin/reviews/doctors
    */
