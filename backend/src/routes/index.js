@@ -1,10 +1,14 @@
 import { Router } from 'express'
-import authRoutes from './auth.routes.js'
-import clinicRoutes from './clinic.routes.js'
+import authRoutes  from './admin/auth.routes.js'
 import adminRoutes from './admin/index.js'
+import clinicRoutes from './clinic.routes.js'
+import uploadRoutes from './upload.routes.js'
+import clinicInfoRoutes from './clinic-info.routes.js'
 import appointmentRoutes from './appointment.routes.js'
 
-// Gom toàn bộ route con vào đây. Thêm module mới: import rồi router.use('/ten', ...).
+/**
+ * Gom toàn bộ route con của hệ thống
+ */
 const router = Router()
 
 // Kiểm tra health-check cơ bản
@@ -14,7 +18,9 @@ router.get('/health', (req, res) => {
 
 router.use('/auth', authRoutes)
 router.use('/admin/clinic', clinicRoutes) // C3: Phòng Khám & Chuyên Khoa
-router.use('/admin/appointments', appointmentRoutes)
 router.use('/admin', adminRoutes)
+router.use('/admin/upload', uploadRoutes)
+router.use('/admin/clinic-info', clinicInfoRoutes)
+router.use('/admin/appointments', appointmentRoutes)
 
 export default router

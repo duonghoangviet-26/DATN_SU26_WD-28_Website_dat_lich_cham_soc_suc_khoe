@@ -16,6 +16,7 @@ export interface User {
   anh_dai_dien?: string | null
   role: Role
   status: UserStatus
+  ngay_xoa?: string | null
   ngay_tao: string
   ngay_cap_nhat?: string
 }
@@ -23,6 +24,7 @@ export interface User {
 export interface Doctor {
   id: number
   user_id: number
+  specialty_id: number // Thêm để khớp với logic lọc
   tieu_su?: string
   bang_cap?: string
   kinh_nghiem?: string
@@ -94,6 +96,7 @@ export interface Member {
 // ViewModel kết hợp thông tin bác sĩ + user (dùng cho trang danh sách)
 export interface DoctorProfile {
   id: number
+  doctor_id: number // Thêm để khớp với logic service
   user_id: number
   ho_ten: string
   email: string
@@ -110,28 +113,30 @@ export interface DoctorProfile {
 
 export interface HospitalItem {
   _id: string
-  ma: string
   ten: string
-  dia_chi: string | null
-  so_dien_thoai: string | null
-  email: string | null
-  gio_lam_viec: string | null
-  mo_ta: string | null
-  logo_url: string | null
-  ban_do_url: string | null
-  ngay_tao: string
-  ngay_cap_nhat: string
+  dia_chi?: string | null
+  so_dien_thoai?: string | null
+  email?: string | null
+  gio_lam_viec?: string | null
+  mo_ta?: string | null
+  logo_url?: string | null
+  ban_do_url?: string | null
+  trang_thai?: 'active' | 'inactive'
+  ngay_tao?: string
+  ngay_cap_nhat?: string
 }
 
 export interface SpecialtyItem {
   _id: string
+  phong_kham_id: string
   ten: string
   mo_ta: string | null
   icon_url: string | null
   slug: string
   thu_tu: number
+  doctor_count?: number
   status: 'active' | 'hidden'
-  ngay_tao: string
+  ngay_tao?: string
 }
 
 // ─── Dịch vụ ─────────────────────────────────────────────────────────────────
@@ -279,6 +284,12 @@ export interface ApiResponse<T = unknown> {
   message: string
   data: T
 }
+
+// Aliases & Missing types để khớp với các service
+export type Notification = NotificationItem
+export type Payment = PaymentItem
+export type Review = ReviewItem
+export type Schedule = DoctorSlot
 
 // ─── Doctor Panel types (B1–B5) ───────────────────────────────
 

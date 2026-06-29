@@ -4,40 +4,61 @@ import { hospitalService } from '@/services/hospital.service'
 import Icon from '@/components/admin/icons'
 
 interface Props {
-  clinic: HospitalItem
+  clinic?: HospitalItem | null
   onSaved: (updated: HospitalItem) => void
   onCancel: () => void
 }
 
-// Form chỉnh sửa thông tin phòng khám (singleton).
+// Form thêm/sửa thông tin chi nhánh
 export default function EditClinic({ clinic, onSaved, onCancel }: Props) {
   const [form, setForm] = useState({
-    ten: clinic.ten ?? '',
-    dia_chi: clinic.dia_chi ?? '',
-    so_dien_thoai: clinic.so_dien_thoai ?? '',
-    email: clinic.email ?? '',
-    gio_lam_viec: clinic.gio_lam_viec ?? '',
-    mo_ta: clinic.mo_ta ?? '',
-    logo_url: clinic.logo_url ?? '',
-    ban_do_url: clinic.ban_do_url ?? '',
+    ten: clinic?.ten ?? '',
+    dia_chi: clinic?.dia_chi ?? '',
+    so_dien_thoai: clinic?.so_dien_thoai ?? '',
+    email: clinic?.email ?? '',
+    gio_lam_viec: clinic?.gio_lam_viec ?? '',
+    mo_ta: clinic?.mo_ta ?? '',
+    logo_url: clinic?.logo_url ?? '',
+    ban_do_url: clinic?.ban_do_url ?? '',
   })
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setUploading(true)
+      setError(null)
+      const url = await hospitalService.uploadImage(file)
+      setForm((prev) => ({ ...prev, logo_url: url }))
+    } catch (err) {
+      setError('Lỗi khi tải ảnh lên')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.ten.trim()) {
-      setError('Tên phòng khám là bắt buộc')
+      setError('Tên chi nhánh là bắt buộc')
       return
     }
     try {
       setSaving(true)
       setError(null)
-      const updated = await hospitalService.updateClinicInfo(form)
+      let updated: HospitalItem
+      if (clinic && clinic._id) {
+        updated = await hospitalService.updateClinicInfo(clinic._id, form)
+      } else {
+        updated = await hospitalService.createClinic(form)
+      }
       onSaved(updated)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Lỗi khi lưu thông tin'
@@ -139,19 +160,6 @@ export default function EditClinic({ clinic, onSaved, onCancel }: Props) {
           />
         </div>
 
-        {/* Logo URL */}
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">URL Logo</label>
-          <input
-            name="logo_url"
-            value={form.logo_url}
-            onChange={handleChange}
-            className="input w-full"
-            placeholder="https://..."
-          />
-        </div>
-
-        {/* Bản đồ URL */}
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-slate-700">URL Bản đồ (Google Maps embed)</label>
           <input

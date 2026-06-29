@@ -1,8 +1,6 @@
 import { Router } from 'express'
 import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
 import {
-  getClinic,
-  updateClinic,
   getSpecialties,
   createSpecialty,
   updateSpecialty,
@@ -13,10 +11,6 @@ const router = Router()
 
 // Bảo vệ toàn bộ route này: phải đăng nhập + phải là admin
 router.use(verifyToken, requireRole('admin'))
-
-// ---- Phòng Khám (Singleton) ----
-router.get('/', getClinic)          // GET  /api/admin/clinic
-router.put('/', updateClinic)       // PUT  /api/admin/clinic
 
 // ---- Chuyên Khoa ----
 router.get('/specialties', getSpecialties)                       // GET   /api/admin/clinic/specialties

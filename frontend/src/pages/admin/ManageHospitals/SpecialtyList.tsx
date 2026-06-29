@@ -4,6 +4,8 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
 import { useState } from 'react'
 import { hospitalService } from '@/services/hospital.service'
+import CopySpecialtyModal from './CopySpecialtyModal'
+import SpecialtyDoctorsModal from './SpecialtyDoctorsModal'
 
 interface Props {
   specialties: SpecialtyItem[]
@@ -17,6 +19,8 @@ interface Props {
 export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onChange }: Props) {
   const [confirmItem, setConfirmItem] = useState<SpecialtyItem | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [copyingSpecialty, setCopyingSpecialty] = useState<SpecialtyItem | null>(null)
+  const [viewingDoctorsSpec, setViewingDoctorsSpec] = useState<SpecialtyItem | null>(null)
 
   async function handleToggle() {
     if (!confirmItem) return
@@ -53,11 +57,12 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
+              <th className="px-5 py-3 font-medium text-center w-16">STT</th>
               <th className="px-5 py-3 font-medium">Icon</th>
               <th className="px-5 py-3 font-medium">Tên chuyên khoa</th>
               <th className="hidden px-5 py-3 font-medium md:table-cell">Slug</th>
               <th className="hidden px-5 py-3 font-medium md:table-cell">Mô tả</th>
-              <th className="hidden px-5 py-3 font-medium text-center md:table-cell">Thứ tự</th>
+              <th className="hidden px-5 py-3 font-medium text-center md:table-cell">Số bác sĩ</th>
               <th className="px-5 py-3 font-medium">Trạng thái</th>
               <th className="px-5 py-3 text-right font-medium">Thao tác</th>
             </tr>
@@ -65,23 +70,24 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-5 py-12 text-center text-slate-400">Đang tải...</td>
+                <td colSpan={8} className="px-5 py-12 text-center text-slate-400">Đang tải...</td>
               </tr>
             ) : specialties.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-12 text-center text-slate-400">Chưa có chuyên khoa nào</td>
+                <td colSpan={8} className="px-5 py-12 text-center text-slate-400">Chưa có chuyên khoa nào</td>
               </tr>
             ) : (
-              specialties.map((s) => (
+              specialties.map((s, index) => (
                 <tr key={s._id} className={`hover:bg-slate-50 ${toggling === s._id ? 'opacity-50' : ''}`}>
+                  {/* STT */}
+                  <td className="px-5 py-3 text-center font-medium text-slate-500">{index + 1}</td>
+
                   {/* Icon */}
                   <td className="px-5 py-3">
                     {s.icon_url ? (
-                      <img src={s.icon_url} alt={s.ten} className="h-8 w-8 rounded object-cover" />
+                      <img src={s.icon_url} alt={s.ten} className="h-8 w-8 rounded object-cover border border-slate-200 bg-white" />
                     ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded bg-brand-100">
-                        <Icon name="service" className="h-4 w-4 text-brand-500" />
-                      </div>
+                      <span className="text-slate-400 text-xs italic">Không có</span>
                     )}
                   </td>
 
@@ -98,8 +104,16 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
                     <span className="line-clamp-2">{s.mo_ta || <em className="text-slate-400">Chưa có</em>}</span>
                   </td>
 
-                  {/* Thứ tự */}
-                  <td className="hidden px-5 py-3 text-center text-slate-600 md:table-cell">{s.thu_tu}</td>
+                  {/* Số bác sĩ */}
+                  <td className="hidden px-5 py-3 text-center md:table-cell">
+                    <button
+                      onClick={() => setViewingDoctorsSpec(s)}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-600 transition-colors hover:bg-blue-100 border border-blue-100 whitespace-nowrap"
+                    >
+                      <Icon name="users" className="h-3.5 w-3.5" />
+                      {s.doctor_count || 0} Bác sĩ
+                    </button>
+                  </td>
 
                   {/* Trạng thái */}
                   <td className="px-5 py-3">
@@ -111,6 +125,15 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
                   {/* Thao tác */}
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {/* Nút Sao chép */}
+                      <button
+                        onClick={() => setCopyingSpecialty(s)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-amber-600 transition-colors hover:border-amber-200 hover:bg-amber-50"
+                        title="Sao chép"
+                      >
+                      <Icon name="copy" className="h-3 w-3" /> Copy
+                      </button>
+
                       {/* Nút Sửa */}
                       <button
                         onClick={() => onEdit(s)}
@@ -153,6 +176,23 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
         onConfirm={handleToggle}
         onCancel={() => setConfirmItem(null)}
       />
+
+      {copyingSpecialty && (
+        <CopySpecialtyModal
+          specialty={copyingSpecialty}
+          currentClinicId={copyingSpecialty.phong_kham_id}
+          onClose={() => setCopyingSpecialty(null)}
+          onSuccess={() => setCopyingSpecialty(null)}
+        />
+      )}
+
+      {viewingDoctorsSpec && (
+        <SpecialtyDoctorsModal
+          specialtyId={viewingDoctorsSpec._id}
+          specialtyName={viewingDoctorsSpec.ten}
+          onClose={() => setViewingDoctorsSpec(null)}
+        />
+      )}
     </div>
   )
 }

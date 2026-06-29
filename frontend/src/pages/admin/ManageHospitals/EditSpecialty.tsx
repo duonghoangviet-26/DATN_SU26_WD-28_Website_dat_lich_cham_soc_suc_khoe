@@ -13,11 +13,12 @@ interface Props {
 export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
   const [form, setForm] = useState({
     ten: specialty.ten,
-    mo_ta: specialty.mo_ta ?? '',
-    icon_url: specialty.icon_url ?? '',
-    thu_tu: specialty.thu_tu,
+    mo_ta: specialty.mo_ta || '',
+    icon_url: specialty.icon_url || '',
+    thu_tu: specialty.thu_tu || 0,
   })
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -33,6 +34,21 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: name === 'thu_tu' ? Number(value) : value }))
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setUploading(true)
+      setError(null)
+      const url = await hospitalService.uploadImage(file)
+      setForm((prev) => ({ ...prev, icon_url: url }))
+    } catch (err) {
+      setError('Lỗi khi tải ảnh lên')
+    } finally {
+      setUploading(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -106,14 +122,26 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">URL Icon</label>
-          <input
-            name="icon_url"
-            value={form.icon_url}
-            onChange={handleChange}
-            className="input w-full"
-            placeholder="https://..."
-          />
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Hình ảnh / Icon</label>
+          <div className="flex items-center gap-3">
+            {form.icon_url ? (
+              <img src={form.icon_url} alt="Icon" className="h-12 w-12 rounded-lg object-cover border border-slate-200" />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-slate-400">
+                <Icon name="image" className="h-5 w-5" />
+              </div>
+            )}
+            <div className="flex-1">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="w-full text-sm text-slate-500 file:mr-4 file:rounded-full file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-600 hover:file:bg-brand-100"
+                disabled={uploading}
+              />
+              {uploading && <p className="mt-1 text-xs text-brand-600">Đang tải lên...</p>}
+            </div>
+          </div>
         </div>
 
         <div>
