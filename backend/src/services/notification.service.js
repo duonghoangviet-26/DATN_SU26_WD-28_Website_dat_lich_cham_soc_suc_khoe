@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import ThongBaoHeThong from '../models/ThongBaoHeThong.js'
 import NguoiDung from '../models/NguoiDung.js'
+import ThongBao from '../models/ThongBao.js'
 
 export async function getSystemNotifications(page = 1, limit = 10) {
   const skip = (page - 1) * limit
@@ -38,7 +39,7 @@ export async function sendSystemNotification({ tieu_de, noi_dung, doi_tuong, adm
   // Đếm số lượng người nhận dựa trên đối tượng
   let so_nguoi_nhan = 0
   if (doi_tuong === 'tat_ca') {
-    so_nguoi_nhan = await NguoiDung.countDocuments({ status: 'active' })
+    so_nguoi_nhan = await NguoiDung.countDocuments({ role: { $in: ['user', 'doctor'] }, status: 'active' })
   } else if (doi_tuong === 'benh_nhan') {
     so_nguoi_nhan = await NguoiDung.countDocuments({ role: 'user', status: 'active' })
   } else if (doi_tuong === 'bac_si') {
@@ -63,6 +64,28 @@ export async function sendSystemNotification({ tieu_de, noi_dung, doi_tuong, adm
     .populate({ path: 'tao_boi', select: 'ho_ten email' })
     .lean()
 
+  // Batch insert vào bảng thông báo cá nhân
+  const targetQuery = { status: 'active' }
+  if (doi_tuong === 'tat_ca') targetQuery.role = { $in: ['user', 'doctor'] }
+  else if (doi_tuong === 'benh_nhan') targetQuery.role = 'user'
+  else targetQuery.role = 'doctor'
+
+  const targetUsers = await NguoiDung.find(targetQuery).select('_id').lean()
+  
+  const BATCH_SIZE = 100
+  for (let i = 0; i < targetUsers.length; i += BATCH_SIZE) {
+    const batch = targetUsers.slice(i, i + BATCH_SIZE)
+    const notifications = batch.map(user => ({
+      user_id: user._id,
+      tieu_de,
+      noi_dung,
+      loai: 'system',
+      related_id: newNotification._id,
+      related_type: 'system_notification'
+    }))
+    await ThongBao.insertMany(notifications)
+  }
+
   return populatedNotification
 }
 
@@ -84,6 +107,12 @@ export async function updateSystemNotification(id, { tieu_de, noi_dung }) {
   notification.noi_dung = noi_dung
   await notification.save()
 
+  // Cập nhật đồng bộ sang các thông báo cá nhân đã gửi
+  await ThongBao.updateMany(
+    { related_id: id, related_type: 'system_notification' },
+    { $set: { tieu_de, noi_dung } }
+  )
+
   const updatedNotification = await ThongBaoHeThong.findById(id)
     .populate({ path: 'tao_boi', select: 'ho_ten email' })
     .lean()
@@ -102,5 +131,9 @@ export async function deleteSystemNotification(id) {
   }
 
   await ThongBaoHeThong.findByIdAndDelete(id)
+  
+  // Xóa đồng bộ các thông báo cá nhân đã gửi
+  await ThongBao.deleteMany({ related_id: id, related_type: 'system_notification' })
+
   return true
 }

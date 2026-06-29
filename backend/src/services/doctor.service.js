@@ -11,6 +11,10 @@ import mongoose from 'mongoose'
 // ============================================================
 
 // ── Helper ghi audit log ─────────────────────────────────────
+function escapeRegex(text) {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')
+}
+
 async function ghiLog({ adminId, hanhDong, doiTuongId, lyDo = null, duLieuCu = null, duLieuMoi = null }) {
   await NhatKyThaoTac.create({
     nguoi_thuc_hien_id: adminId,
@@ -48,8 +52,23 @@ export async function getDoctorList({ trang_thai, chuyen_khoa, keyword, page = 1
   // Tính offset phân trang
   const skip = (Number(page) - 1) * Number(limit)
 
+  // Lọc theo keyword (đẩy xuống Database)
+  if (keyword) {
+    const kw = keyword.trim()
+    const regex = new RegExp(escapeRegex(kw), 'i')
+    
+    // Tìm ID người dùng có tên hoặc email khớp keyword
+    const matchedUsers = await NguoiDung.find({ 
+      $or: [{ ho_ten: regex }, { email: regex }] 
+    }).select('_id').lean()
+    
+    filter.user_id = { $in: matchedUsers.map(u => u._id) }
+  }
+
+  const total = await BacSi.countDocuments(filter)
+
   // Query BacSi, populate NguoiDung (thông tin cá nhân) và ChuyenKhoa (tên)
-  let query = BacSi.find(filter)
+  let docs = await BacSi.find(filter)
     .populate({
       path: 'user_id',
       select: 'ho_ten email so_dien_thoai anh_dai_dien role status',
@@ -62,23 +81,6 @@ export async function getDoctorList({ trang_thai, chuyen_khoa, keyword, page = 1
     .skip(skip)
     .limit(Number(limit))
     .lean()
-
-  // Tìm theo tên / email (sau khi populate không filter được ở DB level —
-  // với dự án nhỏ dùng JS filter sau populate là chấp nhận được)
-  let docs = await query
-
-  if (keyword) {
-    const kw = keyword.trim().toLowerCase()
-    docs = docs.filter((d) => {
-      const u = d.user_id
-      return (
-        u?.ho_ten?.toLowerCase().includes(kw) ||
-        u?.email?.toLowerCase().includes(kw)
-      )
-    })
-  }
-
-  const total = await BacSi.countDocuments(filter)
 
   return {
     doctors: docs,
@@ -106,11 +108,14 @@ export async function getDoctorDetail(doctorId) {
   if (!doctor) throw new Error('Không tìm thấy bác sĩ')
 
   // Thống kê lịch hẹn
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
   const tongLichHen = await LichHen.countDocuments({ doctor_id: doctorId })
   const lichHenSapToi = await LichHen.countDocuments({
     doctor_id: doctorId,
     status: { $in: ['pending', 'confirmed'] },
-    ngay_kham: { $gte: new Date() },
+    ngay_kham: { $gte: today },
   })
 
   return {
@@ -207,10 +212,13 @@ export async function suspendDoctor(doctorId, adminId, ly_do) {
   }
 
   // Cảnh báo nếu có lịch hẹn sắp tới (nhưng vẫn cho phép đình chỉ)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
   const lichHenSapToi = await LichHen.countDocuments({
     doctor_id: doctorId,
     status: { $in: ['pending', 'confirmed'] },
-    ngay_kham: { $gte: new Date() },
+    ngay_kham: { $gte: today },
   })
 
   const duLieuCu = { trang_thai_duyet: doctor.trang_thai_duyet }
@@ -330,7 +338,7 @@ export async function getDoctorAppointments(doctorId, keyword, page = 1, limit =
 
   if (keyword) {
     const kw = keyword.trim()
-    const regex = new RegExp(kw, 'i')
+    const regex = new RegExp(escapeRegex(kw), 'i')
 
     // Tìm user khớp
     const matchedUsers = await NguoiDung.find({ ho_ten: regex }).select('_id').lean()
