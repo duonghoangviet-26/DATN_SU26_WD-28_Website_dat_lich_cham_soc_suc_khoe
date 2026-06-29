@@ -286,7 +286,7 @@ export default function ReviewTable({
                                       className="flex w-full items-center gap-2 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
                                     >
                                       <Icon name="trash" className="h-3.5 w-3.5 text-red-500" />
-                                      Xóa mềm
+                                      Xóa 
                                     </button>
                                   </>
                                 )}
