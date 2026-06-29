@@ -119,44 +119,74 @@ Response 200:
 }
 ```
 
-### 4.2 POST `/api/patient/bookings/payment-callback` (webhook VNPay)
+### 4.2 VNPay có 2 callback riêng biệt
 
-Không còn atomic race-condition guard — slot đã được lock từ bước /prepare.
+VNPay gọi cả hai sau khi BN thanh toán:
+- **IPN** (`POST /api/patient/bookings/vnpay-ipn`): Server-to-server. VNPay gọi trực tiếp vào backend. Phải trả JSON `{"RspCode":"00","Message":"Confirm Success"}`.
+- **Return URL** (`GET /api/patient/bookings/vnpay-return`): Browser redirect. BN's trình duyệt được redirect về URL này sau khi thanh toán.
+
+**Không nhầm hai endpoint này.** IPN xử lý nghiệp vụ. Return URL chỉ redirect FE.
+
+---
+
+#### POST `/api/patient/bookings/vnpay-ipn` (IPN — server-to-server)
 
 ```
 Server:
-  1. Verify VNPay HMAC signature → 400 nếu sai
-  2. Lookup pending_booking bằng token trong vnp_TxnRef
+  1. Verify VNPay HMAC signature
+     → Sai signature: trả { RspCode: '97', Message: 'Invalid Checksum' } — không xử lý
+  2. Lookup pending_booking bằng vnp_TxnRef (token)
+     → Không tìm thấy (đã bị cron xóa vì timeout):
+        → Gọi VNPay Refund API nếu SUCCESS, hoặc bỏ qua nếu FAIL
+        → Trả { RspCode: '01', Message: 'Order not found' }
+        → Kết thúc — không crash, không retry
   3a. SUCCESS (vnp_ResponseCode = '00'):
-       → Atomic update: slot.status='booked', benh_nhan_id=user_id,
-                        lock_expires_at=null
+       → Atomic update LichLamViec:
+           slot.status='booked', benh_nhan_id=user_id, lock_expires_at=null
        → Tạo LichHen { status:'pending', payment_status:'paid',
-                        pending_booking_id: token, ... }
+                        pending_booking_id: token }
        → Tạo ThanhToan { status:'paid', gateway_transaction_id: vnp_TransactionNo,
                           ngay_thanh_toan: now }
        → Xóa pending_booking record
        → Notify Admin (push + badge)
-       → Redirect: /dat-lich-thanh-cong/:lichHenId
+       → Trả { RspCode: '00', Message: 'Confirm Success' }
 
-  3b. FAIL / HỦY / TIMEOUT:
+  3b. FAIL / HỦY (vnp_ResponseCode != '00'):
        → slot.status='active', lock_expires_at=null
        → Xóa pending_booking record
        → Không tạo LichHen, không tạo ThanhToan
+       → Trả { RspCode: '00', Message: 'Confirm Success' }
+       (Vẫn trả '00' để VNPay không retry — nghiệp vụ đã xử lý đúng)
+```
+
+#### GET `/api/patient/bookings/vnpay-return` (Return URL — browser redirect)
+
+```
+Server:
+  1. Verify HMAC signature của query params
+  2. Đọc vnp_ResponseCode và vnp_TxnRef
+  3a. SUCCESS ('00') AND LichHen tồn tại với pending_booking_id = token:
+       → Redirect: /dat-lich-thanh-cong/:lichHenId
+  3b. FAIL hoặc LichHen chưa tạo (IPN chưa xử lý xong):
        → Redirect: /dat-lich-kham?error=payment_failed
+
+Lưu ý: Return URL chỉ redirect — không tạo LichHen (IPN đã làm).
+Nếu IPN đến sau Return URL (race): Return URL redirect về /dat-lich-kham,
+BN thấy lỗi tạm thời nhưng LichHen vẫn được tạo sau đó bởi IPN.
 ```
 
 ### 4.3 GET `/api/doctors/:id/available-slots` (thêm lazy check)
 
 ```js
-// Filter slot trả về FE:
+// Chỉ trả về slot status='active' — KHÔNG bao gồm pending_payment dù đã hết hạn.
+// Lý do: nếu trả về slot pending_payment (hết hạn) như 'active', BN click book → /prepare
+// filter status='active' → 409 (UX bug: slot trông available nhưng book không được).
 const now = new Date()
-const visibleSlots = schedule.slots.filter(slot =>
-  slot.status === 'active' ||
-  (slot.status === 'pending_payment' && slot.lock_expires_at < now)
-)
+const visibleSlots = schedule.slots.filter(slot => slot.status === 'active')
 
-// Lazy reset (fire-and-forget, không block response):
-// Dùng arrayFilters thay vì index-based để tránh race khi array thay đổi giữa chừng
+// Lazy reset (fire-and-forget): dọn các pending_payment hết hạn để slot
+// trở thành 'active' cho lần poll tiếp theo (tối đa 30s sau với polling FE).
+// Cron 1 (5 phút) là cơ chế chính — lazy reset chỉ giúp phản hồi nhanh hơn.
 const hasExpired = schedule.slots.some(
   s => s.status === 'pending_payment' && s.lock_expires_at < now
 )
@@ -202,36 +232,32 @@ try {
 }
 ```
 
-### 5.3 PaymentPage.tsx — countdown (route: `/thanh-toan/:token`)
+### 5.3 PaymentPage.tsx — loading + redirect (route: `/thanh-toan/:token`)
 
 ```tsx
 // Nhận từ navigate state: { vnpay_url, lock_expires_at, doctorId }
-
-const [timeLeft, setTimeLeft] = useState<number>(0) // giây còn lại
+// Guard: nếu state null (BN vào thẳng URL) → redirect về /
 
 useEffect(() => {
-  // Redirect sang VNPay ngay khi load trang
-  window.location.href = vnpay_url
+  if (!vnpay_url) { navigate('/'); return }
+  // Delay 1.5s để BN đọc thông báo, sau đó redirect sang VNPay
+  const timer = setTimeout(() => {
+    window.location.href = vnpay_url
+  }, 1500)
+  return () => clearTimeout(timer)
+}, [vnpay_url])
 
-  // Countdown cho khi BN quay lại tab này
-  const end = new Date(lock_expires_at).getTime()
-  const tick = setInterval(() => {
-    const left = Math.max(0, Math.floor((end - Date.now()) / 1000))
-    setTimeLeft(left)
-    if (left === 0) {
-      clearInterval(tick)
-      toast.error('Thời gian giữ slot đã hết. Vui lòng đặt lại.')
-      navigate('/bac-si/' + doctorId)
-    }
-  }, 1_000)
-  return () => clearInterval(tick)
-}, [])
-
-// UI:
-// "Đang chuyển đến trang thanh toán VNPay..."
-// "Vui lòng hoàn tất trong: MM:SS"
-// Progress bar giảm dần (width = timeLeft / 900 * 100%)
+// UI hiển thị trong 1.5 giây:
+// Spinner + "Đang chuyển đến trang thanh toán VNPay..."
+// "Slot đã được giữ trong 15 phút. Vui lòng hoàn tất thanh toán."
+// (Không dùng MM:SS countdown — VNPay đã có timer riêng trên trang của họ.
+//  Countdown MM:SS sẽ gây nhầm lẫn vì sau redirect user không còn ở trang này.)
 ```
+
+**Lý do không countdown MM:SS:**
+- Sau `window.location.href = vnpay_url`, trình duyệt rời khỏi trang → setInterval bị kill.
+- VNPay đã hiển thị countdown của riêng họ (thường 15 phút).
+- Return URL của VNPay sẽ redirect BN sang trang kết quả (success/fail) — không quay lại PaymentPage.
 
 ---
 
@@ -240,10 +266,20 @@ useEffect(() => {
 ```
 Cron 1 — Mỗi 5 phút (MỚI):
   Mục đích: Giải phóng slot pending_payment đã hết hạn
-  Query: LichLamViec.slots WHERE status='pending_payment'
-                               AND lock_expires_at < now
-  Action: status='active', lock_expires_at=null, benh_nhan_id=null
-          + Xóa pending_booking record tương ứng
+  Query:
+    LichLamViec.find({
+      slots: { $elemMatch: { status: 'pending_payment', lock_expires_at: { $lt: now } } }
+    })
+  Action per document:
+    LichLamViec.updateMany(
+      { 'slots.status': 'pending_payment', 'slots.lock_expires_at': { $lt: now } },
+      { $set: { 'slots.$[el].status': 'active', 'slots.$[el].lock_expires_at': null } },
+      { arrayFilters: [{ 'el.status': 'pending_payment', 'el.lock_expires_at': { $lt: now } }] }
+    )
+    // Sau đó xóa các pending_booking record đã hết hạn:
+    PendingBooking.deleteMany({ expires_at: { $lt: now } })
+  Lưu ý: KHÔNG reset benh_nhan_id — benh_nhan_id không được set trong /prepare
+          (chỉ set khi slot → 'booked' ở IPN callback)
 
 Cron 2 — Mỗi 15 phút (GIỮ từ spec cũ):
   Mục đích: Auto-cancel LichHen pending Admin không confirm kịp
@@ -265,26 +301,30 @@ Cron 3 — Mỗi ngày 00:05 (GIỮ từ spec cũ):
 
 | Scenario | Xử lý |
 |---|---|
-| BN submit form 2 lần nhanh | Nút disable sau click 1 lần (BookingForm); server idempotent — lần 2 tạo token mới nhưng atomic lock đã có → 409 |
-| BN đóng tab sau khi redirect VNPay | Cron 5 phút tự giải phóng slot sau khi lock_expires_at hết hạn |
-| VNPay webhook đến chậm hơn 15 phút | Cron có thể đã reset slot về active. Webhook đến: slot đã active → thực hiện lại atomic lock trước khi booked. Nếu slot đã booked bởi người khác → rollback + refund gateway |
+| BN submit form 2 lần nhanh | Nút disable sau click 1 lần; lần 2 atomic lock fail (slot đã `pending_payment`) → 409 ngay, không tạo token |
+| BN đóng tab sau khi redirect VNPay | Cron 5 phút reset slot → active. VNPay sẽ gọi IPN (nếu BN đã trả) hoặc không gọi (nếu BN bỏ) |
+| IPN đến sau khi cron đã xóa pending_booking | Step 2 IPN: pending_booking not found → nếu SUCCESS gọi VNPay Refund API → trả RspCode '01' (không crash, không retry) |
+| Return URL đến trước IPN (race) | Return URL redirect về `/dat-lich-kham?error=payment_failed` tạm thời. IPN xử lý xong → LichHen được tạo. BN vào `/lich-hen-cua-toi` sẽ thấy lịch. Đây là edge case hiếm với VNPay sandbox. |
 | BN vào thẳng `/thanh-toan/:token` không có state | `location.state` null → redirect về `/` |
-| 2 admin confirm cùng lúc 1 pending LichHen | Giữ nguyên guard từ spec cũ: `findOneAndUpdate filter status='pending'` |
+| 2 Admin confirm cùng lúc 1 pending LichHen | Giữ nguyên guard từ spec cũ: `findOneAndUpdate filter status='pending'` |
+| Slot `pending_payment` chưa được cron dọn, lazy reset chưa chạy | Slot ẩn khỏi lịch (server trả `status='active'` only). BN phải đợi tối đa 30s (1 poll cycle) để slot hiện lại sau khi lazy reset xong |
 
 ---
 
 ## 8. Thứ tự Implementation
 
 ```
-1. [DB] Thêm pending_payment + lock_expires_at vào LichLamViec.slots
-2. [DB] Thêm pending_booking_id vào LichHen
-3. [BE] Cập nhật POST /api/patient/bookings/prepare (atomic lock)
-4. [BE] Cập nhật POST /api/patient/bookings/payment-callback (bỏ race guard)
-5. [BE] Cập nhật GET /api/doctors/:id/available-slots (lazy check)
-6. [BE] Cron 1: giải phóng pending_payment hết hạn (mỗi 5 phút)
-7. [FE] SlotPicker.tsx: thêm polling 30 giây
-8. [FE] BookingForm.tsx: xử lý 409 → redirect chọn lại slot
-9. [FE] PaymentPage.tsx: countdown từ lock_expires_at
+1. [DB] Thêm enum pending_payment + field lock_expires_at vào LichLamViec.slots
+2. [DB] Thêm pending_booking_id vào LichHen schema
+3. [BE] Tạo PendingBooking model (collection tạm: token, slot_id, schedule_id, user_id, patient_info, expires_at)
+4. [BE] Cập nhật POST /api/patient/bookings/prepare (atomic slot lock + tạo pending_booking)
+5. [BE] Viết POST /api/patient/bookings/vnpay-ipn (IPN handler: verify → tạo LichHen + ThanhToan)
+6. [BE] Viết GET /api/patient/bookings/vnpay-return (Return URL: verify → redirect FE)
+7. [BE] Cập nhật GET /api/doctors/:id/available-slots (chỉ active + lazy reset)
+8. [BE] Cron 1: giải phóng pending_payment hết hạn + xóa pending_booking hết hạn (mỗi 5 phút)
+9. [FE] SlotPicker.tsx: thêm polling 30 giây
+10. [FE] BookingForm.tsx: xử lý 409 → toast + redirect chọn lại slot
+11. [FE] PaymentPage.tsx: loading spinner + setTimeout redirect (bỏ MM:SS countdown)
 ```
 
 ---
