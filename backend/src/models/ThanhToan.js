@@ -9,6 +9,12 @@ import mongoose from 'mongoose'
 // ma_giao_dich: backend tự sinh "TXN001", "TXN002"... — frontend dùng để hiển thị và tra cứu.
 // status (transaction): pending → paid/failed; paid → refunded (hoàn tiền khi hủy lịch).
 //   KHÔNG nhầm với LichHen.payment_status (unpaid/paid/refunded) — đây là trạng thái giao dịch.
+//
+// Luồng mới (Phương án C):
+//   ThanhToan được tạo ĐỒNG THỜI với LichHen — cả 2 trong cùng 1 transaction sau gateway callback.
+//   gateway_transaction_id: ID từ VNPay/MoMo để tra cứu & verify webhook signature.
+//   gateway_response: raw response lưu để audit nếu có dispute thanh toán.
+//   Hoàn tiền (refunded): Admin/System trigger → gọi gateway refund API → cập nhật status='refunded'.
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -38,6 +44,13 @@ const paymentSchema = new mongoose.Schema(
       default: 'pending',
     },
     ngay_thanh_toan: { type: Date, default: null },
+    ngay_hoan_tien:  { type: Date, default: null }, // set khi status → refunded
+
+    // Gateway integration (VNPay / MoMo / mock)
+    // ID giao dịch phía gateway — dùng để gọi refund API và verify webhook
+    gateway_transaction_id: { type: String, default: null, maxlength: 100 },
+    // Raw response từ gateway — lưu để audit dispute, không dùng trong logic
+    gateway_response: { type: mongoose.Schema.Types.Mixed, default: null },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
@@ -47,7 +60,6 @@ const paymentSchema = new mongoose.Schema(
 
 paymentSchema.index({ benh_nhan_id: 1 })
 paymentSchema.index({ status: 1 })
-paymentSchema.index({ ma_giao_dich: 1 })
 
 // Tự sinh ma_giao_dich "TXNxxx" nếu chưa có
 paymentSchema.pre('validate', async function () {

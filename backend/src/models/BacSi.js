@@ -8,6 +8,12 @@ import mongoose from 'mongoose'
 // trang_thai_duyet: pending → approved (Admin duyệt, đổi users.role='doctor' cùng transaction)
 //                   pending → rejected (nộp lại tối đa 5 lần) | approved → suspended (đình chỉ)
 // diem_danh_gia / tong_danh_gia: tự cập nhật khi review bị ẩn/hiện (tầng service).
+// bao_hiem: per-doctor — Admin set khi duyệt hồ sơ (C2). Kế thừa mặc định từ
+//   ThongTinPhongKham.bao_hiem, có thể override từng BS. Thiết kế per-doctor để
+//   hỗ trợ đa chi nhánh sau này (mỗi chi nhánh có chính sách bảo hiểm riêng).
+// related_services: DichVu.loai='related' mà BS này áp dụng — Admin tick khi C2.
+//   Chỉ hiển thị thông tin tham khảo "Theo chỉ định bác sĩ" trên trang BN.
+//   BN KHÔNG đặt trực tiếp — bác sĩ chỉ định trong quá trình khám.
 
 const MAX_SO_LAN_NOP = 5
 
@@ -58,6 +64,19 @@ const doctorSchema = new mongoose.Schema(
     specialties: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa' }],
     // services: chỉ ref DichVu loai='home' — dịch vụ tại nhà BS này đảm nhận
     services:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'DichVu' }],
+
+    // --- Bảo hiểm & Dịch vụ liên quan (hiển thị trên trang đặt lịch của BN) ---
+
+    // Admin set khi duyệt hồ sơ (C2). Default kế thừa từ ThongTinPhongKham.bao_hiem.
+    bao_hiem: {
+      nha_nuoc: { type: Boolean, default: false }, // Bảo hiểm y tế nhà nước (BHYT)
+      bao_lanh:  { type: Boolean, default: false }, // Bảo hiểm bảo lãnh viện phí (tư nhân)
+    },
+
+    // Admin tick khi cài đặt BS (C2). Bộ lọc khi Admin chọn:
+    //   DichVu.loai='related' AND DichVu.specialty_id IN BacSi.specialties[] AND status='active'
+    // Hiển thị "Theo chỉ định bác sĩ" — giá chỉ mang tính tham khảo.
+    related_services: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DichVu' }],
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
@@ -69,5 +88,7 @@ doctorSchema.index({ trang_thai_duyet: 1 })
 doctorSchema.index({ la_hien: 1 })
 doctorSchema.index({ specialties: 1 })
 doctorSchema.index({ services: 1 })
+doctorSchema.index({ related_services: 1 })
+doctorSchema.index({ 'bao_hiem.nha_nuoc': 1 })  // lọc BS theo loại bảo hiểm
 
 export default mongoose.model('BacSi', doctorSchema)

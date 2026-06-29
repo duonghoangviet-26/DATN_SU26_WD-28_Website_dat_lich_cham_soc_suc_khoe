@@ -48,8 +48,8 @@ export default function ManageAppointments() {
     if (!confirmItem) return
     const id = confirmItem.id
     setConfirmItem(null)
-    const updated = await appointmentService.cancel(id)
-    setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+    await appointmentService.cancel(String(id))
+    setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, status: 'cancelled' as const } : a))
   }
 
   return (
