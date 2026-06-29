@@ -1,12 +1,9 @@
-// ============================================================
-// SERVICE: Xác thực (Đăng nhập / Đăng ký) — chức năng A1
-// ============================================================
-// Hiện tại dùng tài khoản mock để vào được giao diện Admin mà chưa cần backend.
-// Sau này thay phần thân bằng axios.post('/auth/login', ...).
+import axiosInstance from './axiosInstance'
+import type { User, ApiResponse } from '@/types'
 
-import type { User } from '@/types'
-import { delay } from '@/utils/format'
-// import axios from './axiosInstance'
+/**
+ * SERVICE: Xác thực (Đăng nhập / Đăng ký)
+ */
 
 interface LoginCredentials {
   email: string
@@ -25,46 +22,27 @@ interface LoginResult {
   user: User
 }
 
-// Tài khoản demo để đăng nhập thử trong giai đoạn làm giao diện.
-const DEMO_ACCOUNTS = [
-  { email: 'admin@vitafamily.vn', password: '123456', ho_ten: 'Quản trị viên', role: 'admin' as const },
-  { email: 'doctor@vitafamily.vn', password: '123456', ho_ten: 'BS. Demo', role: 'doctor' as const },
-  { email: 'user@vitafamily.vn', password: '123456', ho_ten: 'Bệnh nhân Demo', role: 'user' as const },
-]
-
 export const authService = {
+  /**
+   * Đăng nhập hệ thống
+   */
   async login({ email, password }: LoginCredentials): Promise<LoginResult> {
-    await delay()
-
-    // ── SAU NÀY thay bằng:
-    // const { data } = await axios.post('/auth/login', { email, password })
-    // return data.data   // { token, user }
-    const found = DEMO_ACCOUNTS.find(
-      (a) => a.email === email && a.password === password,
-    )
-    if (!found) {
-      throw new Error('Email hoặc mật khẩu không đúng')
-    }
-    return {
-      token: 'mock-token-' + found.role,
-      user: {
-        id: 1,
-        email: found.email,
-        ho_ten: found.ho_ten,
-        role: found.role,
-        status: 'active',
-        ngay_tao: new Date().toISOString(),
-      },
-    }
+    const res = await axiosInstance.post<ApiResponse<LoginResult>>('/auth/login', {
+      email,
+      mat_khau: password,
+    })
+    return res.data.data
   },
 
+  /**
+   * Đăng ký tài khoản mới (Bệnh nhân)
+   */
   async register(data: RegisterData): Promise<void> {
-    await delay()
-
-    // ── SAU NÀY thay bằng:
-    // await axios.post('/auth/register', data)
-    if (!data.email || !data.password) {
-      throw new Error('Vui lòng điền đầy đủ thông tin')
-    }
+    await axiosInstance.post<ApiResponse<unknown>>('/auth/register', {
+      email:         data.email,
+      mat_khau:      data.password,
+      ho_ten:        data.ho_ten,
+      so_dien_thoai: data.so_dien_thoai,
+    })
   },
 }

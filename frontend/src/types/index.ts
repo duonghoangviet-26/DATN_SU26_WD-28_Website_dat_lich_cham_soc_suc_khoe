@@ -8,7 +8,7 @@ export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancell
 export type PaymentStatus = 'unpaid' | 'paid' | 'refunded'
 
 export interface User {
-  id: number
+  id: string
   email: string
   mat_khau?: string
   ho_ten: string
@@ -16,6 +16,7 @@ export interface User {
   anh_dai_dien?: string | null
   role: Role
   status: UserStatus
+  ngay_xoa?: string | null
   ngay_tao: string
   ngay_cap_nhat?: string
 }
@@ -23,6 +24,7 @@ export interface User {
 export interface Doctor {
   id: number
   user_id: number
+  specialty_id: number // Thêm để khớp với logic lọc
   tieu_su?: string
   bang_cap?: string
   kinh_nghiem?: string
@@ -94,6 +96,7 @@ export interface Member {
 // ViewModel kết hợp thông tin bác sĩ + user (dùng cho trang danh sách)
 export interface DoctorProfile {
   id: number
+  doctor_id: number // Thêm để khớp với logic service
   user_id: number
   ho_ten: string
   email: string
@@ -109,34 +112,83 @@ export interface DoctorProfile {
 }
 
 export interface HospitalItem {
-  id: number
+  _id: string
   ten: string
-  dia_chi: string
-  so_dien_thoai: string
-  gio_lam_viec: string
-  status: 'active' | 'hidden'
-  ngay_tao: string
+  dia_chi?: string | null
+  so_dien_thoai?: string | null
+  email?: string | null
+  gio_lam_viec?: string | null
+  mo_ta?: string | null
+  logo_url?: string | null
+  ban_do_url?: string | null
+  trang_thai?: 'active' | 'inactive'
+  ngay_tao?: string
+  ngay_cap_nhat?: string
 }
 
 export interface SpecialtyItem {
-  id: number
+  _id: string
+  phong_kham_id: string
   ten: string
-  mo_ta: string
-  icon: string
+  mo_ta: string | null
+  icon_url: string | null
+  slug: string
   thu_tu: number
+  doctor_count?: number
   status: 'active' | 'hidden'
+  ngay_tao?: string
 }
 
-export type ServiceType = 'clinic' | 'home' | 'video'
+// ─── Dịch vụ ─────────────────────────────────────────────────────────────────
+export type ServiceType   = 'clinic' | 'home'
+export type ServiceStatus = 'active' | 'inactive'
+
+export interface ServiceChangeLog {
+  id: string
+  thoi_gian: string                                      // ISO datetime
+  hanh_dong: 'tao_moi' | 'cap_nhat' | 'an' | 'hien'
+  nguoi_thay_doi: string
+  mo_ta?: string
+}
 
 export interface ServiceItem {
-  id: number
+  id: string
+  ma_dich_vu: string                    // "DV001" — auto-gen bởi BE
   ten: string
   loai: ServiceType
-  gia_co_ban: number
-  mo_ta: string
+  gia: number                           // giá thực tế bệnh nhân trả
+  mo_ta_ngan?: string | null
+  mo_ta?: string | null
   thoi_gian_phut: number
-  status: 'active' | 'hidden'
+  gio_dat_truoc_toi_thieu: number       // đơn vị: giờ
+  ngay_ap_dung?: string | null          // "T2–T7"
+  gio_bat_dau?: string | null           // "08:00"
+  gio_ket_thuc?: string | null          // "17:00"
+  specialty_id?: string | null
+  specialty_ten?: string | null         // joined — chỉ dùng để hiển thị
+  khu_vuc?: string[]                    // home only — map tới bảng service_areas
+  so_bac_si?: number                    // computed từ doctor_services
+  so_luot_dat?: number                  // computed từ appointments
+  nguoi_tao?: string | null             // ho_ten của admin tạo dịch vụ
+  status: ServiceStatus
+  ngay_tao?: string
+  ngay_cap_nhat?: string
+  lich_su_thay_doi?: ServiceChangeLog[]
+}
+
+export interface ServiceFormData {
+  ten: string
+  loai: ServiceType
+  gia: number
+  mo_ta_ngan?: string
+  mo_ta?: string
+  thoi_gian_phut: number
+  gio_dat_truoc_toi_thieu: number
+  ngay_ap_dung?: string
+  gio_bat_dau?: string
+  gio_ket_thuc?: string
+  specialty_id?: string | null
+  khu_vuc?: string[]                    // home only — map tới bảng service_areas
 }
 
 // ViewModel lịch hẹn (kết hợp bệnh nhân + bác sĩ)
@@ -147,7 +199,7 @@ export interface AppointmentItem {
   chuyen_khoa: string
   ngay_kham: string
   gio_kham: string
-  loai_kham: 'clinic' | 'home' | 'video'
+  loai_kham: 'clinic' | 'home'
   status: AppointmentStatus
   payment_status: PaymentStatus
   gia_kham: number
@@ -193,6 +245,12 @@ export interface ApiResponse<T = unknown> {
   message: string
   data: T
 }
+
+// Aliases & Missing types để khớp với các service
+export type Notification = NotificationItem
+export type Payment = PaymentItem
+export type Review = ReviewItem
+export type Schedule = DoctorSlot
 
 // ─── Doctor Panel types (B1–B5) ───────────────────────────────
 

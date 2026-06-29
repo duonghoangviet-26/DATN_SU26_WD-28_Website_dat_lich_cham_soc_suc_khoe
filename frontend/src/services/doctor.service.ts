@@ -1,9 +1,13 @@
 import axios from 'axios'
 import type { DoctorApproval, DoctorProfileAPI, DoctorDetailAPI, DoctorAuditLog } from '@/types'
 
+<<<<<<< HEAD
 // Note: Ensure your environment variable VITE_API_URL is set correctly (e.g. http://localhost:5000/api)
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 const BASE_URL = `${API_URL}/admin/doctors`
+=======
+let doctors: DoctorProfile[] = [...mockDoctors] as any
+>>>>>>> 6225679c4a67209eae042dc8a2ac37e776d1569b
 
 export const doctorService = {
   // Lấy danh sách bác sĩ (có phân trang, tìm kiếm, lọc)

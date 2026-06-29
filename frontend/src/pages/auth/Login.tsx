@@ -26,8 +26,12 @@ export default function Login() {
       } else {
         navigate(from || '/', { replace: true })
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Đăng nhập thất bại')
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message ||
+        err.message ||
+        'Đăng nhập thất bại'
+      )
     } finally {
       setLoading(false)
     }
@@ -107,8 +111,8 @@ export default function Login() {
         <div className="space-y-1.5 text-xs">
           {[
             { role: 'Admin', email: 'admin@vitafamily.vn' },
-            { role: 'Bác sĩ', email: 'doctor@vitafamily.vn' },
-            { role: 'Bệnh nhân', email: 'user@vitafamily.vn' },
+            { role: 'Bác sĩ', email: 'bacsi_a@vitafamily.vn' },
+            { role: 'Bệnh nhân', email: 'benhnhan_c@gmail.com' },
           ].map(({ role, email }) => (
             <div key={role} className="flex items-center justify-between">
               <span className="font-medium text-brand-800">{role}</span>

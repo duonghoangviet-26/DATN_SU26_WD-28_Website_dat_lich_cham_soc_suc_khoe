@@ -72,11 +72,11 @@ async function seedAll() {
 
     // 4. Người dùng (Admin, Doctors, Users)
     const users = await NguoiDung.create([
-      { ho_ten: 'Admin Tổng', email: 'admin@vitafamily.vn', mat_khau: passwordHash, so_dien_thoai: '0901000000', vai_tro: 'admin' },
-      { ho_ten: 'BS. Trần Văn A', email: 'bacsi_a@vitafamily.vn', mat_khau: passwordHash, so_dien_thoai: '0901000001', vai_tro: 'doctor' },
-      { ho_ten: 'BS. Nguyễn Thị B', email: 'bacsi_b@vitafamily.vn', mat_khau: passwordHash, so_dien_thoai: '0901000002', vai_tro: 'doctor' },
-      { ho_ten: 'Bệnh nhân Lê C', email: 'benhnhan_c@gmail.com', mat_khau: passwordHash, so_dien_thoai: '0901000003', vai_tro: 'user' },
-      { ho_ten: 'Bệnh nhân Phạm D', email: 'benhnhan_d@gmail.com', mat_khau: passwordHash, so_dien_thoai: '0901000004', vai_tro: 'user' }
+      { ho_ten: 'Admin Tổng', email: 'admin@vitafamily.vn', mat_khau: passwordHash, so_dien_thoai: '0901000000', role: 'admin' },
+      { ho_ten: 'BS. Trần Văn A', email: 'bacsi_a@vitafamily.vn', mat_khau: passwordHash, so_dien_thoai: '0901000001', role: 'doctor' },
+      { ho_ten: 'BS. Nguyễn Thị B', email: 'bacsi_b@vitafamily.vn', mat_khau: passwordHash, so_dien_thoai: '0901000002', role: 'doctor' },
+      { ho_ten: 'Bệnh nhân Lê C', email: 'benhnhan_c@gmail.com', mat_khau: passwordHash, so_dien_thoai: '0901000003', role: 'user' },
+      { ho_ten: 'Bệnh nhân Phạm D', email: 'benhnhan_d@gmail.com', mat_khau: passwordHash, so_dien_thoai: '0901000004', role: 'user' }
     ]);
 
     const admin = users[0];
@@ -171,7 +171,7 @@ async function seedAll() {
 
     // 11. Đánh giá (Reviews)
     await DanhGia.create([
-      { user_id: patientC._id, doctor_id: doctors[0]._id, appointment_id: appointments[0]._id, so_sao: 5, binh_luan: 'Bác sĩ rất nhiệt tình.' }
+      { user_id: patientC._id, doctor_id: doctors[0]._id, appointment_id: appointments[0]._id, so_sao: 5, noi_dung: 'Bác sĩ rất nhiệt tình.' }
     ]);
 
     console.log('🌱 Đang chèn dữ liệu Mức 4 (Y tế, Lịch sử, Thông báo)...');
@@ -190,8 +190,9 @@ async function seedAll() {
 
     // 14. Hồ sơ y tế & Kết quả khám & Đơn thuốc (cho lịch 0)
     const medicalRecord = await HoSoYTe.create({
-      member_id: members[0]._id, appointment_id: appointments[0]._id, bac_si_id: doctors[0]._id,
-      ngay_kham: new Date(dayStr), chan_doan: 'Cảm cúm thông thường', nguon: 'tu_kham', file_dinh_kem: ['https://example.com/xquang.jpg']
+      member_id: members[0]._id, appointment_id: appointments[0]._id,
+      ten_bac_si: users[1].ho_ten,
+      ngay_kham: new Date(dayStr), chan_doan: 'Cảm cúm thông thường', nguon: 'tu_kham',
     });
 
     await KetQuaKham.create({
