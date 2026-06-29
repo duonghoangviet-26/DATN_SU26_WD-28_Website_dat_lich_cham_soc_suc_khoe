@@ -14,6 +14,8 @@ interface Props {
   pagination: PaginationInfo
   onPageChange: (page: number) => void
   onViewDetail: (review: ReviewItem) => void
+  selectedIds: string[]
+  onSelectChange: (ids: string[]) => void
 }
 
 function StarDisplay({ count }: { count: number }) {
@@ -36,6 +38,8 @@ export default function ReviewTable({
   pagination,
   onPageChange,
   onViewDetail,
+  selectedIds,
+  onSelectChange,
 }: Props) {
   const { page, totalPages, total } = pagination
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
@@ -90,6 +94,20 @@ export default function ReviewTable({
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase tracking-wider text-[11px] font-semibold">
               <tr>
+                <th className="px-5 py-4 w-12 text-center">
+                  <input
+                    type="checkbox"
+                    checked={reviews.length > 0 && selectedIds.length === reviews.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        onSelectChange(reviews.map((r) => r.id))
+                      } else {
+                        onSelectChange([])
+                      }
+                    }}
+                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4 cursor-pointer"
+                  />
+                </th>
                 <th className="px-5 py-4">Bệnh nhân</th>
                 <th className="px-5 py-4">Bác sĩ</th>
                 <th className="px-5 py-4">Điểm</th>
@@ -102,7 +120,7 @@ export default function ReviewTable({
             <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center gap-2">
                       <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
                       <span>Đang tải danh sách đánh giá...</span>
@@ -111,7 +129,7 @@ export default function ReviewTable({
                 </tr>
               ) : reviews.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
                     Không tìm thấy đánh giá nào hợp lệ.
                   </td>
                 </tr>
@@ -125,6 +143,20 @@ export default function ReviewTable({
                         r.ngay_xoa ? 'bg-red-50/20' : r.status === 'hidden' ? 'bg-slate-50/50' : ''
                       }`}
                     >
+                      <td className="px-5 py-4 w-12 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(r.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              onSelectChange([...selectedIds, r.id])
+                            } else {
+                              onSelectChange(selectedIds.filter((id) => id !== r.id))
+                            }
+                          }}
+                          className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4 cursor-pointer"
+                        />
+                      </td>
                       {/* Bệnh nhân */}
                       <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
                         <div className="flex items-center gap-3">

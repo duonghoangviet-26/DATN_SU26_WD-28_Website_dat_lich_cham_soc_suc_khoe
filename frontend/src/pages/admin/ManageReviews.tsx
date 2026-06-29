@@ -36,6 +36,9 @@ export default function ManageReviews() {
     deleted: false,
   })
 
+  // Quản lý chọn nhiều đánh giá
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+
   // Quản lý Modal chi tiết
   const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null)
   const [openDetail, setOpenDetail] = useState(false)
@@ -104,6 +107,7 @@ export default function ManageReviews() {
   // Reload danh sách khi filters hoặc trang thay đổi
   useEffect(() => {
     fetchReviews(1)
+    setSelectedIds([]) // Reset chọn nhiều khi đổi bộ lọc
   }, [filters])
 
   const handlePageChange = (newPage: number) => {
@@ -118,6 +122,46 @@ export default function ManageReviews() {
   const handleActionSuccess = () => {
     // Làm mới danh sách ở trang hiện tại sau khi thay đổi trạng thái thành công
     fetchReviews(pagination.page)
+    setSelectedIds([]) // Reset chọn nhiều sau khi thao tác
+  }
+
+  const handleBatchAction = async (action: 'hide' | 'show' | 'delete' | 'restore' | 'hard-delete') => {
+    if (selectedIds.length === 0) return
+
+    const actionNames: Record<string, string> = {
+      hide: 'ẩn',
+      show: 'hiển thị',
+      delete: 'xóa',
+      restore: 'khôi phục',
+      'hard-delete': 'xóa vĩnh viễn'
+    }
+
+    let trimmedReason = ''
+    if (action === 'hard-delete') {
+      const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedIds.length} đánh giá đã chọn khỏi cơ sở dữ liệu? Thao tác này không thể phục hồi!`)
+      if (!confirmDelete) return
+    } else if (action === 'show') {
+      trimmedReason = ''
+    } else {
+      const reason = window.prompt(`Nhập lý do ${actionNames[action]} ${selectedIds.length} đánh giá đã chọn (không bắt buộc):`, '')
+      if (reason === null) return // Hủy bỏ
+      trimmedReason = reason.trim()
+    }
+
+    setLoading(true)
+    try {
+      const res = await reviewService.batchAction({
+        ids: selectedIds,
+        action,
+        ly_do: trimmedReason
+      })
+      alert(`Đã thực hiện thành công thao tác ${actionNames[action]} cho ${res.count} đánh giá!`)
+      setSelectedIds([])
+      fetchReviews(pagination.page)
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Thao tác hàng loạt thất bại.')
+      setLoading(false)
+    }
   }
 
   return (
@@ -184,6 +228,72 @@ export default function ManageReviews() {
         onChange={setFilters}
       />
 
+      {/* Thanh tác vụ hàng loạt */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-700">
+              Đã chọn <strong className="text-brand-600">{selectedIds.length}</strong> đánh giá
+            </span>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="text-xs text-slate-400 hover:text-slate-600 font-semibold underline"
+            >
+              Bỏ chọn tất cả
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {filters.deleted ? (
+              <>
+                <button
+                  onClick={() => handleBatchAction('restore')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="refresh-cw" className="h-3.5 w-3.5" />
+                  Khôi phục hàng loạt
+                </button>
+                <button
+                  onClick={() => handleBatchAction('hard-delete')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="trash" className="h-3.5 w-3.5" />
+                  Xóa vĩnh viễn hàng loạt
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleBatchAction('show')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="eye" className="h-3.5 w-3.5" />
+                  Hiện hàng loạt
+                </button>
+                <button
+                  onClick={() => handleBatchAction('hide')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-600 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="eye-off" className="h-3.5 w-3.5" />
+                  Ẩn hàng loạt
+                </button>
+                <button
+                  onClick={() => handleBatchAction('delete')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3.5 py-2 text-xs font-bold text-red-600 shadow-sm hover:bg-red-100/80 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="trash" className="h-3.5 w-3.5" />
+                  Xóa hàng loạt
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Bảng danh sách component */}
       <ReviewTable
         reviews={reviews}
@@ -191,6 +301,8 @@ export default function ManageReviews() {
         pagination={pagination}
         onPageChange={handlePageChange}
         onViewDetail={handleViewDetail}
+        selectedIds={selectedIds}
+        onSelectChange={setSelectedIds}
       />
 
       {/* Modal chi tiết và thao tác */}
