@@ -27,7 +27,7 @@ export default function ReviewActionMenu({ status, isDeleted, onAction }: Props)
           className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 transition-all active:scale-95"
         >
           <Icon name="trash" className="h-4 w-4" />
-          Xóa vĩnh viễn (Xóa cứng)
+          Xóa vĩnh viễn
         </button>
       </div>
     )
@@ -60,7 +60,7 @@ export default function ReviewActionMenu({ status, isDeleted, onAction }: Props)
         className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 shadow-sm hover:bg-red-100/80 transition-all active:scale-95"
       >
         <Icon name="trash" className="h-4 w-4" />
-        Xóa mềm đánh giá
+        Xóa đánh giá
       </button>
     </div>
   )

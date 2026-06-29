@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Icon from '@/components/admin/icons'
 import Badge from '@/components/common/Badge'
 import ReviewActionMenu from './ReviewActionMenu'
@@ -93,7 +94,7 @@ export default function ReviewDetailModal({ open, review, onClose, onActionSucce
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200">
         
@@ -227,6 +228,7 @@ export default function ReviewDetailModal({ open, review, onClose, onActionSucce
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
