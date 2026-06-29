@@ -73,7 +73,17 @@ export default function ManageHospitals() {
       await hospitalService.deleteClinic(c._id)
       fetchClinics()
     } catch (error) {
-      alert('Lỗi khi xóa chi nhánh')
+      alert('Lỗi khi ngừng hoạt động chi nhánh')
+    }
+  }
+
+  async function handleRestoreClinic(c: HospitalItem) {
+    if (!window.confirm(`Bạn có chắc muốn khôi phục hoạt động chi nhánh "${c.ten}"?`)) return
+    try {
+      await hospitalService.updateClinicInfo(c._id, { trang_thai: 'active' })
+      fetchClinics()
+    } catch (error) {
+      alert('Lỗi khi khôi phục chi nhánh')
     }
   }
 
@@ -111,6 +121,7 @@ export default function ManageHospitals() {
           onAdd={() => setClinicView('add')}
           onEdit={handleEditClinic}
           onDelete={handleDeleteClinic}
+          onRestore={handleRestoreClinic}
           onViewSpecialties={handleViewSpecialties}
         />
       )}

@@ -7,10 +7,11 @@ interface Props {
   onAdd: () => void
   onEdit: (clinic: HospitalItem) => void
   onDelete: (clinic: HospitalItem) => void
+  onRestore: (clinic: HospitalItem) => void
   onViewSpecialties: (clinic: HospitalItem) => void
 }
 
-export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, onViewSpecialties }: Props) {
+export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, onRestore, onViewSpecialties }: Props) {
   if (loading) {
     return (
       <div className="card flex items-center justify-center py-20 text-slate-400">
@@ -95,13 +96,21 @@ export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, 
                     >
                       <Icon name="edit" className="h-4 w-4" />
                     </button>
-                    {c.trang_thai === 'active' && (
+                    {c.trang_thai === 'active' ? (
                       <button
                         onClick={() => onDelete(c)}
                         className="inline-flex rounded-lg p-2 text-red-600 hover:bg-red-50 transition-colors ml-1"
                         title="Ngừng hoạt động"
                       >
                         <Icon name="trash" className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onRestore(c)}
+                        className="inline-flex rounded-lg p-2 text-green-600 hover:bg-green-50 transition-colors ml-1"
+                        title="Khôi phục"
+                      >
+                        <Icon name="refresh-cw" className="h-4 w-4" />
                       </button>
                     )}
                   </td>

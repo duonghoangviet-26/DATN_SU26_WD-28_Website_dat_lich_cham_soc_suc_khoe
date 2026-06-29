@@ -91,11 +91,16 @@ export const updateClinicInfo = async (req, res) => {
       return fail(res, 404, 'Không tìm thấy chi nhánh để cập nhật')
     }
 
-    // CASCADE: Nếu cập nhật trạng thái chi nhánh thành inactive, ẩn luôn các chuyên khoa
+    // CASCADE: Cập nhật trạng thái chuyên khoa theo trạng thái chi nhánh
     if (req.body.trang_thai === 'inactive') {
       await ChuyenKhoa.updateMany(
         { phong_kham_id: req.params.id },
         { status: 'hidden' }
+      )
+    } else if (req.body.trang_thai === 'active') {
+      await ChuyenKhoa.updateMany(
+        { phong_kham_id: req.params.id },
+        { status: 'active' }
       )
     }
 
