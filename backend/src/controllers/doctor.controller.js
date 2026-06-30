@@ -156,9 +156,9 @@ export async function updateDoctor(req, res) {
 export async function getDoctorAppointments(req, res) {
   try {
     const { id } = req.params
-    const { keyword, page, limit } = req.query
+    const { keyword, page, limit, date, exclude_status } = req.query
     
-    const result = await doctorService.getDoctorAppointments(id, keyword, page, limit)
+    const result = await doctorService.getDoctorAppointments(id, keyword, page, limit, date, exclude_status)
     
     return res.status(200).json({
       success: true,

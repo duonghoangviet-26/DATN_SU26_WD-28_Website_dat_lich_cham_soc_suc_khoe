@@ -328,13 +328,26 @@ export async function updateDoctorInfo(doctorId, updateData, adminId) {
 }
 
 // ── 9. Danh sách lịch hẹn của bác sĩ ────────────────────────────
-export async function getDoctorAppointments(doctorId, keyword, page = 1, limit = 10) {
+export async function getDoctorAppointments(doctorId, keyword, page = 1, limit = 10, date = null, exclude_status = null) {
   if (!mongoose.Types.ObjectId.isValid(doctorId)) throw new Error('doctorId không hợp lệ')
 
   const skip = (Number(page) - 1) * Number(limit)
   
   // Base query: Tìm theo doctorId
   const filter = { doctor_id: doctorId }
+
+  if (date) {
+    const startOfDay = new Date(date)
+    startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(date)
+    endOfDay.setHours(23, 59, 59, 999)
+    filter.ngay_kham = { $gte: startOfDay, $lte: endOfDay }
+  }
+
+  if (exclude_status) {
+    const statuses = exclude_status.split(',')
+    filter.status = { $nin: statuses }
+  }
 
   if (keyword) {
     const kw = keyword.trim()

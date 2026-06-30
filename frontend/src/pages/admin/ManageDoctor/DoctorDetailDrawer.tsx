@@ -75,10 +75,13 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
     async function loadApts() {
       setAptLoading(true)
       try {
+        const today = new Date().toISOString().split('T')[0]
         const { data, pagination } = await doctorService.getAppointments(doctorId!, {
           keyword: aptKeyword,
           page: aptPage,
-          limit: 10
+          limit: 10,
+          date: today,
+          exclude_status: 'completed,cancelled'
         })
         if (!ignore) {
           setAppointments(data)
@@ -158,7 +161,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                     activeTab === 'appointments' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  Lịch sử đặt lịch
+                  Ca khám hôm nay
                 </button>
               </div>
 
