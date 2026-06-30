@@ -265,27 +265,29 @@ export default function ManageDoctors() {
       </div>
 
       {/* Phân trang */}
-      {!loading && totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between px-2">
+      {!loading && totalRecords > 0 && (
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between px-2 gap-4">
           <p className="text-sm text-slate-500">
-            Hiển thị <span className="font-medium text-slate-800">{doctors.length}</span> / <span className="font-medium text-slate-800">{totalRecords}</span> kết quả
+            Hiển thị <span className="font-medium text-slate-800">{(page - 1) * 10 + 1}</span> - <span className="font-medium text-slate-800">{Math.min(page * 10, totalRecords)}</span> trong tổng số <span className="font-medium text-slate-800">{totalRecords}</span> kết quả
           </p>
-          <div className="flex gap-1">
-            <button 
-              disabled={page === 1} 
-              onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50"
-            >
-              Trang trước
-            </button>
-            <button 
-              disabled={page === totalPages} 
-              onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50"
-            >
-              Trang sau
-            </button>
-          </div>
+          {totalPages > 1 && (
+            <div className="flex gap-1">
+              <button 
+                disabled={page === 1} 
+                onClick={() => setPage(p => p - 1)}
+                className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50"
+              >
+                Trang trước
+              </button>
+              <button 
+                disabled={page === totalPages} 
+                onClick={() => setPage(p => p + 1)}
+                className="px-3 py-1.5 border border-slate-200 rounded-md text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50"
+              >
+                Trang sau
+              </button>
+            </div>
+          )}
         </div>
       )}
 

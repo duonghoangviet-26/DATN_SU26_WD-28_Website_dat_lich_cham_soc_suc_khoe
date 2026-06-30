@@ -75,7 +75,8 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
     async function loadApts() {
       setAptLoading(true)
       try {
-        const today = new Date().toISOString().split('T')[0]
+        const d = new Date()
+        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
         const { data, pagination } = await doctorService.getAppointments(doctorId!, {
           keyword: aptKeyword,
           page: aptPage,
@@ -373,25 +374,27 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                     </div>
                     
                     {/* Pagination */}
-                    {!aptLoading && aptTotalPages > 1 && (
+                    {!aptLoading && appointments.length > 0 && (
                       <div className="flex items-center justify-between mt-4 px-1">
                         <p className="text-sm text-slate-500">Trang {aptPage} / {aptTotalPages}</p>
-                        <div className="flex gap-2">
-                          <button 
-                            disabled={aptPage === 1} 
-                            onClick={() => setAptPage(p => p - 1)}
-                            className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                          >
-                            Trước
-                          </button>
-                          <button 
-                            disabled={aptPage === aptTotalPages} 
-                            onClick={() => setAptPage(p => p + 1)}
-                            className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                          >
-                            Sau
-                          </button>
-                        </div>
+                        {aptTotalPages > 1 && (
+                          <div className="flex gap-2">
+                            <button 
+                              disabled={aptPage === 1} 
+                              onClick={() => setAptPage(p => p - 1)}
+                              className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                            >
+                              Trước
+                            </button>
+                            <button 
+                              disabled={aptPage === aptTotalPages} 
+                              onClick={() => setAptPage(p => p + 1)}
+                              className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                            >
+                              Sau
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
