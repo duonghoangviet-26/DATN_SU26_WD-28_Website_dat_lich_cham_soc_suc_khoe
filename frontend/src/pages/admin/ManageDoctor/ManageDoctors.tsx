@@ -203,32 +203,36 @@ export default function ManageDoctors() {
                     <div className="flex justify-end gap-1.5">
                       <button 
                         onClick={() => setTargetDetailId(doc._id)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-800"
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-800"
+                        title="Chi tiết"
                       >
-                        <Icon name="eye" className="h-3 w-3" /> Chi tiết
+                        <Icon name="eye" className="h-4 w-4" />
                       </button>
 
                       <button 
                         onClick={() => setTargetEdit(doc)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
+                        className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 p-1.5 text-blue-600 transition-colors hover:bg-blue-100"
+                        title="Sửa"
                       >
-                        <Icon name="edit" className="h-3 w-3" /> Sửa
+                        <Icon name="edit" className="h-4 w-4" />
                       </button>
                       
                       {doc.trang_thai_duyet === 'pending' && (
                         <button
                           onClick={() => openAction(doc, 'approve')}
-                          className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-600 transition-colors hover:bg-green-100"
+                          className="inline-flex items-center justify-center rounded-lg border border-green-200 bg-green-50 p-1.5 text-green-600 transition-colors hover:bg-green-100"
+                          title="Duyệt"
                         >
-                          <Icon name="check" className="h-3 w-3" /> Duyệt
+                          <Icon name="check" className="h-4 w-4" />
                         </button>
                       )}
                       {doc.trang_thai_duyet === 'approved' && (
                         <button
                           onClick={() => openAction(doc, 'suspend')}
-                          className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-600 transition-colors hover:bg-orange-100"
+                          className="inline-flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 p-1.5 text-orange-600 transition-colors hover:bg-orange-100"
+                          title="Tạm ngưng"
                         >
-                          <Icon name="ban" className="h-3 w-3" /> Tạm ngưng
+                          <Icon name="ban" className="h-4 w-4" />
                         </button>
                       )}
                     </div>
