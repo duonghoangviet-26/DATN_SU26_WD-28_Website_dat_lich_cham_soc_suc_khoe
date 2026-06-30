@@ -237,6 +237,30 @@ export async function getAllAppointments(req, res) {
     const total = displayAppointments.length
     const pageNum = Number.parseInt(page, 10)
     const limitNum = Number.parseInt(limit, 10)
+    
+    // Nếu view_mode là doctor_grouped, trả về toàn bộ và gom nhóm
+    if (req.query.view_mode === 'doctor_grouped') {
+      const grouped = {}
+      for (const app of displayAppointments) {
+        const doctorName = app.doctor_id?.user_id?.ho_ten || 'Không rõ'
+        const doctorId = app.doctor_id?._id ? String(app.doctor_id._id) : 'unknown'
+        if (!grouped[doctorId]) {
+          grouped[doctorId] = {
+            doctor_id: doctorId,
+            doctor_name: doctorName,
+            appointments: []
+          }
+        }
+        grouped[doctorId].appointments.push(formatAppointmentItem(app))
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: Object.values(grouped),
+        summary,
+      })
+    }
+
     const totalPages = total === 0 ? 1 : Math.ceil(total / limitNum)
     const startIndex = (pageNum - 1) * limitNum
     const endIndex = startIndex + limitNum
@@ -333,10 +357,46 @@ export async function cancelAppointment(req, res) {
     session.endSession()
 
     const updated = await loadAppointmentForResponse(id)
-    return ok(res, formatAppointmentItem(updated), 'Da huy lich hen thanh cong')
+    return ok(res, formatAppointmentItem(updated), 'Đã hủy lịch hẹn thành công')
   } catch (err) {
     await session.abortTransaction()
     session.endSession()
+    return fail(res, 500, err.message)
+  }
+}
+
+// PATCH /api/admin/appointments/:id/restore
+export async function restoreAppointment(req, res) {
+  try {
+    const { id } = req.params
+    const appointment = await LichHen.findById(id)
+
+    if (!appointment) return fail(res, 404, 'Không tìm thấy lịch hẹn')
+    if (appointment.status !== 'cancelled') {
+      return fail(res, 400, 'Chỉ có thể khôi phục lịch hẹn đã hủy')
+    }
+
+    // Chuyển lại trạng thái thành pending
+    appointment.status = 'pending'
+    appointment.ly_do_huy = null
+    await appointment.save()
+
+    return ok(res, null, 'Khôi phục lịch hẹn thành công')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// DELETE /api/admin/appointments/:id
+export async function deleteAppointment(req, res) {
+  try {
+    const { id } = req.params
+    const appointment = await LichHen.findByIdAndDelete(id)
+
+    if (!appointment) return fail(res, 404, 'Không tìm thấy lịch hẹn')
+
+    return ok(res, null, 'Xóa cứng lịch hẹn thành công')
+  } catch (err) {
     return fail(res, 500, err.message)
   }
 }

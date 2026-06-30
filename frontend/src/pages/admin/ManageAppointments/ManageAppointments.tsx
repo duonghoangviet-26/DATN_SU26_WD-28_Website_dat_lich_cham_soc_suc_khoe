@@ -9,7 +9,7 @@ import type {
 import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
 
-import AppointmentList from './AppointmentList'
+import DoctorAppointmentGroupList from './DoctorAppointmentGroupList'
 import AppointmentDetail from './AppointmentDetail'
 import AddAppointment from './AddAppointment'
 import RescheduleAppointment from './RescheduleAppointment'
@@ -43,6 +43,9 @@ export default function ManageAppointments() {
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState<AppointmentPagination>(EMPTY_PAGINATION)
   const [summary, setSummary] = useState<AppointmentSummary>(EMPTY_SUMMARY)
+  
+  // Lưu data grouped khi view_mode = 'doctor_grouped'
+  const [groupedAppointments, setGroupedAppointments] = useState<any[]>([])
 
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -60,10 +63,12 @@ export default function ManageAppointments() {
         endDate,
         page: nextPage,
         limit: 10,
+        view_mode: 'doctor_grouped' // Thêm cờ này để backend tự gom nhóm
       })
-      setAppointments(res.data)
-      setPagination(res.pagination)
+      // Khi view_mode=doctor_grouped, res.data là mảng các DoctorGroup
+      setGroupedAppointments(res.data)
       setSummary(res.summary)
+      // Không dùng pagination của backend cho chế độ grouped nữa (hoặc chỉ mang tính tham khảo)
     } finally {
       setLoading(false)
     }
@@ -75,6 +80,16 @@ export default function ManageAppointments() {
 
   async function handleCancel(appointment: AppointmentItem) {
     await appointmentService.cancel(appointment._id, 'Admin huy lich')
+    await fetchAppointments()
+  }
+
+  async function handleRestore(appointment: AppointmentItem) {
+    await appointmentService.restore(appointment._id)
+    await fetchAppointments()
+  }
+
+  async function handleHardDelete(appointment: AppointmentItem) {
+    await appointmentService.hardDelete(appointment._id)
     await fetchAppointments()
   }
 
@@ -203,36 +218,15 @@ export default function ManageAppointments() {
             </button>
           </div>
 
-          <AppointmentList
-            appointments={appointments}
+          <DoctorAppointmentGroupList
+            groupedAppointments={groupedAppointments}
             loading={loading}
             onView={handleView}
             onCancel={handleCancel}
             onReschedule={handleReschedule}
+            onRestore={handleRestore}
+            onHardDelete={handleHardDelete}
           />
-          {!loading && (
-            <div className="mt-3 flex items-center justify-between">
-              <p className="text-sm text-slate-500">
-                Hiển thị trang {pagination.page}/{pagination.totalPages} (Tổng {pagination.total} lịch hẹn)
-              </p>
-              <div className="flex gap-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                  className="btn-secondary px-3 py-1"
-                >
-                  Trước
-                </button>
-                <button
-                  disabled={page >= pagination.totalPages}
-                  onClick={() => setPage(page + 1)}
-                  className="btn-secondary px-3 py-1"
-                >
-                  Sau
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
 

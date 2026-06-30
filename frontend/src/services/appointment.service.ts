@@ -15,7 +15,8 @@ export const appointmentService = {
     endDate?: string
     page?: number
     limit?: number
-  }): Promise<AppointmentListResponse> {
+    view_mode?: string
+  }): Promise<any> {
     const res = await axiosInstance.get('/admin/appointments', { params })
     return {
       data: res.data.data,
@@ -32,6 +33,14 @@ export const appointmentService = {
   async cancel(id: string, ly_do_huy: string): Promise<AppointmentItem> {
     const res = await axiosInstance.patch(`/admin/appointments/${id}/cancel`, { ly_do_huy })
     return res.data.data
+  },
+
+  async restore(id: string): Promise<void> {
+    await axiosInstance.patch(`/admin/appointments/${id}/restore`)
+  },
+
+  async hardDelete(id: string): Promise<void> {
+    await axiosInstance.delete(`/admin/appointments/${id}`)
   },
 
   async reschedule(

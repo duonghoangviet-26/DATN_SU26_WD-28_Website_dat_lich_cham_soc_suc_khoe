@@ -18,5 +18,7 @@ router.post('/', controller.createAppointment)
 router.get('/:id', controller.getAppointmentById)
 router.patch('/:id/cancel', controller.cancelAppointment)
 router.patch('/:id/reschedule', controller.rescheduleAppointment)
+router.patch('/:id/restore', controller.restoreAppointment)
+router.delete('/:id', controller.deleteAppointment)
 
 export default router
