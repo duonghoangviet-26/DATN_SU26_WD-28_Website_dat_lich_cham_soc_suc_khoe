@@ -14,6 +14,14 @@ const APPROVAL_COLOR: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
   approved: 'green', pending: 'yellow', rejected: 'red', suspended: 'gray',
 }
 
+const ACTION_LABEL_MAP: Record<string, string> = {
+  APPROVE_DOCTOR: 'Đã duyệt hồ sơ',
+  RESTORE_DOCTOR: 'Khôi phục tài khoản',
+  REJECT_DOCTOR: 'Từ chối hồ sơ',
+  SUSPEND_DOCTOR: 'Tạm ngưng tài khoản',
+  UPDATE_INFO: 'Cập nhật thông tin',
+}
+
 interface Props {
   doctorId: string | null
   onClose: () => void
@@ -272,7 +280,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                               <div className="flex justify-between items-start mb-2">
                                 <div>
                                   <p className="font-semibold text-slate-800 text-sm">
-                                    {log.hanh_dong.replace('_DOCTOR', '')}
+                                    {ACTION_LABEL_MAP[log.hanh_dong] || log.hanh_dong}
                                   </p>
                                   <p className="text-xs text-slate-500 mt-0.5">Bởi: {log.nguoi_thuc_hien_id?.ho_ten || 'Admin ẩn'}</p>
                                 </div>
@@ -394,9 +402,6 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                     <button onClick={() => { onClose(); onAction(doctor, 'reject') }} className="btn-danger bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">Từ chối</button>
                     <button onClick={() => { onClose(); onAction(doctor, 'approve') }} className="btn-primary">Duyệt hồ sơ</button>
                   </>
-                )}
-                {doctor.trang_thai_duyet === 'approved' && (
-                  <button onClick={() => { onClose(); onAction(doctor, 'suspend') }} className="btn-secondary bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100">Tạm ngưng</button>
                 )}
                 {(doctor.trang_thai_duyet === 'suspended' || doctor.trang_thai_duyet === 'rejected') && (
                   <button onClick={() => { onClose(); onAction(doctor, 'restore') }} className="btn-primary">Khôi phục</button>
