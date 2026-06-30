@@ -9,6 +9,7 @@ import EditClinic from './EditClinic'
 import SpecialtyList from './SpecialtyList'
 import AddSpecialty from './AddSpecialty'
 import EditSpecialty from './EditSpecialty'
+import HospitalAuditLogModal from './HospitalAuditLogModal'
 
 type ClinicView = 'list' | 'add' | 'edit' | 'specialties'
 type SpecialtyView = 'list' | 'add' | 'edit'
@@ -26,6 +27,12 @@ export default function ManageHospitals() {
   const [specialtyLoading, setSpecialtyLoading] = useState(false)
   const [specialtyView, setSpecialtyView] = useState<SpecialtyView>('list')
   const [editingSpecialty, setEditingSpecialty] = useState<SpecialtyItem | null>(null)
+
+  // ---- State Lịch sử (Audit Log) ----
+  const [auditModalOpen, setAuditModalOpen] = useState(false)
+  const [auditTitle, setAuditTitle] = useState('')
+  const [auditLogs, setAuditLogs] = useState<any[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
 
   // ---- Load dữ liệu chi nhánh ----
   const fetchClinics = () => {
@@ -87,6 +94,21 @@ export default function ManageHospitals() {
     }
   }
 
+  async function handleViewClinicLogs(c: HospitalItem) {
+    setAuditTitle(`Chi nhánh ${c.ten}`)
+    setAuditModalOpen(true)
+    setAuditLoading(true)
+    try {
+      const logs = await hospitalService.getClinicLogs(c._id)
+      setAuditLogs(logs)
+    } catch (err: any) {
+      console.error(err)
+      alert('Lỗi tải lịch sử: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setAuditLoading(false)
+    }
+  }
+
   // ---- Handlers: Chuyên khoa ----
   function handleSpecialtySaved(saved: SpecialtyItem) {
     setSpecialties((prev) => {
@@ -107,6 +129,21 @@ export default function ManageHospitals() {
     setSpecialtyView('edit')
   }
 
+  async function handleViewSpecialtyLogs(s: SpecialtyItem) {
+    setAuditTitle(`Chuyên khoa ${s.ten}`)
+    setAuditModalOpen(true)
+    setAuditLoading(true)
+    try {
+      const logs = await hospitalService.getSpecialtyLogs(s._id)
+      setAuditLogs(logs)
+    } catch (err: any) {
+      console.error(err)
+      alert('Lỗi tải lịch sử: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setAuditLoading(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -123,6 +160,7 @@ export default function ManageHospitals() {
           onDelete={handleDeleteClinic}
           onRestore={handleRestoreClinic}
           onViewSpecialties={handleViewSpecialties}
+          onViewLogs={handleViewClinicLogs}
         />
       )}
 
@@ -156,6 +194,7 @@ export default function ManageHospitals() {
               onAdd={() => setSpecialtyView('add')}
               onEdit={handleEditSpecialty}
               onChange={handleSpecialtyToggled}
+              onViewLogs={handleViewSpecialtyLogs}
             />
           )}
 
@@ -176,6 +215,14 @@ export default function ManageHospitals() {
           )}
         </div>
       )}
+
+      <HospitalAuditLogModal
+        open={auditModalOpen}
+        onClose={() => setAuditModalOpen(false)}
+        title={auditTitle}
+        logs={auditLogs}
+        loading={auditLoading}
+      />
     </div>
   )
 }

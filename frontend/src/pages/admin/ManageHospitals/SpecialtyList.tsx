@@ -13,10 +13,11 @@ interface Props {
   onAdd: () => void
   onEdit: (s: SpecialtyItem) => void
   onChange: (updated: SpecialtyItem) => void
+  onViewLogs: (s: SpecialtyItem) => void
 }
 
 // Bảng danh sách chuyên khoa với các thao tác: Thêm, Sửa, Ẩn/Hiện.
-export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onChange }: Props) {
+export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onChange, onViewLogs }: Props) {
   const [confirmItem, setConfirmItem] = useState<SpecialtyItem | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
   const [copyingSpecialty, setCopyingSpecialty] = useState<SpecialtyItem | null>(null)
@@ -157,6 +158,15 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
                           ? <><Icon name="eye-off" className="h-3 w-3" /> Ẩn</>
                           : <><Icon name="eye" className="h-3 w-3" /> Hiện</>
                         }
+                      </button>
+
+                      {/* Nút Lịch sử */}
+                      <button
+                        onClick={() => onViewLogs(s)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50"
+                        title="Lịch sử chỉnh sửa"
+                      >
+                        <Icon name="clock" className="h-3 w-3" /> Lịch sử
                       </button>
                     </div>
                   </td>
