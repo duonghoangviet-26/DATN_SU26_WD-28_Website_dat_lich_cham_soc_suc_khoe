@@ -28,7 +28,7 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
     setConfirmItem(null)
     setToggling(id)
     try {
-      const updated = await hospitalService.toggleSpecialty(id)
+      const updated = await hospitalService.toggleSpecialtyStatus(id)
       onChange(updated)
     } finally {
       setToggling(null)
