@@ -38,4 +38,7 @@ router.put('/:id', doctorController.updateDoctor)
 // Lịch sử đặt lịch của bác sĩ
 router.get('/:id/appointments', doctorController.getDoctorAppointments)
 
+// Xóa vĩnh viễn hồ sơ bác sĩ
+router.delete('/:id', doctorController.deleteDoctor)
+
 export default router

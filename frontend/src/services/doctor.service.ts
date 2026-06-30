@@ -68,5 +68,11 @@ export const doctorService = {
   }): Promise<{ data: any[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
     const { data } = await axios.get(`${BASE_URL}/${id}/appointments`, { params })
     return { data: data.data, pagination: data.pagination }
+  },
+
+  // Xóa vĩnh viễn bác sĩ
+  async delete(id: string): Promise<any> {
+    const { data } = await axios.delete(`${BASE_URL}/${id}`)
+    return data.data
   }
 }

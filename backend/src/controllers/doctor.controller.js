@@ -171,3 +171,17 @@ export async function getDoctorAppointments(req, res) {
     return fail(res, status, err.message)
   }
 }
+
+// DELETE /api/admin/doctors/:id
+export async function deleteDoctor(req, res) {
+  try {
+    const { id } = req.params
+    // Gọi service xóa
+    const result = await doctorService.deleteDoctor(id)
+    return ok(res, result, 'Xóa hồ sơ bác sĩ vĩnh viễn thành công')
+  } catch (err) {
+    if (err.message === 'Không tìm thấy bác sĩ') return fail(res, 404, err.message)
+    const status = err.message.includes('không hợp lệ') ? 400 : 500
+    return fail(res, status, err.message)
+  }
+}

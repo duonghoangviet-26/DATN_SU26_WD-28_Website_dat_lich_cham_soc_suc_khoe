@@ -21,7 +21,7 @@ const STATUS_TABS: { value: DoctorApproval | ''; label: string; color: string }[
   { value: 'suspended', label: 'Tạm ngưng', color: 'text-slate-500' },
 ]
 
-type Action = 'approve' | 'reject' | 'suspend' | 'restore'
+type Action = 'approve' | 'reject' | 'suspend' | 'restore' | 'delete'
 
 // HARDCODED ADMIN ID FOR NOW (Dùng tạm cho tới khi có JWT auth hoàn chỉnh)
 const CURRENT_ADMIN_ID = "000000000000000000000099"
@@ -98,7 +98,8 @@ export default function ManageDoctors() {
       if (action === 'approve') await doctorService.approve(id, CURRENT_ADMIN_ID)
       else if (action === 'reject') await doctorService.reject(id, CURRENT_ADMIN_ID, reason)
       else if (action === 'suspend') await doctorService.suspend(id, CURRENT_ADMIN_ID, reason)
-      else await doctorService.restore(id, CURRENT_ADMIN_ID)
+      else if (action === 'restore') await doctorService.restore(id, CURRENT_ADMIN_ID)
+      else if (action === 'delete') await doctorService.delete(id)
       
       loadData() // Reload sau khi cập nhật thành công
     } catch (err) {
@@ -112,6 +113,7 @@ export default function ManageDoctors() {
     reject:   { title: 'Từ chối hồ sơ', msg: `Từ chối hồ sơ BS. "${target?.user_id?.ho_ten}"?`, confirmText: 'Từ chối', danger: true, placeholder: 'Nhập lý do từ chối (bắt buộc)...' },
     suspend:  { title: 'Tạm ngưng bác sĩ', msg: `Tạm ngưng tài khoản BS. "${target?.user_id?.ho_ten}"?`, confirmText: 'Tạm ngưng', danger: true, placeholder: 'Nhập lý do tạm ngưng (bắt buộc)...' },
     restore:  { title: 'Khôi phục bác sĩ', msg: `Khôi phục tài khoản BS. "${target?.user_id?.ho_ten}"?`, confirmText: 'Khôi phục', danger: false, placeholder: '' },
+    delete:   { title: 'Xóa vĩnh viễn', msg: `Xác nhận xóa vĩnh viễn hồ sơ BS. "${target?.user_id?.ho_ten}"? Hành động này không thể hoàn tác!`, confirmText: 'Xóa vĩnh viễn', danger: true, placeholder: '' },
   }
   const cfg = ACTION_CONFIG[action]
 
@@ -235,6 +237,14 @@ export default function ManageDoctors() {
                           <Icon name="ban" className="h-4 w-4" />
                         </button>
                       )}
+
+                      <button
+                        onClick={() => openAction(doc, 'delete')}
+                        className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100"
+                        title="Xóa vĩnh viễn"
+                      >
+                        <Icon name="trash" className="h-4 w-4" />
+                      </button>
                     </div>
                   </td>
                 </tr>

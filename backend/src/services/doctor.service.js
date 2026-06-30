@@ -406,3 +406,23 @@ export async function getDoctorAppointments(doctorId, keyword, page = 1, limit =
     }
   }
 }
+
+// ── 10. Xóa vĩnh viễn bác sĩ ────────────────────────────────
+export async function deleteDoctor(doctorId) {
+  if (!mongoose.Types.ObjectId.isValid(doctorId)) throw new Error('doctorId không hợp lệ')
+
+  const doctor = await BacSi.findById(doctorId)
+  if (!doctor) throw new Error('Không tìm thấy bác sĩ')
+
+  // Xóa tài liệu liên quan nếu cần: LichHen, NhatKyThaoTac, NguoiDung (Tuỳ nghiệp vụ, ở đây chỉ xóa BacSi và NhatKyThaoTac)
+  await NhatKyThaoTac.deleteMany({ loai_doi_tuong: 'doctor', doi_tuong_id: doctorId })
+  await LichHen.deleteMany({ doctor_id: doctorId })
+
+  // Cập nhật lại role của user thành user thay vì doctor
+  await NguoiDung.findByIdAndUpdate(doctor.user_id, { role: 'user' })
+
+  // Cuối cùng xóa hồ sơ bác sĩ
+  await BacSi.findByIdAndDelete(doctorId)
+
+  return { success: true }
+}
