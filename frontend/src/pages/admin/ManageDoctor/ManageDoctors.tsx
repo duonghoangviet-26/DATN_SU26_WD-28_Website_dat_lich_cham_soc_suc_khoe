@@ -238,6 +238,16 @@ export default function ManageDoctors() {
                         </button>
                       )}
 
+                      {doc.trang_thai_duyet === 'suspended' && (
+                        <button
+                          onClick={() => openAction(doc, 'restore')}
+                          className="inline-flex items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 p-1.5 text-indigo-600 transition-colors hover:bg-indigo-100"
+                          title="Khôi phục"
+                        >
+                          <Icon name="sync" className="h-4 w-4" />
+                        </button>
+                      )}
+
                       <button
                         onClick={() => openAction(doc, 'delete')}
                         className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100"
