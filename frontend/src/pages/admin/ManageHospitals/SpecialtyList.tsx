@@ -158,45 +158,46 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
                       {/* Nút Sao chép */}
                       <button
                         onClick={() => setCopyingSpecialty(s)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-amber-600 transition-colors hover:border-amber-200 hover:bg-amber-50"
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-600"
                         title="Sao chép"
                       >
-                      <Icon name="copy" className="h-3 w-3" /> Copy
+                        <Icon name="copy" className="h-4 w-4" />
                       </button>
 
                       {/* Nút Sửa */}
                       <button
                         onClick={() => onEdit(s)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600"
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600"
                         title="Chỉnh sửa"
                       >
-                      <Icon name="file-text" className="h-3 w-3" /> Sửa
+                        <Icon name="file-text" className="h-4 w-4" />
                       </button>
 
                       {/* Nút Ẩn/Khôi phục */}
                       <button
                         onClick={() => setConfirmItem(s)}
                         disabled={toggling === s._id}
-                        className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                        title={s.status === 'active' ? 'Ẩn chuyên khoa' : 'Khôi phục chuyên khoa'}
+                        className={`inline-flex items-center justify-center rounded-lg border p-2 transition-colors ${
                           s.status === 'active'
-                            ? 'border-slate-200 bg-white text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
-                            : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                            ? 'border-slate-200 bg-white text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                            : 'border-green-200 bg-green-50 text-green-600 hover:bg-green-100'
                         }`}
                       >
                         {s.status === 'active' ? (
-                          <><Icon name="eye-off" className="h-3 w-3" /> Ẩn</>
+                          <Icon name="eye-off" className="h-4 w-4" />
                         ) : (
-                          <><Icon name="refresh-cw" className="h-3 w-3" /> Khôi phục</>
+                          <Icon name="refresh-cw" className="h-4 w-4" />
                         )}
                       </button>
 
                       {/* Nút Lịch sử */}
                       <button
                         onClick={() => onViewLogs(s)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50"
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
                         title="Lịch sử chỉnh sửa"
                       >
-                        <Icon name="clock" className="h-3 w-3" /> Lịch sử
+                        <Icon name="clock" className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
