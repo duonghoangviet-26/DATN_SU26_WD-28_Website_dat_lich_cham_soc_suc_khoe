@@ -1,6 +1,9 @@
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import Icon from './icons'
+import { notificationService } from '@/services/notification.service'
+import { formatDateTime } from '@/utils/format'
 
 interface Props {
   onToggleSidebar: () => void
@@ -9,6 +12,27 @@ interface Props {
 export default function AdminHeader({ onToggleSidebar }: Props) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [showNotiDropdown, setShowNotiDropdown] = useState(false)
+  const notiRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (notiRef.current && !notiRef.current.contains(event.target as Node)) {
+        setShowNotiDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    // Fetch 5 latest received notifications
+    notificationService.getReceived(1, 5).then(({ data }) => {
+      setNotifications(data)
+    }).catch(err => console.error('Lỗi tải thông báo header:', err))
+  }, [])
 
   function handleLogout() {
     logout()
@@ -49,10 +73,62 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
 
       {/* Right: notification + user */}
       <div className="flex items-center gap-2">
-        <button className="btn-icon relative" title="Thông báo">
-          <Icon name="bell" className="h-5 w-5 text-slate-500" />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
-        </button>
+        <div className="relative" ref={notiRef}>
+          <button 
+            className="btn-icon relative" 
+            title="Thông báo"
+            onClick={() => setShowNotiDropdown(!showNotiDropdown)}
+          >
+            <Icon name="bell" className="h-5 w-5 text-slate-500" />
+            {notifications.length > 0 && (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+            )}
+          </button>
+
+          {/* Dropdown Menu */}
+          {showNotiDropdown && (
+            <div className="absolute right-0 mt-2 w-80 rounded-xl bg-white shadow-lg border border-slate-100 overflow-hidden z-50">
+              <div className="p-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-800">Thông báo mới</h3>
+                <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-semibold">{notifications.length}</span>
+              </div>
+              
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center">
+                    <Icon name="bell-off" className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-500">Chưa có thông báo nào</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-50">
+                    {notifications.map(n => (
+                      <div key={n._id} className="p-3 hover:bg-slate-50 transition-colors cursor-default">
+                        <p className="text-sm font-semibold text-slate-800 line-clamp-2">{n.tieu_de}</p>
+                        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                          <Icon name="clock" className="w-3 h-3" />
+                          {formatDateTime(n.ngay_tao)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-2 bg-slate-50 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setShowNotiDropdown(false)
+                    navigate('/admin/notifications')
+                  }}
+                  className="w-full py-2 text-sm font-semibold text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors text-center inline-flex items-center justify-center gap-1"
+                >
+                  Xem tất cả
+                  <Icon name="arrow-right" className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="mx-1 h-6 w-px bg-slate-200" />
 
