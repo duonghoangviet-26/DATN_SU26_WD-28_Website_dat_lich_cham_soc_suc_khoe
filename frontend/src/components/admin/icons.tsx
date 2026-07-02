@@ -92,6 +92,12 @@ const ICONS: Record<string, string[]> = {
     'M23 6l-9.5 9.5-5-5L1 18',
     'M17 6h6v6',
   ],
+  'refresh-cw': [
+    'M23 4v6h-6',
+    'M1 20v-6h6',
+    'M3.51 9a9 9 0 0 1 14.85-3.36L23 10',
+    'M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
+  ],
   edit: [
     'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7',
     'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
@@ -113,6 +119,7 @@ const ICONS: Record<string, string[]> = {
     'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2',
     'M15 2H9c-1.1 0-2 .9-2 2v2h10V4c0-1.1-.9-2-2-2z',
   ],
+  
 }
 
 export default function Icon({ name, className = 'h-5 w-5' }: IconProps) {
