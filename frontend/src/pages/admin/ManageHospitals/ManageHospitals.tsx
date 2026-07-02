@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { HospitalItem, SpecialtyItem } from '@/types'
 import { hospitalService } from '@/services/hospital.service'
 import PageHeader from '@/components/common/PageHeader'
@@ -21,6 +22,8 @@ export default function ManageHospitals() {
   const [clinicView, setClinicView] = useState<ClinicView>('list')
   const [editingClinic, setEditingClinic] = useState<HospitalItem | null>(null)
   const [selectedClinic, setSelectedClinic] = useState<HospitalItem | null>(null)
+
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // ---- State chuyên khoa ----
   const [specialties, setSpecialties] = useState<SpecialtyItem[]>([])
@@ -47,6 +50,33 @@ export default function ManageHospitals() {
     fetchClinics()
   }, [])
 
+  // ---- Sync URL with State ----
+  useEffect(() => {
+    if (clinics.length === 0) return
+
+    const clinicIdQuery = searchParams.get('clinic')
+
+    if (clinicIdQuery) {
+      if (clinicView !== 'specialties' || selectedClinic?._id !== clinicIdQuery) {
+        const c = clinics.find((x) => x._id === clinicIdQuery)
+        if (c) {
+          setSelectedClinic(c)
+          setClinicView('specialties')
+          setSpecialtyView('list')
+          fetchSpecialties(c._id)
+        } else {
+          searchParams.delete('clinic')
+          setSearchParams(searchParams)
+        }
+      }
+    } else {
+      if (clinicView === 'specialties') {
+        setClinicView('list')
+        setSelectedClinic(null)
+      }
+    }
+  }, [searchParams, clinics, clinicView, selectedClinic])
+
   // ---- Load danh sách chuyên khoa cho 1 chi nhánh ----
   const fetchSpecialties = (clinicId: string) => {
     setSpecialtyLoading(true)
@@ -72,6 +102,8 @@ export default function ManageHospitals() {
     setClinicView('specialties')
     setSpecialtyView('list')
     fetchSpecialties(c._id)
+    searchParams.set('clinic', c._id)
+    setSearchParams(searchParams)
   }
 
   async function handleDeleteClinic(c: HospitalItem) {
@@ -176,7 +208,12 @@ export default function ManageHospitals() {
         <div className="space-y-4">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => { setClinicView('list'); setSelectedClinic(null) }}
+              onClick={() => {
+                setClinicView('list')
+                setSelectedClinic(null)
+                searchParams.delete('clinic')
+                setSearchParams(searchParams)
+              }}
               className="btn-secondary"
             >
               <Icon name="chevron-left" className="h-4 w-4 mr-1" />
