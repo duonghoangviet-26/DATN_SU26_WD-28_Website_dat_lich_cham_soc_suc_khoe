@@ -313,25 +313,43 @@ export default function ManageUsers() {
       </div>
 
       {/* Bộ lọc */}
-      <div className="card p-4 space-y-4">
-        <div className="grid gap-4 md:grid-cols-4">
-          <div className="md:col-span-2 relative">
+      <div className="card p-4">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4">
+          <div className="relative flex-1">
             <Icon name="search" className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-            <input className="input pl-10" placeholder="Tìm tên hoặc email..." value={keyword} onChange={e => { setKeyword(e.target.value); setPage(1); }} />
+            <input className="input pl-10 w-full" placeholder="Tìm tên hoặc email..." value={keyword} onChange={e => { setKeyword(e.target.value); setPage(1); }} />
           </div>
-          <select className="input" value={role} onChange={e => { setRole(e.target.value); setPage(1); }}>
-            <option value="">Tất cả vai trò</option>
-            {Object.entries(ROLES).map(([key, val]) => <option key={val} value={val}>{ROLE_LABEL[val]}</option>)}
-          </select>
-          <select className="input" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>
-            <option value="">Tất cả trạng thái</option>
-            <option value={USER_STATUS.ACTIVE}>Hoạt động</option>
-            <option value={USER_STATUS.LOCKED}>Đã khóa</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" id="trash" checked={isDeleted} onChange={e => { setIsDeleted(e.target.checked); setPage(1); }} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
-          <label htmlFor="trash" className="cursor-pointer font-medium selection:bg-none">Xem tài khoản đã xóa (Thùng rác)</label>
+          <div className="w-full md:w-48">
+            <select className="input w-full" value={role} onChange={e => { setRole(e.target.value); setPage(1); }}>
+              <option value="">Tất cả vai trò</option>
+              {Object.entries(ROLES).map(([key, val]) => <option key={val} value={val}>{ROLE_LABEL[val]}</option>)}
+            </select>
+          </div>
+          <div className="w-full md:w-48">
+            <select className="input w-full" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>
+              <option value="">Tất cả trạng thái</option>
+              <option value={USER_STATUS.ACTIVE}>Hoạt động</option>
+              <option value={USER_STATUS.LOCKED}>Đã khóa</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsDeleted(!isDeleted)
+              setPage(1)
+            }}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold shadow-sm transition-all active:scale-95 border h-[38px] shrink-0 ${
+              isDeleted
+                ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100/80'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <Icon
+              name="trash"
+              className={`h-4 w-4 ${isDeleted ? 'text-red-500' : 'text-slate-400'}`}
+            />
+            Thùng rác
+          </button>
         </div>
       </div>
 
