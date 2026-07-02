@@ -25,6 +25,7 @@ export default function ManageAppointments() {
   const [loaiKham, setLoaiKham] = useState('')
 
   const [confirmItem, setConfirmItem] = useState<AppointmentItem | null>(null)
+  const [completeItem, setCompleteItem] = useState<AppointmentItem | null>(null)
   const [detail, setDetail] = useState<AppointmentItem | null>(null)
 
   useEffect(() => {
@@ -50,6 +51,14 @@ export default function ManageAppointments() {
     setConfirmItem(null)
     await appointmentService.cancel(String(id))
     setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, status: 'cancelled' as const } : a))
+  }
+
+  async function handleComplete() {
+    if (!completeItem) return
+    const id = completeItem.id
+    setCompleteItem(null)
+    await appointmentService.complete(String(id))
+    setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, status: 'completed' as const } : a))
   }
 
   return (
@@ -105,7 +114,6 @@ export default function ManageAppointments() {
           <select className="input" value={loaiKham} onChange={(e) => setLoaiKham(e.target.value)}>
             <option value="">Tất cả loại khám</option>
             <option value="clinic">Phòng khám</option>
-            <option value="video">Video</option>
             <option value="home">Tại nhà</option>
           </select>
         </div>
@@ -163,6 +171,14 @@ export default function ManageAppointments() {
                       >
                         <Icon name="eye" className="h-3 w-3" /> Xem
                       </button>
+                      {a.status === 'confirmed' && (
+                        <button
+                          onClick={() => setCompleteItem(a)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-600 transition-colors hover:bg-green-100"
+                        >
+                          <Icon name="check" className="h-3 w-3" /> Hoàn thành
+                        </button>
+                      )}
                       {(a.status === 'pending' || a.status === 'confirmed') && (
                         <button
                           onClick={() => setConfirmItem(a)}
@@ -223,6 +239,15 @@ export default function ManageAppointments() {
         confirmText="Hủy lịch"
         onConfirm={handleCancel}
         onCancel={() => setConfirmItem(null)}
+      />
+
+      <ConfirmDialog
+        open={!!completeItem}
+        title="Đánh dấu hoàn thành"
+        message={`Xác nhận lịch hẹn của "${completeItem?.benh_nhan}" với ${completeItem?.bac_si} đã khám xong?`}
+        confirmText="Hoàn thành"
+        onConfirm={handleComplete}
+        onCancel={() => setCompleteItem(null)}
       />
     </div>
   )

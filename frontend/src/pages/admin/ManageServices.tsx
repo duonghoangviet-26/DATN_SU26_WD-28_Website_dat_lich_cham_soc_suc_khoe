@@ -392,7 +392,8 @@ export default function ManageServices() {
                       </td>
 
                       <td className={`px-4 py-3 text-slate-600 ${dim}`}>
-                        {s.loai === 'home' ? `${s.so_bac_si ?? 0} BS` : '—'}
+                        {/* home: BacSi.services[] | related: BacSi.related_services[] — cả 2 loại đều many-to-many với bác sĩ */}
+                        {`${s.so_bac_si ?? 0} BS`}
                       </td>
 
                       <td className={`px-4 py-3 ${dim}`}>
@@ -498,7 +499,10 @@ export default function ManageServices() {
           title={toggleTarget?.status === 'active' ? 'Ẩn dịch vụ?' : 'Hiện dịch vụ?'}
           message={
             toggleTarget?.status === 'active'
-              ? `Dịch vụ "${toggleTarget?.ten}" sẽ bị ẩn. Bệnh nhân không thể đặt thêm lịch. Lịch hẹn hiện có không bị hủy.`
+              ? `Dịch vụ "${toggleTarget?.ten}" sẽ bị ẩn. Bệnh nhân không thể đặt thêm lịch.` +
+                (toggleTarget?.active_appointments
+                  ? ` Có ${toggleTarget.active_appointments} lịch hẹn đang chờ — các lịch đó không bị hủy.`
+                  : ' Lịch hẹn hiện có không bị hủy.')
               : `Dịch vụ "${toggleTarget?.ten}" sẽ hiển thị trở lại. Bệnh nhân có thể đặt lịch.`
           }
           confirmText={toggleTarget?.status === 'active' ? 'Ẩn dịch vụ' : 'Hiện dịch vụ'}

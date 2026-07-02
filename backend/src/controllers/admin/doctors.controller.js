@@ -1,6 +1,7 @@
 import mongoose from 'mongoose'
 import { BacSi, NguoiDung, ChuyenKhoa } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
+import { generateInitialWindowForDoctor } from '../../services/scheduleGenerator.service.js'
 
 // ============================================================
 // C2 — Duyệt & quản lý hồ sơ bác sĩ (Admin)
@@ -33,7 +34,9 @@ async function formatDoctor(doc) {
     so_lan_nop:          d.so_lan_nop,
     la_hien:             d.la_hien,
     diem_danh_gia:       d.diem_danh_gia,
-    tong_danh_gia:       d.tong_danh_gia,
+    // Đổi tên tại boundary API: BacSi.tong_danh_gia (DB) → so_danh_gia (khớp DoctorProfile FE,
+    // cùng cách doctor/stats.controller.js đã làm) — tránh field bị undefined khi nối API thật.
+    so_danh_gia:         d.tong_danh_gia,
     phong_kham_mac_dinh: d.phong_kham_mac_dinh,
     chuyen_khoa:         (d.specialties ?? []).map((s) => ({ id: s._id, ten: s.ten })),
     ngay_tao:            d.ngay_tao,
@@ -116,6 +119,13 @@ export async function approve(req, res) {
 
     // Cấp role='doctor' cho tài khoản người dùng
     await NguoiDung.findByIdAndUpdate(doc.user_id, { role: 'doctor' })
+
+    // Sinh lịch làm việc 6 ngày đầu (B2 doc mục 2.4) — không chặn response nếu lỗi
+    try {
+      await generateInitialWindowForDoctor(doc._id, doc.phong_kham_mac_dinh)
+    } catch (genErr) {
+      console.error('[approve-doctor] Sinh lịch ban đầu thất bại:', genErr.message)
+    }
 
     return ok(res, await formatDoctor(doc), 'Đã duyệt hồ sơ bác sĩ')
   } catch (err) {

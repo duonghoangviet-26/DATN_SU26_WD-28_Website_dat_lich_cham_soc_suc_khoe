@@ -31,14 +31,16 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     tuoi: 38, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
     da_co_ket_qua: false,
   },
+  // id 3, 4 — HOME pending: đây là 2 ca duy nhất còn ở trạng thái 'pending' (quyết định 2026-07-02:
+  // clinic auto-confirm ngay khi thanh toán — không còn tồn tại clinic+pending nữa). Dùng để test nút Xác nhận/Từ chối.
   {
     id: 3, benh_nhan: 'Hoàng Văn Em', benh_nhan_id: 3,
     so_dien_thoai: '0903456789',
     ngay_kham: TODAY, gio_kham: '08:30',
-    loai_kham: 'clinic', status: 'pending', payment_status: 'unpaid', gia_kham: 350000,
-    ten_dich_vu: 'Tư vấn kết quả xét nghiệm',
-    phong_kham: 'Phòng 201, Tầng 2, Tòa A',
-    ly_do_kham: 'Hỏi về kết quả xét nghiệm cholesterol.',
+    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 700000,
+    ten_dich_vu: 'Khám tại nhà',
+    dia_chi_kham: '20 Lê Duẩn, Phường Bến Nghé, Quận 1, TP.HCM',
+    ly_do_kham: 'Sốt cao 3 ngày, cần bác sĩ đến khám tại nhà.',
     tuoi: 52, gioi_tinh: 'Nam', di_ung: null, benh_nen: 'Rối loạn mỡ máu',
     da_co_ket_qua: false,
   },
@@ -46,10 +48,10 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     id: 4, benh_nhan: 'Võ Thị Hoa', benh_nhan_id: 4,
     so_dien_thoai: '0904567890',
     ngay_kham: TODAY, gio_kham: '09:00',
-    loai_kham: 'clinic', status: 'pending', payment_status: 'unpaid', gia_kham: 350000,
-    ten_dich_vu: 'Khám tim mạch',
-    phong_kham: 'Phòng 201, Tầng 2, Tòa A',
-    ly_do_kham: 'Tim đập không đều, hay hồi hộp.',
+    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 700000,
+    ten_dich_vu: 'Khám tại nhà',
+    dia_chi_kham: '55 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM',
+    ly_do_kham: 'Người già không di chuyển được, cần khám tại nhà.',
     tuoi: 29, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
     da_co_ket_qua: false,
   },
@@ -122,14 +124,15 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     da_co_ket_qua: false,
     ly_do_huy: 'Bệnh nhân bận đột xuất, xin hủy lịch.',
   },
-  // id 11 — test TC-C01: pending + paid → nút "Xác nhận" xuất hiện
+  // id 11 — HOME pending: 3rd pending case (đã đổi từ clinic — clinic không thể pending vì
+  // luôn thanh toán ngay lúc đặt, không có bước chờ). home luôn unpaid cho tới khi BS confirm.
   {
     id: 11, benh_nhan: 'Bùi Thị Cẩm', benh_nhan_id: 11,
     so_dien_thoai: '0911111111',
     ngay_kham: TODAY, gio_kham: '10:00',
-    loai_kham: 'clinic', status: 'pending', payment_status: 'paid', gia_kham: 400000,
-    ten_dich_vu: 'Khám tim mạch',
-    phong_kham: 'Phòng 201, Tầng 2, Tòa A',
+    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 700000,
+    ten_dich_vu: 'Khám tại nhà',
+    dia_chi_kham: '88 Điện Biên Phủ, Phường Đa Kao, Quận 1, TP.HCM',
     ly_do_kham: 'Đau đầu kéo dài, chóng mặt.',
     tuoi: 35, gioi_tinh: 'Nữ', di_ung: null, benh_nen: 'Migraine mãn tính',
     da_co_ket_qua: false,
@@ -158,14 +161,14 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     tuoi: 44, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
     da_co_ket_qua: false,
   },
-  // id 14 — test: pending + paid + tương lai → nút "Xác nhận" PHẢI hiện (confirm trước ngày khám là hợp lệ)
+  // id 14 — HOME pending tương lai: test xác nhận trước ngày khám là hợp lệ (đã đổi từ clinic)
   {
     id: 14, benh_nhan: 'Vũ Thị Mai', benh_nhan_id: 14,
     so_dien_thoai: '0914444444',
     ngay_kham: d(3), gio_kham: '09:30',
-    loai_kham: 'clinic', status: 'pending', payment_status: 'paid', gia_kham: 400000,
-    ten_dich_vu: 'Khám tim mạch',
-    phong_kham: 'Phòng 201, Tầng 2, Tòa A',
+    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 700000,
+    ten_dich_vu: 'Khám tại nhà',
+    dia_chi_kham: '12 Pasteur, Phường Bến Nghé, Quận 1, TP.HCM',
     ly_do_kham: 'Tái khám định kỳ 3 tháng.',
     tuoi: 50, gioi_tinh: 'Nữ', di_ung: null, benh_nen: 'Rối loạn nhịp tim',
     da_co_ket_qua: false,
@@ -182,14 +185,15 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     tuoi: 58, gioi_tinh: 'Nam', di_ung: null, benh_nen: 'Cao huyết áp',
     da_co_ket_qua: false,
   },
-  // id 16 — test Luồng C: BS đã xác nhận, BN chưa thanh toán → warning + deadline
+  // id 16 — HOME: test Luồng C — BS đã xác nhận, BN chưa thanh toán → warning + deadline
+  // (chỉ home mới có combo confirmed+unpaid; clinic luôn paid ngay từ lúc tạo lịch)
   {
     id: 16, benh_nhan: 'Nguyễn Thị Phương', benh_nhan_id: 16,
     so_dien_thoai: '0916666666',
     ngay_kham: d(1), gio_kham: '10:30',
-    loai_kham: 'clinic', status: 'confirmed', payment_status: 'unpaid', gia_kham: 350000,
-    ten_dich_vu: 'Khám tim mạch',
-    phong_kham: 'Phòng 201, Tầng 2, Tòa A',
+    loai_kham: 'home', status: 'confirmed', payment_status: 'unpaid', gia_kham: 700000,
+    ten_dich_vu: 'Khám tại nhà',
+    dia_chi_kham: '9 Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP.HCM',
     ly_do_kham: 'Tái khám sau điều trị 2 tuần.',
     tuoi: 40, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
     da_co_ket_qua: false,

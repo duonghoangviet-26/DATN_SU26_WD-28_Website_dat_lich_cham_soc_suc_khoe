@@ -87,12 +87,25 @@ export async function getById(req, res) {
 }
 
 // ─── PATCH /api/doctor/appointments/:id/confirm ─────────────────────────────
+// Chỉ dùng cho HOME — clinic auto-confirm khi thanh toán, bác sĩ không còn xác nhận
+// (quyết định 2026-07-02, xem docs/superpowers/specs/2026-07-02-clinic-auto-confirm-decision.md)
 export async function confirm(req, res) {
   try {
     const docId = await getDocId(req.user.id)
     const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId })
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
+    if (a.loai_kham !== 'home') {
+      return fail(res, 409, 'Lịch khám tại phòng khám tự động xác nhận khi thanh toán — bác sĩ không cần xác nhận')
+    }
     if (a.status !== 'pending') return fail(res, 409, 'Chỉ xác nhận lịch ở trạng thái chờ')
+
+    // Quy tắc B3 #1: pending + ngay_kham < today → không được xác nhận (hết hạn).
+    // FE (isExpiredPending) đã ẩn nút nhưng cần chặn cả server để tránh gọi API trực tiếp.
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    if (a.ngay_kham < todayStart) {
+      return fail(res, 409, 'Lịch hẹn đã quá ngày khám, không thể xác nhận')
+    }
 
     a.status = 'confirmed'
     if (a.payment_status === 'unpaid') {
@@ -107,6 +120,10 @@ export async function confirm(req, res) {
 }
 
 // ─── PATCH /api/doctor/appointments/:id/cancel ──────────────────────────────
+// 2 trường hợp:
+//   - HOME, status='pending'   → từ chối ca chưa nhận (như cũ) — slot không tồn tại cho home.
+//   - CLINIC, status='confirmed' → "Hủy khẩn cấp" (spec 2026-06-27 mục 7.2): bắt buộc lý do,
+//     slot → 'locked' (KHÔNG trả về 'active' — bác sĩ không được tự nhận lại đúng ca đó).
 export async function cancel(req, res) {
   try {
     const { ly_do } = req.body
@@ -117,19 +134,50 @@ export async function cancel(req, res) {
       return fail(res, 409, 'Không thể hủy lịch hẹn ở trạng thái này')
     }
 
+    const isEmergency = a.loai_kham === 'clinic' && a.status === 'confirmed'
+    if (isEmergency && !ly_do?.trim()) {
+      return fail(res, 400, 'Hủy khẩn cấp bắt buộc phải nhập lý do')
+    }
+
     a.status    = 'cancelled'
     a.ly_do_huy = ly_do?.trim() || 'Bác sĩ hủy lịch'
     a.payment_deadline = null
+    if (a.payment_status === 'paid') a.payment_status = 'refunded'
 
     if (a.schedule_id && a.slot_id) {
       await LichLamViec.findOneAndUpdate(
         { _id: a.schedule_id, 'slots._id': a.slot_id },
-        { $set: { 'slots.$.status': 'active', 'slots.$.benh_nhan_id': null } },
+        isEmergency
+          ? { $set: { 'slots.$.status': 'locked' } }
+          : { $set: { 'slots.$.status': 'active', 'slots.$.benh_nhan_id': null } },
       )
     }
 
     await a.save()
-    return ok(res, { id: a._id, status: a.status }, 'Đã hủy lịch hẹn')
+    return ok(res, { id: a._id, status: a.status, payment_status: a.payment_status }, 'Đã hủy lịch hẹn')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── PATCH /api/doctor/appointments/:id/complete ────────────────────────────
+// Bác sĩ tự đánh dấu đã khám xong — KHÔNG bắt buộc đã nhập kết quả khám trước.
+// da_co_ket_qua có thể vẫn false sau khi complete(); createResult() cho phép
+// nhập kết quả cả khi status đã là 'completed' (xem guard trong createResult()).
+export async function complete(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId })
+    if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
+    if (a.status !== 'confirmed') {
+      return fail(res, 409, 'Chỉ đánh dấu hoàn thành cho lịch hẹn đã xác nhận')
+    }
+
+    a.status = 'completed'
+    await a.save()
+
+    const hasDone = await KetQuaKham.exists({ appointment_id: a._id })
+    return ok(res, { id: a._id, status: a.status, da_co_ket_qua: !!hasDone }, 'Đã đánh dấu hoàn thành')
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -162,7 +210,11 @@ export async function createResult(req, res) {
     const docId = await getDocId(req.user.id)
     const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId })
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
-    if (a.status !== 'confirmed') return fail(res, 409, 'Chỉ nhập kết quả khi lịch hẹn đã xác nhận')
+    // Cho phép cả 'completed' — bác sĩ có thể đã bấm "Hoàn thành" (complete()) trước
+    // khi nhập kết quả khám, xem comment tại complete() ở trên.
+    if (!['confirmed', 'completed'].includes(a.status)) {
+      return fail(res, 409, 'Chỉ nhập kết quả khi lịch hẹn đã xác nhận hoặc đã hoàn thành')
+    }
 
     const exists = await KetQuaKham.exists({ appointment_id: a._id })
     if (exists) return fail(res, 409, 'Kết quả khám đã tồn tại, hãy dùng PUT để cập nhật')
@@ -191,9 +243,11 @@ export async function createResult(req, res) {
       })
     }
 
-    // Đánh dấu lịch hẹn hoàn thành
-    a.status = 'completed'
-    await a.save()
+    // Đánh dấu lịch hẹn hoàn thành (nếu chưa — có thể đã completed từ trước)
+    if (a.status !== 'completed') {
+      a.status = 'completed'
+      await a.save()
+    }
 
     return created(res, {
       ...result.toObject(),

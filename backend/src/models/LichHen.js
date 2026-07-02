@@ -17,14 +17,12 @@ import mongoose from 'mongoose'
 //   "Đặt cho người thân (GĐ)": member_id=ThanhVien._id, nguoi_dat_* = người đăng nhập.
 //   "Đặt cho người thân (nhập tay)": member_id=null, nguoi_dat_* = người đăng nhập, khach_* = BN.
 //
-// --- Luồng CLINIC (Phương án C — Admin confirm) ---
+// --- Luồng CLINIC (Auto-confirm khi thanh toán — quyết định 2026-07-02) ---
 //   Slot CHỈ bị lock sau khi payment gateway xác nhận thành công (không lock trước).
-//   LichHen tạo ra với payment_status='paid' ngay lập tức (không qua unpaid với clinic).
-//   Admin xem danh sách pending+paid → xác nhận → status: pending → confirmed.
-//   confirmed_by lưu Admin._id đã thực hiện confirm.
-//   confirm_deadline = ngay_kham + gio_kham − 30 phút (auto-set trong pre-save).
-//   Cron 15': { status:'pending', loai_kham:'clinic', confirm_deadline < now } → auto-cancel + refund.
-//   admin_missed=true khi cron auto-cancel (audit SLA Admin).
+//   LichHen tạo ra với status='confirmed', payment_status='paid' NGAY LẬP TỨC.
+//   Không còn bước "Admin xác nhận" cho clinic — slot đã atomic-lock lúc thanh toán là đủ,
+//   Admin/BS chỉ can thiệp khi có ngoại lệ (hủy khẩn cấp / hủy có lý do / dời lịch).
+//   Xem docs/superpowers/specs/2026-07-02-clinic-auto-confirm-decision.md
 //
 // --- Luồng HOME (giữ nguyên) ---
 //   payment_deadline: BS confirm → BN thanh toán trong X giờ → nếu không: auto-cancel.
@@ -37,7 +35,8 @@ const appointmentSchema = new mongoose.Schema(
   {
     user_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', required: true },
     member_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ThanhVien', default: null },
-    doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', required: true },
+    // clinic: required — validate trong pre('validate') | home: null ban đầu, CSKH gán sau
+    doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
     // clinic: required (validate hook) | home: null — không dùng slot system
     schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', default: null },
     slot_id:     { type: mongoose.Schema.Types.ObjectId, default: null },
@@ -87,20 +86,20 @@ const appointmentSchema = new mongoose.Schema(
 
     ly_do_huy: { type: String, default: null },
 
-    // --- Luồng Admin confirm (clinic) ---
-    // confirmed_by: Admin._id đã xác nhận lịch hẹn này (null = chưa confirm)
-    confirmed_by: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
-    // confirm_deadline: Admin phải confirm trước thời điểm này (= ngay_kham + gio_kham − 30 phút).
-    // Auto-set trong pre-save hook khi loai_kham='clinic'. null với home.
-    // Cron: { status:'pending', loai_kham:'clinic', confirm_deadline:{ $lt: new Date() } } → auto-cancel
-    confirm_deadline: { type: Date, default: null },
-    // admin_missed: true khi cron auto-cancel vì Admin không confirm kịp → audit SLA
-    admin_missed: { type: Boolean, default: false },
-
     // --- Luồng home (giữ nguyên) ---
     // payment_deadline: BS confirm → set deadline BN thanh toán. null với clinic (đã paid từ đầu).
     // Cron: { status:'confirmed', payment_status:'unpaid', payment_deadline:{ $lt: new Date() } } → auto-cancel
     payment_deadline: { type: Date, default: null },
+
+    // --- Soft-lock / VNPay audit ---
+    // UUID token tạo tại POST /prepare — dùng để match IPN callback VNPay với đúng LichHen.
+    // Giữ lại sau khi LichHen tạo xong để audit dispute thanh toán.
+    pending_booking_id: { type: String, default: null },
+
+    // --- Kết quả xét nghiệm tại nhà ---
+    // CSKH upload PDF kết quả lab → paste URL vào đây. null cho đến khi lab trả kết quả.
+    // Chỉ dùng khi loai_kham='home'. Clinic dùng model KetQuaKham riêng.
+    ket_qua_url: { type: String, default: null, maxlength: 2000 },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
@@ -115,34 +114,23 @@ appointmentSchema.index({ payment_status: 1 })
 appointmentSchema.index({ ngay_kham: 1 })
 appointmentSchema.index({ schedule_id: 1 })                          // atomic slot update
 appointmentSchema.index({ doctor_id: 1, status: 1, ngay_kham: 1 })  // màn hình bác sĩ
-appointmentSchema.index({ status: 1, loai_kham: 1, confirm_deadline: 1 }) // cron auto-cancel clinic
-appointmentSchema.index({ confirmed_by: 1 })                         // Admin: "tôi đã confirm những lịch nào"
-appointmentSchema.index({ admin_missed: 1 })                         // audit SLA
-
-// Auto-set confirm_deadline khi tạo lịch clinic mới
-// confirm_deadline = ngay_kham + gio_kham − 30 phút
-appointmentSchema.pre('save', function () {
-  if (this.isNew && this.loai_kham === 'clinic' && this.ngay_kham && this.gio_kham) {
-    const [h, m] = this.gio_kham.split(':').map(Number)
-    const deadline = new Date(this.ngay_kham)
-    deadline.setHours(h, m - 30, 0, 0)
-    this.confirm_deadline = deadline
-  }
-})
 
 // Ràng buộc clinic/home + khách
 appointmentSchema.pre('validate', function () {
   if (this.loai_kham === 'home') {
     if (!this.dia_chi_kham) throw new Error('Khám tại nhà (home) bắt buộc có dia_chi_kham')
     if (!this.service_id)    throw new Error('Khám tại nhà (home) bắt buộc có service_id')
+    // doctor_id = null ban đầu — CSKH gán home_staff sau khi xác nhận
     this.phong_kham  = null
     this.schedule_id = null
     this.slot_id     = null
   } else if (this.loai_kham === 'clinic') {
+    if (!this.doctor_id)   throw new Error('Khám tại phòng khám (clinic) bắt buộc có doctor_id')
     if (!this.schedule_id) throw new Error('Khám tại phòng khám (clinic) bắt buộc có schedule_id')
     if (!this.slot_id)     throw new Error('Khám tại phòng khám (clinic) bắt buộc có slot_id')
     this.dia_chi_kham = null
     this.service_id   = null
+    this.ket_qua_url  = null // ket_qua_url chỉ dùng cho home
   }
   if (!this.member_id && !this.ten_khach) {
     throw new Error('Lịch khách (không có member_id) phải có ten_khach')

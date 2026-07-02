@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { DichVu, NhatKyThaoTac, LichHen } from '../../models/index.js'
+import { DichVu, NhatKyThaoTac, LichHen, BacSi } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 
 const isValidId = (id) => id && mongoose.Types.ObjectId.isValid(id)
@@ -17,6 +17,26 @@ const HANH_DONG_MAP = {
   SHOW_SERVICE:   'hien',
 }
 
+// Helper: tính so_bac_si / so_luot_dat / active_appointments — công thức theo
+// docs/luong-dat-dich-vu.md mục 4.3 (trước đây chưa implement, luôn undefined ở API thật).
+// related: đếm BacSi.related_services chứa service._id | home: đếm BacSi.services chứa service._id.
+// so_luot_dat / active_appointments: đếm LichHen.service_id — chỉ home mới có giá trị này
+// (LichHen.service_id luôn null với clinic, và related không có luồng đặt lịch riêng — xem
+// LichHen.js pre-validate hook), nên với related 2 số này luôn = 0, đúng theo thiết kế.
+async function computeExtras(service) {
+  const bacSiFilter = service.loai === 'related'
+    ? { related_services: service._id, trang_thai_duyet: 'approved', la_hien: true }
+    : { services: service._id, trang_thai_duyet: 'approved', la_hien: true }
+
+  const [so_bac_si, so_luot_dat, active_appointments] = await Promise.all([
+    BacSi.countDocuments(bacSiFilter),
+    LichHen.countDocuments({ service_id: service._id }),
+    LichHen.countDocuments({ service_id: service._id, status: { $in: ['pending', 'confirmed'] } }),
+  ])
+
+  return { so_bac_si, so_luot_dat, active_appointments }
+}
+
 // Helper: populate doc Mongoose (không findById lại — tiết kiệm 1 round-trip DB)
 async function populateService(doc) {
   await doc.populate([
@@ -24,12 +44,14 @@ async function populateService(doc) {
     { path: 'nguoi_tao_id', select: 'ho_ten' },
   ])
   const s = doc.toObject()
+  const extras = await computeExtras(doc)
   return {
     ...s,
     id:            s._id,
     specialty_ten: doc.specialty_id?.ten    ?? null,
     specialty_id:  doc.specialty_id?._id    ?? null,
     nguoi_tao:     doc.nguoi_tao_id?.ho_ten ?? null,
+    ...extras,
   }
 }
 
@@ -95,13 +117,14 @@ export async function list(req, res) {
       DichVu.countDocuments(filter),
     ])
 
-    const items = services.map((s) => ({
+    const items = await Promise.all(services.map(async (s) => ({
       ...s,
       id:            s._id,
       specialty_ten: s.specialty_id?.ten    ?? null,
       specialty_id:  s.specialty_id?._id    ?? null,
       nguoi_tao:     s.nguoi_tao_id?.ho_ten ?? null,
-    }))
+      ...(await computeExtras(s)),
+    })))
 
     const totalPages = Math.max(1, Math.ceil(total / limit))
     return ok(res, { items, total, page, totalPages })
@@ -119,7 +142,10 @@ export async function getById(req, res) {
       .lean()
     if (!s) return fail(res, 404, 'Không tìm thấy dịch vụ')
 
-    const lich_su_thay_doi = await getAuditLogs(s._id)
+    const [lich_su_thay_doi, extras] = await Promise.all([
+      getAuditLogs(s._id),
+      computeExtras(s),
+    ])
     return ok(res, {
       ...s,
       id:               s._id,
@@ -127,6 +153,7 @@ export async function getById(req, res) {
       specialty_id:     s.specialty_id?._id    ?? null,
       nguoi_tao:        s.nguoi_tao_id?.ho_ten ?? null,
       lich_su_thay_doi,
+      ...extras,
     })
   } catch (err) {
     return fail(res, 500, err.message)
@@ -162,17 +189,20 @@ export async function create(req, res) {
         return fail(res, 400, 'Dịch vụ tại nhà cần chọn ít nhất 1 khu vực phục vụ')
     }
 
+    // related: không đặt lịch riêng (đi kèm khám clinic, BS chỉ định) → thời lượng/lịch áp dụng
+    // vô nghĩa, để null thay vì giá trị giả — tránh hiển thị nhầm "30 phút, T2–T7 08:00-17:00"
+    // như 1 dịch vụ đặt lịch được (ServiceViewModal.tsx).
     const service = await DichVu.create({
       ten:            ten.trim(),
       loai,
       gia:            parseInt(gia, 10),
       mo_ta_ngan:     mo_ta_ngan?.trim() || null,
       mo_ta:          mo_ta?.trim()      || null,
-      thoi_gian_phut: loai === 'home' ? 60 : 30,
+      thoi_gian_phut: loai === 'home' ? 60 : null,
       gio_dat_truoc_toi_thieu: loai === 'home' ? parseInt(gio_dat_truoc_toi_thieu ?? 4, 10) : undefined,
-      ngay_ap_dung:   'T2–T7',
-      gio_bat_dau:    '08:00',
-      gio_ket_thuc:   '17:00',
+      ngay_ap_dung:   loai === 'home' ? 'T2–T7' : null,
+      gio_bat_dau:    loai === 'home' ? '08:00' : null,
+      gio_ket_thuc:   loai === 'home' ? '17:00' : null,
       specialty_id:   loai === 'related' ? specialty_id : null,
       khu_vuc:        loai === 'home' ? (khu_vuc ?? []) : [],
       chuan_bi_truoc: loai === 'related' ? (chuan_bi_truoc?.trim() || null) : null,
@@ -198,8 +228,11 @@ export async function create(req, res) {
 
 // ─── PUT /api/admin/services/:id ────────────────────────────────────────────
 export async function update(req, res) {
+  // Khai báo ngoài try — catch bên dưới cần đọc service.loai khi bắt lỗi trùng key (11000).
+  // Khai báo bằng const bên trong try trước đây gây ReferenceError ở catch (block-scope JS).
+  let service
   try {
-    const service = await DichVu.findById(req.params.id)
+    service = await DichVu.findById(req.params.id)
     if (!service) return fail(res, 404, 'Không tìm thấy dịch vụ')
 
     // ── Validate tên ─────────────────────────────────────────────────────────
@@ -257,15 +290,27 @@ export async function update(req, res) {
       service.gio_dat_truoc_toi_thieu = gdt
     }
 
-    if (req.body.specialty_id !== undefined) {
-      service.specialty_id = isValidId(req.body.specialty_id) ? req.body.specialty_id : null
+    // Re-validate khu_vuc ≥1 cho home — create() đã chặn, update() trước đây tin client
+    // hoàn toàn (chỉ set nếu body có field), có thể lưu 0 khu vực qua gọi API trực tiếp.
+    if (currentLoai === 'home' && (!service.khu_vuc || service.khu_vuc.length === 0)) {
+      return fail(res, 400, 'Dịch vụ tại nhà cần chọn ít nhất 1 khu vực phục vụ')
     }
 
-    // Luôn reset các trường cố định theo loại hiện tại
-    service.thoi_gian_phut = currentLoai === 'home' ? 60 : 30
-    service.ngay_ap_dung   = 'T2–T7'
-    service.gio_bat_dau    = '08:00'
-    service.gio_ket_thuc   = '17:00'
+    // home không dùng specialty_id — luôn clear kể cả khi client không gửi field này
+    // (trước đây chỉ set khi body có specialty_id, nên đổi related→home dễ để sót giá trị cũ).
+    if (currentLoai === 'related') {
+      if (req.body.specialty_id !== undefined) service.specialty_id = req.body.specialty_id
+      // đã validate isValidId(specId) ở khối "Validate specialty_id khi loại là related" phía trên
+    } else {
+      service.specialty_id = null
+    }
+
+    // Luôn reset các trường cố định theo loại hiện tại — related không đặt lịch riêng
+    // nên thời lượng/lịch áp dụng vô nghĩa, để null (không phải giá trị giả).
+    service.thoi_gian_phut = currentLoai === 'home' ? 60  : null
+    service.ngay_ap_dung   = currentLoai === 'home' ? 'T2–T7' : null
+    service.gio_bat_dau    = currentLoai === 'home' ? '08:00' : null
+    service.gio_ket_thuc   = currentLoai === 'home' ? '17:00' : null
     if (currentLoai === 'related') {
       service.khu_vuc       = []
       service.chuan_bi_truoc = req.body.chuan_bi_truoc?.trim() || null

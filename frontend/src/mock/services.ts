@@ -8,9 +8,10 @@ export const mockServices: ServiceItem[] = [
     mo_ta_ngan: 'Siêu âm tim 2D, Doppler màu — theo chỉ định bác sĩ Tim mạch.',
     mo_ta: 'Siêu âm tim 2D kết hợp Doppler màu giúp đánh giá cấu trúc, chức năng tim và các van tim. Thực hiện tại phòng chẩn đoán hình ảnh theo chỉ định bác sĩ.',
     chuan_bi_truoc: 'Mặc trang phục thoải mái, nới lỏng vùng ngực. Tháo trang sức kim loại vùng ngực. Không cần nhịn ăn.',
-    thoi_gian_phut: 30, ngay_ap_dung: 'T2–T7', gio_bat_dau: '08:00', gio_ket_thuc: '17:00',
+    // related không đặt lịch riêng (đi kèm khám clinic, BS chỉ định) → không có thời lượng/lịch áp dụng
+    thoi_gian_phut: null, ngay_ap_dung: null, gio_bat_dau: null, gio_ket_thuc: null,
     specialty_id: '1', specialty_ten: 'Tim mạch', khu_vuc: [],
-    so_bac_si: 0, so_luot_dat: 0, status: 'active',
+    so_bac_si: 2, so_luot_dat: 0, status: 'active',
     ngay_tao: '2026-01-10T00:00:00.000Z',
     ngay_cap_nhat: '2026-03-15T14:00:00.000Z',
     lich_su_thay_doi: [
@@ -25,9 +26,9 @@ export const mockServices: ServiceItem[] = [
     mo_ta_ngan: 'Ghi điện tim 12 chuyển đạo — theo chỉ định bác sĩ Tim mạch.',
     mo_ta: 'Điện tâm đồ 12 chuyển đạo giúp phát hiện các rối loạn nhịp tim, thiếu máu cơ tim và các bất thường dẫn truyền. Kết quả có trong 15–30 phút.',
     chuan_bi_truoc: 'Không bôi kem dưỡng da lên ngực, tay, chân ít nhất 4 giờ trước. Tháo trang sức và đồng hồ kim loại. Mặc áo dễ cởi.',
-    thoi_gian_phut: 30, ngay_ap_dung: 'T2–T7', gio_bat_dau: '08:00', gio_ket_thuc: '17:00',
+    thoi_gian_phut: null, ngay_ap_dung: null, gio_bat_dau: null, gio_ket_thuc: null,
     specialty_id: '1', specialty_ten: 'Tim mạch', khu_vuc: [],
-    so_bac_si: 0, so_luot_dat: 0, status: 'active',
+    so_bac_si: 1, so_luot_dat: 0, status: 'active',
     ngay_tao: '2026-01-12T00:00:00.000Z',
     ngay_cap_nhat: '2026-02-20T09:00:00.000Z',
     lich_su_thay_doi: [

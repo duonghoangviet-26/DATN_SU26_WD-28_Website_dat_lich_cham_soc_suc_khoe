@@ -103,6 +103,7 @@ export async function cancel(req, res) {
     a.status   = 'cancelled'
     a.ly_do_huy = ly_do?.trim() || 'Admin hủy lịch'
     a.payment_deadline = null
+    if (a.payment_status === 'paid') a.payment_status = 'refunded'
 
     // Giải phóng slot nếu là clinic
     if (a.schedule_id && a.slot_id) {
@@ -113,7 +114,27 @@ export async function cancel(req, res) {
     }
 
     await a.save()
-    return ok(res, { id: a._id, status: a.status }, 'Đã hủy lịch hẹn')
+    return ok(res, { id: a._id, status: a.status, payment_status: a.payment_status }, 'Đã hủy lịch hẹn')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── PATCH /api/admin/appointments/:id/complete ─────────────────────────────
+// Admin đánh dấu lịch đã khám xong (chỉ từ 'confirmed' — không còn bước Admin "confirm"
+// cho clinic nữa, xem docs/superpowers/specs/2026-07-02-clinic-auto-confirm-decision.md)
+export async function complete(req, res) {
+  try {
+    const a = await LichHen.findById(req.params.id)
+    if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
+    if (a.status !== 'confirmed') {
+      return fail(res, 409, 'Chỉ đánh dấu hoàn thành cho lịch hẹn đã xác nhận')
+    }
+
+    a.status = 'completed'
+    await a.save()
+
+    return ok(res, { id: a._id, status: a.status }, 'Đã đánh dấu hoàn thành')
   } catch (err) {
     return fail(res, 500, err.message)
   }

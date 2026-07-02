@@ -82,6 +82,8 @@ export interface Appointment {
   ten_dich_vu?: string | null     // clinic: snapshot ChuyenKhoa.ten | home: snapshot DichVu.ten
   ly_do_huy?: string | null
   payment_deadline?: string | null
+  // home only — URL PDF kết quả xét nghiệm do CSKH upload sau khi lab xong
+  ket_qua_url?: string | null
   ngay_tao: string
 }
 
@@ -176,12 +178,13 @@ export interface ServiceItem {
   gia: number                           // home: BN trả | related: giá tham khảo
   mo_ta_ngan?: string | null
   mo_ta?: string | null
-  // Cố định theo loại: related=30ph | home=60ph (không cấu hình từ form)
+  // home: cố định 60ph, có lịch áp dụng (đặt lịch riêng, chọn BS+slot)
+  // related: null — không đặt lịch riêng (đi kèm khám clinic, BS chỉ định), thời lượng/lịch áp dụng vô nghĩa
   thoi_gian_phut?: number | null
   gio_dat_truoc_toi_thieu?: number      // home only — đơn vị: giờ
-  ngay_ap_dung?: string | null          // cố định 'T2–T7'
-  gio_bat_dau?: string | null           // cố định '08:00'
-  gio_ket_thuc?: string | null          // cố định '17:00'
+  ngay_ap_dung?: string | null          // home: cố định 'T2–T7' | related: null
+  gio_bat_dau?: string | null           // home: cố định '08:00' | related: null
+  gio_ket_thuc?: string | null          // home: cố định '17:00' | related: null
   // related only — hướng dẫn chuẩn bị trước (nhịn ăn, tháo kim loại, v.v.)
   chuan_bi_truoc?: string | null
   // related: required | home: optional
@@ -190,6 +193,7 @@ export interface ServiceItem {
   khu_vuc?: string[]                    // home only
   so_bac_si?: number                    // computed từ BacSi.services[]
   so_luot_dat?: number                  // computed từ LichHen (home only)
+  active_appointments?: number          // computed — số lịch hẹn pending/confirmed đang dùng dịch vụ này
   nguoi_tao?: string | null
   status: ServiceStatus
   ngay_tao?: string
@@ -282,7 +286,9 @@ export interface DoctorSlot {
   phong_kham?: string | null
   benh_nhan?: string | null
   benh_nhan_id?: string | null
-  status: 'active' | 'booked' | 'locked' | 'cancelled' | 'expired'
+  // pending_payment: slot bị BN giữ 15 phút trong khi thanh toán VNPay (soft-lock)
+  status: 'active' | 'pending_payment' | 'booked' | 'locked' | 'cancelled' | 'expired'
+  lock_expires_at?: string | null  // ISO datetime — set khi pending_payment, null các trạng thái khác
   cancel_requested?: boolean
 }
 
@@ -308,6 +314,8 @@ export interface DoctorAppointmentDetail {
   da_co_ket_qua: boolean             // computed bởi backend (exists in ket_qua_kham)
   ly_do_huy?: string | null
   payment_deadline?: string | null   // ISO datetime — deadline BN thanh toán sau khi BS confirm (Luồng C)
+  // home only — URL PDF kết quả xét nghiệm do CSKH upload sau khi lab xong
+  ket_qua_url?: string | null
 }
 
 export interface PrescriptionDrug {

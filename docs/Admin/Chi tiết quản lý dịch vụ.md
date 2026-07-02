@@ -2,6 +2,12 @@
 
 > Tài liệu phân tích chi tiết chức năng C4 — Quản lý dịch vụ.
 > **Phiên bản 6** — Cập nhật: Kết nối backend MongoDB hoàn tất, đổi id → `string` (ObjectId), thêm `specialty.service.ts`, ghi lại 6 bug tìm & sửa.
+>
+> ⚠️ **Đã lỗi thời 2026-07-02:** `ServiceType` mô tả trong file này (`'clinic' | 'home'`) đã bị thay thế bởi
+> `'home' | 'related'` theo `docs/luong-dat-dich-vu.md` (2026-06-25) — giá khám clinic (theo slot 30 phút)
+> chuyển sang lưu ở `BacSi.gia_kham`, không còn là 1 dòng trong `DichVu`. Code thật
+> (`backend/src/models/DichVu.js`, `frontend/src/types/index.ts`) đã đúng theo doc mới — phần schema/type
+> trong file này (mục 2, 3) chỉ còn giá trị tham khảo lịch sử, không dùng để code tiếp.
 
 ---
 

@@ -77,6 +77,14 @@ const doctorSchema = new mongoose.Schema(
     //   DichVu.loai='related' AND DichVu.specialty_id IN BacSi.specialties[] AND status='active'
     // Hiển thị "Theo chỉ định bác sĩ" — giá chỉ mang tính tham khảo.
     related_services: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DichVu' }],
+
+    // specialist  = bác sĩ khám clinic, có specialties[], có slot, hiển thị trang "Tìm bác sĩ"
+    // home_staff  = nhân viên lấy mẫu tại nhà, specialties=[], KHÔNG hiển thị trang tìm bác sĩ
+    loai: {
+      type: String,
+      enum: ['specialist', 'home_staff'],
+      default: 'specialist',
+    },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },

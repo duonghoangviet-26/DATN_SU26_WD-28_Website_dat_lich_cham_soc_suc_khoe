@@ -1,7 +1,8 @@
 import type { DoctorSlot } from '@/types'
 import { toLocalDateStr } from '@/utils/format'
 
-// 16 slot/ngày — nghỉ trưa 12:00–13:30 (TBD-1: phương án C)
+// 16 slot/ngày — nghỉ trưa 12:00–13:30
+// slot status: active | pending_payment (BN giữ 15 phút, soft-lock) | booked | locked | cancelled | expired
 const SLOT_TIMES: [string, string][] = [
   ['08:00', '08:30'], ['08:30', '09:00'], ['09:00', '09:30'], ['09:30', '10:00'],
   ['10:00', '10:30'], ['10:30', '11:00'], ['11:00', '11:30'], ['11:30', '12:00'],
@@ -52,12 +53,17 @@ function buildSlots(): DoctorSlot[] {
 
       if (dayIdx === 0) {
         // Hôm nay — id 1–16
-        // slotIdx=0:  booked  — test Yêu cầu hủy, guard lockSlot/updatePhongKham booked
+        // slotIdx=0:  booked          — test Yêu cầu hủy, guard lockSlot/updatePhongKham booked
+        // slotIdx=2:  pending_payment — BN đang giữ slot 15 phút để thanh toán VNPay (soft-lock)
         // slotIdx=4:  active phong=null — test warning chưa có phòng + lock null phong
-        // slotIdx=8:  locked  — test Mở lại, guard unlockSlot
-        // slotIdx=15: cancelled — test guard cancelSlot/lockSlot/unlockSlot/updatePhongKham
+        // slotIdx=8:  locked          — test Mở lại, guard unlockSlot
+        // slotIdx=15: cancelled       — test guard cancelSlot/lockSlot/unlockSlot/updatePhongKham
         if (slotIdx === 0) {
           slot = { ...base, status: 'booked', benh_nhan: 'Trần Thị Bình', benh_nhan_id: '2', phong_kham: PHONG[0] }
+        } else if (slotIdx === 2) {
+          // Soft-lock: slot đang bị giữ bởi BN khác, hết hạn sau ~10 phút
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+          slot = { ...base, status: 'pending_payment', lock_expires_at: expiresAt, phong_kham: PHONG[0] }
         } else if (slotIdx === 4) {
           slot = { ...base, phong_kham: null }
         } else if (slotIdx === 8) {

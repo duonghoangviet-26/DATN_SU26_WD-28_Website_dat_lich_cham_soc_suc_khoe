@@ -4,6 +4,8 @@
 > Trạng thái: Đã duyệt
 > Phạm vi: Cập nhật luồng thanh toán từ Phương án C — thêm soft-lock slot 15 phút
 > Tham chiếu: `docs/superpowers/specs/2026-06-27-booking-flow-design.md` (spec gốc)
+>
+> ⚠️ **Đã sửa đổi 2026-07-02:** bước 3a (IPN SUCCESS) tạo `LichHen` với `status:'confirmed'` thay vì `status:'pending'` — bỏ bước Admin xác nhận cho clinic. TTL soft-lock 15 phút trong doc này **giữ nguyên, không đổi**. Xem `docs/superpowers/specs/2026-07-02-clinic-auto-confirm-decision.md`.
 
 ---
 
@@ -143,8 +145,9 @@ Server:
   3a. SUCCESS (vnp_ResponseCode = '00'):
        → Atomic update LichLamViec:
            slot.status='booked', benh_nhan_id=user_id, lock_expires_at=null
-       → Tạo LichHen { status:'pending', payment_status:'paid',
+       → Tạo LichHen { status:'confirmed', payment_status:'paid',
                         pending_booking_id: token }
+       // 2026-07-02: auto-confirm — không còn 'pending' chờ Admin duyệt cho clinic
        → Tạo ThanhToan { status:'paid', gateway_transaction_id: vnp_TransactionNo,
                           ngay_thanh_toan: now }
        → Xóa pending_booking record

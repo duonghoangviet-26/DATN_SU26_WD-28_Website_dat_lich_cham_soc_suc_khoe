@@ -38,7 +38,10 @@ export const doctorAppointmentService = {
   async confirm(id: string | number): Promise<Partial<DoctorAppointmentDetail>> {
     await delay()
     const item = appointments.find(a => String(a.id) === String(id))
-    const deadline = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+    // Chỉ set deadline khi BN chưa thanh toán — đã paid thì không cần chờ (khớp backend thật).
+    const deadline = item?.payment_status === 'unpaid'
+      ? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+      : null
     if (item) {
       item.status = 'confirmed'
       item.payment_deadline = deadline

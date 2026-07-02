@@ -804,10 +804,11 @@ export default function DoctorAppointments() {
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex items-center gap-1.5">
-                                {/* PENDING */}
-                                {appt.status === 'pending' && (
+                                {/* PENDING — chỉ còn cho HOME (quyết định 2026-07-02: clinic auto-confirm khi
+                                    thanh toán, không còn ở trạng thái pending nên không có nút Xác nhận/Từ chối) */}
+                                {appt.status === 'pending' && appt.loai_kham === 'home' && (
                                   <>
-                                    {/* Xác nhận — Luồng C: BS confirm bất kể đã trả tiền chưa, chỉ chặn khi hết hạn */}
+                                    {/* Xác nhận — Luồng C (home): BS confirm bất kể đã trả tiền chưa, chỉ chặn khi hết hạn */}
                                     {!isExpiredPending(appt) && (
                                       <button
                                         onClick={() => handleConfirm(appt.id)}
@@ -848,12 +849,14 @@ export default function DoctorAppointments() {
                                         </button>
                                       </>
                                     )}
-                                    {/* Hủy: luôn hiện — bác sĩ hủy bất kỳ thời điểm → hoàn tiền 100% */}
+                                    {/* Hủy: luôn hiện — bác sĩ hủy bất kỳ thời điểm → hoàn tiền 100%.
+                                        Với clinic đây là "Hủy khẩn cấp" (bắt buộc lý do, slot → locked). */}
                                     <button
                                       onClick={() => setCancelId(appt.id)}
                                       className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
                                     >
-                                      <Icon name="x" className="h-3 w-3" /> Hủy
+                                      <Icon name="x" className="h-3 w-3" />
+                                      {appt.loai_kham === 'clinic' ? 'Hủy khẩn cấp' : 'Hủy'}
                                     </button>
                                   </>
                                 )}
@@ -1005,12 +1008,17 @@ export default function DoctorAppointments() {
         {cancelId !== null && (() => {
           const appt = all.find((a) => a.id === cancelId)
           const hasPaid = appt?.payment_status === 'paid'
+          const isClinic = appt?.loai_kham === 'clinic'
           return (
             <ReasonModal
-              title="Hủy lịch đã xác nhận"
-              description={hasPaid
-                ? 'Bác sĩ hủy → bệnh nhân được hoàn tiền 100% bất kể thời điểm.'
-                : 'Bác sĩ hủy → lịch hẹn sẽ bị hủy. Bệnh nhân chưa thanh toán nên không có hoàn tiền.'}
+              title={isClinic ? 'Hủy khẩn cấp (bắt buộc lý do)' : 'Hủy lịch đã xác nhận'}
+              description={
+                isClinic
+                  ? 'Dùng khi bác sĩ đột xuất không thể khám. Slot sẽ bị khóa (không mở lại tự động) để tránh nhận nhầm đúng ca đó. Bệnh nhân được hoàn tiền 100%.'
+                  : hasPaid
+                    ? 'Bác sĩ hủy → bệnh nhân được hoàn tiền 100% bất kể thời điểm.'
+                    : 'Bác sĩ hủy → lịch hẹn sẽ bị hủy. Bệnh nhân chưa thanh toán nên không có hoàn tiền.'
+              }
               confirmLabel="Xác nhận hủy"
               onConfirm={(ly_do) => handleCancelConfirmed(cancelId, ly_do)}
               onClose={() => setCancelId(null)}

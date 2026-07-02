@@ -53,10 +53,25 @@ export const appointmentService = {
   async cancel(id: string, ly_do?: string): Promise<{ id: string; status: AppointmentStatus }> {
     await delay()
     const item = appointments.find(a => String(a.id) === String(id))
-    if (item) item.status = 'cancelled'
+    if (item) {
+      item.status = 'cancelled'
+      if (item.payment_status === 'paid') item.payment_status = 'refunded'
+    }
     return { id, status: 'cancelled' }
     // Real API:
     // const res = await axiosInstance.patch<ApiResponse<{ id: string; status: AppointmentStatus }>>(`/admin/appointments/${id}/cancel`, { ly_do })
+    // return res.data.data
+  },
+
+  // Admin đánh dấu hoàn thành — chỉ cho lịch đã 'confirmed' (quyết định 2026-07-02: clinic
+  // auto-confirm khi thanh toán, không còn bước Admin "confirm" trước đó nữa)
+  async complete(id: string): Promise<{ id: string; status: AppointmentStatus }> {
+    await delay()
+    const item = appointments.find(a => String(a.id) === String(id))
+    if (item) item.status = 'completed'
+    return { id, status: 'completed' }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<{ id: string; status: AppointmentStatus }>>(`/admin/appointments/${id}/complete`)
     // return res.data.data
   },
 }

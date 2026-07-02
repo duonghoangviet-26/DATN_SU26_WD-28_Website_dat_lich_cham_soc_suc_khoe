@@ -4,6 +4,8 @@
 > Trạng thái: Chờ review  
 > Phạm vi: A-new (Trang chuyên khoa) + trang bác sĩ + trang đặt lịch + trang thanh toán  
 > Tham chiếu: `docs/luong-dat-dich-vu.md`, `backend/src/models/LichHen.js`, `backend/src/models/BacSi.js`
+>
+> ⚠️ **Đã sửa đổi 2026-07-02:** bước "Admin xác nhận" (Bước 6, mục 4.1, 6.2, 6.3-Cron 1, 8.3, 9.2) cho lịch **clinic** đã bị BỎ — clinic giờ auto-confirm ngay khi thanh toán thành công. Xem chi tiết + lý do tại `docs/superpowers/specs/2026-07-02-clinic-auto-confirm-decision.md`. Các phần khác của spec này (luồng home, cancellation policy nói chung, pages/API không liên quan tới confirm) vẫn còn hiệu lực.
 
 ---
 

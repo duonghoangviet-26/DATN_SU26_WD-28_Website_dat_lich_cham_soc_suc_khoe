@@ -2,6 +2,8 @@
 
 > Ngày: 2026-06-27  
 > Tham chiếu spec: `docs/superpowers/specs/2026-06-27-booking-flow-design.md`
+>
+> ⚠️ **Đã sửa đổi 2026-07-02:** mục 2 (LichHen.js) — bỏ hẳn `confirmed_by`, `confirm_deadline`, `admin_missed` + hook pre-save liên quan + các index tương ứng. Clinic auto-confirm khi thanh toán, không còn ai "confirm" nên các field này không cần nữa. Xem `docs/superpowers/specs/2026-07-02-clinic-auto-confirm-decision.md`.
 
 ---
 

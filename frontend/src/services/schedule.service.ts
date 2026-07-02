@@ -76,8 +76,13 @@ export const scheduleService = {
 
   async requestCancelSlot(slotId: string, ly_do: string): Promise<void> {
     await delay()
+    // Cập nhật mảng slots gốc — nếu không, cờ cancel_requested bị mất khi trang gọi lại getAll()
+    // (ví dụ đổi tab rồi quay lại) vì state cục bộ ở component không đồng bộ với "DB" mock này.
+    const s = slots.find(x => x.id === slotId)
+    if (s) s.cancel_requested = true
     // Real API:
-    // await axiosInstance.post(`/doctor/schedule/slots/${slotId}/cancel-request`, { ly_do })
+    // const s = slots.find(x => x.id === slotId)
+    // await axiosInstance.post(`/doctor/schedule/${s.schedule_id}/slots/${slotId}/request-cancel`, { ly_do })
   },
 
   async deleteSchedule(scheduleId: string): Promise<void> {

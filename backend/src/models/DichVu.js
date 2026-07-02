@@ -63,10 +63,11 @@ const serviceSchema = new mongoose.Schema(
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', default: null },
     khu_vuc:      { type: [String], default: [] }, // home only
     nguoi_tao_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
+    // inactive mặc định — Admin review nội dung trước khi công khai (tránh BN thấy giá/mô tả sai)
     status: {
       type: String,
       enum: ['active', 'inactive'],
-      default: 'active',
+      default: 'inactive',
     },
   },
   {
@@ -87,18 +88,22 @@ serviceSchema.pre('validate', async function () {
     const seq = await Counter.nextSeq('dich_vu')
     this.ma_dich_vu = 'DV' + String(seq).padStart(3, '0')
   }
-  // Đặt lịch cố định T2–T7 08:00–17:00 nếu chưa có
-  if (!this.ngay_ap_dung) this.ngay_ap_dung = 'T2–T7'
-  if (!this.gio_bat_dau)  this.gio_bat_dau  = '08:00'
-  if (!this.gio_ket_thuc) this.gio_ket_thuc = '17:00'
-
   if (this.loai === 'home') {
+    // Đặt lịch cố định T2–T7 08:00–17:00 — có ý nghĩa vì home đặt lịch riêng (chọn BS + slot)
+    if (!this.ngay_ap_dung) this.ngay_ap_dung = 'T2–T7'
+    if (!this.gio_bat_dau)  this.gio_bat_dau  = '08:00'
+    if (!this.gio_ket_thuc) this.gio_ket_thuc = '17:00'
     if (!this.thoi_gian_phut) this.thoi_gian_phut = 60
     this.chuan_bi_truoc = null // home không dùng chuan_bi_truoc
   }
   if (this.loai === 'related') {
-    this.thoi_gian_phut = 30  // cố định 30 phút cho related
-    this.khu_vuc        = []
+    // related không đặt lịch riêng (đi kèm khám clinic, BS chỉ định) → thời lượng/lịch áp dụng
+    // vô nghĩa, để null thay vì giá trị giả (tránh hiển thị nhầm như 1 dịch vụ đặt lịch được).
+    this.thoi_gian_phut = null
+    this.ngay_ap_dung    = null
+    this.gio_bat_dau     = null
+    this.gio_ket_thuc    = null
+    this.khu_vuc         = []
     // specialty_id required for related — validated in controller trả 400, không throw ở đây
   }
 })

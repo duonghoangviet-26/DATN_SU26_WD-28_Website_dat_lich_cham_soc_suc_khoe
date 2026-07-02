@@ -10,9 +10,10 @@ export const mockAppointments: AppointmentItem[] = [
     ten_dich_vu: 'Tim mạch',
   },
   {
+    // clinic + paid ⇒ auto-confirm ngay khi tạo lịch (quyết định 2026-07-02) — không còn 'pending' cho clinic
     id: 2, benh_nhan: 'Trần Thị Bình', bac_si: 'BS. Phạm Thu Dung',
     chuyen_khoa: 'Nhi khoa', ngay_kham: TODAY, gio_kham: '10:00',
-    loai_kham: 'clinic', status: 'pending', payment_status: 'unpaid', gia_kham: 250000,
+    loai_kham: 'clinic', status: 'confirmed', payment_status: 'paid', gia_kham: 250000,
     ten_dich_vu: 'Nhi khoa',
   },
   {
@@ -24,7 +25,7 @@ export const mockAppointments: AppointmentItem[] = [
   {
     id: 4, benh_nhan: 'Võ Thị Hoa', bac_si: 'BS. Phạm Thu Dung',
     chuyen_khoa: 'Nhi khoa', ngay_kham: TODAY, gio_kham: '09:00',
-    loai_kham: 'clinic', status: 'pending', payment_status: 'unpaid', gia_kham: 280000,
+    loai_kham: 'clinic', status: 'confirmed', payment_status: 'paid', gia_kham: 280000,
     ten_dich_vu: 'Nhi khoa',
   },
   {

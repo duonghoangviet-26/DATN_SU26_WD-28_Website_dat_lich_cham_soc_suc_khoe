@@ -39,10 +39,19 @@ const slotSchema = new mongoose.Schema(
     phong_kham: { type: String, default: null },
     status: {
       type: String,
-      // active: chưa có BN | booked: benh_nhan_id != null | locked: BS khóa | cancelled: hủy | expired: quá ngày
-      enum: ['active', 'booked', 'locked', 'cancelled', 'expired'],
+      // active: chưa có BN | pending_payment: BN đang giữ slot 15 phút để thanh toán VNPay
+      // booked: benh_nhan_id != null | locked: BS khóa | cancelled: hủy | expired: quá ngày
+      enum: ['active', 'pending_payment', 'booked', 'locked', 'cancelled', 'expired'],
       default: 'active',
     },
+    // null khi active/booked/locked/expired — set = now+15min khi status→'pending_payment'
+    // Reset về null khi status→'active' (timeout/fail) hoặc 'booked' (payment success)
+    // Cron 5 phút dọn pending_payment hết hạn → active
+    lock_expires_at: { type: Date, default: null },
+    // F7 — bác sĩ yêu cầu hủy slot đã booked, chờ Admin xử lý (B2 doc mục F7).
+    // Slot vẫn giữ status='booked' trong lúc chờ — cancel_requested chỉ là cờ hiển thị cho Admin.
+    cancel_requested: { type: Boolean, default: false },
+    cancel_reason:    { type: String, default: null },
   },
   { _id: true }
 )

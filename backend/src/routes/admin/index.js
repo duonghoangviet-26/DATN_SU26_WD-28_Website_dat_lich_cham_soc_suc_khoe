@@ -7,6 +7,7 @@ import appointmentsRoutes  from './appointments.routes.js'
 import reviewsRoutes       from './reviews.routes.js'
 import notificationsRoutes from './notifications.routes.js'
 import paymentsRoutes      from './payments.routes.js'
+import slotsRoutes         from './slots.routes.js'
 
 // ============================================================
 // Admin routes — mount tại /api/admin
@@ -22,5 +23,6 @@ router.use('/appointments',  appointmentsRoutes)    // C5
 router.use('/reviews',       reviewsRoutes)         // C6
 router.use('/notifications', notificationsRoutes)   // C7
 router.use('/payments',      paymentsRoutes)        // C8
+router.use('/slots',         slotsRoutes)           // B2 — sinh lịch thủ công (fallback cron)
 
 export default router

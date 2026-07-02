@@ -227,6 +227,9 @@ export async function createBooking(req, res) {
       return fail(res, 400, 'loai_kham phải là clinic hoặc home')
     }
 
+    // Auto-confirm cho clinic (quyết định 2026-07-02): slot đã atomic-lock ở trên là đủ đảm bảo
+    // không double-booking — không còn bước "chờ xác nhận" cho clinic. Home vẫn giữ nguyên
+    // pending/unpaid, chờ bác sĩ xác nhận thủ công (cần xem địa chỉ trước khi nhận ca).
     const appointment = await LichHen.create({
       user_id:      req.user.id,
       member_id:    member_id    || null,
@@ -240,6 +243,8 @@ export async function createBooking(req, res) {
       ly_do_kham:   ly_do_kham?.trim() || null,
       phong_kham:   loai_kham === 'clinic' ? phong_kham   : null,
       dia_chi_kham: loai_kham === 'home'   ? dia_chi_kham.trim() : null,
+      status:         loai_kham === 'clinic' ? 'confirmed' : 'pending',
+      payment_status: loai_kham === 'clinic' ? 'paid'      : 'unpaid',
       gia_kham,
       ten_dich_vu,
       ten_khach:           ten_khach           || null,
@@ -255,19 +260,32 @@ export async function createBooking(req, res) {
       ten_dich_vu:    appointment.ten_dich_vu,
       ngay_kham:      appointment.ngay_kham,
       gio_kham:       appointment.gio_kham,
-    }, 'Đặt lịch thành công, vui lòng chờ bác sĩ xác nhận')
+    }, loai_kham === 'clinic'
+      ? 'Đặt lịch thành công, lịch hẹn đã được xác nhận'
+      : 'Đặt lịch thành công, vui lòng chờ bác sĩ xác nhận')
   } catch (err) {
     return fail(res, 500, err.message)
   }
 }
 
 // ─── PATCH /api/patient/booking/:id/cancel ──────────────────────────────────
+// pending (home chưa được BS xác nhận): hủy tự do.
+// confirmed (clinic auto-confirm hoặc home đã được BS xác nhận): chỉ hủy được nếu còn >24h
+// trước giờ khám — trong vòng 24h phải gọi lễ tân (spec 2026-06-27 mục 7.1/7.3).
 export async function cancelBooking(req, res) {
   try {
     const a = await LichHen.findOne({ _id: req.params.id, user_id: req.user.id })
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
-    if (a.status !== 'pending') {
-      return fail(res, 409, 'Chỉ có thể hủy lịch ở trạng thái chờ xác nhận')
+    if (['completed', 'cancelled'].includes(a.status)) {
+      return fail(res, 409, 'Lịch hẹn không thể hủy ở trạng thái hiện tại')
+    }
+    if (a.status === 'confirmed') {
+      const [h, m] = a.gio_kham.split(':').map(Number)
+      const gioKham = new Date(a.ngay_kham)
+      gioKham.setHours(h, m, 0, 0)
+      if (gioKham.getTime() - Date.now() < 24 * 3600 * 1000) {
+        return fail(res, 403, 'Lịch hẹn trong vòng 24 giờ tới không thể tự hủy, vui lòng liên hệ phòng khám')
+      }
     }
 
     if (a.schedule_id && a.slot_id) {
@@ -280,9 +298,10 @@ export async function cancelBooking(req, res) {
     a.status          = 'cancelled'
     a.ly_do_huy       = req.body.ly_do?.trim() || 'Bệnh nhân hủy lịch'
     a.payment_deadline = null
+    if (a.payment_status === 'paid') a.payment_status = 'refunded'
     await a.save()
 
-    return ok(res, { id: a._id, status: a.status }, 'Đã hủy lịch hẹn')
+    return ok(res, { id: a._id, status: a.status, payment_status: a.payment_status }, 'Đã hủy lịch hẹn')
   } catch (err) {
     return fail(res, 500, err.message)
   }

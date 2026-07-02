@@ -239,119 +239,146 @@ throw lỗi "tối đa 10 thành viên".
 | `_id` | ObjectId | auto | Dùng làm `LichHen.slot_id` |
 | `gio_bat_dau` | String | required | regex `HH:MM` |
 | `gio_ket_thuc` | String | required | regex `HH:MM`, phải sau `gio_bat_dau` |
-| `phong_kham` | String | default `null` | `maxlength: 255`. VD `"Phòng 201, Tầng 2, Tòa A"`. `null` = bệnh nhân chưa thể đặt |
-| `status` | String | default `'active'` | enum: `active`, `booked`, `locked`, `cancelled`, `expired` |
+| `benh_nhan_id` | ObjectId → `NguoiDung` | default `null` | null = chưa có ai. Set khi `status='booked'`, reset khi `'active'` |
+| `phong_kham` | String | default `null` | `maxlength: 255`. VD `"Phòng 201, Tầng 2, Tòa A"`. `null` = chưa phân phòng |
+| `status` | String | default `'active'` | enum: `active`, `pending_payment`, `booked`, `locked`, `cancelled`, `expired` |
+| `lock_expires_at` | Date | default `null` | Set = `now + 15 phút` khi `status → 'pending_payment'`. Reset = `null` khi `→ 'active'` hoặc `'booked'` |
 
 > **Quy tắc thiết kế:** 1 slot = đúng 1 bệnh nhân. Không dùng cơ chế đếm (`count`) để
-> quản lý sức chứa. Khi bệnh nhân đặt thành công → slot chuyển `active → booked`.
-> Slot `home` không cần `phong_kham` (bác sĩ đến nhà bệnh nhân).
+> quản lý sức chứa.
 
-**Ý nghĩa các trạng thái:**
+**Ý nghĩa các trạng thái slot:**
 
-| Status | Hiển thị | Bệnh nhân thấy? | Ghi chú |
+| Status | Hiển thị | BN thấy? | Ghi chú |
 |---|---|---|---|
-| `active` | Còn trống | **Có** (nếu có `phong_kham`) | Slot mở, bệnh nhân có thể đặt |
-| `booked` | Đã có lịch | Không | Đã có bệnh nhân — không đặt thêm |
+| `active` | Còn trống | **Có** (nếu có `phong_kham`) | Slot mở, BN có thể đặt |
+| `pending_payment` | Đang được giữ | Không | BN khác đang thanh toán VNPay — ẩn khỏi lịch. Tự giải phóng sau 15 phút |
+| `booked` | Đã có lịch | Không | Đã thanh toán và tạo LichHen — không đặt thêm |
 | `locked` | Bác sĩ bận | Không | Bác sĩ tự đánh dấu bận |
 | `cancelled` | Đã hủy | Không | Slot bị hủy |
-| `expired` | Hết hạn | Không | Quá ngày, chưa có BN (cron đánh dấu) |
+| `expired` | Hết hạn | Không | Quá ngày (cron 00:05 đánh dấu) |
 
-**Điều kiện bệnh nhân thấy slot:**
+**Điều kiện BN thấy slot (API `/api/doctors/:id/available-slots`):**
 ```
-status = 'active'
-AND ngay >= hôm nay
-AND (phong_kham != null   // clinic
-     OR loai_kham = 'home') // home không cần phòng
+status = 'active'          // pending_payment KHÔNG hiển thị
+AND ngay + gio_bat_dau >= now + 3 giờ
+```
+
+**Soft-lock flow (POST /prepare → VNPay IPN):**
+```
+1. POST /prepare: atomic update slot: status='active' → 'pending_payment', lock_expires_at=now+15min
+2. VNPay IPN SUCCESS: slot → 'booked', benh_nhan_id=user_id, lock_expires_at=null → tạo LichHen
+3. VNPay IPN FAIL/HỦY: slot → 'active', lock_expires_at=null
+4. Cron 5 phút: slot pending_payment đã hết hạn → 'active', lock_expires_at=null
+5. Lazy reset: GET /available-slots dọn pending_payment hết hạn fire-and-forget
 ```
 
 **Index:** `{doctor_id, ngay}` (unique), `ngay`
 
-**Hook:** `slotSchema.pre('validate')` — `gio_ket_thuc` phải sau `gio_bat_dau`
-(chỉ chạy với `.save()`/`.validate()`).
-
-**Static methods (atomic, dùng `findOneAndUpdate` + `arrayFilters`):**
-
-| Method | Mục đích |
-|---|---|
-| `bookSlot(scheduleId, slotId, {session})` | `status: 'active' → 'booked'` (atomic); throw nếu slot không `active` hoặc clinic mà chưa có `phong_kham` |
-| `releaseSlot(scheduleId, slotId, {session})` | `status: 'booked' → 'active'`; gọi khi hủy lịch hẹn |
-| `expireSlots(cutoffDate)` | Cron: set `status='expired'` cho tất cả slot `status='active'` có `ngay < cutoffDate` |
+**Hook:** `slotSchema.pre('validate')` — `gio_ket_thuc` phải sau `gio_bat_dau`.
 
 ---
 
 ## 10. `dich_vu` — Model: `DichVu`
 
+> **Loại dịch vụ:**
+> - `home` → bác sĩ đến nhà BN, đặt được trực tiếp, có `thoi_gian_phut` và `khu_vuc[]`.
+> - `related` → dịch vụ liên quan theo chuyên khoa (siêu âm, MRI, xét nghiệm…). Chỉ hiển thị
+>   thông tin tham khảo "Theo chỉ định bác sĩ" — **BN không đặt trực tiếp**. Bắt buộc có `specialty_id`.
+> - ⚠️ **Không có loại `clinic`** — giá khám clinic lưu ở `BacSi.gia_kham`, không phải `DichVu`.
+
 | Field | Type | Bắt buộc/Default | Ràng buộc |
 |---|---|---|---|
 | `ma_dich_vu` | String | tự sinh "DV001"... | `unique`, `trim` |
 | `ten` | String | required | `trim`, `maxlength: 255` |
-| `loai` | String | required | enum: `clinic`, `home` |
+| `loai` | String | required | enum: `home`, `related` |
 | `mo_ta_ngan` | String | default `null` | `maxlength: 500` |
 | `mo_ta` | String | default `null` | `maxlength: 5000` |
-| `gia` | Number | required | `min: 0`. Snapshot vào `LichHen.gia_kham` lúc đặt |
-| `thoi_gian_phut` | Number | required | `min: 10`, `max: 480` |
-| `gio_dat_truoc_toi_thieu` | Number | default `2` | Giờ |
-| `ngay_ap_dung` | String | default `null` | `maxlength: 100`. VD `"T2-T7"` |
-| `gio_bat_dau` | String | default `null` | VD `"08:00"` |
-| `gio_ket_thuc` | String | default `null` | VD `"17:00"` |
-| `specialty_id` | ObjectId → `ChuyenKhoa` | default `null` | |
-| `khu_vuc` | [String] | default `[]` | Chỉ có ý nghĩa khi `loai='home'` |
+| `gia` | Number | required | `min: 1`, `max: 100_000_000`, phải là số nguyên VNĐ. `home`: snapshot vào `LichHen.gia_kham`. `related`: chỉ hiển thị tham khảo |
+| `thoi_gian_phut` | Number | default `null` | `min: 10`, `max: 480`. Hook tự set: `related`=30ph, `home`=60ph |
+| `gio_dat_truoc_toi_thieu` | Number | default `4` | `min: 1`, `max: 48`. Giờ. Chỉ dùng cho `home` |
+| `ngay_ap_dung` | String | default `null` | `maxlength: 100`. Hook tự set `'T2–T7'` nếu chưa có |
+| `gio_bat_dau` | String | default `null` | Hook tự set `'08:00'` nếu chưa có |
+| `gio_ket_thuc` | String | default `null` | Hook tự set `'17:00'` nếu chưa có |
+| `chuan_bi_truoc` | String | default `null` | `maxlength: 1000`. Chỉ dùng cho `related` (nhịn ăn, tháo trang sức…). `home` = null |
+| `specialty_id` | ObjectId → `ChuyenKhoa` | default `null` | Bắt buộc khi `related` (validate ở controller) |
+| `khu_vuc` | [String] | default `[]` | Chỉ dùng khi `home`. Hook tự reset `[]` khi `related` |
+| `nguoi_tao_id` | ObjectId → `NguoiDung` | default `null` | Admin tạo dịch vụ |
 | `status` | String | default `'active'` | enum: `active`, `inactive` |
 | `ngay_tao` | Date | auto | |
 | `ngay_cap_nhat` | Date | auto | |
 
 **Index:** `{ten, specialty_id}` (unique), `{status, loai}`
 
-**Hook (`pre('validate')`, async):** tự sinh `ma_dich_vu` nếu chưa có (số lớn
-nhất hiện có + 1); nếu `loai='clinic'` → tự reset `khu_vuc = []`.
-
-**Method instance 🆕 — `isTimeAllowed(ngayKham, gioKham)`:**
-Parse `ngay_ap_dung` (hỗ trợ `"T2-T7"`, `"T2,T4,T6"`, `"CN"` qua `WEEKDAY_MAP`
-nội bộ: `CN=0, T2=1...T7=6`), so khớp với `gio_bat_dau`/`gio_ket_thuc`. Trả về
-`{ok: true}` hoặc `{ok: false, reason}`. Được `LichHen` gọi tự động lúc validate.
+**Hook (`pre('validate')`, async):** tự sinh `ma_dich_vu` bằng atomic counter (`Counter.nextSeq`);
+đặt lịch cố định `T2–T7 08:00–17:00` nếu chưa có; nếu `loai='home'` → set `thoi_gian_phut=60`,
+xóa `chuan_bi_truoc`; nếu `loai='related'` → set `thoi_gian_phut=30`, reset `khu_vuc=[]`.
 
 ---
 
 ## 11. `lich_hen` — Model: `LichHen` ⭐ (bảng trung tâm)
 
+> **Luồng clinic (Phương án C + soft-lock):** Slot chỉ bị lock sau khi payment gateway xác nhận.
+> LichHen được tạo với `payment_status='paid'` ngay lập tức (không qua `unpaid`).
+> Admin xem danh sách `pending+paid` → xác nhận → `confirmed`. Cron tự cancel nếu qua `confirm_deadline`.
+>
+> **Luồng home:** Bác sĩ confirm trước → BN thanh toán → `payment_status='paid'`.
+> `payment_status='unpaid'` chỉ có ở home.
+
 | Field | Type | Bắt buộc/Default | Ràng buộc |
 |---|---|---|---|
-| `user_id` | ObjectId → `NguoiDung` | required | |
-| `member_id` | ObjectId → `ThanhVien` | default `null` | `null` = khách vãng lai |
+| `user_id` | ObjectId → `NguoiDung` | required | Người đăng nhập đặt lịch |
+| `member_id` | ObjectId → `ThanhVien` | default `null` | `null` = khách (đặt cho mình hoặc nhập tay) |
 | `doctor_id` | ObjectId → `BacSi` | required | |
-| `schedule_id` | ObjectId → `LichLamViec` | required | |
-| `slot_id` | ObjectId | required | `_id` của subdoc `slots` trong `LichLamViec` |
-| `service_id` | ObjectId → `DichVu` | default `null` | |
+| `schedule_id` | ObjectId → `LichLamViec` | default `null` | required khi `clinic`; `null` khi `home` |
+| `slot_id` | ObjectId | default `null` | `_id` của subdoc `slots[]`; required khi `clinic` |
+| `service_id` | ObjectId → `DichVu` | default `null` | required khi `home` (ref `DichVu.loai='home'`); `null` khi `clinic` |
 | `loai_kham` | String | required | enum: `clinic`, `home` |
 | `ngay_kham` | Date | required | |
 | `gio_kham` | String | required | VD `"08:30"` |
 | `ly_do_kham` | String | default `null` | `maxlength: 500` |
-| `dia_chi_kham` | String | default `null` | Bắt buộc khi `loai_kham='home'` |
+| `phong_kham` | String | default `null` | Snapshot `slots[].phong_kham` lúc đặt clinic; `null` khi home |
+| `dia_chi_kham` | String | default `null` | Bắt buộc khi `home` (địa chỉ home visit) |
 | `status` | String | default `'pending'` | enum: `pending`, `confirmed`, `completed`, `cancelled` |
-| `payment_status` | String | default `'unpaid'` | enum: `unpaid`, `paid`, `refunded` |
-| `gia_kham` | Number | required | `min: 0` — snapshot `DichVu.gia` |
-| `ten_khach` | String | default `null` | `maxlength: 255` |
+| `payment_status` | String | default `'unpaid'` | enum: `unpaid`, `paid`, `refunded`. Clinic luôn bắt đầu `paid` |
+| `gia_kham` | Number | required | `min: 0`. Clinic: snapshot `BacSi.gia_kham`; Home: snapshot `DichVu.gia` |
+| `ten_dich_vu` | String | default `null` | `maxlength: 255`. Clinic: tên chuyên khoa; Home: tên dịch vụ |
+| `ten_khach` | String | default `null` | `maxlength: 255`. Bắt buộc khi `member_id=null` |
+| `gioi_tinh_khach` | String | default `null` | enum: `male`, `female` |
 | `so_dien_thoai_khach` | String | default `null` | `maxlength: 20` |
+| `email_khach` | String | default `null` | `maxlength: 255`, lowercase, trim |
 | `nam_sinh_khach` | Number | default `null` | |
+| `tinh_thanh` | String | default `null` | `maxlength: 100`. Tỉnh/thành phố BN |
+| `phuong_xa` | String | default `null` | `maxlength: 100`. Phường/xã BN |
+| `dia_chi_chi_tiet` | String | default `null` | `maxlength: 255`. Số nhà, đường BN (≠ `dia_chi_kham` là địa chỉ home visit) |
+| `nguoi_dat_ho_ten` | String | default `null` | `maxlength: 255`. Người đặt hộ (chỉ khi "Đặt cho người thân") |
+| `nguoi_dat_sdt` | String | default `null` | `maxlength: 20`. SĐT người đặt hộ |
 | `ly_do_huy` | String | default `null` | |
+| `confirmed_by` | ObjectId → `NguoiDung` | default `null` | Admin._id đã confirm; `null` = chưa confirm |
+| `confirm_deadline` | Date | default `null` | Auto-set = `ngay_kham + gio_kham − 30 phút` (clinic). Cron: pending clinic quá deadline → auto-cancel |
+| `admin_missed` | Boolean | default `false` | `true` khi cron auto-cancel vì Admin không confirm kịp — audit SLA |
+| `payment_deadline` | Date | default `null` | Home: BS confirm → BN phải thanh toán trước thời điểm này |
+| `pending_booking_id` | String | default `null` | UUID token tạo tại `POST /prepare` — dùng để match IPN callback VNPay. Giữ lại sau khi LichHen tạo xong để audit dispute |
 | `ngay_tao` | Date | auto | |
 | `ngay_cap_nhat` | Date | auto | |
 
-**Index:** `user_id`, `member_id` 🆕, `status`, `payment_status`, `ngay_kham`,
-`schedule_id`, `{doctor_id, status, ngay_kham}` (compound). *(Đã bỏ index đơn
-lẻ `doctor_id` vì dư thừa — đã là prefix của compound trên.)*
+**Phân biệt 3 chế độ đặt lịch:**
 
-**Hook (`pre('validate')` ×2 + `pre`/`post('save')`):**
-1. `loai_kham='home'` → bắt buộc `dia_chi_kham`; `clinic` → tự xóa `dia_chi_kham`
-2. Không có `member_id` → bắt buộc `ten_khach`
-3. 🆕 Nếu `isNew` và có `service_id` → gọi `DichVu.isTimeAllowed()`, throw nếu không hợp lệ
-4. 🆕 `pre('save')` đánh dấu nếu `status` vừa đổi sang `cancelled`; `post('save')`
-   tự gọi `LichLamViec.releaseSlot(schedule_id, slot_id)` → slot chuyển `booked → active`
+| Chế độ | `member_id` | `nguoi_dat_ho_ten` | Thông tin BN |
+|---|---|---|---|
+| Đặt cho mình | `null` | `null` | `ten_khach`, `so_dien_thoai_khach`… |
+| Đặt cho người thân (GĐ) | `ThanhVien._id` | điền | Lấy từ ThanhVien |
+| Đặt cho người thân (nhập tay) | `null` | điền | `ten_khach`, `so_dien_thoai_khach`… |
 
-**Luồng đặt slot (service layer, bên ngoài hook):**
-- Khi tạo `LichHen` mới: service layer gọi `LichLamViec.bookSlot(schedule_id, slot_id, {session})`
-  **trong cùng MongoDB session/transaction** trước khi `.save()` appointment.
-- Nếu `bookSlot` throw (slot không active, hoặc clinic thiếu `phong_kham`) → rollback toàn bộ.
+**Index:** `user_id`, `member_id`, `status`, `payment_status`, `ngay_kham`,
+`schedule_id`, `{doctor_id, status, ngay_kham}` (compound),
+`{status, loai_kham, confirm_deadline}` (cron auto-cancel clinic),
+`confirmed_by`, `admin_missed`
+
+**Hooks:**
+1. `pre('validate')`: `home` → bắt buộc `dia_chi_kham` + `service_id`; `clinic` → bắt buộc `schedule_id` + `slot_id`; tự xóa field trái loại
+2. `pre('validate')`: `member_id=null` → bắt buộc `ten_khach`
+3. `pre('save')` — auto-set `confirm_deadline` khi tạo mới clinic: `= ngay_kham + gio_kham − 30 phút`
 
 ---
 

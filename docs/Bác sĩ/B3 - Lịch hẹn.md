@@ -2,6 +2,8 @@
 
 > Cập nhật: 2026-06-23
 > Files liên quan: `frontend/src/pages/doctor/DoctorAppointments.tsx`, `frontend/src/services/doctor-appointment.service.ts`, `backend/src/models/LichHen.js`
+>
+> ⚠️ **Đã thu hẹp phạm vi 2026-07-02:** Luồng C mô tả trong file này (BS tự xác nhận/từ chối) **chỉ còn áp dụng cho `loai_kham='home'`**. Với `loai_kham='clinic'`, lịch auto-confirm ngay khi thanh toán thành công — BS không còn xác nhận/từ chối clinic nữa, chỉ có quyền "Hủy khẩn cấp". Code hiện tại (`DoctorAppointments.tsx`, `doctor/appointments.controller.js`) chưa phân biệt 2 loại này khi hiển thị nút Xác nhận/Từ chối — đây là việc cần sửa. Xem `docs/superpowers/specs/2026-07-02-clinic-auto-confirm-decision.md`.
 
 ---
 
