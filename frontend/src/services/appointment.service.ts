@@ -16,6 +16,7 @@ export const appointmentService = {
     page?: number
     limit?: number
     view_mode?: string
+    doctor_id?: string
   }): Promise<any> {
     const res = await axiosInstance.get('/admin/appointments', { params })
     return {

@@ -66,8 +66,8 @@ export default function SpecialtyDoctorsModal({ specialtyId, specialtyName, onCl
                       <td className="px-4 py-3 text-right">
                         <button
                           onClick={() => {
-                            // Chuyển hướng sang trang quản lý lịch hẹn hoặc danh sách lịch của bác sĩ
-                            navigate(`/admin/appointments?doctorId=${doctor.user_id}`)
+                            // Chuyển hướng sang trang quản lý lịch hẹn kèm theo doctor_id và tên để lọc
+                            navigate(`/admin/appointments?doctor_id=${doctor._id}&doctor_name=${encodeURIComponent(doctor.ho_ten)}`)
                           }}
                           className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors border border-brand-200"
                         >

@@ -186,10 +186,12 @@ export async function getAllAppointments(req, res) {
       endDate,
       page = 1,
       limit = 20,
+      doctor_id,
     } = req.query
 
     const query = {}
     if (loai_kham) query.loai_kham = loai_kham
+    if (doctor_id) query.doctor_id = doctor_id
 
     if (startDate || endDate) {
       query.ngay_kham = {}

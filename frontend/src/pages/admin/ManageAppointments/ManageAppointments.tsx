@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { appointmentService } from '@/services/appointment.service'
 import type {
   AppointmentItem,
@@ -35,6 +36,10 @@ export default function ManageAppointments() {
   const [appointments, setAppointments] = useState<AppointmentItem[]>([])
   const [loading, setLoading] = useState(true)
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filterDoctorId = searchParams.get('doctor_id')
+  const filterDoctorName = searchParams.get('doctor_name')
+
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState<AppointmentStatus | ''>('')
   const [loaiKham, setLoaiKham] = useState('')
@@ -65,7 +70,8 @@ export default function ManageAppointments() {
         endDate,
         page: nextPage,
         limit: 10,
-        view_mode: 'doctor_grouped' // Thêm cờ này để backend tự gom nhóm
+        view_mode: 'doctor_grouped', // Thêm cờ này để backend tự gom nhóm
+        doctor_id: filterDoctorId || undefined
       })
       // Khi view_mode=doctor_grouped, res.data là mảng các DoctorGroup
       setGroupedAppointments(res.data)
@@ -74,7 +80,7 @@ export default function ManageAppointments() {
     } finally {
       setLoading(false)
     }
-  }, [endDate, keyword, loaiKham, page, startDate, status])
+  }, [keyword, status, loaiKham, startDate, endDate, page, filterDoctorId])
 
   useEffect(() => {
     fetchAppointments()
@@ -160,7 +166,7 @@ export default function ManageAppointments() {
                 </span>
                 <input
                   className="input w-full pl-9"
-                  placeholder="Tìm bệnh nhân/bác sĩ..."
+                  placeholder="Tìm bác sĩ/bệnh nhân..."
                   value={keyword}
                   onChange={(e) => {
                     setKeyword(e.target.value)
@@ -223,6 +229,32 @@ export default function ManageAppointments() {
               Đặt lịch mới
             </button>
           </div>
+
+          {filterDoctorId && (
+            <div className="mb-6 flex items-center justify-between rounded-xl bg-blue-50 p-4 border border-blue-100">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-200 text-blue-700">
+                  <Icon name="users" className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-blue-900">Đang lọc lịch hẹn của bác sĩ:</p>
+                  <p className="text-base font-bold text-blue-700">{filterDoctorName || 'Đã chọn'}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  searchParams.delete('doctor_id')
+                  searchParams.delete('doctor_name')
+                  setSearchParams(searchParams)
+                  setPage(1)
+                }}
+                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors"
+              >
+                <Icon name="x" className="h-4 w-4" />
+                Xóa bộ lọc
+              </button>
+            </div>
+          )}
 
           <DoctorAppointmentGroupList
             groupedAppointments={groupedAppointments}
