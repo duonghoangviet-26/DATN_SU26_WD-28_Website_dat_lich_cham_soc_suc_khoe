@@ -8,6 +8,7 @@ import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
 import DoctorDetailDrawer from './DoctorDetailDrawer'
 import UpdateDoctor from './UpdateDoctor'
+import DoctorActionModal, { ActionType } from './DoctorActionModal'
 
 const APPROVAL_COLOR: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
   approved: 'green', pending: 'yellow', rejected: 'red', suspended: 'gray',
@@ -20,8 +21,6 @@ const STATUS_TABS: { value: DoctorApproval | ''; label: string; color: string }[
   { value: 'rejected', label: 'Từ chối', color: 'text-red-600' },
   { value: 'suspended', label: 'Tạm ngưng', color: 'text-slate-500' },
 ]
-
-type Action = 'approve' | 'reject' | 'suspend' | 'restore' | 'delete'
 
 // HARDCODED ADMIN ID FOR NOW (Dùng tạm cho tới khi có JWT auth hoàn chỉnh)
 const CURRENT_ADMIN_ID = "000000000000000000000099"
@@ -41,9 +40,7 @@ export default function ManageDoctors() {
   const [targetDetailId, setTargetDetailId] = useState<string | null>(null)
   const [targetEdit, setTargetEdit] = useState<DoctorProfileAPI | DoctorDetailAPI | null>(null)
   const [target, setTarget] = useState<DoctorProfileAPI | DoctorDetailAPI | null>(null)
-  const [action, setAction] = useState<Action>('approve')
-  const [reason, setReason] = useState('')
-  const [showReasonInput, setShowReasonInput] = useState(false)
+  const [action, setAction] = useState<ActionType>('approve')
 
   // Debounce search
   const [debouncedKeyword, setDebouncedKeyword] = useState(keyword)
@@ -83,39 +80,10 @@ export default function ManageDoctors() {
   // Reset page when tab/keyword changes
   useEffect(() => { setPage(1) }, [activeTab, debouncedKeyword])
 
-  function openAction(doc: DoctorProfileAPI | DoctorDetailAPI, act: Action) {
+  function openAction(doc: DoctorProfileAPI | DoctorDetailAPI, act: ActionType) {
     setTarget(doc)
     setAction(act)
-    setReason('')
-    setShowReasonInput(act === 'reject' || act === 'suspend') // Yêu cầu nhập lý do cho reject VÀ suspend
   }
-
-  async function handleConfirm() {
-    if (!target) return
-    const id = target._id
-    setTarget(null)
-    try {
-      if (action === 'approve') await doctorService.approve(id, CURRENT_ADMIN_ID)
-      else if (action === 'reject') await doctorService.reject(id, CURRENT_ADMIN_ID, reason)
-      else if (action === 'suspend') await doctorService.suspend(id, CURRENT_ADMIN_ID, reason)
-      else if (action === 'restore') await doctorService.restore(id, CURRENT_ADMIN_ID)
-      else if (action === 'delete') await doctorService.delete(id)
-      
-      loadData() // Reload sau khi cập nhật thành công
-    } catch (err) {
-      console.error('Lỗi cập nhật trạng thái:', err)
-      alert(err instanceof Error ? err.message : 'Có lỗi xảy ra')
-    }
-  }
-
-  const ACTION_CONFIG = {
-    approve:  { title: 'Duyệt hồ sơ bác sĩ', msg: `Xác nhận duyệt hồ sơ BS. "${target?.user_id?.ho_ten}"?`, confirmText: 'Duyệt', danger: false, placeholder: '' },
-    reject:   { title: 'Từ chối hồ sơ', msg: `Từ chối hồ sơ BS. "${target?.user_id?.ho_ten}"?`, confirmText: 'Từ chối', danger: true, placeholder: 'Nhập lý do từ chối (bắt buộc)...' },
-    suspend:  { title: 'Tạm ngưng bác sĩ', msg: `Tạm ngưng tài khoản BS. "${target?.user_id?.ho_ten}"?`, confirmText: 'Tạm ngưng', danger: true, placeholder: 'Nhập lý do tạm ngưng (bắt buộc)...' },
-    restore:  { title: 'Khôi phục bác sĩ', msg: `Khôi phục tài khoản BS. "${target?.user_id?.ho_ten}"?`, confirmText: 'Khôi phục', danger: false, placeholder: '' },
-    delete:   { title: 'Xóa vĩnh viễn', msg: `Xác nhận xóa vĩnh viễn hồ sơ BS. "${target?.user_id?.ho_ten}"? Hành động này không thể hoàn tác!`, confirmText: 'Xóa vĩnh viễn', danger: true, placeholder: '' },
-  }
-  const cfg = ACTION_CONFIG[action]
 
   return (
     <div>
@@ -293,34 +261,15 @@ export default function ManageDoctors() {
 
       {/* Dialog xác nhận */}
       {target && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm transition-opacity">
-          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl transform transition-transform">
-            <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-              {cfg.danger && <Icon name="alert-triangle" className="w-5 h-5 text-red-500" />}
-              {cfg.title}
-            </h3>
-            <p className="mt-2 text-sm text-slate-600">{cfg.msg}</p>
-            {showReasonInput && (
-              <textarea
-                className="input mt-4 resize-none w-full bg-slate-50 border-slate-200 focus:bg-white"
-                rows={3}
-                placeholder={cfg.placeholder}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            )}
-            <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setTarget(null)} className="btn-secondary">Hủy</button>
-              <button
-                onClick={handleConfirm}
-                disabled={showReasonInput && !reason.trim()}
-                className={cfg.danger ? 'btn-danger disabled:opacity-50' : 'btn-primary disabled:opacity-50'}
-              >
-                {cfg.confirmText}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DoctorActionModal 
+          target={target} 
+          action={action} 
+          onClose={() => setTarget(null)} 
+          onSuccess={() => {
+            setTarget(null)
+            loadData()
+          }}
+        />
       )}
 
       {/* Drawer Chi tiết bác sĩ */}
