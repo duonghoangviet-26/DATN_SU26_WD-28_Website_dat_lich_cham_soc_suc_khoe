@@ -112,22 +112,31 @@ export interface DoctorProfile {
 }
 
 export interface HospitalItem {
-  id: number
+  _id: string
   ten: string
-  dia_chi: string
-  so_dien_thoai: string
-  gio_lam_viec: string
-  status: 'active' | 'hidden'
-  ngay_tao: string
+  dia_chi?: string | null
+  so_dien_thoai?: string | null
+  email?: string | null
+  gio_lam_viec?: string | null
+  mo_ta?: string | null
+  logo_url?: string | null
+  ban_do_url?: string | null
+  trang_thai?: 'active' | 'inactive'
+  ngay_tao?: string
+  ngay_cap_nhat?: string
 }
 
 export interface SpecialtyItem {
-  id: number
+  _id: string
+  phong_kham_id: string
   ten: string
-  mo_ta: string
-  icon: string
+  mo_ta: string | null
+  icon_url: string | null
+  slug: string
   thu_tu: number
+  doctor_count?: number
   status: 'active' | 'hidden'
+  ngay_tao?: string
 }
 
 // ─── Dịch vụ ─────────────────────────────────────────────────────────────────
