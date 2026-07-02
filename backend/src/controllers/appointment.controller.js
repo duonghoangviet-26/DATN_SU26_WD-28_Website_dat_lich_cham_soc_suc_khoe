@@ -420,7 +420,6 @@ export async function createAppointment(req, res) {
       so_dien_thoai_khach,
     } = req.body
 
-    if (!user_id) throw new Error('Tai khoan benh nhan la bat buoc')
     if (!doctor_id) throw new Error('Bac si la bat buoc')
     if (!schedule_id || !slot_id) throw new Error('Lich lam viec va khung gio la bat buoc')
     if (!service_id) throw new Error('Dich vu la bat buoc')
@@ -447,7 +446,7 @@ export async function createAppointment(req, res) {
     await schedule.save({ session })
 
     const newAppointment = new LichHen({
-      user_id,
+      user_id: user_id || null,
       doctor_id: doctor._id,
       schedule_id: schedule._id,
       slot_id: slot._id,
@@ -468,7 +467,7 @@ export async function createAppointment(req, res) {
 
     await ThanhToan.create([{
       appointment_id: newAppointment._id,
-      benh_nhan_id: user_id,
+      benh_nhan_id: user_id || null,
       so_tien: service.gia,
       status: 'pending',
     }], { session })
@@ -623,12 +622,20 @@ export async function getActiveServices(req, res) {
 }
 
 // GET /api/admin/doctors/:id/schedules
-// Lay lich lam viec cua bac si (tu hom nay tro di)
+// Lay lich lam viec cua bac si (tu hom nay tro di, slot chua qua gio)
 export async function getDoctorSchedules(req, res) {
   try {
     const { id } = req.params
-    const today = new Date()
+
+    const now = new Date()
+    const today = new Date(now)
     today.setHours(0, 0, 0, 0)
+
+    // Giờ hiện tại dạng "HH:MM" — để lọc slot đã qua trong ngày hôm nay
+    const hh = String(now.getHours()).padStart(2, '0')
+    const mm = String(now.getMinutes()).padStart(2, '0')
+    const currentTimeStr = `${hh}:${mm}`
+    const todayStr = formatDateOnly(today)
 
     const schedules = await LichLamViec.find({
       doctor_id: id,
@@ -636,13 +643,22 @@ export async function getDoctorSchedules(req, res) {
     }).sort({ ngay: 1 }).lean()
 
     const formatted = schedules
-      .map((schedule) => ({
-        _id: schedule._id,
-        ngay: formatDateOnly(schedule.ngay),
-        slots: schedule.slots.filter(
-          (slot) => slot.status === 'active' && slot.so_benh_nhan_hien_tai < slot.so_benh_nhan_toi_da
-        ),
-      }))
+      .map((schedule) => {
+        const scheduleDate = formatDateOnly(schedule.ngay)
+        const isToday = scheduleDate === todayStr
+
+        return {
+          _id: schedule._id,
+          ngay: scheduleDate,
+          slots: schedule.slots.filter((slot) => {
+            if (slot.status !== 'active') return false
+            if (slot.so_benh_nhan_hien_tai >= slot.so_benh_nhan_toi_da) return false
+            // Nếu lịch hôm nay: loại slot đã bắt đầu hoặc đã qua (gio_bat_dau <= giờ hiện tại)
+            if (isToday && slot.gio_bat_dau <= currentTimeStr) return false
+            return true
+          }),
+        }
+      })
       .filter((schedule) => schedule.slots.length > 0)
 
     return ok(res, formatted)

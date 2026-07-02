@@ -14,7 +14,7 @@ import mongoose from 'mongoose'
 
 const appointmentSchema = new mongoose.Schema(
   {
-    user_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', required: true },
+    user_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     member_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ThanhVien', default: null },
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', required: true },
     schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', required: true },

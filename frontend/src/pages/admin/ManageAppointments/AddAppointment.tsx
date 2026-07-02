@@ -6,6 +6,18 @@ import type {
 } from '@/types'
 import Icon from '@/components/admin/icons'
 
+// Format "2026-07-05" → "Thứ 7, 05/07/2026" (tránh lệch múi giờ UTC)
+function formatScheduleDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('vi-VN', {
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+}
+
 interface Props {
   onSaved: () => void
   onCancel: () => void
@@ -98,10 +110,6 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
     e.preventDefault()
     setError(null)
 
-    if (!form.user_id.trim()) {
-      setError('Vui lòng nhập ID tài khoản bệnh nhân.')
-      return
-    }
     if (!form.ten_khach.trim()) {
       setError('Vui lòng nhập tên bệnh nhân.')
       return
@@ -129,7 +137,10 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
   return (
     <div className="card p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-800">Đặt lịch khám hộ</h3>
+        <h3 className="text-lg font-semibold text-slate-800">
+          Đặt lịch hộ{' '}
+          <span className="text-sm font-normal text-orange-500">(Can thiệp khẩn cấp)</span>
+        </h3>
         <button onClick={onCancel} className="text-slate-400 hover:text-slate-700">
           <Icon name="x" className="h-5 w-5" />
         </button>
@@ -142,20 +153,6 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
       )}
 
       <form onSubmit={handleSubmit} className="grid gap-6 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            ID tài khoản bệnh nhân <span className="text-red-500">*</span>
-          </label>
-          <input
-            name="user_id"
-            value={form.user_id}
-            onChange={handleChange}
-            className="input w-full"
-            placeholder="Ví dụ: 64fa..."
-            required
-          />
-        </div>
-
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
             Tên bệnh nhân <span className="text-red-500">*</span>
@@ -251,10 +248,15 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             <option value="">-- Chọn ngày khám --</option>
             {schedules.map((schedule) => (
               <option key={schedule._id} value={schedule._id}>
-                {schedule.ngay}
+                {formatScheduleDate(schedule.ngay)}
               </option>
             ))}
           </select>
+          {form.doctor_id && schedules.length === 0 && (
+            <p className="mt-1 text-xs text-amber-600">
+              ⚠ Bác sĩ này chưa có lịch làm việc từ hôm nay trở đi, hoặc tất cả khung giờ đã đầy.
+            </p>
+          )}
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
