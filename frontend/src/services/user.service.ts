@@ -79,6 +79,12 @@ export const userService = {
     await axios.delete(`/admin/users/${id}/permanently`)
   },
 
+  // Thao tác hàng loạt trên nhiều người dùng
+  async batchAction(payload: { ids: string[]; action: 'lock' | 'unlock' | 'delete' | 'restore' | 'hard-delete'; ly_do?: string }): Promise<{ count: number }> {
+    const { data } = await axios.post('/admin/users/batch', payload)
+    return data.data
+  },
+
   // Lấy nhật ký thao tác (Audit Logs)
   async getLogs(targetId?: string): Promise<any[]> {
     const { data } = await axios.get('/admin/users/logs', { params: { targetId } })
