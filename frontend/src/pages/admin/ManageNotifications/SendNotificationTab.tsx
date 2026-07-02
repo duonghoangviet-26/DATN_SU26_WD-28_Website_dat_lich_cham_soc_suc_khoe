@@ -102,7 +102,11 @@ export default function SendNotificationTab() {
     if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này? Hành động này không thể hoàn tác.')) {
       try {
         await notificationService.delete(id)
-        loadData()
+        if (notifications.length === 1 && page > 1) {
+          setPage(page - 1)
+        } else {
+          loadData()
+        }
       } catch (err: any) {
         alert(err?.response?.data?.message || err.message || 'Xóa thất bại')
       }
