@@ -23,8 +23,18 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
   const [copyingSpecialty, setCopyingSpecialty] = useState<SpecialtyItem | null>(null)
   const [viewingDoctorsSpec, setViewingDoctorsSpec] = useState<SpecialtyItem | null>(null)
   const [activeTab, setActiveTab] = useState<'active' | 'hidden'>('active')
+  const [page, setPage] = useState(1)
+  const itemsPerPage = 6
+
+  const handleTabChange = (tab: 'active' | 'hidden') => {
+    setActiveTab(tab)
+    setPage(1)
+  }
 
   const displayedSpecialties = specialties.filter((s) => s.status === activeTab)
+  const totalPages = Math.ceil(displayedSpecialties.length / itemsPerPage)
+  const startIndex = (page - 1) * itemsPerPage
+  const visibleSpecialties = displayedSpecialties.slice(startIndex, startIndex + itemsPerPage)
 
   async function handleToggle() {
     if (!confirmItem) return
@@ -59,7 +69,7 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
       {/* Tabs */}
       <div className="flex items-center gap-6 px-5 pt-3 border-b border-slate-100 bg-slate-50/50">
         <button
-          onClick={() => setActiveTab('active')}
+          onClick={() => handleTabChange('active')}
           className={`font-medium text-sm pb-3 border-b-2 transition-colors ${
             activeTab === 'active'
               ? 'border-brand-500 text-brand-600'
@@ -69,7 +79,7 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
           Đang hoạt động ({specialties.filter(s => s.status === 'active').length})
         </button>
         <button
-          onClick={() => setActiveTab('hidden')}
+          onClick={() => handleTabChange('hidden')}
           className={`font-medium text-sm pb-3 border-b-2 transition-colors ${
             activeTab === 'hidden'
               ? 'border-brand-500 text-brand-600'
@@ -107,10 +117,10 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
                 </td>
               </tr>
             ) : (
-              displayedSpecialties.map((s, index) => (
+              visibleSpecialties.map((s, index) => (
                 <tr key={s._id} className={`hover:bg-slate-50 ${toggling === s._id ? 'opacity-50' : ''}`}>
                   {/* STT */}
-                  <td className="px-5 py-3 text-center font-medium text-slate-500">{index + 1}</td>
+                  <td className="px-5 py-3 text-center font-medium text-slate-500">{startIndex + index + 1}</td>
 
                   {/* Icon */}
                   <td className="px-5 py-3">
@@ -207,6 +217,30 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t p-4 bg-slate-50/50">
+          <span className="text-sm text-slate-500">
+            Hiển thị <span className="font-medium text-slate-700">{startIndex + 1}</span> - <span className="font-medium text-slate-700">{Math.min(startIndex + itemsPerPage, displayedSpecialties.length)}</span> / <span className="font-medium text-slate-700">{displayedSpecialties.length}</span> chuyên khoa
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+            >
+              Trước
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!confirmItem}

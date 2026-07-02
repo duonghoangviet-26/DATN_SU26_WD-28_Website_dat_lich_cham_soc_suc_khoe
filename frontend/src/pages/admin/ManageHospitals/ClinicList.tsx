@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { HospitalItem } from '@/types'
 import Icon from '@/components/admin/icons'
 
@@ -13,6 +14,12 @@ interface Props {
 }
 
 export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, onRestore, onViewSpecialties, onViewLogs }: Props) {
+  const [page, setPage] = useState(1)
+  const itemsPerPage = 6
+  const totalPages = Math.ceil(clinics.length / itemsPerPage)
+  const startIndex = (page - 1) * itemsPerPage
+  const visibleClinics = clinics.slice(startIndex, startIndex + itemsPerPage)
+
   if (loading) {
     return (
       <div className="card flex items-center justify-center py-20 text-slate-400">
@@ -48,7 +55,7 @@ export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {clinics.map((c) => (
+              {visibleClinics.map((c) => (
                 <tr key={c._id} className="hover:bg-slate-50">
                   <td className="px-5 py-4 font-medium text-slate-800">
                     <div className="flex items-center gap-3">
@@ -126,6 +133,30 @@ export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, 
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t p-4 bg-slate-50/50">
+          <span className="text-sm text-slate-500">
+            Hiển thị <span className="font-medium text-slate-700">{startIndex + 1}</span> - <span className="font-medium text-slate-700">{Math.min(startIndex + itemsPerPage, clinics.length)}</span> / <span className="font-medium text-slate-700">{clinics.length}</span> chi nhánh
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+            >
+              Trước
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+            >
+              Sau
+            </button>
+          </div>
         </div>
       )}
     </div>
