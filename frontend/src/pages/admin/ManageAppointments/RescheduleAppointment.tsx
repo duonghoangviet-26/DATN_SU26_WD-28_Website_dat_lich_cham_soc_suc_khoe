@@ -11,7 +11,7 @@ interface Props {
 
 export default function RescheduleAppointment({ appointment, onSaved, onCancel }: Props) {
   const [form, setForm] = useState({
-    doctor_id: '',
+    doctor_id: appointment.doctor_id || '',
     schedule_id: '',
     slot_id: '',
   })

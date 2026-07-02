@@ -18,11 +18,12 @@ interface Props {
   appointments: AppointmentItem[]
   loading: boolean
   onView: (a: AppointmentItem) => void
+  onHistory: (a: AppointmentItem) => void
   onCancel: (a: AppointmentItem) => void
   onReschedule: (a: AppointmentItem) => void
 }
 
-export default function AppointmentList({ appointments, loading, onView, onCancel, onReschedule }: Props) {
+export default function AppointmentList({ appointments, loading, onView, onHistory, onCancel, onReschedule }: Props) {
   const [confirmItem, setConfirmItem] = useState<AppointmentItem | null>(null)
 
   return (
@@ -79,6 +80,12 @@ export default function AppointmentList({ appointments, loading, onView, onCance
                       className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
                     >
                       <Icon name="eye" className="h-3 w-3" /> Xem
+                    </button>
+                    <button
+                      onClick={() => onHistory(a)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-600 transition-colors hover:bg-purple-100"
+                    >
+                      <Icon name="clock" className="h-3 w-3" /> Lịch sử
                     </button>
                     {(a.status === 'pending' || a.status === 'confirmed') && (
                       <button

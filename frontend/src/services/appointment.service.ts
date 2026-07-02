@@ -30,6 +30,11 @@ export const appointmentService = {
     return res.data.data
   },
 
+  async getAppointmentHistory(id: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/appointments/${id}/history`)
+    return res.data.data
+  },
+
   async cancel(id: string, ly_do_huy: string): Promise<AppointmentItem> {
     const res = await axiosInstance.patch(`/admin/appointments/${id}/cancel`, { ly_do_huy })
     return res.data.data

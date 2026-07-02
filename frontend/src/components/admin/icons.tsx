@@ -119,6 +119,7 @@ const ICONS: Record<string, string[]> = {
     'M3.51 9a9 9 0 0 1 14.85-3.36L23 10',
     'M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
   ],
+  'arrow-right': ['M5 12h14', 'M12 5l7 7-7 7'],
 }
 
 export default function Icon({ name, className = 'h-5 w-5' }: IconProps) {

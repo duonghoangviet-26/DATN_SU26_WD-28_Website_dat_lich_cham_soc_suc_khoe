@@ -13,6 +13,7 @@ import DoctorAppointmentGroupList from './DoctorAppointmentGroupList'
 import AppointmentDetail from './AppointmentDetail'
 import AddAppointment from './AddAppointment'
 import RescheduleAppointment from './RescheduleAppointment'
+import AppointmentHistoryModal from './AppointmentHistoryModal'
 
 type ViewMode = 'list' | 'add' | 'reschedule'
 
@@ -51,6 +52,7 @@ export default function ManageAppointments() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detail, setDetail] = useState<AppointmentItem | null>(null)
   const [rescheduleData, setRescheduleData] = useState<AppointmentItem | null>(null)
+  const [historyItem, setHistoryItem] = useState<AppointmentItem | null>(null)
 
   const fetchAppointments = useCallback(async (nextPage = page) => {
     setLoading(true)
@@ -103,6 +105,10 @@ export default function ManageAppointments() {
     } finally {
       setDetailLoading(false)
     }
+  }
+
+  function handleHistory(appointment: AppointmentItem) {
+    setHistoryItem(appointment)
   }
 
   function handleReschedule(appointment: AppointmentItem) {
@@ -222,6 +228,7 @@ export default function ManageAppointments() {
             groupedAppointments={groupedAppointments}
             loading={loading}
             onView={handleView}
+            onHistory={handleHistory}
             onCancel={handleCancel}
             onReschedule={handleReschedule}
             onRestore={handleRestore}
@@ -254,6 +261,13 @@ export default function ManageAppointments() {
 
       {detailOpen && (
         <AppointmentDetail detail={detail} loading={detailLoading} onClose={closeDetail} />
+      )}
+
+      {historyItem && (
+        <AppointmentHistoryModal 
+          appointment={historyItem} 
+          onClose={() => setHistoryItem(null)} 
+        />
       )}
     </div>
   )

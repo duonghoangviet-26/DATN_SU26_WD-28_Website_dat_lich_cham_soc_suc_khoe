@@ -23,6 +23,7 @@ interface Props {
   groupedAppointments: DoctorGroup[]
   loading: boolean
   onView: (a: AppointmentItem) => void
+  onHistory: (a: AppointmentItem) => void
   onCancel: (a: AppointmentItem) => void
   onReschedule: (a: AppointmentItem) => void
   onRestore: (a: AppointmentItem) => void
@@ -32,7 +33,7 @@ interface Props {
 type TabType = 'upcoming' | 'ongoing' | 'completed' | 'cancelled' | 'overdue'
 
 export default function DoctorAppointmentGroupList({
-  groupedAppointments, loading, onView, onCancel, onReschedule, onRestore, onHardDelete
+  groupedAppointments, loading, onView, onHistory, onCancel, onReschedule, onRestore, onHardDelete
 }: Props) {
   const [expandedDoctor, setExpandedDoctor] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('upcoming')
@@ -185,6 +186,13 @@ export default function DoctorAppointmentGroupList({
                                 title="Xem chi tiết"
                               >
                                 <Icon name="eye" className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => onHistory(a)}
+                                className="inline-flex items-center justify-center rounded-lg border border-purple-200 bg-purple-50 p-2 text-purple-600 transition-colors hover:bg-purple-100"
+                                title="Xem lịch sử"
+                              >
+                                <Icon name="clock" className="h-4 w-4" />
                               </button>
                               
                               {(activeTab === 'upcoming' || activeTab === 'ongoing' || activeTab === 'overdue') && (

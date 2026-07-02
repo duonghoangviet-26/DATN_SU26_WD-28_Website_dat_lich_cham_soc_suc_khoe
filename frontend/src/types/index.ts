@@ -198,6 +198,7 @@ export interface AppointmentItem {
   service_id?: string | null
   benh_nhan: string
   sdt_benh_nhan?: string | null
+  doctor_id?: string | null
   bac_si: string
   chuyen_khoa: string
   ngay_kham: string

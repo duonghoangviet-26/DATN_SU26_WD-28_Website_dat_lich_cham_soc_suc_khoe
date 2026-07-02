@@ -28,6 +28,7 @@ function formatAppointmentItem(appointment) {
     service_id: appointment.service_id?._id ?? appointment.service_id ?? null,
     benh_nhan: appointment.ten_khach || appointment.user_id?.ho_ten || 'Khach vang lai',
     sdt_benh_nhan: appointment.so_dien_thoai_khach || appointment.user_id?.so_dien_thoai || null,
+    doctor_id: appointment.doctor_id?._id ?? appointment.doctor_id ?? null,
     bac_si: appointment.doctor_id?.user_id?.ho_ten || 'Khong ro',
     chuyen_khoa: appointment.service_id?.ten || 'Kham tong quat',
     ngay_kham: formatDateOnly(appointment.ngay_kham),
@@ -660,6 +661,36 @@ export async function getDoctorSchedules(req, res) {
         }
       })
       .filter((schedule) => schedule.slots.length > 0)
+
+    return ok(res, formatted)
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// GET /api/admin/appointments/:id/history
+// Xem lich su thay doi cua 1 lich hen
+export async function getAppointmentHistory(req, res) {
+  try {
+    const { id } = req.params
+
+    const history = await LichSuLichHen.find({ appointment_id: id })
+      .populate('nguoi_thuc_hien_id', 'ho_ten email')
+      .sort({ thoi_diem: -1 })
+      .lean()
+
+    const formatted = history.map((item) => ({
+      _id: item._id,
+      tu_trang_thai: item.tu_trang_thai,
+      den_trang_thai: item.den_trang_thai,
+      tu_payment_status: item.tu_payment_status,
+      den_payment_status: item.den_payment_status,
+      vai_tro: item.vai_tro,
+      nguoi_thuc_hien: item.nguoi_thuc_hien_id ? item.nguoi_thuc_hien_id.ho_ten : (item.vai_tro === 'system' ? 'Hệ thống' : 'Khách'),
+      nguoi_thuc_hien_email: item.nguoi_thuc_hien_id ? item.nguoi_thuc_hien_id.email : '',
+      ly_do: item.ly_do,
+      thoi_diem: item.thoi_diem,
+    }))
 
     return ok(res, formatted)
   } catch (err) {

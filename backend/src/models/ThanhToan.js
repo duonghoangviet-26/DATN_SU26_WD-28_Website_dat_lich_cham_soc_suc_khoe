@@ -18,7 +18,7 @@ const paymentSchema = new mongoose.Schema(
     benh_nhan_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'NguoiDung',
-      required: true,
+      default: null,
     },
     so_tien: { type: Number, required: true, min: [0, 'Số tiền không được âm'] },
     status: {
