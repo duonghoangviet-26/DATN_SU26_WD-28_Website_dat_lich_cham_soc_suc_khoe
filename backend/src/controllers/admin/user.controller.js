@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs'
-import { NguoiDung, NhatKyThaoTac } from '../../models/index.js'
+import { NguoiDung, NhatKyThaoTac, BacSi, ThongBao } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
+
+const ADMIN_ID = "000000000000000000000099"
 
 /**
  * Hàm trợ giúp ghi nhật ký thao tác
@@ -129,6 +131,22 @@ export async function createUser(req, res) {
       role: role || 'user'
     })
 
+    // NẾU LÀ BÁC SĨ -> TẠO NGAY HỒ SƠ BÁC SĨ (để xuất hiện bên Quản lý Bác sĩ)
+    if (newUser.role === 'doctor') {
+      await BacSi.create({
+        user_id: newUser._id,
+        trang_thai_duyet: 'pending' // Mặc định là chờ duyệt
+      })
+
+      // Gửi thông báo cho Admin
+      await ThongBao.create({
+        user_id: ADMIN_ID,
+        tieu_de: 'Bác sĩ mới cần duyệt',
+        noi_dung: `Tài khoản bác sĩ ${ho_ten} (${email}) vừa được tạo. Vui lòng kiểm tra và duyệt hồ sơ.`,
+        loai: 'system'
+      })
+    }
+
     // 5. Ghi nhật ký
     await logActivity(req, 'CREATE_USER', newUser._id, null, {
       email, ho_ten, role: role || 'user'
@@ -157,6 +175,25 @@ export async function updateUser(req, res) {
       { ho_ten, so_dien_thoai, role, status },
       { new: true, runValidators: true }
     )
+
+    // NẾU ĐỔI ROLE THÀNH BÁC SĨ MÀ CHƯA CÓ HỒ SƠ -> TẠO HỒ SƠ
+    if (user && user.role === 'doctor') {
+      const existingBacSi = await BacSi.findOne({ user_id: user._id })
+      if (!existingBacSi) {
+        await BacSi.create({
+          user_id: user._id,
+          trang_thai_duyet: 'pending'
+        })
+        
+        // Gửi thông báo cho Admin
+        await ThongBao.create({
+          user_id: ADMIN_ID,
+          tieu_de: 'Có hồ sơ bác sĩ mới cần duyệt',
+          noi_dung: `Người dùng ${user.ho_ten} vừa được nâng cấp thành Bác sĩ. Vui lòng kiểm tra hồ sơ.`,
+          loai: 'system'
+        })
+      }
+    }
 
     if (!user) {
       return fail(res, 404, 'Không tìm thấy người dùng để cập nhật')

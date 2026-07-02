@@ -18,6 +18,26 @@ export async function getNotifications(req, res) {
   }
 }
 
+export async function getReceivedNotifications(req, res) {
+  try {
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 10
+    // Lấy hardcode ADMIN_ID tương tự như bên ManageDoctors.tsx
+    const adminId = "000000000000000000000099" 
+    
+    const result = await notificationService.getReceivedNotifications(adminId, page, limit)
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Lấy danh sách thông báo nhận thành công',
+      data: result.data,
+      pagination: result.pagination
+    })
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
 export async function sendNotification(req, res) {
   try {
     const { tieu_de, noi_dung, doi_tuong, admin_id } = req.body

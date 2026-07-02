@@ -137,3 +137,26 @@ export async function deleteSystemNotification(id) {
 
   return true
 }
+
+export async function getReceivedNotifications(admin_id, page = 1, limit = 10) {
+  const skip = (page - 1) * limit
+
+  const [notifications, total] = await Promise.all([
+    ThongBao.find({ user_id: admin_id })
+      .sort({ ngay_tao: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    ThongBao.countDocuments({ user_id: admin_id }),
+  ])
+
+  return {
+    data: notifications,
+    pagination: {
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      totalPages: Math.ceil(total / limit),
+    },
+  }
+}

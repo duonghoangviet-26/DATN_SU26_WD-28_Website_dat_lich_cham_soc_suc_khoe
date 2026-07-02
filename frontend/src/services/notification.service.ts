@@ -20,6 +20,14 @@ export const notificationService = {
     }
   },
 
+  async getReceived(page = 1, limit = 10): Promise<{ data: any[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
+    const { data } = await axios.get(`${BASE_URL}/received`, { params: { page, limit } })
+    return {
+      data: data.data,
+      pagination: data.pagination
+    }
+  },
+
   async send(payload: SendPayloadAPI): Promise<NotificationItemAPI> {
     const { data } = await axios.post(BASE_URL, payload)
     return data.data

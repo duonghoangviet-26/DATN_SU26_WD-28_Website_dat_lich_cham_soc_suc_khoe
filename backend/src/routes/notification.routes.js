@@ -6,6 +6,9 @@ const router = Router()
 // GET /api/admin/notifications - Lấy danh sách thông báo hệ thống đã gửi
 router.get('/', notificationController.getNotifications)
 
+// GET /api/admin/notifications/received - Lấy danh sách thông báo gửi đến Admin
+router.get('/received', notificationController.getReceivedNotifications)
+
 // POST /api/admin/notifications - Gửi thông báo hệ thống mới
 router.post('/', notificationController.sendNotification)
 
