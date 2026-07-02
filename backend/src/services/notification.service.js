@@ -39,11 +39,11 @@ export async function sendSystemNotification({ tieu_de, noi_dung, doi_tuong, adm
   // Đếm số lượng người nhận dựa trên đối tượng
   let so_nguoi_nhan = 0
   if (doi_tuong === 'tat_ca') {
-    so_nguoi_nhan = await NguoiDung.countDocuments({ role: { $in: ['user', 'doctor'] }, status: 'active' })
+    so_nguoi_nhan = await NguoiDung.countDocuments({ role: { $in: ['user', 'doctor'] }, status: 'active', ngay_xoa: null })
   } else if (doi_tuong === 'benh_nhan') {
-    so_nguoi_nhan = await NguoiDung.countDocuments({ role: 'user', status: 'active' })
+    so_nguoi_nhan = await NguoiDung.countDocuments({ role: 'user', status: 'active', ngay_xoa: null })
   } else if (doi_tuong === 'bac_si') {
-    so_nguoi_nhan = await NguoiDung.countDocuments({ role: 'doctor', status: 'active' })
+    so_nguoi_nhan = await NguoiDung.countDocuments({ role: 'doctor', status: 'active', ngay_xoa: null })
   } else {
     throw new Error('doi_tuong không hợp lệ (tat_ca, benh_nhan, bac_si)')
   }
@@ -65,7 +65,7 @@ export async function sendSystemNotification({ tieu_de, noi_dung, doi_tuong, adm
     .lean()
 
   // Batch insert vào bảng thông báo cá nhân
-  const targetQuery = { status: 'active' }
+  const targetQuery = { status: 'active', ngay_xoa: null }
   if (doi_tuong === 'tat_ca') targetQuery.role = { $in: ['user', 'doctor'] }
   else if (doi_tuong === 'benh_nhan') targetQuery.role = 'user'
   else targetQuery.role = 'doctor'
