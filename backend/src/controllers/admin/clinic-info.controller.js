@@ -1,7 +1,7 @@
-import ThongTinPhongKham from '../models/ThongTinPhongKham.js'
-import ChuyenKhoa from '../models/ChuyenKhoa.js'
-import NhatKyThaoTac from '../models/NhatKyThaoTac.js'
-import { ok, fail } from '../utils/response.js'
+import ThongTinPhongKham from '../../models/ThongTinPhongKham.js'
+import ChuyenKhoa from '../../models/ChuyenKhoa.js'
+import NhatKyThaoTac from '../../models/NhatKyThaoTac.js'
+import { ok, fail } from '../../utils/response.js'
 
 // Helper: Lấy lịch sử thao tác chung
 const getAuditLogs = async (loai_doi_tuong, doi_tuong_id) => {
@@ -203,7 +203,7 @@ export const deleteClinic = async (req, res) => {
 // ==========================================
 // QUẢN LÝ CHUYÊN KHOA CỦA TỪNG CHI NHÁNH
 // ==========================================
-import BacSi from '../models/BacSi.js'
+import BacSi from '../../models/BacSi.js'
 
 // Lấy danh sách chuyên khoa của 1 chi nhánh
 export const getSpecialtiesByClinic = async (req, res) => {

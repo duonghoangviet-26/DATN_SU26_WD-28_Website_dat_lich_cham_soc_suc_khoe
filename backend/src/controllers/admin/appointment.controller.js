@@ -1,13 +1,13 @@
 import mongoose from 'mongoose'
-import LichHen from '../models/LichHen.js'
-import LichLamViec from '../models/LichLamViec.js'
-import LichSuLichHen from '../models/LichSuLichHen.js'
-import BacSi from '../models/BacSi.js'
-import DichVu from '../models/DichVu.js'
-import ThanhToan from '../models/ThanhToan.js'
-import HoanTien from '../models/HoanTien.js'
-import CaiDatThanhToan from '../models/CaiDatThanhToan.js'
-import { ok, created, fail } from '../utils/response.js'
+import LichHen from '../../models/LichHen.js'
+import LichLamViec from '../../models/LichLamViec.js'
+import LichSuLichHen from '../../models/LichSuLichHen.js'
+import BacSi from '../../models/BacSi.js'
+import DichVu from '../../models/DichVu.js'
+import ThanhToan from '../../models/ThanhToan.js'
+import HoanTien from '../../models/HoanTien.js'
+import CaiDatThanhToan from '../../models/CaiDatThanhToan.js'
+import { ok, created, fail } from '../../utils/response.js'
 
 const ADMIN_REFUND_SETTING_KEYS = ['hoan_tien_admin_huy', 'hoan_tien_admin_huy_khan_cap']
 

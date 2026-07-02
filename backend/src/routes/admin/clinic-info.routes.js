@@ -13,8 +13,8 @@ import {
   copySpecialty,
   getClinicLogs,
   getSpecialtyLogs
-} from '../controllers/clinic-info.controller.js'
-import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
+} from '../../controllers/admin/clinic-info.controller.js'
+import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js'
 
 const router = Router()
 

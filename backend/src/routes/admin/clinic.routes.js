@@ -1,11 +1,11 @@
 import { Router } from 'express'
-import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
+import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js'
 import {
   getSpecialties,
   createSpecialty,
   updateSpecialty,
-  toggleSpecialty,
-} from '../controllers/clinic.controller.js'
+  toggleSpecialty
+} from '../../controllers/admin/clinic.controller.js'
 
 const router = Router()
 

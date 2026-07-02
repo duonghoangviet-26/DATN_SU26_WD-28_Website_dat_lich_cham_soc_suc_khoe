@@ -1,10 +1,10 @@
 import { Router } from 'express'
 import authRoutes  from './admin/auth.routes.js'
 import adminRoutes from './admin/index.js'
-import clinicRoutes from './clinic.routes.js'
-import uploadRoutes from './upload.routes.js'
-import clinicInfoRoutes from './clinic-info.routes.js'
-import appointmentRoutes from './appointment.routes.js'
+import clinicRoutes from './admin/clinic.routes.js'
+import uploadRoutes from './admin/upload.routes.js'
+import clinicInfoRoutes from './admin/clinic-info.routes.js'
+import appointmentRoutes from './admin/appointment.routes.js'
 
 /**
  * Gom toàn bộ route con của hệ thống
