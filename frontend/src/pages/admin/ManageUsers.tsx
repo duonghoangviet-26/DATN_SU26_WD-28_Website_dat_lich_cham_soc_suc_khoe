@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { userService } from '@/services/user.service'
 import { useAuth } from '@/context/AuthContext'
 import type { User, Role } from '@/types'
@@ -518,7 +519,7 @@ export default function ManageUsers() {
       {/* --- MODALS --- */}
 
       {/* Modal Xem chi tiết */}
-      {selectedUser && (
+      {selectedUser && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedUser(null)}>
           <div className="bg-white w-full max-w-xl rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 pb-2 border-b">
@@ -587,11 +588,12 @@ export default function ManageUsers() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Thêm */}
-      {showAddModal && (
+      {showAddModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <form onSubmit={handleAddSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl animate-in slide-in-from-bottom-4 duration-300">
             <h3 className="text-xl font-bold mb-4">Thêm thành viên mới</h3>
@@ -610,11 +612,12 @@ export default function ManageUsers() {
               <button disabled={submitting} type="submit" className="flex-1 py-2 bg-brand-600 text-white rounded-xl font-bold disabled:opacity-50">{submitting ? 'Đang lưu...' : 'Lưu người dùng'}</button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Sửa */}
-      {editingUser && (
+      {editingUser && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <form onSubmit={handleEditSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl animate-in slide-in-from-bottom-4 duration-300">
             <h3 className="text-xl font-bold mb-4">Cập nhật thông tin</h3>
@@ -632,19 +635,23 @@ export default function ManageUsers() {
               <button disabled={submitting} type="submit" className="flex-1 py-2 bg-brand-600 text-white rounded-xl font-bold disabled:opacity-50">{submitting ? 'Đang lưu...' : 'Cập nhật'}</button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Hộp thoại xác nhận */}
-      <ConfirmDialog
-        open={!!confirmAction}
-        danger={confirmAction?.type === 'delete' || confirmAction?.type === 'hard-delete' || (confirmAction?.type === 'lock' && confirmAction.user.status === 'active')}
-        title={confirmAction?.type === 'hard-delete' ? 'XÓA VĨNH VIỄN' : confirmAction?.type === 'delete' ? 'Xóa người dùng' : confirmAction?.type === 'restore' ? 'Khôi phục' : confirmAction?.user.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-        message={confirmAction ? `Bạn có chắc muốn ${confirmAction.type === 'hard-delete' ? 'XÓA VĨNH VIỄN (không thể khôi phục)' : confirmAction.type === 'delete' ? 'xóa' : confirmAction.type === 'restore' ? 'khôi phục' : confirmAction.user.status === 'active' ? 'khóa' : 'mở khóa'} người dùng "${confirmAction.user.ho_ten}"?` : ''}
-        confirmText="Xác nhận"
-        onConfirm={onConfirmAction}
-        onCancel={() => setConfirmAction(null)}
-      />
+      {confirmAction && createPortal(
+        <ConfirmDialog
+          open={!!confirmAction}
+          danger={confirmAction?.type === 'delete' || confirmAction?.type === 'hard-delete' || (confirmAction?.type === 'lock' && confirmAction.user.status === 'active')}
+          title={confirmAction?.type === 'hard-delete' ? 'XÓA VĨNH VIỄN' : confirmAction?.type === 'delete' ? 'Xóa người dùng' : confirmAction?.type === 'restore' ? 'Khôi phục' : confirmAction?.user.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
+          message={confirmAction ? `Bạn có chắc muốn ${confirmAction.type === 'hard-delete' ? 'XÓA VĨNH VIỄN (không thể khôi phục)' : confirmAction.type === 'delete' ? 'xóa' : confirmAction.type === 'restore' ? 'khôi phục' : confirmAction.user.status === 'active' ? 'khóa' : 'mở khóa'} người dùng "${confirmAction.user.ho_ten}"?` : ''}
+          confirmText="Xác nhận"
+          onConfirm={onConfirmAction}
+          onCancel={() => setConfirmAction(null)}
+        />,
+        document.body
+      )}
 
     </div>
   )
