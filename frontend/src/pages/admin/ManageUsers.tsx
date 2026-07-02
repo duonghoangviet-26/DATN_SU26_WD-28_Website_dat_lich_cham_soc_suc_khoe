@@ -70,6 +70,15 @@ export default function ManageUsers() {
   const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'delete' | 'restore' | 'hard-delete', user: User } | null>(null)
   const [detailLogs, setDetailLogs] = useState<any[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  // State thống kê ở đầu trang
+  const [stats, setStats] = useState({
+    total: 0,
+    roles: { admin: 0, doctor: 0, user: 0 },
+    status: { active: 0, locked: 0 },
+    deleted: 0,
+  })
 
   // Form state
   const [formData, setFormData] = useState<{
@@ -89,6 +98,10 @@ export default function ManageUsers() {
       const res = await userService.getAll({ keyword, role, status, page, limit: 10, isDeleted: isDeleted ? 'true' : 'false' } as any)
       setUsers(res.data)
       setPagination(res.pagination)
+
+      // Gọi song song API thống kê
+      const statData = await userService.getStatistics()
+      setStats(statData)
     } catch (err: any) {
       setError(err.response?.data?.message || 'Không thể tải danh sách')
     } finally {
@@ -98,6 +111,7 @@ export default function ManageUsers() {
 
   useEffect(() => {
     loadUsers()
+    setSelectedIds([]) // Reset chọn nhiều khi đổi bộ lọc
   }, [keyword, role, status, page, isDeleted])
 
   useEffect(() => {
@@ -167,6 +181,45 @@ export default function ManageUsers() {
     }
   }
 
+  const handleBatchAction = async (action: 'lock' | 'unlock' | 'delete' | 'restore' | 'hard-delete') => {
+    if (selectedIds.length === 0) return
+
+    const actionNames: Record<string, string> = {
+      lock: 'khóa',
+      unlock: 'mở khóa',
+      delete: 'xóa',
+      restore: 'khôi phục',
+      'hard-delete': 'xóa vĩnh viễn'
+    }
+
+    let trimmedReason = ''
+    if (action === 'hard-delete') {
+      const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedIds.length} người dùng đã chọn khỏi cơ sở dữ liệu? Thao tác này không thể phục hồi!`)
+      if (!confirmDelete) return
+    } else if (action === 'unlock') {
+      trimmedReason = ''
+    } else {
+      const reason = window.prompt(`Nhập lý do ${actionNames[action]} ${selectedIds.length} người dùng đã chọn (không bắt buộc):`, '')
+      if (reason === null) return // Hủy bỏ
+      trimmedReason = reason.trim()
+    }
+
+    setLoading(true)
+    try {
+      const res = await userService.batchAction({
+        ids: selectedIds,
+        action,
+        ly_do: trimmedReason
+      })
+      alert(`Đã thực hiện thành công thao tác ${actionNames[action]} cho ${res.count} người dùng!`)
+      setSelectedIds([])
+      loadUsers()
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Thao tác hàng loạt thất bại.')
+      setLoading(false)
+    }
+  }
+
 
 
   const getLogDescription = (log: any) => {
@@ -207,6 +260,57 @@ export default function ManageUsers() {
         </button>
       </PageHeader>
 
+      {/* Thẻ thống kê tổng quan (Dashboard mini) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Tổng tài khoản */}
+        <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-500">Tổng tài khoản</p>
+            <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Thành viên hệ thống</p>
+          </div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-500 shadow-sm border border-blue-100/50">
+            <Icon name="users" className="h-6 w-6" />
+          </div>
+        </div>
+
+        {/* Bệnh nhân */}
+        <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-500">Bệnh nhân</p>
+            <p className="text-2xl font-bold text-slate-800">{stats.roles.user}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Vai trò user</p>
+          </div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-500 shadow-sm border border-emerald-100/50">
+            <Icon name="check" className="h-6 w-6" />
+          </div>
+        </div>
+
+        {/* Bác sĩ */}
+        <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-500">Bác sĩ</p>
+            <p className="text-2xl font-bold text-slate-800">{stats.roles.doctor}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Cần duyệt hồ sơ</p>
+          </div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-50 text-purple-500 shadow-sm border border-purple-100/50">
+            <Icon name="doctor" className="h-6 w-6" />
+          </div>
+        </div>
+
+        {/* Đã khóa */}
+        <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-500">Đã khóa</p>
+            <p className="text-2xl font-bold text-red-600">{stats.status.locked}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Tạm ngưng hoạt động</p>
+          </div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-500 shadow-sm border border-red-100/50">
+            <Icon name="ban" className="h-6 w-6" />
+          </div>
+        </div>
+      </div>
+
       {/* Bộ lọc */}
       <div className="card p-4 space-y-4">
         <div className="grid gap-4 md:grid-cols-4">
@@ -235,12 +339,92 @@ export default function ManageUsers() {
         <Icon name="ban" className="h-5 w-5" /> {error}
       </div>}
 
+      {/* Thanh tác vụ hàng loạt */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-700">
+              Đã chọn <strong className="text-brand-600">{selectedIds.length}</strong> người dùng
+            </span>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="text-xs text-slate-400 hover:text-slate-600 font-semibold underline"
+            >
+              Bỏ chọn tất cả
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {isDeleted ? (
+              <>
+                <button
+                  onClick={() => handleBatchAction('restore')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 px-3.5 py-2 text-xs font-bold rounded-lg shadow-sm transition-colors"
+                >
+                  <Icon name="refresh-cw" className="h-3.5 w-3.5" />
+                  Khôi phục hàng loạt
+                </button>
+                <button
+                  onClick={() => handleBatchAction('hard-delete')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 bg-red-600 text-white hover:bg-red-700 px-3.5 py-2 text-xs font-bold rounded-lg shadow-sm transition-colors"
+                >
+                  <Icon name="trash" className="h-3.5 w-3.5" />
+                  Xóa vĩnh viễn hàng loạt
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleBatchAction('unlock')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 px-3.5 py-2 text-xs font-bold rounded-lg shadow-sm transition-colors"
+                >
+                  <Icon name="check" className="h-3.5 w-3.5" />
+                  Mở khóa hàng loạt
+                </button>
+                <button
+                  onClick={() => handleBatchAction('lock')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 bg-amber-500 text-white hover:bg-amber-600 px-3.5 py-2 text-xs font-bold rounded-lg shadow-sm transition-colors"
+                >
+                  <Icon name="ban" className="h-3.5 w-3.5" />
+                  Khóa hàng loạt
+                </button>
+                <button
+                  onClick={() => handleBatchAction('delete')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 px-3.5 py-2 text-xs font-bold rounded-lg shadow-sm transition-colors"
+                >
+                  <Icon name="trash" className="h-3.5 w-3.5" />
+                  Xóa hàng loạt
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Bảng */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b">
               <tr>
+                <th className="px-4 py-3 text-center w-12">
+                  <input
+                    type="checkbox"
+                    checked={users.length > 0 && selectedIds.length === users.filter(u => u.id !== currentUser?.id).length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(users.filter(u => u.id !== currentUser?.id).map((u) => u.id))
+                      } else {
+                        setSelectedIds([])
+                      }
+                    }}
+                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4 cursor-pointer"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-600">Thành viên</th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-600">Vai trò</th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-600">Trạng thái</th>
@@ -250,12 +434,28 @@ export default function ManageUsers() {
             </thead>
             <tbody className="divide-y">
               {loading ? (
-                <tr><td colSpan={5} className="py-20 text-center"><div className="animate-pulse text-slate-400 font-medium">Đang tải dữ liệu...</div></td></tr>
+                <tr><td colSpan={6} className="py-20 text-center"><div className="animate-pulse text-slate-400 font-medium">Đang tải dữ liệu...</div></td></tr>
               ) : users.length === 0 ? (
-                <tr><td colSpan={5} className="py-20 text-center text-slate-400 font-medium">Không tìm thấy người dùng phù hợp.</td></tr>
+                <tr><td colSpan={6} className="py-20 text-center text-slate-400 font-medium">Không tìm thấy người dùng phù hợp.</td></tr>
               ) : (
                 users.map(u => (
                   <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-4 w-12 text-center">
+                      {u.id !== currentUser?.id ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(u.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedIds([...selectedIds, u.id])
+                            } else {
+                              setSelectedIds(selectedIds.filter((id) => id !== u.id))
+                            }
+                          }}
+                          className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4 cursor-pointer"
+                        />
+                      ) : null}
+                    </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 flex-shrink-0 bg-brand-100 text-brand-700 rounded-full flex items-center justify-center font-bold text-lg">
@@ -277,21 +477,21 @@ export default function ManageUsers() {
                     </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-1">
-                        <button onClick={() => setSelectedUser(u)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Xem"><Icon name="eye" className="h-4 w-4" /></button>
+                        <button onClick={() => setSelectedUser(u)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Xem chi tiết"><Icon name="eye" className="h-4 w-4" /></button>
 
                         {!isDeleted ? (
                           <>
-                            <button onClick={() => setEditingUser(u)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Sửa"><Icon name="edit" className="h-4 w-4" /></button>
+                            <button onClick={() => setEditingUser(u)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Chỉnh sửa"><Icon name="edit" className="h-4 w-4" /></button>
                             {u.id !== currentUser?.id && (
                               <>
-                                <button onClick={() => setConfirmAction({ type: 'lock', user: u })} className={`p-2 rounded-lg transition-colors ${u.status === 'active' ? 'text-slate-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 bg-orange-50'}`} title={u.status === 'active' ? 'Khóa' : 'Mở khóa'}><Icon name="ban" className="h-4 w-4" /></button>
-                                <button onClick={() => setConfirmAction({ type: 'delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa"><Icon name="trash" className="h-4 w-4" /></button>
+                                <button onClick={() => setConfirmAction({ type: 'lock', user: u })} className={`p-2 rounded-lg transition-colors ${u.status === 'active' ? 'text-slate-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 bg-orange-50'}`} title={u.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}><Icon name="ban" className="h-4 w-4" /></button>
+                                <button onClick={() => setConfirmAction({ type: 'delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa mềm"><Icon name="trash" className="h-4 w-4" /></button>
                               </>
                             )}
                           </>
                         ) : (
                           <div className="flex justify-end gap-1">
-                            <button onClick={() => setConfirmAction({ type: 'restore', user: u })} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Khôi phục"><Icon name="check" className="h-4 w-4" /></button>
+                            <button onClick={() => setConfirmAction({ type: 'restore', user: u })} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Khôi phục tài khoản"><Icon name="check" className="h-4 w-4" /></button>
                             <button onClick={() => setConfirmAction({ type: 'hard-delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa vĩnh viễn"><Icon name="trash" className="h-4 w-4" /></button>
                           </div>
                         )}
