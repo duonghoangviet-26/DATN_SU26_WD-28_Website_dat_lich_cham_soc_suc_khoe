@@ -193,8 +193,12 @@ export interface ServiceFormData {
 
 // ViewModel lịch hẹn (kết hợp bệnh nhân + bác sĩ)
 export interface AppointmentItem {
-  id: number
+  _id: string
+  user_id?: string | null
+  service_id?: string | null
   benh_nhan: string
+  sdt_benh_nhan?: string | null
+  doctor_id?: string | null
   bac_si: string
   chuyen_khoa: string
   ngay_kham: string
@@ -203,6 +207,43 @@ export interface AppointmentItem {
   status: AppointmentStatus
   payment_status: PaymentStatus
   gia_kham: number
+  dia_chi_kham?: string | null
+  ly_do_kham?: string | null
+  ngay_cap_nhat?: string
+}
+
+export interface AppointmentSummary {
+  today: number
+  pending: number
+  confirmed: number
+  completed: number
+}
+
+export interface AppointmentPagination {
+  total: number
+  totalPages: number
+  page: number
+  limit?: number
+}
+
+export interface AppointmentListResponse {
+  data: AppointmentItem[]
+  pagination: AppointmentPagination
+  summary: AppointmentSummary
+}
+
+export interface AdminAppointmentDoctorOption {
+  _id: string
+  ten: string
+  chuyen_khoa: string
+  service_ids: string[]
+}
+
+export interface AdminAppointmentServiceOption {
+  _id: string
+  ten: string
+  loai: 'clinic' | 'home'
+  gia: number
 }
 
 export interface ReviewItem {

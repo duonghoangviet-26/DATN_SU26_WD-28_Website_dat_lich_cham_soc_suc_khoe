@@ -10,9 +10,11 @@ import {
   createSpecialtyForClinic,
   updateSpecialty,
   toggleSpecialty,
-  copySpecialty
-} from '../controllers/clinic-info.controller.js'
-import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
+  copySpecialty,
+  getClinicLogs,
+  getSpecialtyLogs
+} from '../../controllers/admin/clinic-info.controller.js'
+import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js'
 
 const router = Router()
 
@@ -23,11 +25,13 @@ router.use(verifyToken, requireRole('admin'))
 router.get('/', getAllClinics)
 router.post('/', createClinic)
 router.get('/:id', getClinicById)
+router.get('/:id/logs', getClinicLogs)
 router.put('/:id', updateClinicInfo)
 router.delete('/:id', deleteClinic)
 
 // ---- Quản lý chuyên khoa của chi nhánh ----
 router.get('/:id/specialties', getSpecialtiesByClinic)
+router.get('/specialties/:specialtyId/logs', getSpecialtyLogs)
 router.get('/specialties/:specialtyId/doctors', getDoctorsBySpecialty)
 router.post('/:id/specialties', createSpecialtyForClinic)
 router.put('/specialties/:specialtyId', updateSpecialty)

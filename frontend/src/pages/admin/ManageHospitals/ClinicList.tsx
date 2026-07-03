@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { HospitalItem } from '@/types'
 import Icon from '@/components/admin/icons'
 
@@ -7,10 +8,18 @@ interface Props {
   onAdd: () => void
   onEdit: (clinic: HospitalItem) => void
   onDelete: (clinic: HospitalItem) => void
+  onRestore: (clinic: HospitalItem) => void
   onViewSpecialties: (clinic: HospitalItem) => void
+  onViewLogs: (clinic: HospitalItem) => void
 }
 
-export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, onViewSpecialties }: Props) {
+export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, onRestore, onViewSpecialties, onViewLogs }: Props) {
+  const [page, setPage] = useState(1)
+  const itemsPerPage = 6
+  const totalPages = Math.ceil(clinics.length / itemsPerPage)
+  const startIndex = (page - 1) * itemsPerPage
+  const visibleClinics = clinics.slice(startIndex, startIndex + itemsPerPage)
+
   if (loading) {
     return (
       <div className="card flex items-center justify-center py-20 text-slate-400">
@@ -46,7 +55,7 @@ export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {clinics.map((c) => (
+              {visibleClinics.map((c) => (
                 <tr key={c._id} className="hover:bg-slate-50">
                   <td className="px-5 py-4 font-medium text-slate-800">
                     <div className="flex items-center gap-3">
@@ -95,7 +104,7 @@ export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, 
                     >
                       <Icon name="edit" className="h-4 w-4" />
                     </button>
-                    {c.trang_thai === 'active' && (
+                    {c.trang_thai === 'active' ? (
                       <button
                         onClick={() => onDelete(c)}
                         className="inline-flex rounded-lg p-2 text-red-600 hover:bg-red-50 transition-colors ml-1"
@@ -103,12 +112,51 @@ export default function ClinicList({ clinics, loading, onAdd, onEdit, onDelete, 
                       >
                         <Icon name="trash" className="h-4 w-4" />
                       </button>
+                    ) : (
+                      <button
+                        onClick={() => onRestore(c)}
+                        className="inline-flex rounded-lg p-2 text-green-600 hover:bg-green-50 transition-colors ml-1"
+                        title="Khôi phục"
+                      >
+                        <Icon name="refresh-cw" className="h-4 w-4" />
+                      </button>
                     )}
+                    <button
+                      onClick={() => onViewLogs(c)}
+                      className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-slate-100 transition-colors ml-1"
+                      title="Lịch sử chỉnh sửa"
+                    >
+                      <Icon name="clock" className="h-4 w-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t p-4 bg-slate-50/50">
+          <span className="text-sm text-slate-500">
+            Hiển thị <span className="font-medium text-slate-700">{startIndex + 1}</span> - <span className="font-medium text-slate-700">{Math.min(startIndex + itemsPerPage, clinics.length)}</span> / <span className="font-medium text-slate-700">{clinics.length}</span> chi nhánh
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+            >
+              Trước
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+            >
+              Sau
+            </button>
+          </div>
         </div>
       )}
     </div>

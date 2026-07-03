@@ -13,14 +13,28 @@ interface Props {
   onAdd: () => void
   onEdit: (s: SpecialtyItem) => void
   onChange: (updated: SpecialtyItem) => void
+  onViewLogs: (s: SpecialtyItem) => void
 }
 
 // Bảng danh sách chuyên khoa với các thao tác: Thêm, Sửa, Ẩn/Hiện.
-export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onChange }: Props) {
+export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onChange, onViewLogs }: Props) {
   const [confirmItem, setConfirmItem] = useState<SpecialtyItem | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
   const [copyingSpecialty, setCopyingSpecialty] = useState<SpecialtyItem | null>(null)
   const [viewingDoctorsSpec, setViewingDoctorsSpec] = useState<SpecialtyItem | null>(null)
+  const [activeTab, setActiveTab] = useState<'active' | 'hidden'>('active')
+  const [page, setPage] = useState(1)
+  const itemsPerPage = 6
+
+  const handleTabChange = (tab: 'active' | 'hidden') => {
+    setActiveTab(tab)
+    setPage(1)
+  }
+
+  const displayedSpecialties = specialties.filter((s) => s.status === activeTab)
+  const totalPages = Math.ceil(displayedSpecialties.length / itemsPerPage)
+  const startIndex = (page - 1) * itemsPerPage
+  const visibleSpecialties = displayedSpecialties.slice(startIndex, startIndex + itemsPerPage)
 
   async function handleToggle() {
     if (!confirmItem) return
@@ -28,7 +42,7 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
     setConfirmItem(null)
     setToggling(id)
     try {
-      const updated = await hospitalService.toggleSpecialty(id)
+      const updated = await hospitalService.toggleSpecialtyStatus(id)
       onChange(updated)
     } finally {
       setToggling(null)
@@ -52,6 +66,30 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex items-center gap-6 px-5 pt-3 border-b border-slate-100 bg-slate-50/50">
+        <button
+          onClick={() => handleTabChange('active')}
+          className={`font-medium text-sm pb-3 border-b-2 transition-colors ${
+            activeTab === 'active'
+              ? 'border-brand-500 text-brand-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+          }`}
+        >
+          Đang hoạt động ({specialties.filter(s => s.status === 'active').length})
+        </button>
+        <button
+          onClick={() => handleTabChange('hidden')}
+          className={`font-medium text-sm pb-3 border-b-2 transition-colors ${
+            activeTab === 'hidden'
+              ? 'border-brand-500 text-brand-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+          }`}
+        >
+          Đã ẩn ({specialties.filter(s => s.status === 'hidden').length})
+        </button>
+      </div>
+
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -72,15 +110,17 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
               <tr>
                 <td colSpan={8} className="px-5 py-12 text-center text-slate-400">Đang tải...</td>
               </tr>
-            ) : specialties.length === 0 ? (
+            ) : displayedSpecialties.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-slate-400">Chưa có chuyên khoa nào</td>
+                <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
+                  {activeTab === 'active' ? 'Chưa có chuyên khoa nào đang hoạt động' : 'Chưa có chuyên khoa nào bị ẩn'}
+                </td>
               </tr>
             ) : (
-              specialties.map((s, index) => (
+              visibleSpecialties.map((s, index) => (
                 <tr key={s._id} className={`hover:bg-slate-50 ${toggling === s._id ? 'opacity-50' : ''}`}>
                   {/* STT */}
-                  <td className="px-5 py-3 text-center font-medium text-slate-500">{index + 1}</td>
+                  <td className="px-5 py-3 text-center font-medium text-slate-500">{startIndex + index + 1}</td>
 
                   {/* Icon */}
                   <td className="px-5 py-3">
@@ -128,35 +168,46 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
                       {/* Nút Sao chép */}
                       <button
                         onClick={() => setCopyingSpecialty(s)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-amber-600 transition-colors hover:border-amber-200 hover:bg-amber-50"
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-600"
                         title="Sao chép"
                       >
-                      <Icon name="copy" className="h-3 w-3" /> Copy
+                        <Icon name="copy" className="h-4 w-4" />
                       </button>
 
                       {/* Nút Sửa */}
                       <button
                         onClick={() => onEdit(s)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600"
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600"
                         title="Chỉnh sửa"
                       >
-                      <Icon name="file-text" className="h-3 w-3" /> Sửa
+                        <Icon name="file-text" className="h-4 w-4" />
                       </button>
 
-                      {/* Nút Ẩn/Hiện */}
+                      {/* Nút Ẩn/Khôi phục */}
                       <button
                         onClick={() => setConfirmItem(s)}
                         disabled={toggling === s._id}
-                        className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                        title={s.status === 'active' ? 'Ẩn chuyên khoa' : 'Khôi phục chuyên khoa'}
+                        className={`inline-flex items-center justify-center rounded-lg border p-2 transition-colors ${
                           s.status === 'active'
-                            ? 'border-slate-200 bg-slate-50 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
-                            : 'border-brand-200 bg-brand-50 text-brand-600 hover:bg-brand-100'
+                            ? 'border-slate-200 bg-white text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                            : 'border-green-200 bg-green-50 text-green-600 hover:bg-green-100'
                         }`}
                       >
-                        {s.status === 'active'
-                          ? <><Icon name="eye-off" className="h-3 w-3" /> Ẩn</>
-                          : <><Icon name="eye" className="h-3 w-3" /> Hiện</>
-                        }
+                        {s.status === 'active' ? (
+                          <Icon name="eye-off" className="h-4 w-4" />
+                        ) : (
+                          <Icon name="refresh-cw" className="h-4 w-4" />
+                        )}
+                      </button>
+
+                      {/* Nút Lịch sử */}
+                      <button
+                        onClick={() => onViewLogs(s)}
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                        title="Lịch sử chỉnh sửa"
+                      >
+                        <Icon name="clock" className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
@@ -167,11 +218,35 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
         </table>
       </div>
 
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t p-4 bg-slate-50/50">
+          <span className="text-sm text-slate-500">
+            Hiển thị <span className="font-medium text-slate-700">{startIndex + 1}</span> - <span className="font-medium text-slate-700">{Math.min(startIndex + itemsPerPage, displayedSpecialties.length)}</span> / <span className="font-medium text-slate-700">{displayedSpecialties.length}</span> chuyên khoa
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+            >
+              Trước
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog
         open={!!confirmItem}
-        title={confirmItem?.status === 'active' ? 'Ẩn chuyên khoa' : 'Hiện chuyên khoa'}
-        message={`Bạn có chắc muốn ${confirmItem?.status === 'active' ? 'ẩn' : 'hiện'} chuyên khoa "${confirmItem?.ten}"?`}
-        confirmText={confirmItem?.status === 'active' ? 'Ẩn' : 'Hiện'}
+        title={confirmItem?.status === 'active' ? 'Ẩn chuyên khoa' : 'Khôi phục chuyên khoa'}
+        message={`Bạn có chắc muốn ${confirmItem?.status === 'active' ? 'ẩn' : 'khôi phục'} chuyên khoa "${confirmItem?.ten}"?`}
+        confirmText={confirmItem?.status === 'active' ? 'Ẩn' : 'Khôi phục'}
         danger={confirmItem?.status === 'active'}
         onConfirm={handleToggle}
         onCancel={() => setConfirmItem(null)}
