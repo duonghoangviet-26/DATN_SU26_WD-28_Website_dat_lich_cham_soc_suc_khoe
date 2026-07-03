@@ -1,7 +1,7 @@
 import { Router } from 'express'
-import { upload } from '../utils/cloudinary.js'
-import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
-import { ok, fail } from '../utils/response.js'
+import { upload } from '../../utils/cloudinary.js'
+import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js'
+import { ok, fail } from '../../utils/response.js'
 
 const router = Router()
 

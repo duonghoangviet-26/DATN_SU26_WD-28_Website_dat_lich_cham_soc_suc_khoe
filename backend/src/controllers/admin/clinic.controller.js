@@ -1,6 +1,6 @@
-import ThongTinPhongKham from '../models/ThongTinPhongKham.js'
-import ChuyenKhoa from '../models/ChuyenKhoa.js'
-import { ok, created, fail } from '../utils/response.js'
+import ThongTinPhongKham from '../../models/ThongTinPhongKham.js'
+import ChuyenKhoa from '../../models/ChuyenKhoa.js'
+import { ok, created, fail } from '../../utils/response.js'
 
 // ============================================================
 // CLINIC CONTROLLER — Chuyên Khoa (C3)

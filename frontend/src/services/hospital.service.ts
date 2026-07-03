@@ -33,6 +33,11 @@ export const hospitalService = {
     return res.data.data
   },
 
+  async getClinicLogs(id: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/clinic-info/${id}/logs`)
+    return res.data.data
+  },
+
   // ---- Chuyên Khoa của từng chi nhánh ----
 
   async getSpecialties(clinicId: string): Promise<SpecialtyItem[]> {
@@ -57,6 +62,11 @@ export const hospitalService = {
 
   async toggleSpecialtyStatus(id: string): Promise<SpecialtyItem> {
     const res = await axiosInstance.patch(`/admin/clinic-info/specialties/${id}/toggle`)
+    return res.data.data
+  },
+
+  async getSpecialtyLogs(id: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/clinic-info/specialties/${id}/logs`)
     return res.data.data
   },
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { HospitalItem, SpecialtyItem } from '@/types'
 import { hospitalService } from '@/services/hospital.service'
 import PageHeader from '@/components/common/PageHeader'
@@ -9,6 +10,7 @@ import EditClinic from './EditClinic'
 import SpecialtyList from './SpecialtyList'
 import AddSpecialty from './AddSpecialty'
 import EditSpecialty from './EditSpecialty'
+import HospitalAuditLogModal from './HospitalAuditLogModal'
 
 type ClinicView = 'list' | 'add' | 'edit' | 'specialties'
 type SpecialtyView = 'list' | 'add' | 'edit'
@@ -21,11 +23,19 @@ export default function ManageHospitals() {
   const [editingClinic, setEditingClinic] = useState<HospitalItem | null>(null)
   const [selectedClinic, setSelectedClinic] = useState<HospitalItem | null>(null)
 
+  const [searchParams, setSearchParams] = useSearchParams()
+
   // ---- State chuyên khoa ----
   const [specialties, setSpecialties] = useState<SpecialtyItem[]>([])
   const [specialtyLoading, setSpecialtyLoading] = useState(false)
   const [specialtyView, setSpecialtyView] = useState<SpecialtyView>('list')
   const [editingSpecialty, setEditingSpecialty] = useState<SpecialtyItem | null>(null)
+
+  // ---- State Lịch sử (Audit Log) ----
+  const [auditModalOpen, setAuditModalOpen] = useState(false)
+  const [auditTitle, setAuditTitle] = useState('')
+  const [auditLogs, setAuditLogs] = useState<any[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
 
   // ---- Load dữ liệu chi nhánh ----
   const fetchClinics = () => {
@@ -39,6 +49,33 @@ export default function ManageHospitals() {
   useEffect(() => {
     fetchClinics()
   }, [])
+
+  // ---- Sync URL with State ----
+  useEffect(() => {
+    if (clinics.length === 0) return
+
+    const clinicIdQuery = searchParams.get('clinic')
+
+    if (clinicIdQuery) {
+      if (clinicView !== 'specialties' || selectedClinic?._id !== clinicIdQuery) {
+        const c = clinics.find((x) => x._id === clinicIdQuery)
+        if (c) {
+          setSelectedClinic(c)
+          setClinicView('specialties')
+          setSpecialtyView('list')
+          fetchSpecialties(c._id)
+        } else {
+          searchParams.delete('clinic')
+          setSearchParams(searchParams)
+        }
+      }
+    } else {
+      if (clinicView === 'specialties') {
+        setClinicView('list')
+        setSelectedClinic(null)
+      }
+    }
+  }, [searchParams, clinics, clinicView, selectedClinic])
 
   // ---- Load danh sách chuyên khoa cho 1 chi nhánh ----
   const fetchSpecialties = (clinicId: string) => {
@@ -65,6 +102,8 @@ export default function ManageHospitals() {
     setClinicView('specialties')
     setSpecialtyView('list')
     fetchSpecialties(c._id)
+    searchParams.set('clinic', c._id)
+    setSearchParams(searchParams)
   }
 
   async function handleDeleteClinic(c: HospitalItem) {
@@ -73,7 +112,32 @@ export default function ManageHospitals() {
       await hospitalService.deleteClinic(c._id)
       fetchClinics()
     } catch (error) {
-      alert('Lỗi khi xóa chi nhánh')
+      alert('Lỗi khi ngừng hoạt động chi nhánh')
+    }
+  }
+
+  async function handleRestoreClinic(c: HospitalItem) {
+    if (!window.confirm(`Bạn có chắc muốn khôi phục hoạt động chi nhánh "${c.ten}"?`)) return
+    try {
+      await hospitalService.updateClinicInfo(c._id, { trang_thai: 'active' })
+      fetchClinics()
+    } catch (error) {
+      alert('Lỗi khi khôi phục chi nhánh')
+    }
+  }
+
+  async function handleViewClinicLogs(c: HospitalItem) {
+    setAuditTitle(`Chi nhánh ${c.ten}`)
+    setAuditModalOpen(true)
+    setAuditLoading(true)
+    try {
+      const logs = await hospitalService.getClinicLogs(c._id)
+      setAuditLogs(logs)
+    } catch (err: any) {
+      console.error(err)
+      alert('Lỗi tải lịch sử: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setAuditLoading(false)
     }
   }
 
@@ -81,8 +145,10 @@ export default function ManageHospitals() {
   function handleSpecialtySaved(saved: SpecialtyItem) {
     setSpecialties((prev) => {
       const exists = prev.find((s) => s._id === saved._id)
-      if (exists) return prev.map((s) => (s._id === saved._id ? saved : s))
-      return [...prev, saved].sort((a, b) => a.thu_tu - b.thu_tu)
+      const newList = exists 
+        ? prev.map((s) => (s._id === saved._id ? saved : s))
+        : [...prev, saved]
+      return newList.sort((a, b) => a.thu_tu - b.thu_tu)
     })
     setSpecialtyView('list')
     setEditingSpecialty(null)
@@ -95,6 +161,21 @@ export default function ManageHospitals() {
   function handleEditSpecialty(s: SpecialtyItem) {
     setEditingSpecialty(s)
     setSpecialtyView('edit')
+  }
+
+  async function handleViewSpecialtyLogs(s: SpecialtyItem) {
+    setAuditTitle(`Chuyên khoa ${s.ten}`)
+    setAuditModalOpen(true)
+    setAuditLoading(true)
+    try {
+      const logs = await hospitalService.getSpecialtyLogs(s._id)
+      setAuditLogs(logs)
+    } catch (err: any) {
+      console.error(err)
+      alert('Lỗi tải lịch sử: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setAuditLoading(false)
+    }
   }
 
   return (
@@ -111,7 +192,9 @@ export default function ManageHospitals() {
           onAdd={() => setClinicView('add')}
           onEdit={handleEditClinic}
           onDelete={handleDeleteClinic}
+          onRestore={handleRestoreClinic}
           onViewSpecialties={handleViewSpecialties}
+          onViewLogs={handleViewClinicLogs}
         />
       )}
 
@@ -127,7 +210,12 @@ export default function ManageHospitals() {
         <div className="space-y-4">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => { setClinicView('list'); setSelectedClinic(null) }}
+              onClick={() => {
+                setClinicView('list')
+                setSelectedClinic(null)
+                searchParams.delete('clinic')
+                setSearchParams(searchParams)
+              }}
               className="btn-secondary"
             >
               <Icon name="chevron-left" className="h-4 w-4 mr-1" />
@@ -145,6 +233,7 @@ export default function ManageHospitals() {
               onAdd={() => setSpecialtyView('add')}
               onEdit={handleEditSpecialty}
               onChange={handleSpecialtyToggled}
+              onViewLogs={handleViewSpecialtyLogs}
             />
           )}
 
@@ -165,6 +254,14 @@ export default function ManageHospitals() {
           )}
         </div>
       )}
+
+      <HospitalAuditLogModal
+        open={auditModalOpen}
+        onClose={() => setAuditModalOpen(false)}
+        title={auditTitle}
+        logs={auditLogs}
+        loading={auditLoading}
+      />
     </div>
   )
 }
