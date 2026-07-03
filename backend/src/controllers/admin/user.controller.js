@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { NguoiDung, NhatKyThaoTac, BacSi, ThongBao } from '../../models/index.js'
+
 import { ok, fail } from '../../utils/response.js'
 
 const ADMIN_ID = "000000000000000000000099"
@@ -33,7 +34,7 @@ export async function getAllUsers(req, res) {
 
     // Xây dựng filter
     const query = {}
-    
+
     // Xử lý lọc xóa mềm
     if (isDeleted === 'true') {
       query.ngay_xoa = { $ne: null } // Lấy những người đã xóa
@@ -88,7 +89,7 @@ export async function getAllUsers(req, res) {
 export async function getUserById(req, res) {
   try {
     const user = await NguoiDung.findById(req.params.id)
-    
+
     if (!user) {
       return fail(res, 404, 'Không tìm thấy người dùng')
     }
@@ -147,6 +148,7 @@ export async function createUser(req, res) {
       })
     }
 
+
     // 5. Ghi nhật ký
     await logActivity(req, 'CREATE_USER', newUser._id, null, {
       email, ho_ten, role: role || 'user'
@@ -168,7 +170,7 @@ export async function createUser(req, res) {
 export async function updateUser(req, res) {
   try {
     const { ho_ten, so_dien_thoai, role, status } = req.body
-    
+
     // Tìm và cập nhật (chỉ cập nhật các trường được gửi lên)
     const user = await NguoiDung.findByIdAndUpdate(
       req.params.id,
@@ -184,7 +186,7 @@ export async function updateUser(req, res) {
           user_id: user._id,
           trang_thai_duyet: 'pending'
         })
-        
+
         // Gửi thông báo cho Admin
         await ThongBao.create({
           user_id: ADMIN_ID,
@@ -197,6 +199,21 @@ export async function updateUser(req, res) {
 
     if (!user) {
       return fail(res, 404, 'Không tìm thấy người dùng để cập nhật')
+    }
+
+    // Nếu vai trò chuyển thành bác sĩ, tự động tạo hoặc kích hoạt lại hồ sơ bác sĩ
+    if (user.role === 'doctor') {
+      const exists = await BacSi.findOne({ user_id: user._id })
+      if (!exists) {
+        await BacSi.create({
+          user_id: user._id,
+          trang_thai_duyet: 'approved',
+          so_nam_kinh_nghiem: 0,
+          phi_tu_van: 0,
+          specialties: [],
+          services: []
+        })
+      }
     }
 
     // Ghi nhật ký
@@ -377,6 +394,104 @@ export async function getAuditLogs(req, res) {
       .limit(parseInt(limit))
 
     return ok(res, logs, 'Lấy nhật ký thao tác thành công')
+  } catch (error) {
+    return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
+}
+
+/**
+ * Thao tác hàng loạt trên nhiều người dùng
+ */
+export async function batchActionUsers(req, res) {
+  try {
+    const { ids, action, ly_do } = req.body
+    const adminId = req.user.id
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return fail(res, 400, 'Danh sách ID người dùng không hợp lệ')
+    }
+
+    const validActions = ['lock', 'unlock', 'delete', 'restore', 'hard-delete']
+    if (!validActions.includes(action)) {
+      return fail(res, 400, 'Hành động hàng loạt không hợp lệ')
+    }
+
+    // Lọc bỏ ID của chính admin thực hiện (ngăn tự khóa/xóa chính mình)
+    const targetIds = ids.filter(id => id !== adminId)
+    if (targetIds.length === 0) {
+      return fail(res, 400, 'Không thể thực hiện hành động trên tài khoản của chính mình')
+    }
+
+    let count = 0
+
+    if (action === 'hard-delete') {
+      // Chỉ cho phép xóa vĩnh viễn những người dùng đã nằm trong thùng rác (ngay_xoa != null)
+      const result = await NguoiDung.deleteMany({
+        _id: { $in: targetIds },
+        ngay_xoa: { $ne: null }
+      })
+      count = result.deletedCount
+
+      // Ghi nhật ký thao tác hàng loạt
+      if (count > 0) {
+        await NhatKyThaoTac.create({
+          nguoi_thuc_hien_id: adminId,
+          vai_tro: req.user.role,
+          hanh_dong: 'HARD_DELETE_USER',
+          loai_doi_tuong: 'user',
+          doi_tuong_id: null,
+          ly_do: ly_do || `Xóa vĩnh viễn hàng loạt ${count} tài khoản khỏi hệ thống`,
+        })
+      }
+    } else {
+      let updateFields = {}
+      let filter = { _id: { $in: targetIds } }
+
+      if (action === 'lock') {
+        updateFields = { status: 'locked' }
+        filter.ngay_xoa = null // Chỉ khóa tài khoản chưa xóa
+      } else if (action === 'unlock') {
+        updateFields = { status: 'active' }
+        filter.ngay_xoa = null // Chỉ mở khóa tài khoản chưa xóa
+      } else if (action === 'delete') {
+        updateFields = { ngay_xoa: new Date() }
+        filter.ngay_xoa = null // Chỉ xóa mềm tài khoản chưa xóa
+      } else if (action === 'restore') {
+        updateFields = { ngay_xoa: null }
+        filter.ngay_xoa = { $ne: null } // Chỉ khôi phục tài khoản đã xóa mềm
+      }
+
+      const result = await NguoiDung.updateMany(filter, { $set: updateFields })
+      count = result.modifiedCount
+
+      // Ghi nhật ký thao tác hàng loạt
+      const actionLogNames = {
+        lock: 'LOCK_USER',
+        unlock: 'UNLOCK_USER',
+        delete: 'SOFT_DELETE_USER',
+        restore: 'RESTORE_USER',
+      }
+
+      const actionDescriptions = {
+        lock: 'Khóa hàng loạt tài khoản',
+        unlock: 'Mở khóa hàng loạt tài khoản',
+        delete: 'Xóa mềm hàng loạt tài khoản',
+        restore: 'Khôi phục hàng loạt tài khoản',
+      }
+
+      if (count > 0) {
+        await NhatKyThaoTac.create({
+          nguoi_thuc_hien_id: adminId,
+          vai_tro: req.user.role,
+          hanh_dong: actionLogNames[action],
+          loai_doi_tuong: 'user',
+          doi_tuong_id: null,
+          ly_do: ly_do || `${actionDescriptions[action]} (Số lượng: ${count})`,
+        })
+      }
+    }
+
+    return ok(res, { count }, `Thực hiện thao tác hàng loạt thành công (${count} người dùng)`)
   } catch (error) {
     return fail(res, 500, 'Lỗi server: ' + error.message)
   }

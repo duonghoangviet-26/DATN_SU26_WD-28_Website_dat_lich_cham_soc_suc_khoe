@@ -34,9 +34,18 @@ const reviewSchema = new mongoose.Schema(
       enum: ['visible', 'hidden'],
       default: 'visible',
     },
+    ngay_xoa: {
+      type: Date,
+      default: null,
+    },
+    nguoi_xoa: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'NguoiDung',
+      default: null,
+    },
   },
   {
-    timestamps: { createdAt: 'ngay_tao', updatedAt: false },
+    timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
     collection: 'danh_gia',
   }
 )
@@ -44,5 +53,6 @@ const reviewSchema = new mongoose.Schema(
 reviewSchema.index({ doctor_id: 1, status: 1, so_sao: 1 })
 reviewSchema.index({ user_id: 1 }) // query "đánh giá của tôi"
 reviewSchema.index({ status: 1 })
+reviewSchema.index({ ngay_xoa: 1 })
 
 export default mongoose.model('DanhGia', reviewSchema)
