@@ -23,6 +23,8 @@ export default function Login() {
       const from = (location.state as { from?: { pathname?: string } })?.from?.pathname
       if (user.role === 'admin') {
         navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true })
+      } else if (user.role === 'doctor') {
+        navigate(from?.startsWith('/doctor') ? from : '/doctor', { replace: true })
       } else {
         navigate(from || '/', { replace: true })
       }
