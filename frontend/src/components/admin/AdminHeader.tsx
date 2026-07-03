@@ -102,7 +102,14 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
                 ) : (
                   <div className="divide-y divide-slate-50">
                     {notifications.map(n => (
-                      <div key={n._id} className="p-3 hover:bg-slate-50 transition-colors cursor-default">
+                      <div 
+                        key={n._id} 
+                        className="p-3 hover:bg-slate-50 transition-colors cursor-pointer"
+                        onClick={() => {
+                          setShowNotiDropdown(false)
+                          navigate('/admin/notifications', { state: { openNotification: n } })
+                        }}
+                      >
                         <p className="text-sm font-semibold text-slate-800 line-clamp-2">{n.tieu_de}</p>
                         <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                           <Icon name="clock" className="w-3 h-3" />

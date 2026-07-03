@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { notificationService } from '@/services/notification.service'
 import { formatDateTime } from '@/utils/format'
 import Icon from '@/components/admin/icons'
@@ -15,6 +16,16 @@ export default function ReceiveNotificationTab() {
   const [totalRecords, setTotalRecords] = useState(0)
 
   const [detail, setDetail] = useState<any | null>(null)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (location.state?.openNotification) {
+      setDetail(location.state.openNotification)
+      // Dùng navigate của React Router để ép xóa bộ nhớ đệm state
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state, navigate, location.pathname])
 
   const loadData = async (ignore = false) => {
     setLoading(true)
