@@ -34,6 +34,11 @@ export default function ClientLayout() {
                     Quản trị
                   </Link>
                 )}
+                {user.role === 'doctor' && (
+                  <Link to="/doctor" className="btn-secondary text-sm">
+                    Trang bác sĩ
+                  </Link>
+                )}
                 <button onClick={handleLogout} className="btn-ghost text-sm">
                   Đăng xuất
                 </button>
