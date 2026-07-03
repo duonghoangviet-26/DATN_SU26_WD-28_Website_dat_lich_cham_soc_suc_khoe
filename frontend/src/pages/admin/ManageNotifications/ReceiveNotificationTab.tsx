@@ -32,6 +32,11 @@ export default function ReceiveNotificationTab() {
     try {
       const { data, pagination } = await notificationService.getReceived(page, 10)
       if (!ignore) {
+        // Fix BUG 1: Out of bound page
+        if (page > pagination.totalPages && pagination.totalPages > 0) {
+          setPage(pagination.totalPages)
+          return
+        }
         setNotifications(data)
         setTotalPages(pagination.totalPages)
         setTotalRecords(pagination.total)
