@@ -314,7 +314,7 @@ export default function SendNotificationTab() {
       </div>
 
       {/* Phân trang */}
-      {!loading && totalRecords > 0 && (
+      {!loading && notifications.length > 0 && totalRecords > 0 && (
         <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
           <p className="text-sm text-slate-500">
             Hiển thị <span className="font-semibold text-slate-800">{(page - 1) * 10 + 1}</span> - <span className="font-semibold text-slate-800">{Math.min(page * 10, totalRecords)}</span> trong tổng số <span className="font-semibold text-slate-800">{totalRecords}</span> thông báo
