@@ -129,6 +129,7 @@ export default function ManageUsers() {
       setShowAddModal(false)
       setFormData({ ho_ten: '', email: '', mat_khau: '', so_dien_thoai: '', role: 'user' })
       loadUsers()
+      window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
     } catch (err: any) {
       setFormError(err.response?.data?.message || 'Lỗi khi tạo')
     } finally { setSubmitting(false) }
@@ -142,6 +143,7 @@ export default function ManageUsers() {
       await userService.update(editingUser.id, editingUser)
       setEditingUser(null)
       loadUsers()
+      window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
     } catch (err: any) {
       setFormError(err.response?.data?.message || 'Lỗi khi cập nhật')
     } finally { setSubmitting(false) }

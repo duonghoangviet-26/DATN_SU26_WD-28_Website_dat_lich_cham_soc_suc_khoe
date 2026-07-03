@@ -27,11 +27,19 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  useEffect(() => {
-    // Fetch 5 latest received notifications
+  const loadNotifications = () => {
     notificationService.getReceived(1, 5).then(({ data }) => {
       setNotifications(data)
     }).catch(err => console.error('Lỗi tải thông báo header:', err))
+  }
+
+  useEffect(() => {
+    loadNotifications()
+    
+    window.addEventListener('RELOAD_NOTIFICATIONS', loadNotifications)
+    return () => {
+      window.removeEventListener('RELOAD_NOTIFICATIONS', loadNotifications)
+    }
   }, [])
 
   function handleLogout() {
