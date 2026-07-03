@@ -15,6 +15,7 @@ router.get('/:id', userController.getUserById)
 
 // Tạo & Sửa
 router.post('/', userController.createUser)
+router.post('/batch', userController.batchActionUsers) // Thao tác hàng loạt
 router.put('/:id', userController.updateUser)
 
 // Các thao tác trạng thái
