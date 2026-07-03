@@ -33,7 +33,7 @@ import mongoose from 'mongoose'
 
 const appointmentSchema = new mongoose.Schema(
   {
-    user_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', required: true },
+    user_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     member_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ThanhVien', default: null },
     // clinic: required — validate trong pre('validate') | home: null ban đầu, CSKH gán sau
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },

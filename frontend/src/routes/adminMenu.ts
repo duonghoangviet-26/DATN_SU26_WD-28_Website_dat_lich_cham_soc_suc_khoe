@@ -7,7 +7,7 @@ export const adminMenu: AdminMenuItem[] = [
   { type: 'section', label: 'Quản lý' },
   { type: 'item', path: '/admin/users', label: 'Người dùng', icon: 'users' },
   { type: 'item', path: '/admin/doctors', label: 'Hồ sơ bác sĩ', icon: 'doctor' },
-  { type: 'item', path: '/admin/hospitals', label: 'Bệnh viện & CK', icon: 'hospital' },
+  { type: 'item', path: '/admin/hospitals', label: 'Phòng Khám & Chuyên Khoa', icon: 'hospital' },
   { type: 'item', path: '/admin/services', label: 'Dịch vụ', icon: 'service' },
   { type: 'section', label: 'Hoạt động' },
   { type: 'item', path: '/admin/appointments', label: 'Lịch hẹn', icon: 'calendar' },

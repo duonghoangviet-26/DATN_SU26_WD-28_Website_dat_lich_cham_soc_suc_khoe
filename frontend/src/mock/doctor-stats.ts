@@ -1,4 +1,4 @@
-import type { DoctorStats, DoctorReview, DoctorProfile } from '@/types'
+import type { DoctorProfile, DoctorStats, DoctorReview } from '@/types'
 
 export const mockDoctorProfile: DoctorProfile = {
   id: 100,
@@ -10,51 +10,39 @@ export const mockDoctorProfile: DoctorProfile = {
   gia_kham: 350000,
   trang_thai_duyet: 'approved',
   diem_danh_gia: 4.8,
-  so_danh_gia: 124,
-  bang_cap: 'Thạc sĩ Y khoa — Đại học Y Hà Nội',
-  ngay_tao: '2026-01-01T00:00:00',
+  so_danh_gia: 156,
+  bang_cap: 'Thạc sĩ Y khoa - ĐH Y Dược TP.HCM',
+  ngay_tao: '2024-01-15T08:00:00Z',
 }
 
 export const mockDoctorProfileExtra = {
-  tieu_su: 'Bác sĩ chuyên khoa Tim mạch với hơn 8 năm kinh nghiệm công tác tại các bệnh viện hàng đầu. Chuyên điều trị các bệnh lý tim mạch phức tạp như suy tim, rối loạn nhịp tim và bệnh mạch vành.',
-  chuyen_khoa_id: 1,
-  benh_vien_chinh: 'Bệnh viện Đa khoa VitaFamily Hà Nội',
+  tieu_su: 'Bác sĩ Lê Hoàng Cường có hơn 12 năm kinh nghiệm trong lĩnh vực Nhi khoa. Ông từng công tác tại các bệnh viện lớn và có nhiều công trình nghiên cứu về dinh dưỡng trẻ em.',
+  benh_vien_chinh: 'Bệnh viện Đa khoa VitaFamily',
 }
 
 export const mockDoctorStats: DoctorStats = {
-  tong_luot_kham: 248,
-  thang_nay: 34,
-  ty_le_hoan_thanh: 92.5,
-  ty_le_huy: 4.2,
+  tong_luot_kham: 1250,
+  thang_nay: 145,
+  ty_le_hoan_thanh: 95,
+  ty_le_huy: 2,
   diem_danh_gia: 4.8,
-  so_danh_gia: 124,
-  doanh_thu_thang: 11900000,
+  so_danh_gia: 156,
+  doanh_thu_thang: 45000000,
 }
 
 export const mockDoctorReviews: DoctorReview[] = [
   {
-    id: 1, benh_nhan: 'Nguyễn Văn An', diem: 5,
-    noi_dung: 'Bác sĩ rất tận tâm, giải thích rõ ràng tình trạng bệnh và hướng điều trị. Tôi rất yên tâm sau buổi khám!',
-    ngay_tao: '2026-06-14T10:20:00',
+    id: 1,
+    benh_nhan: 'Nguyễn Minh Anh',
+    diem: 5,
+    noi_dung: 'Bác sĩ rất nhiệt tình và thấu hiểu tâm lý trẻ em.',
+    ngay_tao: '2024-06-15T10:00:00Z',
   },
   {
-    id: 2, benh_nhan: 'Trần Thị Bình', diem: 5,
-    noi_dung: 'Lần đầu khám tim mạch, rất hài lòng. Bác sĩ kiên nhẫn lắng nghe và giải đáp mọi thắc mắc.',
-    ngay_tao: '2026-06-12T09:15:00',
-  },
-  {
-    id: 3, benh_nhan: 'Đặng Văn Quân', diem: 4,
-    noi_dung: 'Khám kỹ lưỡng, bác sĩ có chuyên môn cao. Đợi hơi lâu nhưng chất lượng tốt.',
-    ngay_tao: '2026-06-10T14:30:00',
-  },
-  {
-    id: 4, benh_nhan: 'Ngô Thị Tú', diem: 5,
-    noi_dung: 'Rất hài lòng! Bác sĩ phát hiện sớm tình trạng tim của tôi, điều trị kịp thời.',
-    ngay_tao: '2026-06-08T11:00:00',
-  },
-  {
-    id: 5, benh_nhan: 'Phan Văn Hải', diem: 4,
-    noi_dung: 'Chuyên môn tốt, tư vấn chi tiết. Sẽ quay lại tái khám theo lịch.',
-    ngay_tao: '2026-06-05T16:00:00',
+    id: 2,
+    benh_nhan: 'Trần Thanh Tâm',
+    diem: 4,
+    noi_dung: 'Tư vấn kỹ, tuy nhiên đôi khi phải chờ hơi lâu một chút.',
+    ngay_tao: '2024-06-14T15:30:00Z',
   },
 ]

@@ -27,7 +27,7 @@ const paymentSchema = new mongoose.Schema(
     benh_nhan_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'NguoiDung',
-      required: true,
+      default: null,
     },
     // Mã giao dịch hiển thị — auto-gen "TXNxxx" (xem pre-validate hook)
     ma_giao_dich: { type: String, unique: true, sparse: true, maxlength: 20 },

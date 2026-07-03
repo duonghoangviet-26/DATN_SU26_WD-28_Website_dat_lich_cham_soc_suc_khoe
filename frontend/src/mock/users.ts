@@ -1,7 +1,3 @@
-// Dữ liệu fix cứng (mock) cho module Quản lý người dùng.
-// Các trường khớp với bảng `users` trong VitaFamily_Database.sql.
-// Khi có database thật, XÓA file này — dữ liệu sẽ đến từ API.
-
 import type { User } from '@/types'
 
 export const mockUsers: User[] = [
@@ -69,11 +65,9 @@ export const mockUsers: User[] = [
     id: 'mock-user-007',
     ho_ten: 'Quản trị viên',
     email: 'admin@vitafamily.vn',
-    so_dien_thoai: '0900000000',
-    anh_dai_dien: null,
     role: 'admin',
     status: 'active',
-    ngay_tao: '2026-01-01T00:00:00',
+    ngay_tao: '2024-01-01T00:00:00Z',
   },
   {
     id: 'mock-user-008',
@@ -82,7 +76,15 @@ export const mockUsers: User[] = [
     so_dien_thoai: '0907890123',
     anh_dai_dien: null,
     role: 'doctor',
-    status: 'locked',
-    ngay_tao: '2026-03-25T11:30:00',
+    status: 'active',
+    ngay_tao: '2024-01-10T00:00:00Z',
+  },
+  {
+    id: '3',
+    email: 'user@vitafamily.vn',
+    ho_ten: 'Nguyễn Văn An',
+    role: 'user',
+    status: 'active',
+    ngay_tao: '2024-02-01T00:00:00Z',
   },
 ]

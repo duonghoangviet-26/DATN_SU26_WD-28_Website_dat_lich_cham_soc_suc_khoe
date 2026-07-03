@@ -1,195 +1,319 @@
 import { useEffect, useState } from 'react'
 import { reviewService } from '@/services/review.service'
-import type { ReviewItem } from '@/types'
-import { formatDate } from '@/utils/format'
+import type { ReviewFilters, ReviewItem, ReviewStatistics, PaginationInfo } from '@/types/review.type'
 import PageHeader from '@/components/common/PageHeader'
-import Badge from '@/components/common/Badge'
-import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
-
-function StarDisplay({ count }: { count: number }) {
-  return (
-    <span className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Icon
-          key={i}
-          name="star"
-          className={`h-4 w-4 ${i <= count ? 'text-amber-400' : 'text-slate-200'}`}
-        />
-      ))}
-    </span>
-  )
-}
+import ReviewFilter from '@/components/admin/reviews/ReviewFilter'
+import ReviewTable from '@/components/admin/reviews/ReviewTable'
+import ReviewDetailModal from '@/components/admin/reviews/ReviewDetailModal'
 
 export default function ManageReviews() {
   const [reviews, setReviews] = useState<ReviewItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [diemFilter, setDiemFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [confirm, setConfirm] = useState<ReviewItem | null>(null)
+  
+  // State phân trang & thống kê
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+  })
+  const [statistics, setStatistics] = useState<ReviewStatistics>({
+    averageRating: 0,
+    total: 0,
+    visible: 0,
+    hidden: 0,
+  })
 
+  // State bộ lọc
+  const [filters, setFilters] = useState<ReviewFilters>({
+    search: '',
+    rating: '',
+    status: '',
+    doctor: '',
+    startDate: '',
+    endDate: '',
+    deleted: false,
+  })
+
+  // Quản lý chọn nhiều đánh giá
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  // Quản lý Modal chi tiết
+  const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null)
+  const [openDetail, setOpenDetail] = useState(false)
+
+  // 1. Tự động cập nhật dữ liệu trang hiện tại khi người dùng quay lại tab (window focus)
   useEffect(() => {
-    let ignore = false
-    setLoading(true)
-    reviewService.getAll({ diem: diemFilter, status: statusFilter }).then((data) => {
-      if (!ignore) setReviews(data)
-    }).finally(() => { if (!ignore) setLoading(false) })
-    return () => { ignore = true }
-  }, [diemFilter, statusFilter])
+    const handleFocus = () => {
+      fetchReviews(pagination.page)
+    }
 
-  const counts = {
-    low: reviews.filter((r) => r.diem <= 2).length,
-    total: reviews.length,
-    avg: reviews.length > 0
-      ? (reviews.reduce((s, r) => s + r.diem, 0) / reviews.length).toFixed(1)
-      : '—',
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [pagination.page])
+
+  // 2. Tải danh sách đánh giá từ API dựa trên bộ lọc và trang hiện tại
+  const fetchReviews = (pageNumber = 1) => {
+    // Lấy ngày hiện tại ở múi giờ địa phương (timezone-safe YYYY-MM-DD)
+    const getLocalDateString = () => {
+      const d = new Date()
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    const todayStr = getLocalDateString()
+
+    // Validate dates before calling API
+    const isFutureStart = filters.startDate && filters.startDate > todayStr
+    const isFutureEnd = filters.endDate && filters.endDate > todayStr
+    const isStartAfterEnd = filters.startDate && filters.endDate && filters.startDate > filters.endDate
+
+    if (isFutureStart || isFutureEnd || isStartAfterEnd) {
+      setReviews([])
+      setPagination((prev) => ({
+        ...prev,
+        page: 1,
+        total: 0,
+        totalPages: 1,
+      }))
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    reviewService
+      .getAll({
+        ...filters,
+        page: pageNumber,
+        limit: pagination.limit,
+      })
+      .then((res) => {
+        setReviews(res.reviews)
+        setPagination(res.pagination)
+        setStatistics(res.statistics)
+      })
+      .catch((err) => {
+        console.error('Lỗi tải danh sách đánh giá:', err)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }
 
-  async function handleToggle() {
-    if (!confirm) return
-    const id = confirm.id
-    setConfirm(null)
-    const updated = await reviewService.toggle(id)
-    setReviews((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+  // Reload danh sách khi filters hoặc trang thay đổi
+  useEffect(() => {
+    fetchReviews(1)
+    setSelectedIds([]) // Reset chọn nhiều khi đổi bộ lọc
+  }, [filters])
+
+  const handlePageChange = (newPage: number) => {
+    fetchReviews(newPage)
+  }
+
+  const handleViewDetail = (review: ReviewItem) => {
+    setSelectedReview(review)
+    setOpenDetail(true)
+  }
+
+  const handleActionSuccess = () => {
+    // Làm mới danh sách ở trang hiện tại sau khi thay đổi trạng thái thành công
+    fetchReviews(pagination.page)
+    setSelectedIds([]) // Reset chọn nhiều sau khi thao tác
+  }
+
+  const handleBatchAction = async (action: 'hide' | 'show' | 'delete' | 'restore' | 'hard-delete') => {
+    if (selectedIds.length === 0) return
+
+    const actionNames: Record<string, string> = {
+      hide: 'ẩn',
+      show: 'hiển thị',
+      delete: 'xóa',
+      restore: 'khôi phục',
+      'hard-delete': 'xóa vĩnh viễn'
+    }
+
+    let trimmedReason = ''
+    if (action === 'hard-delete') {
+      const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedIds.length} đánh giá đã chọn khỏi cơ sở dữ liệu? Thao tác này không thể phục hồi!`)
+      if (!confirmDelete) return
+    } else if (action === 'show') {
+      trimmedReason = ''
+    } else {
+      const reason = window.prompt(`Nhập lý do ${actionNames[action]} ${selectedIds.length} đánh giá đã chọn (không bắt buộc):`, '')
+      if (reason === null) return // Hủy bỏ
+      trimmedReason = reason.trim()
+    }
+
+    setLoading(true)
+    try {
+      const res = await reviewService.batchAction({
+        ids: selectedIds,
+        action,
+        ly_do: trimmedReason
+      })
+      alert(`Đã thực hiện thành công thao tác ${actionNames[action]} cho ${res.count} đánh giá!`)
+      setSelectedIds([])
+      fetchReviews(pagination.page)
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Thao tác hàng loạt thất bại.')
+      setLoading(false)
+    }
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Đánh giá & phản hồi"
-        description="Xem và kiểm duyệt các đánh giá từ bệnh nhân, ẩn nội dung không phù hợp."
+        description="Xem và kiểm duyệt các đánh giá từ bệnh nhân, ẩn nội dung không phù hợp hoặc khôi phục/xóa đánh giá."
       />
 
-      {/* Thẻ tổng quan */}
-      <div className="mb-5 grid gap-4 sm:grid-cols-3">
-        <div className="card p-5">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-500">Điểm trung bình</p>
-              <p className="mt-1.5 text-2xl font-bold text-slate-800">{counts.avg}</p>
-            </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100">
-              <Icon name="star" className="h-6 w-6 text-amber-600" />
-            </div>
+      {/* Thẻ thống kê tổng quan (Dashboard mini) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Điểm trung bình */}
+        <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-500">Điểm trung bình</p>
+            <p className="text-2xl font-bold text-slate-800">{statistics.averageRating || '0.0'}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Thang điểm 5.0</p>
           </div>
-          <p className="mt-3 text-xs text-slate-500">trên thang điểm 5</p>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-500 shadow-sm border border-amber-100/50">
+            <Icon name="star" className="h-6 w-6" />
+          </div>
         </div>
-        <div className="card p-5">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-500">Tổng đánh giá</p>
-              <p className="mt-1.5 text-2xl font-bold text-slate-800">{counts.total}</p>
-            </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-100">
-              <Icon name="file-text" className="h-6 w-6 text-blue-600" />
-            </div>
+
+        {/* Tổng số đánh giá */}
+        <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-500">Tổng đánh giá hoạt động</p>
+            <p className="text-2xl font-bold text-slate-800">{statistics.total}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Từ bệnh nhân</p>
           </div>
-          <p className="mt-3 text-xs text-slate-500">từ bệnh nhân</p>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-500 shadow-sm border border-blue-100/50">
+            <Icon name="file-text" className="h-6 w-6" />
+          </div>
         </div>
-        <div className="card p-5">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-500">Đánh giá 1–2 sao</p>
-              <p className="mt-1.5 text-2xl font-bold text-slate-800">{counts.low}</p>
-            </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-100">
-              <Icon name="alert-circle" className="h-6 w-6 text-red-600" />
-            </div>
+
+        {/* Số lượng đang hiển thị */}
+        <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-500">Đang hiển thị</p>
+            <p className="text-2xl font-bold text-emerald-600">{statistics.visible}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Công khai trên hệ thống</p>
           </div>
-          <p className="mt-3 text-xs text-red-500">cần xem xét</p>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-500 shadow-sm border border-emerald-100/50">
+            <Icon name="eye" className="h-6 w-6" />
+          </div>
+        </div>
+
+        {/* Số lượng bị ẩn */}
+        <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-500">Đã ẩn kiểm duyệt</p>
+            <p className="text-2xl font-bold text-amber-600">{statistics.hidden}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Cần xem xét kiểm duyệt</p>
+          </div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-500 shadow-sm border border-amber-100/50">
+            <Icon name="eye-off" className="h-6 w-6" />
+          </div>
         </div>
       </div>
 
-      {/* Bộ lọc */}
-      <div className="card mb-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <select className="input" value={diemFilter} onChange={(e) => setDiemFilter(e.target.value)}>
-            <option value="">Tất cả điểm</option>
-            <option value="1">⭐ 1 sao</option>
-            <option value="2">⭐⭐ 2 sao</option>
-            <option value="3">⭐⭐⭐ 3 sao</option>
-            <option value="4">⭐⭐⭐⭐ 4 sao</option>
-            <option value="5">⭐⭐⭐⭐⭐ 5 sao</option>
-          </select>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">Tất cả trạng thái</option>
-            <option value="visible">Đang hiển thị</option>
-            <option value="hidden">Đã ẩn</option>
-          </select>
-        </div>
-      </div>
+      {/* Bộ lọc component */}
+      <ReviewFilter
+        filters={filters}
+        onChange={setFilters}
+      />
 
-      {/* Bảng đánh giá */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Bệnh nhân</th>
-                <th className="px-4 py-3 font-medium">Bác sĩ</th>
-                <th className="px-4 py-3 font-medium">Điểm</th>
-                <th className="px-4 py-3 font-medium">Nội dung</th>
-                <th className="px-4 py-3 font-medium">Ngày</th>
-                <th className="px-4 py-3 font-medium">Trạng thái</th>
-                <th className="px-4 py-3 text-right font-medium">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Đang tải...</td></tr>
-              ) : reviews.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Không tìm thấy đánh giá.</td></tr>
-              ) : reviews.map((r) => (
-                <tr key={r.id} className={`hover:bg-slate-50 ${r.status === 'hidden' ? 'opacity-60' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-slate-800">{r.benh_nhan}</td>
-                  <td className="px-4 py-3 text-slate-600">{r.bac_si}</td>
-                  <td className="px-4 py-3">
-                    <StarDisplay count={r.diem} />
-                  </td>
-                  <td className="px-4 py-3 max-w-[280px]">
-                    <p className={`text-sm ${r.diem <= 2 ? 'text-red-700' : 'text-slate-600'}`}>
-                      {r.noi_dung}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{formatDate(r.ngay_tao)}</td>
-                  <td className="px-4 py-3">
-                    <Badge color={r.status === 'visible' ? 'green' : 'gray'}>
-                      {r.status === 'visible' ? 'Hiển thị' : 'Đã ẩn'}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => setConfirm(r)}
-                      className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                        r.status === 'visible'
-                          ? 'border-slate-200 bg-slate-50 text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
-                          : 'border-brand-200 bg-brand-50 text-brand-600 hover:bg-brand-100'
-                      }`}
-                    >
-                      {r.status === 'visible'
-                        ? <><Icon name="eye-off" className="h-3 w-3" /> Ẩn</>
-                        : <><Icon name="eye" className="h-3 w-3" /> Hiện</>}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Thanh tác vụ hàng loạt */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-700">
+              Đã chọn <strong className="text-brand-600">{selectedIds.length}</strong> đánh giá
+            </span>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="text-xs text-slate-400 hover:text-slate-600 font-semibold underline"
+            >
+              Bỏ chọn tất cả
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {filters.deleted ? (
+              <>
+                <button
+                  onClick={() => handleBatchAction('restore')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="refresh-cw" className="h-3.5 w-3.5" />
+                  Khôi phục hàng loạt
+                </button>
+                <button
+                  onClick={() => handleBatchAction('hard-delete')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="trash" className="h-3.5 w-3.5" />
+                  Xóa vĩnh viễn hàng loạt
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleBatchAction('show')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="eye" className="h-3.5 w-3.5" />
+                  Hiện hàng loạt
+                </button>
+                <button
+                  onClick={() => handleBatchAction('hide')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-600 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="eye-off" className="h-3.5 w-3.5" />
+                  Ẩn hàng loạt
+                </button>
+                <button
+                  onClick={() => handleBatchAction('delete')}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3.5 py-2 text-xs font-bold text-red-600 shadow-sm hover:bg-red-100/80 transition-colors disabled:opacity-50"
+                >
+                  <Icon name="trash" className="h-3.5 w-3.5" />
+                  Xóa hàng loạt
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-
-      {!loading && (
-        <p className="mt-3 text-sm text-slate-500">Tổng cộng {reviews.length} đánh giá</p>
       )}
 
-      <ConfirmDialog
-        open={!!confirm}
-        title={confirm?.status === 'visible' ? 'Ẩn đánh giá' : 'Hiện đánh giá'}
-        message={`Bạn có chắc muốn ${confirm?.status === 'visible' ? 'ẩn' : 'hiện'} đánh giá này?`}
-        confirmText={confirm?.status === 'visible' ? 'Ẩn' : 'Hiện'}
-        danger={confirm?.status === 'visible'}
-        onConfirm={handleToggle}
-        onCancel={() => setConfirm(null)}
+      {/* Bảng danh sách component */}
+      <ReviewTable
+        reviews={reviews}
+        loading={loading}
+        pagination={pagination}
+        onPageChange={handlePageChange}
+        onViewDetail={handleViewDetail}
+        selectedIds={selectedIds}
+        onSelectChange={setSelectedIds}
+      />
+
+      {/* Modal chi tiết và thao tác */}
+      <ReviewDetailModal
+        open={openDetail}
+        review={selectedReview}
+        onClose={() => {
+          setOpenDetail(false)
+          setSelectedReview(null)
+        }}
+        onActionSuccess={handleActionSuccess}
       />
     </div>
   )

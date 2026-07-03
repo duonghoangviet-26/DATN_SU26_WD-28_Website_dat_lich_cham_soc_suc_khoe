@@ -1,44 +1,105 @@
-import { mockReviews } from '@/mock/reviews'
-import type { ReviewItem } from '@/types'
-
-const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
-
-let reviews = [...mockReviews]
-
-interface ReviewFilters {
-  status?: string
-  search?: string
-}
+import axiosInstance from './axiosInstance'
+import type { ApiResponse } from '@/types'
+import type {
+  ReviewItem,
+  ReviewFilters,
+  ReviewListResponse,
+  ReviewDetailResponse
+} from '@/types/review.type'
 
 export const reviewService = {
-  async getAll({ status = '', search = '' }: ReviewFilters = {}): Promise<ReviewItem[]> {
-    await delay()
-    let list = [...reviews]
-    if (status) list = list.filter(r => r.status === status)
-    if (search) {
-      const q = search.toLowerCase()
-      list = list.filter(r =>
-        r.benh_nhan.toLowerCase().includes(q) ||
-        r.bac_si.toLowerCase().includes(q) ||
-        r.noi_dung.toLowerCase().includes(q),
-      )
-    }
-    return list
-    // Real API:
-    // const params: Record<string, string> = {}
-    // if (status) params.status = status
-    // if (search) params.search = search
-    // const res = await axiosInstance.get<ApiResponse<ReviewItem[]>>('/admin/reviews', { params })
-    // return res.data.data
+  /**
+   * Lấy danh sách đánh giá kèm phân trang, bộ lọc & thống kê.
+   * GET /api/admin/reviews
+   */
+  async getAll(params: Partial<ReviewFilters> & { page?: number; limit?: number }): Promise<ReviewListResponse> {
+    const queryParams: Record<string, any> = {}
+    if (params.page) queryParams.page = params.page
+    if (params.limit) queryParams.limit = params.limit
+    if (params.rating) queryParams.rating = params.rating
+    if (params.status) queryParams.status = params.status
+    if (params.doctor) queryParams.doctor = params.doctor
+    if (params.startDate) queryParams.startDate = params.startDate
+    if (params.endDate) queryParams.endDate = params.endDate
+    if (params.search?.trim()) queryParams.search = params.search.trim()
+    if (params.deleted !== undefined) queryParams.deleted = params.deleted.toString()
+
+    // Thêm timestamp để chống trình duyệt cache kết quả GET
+    queryParams._t = Date.now()
+
+    const res = await axiosInstance.get<ApiResponse<ReviewListResponse>>('/admin/reviews', { params: queryParams })
+    return res.data.data
   },
 
-  async toggle(id: string): Promise<{ id: string; status: string }> {
-    await delay()
-    const review = reviews.find(r => String(r.id) === String(id))
-    if (review) review.status = review.status === 'visible' ? 'hidden' : 'visible'
-    return { id, status: review?.status ?? 'visible' }
-    // Real API:
-    // const res = await axiosInstance.patch<ApiResponse<{ id: string; status: string }>>(`/admin/reviews/${id}/toggle`)
-    // return res.data.data
+  /**
+   * Lấy chi tiết 1 đánh giá kèm lịch sử thao tác.
+   * GET /api/admin/reviews/:id
+   */
+  async getById(id: string): Promise<ReviewDetailResponse> {
+    const res = await axiosInstance.get<ApiResponse<ReviewDetailResponse>>(`/admin/reviews/${id}`)
+    return res.data.data
+  },
+
+  /**
+   * Ẩn đánh giá.
+   * PATCH /api/admin/reviews/:id/hide
+   */
+  async hide(id: string, ly_do?: string): Promise<ReviewItem> {
+    const res = await axiosInstance.patch<ApiResponse<ReviewItem>>(`/admin/reviews/${id}/hide`, { ly_do })
+    return res.data.data
+  },
+
+  /**
+   * Hiện lại đánh giá.
+   * PATCH /api/admin/reviews/:id/show
+   */
+  async show(id: string, ly_do?: string): Promise<ReviewItem> {
+    const res = await axiosInstance.patch<ApiResponse<ReviewItem>>(`/admin/reviews/${id}/show`, { ly_do })
+    return res.data.data
+  },
+
+  /**
+   * Xóa mềm đánh giá.
+   * PATCH /api/admin/reviews/:id/delete
+   */
+  async softDelete(id: string, ly_do?: string): Promise<void> {
+    await axiosInstance.patch<ApiResponse<null>>(`/admin/reviews/${id}/delete`, { ly_do })
+  },
+
+  /**
+   * Khôi phục đánh giá bị xóa mềm.
+   * PATCH /api/admin/reviews/:id/restore
+   */
+  async restore(id: string, ly_do?: string): Promise<ReviewItem> {
+    const res = await axiosInstance.patch<ApiResponse<ReviewItem>>(`/admin/reviews/${id}/restore`, { ly_do })
+    return res.data.data
+  },
+
+  /**
+   * Xóa cứng đánh giá (Xóa vĩnh viễn khỏi DB).
+   * DELETE /api/admin/reviews/:id/permanently
+   */
+  async hardDelete(id: string): Promise<void> {
+    await axiosInstance.delete<ApiResponse<null>>(`/admin/reviews/${id}/permanently`)
+  },
+
+  /**
+   * Thao tác hàng loạt trên nhiều đánh giá.
+   * POST /api/admin/reviews/batch
+   */
+  async batchAction(payload: { ids: string[]; action: 'hide' | 'show' | 'delete' | 'restore' | 'hard-delete'; ly_do?: string }): Promise<{ count: number }> {
+    const res = await axiosInstance.post<ApiResponse<{ count: number }>>('/admin/reviews/batch', payload)
+    return res.data.data
+  },
+
+  /**
+   * Lấy danh sách bác sĩ cho dropdown lọc.
+   * GET /api/admin/reviews/doctors
+   */
+  async getDoctors(): Promise<Array<{ id: string; ho_ten: string }>> {
+    const res = await axiosInstance.get<ApiResponse<Array<{ id: string; ho_ten: string }>>>('/admin/reviews/doctors', {
+      params: { _t: Date.now() }
+    })
+    return res.data.data
   },
 }

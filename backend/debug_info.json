@@ -1,0 +1,79 @@
+{
+  "doctorUsersCount": 3,
+  "doctorUsers": [
+    {
+      "id": "6a3633c65f7919b49aaeb00a",
+      "ho_ten": "BS. Nguyễn Thị B",
+      "role": "doctor"
+    },
+    {
+      "id": "6a3633c65f7919b49aaeb009",
+      "ho_ten": "BS. Trần Văn A",
+      "role": "doctor"
+    },
+    {
+      "id": "6a3678be4f8de36978b745ca",
+      "ho_ten": "Hoàng VIệt Dương",
+      "role": "doctor",
+      "ngay_xoa": null
+    }
+  ],
+  "existingDoctorsCount": 3,
+  "existingUserIds": [
+    "6a3633c65f7919b49aaeb009",
+    "6a3633c65f7919b49aaeb00a",
+    "6a3678be4f8de36978b745ca"
+  ],
+  "missingUserIds": [],
+  "doctorsInBacSiCollectionCount": 5,
+  "doctorsInBacSiCollection": [
+    {
+      "id": "6a3633c65f7919b49aaeb01f",
+      "user_id": {
+        "id": "6a3633c65f7919b49aaeb00a",
+        "ho_ten": "BS. Nguyễn Thị B",
+        "role": "doctor"
+      },
+      "trang_thai_duyet": "approved"
+    },
+    {
+      "id": "6a3633c65f7919b49aaeb01e",
+      "user_id": {
+        "id": "6a3633c65f7919b49aaeb009",
+        "ho_ten": "BS. Trần Văn A",
+        "role": "doctor"
+      },
+      "trang_thai_duyet": "approved"
+    },
+    {
+      "id": "6a3e45d2f039e48cacb8657b",
+      "user_id": {
+        "id": "6a3678be4f8de36978b745ca",
+        "ho_ten": "Hoàng VIệt Dương",
+        "role": "doctor",
+        "ngay_xoa": null
+      },
+      "trang_thai_duyet": "approved"
+    },
+    {
+      "id": "6a3e45d2f039e48cacb8657c",
+      "user_id": {
+        "id": "6a36e179d52c9b174ac14602",
+        "ho_ten": "Hoàng Việt Dương 123",
+        "role": "user",
+        "ngay_xoa": null
+      },
+      "trang_thai_duyet": "approved"
+    },
+    {
+      "id": "6a3f76777578a08133554130",
+      "user_id": {
+        "id": "6a3a4986a2d38232118d9751",
+        "ho_ten": "Văn Hoàng Nam",
+        "role": "user",
+        "ngay_xoa": null
+      },
+      "trang_thai_duyet": "approved"
+    }
+  ]
+}

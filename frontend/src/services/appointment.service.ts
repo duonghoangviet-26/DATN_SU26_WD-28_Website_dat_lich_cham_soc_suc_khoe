@@ -1,106 +1,92 @@
-import { mockAppointments } from '@/mock/appointments'
-import type { AppointmentItem, AppointmentStatus } from '@/types'
-
-const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
-
-let appointments = [...mockAppointments]
-
-interface AppointmentFilters {
-  keyword?: string
-  status?: AppointmentStatus | ''
-  loai_kham?: string
-  payment_status?: string
-  from?: string
-  to?: string
-}
+import type {
+  AppointmentItem,
+  AppointmentListResponse,
+  AdminAppointmentDoctorOption,
+  AdminAppointmentServiceOption,
+} from '@/types'
+import axiosInstance from './axiosInstance'
 
 export const appointmentService = {
-  async getAll({
-    keyword = '', status = '', loai_kham = '', payment_status = '', from = '', to = '',
-  }: AppointmentFilters = {}): Promise<AppointmentItem[]> {
-    await delay()
-    let list = [...appointments]
-    if (keyword) {
-      const q = keyword.toLowerCase()
-      list = list.filter(a =>
-        a.benh_nhan.toLowerCase().includes(q) || (a.bac_si?.toLowerCase().includes(q) ?? false),
-      )
+  async getAll(params?: {
+    keyword?: string
+    status?: string
+    loai_kham?: string
+    startDate?: string
+    endDate?: string
+    page?: number
+    limit?: number
+    view_mode?: string
+    doctor_id?: string
+  }): Promise<any> {
+    const res = await axiosInstance.get('/admin/appointments', { params })
+    return {
+      data: res.data.data,
+      pagination: res.data.pagination,
+      summary: res.data.summary,
     }
-    if (status)         list = list.filter(a => a.status === status)
-    if (loai_kham)      list = list.filter(a => a.loai_kham === loai_kham)
-    if (payment_status) list = list.filter(a => a.payment_status === payment_status)
-    if (from)           list = list.filter(a => a.ngay_kham >= from)
-    if (to)             list = list.filter(a => a.ngay_kham <= to)
-    return list
-    // Real API:
-    // const params: Record<string, string> = {}
-    // if (keyword) params.search = keyword
-    // ... etc
-    // const res = await axiosInstance.get<ApiResponse<AppointmentItem[]>>('/admin/appointments', { params })
-    // return res.data.data
   },
 
   async getById(id: string): Promise<AppointmentItem> {
-    await delay()
-    const item = appointments.find(a => String(a.id) === String(id))
-    if (!item) throw new Error('Không tìm thấy lịch hẹn')
-    return { ...item }
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<AppointmentItem>>(`/admin/appointments/${id}`)
-    // return res.data.data
+    const res = await axiosInstance.get(`/admin/appointments/${id}`)
+    return res.data.data
   },
 
-  async cancel(id: string, ly_do?: string): Promise<{ id: string; status: AppointmentStatus }> {
-    await delay()
-    const item = appointments.find(a => String(a.id) === String(id))
-    if (item) {
-      item.status = 'cancelled'
-      if (item.payment_status === 'paid') item.payment_status = 'refunded'
-    }
-    return { id, status: 'cancelled' }
-    // Real API:
-    // const res = await axiosInstance.patch<ApiResponse<{ id: string; status: AppointmentStatus }>>(`/admin/appointments/${id}/cancel`, { ly_do })
-    // return res.data.data
+  async getAppointmentHistory(id: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/appointments/${id}/history`)
+    return res.data.data
   },
 
-  // Admin đánh dấu hoàn thành — chỉ cho lịch đã 'confirmed' (quyết định 2026-07-02: clinic
-  // auto-confirm khi thanh toán, không còn bước Admin "confirm" trước đó nữa)
-  async complete(id: string): Promise<{ id: string; status: AppointmentStatus }> {
-    await delay()
-    const item = appointments.find(a => String(a.id) === String(id))
-    if (item) item.status = 'completed'
-    return { id, status: 'completed' }
-    // Real API:
-    // const res = await axiosInstance.patch<ApiResponse<{ id: string; status: AppointmentStatus }>>(`/admin/appointments/${id}/complete`)
-    // return res.data.data
+  async cancel(id: string, ly_do_huy: string, updatedAt?: string): Promise<AppointmentItem> {
+    const res = await axiosInstance.patch(`/admin/appointments/${id}/cancel`, { ly_do_huy, updatedAt })
+    return res.data.data
   },
 
-  // CSKH gán nhân viên lấy mẫu cho lịch home đang pending — chuyển sang confirmed
-  // (2026-07-02-home-service-redesign.md §2.5, bước 5)
-  async assignHomeStaff(id: string, bac_si: string, chuyen_khoa: string): Promise<AppointmentItem> {
-    await delay()
-    const item = appointments.find(a => String(a.id) === String(id))
-    if (!item) throw new Error('Không tìm thấy lịch hẹn')
-    item.bac_si = bac_si
-    item.chuyen_khoa = chuyen_khoa
-    item.status = 'confirmed'
-    return { ...item }
-    // Real API:
-    // const res = await axiosInstance.patch<ApiResponse<AppointmentItem>>(`/admin/appointments/${id}/assign-home-staff`, { doctor_id })
-    // return res.data.data
+  async restore(id: string): Promise<void> {
+    await axiosInstance.patch(`/admin/appointments/${id}/restore`)
   },
 
-  // CSKH upload PDF kết quả lab xong → điền ket_qua_url, tự chuyển sang completed
-  // (2026-07-02-home-service-redesign.md §2.5, bước 7)
-  async uploadResult(id: string, ket_qua_url: string): Promise<AppointmentItem> {
-    await delay()
-    const item = appointments.find(a => String(a.id) === String(id))
-    if (!item) throw new Error('Không tìm thấy lịch hẹn')
-    item.ket_qua_url = ket_qua_url
-    item.status = 'completed'
-    return { ...item }
-    // Real API:
-    // const res = await axiosInstance.patch<ApiResponse<AppointmentItem>>(`/admin/appointments/${id}/result`, { ket_qua_url })
-    // return res.data.data
+  async hardDelete(id: string): Promise<void> {
+    await axiosInstance.delete(`/admin/appointments/${id}`)
+  },
+
+  async reschedule(
+    id: string,
+    data: { doctor_id: string, schedule_id: string, slot_id: string, updatedAt?: string }
+  ): Promise<AppointmentItem> {
+    const res = await axiosInstance.patch(`/admin/appointments/${id}/reschedule`, data)
+    return res.data.data
+  },
+
+  async create(data: {
+    user_id: string
+    ten_khach: string
+    so_dien_thoai_khach: string
+    doctor_id: string
+    schedule_id: string
+    slot_id: string
+    service_id: string
+    loai_kham: 'clinic' | 'home'
+    dia_chi_kham: string
+    ly_do_kham?: string
+  }): Promise<AppointmentItem> {
+    const res = await axiosInstance.post('/admin/appointments', data)
+    return res.data.data
+  },
+
+  async getActiveDoctors(): Promise<AdminAppointmentDoctorOption[]> {
+    const res = await axiosInstance.get('/admin/appointments/doctors/active')
+    return res.data.data
+  },
+
+  async getActiveServices(loai?: 'clinic' | 'home'): Promise<AdminAppointmentServiceOption[]> {
+    const res = await axiosInstance.get('/admin/appointments/services/active', {
+      params: loai ? { loai } : undefined,
+    })
+    return res.data.data
+  },
+
+  async getDoctorSchedules(doctorId: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/appointments/doctors/${doctorId}/schedules`)
+    return res.data.data
   },
 }

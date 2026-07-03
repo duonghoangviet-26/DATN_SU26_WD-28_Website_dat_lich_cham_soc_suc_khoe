@@ -1,38 +1,87 @@
-import { mockHospitals, mockSpecialties } from '@/mock/hospitals'
 import type { HospitalItem, SpecialtyItem } from '@/types'
+import axiosInstance from './axiosInstance'
 
-const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+// Gọi API thật từ backend. Tất cả response có dạng { success, message, data }.
 
-let specialties = [...mockSpecialties]
-
-// Phòng khám tư 1 cơ sở — getHospitals/toggleHospital giữ lại để không phá vỡ UI placeholder C3.
 export const hospitalService = {
-  async getHospitals(): Promise<HospitalItem[]> {
-    await delay()
-    return [...mockHospitals]
+  // ==========================================
+  // 1. Quản lý Chi nhánh (Phòng khám)
+  // ==========================================
+  async getAllClinics(status?: 'active' | 'inactive'): Promise<HospitalItem[]> {
+    const params = status ? { status } : {}
+    const res = await axiosInstance.get('/admin/clinic-info', { params })
+    return res.data.data
   },
 
-  async toggleHospital(_id: number): Promise<HospitalItem | null> {
-    await delay()
-    return null
+  async getClinicById(id: string): Promise<HospitalItem> {
+    const res = await axiosInstance.get(`/admin/clinic-info/${id}`)
+    return res.data.data
   },
 
-  async getSpecialties(): Promise<SpecialtyItem[]> {
-    await delay()
-    return [...specialties]
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<SpecialtyItem[]>>('/admin/specialties')
-    // return res.data.data
+  async createClinic(payload: Partial<HospitalItem>): Promise<HospitalItem> {
+    const res = await axiosInstance.post('/admin/clinic-info', payload)
+    return res.data.data
   },
 
-  async toggleSpecialty(id: string): Promise<SpecialtyItem> {
-    await delay()
-    const item = specialties.find(s => String(s.id) === String(id))
-    if (!item) throw new Error('Không tìm thấy chuyên khoa')
-    item.status = item.status === 'active' ? 'hidden' : 'active'
-    return { ...item }
-    // Real API:
-    // const res = await axiosInstance.patch<ApiResponse<SpecialtyItem>>(`/admin/specialties/${id}/toggle`)
-    // return res.data.data
+  async updateClinicInfo(id: string, payload: Partial<HospitalItem>): Promise<HospitalItem> {
+    const res = await axiosInstance.put(`/admin/clinic-info/${id}`, payload)
+    return res.data.data
   },
+
+  async deleteClinic(id: string): Promise<HospitalItem> {
+    const res = await axiosInstance.delete(`/admin/clinic-info/${id}`)
+    return res.data.data
+  },
+
+  async getClinicLogs(id: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/clinic-info/${id}/logs`)
+    return res.data.data
+  },
+
+  // ---- Chuyên Khoa của từng chi nhánh ----
+
+  async getSpecialties(clinicId: string): Promise<SpecialtyItem[]> {
+    const res = await axiosInstance.get(`/admin/clinic-info/${clinicId}/specialties`)
+    return res.data.data
+  },
+
+  async getDoctorsBySpecialty(specialtyId: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/clinic-info/specialties/${specialtyId}/doctors`)
+    return res.data.data
+  },
+
+  async createSpecialty(clinicId: string, payload: Partial<SpecialtyItem>): Promise<SpecialtyItem> {
+    const res = await axiosInstance.post(`/admin/clinic-info/${clinicId}/specialties`, payload)
+    return res.data.data
+  },
+
+  async updateSpecialty(id: string, payload: Partial<SpecialtyItem>): Promise<SpecialtyItem> {
+    const res = await axiosInstance.put(`/admin/clinic-info/specialties/${id}`, payload)
+    return res.data.data
+  },
+
+  async toggleSpecialtyStatus(id: string): Promise<SpecialtyItem> {
+    const res = await axiosInstance.patch(`/admin/clinic-info/specialties/${id}/toggle`)
+    return res.data.data
+  },
+
+  async getSpecialtyLogs(id: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/clinic-info/specialties/${id}/logs`)
+    return res.data.data
+  },
+
+  async copySpecialty(specialtyId: string, targetClinicIds: string[]): Promise<{ message: string }> {
+    const res = await axiosInstance.post(`/admin/clinic-info/specialties/${specialtyId}/copy`, { targetClinicIds })
+    return { message: res.data.message }
+  },
+
+  // ---- Upload Ảnh ----
+  async uploadImage(file: File): Promise<string> {
+    const formData = new FormData()
+    formData.append('image', file)
+    const res = await axiosInstance.post('/admin/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return res.data.data.url
+  }
 }

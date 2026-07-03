@@ -9,17 +9,16 @@ import mongoose from 'mongoose'
 
 const clinicInfoSchema = new mongoose.Schema(
   {
-    ma: {
-      type: String,
-      default: 'MAIN',
-      unique: true,
-      immutable: true, // không đổi — đảm bảo chỉ 1 doc
-    },
     ten: {
       type: String,
-      required: [true, 'Tên phòng khám là bắt buộc'],
+      required: [true, 'Tên chi nhánh/phòng khám là bắt buộc'],
       trim: true,
       maxlength: 255,
+    },
+    trang_thai: {
+      type: String,
+      enum: ['active', 'inactive'],
+      default: 'active',
     },
     dia_chi:       { type: String, default: null },
     so_dien_thoai: { type: String, default: null, maxlength: 20 },

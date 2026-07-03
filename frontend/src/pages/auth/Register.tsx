@@ -21,8 +21,16 @@ export default function Register() {
       setError('Mật khẩu xác nhận không khớp')
       return
     }
-    if (password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự')
+    
+    const phoneRegex = /^0\d{9}$/
+    if (!phoneRegex.test(soDienThoai)) {
+      setError('Số điện thoại phải gồm 10 số và bắt đầu bằng số 0')
+      return
+    }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
+    if (!passwordRegex.test(password)) {
+      setError('Mật khẩu phải tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và số')
       return
     }
 
@@ -30,8 +38,12 @@ export default function Register() {
     try {
       await authService.register({ ho_ten: hoTen, email, so_dien_thoai: soDienThoai, password })
       navigate('/login', { state: { registered: true } })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Đăng ký thất bại')
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message ||
+        err.message ||
+        'Đăng ký thất bại'
+      )
     } finally {
       setLoading(false)
     }
