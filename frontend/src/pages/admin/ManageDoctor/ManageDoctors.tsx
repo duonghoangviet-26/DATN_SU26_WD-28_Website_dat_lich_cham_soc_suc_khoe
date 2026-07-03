@@ -188,13 +188,22 @@ export default function ManageDoctors() {
                       </button>
                       
                       {doc.trang_thai_duyet === 'pending' && (
-                        <button
-                          onClick={() => openAction(doc, 'approve')}
-                          className="inline-flex items-center justify-center rounded-lg border border-green-200 bg-green-50 p-1.5 text-green-600 transition-colors hover:bg-green-100"
-                          title="Duyệt"
-                        >
-                          <Icon name="check" className="h-4 w-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => openAction(doc, 'approve')}
+                            className="inline-flex items-center justify-center rounded-lg border border-green-200 bg-green-50 p-1.5 text-green-600 transition-colors hover:bg-green-100"
+                            title="Duyệt"
+                          >
+                            <Icon name="check" className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => openAction(doc, 'reject')}
+                            className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100"
+                            title="Từ chối"
+                          >
+                            <Icon name="x" className="h-4 w-4" />
+                          </button>
+                        </>
                       )}
                       {doc.trang_thai_duyet === 'approved' && (
                         <button
