@@ -362,3 +362,81 @@ export interface DoctorReview {
   noi_dung: string
   ngay_tao: string
 }
+
+// ─── API Types (MongoDB Response) ─────────────────────────────
+
+export interface DoctorSpecialty { _id: string; ten: string; slug: string; icon_url: string | null; status: string }
+export interface DoctorService   { _id: string; ten: string; loai: string; gia: number; thoi_gian_phut: number; ma_dich_vu: string; status: string }
+
+export interface DoctorProfileAPI {
+  _id: string
+  user_id: { ho_ten: string; email: string; so_dien_thoai?: string; anh_dai_dien?: string | null; role: string; status: string }
+  tieu_su?: string | null
+  bang_cap?: string | null
+  kinh_nghiem?: string | null
+  so_nam_kinh_nghiem: number
+  phi_tu_van: number
+  trang_thai_duyet: DoctorApproval
+  ly_do_tu_choi?: string | null
+  so_lan_nop: number
+  la_hien: boolean
+  diem_danh_gia: number
+  tong_danh_gia: number
+  specialties: DoctorSpecialty[]
+  services: DoctorService[]
+  ngay_tao: string
+  ngay_cap_nhat?: string
+}
+
+export interface DoctorDetailAPI extends DoctorProfileAPI {
+  thong_ke: { tong_lich_hen: number; lich_hen_sap_toi: number }
+}
+
+export interface DoctorAuditLog {
+  _id: string
+  nguoi_thuc_hien_id: { ho_ten: string; email: string; anh_dai_dien?: string | null }
+  hanh_dong: string
+  ly_do?: string | null
+  du_lieu_cu?: { trang_thai_duyet?: string; ly_do_tu_choi?: string | null } | null
+  du_lieu_moi?: { trang_thai_duyet?: string; ly_do_tu_choi?: string | null } | null
+  ngay_tao: string
+}
+
+export type NotificationTargetAPI = 'tat_ca' | 'benh_nhan' | 'bac_si'
+
+export interface NotificationItemAPI {
+  _id: string
+  tieu_de: string
+  noi_dung: string
+  doi_tuong: NotificationTargetAPI
+  so_nguoi_nhan: number
+  ngay_gui: string
+  tao_boi: { _id: string; ho_ten: string; email: string } | null
+}
+
+export interface DoctorUpdatePayload {
+  tieu_su?: string | null
+  bang_cap?: string | null
+  kinh_nghiem?: string | null
+  so_nam_kinh_nghiem?: number
+  phi_tu_van?: number
+  la_hien?: boolean
+  admin_id: string
+}
+
+export interface NotificationUpdatePayload {
+  tieu_de: string
+  noi_dung: string
+}
+
+export interface DoctorAppointmentHistory {
+  _id: string
+  patient_name: string
+  patient_phone: string
+  ngay_kham: string
+  gio_kham: string
+  loai_kham: 'clinic' | 'home' | 'video'
+  status: AppointmentStatus
+  gia_kham: number
+  payment_status: PaymentStatus
+}

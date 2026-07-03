@@ -56,4 +56,4 @@ frontend/src/
 
 - Component: `PascalCase.jsx` · biến/hàm: `camelCase` · hằng số: `UPPER_SNAKE`.
 - Import dùng alias `@/` (trỏ về `src/`).
-- Tên trường dữ liệu giữ tiếng Việt khớp database (`ho_ten`, `mat_khau`...).
+- Tên trường dữ liệu giữ tiếng Việt khớp database (`ho_ten`, `mat_khau`.....).
