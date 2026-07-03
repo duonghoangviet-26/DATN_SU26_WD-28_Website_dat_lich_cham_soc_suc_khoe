@@ -66,7 +66,7 @@ export default function RescheduleAppointment({ appointment, onSaved, onCancel }
 
     setLoading(true)
     try {
-      await appointmentService.reschedule(appointment._id, form)
+      await appointmentService.reschedule(appointment._id, { ...form, updatedAt: appointment.ngay_cap_nhat })
       onSaved()
     } catch (err: any) {
       setError(err?.response?.data?.message || err.message || 'Lỗi khi dời lịch')

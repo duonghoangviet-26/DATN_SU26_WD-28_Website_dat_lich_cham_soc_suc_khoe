@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { AppointmentItem, AppointmentStatus } from '@/types'
 import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL, SERVICE_TYPE_LABEL } from '@/utils/constants'
 import { formatPrice } from '@/utils/format'
@@ -24,7 +24,7 @@ interface Props {
   loading: boolean
   onView: (a: AppointmentItem) => void
   onHistory: (a: AppointmentItem) => void
-  onCancel: (a: AppointmentItem) => void
+  onCancel: (a: AppointmentItem, reason: string) => void
   onReschedule: (a: AppointmentItem) => void
   onRestore: (a: AppointmentItem) => void
   onHardDelete: (a: AppointmentItem) => void
@@ -38,6 +38,7 @@ export default function DoctorAppointmentGroupList({
   const [expandedDoctor, setExpandedDoctor] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('upcoming')
   const [confirmCancel, setConfirmCancel] = useState<AppointmentItem | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<AppointmentItem | null>(null)
   const [confirmRestore, setConfirmRestore] = useState<AppointmentItem | null>(null)
 
@@ -50,32 +51,41 @@ export default function DoctorAppointmentGroupList({
     }
   }
 
-  // Phân loại lịch hẹn
-  function filterAppointments(apps: AppointmentItem[], tab: TabType) {
-    const now = new Date().getTime()
-    return apps.filter(a => {
-      // Giả sử ngày khám + giờ khám -> Date object
-      const appDate = new Date(`${a.ngay_kham}T${a.gio_kham || '00:00'}:00`)
-      const appTime = appDate.getTime()
-      
-      const isPast = appTime < now
-      // Coi như 'đang diễn ra' nếu khoảng thời gian chênh lệch < 1h
-      const isOngoing = appTime <= now && appTime > now - 3600 * 1000 
-      const isFuture = appTime > now
+  const categorizedAppointments = useMemo(() => {
+    if (!expandedDoctor) return null;
+    const group = groupedAppointments.find(g => g.doctor_id === expandedDoctor);
+    if (!group) return null;
+    
+    const now = new Date().getTime();
+    const buckets: Record<TabType, AppointmentItem[]> = {
+      upcoming: [], ongoing: [], completed: [], cancelled: [], overdue: []
+    };
+    
+    group.appointments.forEach(a => {
+      const appDate = new Date(`${a.ngay_kham}T${a.gio_kham || '00:00'}:00`);
+      const appTime = appDate.getTime();
+      const isPast = appTime < now;
+      const isOngoing = appTime <= now && appTime > now - 3600 * 1000;
+      const isFuture = appTime > now;
 
-      if (tab === 'completed') return a.status === 'completed'
-      if (tab === 'cancelled') return a.status === 'cancelled'
-      
-      // Các tab còn lại chỉ xử lý pending và confirmed
-      if (a.status !== 'pending' && a.status !== 'confirmed') return false
-
-      if (tab === 'ongoing') return isOngoing
-      if (tab === 'upcoming') return isFuture && !isOngoing
-      if (tab === 'overdue') return isPast && !isOngoing
-
-      return false
-    }).sort((a, b) => new Date(`${b.ngay_kham}T${b.gio_kham}`).getTime() - new Date(`${a.ngay_kham}T${a.gio_kham}`).getTime())
-  }
+      if (a.status === 'completed') {
+        buckets.completed.push(a);
+      } else if (a.status === 'cancelled') {
+        buckets.cancelled.push(a);
+      } else if (a.status === 'pending' || a.status === 'confirmed') {
+        if (isOngoing) buckets.ongoing.push(a);
+        else if (isFuture) buckets.upcoming.push(a);
+        else if (isPast) buckets.overdue.push(a);
+      }
+    });
+    
+    // Sort each bucket
+    Object.keys(buckets).forEach(key => {
+      buckets[key as TabType].sort((a, b) => new Date(`${b.ngay_kham}T${b.gio_kham}`).getTime() - new Date(`${a.ngay_kham}T${a.gio_kham}`).getTime());
+    });
+    
+    return buckets;
+  }, [expandedDoctor, groupedAppointments]);
 
   if (loading) {
     return <div className="card p-10 text-center text-slate-400">Đang tải lịch hẹn...</div>
@@ -121,7 +131,7 @@ export default function DoctorAppointmentGroupList({
                     { id: 'cancelled', label: 'Đã hủy' },
                     { id: 'overdue', label: 'Quá hạn' },
                   ].map((tab) => {
-                    const count = filterAppointments(group.appointments, tab.id as TabType).length
+                    const count = categorizedAppointments ? categorizedAppointments[tab.id as TabType].length : 0;
                     return (
                       <button
                         key={tab.id}
@@ -153,13 +163,14 @@ export default function DoctorAppointmentGroupList({
                         <th className="px-4 py-3 font-medium">Loại khám</th>
                         <th className="px-4 py-3 font-medium">Giá</th>
                         <th className="px-4 py-3 font-medium">Trạng thái</th>
+                        <th className="px-4 py-3 font-medium">Thanh toán</th>
                         <th className="px-4 py-3 text-right font-medium">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filterAppointments(group.appointments, activeTab).length === 0 ? (
-                        <tr><td colSpan={6} className="py-8 text-center text-slate-400">Không có lịch hẹn trong mục này.</td></tr>
-                      ) : filterAppointments(group.appointments, activeTab).map(a => (
+                      {categorizedAppointments && categorizedAppointments[activeTab].length === 0 ? (
+                        <tr><td colSpan={7} className="py-8 text-center text-slate-400">Không có lịch hẹn trong mục này.</td></tr>
+                      ) : categorizedAppointments && categorizedAppointments[activeTab].map(a => (
                         <tr key={a._id} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-medium text-slate-800">
                             {a.benh_nhan}
@@ -177,6 +188,9 @@ export default function DoctorAppointmentGroupList({
                           <td className="px-4 py-3 font-medium text-slate-700">{formatPrice(a.gia_kham)}</td>
                           <td className="px-4 py-3">
                             <Badge color={STATUS_COLOR[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status]}</Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge color={PAYMENT_COLOR[a.payment_status] || 'gray'}>{PAYMENT_STATUS_LABEL[a.payment_status]}</Badge>
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-2">
@@ -245,18 +259,48 @@ export default function DoctorAppointmentGroupList({
         )
       })}
 
-      <ConfirmDialog
-        open={!!confirmCancel}
-        danger
-        title="Hủy lịch hẹn"
-        message={`Xác nhận hủy lịch hẹn của "${confirmCancel?.benh_nhan}"?`}
-        confirmText="Hủy lịch"
-        onConfirm={() => {
-          if (confirmCancel) onCancel(confirmCancel)
-          setConfirmCancel(null)
-        }}
-        onCancel={() => setConfirmCancel(null)}
-      />
+      {confirmCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-800">Hủy lịch hẹn</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Xác nhận hủy lịch hẹn của "{confirmCancel.benh_nhan}"?
+            </p>
+            <div className="mt-4">
+              <label className="mb-1 block text-sm font-medium text-slate-700">Lý do hủy <span className="text-red-500">*</span></label>
+              <textarea
+                className="input w-full"
+                rows={3}
+                placeholder="Nhập lý do hủy lịch..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button 
+                onClick={() => { setConfirmCancel(null); setCancelReason('') }} 
+                className="btn-secondary"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={() => {
+                  if (!cancelReason.trim()) {
+                    alert('Vui lòng nhập lý do hủy lịch');
+                    return;
+                  }
+                  onCancel(confirmCancel, cancelReason.trim());
+                  setConfirmCancel(null);
+                  setCancelReason('');
+                }}
+                className="btn-danger"
+              >
+                Hủy lịch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!confirmRestore}

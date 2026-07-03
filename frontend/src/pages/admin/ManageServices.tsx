@@ -350,7 +350,7 @@ export default function ManageServices() {
                   <th onClick={() => handleSort('status')} className={TH_SORT}>
                     <div className="flex items-center gap-1">Trạng thái {sortIcon('status')}</div>
                   </th>
-                  <th className="px-4 py-3" /> {/* cột nút hành động */}
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
 
@@ -450,7 +450,6 @@ export default function ManageServices() {
                         </Badge>
                       </td>
 
-                      {/* Cột nút hành động — KHÔNG làm mờ dù dịch vụ đang ẩn */}
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <button

@@ -209,6 +209,7 @@ export interface AppointmentItem {
   gia_kham: number
   dia_chi_kham?: string | null
   ly_do_kham?: string | null
+  ngay_cap_nhat?: string
 }
 
 export interface AppointmentSummary {

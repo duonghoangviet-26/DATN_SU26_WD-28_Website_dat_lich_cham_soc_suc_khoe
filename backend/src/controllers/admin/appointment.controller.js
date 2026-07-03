@@ -37,8 +37,8 @@ function formatAppointmentItem(appointment) {
     status: appointment.status,
     payment_status: appointment.payment_status,
     gia_kham: appointment.gia_kham,
-    ly_do_kham: appointment.ly_do_kham,
     dia_chi_kham: appointment.dia_chi_kham,
+    ngay_cap_nhat: appointment.ngay_cap_nhat,
   }
 }
 
@@ -322,6 +322,12 @@ export async function cancelAppointment(req, res) {
       return fail(res, 400, 'Khong the huy lich hen da hoan thanh hoac da huy')
     }
 
+    if (req.body.updatedAt && new Date(req.body.updatedAt).getTime() !== new Date(appointment.ngay_cap_nhat).getTime()) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 409, 'Lịch hẹn đã bị thay đổi bởi người khác (Concurrency Conflict). Vui lòng tải lại trang.')
+    }
+
     const oldStatus = appointment.status
     appointment.status = 'cancelled'
     appointment.ly_do_huy = req.body.ly_do_huy || 'Huy boi Admin'
@@ -517,6 +523,10 @@ export async function rescheduleAppointment(req, res) {
 
     if (appointment.status === 'cancelled' || appointment.status === 'completed') {
       throw new Error('Khong the doi lich hen da hoan thanh hoac da huy')
+    }
+
+    if (req.body.updatedAt && new Date(req.body.updatedAt).getTime() !== new Date(appointment.ngay_cap_nhat).getTime()) {
+      throw new Error('Lịch hẹn đã bị thay đổi bởi người khác (Concurrency Conflict). Vui lòng tải lại trang.')
     }
 
     const doctor = await getDoctorOrThrow(doctor_id, session)

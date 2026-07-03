@@ -36,8 +36,8 @@ export const appointmentService = {
     return res.data.data
   },
 
-  async cancel(id: string, ly_do_huy: string): Promise<AppointmentItem> {
-    const res = await axiosInstance.patch(`/admin/appointments/${id}/cancel`, { ly_do_huy })
+  async cancel(id: string, ly_do_huy: string, updatedAt?: string): Promise<AppointmentItem> {
+    const res = await axiosInstance.patch(`/admin/appointments/${id}/cancel`, { ly_do_huy, updatedAt })
     return res.data.data
   },
 
@@ -51,7 +51,7 @@ export const appointmentService = {
 
   async reschedule(
     id: string,
-    data: { doctor_id: string, schedule_id: string, slot_id: string }
+    data: { doctor_id: string, schedule_id: string, slot_id: string, updatedAt?: string }
   ): Promise<AppointmentItem> {
     const res = await axiosInstance.patch(`/admin/appointments/${id}/reschedule`, data)
     return res.data.data

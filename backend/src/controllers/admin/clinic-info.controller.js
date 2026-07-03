@@ -1,6 +1,8 @@
 import ThongTinPhongKham from '../../models/ThongTinPhongKham.js'
 import ChuyenKhoa from '../../models/ChuyenKhoa.js'
 import NhatKyThaoTac from '../../models/NhatKyThaoTac.js'
+import BacSi from '../../models/BacSi.js'
+import LichHen from '../../models/LichHen.js'
 import { ok, fail } from '../../utils/response.js'
 
 // Helper: Lấy lịch sử thao tác chung
@@ -170,6 +172,24 @@ export const updateClinicInfo = async (req, res) => {
 // Xóa mềm 1 chi nhánh (chuyển trang_thai thành inactive)
 export const deleteClinic = async (req, res) => {
   try {
+    // Ràng buộc Business: Không cho xóa nếu có lịch hẹn pending/confirmed
+    const specialties = await ChuyenKhoa.find({ phong_kham_id: req.params.id }).select('_id').lean()
+    if (specialties.length > 0) {
+      const specIds = specialties.map(s => s._id)
+      const doctors = await BacSi.find({ specialties: { $in: specIds } }).select('_id').lean()
+      if (doctors.length > 0) {
+        const docIds = doctors.map(d => d._id)
+        const activeAppointments = await LichHen.countDocuments({
+          doctor_id: { $in: docIds },
+          status: { $in: ['pending', 'confirmed'] }
+        })
+        
+        if (activeAppointments > 0) {
+          return fail(res, 400, `Không thể ngừng hoạt động chi nhánh vì còn ${activeAppointments} lịch hẹn đang chờ khám hoặc đã xác nhận.`)
+        }
+      }
+    }
+
     const deleted = await ThongTinPhongKham.findByIdAndUpdate(
       req.params.id,
       { trang_thai: 'inactive' },
@@ -203,7 +223,6 @@ export const deleteClinic = async (req, res) => {
 // ==========================================
 // QUẢN LÝ CHUYÊN KHOA CỦA TỪNG CHI NHÁNH
 // ==========================================
-import BacSi from '../../models/BacSi.js'
 
 // Lấy danh sách chuyên khoa của 1 chi nhánh
 export const getSpecialtiesByClinic = async (req, res) => {

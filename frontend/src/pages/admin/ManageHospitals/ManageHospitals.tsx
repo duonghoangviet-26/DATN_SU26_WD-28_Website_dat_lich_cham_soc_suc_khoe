@@ -145,8 +145,10 @@ export default function ManageHospitals() {
   function handleSpecialtySaved(saved: SpecialtyItem) {
     setSpecialties((prev) => {
       const exists = prev.find((s) => s._id === saved._id)
-      if (exists) return prev.map((s) => (s._id === saved._id ? saved : s))
-      return [...prev, saved].sort((a, b) => a.thu_tu - b.thu_tu)
+      const newList = exists 
+        ? prev.map((s) => (s._id === saved._id ? saved : s))
+        : [...prev, saved]
+      return newList.sort((a, b) => a.thu_tu - b.thu_tu)
     })
     setSpecialtyView('list')
     setEditingSpecialty(null)

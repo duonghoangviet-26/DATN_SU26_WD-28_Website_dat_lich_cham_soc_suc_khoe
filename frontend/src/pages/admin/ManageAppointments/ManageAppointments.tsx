@@ -41,6 +41,7 @@ export default function ManageAppointments() {
   const filterDoctorName = searchParams.get('doctor_name')
 
   const [keyword, setKeyword] = useState('')
+  const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [status, setStatus] = useState<AppointmentStatus | ''>('')
   const [loaiKham, setLoaiKham] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -59,11 +60,21 @@ export default function ManageAppointments() {
   const [rescheduleData, setRescheduleData] = useState<AppointmentItem | null>(null)
   const [historyItem, setHistoryItem] = useState<AppointmentItem | null>(null)
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (debouncedKeyword !== keyword) {
+        setDebouncedKeyword(keyword)
+        setPage(1)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [keyword, debouncedKeyword])
+
   const fetchAppointments = useCallback(async (nextPage = page) => {
     setLoading(true)
     try {
       const res = await appointmentService.getAll({
-        keyword,
+        keyword: debouncedKeyword,
         status,
         loai_kham: loaiKham,
         startDate,
@@ -76,19 +87,26 @@ export default function ManageAppointments() {
       // Khi view_mode=doctor_grouped, res.data là mảng các DoctorGroup
       setGroupedAppointments(res.data)
       setSummary(res.summary)
-      // Không dùng pagination của backend cho chế độ grouped nữa (hoặc chỉ mang tính tham khảo)
+      if (res.pagination) {
+        setPagination(res.pagination)
+      }
     } finally {
       setLoading(false)
     }
-  }, [keyword, status, loaiKham, startDate, endDate, page, filterDoctorId])
+  }, [debouncedKeyword, status, loaiKham, startDate, endDate, page, filterDoctorId])
 
   useEffect(() => {
     fetchAppointments()
   }, [fetchAppointments])
 
-  async function handleCancel(appointment: AppointmentItem) {
-    await appointmentService.cancel(appointment._id, 'Admin huy lich')
-    await fetchAppointments()
+  async function handleCancel(appointment: AppointmentItem, reason: string) {
+    try {
+      await appointmentService.cancel(appointment._id, reason, appointment.ngay_cap_nhat)
+      await fetchAppointments()
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message)
+      await fetchAppointments() // Tải lại để lấy dữ liệu mới nhất
+    }
   }
 
   async function handleRestore(appointment: AppointmentItem) {
@@ -170,7 +188,6 @@ export default function ManageAppointments() {
                   value={keyword}
                   onChange={(e) => {
                     setKeyword(e.target.value)
-                    setPage(1)
                   }}
                 />
               </div>
@@ -266,6 +283,38 @@ export default function ManageAppointments() {
             onRestore={handleRestore}
             onHardDelete={handleHardDelete}
           />
+
+          {!loading && groupedAppointments.length > 0 && pagination.totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 sm:px-6 rounded-lg shadow-sm">
+              <div className="flex flex-1 items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-700">
+                    Hiển thị trang <span className="font-medium">{pagination.page}</span> / <span className="font-medium">{pagination.totalPages}</span>
+                  </p>
+                </div>
+                <div>
+                  <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                    <button
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={pagination.page <= 1}
+                      className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                    >
+                      <span className="sr-only">Previous</span>
+                      <Icon name="chevron-left" className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                      disabled={pagination.page >= pagination.totalPages}
+                      className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                    >
+                      <span className="sr-only">Next</span>
+                      <Icon name="chevron-right" className="h-5 w-5" />
+                    </button>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
