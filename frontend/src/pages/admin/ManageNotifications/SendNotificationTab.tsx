@@ -68,6 +68,12 @@ export default function SendNotificationTab() {
     return () => { ignore = true }
   }, [page])
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage > 0 && newPage <= totalPages) {
+      setPage(newPage)
+    }
+  }
+
   async function handleSend(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
@@ -322,7 +328,7 @@ export default function SendNotificationTab() {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            onPageChange={setPage}
+            onPageChange={handlePageChange}
           />
         </div>
       )}
