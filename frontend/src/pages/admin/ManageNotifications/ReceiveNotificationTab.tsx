@@ -21,7 +21,17 @@ export default function ReceiveNotificationTab() {
 
   useEffect(() => {
     if (location.state?.openNotification) {
-      setDetail(location.state.openNotification)
+      const n = location.state.openNotification
+      setDetail(n)
+      
+      // Tự động đánh dấu đã đọc nếu mở từ Dropdown Header
+      if (!n.da_doc) {
+        notificationService.markAsRead(n._id).then(() => {
+          setNotifications(prev => prev.map(item => item._id === n._id ? { ...item, da_doc: true } : item))
+          window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
+        }).catch(err => console.error('Lỗi mark as read từ header:', err))
+      }
+
       // Dùng navigate của React Router để ép xóa bộ nhớ đệm state
       navigate(location.pathname, { replace: true, state: {} })
     }
@@ -120,7 +130,18 @@ export default function ReceiveNotificationTab() {
                   </td>
                   <td className="px-5 py-4 text-right whitespace-nowrap">
                     <button
-                      onClick={() => setDetail(n)}
+                      onClick={async () => {
+                        setDetail(n)
+                        if (!n.da_doc) {
+                          try {
+                            await notificationService.markAsRead(n._id)
+                            setNotifications(prev => prev.map(item => item._id === n._id ? { ...item, da_doc: true } : item))
+                            window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
+                          } catch (err) {
+                            console.error('Lỗi khi đánh dấu đã đọc:', err)
+                          }
+                        }
+                      }}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-brand-600 hover:border-brand-200"
                     >
                       <Icon name="eye" className="h-3.5 w-3.5" /> Xem

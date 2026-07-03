@@ -18,4 +18,7 @@ router.put('/:id', notificationController.updateNotification)
 // DELETE /api/admin/notifications/:id - Xóa thông báo đã gửi
 router.delete('/:id', notificationController.deleteNotification)
 
+// PUT /api/admin/notifications/received/:id/read - Đánh dấu thông báo đã xem
+router.put('/received/:id/read', notificationController.markNotificationAsRead)
+
 export default router

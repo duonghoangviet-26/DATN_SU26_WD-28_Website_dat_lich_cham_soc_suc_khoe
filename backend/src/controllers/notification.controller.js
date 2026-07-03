@@ -90,3 +90,17 @@ export async function deleteNotification(req, res) {
     return fail(res, 500, err.message)
   }
 }
+
+export async function markNotificationAsRead(req, res) {
+  try {
+    const { id } = req.params
+    const updatedNotif = await notificationService.markNotificationAsRead(id)
+    return ok(res, updatedNotif, 'Đánh dấu đã đọc thành công', 200)
+  } catch (err) {
+    if (err.message === 'Không tìm thấy thông báo') return fail(res, 404, err.message)
+    if (err.message.includes('không hợp lệ')) {
+      return fail(res, 400, err.message)
+    }
+    return fail(res, 500, err.message)
+  }
+}

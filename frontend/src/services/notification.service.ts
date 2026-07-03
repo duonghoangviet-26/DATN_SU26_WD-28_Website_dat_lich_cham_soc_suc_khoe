@@ -42,4 +42,9 @@ export const notificationService = {
     await axios.delete(`${BASE_URL}/${id}`)
     return true
   },
+
+  async markAsRead(id: string): Promise<boolean> {
+    await axios.put(`${BASE_URL}/received/${id}/read`)
+    return true
+  },
 }

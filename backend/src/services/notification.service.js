@@ -160,3 +160,19 @@ export async function getReceivedNotifications(admin_id, page = 1, limit = 10) {
     },
   }
 }
+
+export async function markNotificationAsRead(id) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new Error('ID thông báo không hợp lệ')
+  }
+
+  const notification = await ThongBao.findById(id)
+  if (!notification) {
+    throw new Error('Không tìm thấy thông báo')
+  }
+
+  notification.da_doc = true
+  await notification.save()
+
+  return notification
+}
