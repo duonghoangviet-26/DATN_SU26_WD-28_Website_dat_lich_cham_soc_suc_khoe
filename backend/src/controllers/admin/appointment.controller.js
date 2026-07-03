@@ -451,8 +451,19 @@ export async function createAppointment(req, res) {
       throw new Error('Khung gio nay da kin cho')
     }
 
-    slot.so_benh_nhan_hien_tai += 1
-    await schedule.save({ session })
+    const updatedSchedule = await LichLamViec.findOneAndUpdate(
+      {
+        _id: schedule_id,
+        'slots._id': slot_id,
+        'slots.so_benh_nhan_hien_tai': { $lt: slot.so_benh_nhan_toi_da }
+      },
+      { $inc: { 'slots.$.so_benh_nhan_hien_tai': 1 } },
+      { session, new: true }
+    )
+
+    if (!updatedSchedule) {
+      throw new Error('Khung giờ này vừa mới có người đặt hết chỗ, vui lòng chọn khung giờ khác')
+    }
 
     const newAppointment = new LichHen({
       user_id: user_id || null,
@@ -555,8 +566,19 @@ export async function rescheduleAppointment(req, res) {
       { session }
     )
 
-    newSlot.so_benh_nhan_hien_tai += 1
-    await newSchedule.save({ session })
+    const updatedNewSchedule = await LichLamViec.findOneAndUpdate(
+      {
+        _id: schedule_id,
+        'slots._id': slot_id,
+        'slots.so_benh_nhan_hien_tai': { $lt: newSlot.so_benh_nhan_toi_da }
+      },
+      { $inc: { 'slots.$.so_benh_nhan_hien_tai': 1 } },
+      { session, new: true }
+    )
+
+    if (!updatedNewSchedule) {
+      throw new Error('Khung giờ mới vừa có người đặt hết chỗ, vui lòng chọn khung giờ khác')
+    }
 
     appointment.doctor_id = doctor._id
     appointment.schedule_id = newSchedule._id
