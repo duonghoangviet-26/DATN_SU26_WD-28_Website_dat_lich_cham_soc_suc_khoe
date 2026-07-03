@@ -40,6 +40,9 @@ export default function SendNotificationTab() {
 
   const [detail, setDetail] = useState<NotificationItemAPI | null>(null)
   const [targetEdit, setTargetEdit] = useState<NotificationItemAPI | null>(null)
+  const [targetLogs, setTargetLogs] = useState<NotificationItemAPI | null>(null)
+  const [logs, setLogs] = useState<any[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
 
   const loadData = async (ignore = false) => {
     setLoading(true)
@@ -67,6 +70,21 @@ export default function SendNotificationTab() {
     loadData(ignore)
     return () => { ignore = true }
   }, [page])
+
+  useEffect(() => {
+    if (targetLogs) {
+      setLoadingLogs(true)
+      notificationService.getLogs(targetLogs._id).then(data => {
+        setLogs(data)
+      }).catch(err => {
+        console.error('Lỗi tải lịch sử:', err)
+      }).finally(() => {
+        setLoadingLogs(false)
+      })
+    } else {
+      setLogs([])
+    }
+  }, [targetLogs])
 
   const handlePageChange = (newPage: number) => {
     if (newPage > 0 && newPage <= totalPages) {
@@ -118,17 +136,13 @@ export default function SendNotificationTab() {
   }
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này? Hành động này không thể hoàn tác.')) {
-      try {
-        await notificationService.delete(id)
-        if (notifications.length === 1 && page > 1) {
-          setPage(page - 1)
-        } else {
-          loadData()
-        }
-      } catch (err: any) {
-        alert(err?.response?.data?.message || err.message || 'Xóa thất bại')
-      }
+    if (!window.confirm('Bạn có chắc chắn muốn xóa thông báo này? Dữ liệu không thể khôi phục.')) return
+    try {
+      await notificationService.delete(id)
+      loadData()
+      window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Có lỗi xảy ra khi xóa')
     }
   }
 
@@ -294,21 +308,31 @@ export default function SendNotificationTab() {
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => setDetail(n)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-brand-600 hover:border-brand-200"
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-800"
+                        title="Chi tiết"
                       >
-                        <Icon name="eye" className="h-3.5 w-3.5" /> Chi tiết
+                        <Icon name="eye" className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setTargetEdit(n)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
+                        className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 p-1.5 text-blue-600 transition-colors hover:bg-blue-100"
+                        title="Sửa"
                       >
-                        <Icon name="edit" className="h-3.5 w-3.5" /> Sửa
+                        <Icon name="edit" className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setTargetLogs(n)}
+                        className="inline-flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 p-1.5 text-orange-600 transition-colors hover:bg-orange-100"
+                        title="Lịch sử sửa đổi"
+                      >
+                        <Icon name="clock" className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(n._id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-100"
+                        className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100"
+                        title="Xóa thông báo"
                       >
-                        <Icon name="trash-2" className="h-3.5 w-3.5" /> Xóa
+                        <Icon name="trash-2" className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
@@ -388,8 +412,70 @@ export default function SendNotificationTab() {
           onSuccess={() => {
             setTargetEdit(null)
             loadData()
+            window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
           }}
         />
+      )}
+
+      {/* Modal Lịch sử sửa đổi */}
+      {targetLogs && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl shrink-0">
+              <h3 className="text-lg font-bold text-slate-800">Lịch sử chỉnh sửa</h3>
+              <button onClick={() => setTargetLogs(null)} className="p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 rounded-full transition-colors">
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              {loadingLogs ? (
+                <div className="flex justify-center p-8"><span className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></span></div>
+              ) : logs.length === 0 ? (
+                <div className="text-center p-8 text-slate-400">
+                  <Icon name="clock" className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>Chưa có lịch sử chỉnh sửa nào.</p>
+                </div>
+              ) : (
+                <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                  {logs.map((log) => (
+                    <div key={log._id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-slate-100 text-slate-500 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm">
+                        <Icon name="edit" className="w-4 h-4" />
+                      </div>
+                      <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-slate-800">{log.nguoi_thuc_hien_id?.ho_ten || 'Admin'}</span>
+                          <span className="text-xs font-medium text-slate-500">{formatDateTime(log.ngay_tao)}</span>
+                        </div>
+                        <div className="text-sm text-slate-600 mt-2 space-y-2">
+                          {log.du_lieu_cu?.tieu_de !== log.du_lieu_moi?.tieu_de && (
+                            <div>
+                              <p className="text-xs text-slate-400 mb-0.5">Tiêu đề:</p>
+                              <p className="line-through text-red-500/70 text-xs mb-1">{log.du_lieu_cu?.tieu_de}</p>
+                              <p className="text-green-600 font-medium">{log.du_lieu_moi?.tieu_de}</p>
+                            </div>
+                          )}
+                          {log.du_lieu_cu?.noi_dung !== log.du_lieu_moi?.noi_dung && (
+                            <div className="pt-2 border-t border-slate-100">
+                              <p className="text-xs text-slate-400 mb-0.5">Nội dung:</p>
+                              <p className="line-through text-red-500/70 text-xs mb-1 line-clamp-2">{log.du_lieu_cu?.noi_dung}</p>
+                              <p className="text-green-600 font-medium line-clamp-2">{log.du_lieu_moi?.noi_dung}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 flex justify-end shrink-0">
+              <button type="button" onClick={() => setTargetLogs(null)} className="px-5 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Đóng</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

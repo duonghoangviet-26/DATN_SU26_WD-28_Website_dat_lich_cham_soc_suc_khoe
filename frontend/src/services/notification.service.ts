@@ -47,4 +47,9 @@ export const notificationService = {
     await axios.put(`${BASE_URL}/received/${id}/read`)
     return true
   },
+
+  async getLogs(id: string): Promise<any[]> {
+    const { data } = await axios.get(`${BASE_URL}/${id}/logs`)
+    return data.data
+  },
 }

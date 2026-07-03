@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import ThongBaoHeThong from '../models/ThongBaoHeThong.js'
 import NguoiDung from '../models/NguoiDung.js'
 import ThongBao from '../models/ThongBao.js'
+import NhatKyThaoTac from '../models/NhatKyThaoTac.js'
 
 export async function getSystemNotifications(page = 1, limit = 10) {
   const skip = (page - 1) * limit
@@ -89,7 +90,7 @@ export async function sendSystemNotification({ tieu_de, noi_dung, doi_tuong, adm
   return populatedNotification
 }
 
-export async function updateSystemNotification(id, { tieu_de, noi_dung }) {
+export async function updateSystemNotification(id, { tieu_de, noi_dung }, admin_id) {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new Error('ID thông báo không hợp lệ')
   }
@@ -103,9 +104,23 @@ export async function updateSystemNotification(id, { tieu_de, noi_dung }) {
     throw new Error('Không tìm thấy thông báo')
   }
 
+  const oldData = { tieu_de: notification.tieu_de, noi_dung: notification.noi_dung }
+
   notification.tieu_de = tieu_de
   notification.noi_dung = noi_dung
   await notification.save()
+
+  if (admin_id) {
+    await NhatKyThaoTac.create({
+      nguoi_thuc_hien_id: admin_id,
+      vai_tro: 'admin',
+      hanh_dong: 'UPDATE_NOTIFICATION',
+      loai_doi_tuong: 'system_notification',
+      doi_tuong_id: id,
+      du_lieu_cu: oldData,
+      du_lieu_moi: { tieu_de, noi_dung }
+    })
+  }
 
   // Cập nhật đồng bộ sang các thông báo cá nhân đã gửi
   await ThongBao.updateMany(
@@ -175,4 +190,14 @@ export async function markNotificationAsRead(id) {
   await notification.save()
 
   return notification
+}
+
+export async function getNotificationLogs(id) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new Error('ID thông báo không hợp lệ')
+  }
+  return await NhatKyThaoTac.find({ loai_doi_tuong: 'system_notification', doi_tuong_id: id })
+    .populate({ path: 'nguoi_thuc_hien_id', select: 'ho_ten email' })
+    .sort({ ngay_tao: -1 })
+    .lean()
 }

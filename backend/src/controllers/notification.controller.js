@@ -62,10 +62,14 @@ export async function updateNotification(req, res) {
     const { id } = req.params
     const { tieu_de, noi_dung } = req.body
     
+    // Lấy admin_id hiện tại từ request (phụ thuộc vào auth middleware)
+    // Hoặc lấy trực tiếp giống như adminId hardcode nếu auth chưa gắn (tạm thời lấy adminId hardcode cho an toàn nếu jwt chưa gắn chặt)
+    const adminId = req.user?.id || "000000000000000000000099"
+    
     const updatedNotif = await notificationService.updateSystemNotification(id, {
       tieu_de,
       noi_dung
-    })
+    }, adminId)
     
     return ok(res, updatedNotif, 'Cập nhật thông báo thành công', 200)
   } catch (err) {
@@ -101,6 +105,17 @@ export async function markNotificationAsRead(req, res) {
     if (err.message.includes('không hợp lệ')) {
       return fail(res, 400, err.message)
     }
+    return fail(res, 500, err.message)
+  }
+}
+
+export async function getNotificationLogs(req, res) {
+  try {
+    const { id } = req.params
+    const logs = await notificationService.getNotificationLogs(id)
+    return ok(res, logs, 'Lấy lịch sử thành công', 200)
+  } catch (err) {
+    if (err.message.includes('không hợp lệ')) return fail(res, 400, err.message)
     return fail(res, 500, err.message)
   }
 }

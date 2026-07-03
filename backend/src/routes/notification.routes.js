@@ -21,4 +21,7 @@ router.delete('/:id', notificationController.deleteNotification)
 // PUT /api/admin/notifications/received/:id/read - Đánh dấu thông báo đã xem
 router.put('/received/:id/read', notificationController.markNotificationAsRead)
 
+// GET /api/admin/notifications/:id/logs - Xem lịch sử sửa đổi thông báo
+router.get('/:id/logs', notificationController.getNotificationLogs)
+
 export default router
