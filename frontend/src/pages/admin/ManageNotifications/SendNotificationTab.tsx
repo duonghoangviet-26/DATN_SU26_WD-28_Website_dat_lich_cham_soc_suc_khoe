@@ -34,6 +34,7 @@ export default function SendNotificationTab() {
   const [tieu_de, setTieuDe] = useState('')
   const [noi_dung, setNoiDung] = useState('')
   const [doi_tuong, setDoiTuong] = useState<NotificationTargetAPI>('tat_ca')
+  const [sendMethod, setSendMethod] = useState<'web' | 'email'>('web')
   const [sendError, setSendError] = useState('')
   const [sendSuccess, setSendSuccess] = useState(false)
 
@@ -64,6 +65,12 @@ export default function SendNotificationTab() {
 
   async function handleSend(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+
+    if (doi_tuong === 'bac_si' && sendMethod === 'email') {
+      alert('Giao diện Form Email đã sẵn sàng! Chờ kết nối Backend.')
+      return
+    }
+
     setSendError('')
     setSendSuccess(false)
     if (!tieu_de.trim() || !noi_dung.trim()) {
@@ -144,10 +151,12 @@ export default function SendNotificationTab() {
         <form onSubmit={handleSend} className="space-y-5">
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-semibold text-slate-700">Tiêu đề thông báo</label>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                {doi_tuong === 'bac_si' && sendMethod === 'email' ? 'Tiêu đề Email (Subject)' : 'Tiêu đề thông báo'}
+              </label>
               <input
                 className="input bg-slate-50 border-slate-200 focus:bg-white transition-colors"
-                placeholder="Nhập tiêu đề ngắn gọn..."
+                placeholder={doi_tuong === 'bac_si' && sendMethod === 'email' ? "Nhập tiêu đề Email..." : "Nhập tiêu đề ngắn gọn..."}
                 value={tieu_de}
                 onChange={(e) => setTieuDe(e.target.value)}
               />
@@ -165,20 +174,63 @@ export default function SendNotificationTab() {
               </select>
             </div>
           </div>
+
+          {doi_tuong === 'bac_si' && (
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-700">Hình thức gửi</label>
+              <div className="flex gap-2 p-1 bg-slate-100/80 rounded-lg w-fit border border-slate-200/50">
+                <button
+                  type="button"
+                  onClick={() => setSendMethod('web')}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-all ${sendMethod === 'web' ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  <Icon name="bell" className="w-4 h-4" /> Gửi qua Website (Mặc định)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSendMethod('email')}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-all ${sendMethod === 'email' ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  <Icon name="mail" className="w-4 h-4" /> Gửi qua Email
+                </button>
+              </div>
+            </div>
+          )}
+
+          {doi_tuong === 'bac_si' && sendMethod === 'email' && (
+            <div className="flex items-start gap-3 rounded-lg bg-yellow-50 border border-yellow-200 p-4 text-sm text-yellow-800">
+              <Icon name="alert-triangle" className="w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Lưu ý: Tính năng kết nối máy chủ gửi Mail thực tế đang trong quá trình phát triển.</p>
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">Nội dung chi tiết</label>
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+              {doi_tuong === 'bac_si' && sendMethod === 'email' ? 'Nội dung Email (Body)' : 'Nội dung chi tiết'}
+            </label>
             <textarea
               className="input resize-none bg-slate-50 border-slate-200 focus:bg-white transition-colors"
               rows={4}
-              placeholder="Nhập nội dung đầy đủ của thông báo..."
+              placeholder={doi_tuong === 'bac_si' && sendMethod === 'email' ? "Nhập nội dung đầy đủ của Email..." : "Nhập nội dung đầy đủ của thông báo..."}
               value={noi_dung}
               onChange={(e) => setNoiDung(e.target.value)}
             />
           </div>
           <div className="flex justify-end pt-2 border-t border-slate-100">
             <button type="submit" className="btn-primary py-2.5 px-6" disabled={sending}>
-              <Icon name="send" className="h-4 w-4 mr-2" />
-              {sending ? 'Hệ thống đang xử lý...' : 'Xác nhận gửi thông báo'}
+              {doi_tuong === 'bac_si' && sendMethod === 'email' ? (
+                <>
+                  <Icon name="mail" className="h-4 w-4 mr-2" />
+                  Gửi Email
+                </>
+              ) : (
+                <>
+                  <Icon name="send" className="h-4 w-4 mr-2" />
+                  {sending ? 'Hệ thống đang xử lý...' : 'Xác nhận gửi thông báo'}
+                </>
+              )}
             </button>
           </div>
         </form>
