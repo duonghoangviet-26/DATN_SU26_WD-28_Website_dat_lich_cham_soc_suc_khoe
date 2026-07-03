@@ -29,11 +29,6 @@ export default function ClientLayout() {
                 <span className="hidden rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 sm:block">
                   {user.ho_ten}
                 </span>
-                {user.role === 'admin' && (
-                  <Link to="/admin" className="btn-secondary text-sm">
-                    Quản trị
-                  </Link>
-                )}
                 {user.role === 'doctor' && (
                   <Link to="/doctor" className="btn-secondary text-sm">
                     Trang bác sĩ

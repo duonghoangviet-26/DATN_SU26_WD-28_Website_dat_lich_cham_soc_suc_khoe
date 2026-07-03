@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useAuth } from '@/context/AuthContext'
 
 const features = [
   {
@@ -44,6 +45,8 @@ const features = [
 ]
 
 export default function Home() {
+  const { user } = useAuth()
+
   return (
     <div>
       {/* Hero */}
@@ -61,12 +64,30 @@ export default function Home() {
           trong gia đình — chỉ với một tài khoản.
         </p>
         <div className="mt-8 flex justify-center gap-3">
-          <Link to="/register" className="btn-primary px-6 py-2.5 text-base">
-            Bắt đầu miễn phí
-          </Link>
-          <Link to="/login" className="btn-secondary px-6 py-2.5 text-base">
-            Đăng nhập
-          </Link>
+          {user ? (
+            user.role === 'admin' ? (
+              <Link to="/admin" className="btn-primary px-6 py-2.5 text-base">
+                Vào trang quản trị
+              </Link>
+            ) : user.role === 'doctor' ? (
+              <Link to="/doctor" className="btn-primary px-6 py-2.5 text-base">
+                Vào trang bác sĩ
+              </Link>
+            ) : (
+              <Link to="/" className="btn-primary px-6 py-2.5 text-base">
+                Đặt lịch ngay
+              </Link>
+            )
+          ) : (
+            <>
+              <Link to="/register" className="btn-primary px-6 py-2.5 text-base">
+                Bắt đầu miễn phí
+              </Link>
+              <Link to="/login" className="btn-secondary px-6 py-2.5 text-base">
+                Đăng nhập
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
