@@ -71,7 +71,7 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
               {service.loai === 'home' ? (
                 <>
                   <InfoCell label="Đặt trước tối thiểu" value={service.gio_dat_truoc_toi_thieu != null ? `${service.gio_dat_truoc_toi_thieu} giờ` : '—'} />
-                  <InfoCell label="Bác sĩ đăng ký"      value={`${service.so_bac_si ?? 0} bác sĩ`} />
+                  <InfoCell label="Nhân viên đảm nhận"  value={`${service.so_bac_si ?? 0} nhân viên`} />
                   <InfoCell label="Lượt đặt"             value={`${service.so_luot_dat ?? 0} lần`} />
                 </>
               ) : (

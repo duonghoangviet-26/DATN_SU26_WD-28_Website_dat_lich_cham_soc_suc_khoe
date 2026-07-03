@@ -23,7 +23,7 @@ export const appointmentService = {
     if (keyword) {
       const q = keyword.toLowerCase()
       list = list.filter(a =>
-        a.benh_nhan.toLowerCase().includes(q) || a.bac_si.toLowerCase().includes(q),
+        a.benh_nhan.toLowerCase().includes(q) || (a.bac_si?.toLowerCase().includes(q) ?? false),
       )
     }
     if (status)         list = list.filter(a => a.status === status)
@@ -72,6 +72,35 @@ export const appointmentService = {
     return { id, status: 'completed' }
     // Real API:
     // const res = await axiosInstance.patch<ApiResponse<{ id: string; status: AppointmentStatus }>>(`/admin/appointments/${id}/complete`)
+    // return res.data.data
+  },
+
+  // CSKH gán nhân viên lấy mẫu cho lịch home đang pending — chuyển sang confirmed
+  // (2026-07-02-home-service-redesign.md §2.5, bước 5)
+  async assignHomeStaff(id: string, bac_si: string, chuyen_khoa: string): Promise<AppointmentItem> {
+    await delay()
+    const item = appointments.find(a => String(a.id) === String(id))
+    if (!item) throw new Error('Không tìm thấy lịch hẹn')
+    item.bac_si = bac_si
+    item.chuyen_khoa = chuyen_khoa
+    item.status = 'confirmed'
+    return { ...item }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<AppointmentItem>>(`/admin/appointments/${id}/assign-home-staff`, { doctor_id })
+    // return res.data.data
+  },
+
+  // CSKH upload PDF kết quả lab xong → điền ket_qua_url, tự chuyển sang completed
+  // (2026-07-02-home-service-redesign.md §2.5, bước 7)
+  async uploadResult(id: string, ket_qua_url: string): Promise<AppointmentItem> {
+    await delay()
+    const item = appointments.find(a => String(a.id) === String(id))
+    if (!item) throw new Error('Không tìm thấy lịch hẹn')
+    item.ket_qua_url = ket_qua_url
+    item.status = 'completed'
+    return { ...item }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<AppointmentItem>>(`/admin/appointments/${id}/result`, { ket_qua_url })
     // return res.data.data
   },
 }

@@ -61,11 +61,11 @@ export default function Home() {
           trong gia đình — chỉ với một tài khoản.
         </p>
         <div className="mt-8 flex justify-center gap-3">
-          <Link to="/register" className="btn-primary px-6 py-2.5 text-base">
-            Bắt đầu miễn phí
+          <Link to="/dich-vu" className="btn-primary px-6 py-2.5 text-base">
+            Khám phá dịch vụ
           </Link>
-          <Link to="/login" className="btn-secondary px-6 py-2.5 text-base">
-            Đăng nhập
+          <Link to="/register" className="btn-secondary px-6 py-2.5 text-base">
+            Bắt đầu miễn phí
           </Link>
         </div>
       </div>
@@ -84,7 +84,7 @@ export default function Home() {
       </div>
 
       <p className="mt-10 text-center text-sm text-slate-400">
-        * Giao diện người dùng sẽ được phát triển sau — hiện đang tập trung trang Admin.
+        * Một số tính năng (đặt lịch, thanh toán) đang được hoàn thiện.
       </p>
     </div>
   )

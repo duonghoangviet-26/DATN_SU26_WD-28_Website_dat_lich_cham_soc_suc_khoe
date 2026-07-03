@@ -1,4 +1,5 @@
 import { mockDoctors } from '@/mock/doctors'
+import { mockSpecialties } from '@/mock/hospitals'
 import type { DoctorProfile, DoctorApproval } from '@/types'
 
 const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
@@ -68,6 +69,36 @@ export const doctorService = {
     // return res.data.data
   },
 
+  async restore(id: string): Promise<DoctorProfile> {
+    await delay()
+    const doc = doctors.find(d => String(d.id) === String(id))
+    if (!doc) throw new Error('Không tìm thấy bác sĩ')
+    doc.trang_thai_duyet = 'approved'
+    return { ...doc }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<DoctorProfile>>(`/admin/doctors/${id}/restore`)
+    // return res.data.data
+  },
+
+  // Sửa nhanh field liên quan dịch vụ (giá khám, bảo hiểm, dịch vụ liên quan đã áp dụng)
+  // — dùng từ trang Quản lý dịch vụ > chi tiết chuyên khoa. Không sửa hồ sơ bác sĩ (bằng cấp, kinh nghiệm...).
+  async updateServiceFields(id: string, data: {
+    gia_kham: number
+    bao_hiem: { nha_nuoc: boolean; bao_lanh: boolean }
+    related_services: { id: string; ten: string; gia: number }[]
+  }): Promise<DoctorProfile> {
+    await delay()
+    const doc = doctors.find(d => String(d.id) === String(id))
+    if (!doc) throw new Error('Không tìm thấy bác sĩ')
+    doc.gia_kham = data.gia_kham
+    doc.bao_hiem = data.bao_hiem
+    doc.related_services = data.related_services
+    return { ...doc }
+    // Real API:
+    // const res = await axiosInstance.patch<ApiResponse<DoctorProfile>>(`/admin/doctors/${id}/service-fields`, data)
+    // return res.data.data
+  },
+
   async assignRoom(id: string, phong_kham_mac_dinh: string): Promise<DoctorProfile> {
     await delay()
     const doc = doctors.find(d => String(d.id) === String(id))
@@ -75,6 +106,19 @@ export const doctorService = {
     return { ...doc }
     // Real API:
     // const res = await axiosInstance.patch<ApiResponse<DoctorProfile>>(`/admin/doctors/${id}/assign-room`, { phong_kham_mac_dinh })
+    // return res.data.data
+  },
+
+  // Tầng 3 — danh sách bác sĩ approved theo chuyên khoa (client, dùng slug)
+  async getBySpecialtySlug(slug: string): Promise<DoctorProfile[]> {
+    await delay()
+    const specialty = mockSpecialties.find((s) => s.slug === slug && s.status === 'active')
+    if (!specialty) return []
+    return doctors.filter(
+      (d) => d.trang_thai_duyet === 'approved' && d.loai !== 'home_staff' && d.chuyen_khoa === specialty.ten,
+    )
+    // Real API:
+    // const res = await axiosInstance.get<ApiResponse<DoctorProfile[]>>(`/specialties/${slug}/doctors`)
     // return res.data.data
   },
 }

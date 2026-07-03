@@ -4,7 +4,7 @@ import Counter from './Counter.js'
 // ============================================================
 // SERVICE — Dịch vụ y tế (C4)
 // ============================================================
-// loai: 'home'    → bác sĩ đến nhà — đặt được, có thoi_gian_phut, khu_vuc[].
+// loai: 'home'    → nhân viên lấy mẫu xét nghiệm đến nhà — đặt được, có thoi_gian_phut, khu_vuc[].
 //        'related' → dịch vụ liên quan theo chuyên khoa (X-quang, MRI, xét nghiệm...)
 //                    CHỈ hiển thị thông tin "Theo chỉ định bác sĩ", KHÔNG đặt lịch riêng.
 //                    Bắt buộc có specialty_id. Không cần thoi_gian_phut.

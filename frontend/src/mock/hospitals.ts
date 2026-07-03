@@ -40,12 +40,13 @@ export const mockHospitals: HospitalItem[] = [
 ]
 
 export const mockSpecialties: SpecialtyItem[] = [
-  { id: 1, ten: 'Tim mạch', mo_ta: 'Khám và điều trị bệnh tim mạch', icon_url: '❤️', thu_tu: 1, status: 'active' },
-  { id: 2, ten: 'Nhi khoa', mo_ta: 'Chăm sóc sức khỏe trẻ em', icon_url: '👶', thu_tu: 2, status: 'active' },
-  { id: 3, ten: 'Da liễu', mo_ta: 'Các bệnh về da, tóc, móng', icon_url: '🧴', thu_tu: 3, status: 'active' },
-  { id: 4, ten: 'Sản phụ khoa', mo_ta: 'Sức khỏe sinh sản và thai kỳ', icon_url: '🌸', thu_tu: 4, status: 'active' },
-  { id: 5, ten: 'Thần kinh', mo_ta: 'Bệnh lý hệ thần kinh', icon_url: '🧠', thu_tu: 5, status: 'active' },
-  { id: 6, ten: 'Nội tổng quát', mo_ta: 'Khám và điều trị bệnh nội khoa', icon_url: '🩺', thu_tu: 6, status: 'active' },
-  { id: 7, ten: 'Mắt', mo_ta: 'Các bệnh về mắt và thị lực', icon_url: '👁️', thu_tu: 7, status: 'active' },
-  { id: 8, ten: 'Tai Mũi Họng', mo_ta: 'Khám tai, mũi, họng', icon_url: '👂', thu_tu: 8, status: 'hidden' },
+  { id: 1, ten: 'Tim mạch', mo_ta: 'Khám và điều trị bệnh tim mạch', icon_url: '❤️', slug: 'tim-mach', thu_tu: 1, status: 'active' },
+  { id: 2, ten: 'Nhi khoa', mo_ta: 'Chăm sóc sức khỏe trẻ em', icon_url: '👶', slug: 'nhi-khoa', thu_tu: 2, status: 'active' },
+  { id: 3, ten: 'Da liễu', mo_ta: 'Các bệnh về da, tóc, móng', icon_url: '🧴', slug: 'da-lieu', thu_tu: 3, status: 'active' },
+  { id: 4, ten: 'Sản phụ khoa', mo_ta: 'Sức khỏe sinh sản và thai kỳ', icon_url: '🌸', slug: 'san-phu-khoa', thu_tu: 4, status: 'active' },
+  { id: 5, ten: 'Thần kinh', mo_ta: 'Bệnh lý hệ thần kinh', icon_url: '🧠', slug: 'than-kinh', thu_tu: 5, status: 'active' },
+  { id: 6, ten: 'Nội tổng quát', mo_ta: 'Khám và điều trị bệnh nội khoa', icon_url: '🩺', slug: 'noi-tong-quat', thu_tu: 6, status: 'active' },
+  { id: 7, ten: 'Mắt', mo_ta: 'Các bệnh về mắt và thị lực', icon_url: '👁️', slug: 'mat', thu_tu: 7, status: 'active' },
+  { id: 8, ten: 'Tai Mũi Họng', mo_ta: 'Khám tai, mũi, họng', icon_url: '👂', slug: 'tai-mui-hong', thu_tu: 8, status: 'hidden' },
+  { id: 9, ten: 'Cột sống', mo_ta: 'Chẩn đoán và điều trị bệnh lý cột sống, thoát vị đĩa đệm', icon_url: '🦴', slug: 'cot-song', thu_tu: 9, status: 'active' },
 ]

@@ -158,20 +158,27 @@ export async function createBooking(req, res) {
     const {
       loai_kham, doctor_id,
       schedule_id, slot_id,
-      service_id, dia_chi_kham, gio_kham,
+      service_id, khu_vuc, dia_chi_kham, gio_kham,
       ngay_kham, ly_do_kham,
       member_id, ten_khach, so_dien_thoai_khach, nam_sinh_khach,
     } = req.body
 
     if (!loai_kham)  return fail(res, 400, 'Loại khám là bắt buộc')
-    if (!doctor_id)  return fail(res, 400, 'Bác sĩ là bắt buộc')
+    if (!['clinic', 'home'].includes(loai_kham)) return fail(res, 400, 'loai_kham phải là clinic hoặc home')
     if (!ngay_kham)  return fail(res, 400, 'Ngày khám là bắt buộc')
     if (!member_id && !ten_khach) return fail(res, 400, 'Phải có member_id hoặc ten_khach')
 
-    const doc = await BacSi.findOne({ _id: doctor_id, trang_thai_duyet: 'approved', la_hien: true })
-      .populate('specialties', 'ten')
-      .lean()
-    if (!doc) return fail(res, 404, 'Bác sĩ không tồn tại hoặc chưa được duyệt')
+    // clinic: bắt buộc chọn bác sĩ cụ thể. home: KHÔNG chọn bác sĩ lúc đặt —
+    // đây là dịch vụ lấy mẫu xét nghiệm tại nhà, CSKH gán nhân viên sau khi thanh toán
+    // (xem docs/superpowers/specs/2026-07-02-home-service-redesign.md mục 2.5).
+    let doc = null
+    if (loai_kham === 'clinic') {
+      if (!doctor_id) return fail(res, 400, 'Bác sĩ là bắt buộc')
+      doc = await BacSi.findOne({ _id: doctor_id, trang_thai_duyet: 'approved', la_hien: true })
+        .populate('specialties', 'ten')
+        .lean()
+      if (!doc) return fail(res, 404, 'Bác sĩ không tồn tại hoặc chưa được duyệt')
+    }
 
     // Verify member thuộc family của user
     if (member_id) {
@@ -208,32 +215,32 @@ export async function createBooking(req, res) {
       gia_kham   = doc.gia_kham
       ten_dich_vu = doc.specialties?.[0]?.ten ?? 'Khám tổng quát'
 
-    } else if (loai_kham === 'home') {
+    } else {
+      // home — dịch vụ lấy mẫu xét nghiệm tại nhà, không chọn bác sĩ, chọn khu vực + giờ tự do
       if (!service_id)          return fail(res, 400, 'Khám tại nhà yêu cầu service_id')
+      if (!khu_vuc?.trim())     return fail(res, 400, 'Khu vực là bắt buộc')
       if (!dia_chi_kham?.trim()) return fail(res, 400, 'Địa chỉ khám là bắt buộc')
       if (!gio_kham)             return fail(res, 400, 'Giờ khám là bắt buộc')
 
       const service = await DichVu.findOne({ _id: service_id, loai: 'home', status: 'active' }).lean()
       if (!service) return fail(res, 404, 'Dịch vụ không tồn tại')
 
-      const hasService = doc.services?.some((s) => s.toString() === service_id)
-      if (!hasService) return fail(res, 400, 'Bác sĩ không cung cấp dịch vụ này')
+      if (service.khu_vuc?.length && !service.khu_vuc.includes(khu_vuc.trim())) {
+        return fail(res, 400, 'Dịch vụ này không hỗ trợ khu vực đã chọn')
+      }
 
       gia_kham    = service.gia
       ten_dich_vu = service.ten
       gio_dat     = gio_kham
-
-    } else {
-      return fail(res, 400, 'loai_kham phải là clinic hoặc home')
     }
 
-    // Auto-confirm cho clinic (quyết định 2026-07-02): slot đã atomic-lock ở trên là đủ đảm bảo
-    // không double-booking — không còn bước "chờ xác nhận" cho clinic. Home vẫn giữ nguyên
-    // pending/unpaid, chờ bác sĩ xác nhận thủ công (cần xem địa chỉ trước khi nhận ca).
+    // Thanh toán ngay khi đặt cho cả 2 loại — clinic auto-confirm, home giá cố định nên
+    // thanh toán trước an toàn (quyết định 2026-07-02, xem spec mục 2.1/2.5). doctor_id=null
+    // cho home — CSKH gán nhân viên lấy mẫu sau qua PATCH /api/admin/appointments/:id/assign-home-staff.
     const appointment = await LichHen.create({
       user_id:      req.user.id,
       member_id:    member_id    || null,
-      doctor_id:    doc._id,
+      doctor_id:    loai_kham === 'clinic' ? doc._id : null,
       schedule_id:  loai_kham === 'clinic' ? schedule_id  : null,
       slot_id:      loai_kham === 'clinic' ? slot_id      : null,
       service_id:   loai_kham === 'home'   ? service_id   : null,
@@ -244,7 +251,7 @@ export async function createBooking(req, res) {
       phong_kham:   loai_kham === 'clinic' ? phong_kham   : null,
       dia_chi_kham: loai_kham === 'home'   ? dia_chi_kham.trim() : null,
       status:         loai_kham === 'clinic' ? 'confirmed' : 'pending',
-      payment_status: loai_kham === 'clinic' ? 'paid'      : 'unpaid',
+      payment_status: 'paid',
       gia_kham,
       ten_dich_vu,
       ten_khach:           ten_khach           || null,
@@ -262,7 +269,7 @@ export async function createBooking(req, res) {
       gio_kham:       appointment.gio_kham,
     }, loai_kham === 'clinic'
       ? 'Đặt lịch thành công, lịch hẹn đã được xác nhận'
-      : 'Đặt lịch thành công, vui lòng chờ bác sĩ xác nhận')
+      : 'Đặt lịch và thanh toán thành công, chúng tôi sẽ liên hệ xác nhận lịch lấy mẫu')
   } catch (err) {
     return fail(res, 500, err.message)
   }

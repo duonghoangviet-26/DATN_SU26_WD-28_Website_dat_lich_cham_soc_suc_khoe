@@ -118,6 +118,12 @@ export interface DoctorProfile {
   bang_cap: string
   kinh_nghiem?: string
   ly_do_tu_choi?: string | null
+  // specialist = bác sĩ khám clinic | home_staff = nhân viên lấy mẫu tại nhà
+  loai?: 'specialist' | 'home_staff'
+  // Bảo hiểm bác sĩ chấp nhận — hiển thị ở trang chọn bác sĩ theo chuyên khoa
+  bao_hiem?: { nha_nuoc: boolean; bao_lanh: boolean }
+  // Dịch vụ liên quan (loai='related') mà bác sĩ này có thể chỉ định — hiển thị tham khảo
+  related_services?: { id: string; ten: string; gia: number }[]
   ngay_tao: string
 }
 
@@ -152,12 +158,13 @@ export interface SpecialtyItem {
   ten: string
   mo_ta: string
   icon_url: string        // khớp backend ChuyenKhoa.icon_url (GAP-18)
+  slug: string             // URL-friendly, khớp backend ChuyenKhoa.slug — dùng cho route /dich-vu/chuyen-khoa/:slug
   thu_tu: number
   status: 'active' | 'hidden'
 }
 
 // ─── Dịch vụ ─────────────────────────────────────────────────────────────────
-// 'home'    → bác sĩ đến nhà, đặt được, có thoi_gian_phut
+// 'home'    → nhân viên lấy mẫu xét nghiệm đến nhà, đặt được, có thoi_gian_phut
 // 'related' → dịch vụ liên quan theo chuyên khoa (X-quang, MRI...), chỉ hiển thị thông tin
 export type ServiceType   = 'home' | 'related'
 export type ServiceStatus = 'active' | 'inactive'
@@ -218,8 +225,9 @@ export interface ServiceFormData {
 export interface AppointmentItem {
   id: number
   benh_nhan: string
-  bac_si: string
-  chuyen_khoa: string           // tên chuyên khoa của BS
+  // clinic: luôn có tên BS | home: null cho đến khi CSKH gán nhân viên lấy mẫu (assignHomeStaff)
+  bac_si: string | null
+  chuyen_khoa: string           // tên chuyên khoa của BS — rỗng khi home chưa gán
   ngay_kham: string
   gio_kham: string
   loai_kham: 'clinic' | 'home'
@@ -227,6 +235,7 @@ export interface AppointmentItem {
   payment_status: PaymentStatus
   gia_kham: number
   ten_dich_vu?: string | null   // clinic: tên chuyên khoa | home: tên dịch vụ
+  ket_qua_url?: string | null   // home only — CSKH upload PDF kết quả xét nghiệm sau khi hoàn thành
 }
 
 export interface ReviewItem {

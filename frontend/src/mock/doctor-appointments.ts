@@ -31,16 +31,16 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     tuoi: 38, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
     da_co_ket_qua: false,
   },
-  // id 3, 4 — HOME pending: đây là 2 ca duy nhất còn ở trạng thái 'pending' (quyết định 2026-07-02:
-  // clinic auto-confirm ngay khi thanh toán — không còn tồn tại clinic+pending nữa). Dùng để test nút Xác nhận/Từ chối.
+  // id 3, 4 — HOME pending+paid: BN đã thanh toán trước, CSKH chưa gán nhân viên lấy mẫu.
+  // (Luồng home mới 2026-07-02: thanh toán ngay khi đặt, CSKH gán staff sau)
   {
     id: 3, benh_nhan: 'Hoàng Văn Em', benh_nhan_id: 3,
     so_dien_thoai: '0903456789',
     ngay_kham: TODAY, gio_kham: '08:30',
-    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 700000,
-    ten_dich_vu: 'Khám tại nhà',
+    loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 700000,
+    ten_dich_vu: 'Lấy mẫu xét nghiệm tại nhà',
     dia_chi_kham: '20 Lê Duẩn, Phường Bến Nghé, Quận 1, TP.HCM',
-    ly_do_kham: 'Sốt cao 3 ngày, cần bác sĩ đến khám tại nhà.',
+    ly_do_kham: 'Kiểm tra đường huyết, mỡ máu theo định kỳ.',
     tuoi: 52, gioi_tinh: 'Nam', di_ung: null, benh_nen: 'Rối loạn mỡ máu',
     da_co_ket_qua: false,
   },
@@ -48,10 +48,10 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     id: 4, benh_nhan: 'Võ Thị Hoa', benh_nhan_id: 4,
     so_dien_thoai: '0904567890',
     ngay_kham: TODAY, gio_kham: '09:00',
-    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 700000,
-    ten_dich_vu: 'Khám tại nhà',
+    loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 700000,
+    ten_dich_vu: 'Lấy mẫu xét nghiệm tại nhà',
     dia_chi_kham: '55 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM',
-    ly_do_kham: 'Người già không di chuyển được, cần khám tại nhà.',
+    ly_do_kham: 'Xét nghiệm máu tổng quát theo chỉ định bác sĩ.',
     tuoi: 29, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
     da_co_ket_qua: false,
   },
@@ -124,28 +124,27 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     da_co_ket_qua: false,
     ly_do_huy: 'Bệnh nhân bận đột xuất, xin hủy lịch.',
   },
-  // id 11 — HOME pending: 3rd pending case (đã đổi từ clinic — clinic không thể pending vì
-  // luôn thanh toán ngay lúc đặt, không có bước chờ). home luôn unpaid cho tới khi BS confirm.
+  // id 11 — HOME pending+paid: đã thanh toán, chờ CSKH gán nhân viên lấy mẫu
   {
     id: 11, benh_nhan: 'Bùi Thị Cẩm', benh_nhan_id: 11,
     so_dien_thoai: '0911111111',
     ngay_kham: TODAY, gio_kham: '10:00',
-    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 700000,
-    ten_dich_vu: 'Khám tại nhà',
+    loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 700000,
+    ten_dich_vu: 'Lấy mẫu xét nghiệm tại nhà',
     dia_chi_kham: '88 Điện Biên Phủ, Phường Đa Kao, Quận 1, TP.HCM',
-    ly_do_kham: 'Đau đầu kéo dài, chóng mặt.',
+    ly_do_kham: 'Xét nghiệm công thức máu, sinh hóa máu cơ bản.',
     tuoi: 35, gioi_tinh: 'Nữ', di_ung: null, benh_nen: 'Migraine mãn tính',
     da_co_ket_qua: false,
   },
-  // id 12 — test TC-EDG09: pending đã qua ngày → badge "Hết hạn"
+  // id 12 — test TC-EDG09: home pending đã qua ngày → badge "Hết hạn" (BN đã paid nhưng chưa được gán staff)
   {
     id: 12, benh_nhan: 'Trương Văn Bình', benh_nhan_id: 12,
     so_dien_thoai: '0912222222',
     ngay_kham: d(-4), gio_kham: '14:00',
-    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 600000,
-    ten_dich_vu: 'Khám tại nhà',
+    loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 600000,
+    ten_dich_vu: 'Lấy mẫu xét nghiệm tại nhà',
     dia_chi_kham: '45 Trần Hưng Đạo, Phường Cửa Nam, Quận Hoàn Kiếm, Hà Nội',
-    ly_do_kham: 'Kiểm tra sau phẫu thuật.',
+    ly_do_kham: 'Kiểm tra sau phẫu thuật — xét nghiệm viêm nhiễm, đông máu.',
     tuoi: 67, gioi_tinh: 'Nam', di_ung: 'Ibuprofen', benh_nen: 'Sau phẫu thuật tim',
     da_co_ket_qua: false,
   },
@@ -161,15 +160,15 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     tuoi: 44, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
     da_co_ket_qua: false,
   },
-  // id 14 — HOME pending tương lai: test xác nhận trước ngày khám là hợp lệ (đã đổi từ clinic)
+  // id 14 — HOME pending+paid tương lai: test gán nhân viên trước ngày lấy mẫu
   {
     id: 14, benh_nhan: 'Vũ Thị Mai', benh_nhan_id: 14,
     so_dien_thoai: '0914444444',
     ngay_kham: d(3), gio_kham: '09:30',
-    loai_kham: 'home', status: 'pending', payment_status: 'unpaid', gia_kham: 700000,
-    ten_dich_vu: 'Khám tại nhà',
+    loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 700000,
+    ten_dich_vu: 'Lấy mẫu xét nghiệm tại nhà',
     dia_chi_kham: '12 Pasteur, Phường Bến Nghé, Quận 1, TP.HCM',
-    ly_do_kham: 'Tái khám định kỳ 3 tháng.',
+    ly_do_kham: 'Xét nghiệm định kỳ 3 tháng — đường huyết, HbA1c.',
     tuoi: 50, gioi_tinh: 'Nữ', di_ung: null, benh_nen: 'Rối loạn nhịp tim',
     da_co_ket_qua: false,
   },
@@ -185,18 +184,17 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     tuoi: 58, gioi_tinh: 'Nam', di_ung: null, benh_nen: 'Cao huyết áp',
     da_co_ket_qua: false,
   },
-  // id 16 — HOME: test Luồng C — BS đã xác nhận, BN chưa thanh toán → warning + deadline
-  // (chỉ home mới có combo confirmed+unpaid; clinic luôn paid ngay từ lúc tạo lịch)
+  // id 16 — HOME completed + ket_qua_url: test hiển thị link kết quả xét nghiệm PDF
   {
     id: 16, benh_nhan: 'Nguyễn Thị Phương', benh_nhan_id: 16,
     so_dien_thoai: '0916666666',
-    ngay_kham: d(1), gio_kham: '10:30',
-    loai_kham: 'home', status: 'confirmed', payment_status: 'unpaid', gia_kham: 700000,
-    ten_dich_vu: 'Khám tại nhà',
+    ngay_kham: d(-2), gio_kham: '10:30',
+    loai_kham: 'home', status: 'completed', payment_status: 'paid', gia_kham: 700000,
+    ten_dich_vu: 'Lấy mẫu xét nghiệm tại nhà',
     dia_chi_kham: '9 Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP.HCM',
-    ly_do_kham: 'Tái khám sau điều trị 2 tuần.',
+    ly_do_kham: 'Xét nghiệm máu định kỳ — lipid máu, glucose.',
     tuoi: 40, gioi_tinh: 'Nữ', di_ung: null, benh_nen: null,
     da_co_ket_qua: false,
-    payment_deadline: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+    ket_qua_url: 'https://storage.vitafamily.vn/results/ket-qua-xet-nghiem-16-20260701.pdf',
   },
 ]

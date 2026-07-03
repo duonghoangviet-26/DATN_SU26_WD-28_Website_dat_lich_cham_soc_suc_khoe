@@ -1,4 +1,5 @@
-import { LichHen, NguoiDung, BacSi, LichLamViec } from '../../models/index.js'
+import mongoose from 'mongoose'
+import { LichHen, NguoiDung, BacSi, LichLamViec, ThongBao } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 
 // ============================================================
@@ -135,6 +136,77 @@ export async function complete(req, res) {
     await a.save()
 
     return ok(res, { id: a._id, status: a.status }, 'Đã đánh dấu hoàn thành')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── PATCH /api/admin/appointments/:id/assign-home-staff ───────────────────
+// CSKH gán nhân viên lấy mẫu (BacSi.loai='home_staff') cho lịch home đang chờ xử lý.
+// Chuyển status 'pending' → 'confirmed'. Không đổi payment_status (đã 'paid' từ lúc đặt,
+// xem docs/superpowers/specs/2026-07-02-home-service-redesign.md mục 2.5).
+export async function assignHomeStaff(req, res) {
+  try {
+    const { staff_id } = req.body
+    if (!staff_id || !mongoose.Types.ObjectId.isValid(staff_id)) {
+      return fail(res, 400, 'staff_id là bắt buộc và phải hợp lệ')
+    }
+
+    const a = await LichHen.findById(req.params.id)
+    if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
+    if (a.loai_kham !== 'home') return fail(res, 409, 'Chỉ gán nhân viên cho lịch khám tại nhà')
+    if (a.status !== 'pending') return fail(res, 409, 'Chỉ gán nhân viên cho lịch đang chờ xử lý')
+
+    const staff = await BacSi.findOne({
+      _id: staff_id, loai: 'home_staff', trang_thai_duyet: 'approved', la_hien: true,
+    }).lean()
+    if (!staff) return fail(res, 404, 'Không tìm thấy nhân viên lấy mẫu hợp lệ')
+
+    a.doctor_id = staff._id
+    a.status    = 'confirmed'
+    await a.save()
+
+    return ok(res, { id: a._id, doctor_id: a.doctor_id, status: a.status }, 'Đã gán nhân viên lấy mẫu')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── PATCH /api/admin/appointments/:id/result ───────────────────────────────
+// CSKH upload URL kết quả xét nghiệm (PDF) sau khi lab trả kết quả cho lịch home.
+// Chuyển status 'confirmed' → 'completed' + gửi thông báo cho bệnh nhân
+// (xem docs/superpowers/specs/2026-07-02-home-service-redesign.md mục 2.5 bước 7–8).
+export async function uploadHomeResult(req, res) {
+  try {
+    const { ket_qua_url } = req.body
+    if (!ket_qua_url?.trim()) return fail(res, 400, 'ket_qua_url là bắt buộc')
+
+    const a = await LichHen.findById(req.params.id)
+    if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
+    if (a.loai_kham !== 'home') return fail(res, 409, 'Chỉ áp dụng cho lịch khám tại nhà')
+    if (a.status !== 'confirmed') {
+      return fail(res, 409, 'Chỉ điền kết quả cho lịch đã xác nhận (đã lấy mẫu)')
+    }
+
+    a.ket_qua_url = ket_qua_url.trim()
+    a.status      = 'completed'
+    await a.save()
+
+    // Không throw nếu tạo thông báo lỗi — không chặn luồng chính (giống pattern audit log ở services.controller.js)
+    try {
+      await ThongBao.create({
+        user_id:      a.user_id,
+        tieu_de:      'Kết quả xét nghiệm đã có',
+        noi_dung:     `Kết quả xét nghiệm "${a.ten_dich_vu}" của bạn đã có. Vào xem chi tiết trong lịch hẹn.`,
+        loai:         'appointment',
+        related_id:   a._id,
+        related_type: 'appointment',
+      })
+    } catch (notifyErr) {
+      console.error('[notification] Gửi thông báo kết quả xét nghiệm thất bại:', notifyErr.message)
+    }
+
+    return ok(res, { id: a._id, ket_qua_url: a.ket_qua_url, status: a.status }, 'Đã lưu kết quả xét nghiệm')
   } catch (err) {
     return fail(res, 500, err.message)
   }

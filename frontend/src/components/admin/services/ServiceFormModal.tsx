@@ -43,11 +43,13 @@ function validate(data: ServiceFormData): Record<string, string> {
 interface Props {
   open: boolean
   service: ServiceItem | null   // null = Thêm mới, ServiceItem = Sửa
+  initialLoai?: ServiceType        // preset loại khi tạo mới (VD: 'home' khi tạo từ nhánh Khám tại nhà)
+  initialSpecialtyId?: string      // preset chuyên khoa khi tạo mới (VD: từ trang chi tiết chuyên khoa)
   onClose: () => void
   onSave: (data: ServiceFormData, mo_ta_thay_doi?: string) => Promise<void>
 }
 
-export default function ServiceFormModal({ open, service, onClose, onSave }: Props) {
+export default function ServiceFormModal({ open, service, initialLoai, initialSpecialtyId, onClose, onSave }: Props) {
   const isEdit = service !== null
   const [form, setForm]           = useState<ServiceFormData>(EMPTY_FORM)
   const [errors, setErrors]       = useState<Record<string, string>>({})
@@ -75,11 +77,17 @@ export default function ServiceFormModal({ open, service, onClose, onSave }: Pro
         khu_vuc: service.khu_vuc ?? [],
       })
     } else {
-      setForm(EMPTY_FORM)
+      const loai = initialLoai ?? EMPTY_FORM.loai
+      setForm({
+        ...EMPTY_FORM,
+        loai,
+        specialty_id: initialSpecialtyId ?? EMPTY_FORM.specialty_id,
+        gio_dat_truoc_toi_thieu: loai === 'home' ? 4 : undefined,
+      })
     }
     setErrors({})
     setMotaThayDoi('')
-  }, [open, service])
+  }, [open, service, initialLoai, initialSpecialtyId])
 
   function handleLoaiChange(loai: ServiceType) {
     setForm((f) => ({
@@ -171,7 +179,7 @@ export default function ServiceFormModal({ open, service, onClose, onSave }: Pro
                 {
                   value: 'home' as ServiceType,
                   title: 'Tại nhà',
-                  desc: 'Bác sĩ đến nhà bệnh nhân. Slot max 1 người, cần bác sĩ confirm.',
+                  desc: 'Nhân viên lấy mẫu xét nghiệm đến nhà. Bệnh nhân thanh toán trước, CSKH gán nhân viên sau.',
                 },
               ]).map((opt) => (
                 <button
@@ -281,7 +289,7 @@ export default function ServiceFormModal({ open, service, onClose, onSave }: Pro
                 ))}
               </div>
               <p className="mt-1.5 text-xs text-slate-400">
-                Giá nên bao gồm phí đi lại. Slot tại nhà tối đa 1 bệnh nhân, bác sĩ cần confirm thủ công.
+                Giá nên bao gồm phí đi lại. Bệnh nhân thanh toán ngay khi đặt — CSKH gán nhân viên lấy mẫu sau đó.
               </p>
             </FormField>
           )}

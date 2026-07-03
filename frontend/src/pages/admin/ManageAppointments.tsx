@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { appointmentService } from '@/services/appointment.service'
-import type { AppointmentItem, AppointmentStatus } from '@/types'
-import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL, SERVICE_TYPE_LABEL } from '@/utils/constants'
+import { doctorService } from '@/services/doctor.service'
+import type { AppointmentItem, AppointmentStatus, DoctorProfile } from '@/types'
+import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL, EXAM_TYPE_LABEL } from '@/utils/constants'
 import { formatPrice } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
@@ -27,6 +28,12 @@ export default function ManageAppointments() {
   const [confirmItem, setConfirmItem] = useState<AppointmentItem | null>(null)
   const [completeItem, setCompleteItem] = useState<AppointmentItem | null>(null)
   const [detail, setDetail] = useState<AppointmentItem | null>(null)
+  const [assignItem, setAssignItem] = useState<AppointmentItem | null>(null)
+  const [resultItem, setResultItem] = useState<AppointmentItem | null>(null)
+  const [homeStaff, setHomeStaff] = useState<DoctorProfile[]>([])
+  const [selectedStaffId, setSelectedStaffId] = useState('')
+  const [resultUrl, setResultUrl] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -36,6 +43,13 @@ export default function ManageAppointments() {
     }).finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
   }, [keyword, status, loaiKham])
+
+  useEffect(() => {
+    // Nhân viên lấy mẫu tại nhà — dùng cho modal "Gán nhân viên"
+    doctorService.getAll('approved').then((list) => {
+      setHomeStaff(list.filter((d) => d.loai === 'home_staff'))
+    })
+  }, [])
 
   const todayStr = new Date().toISOString().slice(0, 10)
   const counts = {
@@ -59,6 +73,34 @@ export default function ManageAppointments() {
     setCompleteItem(null)
     await appointmentService.complete(String(id))
     setAppointments((prev) => prev.map((a) => a.id === id ? { ...a, status: 'completed' as const } : a))
+  }
+
+  async function handleAssignStaff() {
+    if (!assignItem || !selectedStaffId) return
+    const staff = homeStaff.find((s) => String(s.id) === selectedStaffId)
+    if (!staff) return
+    setActionLoading(true)
+    try {
+      const updated = await appointmentService.assignHomeStaff(String(assignItem.id), staff.ho_ten, staff.chuyen_khoa)
+      setAppointments((prev) => prev.map((a) => a.id === assignItem.id ? { ...a, ...updated } : a))
+      setAssignItem(null)
+      setSelectedStaffId('')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleUploadResult() {
+    if (!resultItem || !resultUrl.trim()) return
+    setActionLoading(true)
+    try {
+      const updated = await appointmentService.uploadResult(String(resultItem.id), resultUrl.trim())
+      setAppointments((prev) => prev.map((a) => a.id === resultItem.id ? { ...a, ...updated } : a))
+      setResultItem(null)
+      setResultUrl('')
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   return (
@@ -144,8 +186,16 @@ export default function ManageAppointments() {
                 <tr key={a.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-800">{a.benh_nhan}</td>
                   <td className="px-4 py-3">
-                    <p className="text-slate-700">{a.bac_si}</p>
-                    <p className="text-xs text-slate-400">{a.chuyen_khoa}</p>
+                    {a.bac_si ? (
+                      <>
+                        <p className="text-slate-700">{a.bac_si}</p>
+                        <p className="text-xs text-slate-400">{a.chuyen_khoa}</p>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
+                        Chưa gán nhân viên
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     <p>{a.ngay_kham}</p>
@@ -153,7 +203,7 @@ export default function ManageAppointments() {
                   </td>
                   <td className="px-4 py-3">
                     <Badge color={a.loai_kham === 'clinic' ? 'blue' : 'yellow'}>
-                      {SERVICE_TYPE_LABEL[a.loai_kham]}
+                      {EXAM_TYPE_LABEL[a.loai_kham]}
                     </Badge>
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-700">{formatPrice(a.gia_kham)}</td>
@@ -171,7 +221,23 @@ export default function ManageAppointments() {
                       >
                         <Icon name="eye" className="h-3 w-3" /> Xem
                       </button>
-                      {a.status === 'confirmed' && (
+                      {a.loai_kham === 'home' && a.status === 'pending' && (
+                        <button
+                          onClick={() => setAssignItem(a)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-600 transition-colors hover:bg-purple-100"
+                        >
+                          <Icon name="user" className="h-3 w-3" /> Gán nhân viên
+                        </button>
+                      )}
+                      {a.loai_kham === 'home' && a.status === 'confirmed' && (
+                        <button
+                          onClick={() => setResultItem(a)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-600 transition-colors hover:bg-green-100"
+                        >
+                          <Icon name="file-text" className="h-3 w-3" /> Nhập kết quả
+                        </button>
+                      )}
+                      {a.loai_kham === 'clinic' && a.status === 'confirmed' && (
                         <button
                           onClick={() => setCompleteItem(a)}
                           className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-600 transition-colors hover:bg-green-100"
@@ -213,12 +279,13 @@ export default function ManageAppointments() {
             <dl className="space-y-3 text-sm">
               {[
                 ['Bệnh nhân', detail.benh_nhan],
-                ['Bác sĩ', `${detail.bac_si} — ${detail.chuyen_khoa}`],
+                [detail.loai_kham === 'home' ? 'Nhân viên lấy mẫu' : 'Bác sĩ', detail.bac_si ? `${detail.bac_si}${detail.chuyen_khoa ? ` — ${detail.chuyen_khoa}` : ''}` : 'Chưa gán nhân viên'],
                 ['Ngày khám', `${detail.ngay_kham} lúc ${detail.gio_kham}`],
-                ['Loại khám', SERVICE_TYPE_LABEL[detail.loai_kham]],
+                ['Loại khám', EXAM_TYPE_LABEL[detail.loai_kham]],
                 ['Phí khám', formatPrice(detail.gia_kham)],
                 ['Trạng thái', APPOINTMENT_STATUS_LABEL[detail.status]],
                 ['Thanh toán', PAYMENT_STATUS_LABEL[detail.payment_status]],
+                ...(detail.loai_kham === 'home' ? [['Kết quả xét nghiệm', detail.ket_qua_url ?? 'Chưa có']] : []),
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4">
                   <dt className="text-slate-500">{label}</dt>
@@ -235,7 +302,11 @@ export default function ManageAppointments() {
         open={!!confirmItem}
         danger
         title="Hủy lịch hẹn"
-        message={`Xác nhận hủy lịch hẹn của "${confirmItem?.benh_nhan}" với ${confirmItem?.bac_si}?`}
+        message={
+          confirmItem?.bac_si
+            ? `Xác nhận hủy lịch hẹn của "${confirmItem?.benh_nhan}" với ${confirmItem?.bac_si}?`
+            : `Xác nhận hủy lịch hẹn của "${confirmItem?.benh_nhan}"?`
+        }
         confirmText="Hủy lịch"
         onConfirm={handleCancel}
         onCancel={() => setConfirmItem(null)}
@@ -249,6 +320,84 @@ export default function ManageAppointments() {
         onConfirm={handleComplete}
         onCancel={() => setCompleteItem(null)}
       />
+
+      {/* Modal gán nhân viên lấy mẫu — chỉ cho home + pending */}
+      {assignItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-lg font-semibold text-slate-800">Gán nhân viên lấy mẫu</h3>
+            <p className="mb-4 text-sm text-slate-500">
+              Lịch hẹn của "{assignItem.benh_nhan}" — {assignItem.ten_dich_vu}
+            </p>
+            {homeStaff.length === 0 ? (
+              <p className="text-sm text-slate-400">Chưa có nhân viên lấy mẫu nào được duyệt.</p>
+            ) : (
+              <select
+                className="input w-full"
+                value={selectedStaffId}
+                onChange={(e) => setSelectedStaffId(e.target.value)}
+              >
+                <option value="">-- Chọn nhân viên --</option>
+                {homeStaff.map((s) => (
+                  <option key={s.id} value={s.id}>{s.ho_ten}</option>
+                ))}
+              </select>
+            )}
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => { setAssignItem(null); setSelectedStaffId('') }}
+                className="btn-secondary"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={handleAssignStaff}
+                disabled={!selectedStaffId || actionLoading}
+                className="btn-primary disabled:opacity-40"
+              >
+                {actionLoading ? 'Đang lưu...' : 'Xác nhận gán'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal nhập kết quả xét nghiệm — chỉ cho home + confirmed */}
+      {resultItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="mb-1 text-lg font-semibold text-slate-800">Nhập kết quả xét nghiệm</h3>
+            <p className="mb-4 text-sm text-slate-500">
+              Lịch hẹn của "{resultItem.benh_nhan}" — {resultItem.ten_dich_vu}
+            </p>
+            <label className="input-label">Link file PDF kết quả</label>
+            <input
+              className="input w-full"
+              placeholder="https://..."
+              value={resultUrl}
+              onChange={(e) => setResultUrl(e.target.value)}
+            />
+            <p className="mt-1.5 text-xs text-slate-400">
+              Sau khi lưu, lịch hẹn sẽ chuyển sang "Hoàn thành" và bệnh nhân nhận được thông báo.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => { setResultItem(null); setResultUrl('') }}
+                className="btn-secondary"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={handleUploadResult}
+                disabled={!resultUrl.trim() || actionLoading}
+                className="btn-primary disabled:opacity-40"
+              >
+                {actionLoading ? 'Đang lưu...' : 'Lưu kết quả'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
