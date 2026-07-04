@@ -45,15 +45,15 @@ export async function getDoctorById(req, res) {
 }
 
 // PUT /api/admin/doctors/:id/approve
-// Body: { admin_id } — (tạm thời truyền manual, sau này lấy từ req.user khi có JWT)
+// Body: { admin_id, phong_kham_mac_dinh? } — (tạm thời truyền manual, sau này lấy từ req.user khi có JWT)
 export async function approveDoctor(req, res) {
   try {
     const { id } = req.params
-    const { admin_id } = req.body
+    const { admin_id, phong_kham_mac_dinh } = req.body
 
     if (!admin_id) return fail(res, 400, 'admin_id là bắt buộc')
 
-    const doctor = await doctorService.approveDoctor(id, admin_id)
+    const doctor = await doctorService.approveDoctor(id, admin_id, phong_kham_mac_dinh)
     return ok(res, doctor, 'Duyệt bác sĩ thành công')
   } catch (err) {
     if (err.message === 'Không tìm thấy bác sĩ') return fail(res, 404, err.message)

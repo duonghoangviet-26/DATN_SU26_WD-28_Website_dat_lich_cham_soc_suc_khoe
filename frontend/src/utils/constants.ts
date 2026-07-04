@@ -56,6 +56,12 @@ export const DOCTOR_APPROVAL_LABEL: Record<string, string> = {
 }
 
 export const SERVICE_TYPE_LABEL: Record<string, string> = {
+  related: 'Dịch vụ liên quan',
+  home:    'Tại nhà',
+}
+
+// Loại khám của LichHen (loai_kham) — khác với DichVu.loai ở trên, không dùng chung 1 map
+export const EXAM_TYPE_LABEL: Record<string, string> = {
   clinic: 'Phòng khám',
   home:   'Tại nhà',
 }

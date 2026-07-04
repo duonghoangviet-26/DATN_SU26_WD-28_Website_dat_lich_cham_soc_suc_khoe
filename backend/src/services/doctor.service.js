@@ -1,5 +1,6 @@
 import { BacSi, NguoiDung, LichHen, NhatKyThaoTac } from '../models/index.js'
 import mongoose from 'mongoose'
+import { generateInitialWindowForDoctor } from './scheduleGenerator.service.js'
 
 // ============================================================
 // DOCTOR SERVICE — Quản lý bác sĩ (Admin)
@@ -128,7 +129,9 @@ export async function getDoctorDetail(doctorId) {
 }
 
 // ── 3. Duyệt bác sĩ (pending → approved) ────────────────────
-export async function approveDoctor(doctorId, adminId) {
+// phong_kham_mac_dinh (optional): Admin gán phòng khám mặc định ngay lúc duyệt (C2).
+// Sau khi duyệt, tự sinh lịch làm việc 6 ngày đầu (B2 doc mục 2.4) — không chặn response nếu lỗi.
+export async function approveDoctor(doctorId, adminId, phong_kham_mac_dinh) {
   if (!mongoose.Types.ObjectId.isValid(doctorId)) throw new Error('doctorId không hợp lệ')
 
   const doctor = await BacSi.findById(doctorId)
@@ -146,10 +149,18 @@ export async function approveDoctor(doctorId, adminId) {
   // Cập nhật BacSi
   doctor.trang_thai_duyet = 'approved'
   doctor.ly_do_tu_choi = null
+  if (phong_kham_mac_dinh) doctor.phong_kham_mac_dinh = phong_kham_mac_dinh
   await doctor.save()
 
   // Cập nhật NguoiDung.role = 'doctor'
   await NguoiDung.findByIdAndUpdate(doctor.user_id, { role: 'doctor' })
+
+  // Sinh lịch làm việc 6 ngày đầu (B2 doc mục 2.4) — không chặn response nếu lỗi
+  try {
+    await generateInitialWindowForDoctor(doctor._id, doctor.phong_kham_mac_dinh)
+  } catch (genErr) {
+    console.error('[approve-doctor] Sinh lịch ban đầu thất bại:', genErr.message)
+  }
 
   // Ghi audit log
   await ghiLog({
@@ -298,7 +309,7 @@ export async function updateDoctorInfo(doctorId, updateData, adminId) {
   const doctor = await BacSi.findById(doctorId)
   if (!doctor) throw new Error('Không tìm thấy bác sĩ')
 
-  const allowedFields = ['tieu_su', 'bang_cap', 'kinh_nghiem', 'so_nam_kinh_nghiem', 'phi_tu_van', 'la_hien']
+  const allowedFields = ['tieu_su', 'bang_cap', 'kinh_nghiem', 'so_nam_kinh_nghiem', 'phi_tu_van', 'la_hien', 'phong_kham_mac_dinh']
   const duLieuCu = {}
   const duLieuMoi = {}
   let hasChanges = false

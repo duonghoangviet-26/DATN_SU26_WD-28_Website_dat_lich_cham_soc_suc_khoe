@@ -29,6 +29,15 @@ export function formatDateTime(value: string | null | undefined): string {
   })
 }
 
+// Trả về chuỗi 'YYYY-MM-DD' theo múi giờ LOCAL (không dùng toISOString — đó là UTC)
+// Dùng thay cho new Date().toISOString().slice(0,10) để tránh lệch ngày từ 00:00–07:00 VN (+7)
+export function toLocalDateStr(d: Date = new Date()): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // Trả về Promise chờ một khoảng (ms) — giả lập độ trễ mạng cho mock data
 export function delay(ms = 300): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))

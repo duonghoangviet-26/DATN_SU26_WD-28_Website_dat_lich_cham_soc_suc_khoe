@@ -105,7 +105,7 @@ export default function Home() {
       </div>
 
       <p className="mt-10 text-center text-sm text-slate-400">
-        * Giao diện người dùng sẽ được phát triển sau — hiện đang tập trung trang Admin.
+        * Một số tính năng (đặt lịch, thanh toán) đang được hoàn thiện.
       </p>
     </div>
   )

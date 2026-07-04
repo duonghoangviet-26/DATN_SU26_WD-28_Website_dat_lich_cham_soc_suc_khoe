@@ -12,40 +12,44 @@ const HN_DISTRICTS = [
 ]
 
 const EMPTY_FORM: ServiceFormData = {
-  ten: '', loai: 'clinic', gia: 0,
+  ten: '', loai: 'related', gia: 0,
   mo_ta_ngan: '', mo_ta: '',
-  thoi_gian_phut: 30, gio_dat_truoc_toi_thieu: 2,
-  ngay_ap_dung: '', gio_bat_dau: '', gio_ket_thuc: '',
+  chuan_bi_truoc: '',
   specialty_id: null, khu_vuc: [],
 }
 
 // ─── Validation theo 13 rule từ tài liệu ─────────────────────────────────────
 function validate(data: ServiceFormData): Record<string, string> {
   const e: Record<string, string> = {}
-  if (!data.ten.trim())             e.ten = 'Vui lòng nhập tên dịch vụ'
-  else if (data.ten.length > 255)   e.ten = 'Tên không vượt quá 255 ký tự'
-  if (!data.gia || data.gia <= 0)               e.gia = 'Giá phải lớn hơn 0'
-  else if (!Number.isInteger(data.gia))         e.gia = 'Giá phải là số nguyên (VNĐ)'
-  else if (data.gia > 100_000_000)              e.gia = 'Giá không vượt quá 100 triệu'
-  if (!data.thoi_gian_phut || data.thoi_gian_phut < 10)  e.thoi_gian_phut = 'Thời lượng tối thiểu 10 phút'
-  else if (data.thoi_gian_phut > 480)           e.thoi_gian_phut = 'Thời lượng tối đa 8 giờ (480 phút)'
-  if (!data.gio_dat_truoc_toi_thieu || data.gio_dat_truoc_toi_thieu < 1) e.gio_dat_truoc_toi_thieu = 'Tối thiểu đặt trước 1 giờ'
-  else if (data.gio_dat_truoc_toi_thieu > 48)   e.gio_dat_truoc_toi_thieu = 'Tối đa đặt trước 48 giờ'
-  if (data.gio_bat_dau && data.gio_ket_thuc && data.gio_ket_thuc <= data.gio_bat_dau)
-    e.gio_ket_thuc = 'Giờ kết thúc phải sau giờ bắt đầu'
+  const tenTrimmed = data.ten.trim()
+  if (!tenTrimmed)              e.ten = 'Vui lòng nhập tên dịch vụ'
+  else if (tenTrimmed.length > 255) e.ten = 'Tên không vượt quá 255 ký tự'
+  if (!data.gia || data.gia <= 0)          e.gia = 'Giá phải lớn hơn 0'
+  else if (!Number.isInteger(data.gia))    e.gia = 'Giá phải là số nguyên (VNĐ)'
+  else if (data.gia > 100_000_000)         e.gia = 'Giá không vượt quá 100 triệu'
+  if (data.loai === 'related' && !data.specialty_id) e.specialty_id = 'Dịch vụ liên quan bắt buộc chọn chuyên khoa'
+  if (data.loai === 'home') {
+    if (!data.gio_dat_truoc_toi_thieu || data.gio_dat_truoc_toi_thieu < 1) e.gio_dat_truoc_toi_thieu = 'Tối thiểu đặt trước 1 giờ'
+    else if (data.gio_dat_truoc_toi_thieu > 48) e.gio_dat_truoc_toi_thieu = 'Tối đa đặt trước 48 giờ'
+    if (!data.khu_vuc || data.khu_vuc.length === 0) e.khu_vuc = 'Chọn ít nhất 1 khu vực phục vụ'
+  }
+  if (data.loai === 'related' && data.chuan_bi_truoc && data.chuan_bi_truoc.trim().length > 1000)
+    e.chuan_bi_truoc = 'Hướng dẫn chuẩn bị không vượt 1000 ký tự'
   if (data.mo_ta_ngan && data.mo_ta_ngan.length > 500) e.mo_ta_ngan = 'Mô tả ngắn không vượt 500 ký tự'
-  if (data.mo_ta && data.mo_ta.length > 5000)   e.mo_ta = 'Mô tả không vượt 5000 ký tự'
+  if (data.mo_ta && data.mo_ta.length > 5000)           e.mo_ta    = 'Mô tả không vượt 5000 ký tự'
   return e
 }
 
 interface Props {
   open: boolean
   service: ServiceItem | null   // null = Thêm mới, ServiceItem = Sửa
+  initialLoai?: ServiceType        // preset loại khi tạo mới (VD: 'home' khi tạo từ nhánh Khám tại nhà)
+  initialSpecialtyId?: string      // preset chuyên khoa khi tạo mới (VD: từ trang chi tiết chuyên khoa)
   onClose: () => void
   onSave: (data: ServiceFormData, mo_ta_thay_doi?: string) => Promise<void>
 }
 
-export default function ServiceFormModal({ open, service, onClose, onSave }: Props) {
+export default function ServiceFormModal({ open, service, initialLoai, initialSpecialtyId, onClose, onSave }: Props) {
   const isEdit = service !== null
   const [form, setForm]           = useState<ServiceFormData>(EMPTY_FORM)
   const [errors, setErrors]       = useState<Record<string, string>>({})
@@ -67,27 +71,34 @@ export default function ServiceFormModal({ open, service, onClose, onSave }: Pro
         gia: service.gia,
         mo_ta_ngan: service.mo_ta_ngan ?? '',
         mo_ta: service.mo_ta ?? '',
-        thoi_gian_phut: service.thoi_gian_phut,
-        gio_dat_truoc_toi_thieu: service.gio_dat_truoc_toi_thieu,
-        ngay_ap_dung: service.ngay_ap_dung ?? '',
-        gio_bat_dau: service.gio_bat_dau ?? '',
-        gio_ket_thuc: service.gio_ket_thuc ?? '',
+        chuan_bi_truoc: service.chuan_bi_truoc ?? '',
+        gio_dat_truoc_toi_thieu: service.gio_dat_truoc_toi_thieu ?? undefined,
         specialty_id: service.specialty_id ?? null,
         khu_vuc: service.khu_vuc ?? [],
       })
     } else {
-      setForm(EMPTY_FORM)
+      const loai = initialLoai ?? EMPTY_FORM.loai
+      setForm({
+        ...EMPTY_FORM,
+        loai,
+        specialty_id: initialSpecialtyId ?? EMPTY_FORM.specialty_id,
+        gio_dat_truoc_toi_thieu: loai === 'home' ? 4 : undefined,
+      })
     }
     setErrors({})
     setMotaThayDoi('')
-  }, [open, service])
+  }, [open, service, initialLoai, initialSpecialtyId])
 
   function handleLoaiChange(loai: ServiceType) {
     setForm((f) => ({
       ...f,
       loai,
-      // Auto-set đặt trước mặc định theo loại dịch vụ
-      gio_dat_truoc_toi_thieu: loai === 'clinic' ? 2 : 4,
+      // Khi chuyển sang home: giữ lại gio_dat_truoc_toi_thieu nếu đã có, không reset về 4
+      gio_dat_truoc_toi_thieu: loai === 'home' ? (f.gio_dat_truoc_toi_thieu ?? 4) : undefined,
+      khu_vuc: loai === 'home' ? (f.khu_vuc ?? []) : [],
+      // Khi chuyển sang home: xóa chuan_bi_truoc (home không dùng)
+      // Khi chuyển sang related: giữ lại nếu đã nhập
+      chuan_bi_truoc: loai === 'home' ? '' : (f.chuan_bi_truoc ?? ''),
     }))
   }
 
@@ -161,14 +172,14 @@ export default function ServiceFormModal({ open, service, onClose, onSave }: Pro
             <div className="grid grid-cols-2 gap-3">
               {([
                 {
-                  value: 'clinic' as ServiceType,
-                  title: 'Phòng khám',
-                  desc: 'Bệnh nhân đến cơ sở. Đầy đủ thiết bị y tế.',
+                  value: 'related' as ServiceType,
+                  title: 'Dịch vụ liên quan',
+                  desc: 'Xét nghiệm, chẩn đoán hình ảnh… Theo chỉ định bác sĩ, không đặt lịch riêng.',
                 },
                 {
                   value: 'home' as ServiceType,
                   title: 'Tại nhà',
-                  desc: 'Bác sĩ đến nhà bệnh nhân. Slot max 1 người, cần bác sĩ confirm.',
+                  desc: 'Nhân viên lấy mẫu xét nghiệm đến nhà. Bệnh nhân thanh toán trước, CSKH gán nhân viên sau.',
                 },
               ]).map((opt) => (
                 <button
@@ -197,112 +208,71 @@ export default function ServiceFormModal({ open, service, onClose, onSave }: Pro
             </div>
           </FormField>
 
-          {/* Chuyên khoa */}
-          <FormField label="Chuyên khoa liên quan">
-            <select
-              value={form.specialty_id ?? ''}
-              onChange={(e) =>
-                setField('specialty_id', e.target.value || null)
-              }
-              className="input w-full"
-            >
-              <option value="">Không chọn</option>
-              {specialties.map((sp) => (
-                <option key={sp.id} value={sp.id}>{sp.ten}</option>
-              ))}
-            </select>
-          </FormField>
-
-          {/* Giá + Thời lượng */}
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Giá dịch vụ (VNĐ)" required error={errors.gia}>
-              <input
-                type="number"
-                value={form.gia || ''}
-                onChange={(e) => setField('gia', Math.floor(Number(e.target.value)))}
-                min={1}
-                step={1000}
-                placeholder="200000"
-                className={`input w-full ${errors.gia ? 'border-red-300' : ''}`}
-              />
-              <p className="mt-1 text-xs text-slate-400">Bệnh nhân trả đúng số này khi đặt lịch</p>
-            </FormField>
-            <FormField label="Thời lượng (phút)" required error={errors.thoi_gian_phut}>
-              <input
-                type="number"
-                value={form.thoi_gian_phut || ''}
-                onChange={(e) => setField('thoi_gian_phut', Number(e.target.value))}
-                min={10}
-                max={480}
-                className={`input w-full ${errors.thoi_gian_phut ? 'border-red-300' : ''}`}
-              />
-            </FormField>
+          {/* Info: thông số cố định theo loại hình */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Thông số cố định hệ thống</p>
+            <p className="text-slate-700">
+              Thời lượng:{' '}
+              <span className="font-semibold">{form.loai === 'home' ? '60 phút' : '30 phút'}</span>
+              {' · '}
+              Lịch:{' '}
+              <span className="font-semibold">Thứ 2–Thứ 7, 08:00–17:00</span>
+            </p>
           </div>
 
-          {/* Đặt trước tối thiểu */}
-          <FormField
-            label="Đặt trước tối thiểu (giờ)"
-            required
-            error={errors.gio_dat_truoc_toi_thieu}
-          >
+          {/* Chuyên khoa — chỉ hiện với related (home không cần) */}
+          {form.loai === 'related' && (
+            <FormField label="Chuyên khoa liên quan" required error={errors.specialty_id}>
+              <select
+                value={form.specialty_id ?? ''}
+                onChange={(e) => setField('specialty_id', e.target.value || null)}
+                className={`input w-full ${errors.specialty_id ? 'border-red-300' : ''}`}
+              >
+                <option value="">— Chọn chuyên khoa —</option>
+                {specialties.map((sp) => (
+                  <option key={sp.id} value={sp.id}>{sp.ten}</option>
+                ))}
+              </select>
+            </FormField>
+          )}
+
+          {/* Giá — hiện với mọi loại */}
+          <FormField label="Giá dịch vụ (VNĐ)" required error={errors.gia}>
             <input
               type="number"
-              value={form.gio_dat_truoc_toi_thieu || ''}
-              onChange={(e) => setField('gio_dat_truoc_toi_thieu', Number(e.target.value))}
+              value={form.gia || ''}
+              onChange={(e) => setField('gia', Math.floor(Number(e.target.value)))}
               min={1}
-              max={48}
-              className={`input w-full ${errors.gio_dat_truoc_toi_thieu ? 'border-red-300' : ''}`}
+              step={1000}
+              placeholder="200000"
+              className={`input w-full ${errors.gia ? 'border-red-300' : ''}`}
             />
             <p className="mt-1 text-xs text-slate-400">
-              Mặc định: {form.loai === 'clinic' ? '2' : '4'} giờ
+              {form.loai === 'related'
+                ? 'Giá tham khảo — bệnh nhân không đặt lịch riêng cho dịch vụ này'
+                : 'Bệnh nhân trả đúng số này khi đặt lịch'}
             </p>
           </FormField>
 
-          {/* Lịch áp dụng */}
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Lịch áp dụng{' '}
-              <span className="font-normal text-slate-400">(hiển thị tổng quát cho bệnh nhân)</span>
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <input
-                  type="text"
-                  value={form.ngay_ap_dung ?? ''}
-                  onChange={(e) => setField('ngay_ap_dung', e.target.value)}
-                  placeholder="T2–T7"
-                  className="input w-full"
-                />
-                <p className="mt-1 text-xs text-slate-400">Ngày</p>
-              </div>
-              <div>
-                <input
-                  type="time"
-                  value={form.gio_bat_dau ?? ''}
-                  onChange={(e) => setField('gio_bat_dau', e.target.value)}
-                  className="input w-full"
-                />
-                <p className="mt-1 text-xs text-slate-400">Từ</p>
-              </div>
-              <div>
-                <input
-                  type="time"
-                  value={form.gio_ket_thuc ?? ''}
-                  onChange={(e) => setField('gio_ket_thuc', e.target.value)}
-                  className={`input w-full ${errors.gio_ket_thuc ? 'border-red-300' : ''}`}
-                />
-                <p className="mt-1 text-xs text-slate-400">Đến</p>
-                {errors.gio_ket_thuc && (
-                  <p className="mt-0.5 text-xs text-red-500">{errors.gio_ket_thuc}</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Khu vực hỗ trợ — chỉ hiện khi loai = 'home' */}
+          {/* Đặt trước — chỉ hiện với home. Thời lượng & lịch áp dụng cố định (60ph, T2–T7 08:00–17:00) */}
           {form.loai === 'home' && (
-            <FormField label="Khu vực hỗ trợ">
-              <div className="grid grid-cols-3 gap-x-4 gap-y-2.5 rounded-xl border border-slate-200 p-4">
+            <FormField label="Đặt trước tối thiểu (giờ)" required error={errors.gio_dat_truoc_toi_thieu}>
+              <input
+                type="number"
+                value={form.gio_dat_truoc_toi_thieu || ''}
+                onChange={(e) => setField('gio_dat_truoc_toi_thieu', Number(e.target.value))}
+                min={1}
+                max={48}
+                className={`input w-full ${errors.gio_dat_truoc_toi_thieu ? 'border-red-300' : ''}`}
+              />
+              <p className="mt-1 text-xs text-slate-400">Mặc định: 4 giờ. Thời lượng 60 phút, lịch T2–T7 08:00–17:00.</p>
+            </FormField>
+          )}
+
+          {/* Khu vực hỗ trợ — bắt buộc với home (ít nhất 1 quận) */}
+          {form.loai === 'home' && (
+            <FormField label="Khu vực phục vụ" required error={errors.khu_vuc}>
+              <div className={`grid grid-cols-3 gap-x-4 gap-y-2.5 rounded-xl border p-4 ${errors.khu_vuc ? 'border-red-300' : 'border-slate-200'}`}>
                 {HN_DISTRICTS.map((d) => (
                   <label
                     key={d}
@@ -319,7 +289,29 @@ export default function ServiceFormModal({ open, service, onClose, onSave }: Pro
                 ))}
               </div>
               <p className="mt-1.5 text-xs text-slate-400">
-                Giá nên bao gồm phí đi lại. Slot tại nhà tối đa 1 bệnh nhân, bác sĩ cần confirm thủ công.
+                Giá nên bao gồm phí đi lại. Bệnh nhân thanh toán ngay khi đặt — CSKH gán nhân viên lấy mẫu sau đó.
+              </p>
+            </FormField>
+          )}
+
+          {/* Hướng dẫn chuẩn bị — chỉ với dịch vụ liên quan (related) */}
+          {form.loai === 'related' && (
+            <FormField label="Hướng dẫn chuẩn bị cho bệnh nhân" error={errors.chuan_bi_truoc}>
+              <div className="relative">
+                <textarea
+                  value={form.chuan_bi_truoc ?? ''}
+                  onChange={(e) => setField('chuan_bi_truoc', e.target.value)}
+                  rows={3}
+                  maxLength={1000}
+                  placeholder="VD: Nhịn ăn ít nhất 8 giờ trước xét nghiệm máu..."
+                  className={`input w-full resize-y ${errors.chuan_bi_truoc ? 'border-red-300' : ''}`}
+                />
+                <span className="absolute bottom-2 right-3 text-xs text-slate-400">
+                  {(form.chuan_bi_truoc ?? '').length}/1000
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Hiển thị cho bệnh nhân trước khi thực hiện (nhịn ăn, tháo trang sức, v.v.). Để trống nếu không cần chuẩn bị.
               </p>
             </FormField>
           )}

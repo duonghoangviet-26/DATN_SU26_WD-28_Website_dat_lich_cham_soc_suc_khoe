@@ -10,15 +10,18 @@ import mongoose from 'mongoose'
 //   - Cần query độc lập: "timeline của lịch hẹn #X"
 //
 // Luồng trạng thái appointment.status:
-//   pending → confirmed (bác sĩ confirm, hoặc auto khi clinic+đã thanh toán)
-//   pending → cancelled  (bệnh nhân hủy / admin hủy / cron timeout)
-//   confirmed → completed (bác sĩ/admin đánh dấu hoàn thành)
-//   confirmed → cancelled  (bác sĩ/admin hủy)
+//   [CLINIC] pending → confirmed (Admin xác nhận sau khi BN đã thanh toán)
+//   [CLINIC] pending → cancelled (BN hủy / Admin hủy / cron timeout confirm_deadline)
+//   [HOME]   pending → confirmed (BS confirm thủ công)
+//   [HOME]   pending → cancelled (BN hủy / Admin hủy / cron timeout payment_deadline)
+//   confirmed → completed (Admin đánh dấu sau khi BN khám xong)
+//   confirmed → cancelled (BN hủy >24h / Admin hủy / BS hủy khẩn cấp)
 //
 // Luồng payment_status:
-//   unpaid → paid      (bệnh nhân thanh toán)
-//   unpaid → (deleted) (hủy lịch trước khi thanh toán)
-//   paid   → refunded  (hoàn tiền sau khi hủy)
+//   [CLINIC] paid     → refunded  (hoàn tiền khi hủy — BN đã trả trước qua gateway)
+//   [HOME]   unpaid   → paid      (BN thanh toán sau khi BS confirm)
+//   [HOME]   unpaid   → (deleted) (hủy lịch trước khi BN thanh toán)
+//   [BOTH]   paid     → refunded  (hoàn tiền sau khi hủy)
 //
 // nguoi_thuc_hien_id=null khi vai_tro='system' (cron auto-cancel)
 

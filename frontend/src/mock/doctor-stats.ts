@@ -1,14 +1,13 @@
 import type { DoctorProfile, DoctorStats, DoctorReview } from '@/types'
 
 export const mockDoctorProfile: DoctorProfile = {
-  id: 1,
-  doctor_id: 1,
-  user_id: 10,
-  ho_ten: 'BS. Lê Hoàng Cường',
-  email: 'cuong.le@vitafamily.vn',
-  chuyen_khoa: 'Nhi khoa',
-  so_nam_kinh_nghiem: 12,
-  phi_tu_van: 350000,
+  id: 100,
+  user_id: 99,
+  ho_ten: 'BS. Demo',
+  email: 'doctor@vitafamily.vn',
+  chuyen_khoa: 'Tim mạch',
+  so_nam_kinh_nghiem: 8,
+  gia_kham: 350000,
   trang_thai_duyet: 'approved',
   diem_danh_gia: 4.8,
   so_danh_gia: 156,

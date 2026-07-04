@@ -23,6 +23,9 @@ yarn-debug.log*
 .DS_Store
 Thumbs.db
 
+# Windows reserved device name (không phải file thật)
+nul
+
 # Claude Code / Agent tools (chỉ trên máy local)
 .claude
 .agents/
@@ -37,3 +40,4 @@ web/
 AGENT_FLOW.md
 CHANGELOG.md
 .github/
+.superpowers/
