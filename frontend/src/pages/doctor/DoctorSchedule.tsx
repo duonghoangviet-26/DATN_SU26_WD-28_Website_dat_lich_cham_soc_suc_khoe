@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Toast from '@/components/common/Toast'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
 import { scheduleService } from '@/services/schedule.service'
 import { mockRooms } from '@/mock/rooms'
@@ -27,10 +28,17 @@ function formatDayHeader(dateStr: string): string {
   return `${DAY_NAMES[dow]}  ·  ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
 }
 
-function effectiveStatus(slot: DoctorSlot, todayStr: string): DoctorSlot['status'] {
-  if (slot.ngay < todayStr && (slot.status === 'active' || slot.status === 'locked')) {
-    return 'expired'
-  }
+function nowHHMM(): string {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+// So cả ngày lẫn giờ — slot hôm nay đã trôi qua giờ bắt đầu cũng phải coi là hết hạn,
+// tránh hiển thị "Còn trống" cho 1 ca 08:00 khi đã là 15:00 chiều cùng ngày.
+function effectiveStatus(slot: DoctorSlot, todayStr: string, nowStr: string): DoctorSlot['status'] {
+  if (slot.status !== 'active' && slot.status !== 'locked') return slot.status
+  if (slot.ngay < todayStr) return 'expired'
+  if (slot.ngay === todayStr && slot.gio_bat_dau <= nowStr) return 'expired'
   return slot.status
 }
 
@@ -52,9 +60,9 @@ function getBusyRoomNames(targetSlot: DoctorSlot, allSlots: DoctorSlot[]): Set<s
 
 // ─── Sub: Thanh chấm trạng thái slot theo ngày ────────────────────────────────
 
-function DotBar({ slots, todayStr }: { slots: DoctorSlot[]; todayStr: string }) {
+function DotBar({ slots, todayStr, nowStr }: { slots: DoctorSlot[]; todayStr: string; nowStr: string }) {
   const dotColor = (s: DoctorSlot) => {
-    const eff = effectiveStatus(s, todayStr)
+    const eff = effectiveStatus(s, todayStr, nowStr)
     if (eff === 'booked') return 'bg-blue-400'
     if (eff === 'locked') return 'bg-yellow-400'
     if (eff === 'cancelled' || eff === 'expired') return 'bg-slate-200'
@@ -71,10 +79,10 @@ function DotBar({ slots, todayStr }: { slots: DoctorSlot[]; todayStr: string }) 
 
 // ─── Sub: Summary counts cho header ───────────────────────────────────────────
 
-function DaySummary({ slots, todayStr }: { slots: DoctorSlot[]; todayStr: string }) {
+function DaySummary({ slots, todayStr, nowStr }: { slots: DoctorSlot[]; todayStr: string; nowStr: string }) {
   const booked = slots.filter((s) => s.status === 'booked').length
   const locked = slots.filter((s) => s.status === 'locked').length
-  const active = slots.filter((s) => effectiveStatus(s, todayStr) === 'active').length
+  const active = slots.filter((s) => effectiveStatus(s, todayStr, nowStr) === 'active').length
   const parts: string[] = []
   if (active > 0) parts.push(`${active} trống`)
   if (booked > 0) parts.push(`${booked} đặt`)
@@ -86,6 +94,7 @@ function DaySummary({ slots, todayStr }: { slots: DoctorSlot[]; todayStr: string
 
 export default function DoctorSchedule() {
   const todayStr = toLocalDateStr()
+  const nowStr = nowHHMM()
 
   const [slots, setSlots] = useState<DoctorSlot[]>([])
   const [loading, setLoading] = useState(true)
@@ -100,6 +109,10 @@ export default function DoctorSchedule() {
   // Dialog yêu cầu hủy
   const [cancelDialog, setCancelDialog] = useState<{ slot: DoctorSlot; ly_do: string } | null>(null)
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
+
+  // Dialog nghỉ cả ngày
+  const [dayOffDate, setDayOffDate] = useState<string | null>(null)
+  const [dayOffSubmitting, setDayOffSubmitting] = useState(false)
 
   useEffect(() => {
     scheduleService.getAll().then(setSlots).finally(() => setLoading(false))
@@ -143,7 +156,7 @@ export default function DoctorSchedule() {
 
   async function handleLock(slot: DoctorSlot) {
     try {
-      const updated = await scheduleService.lockSlot(slot)
+      const updated = await scheduleService.lockSlot(slot.id)
       setSlots((prev) => prev.map((s) => s.id === slot.id ? updated : s))
       showSuccess('Đã đặt ca Tạm nghỉ.')
     } catch (err) { showError((err as Error).message) }
@@ -151,7 +164,7 @@ export default function DoctorSchedule() {
 
   async function handleUnlock(slot: DoctorSlot) {
     try {
-      const updated = await scheduleService.unlockSlot(slot)
+      const updated = await scheduleService.unlockSlot(slot.id)
       setSlots((prev) => prev.map((s) => s.id === slot.id ? updated : s))
       showSuccess('Đã mở lại ca làm việc.')
     } catch (err) { showError((err as Error).message) }
@@ -160,7 +173,7 @@ export default function DoctorSchedule() {
   async function selectRoom(slot: DoctorSlot, fullName: string | null) {
     setSavingRoom(true)
     try {
-      const updated = await scheduleService.updatePhongKham(slot, fullName)
+      const updated = await scheduleService.updatePhongKham(slot.id, fullName)
       setSlots((prev) => prev.map((s) => s.id === slot.id ? updated : s))
       // Cập nhật roomPickerSlot để UI phản ánh ngay phòng vừa chọn
       setRoomPickerSlot((prev) => prev ? { ...prev, phong_kham: fullName } : null)
@@ -168,6 +181,19 @@ export default function DoctorSchedule() {
       if (!fullName) setRoomPickerSlot(null)
     } catch (err) { showError((err as Error).message) }
     finally { setSavingRoom(false) }
+  }
+
+  async function confirmDayOff() {
+    if (!dayOffDate) return
+    setDayOffSubmitting(true)
+    try {
+      const { locked } = await scheduleService.lockDay(dayOffDate)
+      setSlots((prev) => prev.map((s) =>
+        s.ngay === dayOffDate && s.status === 'active' ? { ...s, status: 'locked' } : s
+      ))
+      showSuccess(`Đã đặt nghỉ ${locked} ca trống trong ngày.`)
+    } catch (err) { showError((err as Error).message) }
+    finally { setDayOffSubmitting(false); setDayOffDate(null) }
   }
 
   async function submitCancelRequest() {
@@ -217,6 +243,7 @@ export default function DoctorSchedule() {
             const daySlots = slotsByDate[date]
             const isToday = date === todayStr
             const isExpanded = expandedDates.has(date)
+            const activeCount = daySlots.filter((s) => effectiveStatus(s, todayStr, nowStr) === 'active').length
 
             return (
               <div key={date} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -242,10 +269,20 @@ export default function DoctorSchedule() {
                       )}
                     </div>
                     <div className="mt-1 flex items-center gap-3">
-                      <DaySummary slots={daySlots} todayStr={todayStr} />
-                      <DotBar slots={daySlots} todayStr={todayStr} />
+                      <DaySummary slots={daySlots} todayStr={todayStr} nowStr={nowStr} />
+                      <DotBar slots={daySlots} todayStr={todayStr} nowStr={nowStr} />
                     </div>
                   </div>
+
+                  {activeCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setDayOffDate(date) }}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-semibold text-yellow-700 hover:bg-yellow-100"
+                    >
+                      <Icon name="ban" className="h-3 w-3" /> Nghỉ cả ngày
+                    </button>
+                  )}
 
                   <Icon
                     name="chevron-down"
@@ -257,10 +294,13 @@ export default function DoctorSchedule() {
                 {isExpanded && (
                   <div className="border-t border-slate-100 divide-y divide-slate-50">
                     {daySlots.map((slot) => {
-                      const eff = effectiveStatus(slot, todayStr)
+                      const eff = effectiveStatus(slot, todayStr, nowStr)
+                      // Dùng eff (trạng thái đã tính giờ/ngày), không dùng slot.status thô —
+                      // nếu không, ca đã qua ngày/giờ (status vẫn 'active'/'locked' trong data)
+                      // vẫn cho bấm Tạm nghỉ/Mở lại/sửa phòng dù thực tế đã hết hạn.
                       const canEditRoom =
                         slot.benh_nhan_id == null &&
-                        (slot.status === 'active' || slot.status === 'locked')
+                        (eff === 'active' || eff === 'locked')
 
                       return (
                         <div key={slot.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
@@ -304,7 +344,7 @@ export default function DoctorSchedule() {
 
                           {/* Nút hành động */}
                           <div className="ml-auto flex items-center gap-2">
-                            {slot.status === 'active' && (
+                            {eff === 'active' && (
                               <button
                                 onClick={() => handleLock(slot)}
                                 className="inline-flex items-center gap-1 rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-semibold text-yellow-700 hover:bg-yellow-100"
@@ -312,7 +352,7 @@ export default function DoctorSchedule() {
                                 <Icon name="ban" className="h-3 w-3" /> Tạm nghỉ
                               </button>
                             )}
-                            {slot.status === 'locked' && (
+                            {eff === 'locked' && (
                               <button
                                 onClick={() => handleUnlock(slot)}
                                 className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
@@ -443,6 +483,17 @@ export default function DoctorSchedule() {
           </div>
         </div>
       )}
+
+      {/* ── Dialog xác nhận nghỉ cả ngày ─────────────────────────────────────── */}
+      <ConfirmDialog
+        open={dayOffDate !== null}
+        title="Nghỉ cả ngày"
+        message={dayOffDate ? `Toàn bộ ca "Còn trống" trong ${formatDayHeader(dayOffDate)} sẽ chuyển sang "Tạm nghỉ". Ca đã có bệnh nhân đặt không bị ảnh hưởng.` : ''}
+        confirmText={dayOffSubmitting ? 'Đang xử lý...' : 'Xác nhận nghỉ'}
+        danger
+        onConfirm={confirmDayOff}
+        onCancel={() => setDayOffDate(null)}
+      />
 
       {/* ── Dialog yêu cầu hủy ca có bệnh nhân ──────────────────────────────── */}
       {cancelDialog && (

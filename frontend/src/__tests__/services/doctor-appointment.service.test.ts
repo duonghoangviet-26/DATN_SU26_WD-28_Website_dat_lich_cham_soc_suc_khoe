@@ -3,12 +3,28 @@
  *
  * Mỗi `describe` block dùng dynamic import sau vi.resetModules()
  * để đảm bảo module-level state (let appointments = [...]) được reset.
+ *
+ * Mock data (mock/doctor-appointments.ts) — 9 record, chỉ loai_kham='clinic'
+ * (khám tại nhà tạm bỏ khỏi mock, làm sau khi xong chức năng chính):
+ *   id=1: hôm nay 08:00, confirmed, paid, chưa có kết quả
+ *   id=2: hôm nay 08:30, confirmed, paid, chưa có kết quả
+ *   id=3: hôm nay 09:00, confirmed, paid, chưa có kết quả
+ *   id=4: ngày mai 08:00, confirmed, paid
+ *   id=5: ngày mai 08:30, confirmed, paid
+ *   id=6: +2 ngày 08:00, confirmed, paid
+ *   id=7: hôm qua, completed, paid, đã có kết quả
+ *   id=8: -2 ngày, completed, paid, đã có kết quả
+ *   id=9: -3 ngày, cancelled, refunded (lịch sử)
+ *
+ * Clinic luôn auto-confirm khi thanh toán (quyết định 2026-07-02) nên mock không còn
+ * record nào ở trạng thái 'pending' — các test guard liên quan pending/unpaid (chỉ có ý
+ * nghĩa khi có khám tại nhà) tự dựng precondition bằng cách mutate object trả về từ
+ * getAll() (getAll() chỉ shallow-copy mảng, item bên trong vẫn cùng reference với state
+ * nội bộ service — mutate object đó tương đương mutate state thật). Cách này giữ được
+ * toàn bộ coverage của state machine mà không cần dữ liệu demo giả home/pending cố định.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import type { DoctorAppointmentDetail } from '@/types'
-
-// ─── Helper: lấy service mới sau khi reset module ────────────────────────────
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 async function freshService() {
   vi.resetModules()
@@ -39,27 +55,30 @@ describe('getAll() — filter theo tab', () => {
   it('tab=upcoming chỉ trả ngày tương lai', async () => {
     const result = await svc.getAll({ tab: 'upcoming' })
     expect(result.every((a) => a.ngay_kham > TODAY)).toBe(true)
+    expect(result.length).toBeGreaterThan(0)
   })
 
   it('tab=past chỉ trả ngày quá khứ', async () => {
     const result = await svc.getAll({ tab: 'past' })
     expect(result.every((a) => a.ngay_kham < TODAY)).toBe(true)
+    expect(result.length).toBeGreaterThan(0)
   })
 
-  it('tab=all trả tất cả 16 record', async () => {
+  it('tab=all trả tất cả 9 record', async () => {
     const result = await svc.getAll({ tab: 'all' })
-    expect(result.length).toBe(16)
+    expect(result.length).toBe(9)
   })
 
-  it('filter status=pending chỉ trả pending', async () => {
-    const result = await svc.getAll({ tab: 'all', status: 'pending' })
-    expect(result.every((a) => a.status === 'pending')).toBe(true)
+  it('filter status=confirmed chỉ trả confirmed', async () => {
+    const result = await svc.getAll({ tab: 'all', status: 'confirmed' })
+    expect(result.every((a) => a.status === 'confirmed')).toBe(true)
     expect(result.length).toBeGreaterThan(0)
   })
 
   it('kết hợp tab=today + status=confirmed', async () => {
     const result = await svc.getAll({ tab: 'today', status: 'confirmed' })
     expect(result.every((a) => a.ngay_kham === TODAY && a.status === 'confirmed')).toBe(true)
+    expect(result.length).toBeGreaterThan(0)
   })
 
   it('kết quả được sắp xếp theo ngày_kham tăng dần', async () => {
@@ -72,9 +91,23 @@ describe('getAll() — filter theo tab', () => {
       expect(cmp).toBeLessThanOrEqual(0)
     }
   })
+
+  it('quyết định 2026-07-04: pending+unpaid bị ẩn hẳn khỏi mọi tab', async () => {
+    // Dựng precondition: lấy 1 confirmed có sẵn (id=1) rồi mutate thành pending+unpaid —
+    // getAll() không deep-clone nên mutate item trả về = mutate state nội bộ.
+    const before = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    before.status = 'pending'
+    before.payment_status = 'unpaid'
+
+    const after = await svc.getAll({ tab: 'all' })
+    expect(after.some((a) => a.id === 1)).toBe(false)
+  })
 })
 
 // ─── Nhóm: confirm() ─────────────────────────────────────────────────────────
+// confirm()/reject() chỉ có ý nghĩa thật với lịch pending (home) — clinic luôn
+// auto-confirm nên mock hiện không có sẵn record pending. Test dựng precondition
+// bằng cách mutate 1 record confirmed có sẵn thành pending trước khi gọi.
 
 describe('confirm() — xác nhận lịch hẹn', () => {
   let svc: Awaited<ReturnType<typeof freshService>>
@@ -82,24 +115,17 @@ describe('confirm() — xác nhận lịch hẹn', () => {
   beforeEach(async () => { svc = await freshService() })
 
   it('TC-C01: pending+paid → status = confirmed', async () => {
-    // id=11: pending + paid (mock)
-    const updated = await svc.confirm(11)
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    item.status = 'pending'
+    const updated = await svc.confirm(1)
     expect(updated.status).toBe('confirmed')
   })
 
   it('payment_status giữ nguyên sau confirm', async () => {
-    const before = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 11)!
-    const updated = await svc.confirm(11)
-    expect(updated.payment_status).toBe(before.payment_status)
-  })
-
-  it('TC-C02 (Luồng C): pending+unpaid → confirm thành công + payment_deadline được set', async () => {
-    // Luồng C: BS xác nhận trước, BN thanh toán sau trong deadline
-    // id=3: pending + unpaid — PHẢI xác nhận được, service set payment_deadline
-    const updated = await svc.confirm(3)
-    expect(updated.status).toBe('confirmed')
-    expect(updated.payment_deadline).toBeTruthy()
-    expect(new Date(updated.payment_deadline!).getTime()).toBeGreaterThan(Date.now())
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    item.status = 'pending'
+    const updated = await svc.confirm(1)
+    expect(updated.payment_status).toBe('paid')
   })
 
   it('BUG-GUARD: confirm appointment không tồn tại → throw', async () => {
@@ -112,10 +138,15 @@ describe('confirm() — xác nhận lịch hẹn', () => {
   })
 
   it('BUG-GUARD: confirm đã completed → service phải từ chối', async () => {
-    // id=8: status=completed trong mock — sau fix phải throw
-    // Hiện tại KHÔNG có guard → đây là BUG! Test sẽ FAIL sau khi fix đúng
-    // Bật test này để xác nhận bug tồn tại, rồi fix service:
-    await expect(svc.confirm(8)).rejects.toThrow(/chỉ xác nhận lịch.*chờ/i)
+    // id=7: status=completed trong mock
+    await expect(svc.confirm(7)).rejects.toThrow(/chỉ xác nhận lịch.*chờ/i)
+  })
+
+  it('quyết định 2026-07-04: pending+unpaid → service phải từ chối', async () => {
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    item.status = 'pending'
+    item.payment_status = 'unpaid'
+    await expect(svc.confirm(1)).rejects.toThrow(/chỉ xác nhận lịch hẹn đã thanh toán/i)
   })
 })
 
@@ -127,18 +158,12 @@ describe('reject() — từ chối lịch hẹn', () => {
   beforeEach(async () => { svc = await freshService() })
 
   it('TC-R01: pending+paid → cancelled + refunded', async () => {
-    // id=11: pending+paid
-    const updated = await svc.reject(11, 'Bác sĩ bận đột xuất')
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    item.status = 'pending'
+    const updated = await svc.reject(1, 'Bác sĩ bận đột xuất')
     expect(updated.status).toBe('cancelled')
     expect(updated.payment_status).toBe('refunded')
     expect(updated.ly_do_huy).toBe('Bác sĩ bận đột xuất')
-  })
-
-  it('TC-R02: pending+unpaid → cancelled, payment_status KHÔNG đổi', async () => {
-    // id=3: pending+unpaid
-    const updated = await svc.reject(3, 'Lý do test')
-    expect(updated.status).toBe('cancelled')
-    expect(updated.payment_status).toBe('unpaid')
   })
 
   it('TC-R03: reject không tồn tại → throw', async () => {
@@ -146,13 +171,13 @@ describe('reject() — từ chối lịch hẹn', () => {
   })
 
   it('BUG-GUARD: reject đã confirmed → service phải từ chối', async () => {
-    // id=5: confirmed — reject() không nên hoạt động, phải dùng cancelConfirmed()
-    await expect(svc.reject(5, 'lý do')).rejects.toThrow(/chỉ từ chối lịch.*chờ/i)
+    // id=1: confirmed — reject() không nên hoạt động, phải dùng cancelConfirmed()
+    await expect(svc.reject(1, 'lý do')).rejects.toThrow(/chỉ từ chối lịch.*chờ/i)
   })
 
   it('BUG-GUARD: reject đã cancelled → service phải từ chối', async () => {
-    // id=10: cancelled — không reject lại
-    await expect(svc.reject(10, 'lý do')).rejects.toThrow(/chỉ từ chối lịch.*chờ/i)
+    // id=9: cancelled — không reject lại
+    await expect(svc.reject(9, 'lý do')).rejects.toThrow(/chỉ từ chối lịch.*chờ/i)
   })
 })
 
@@ -169,17 +194,10 @@ describe('complete() — đánh dấu hoàn thành', () => {
     expect(updated.status).toBe('completed')
   })
 
-  it('TC-CO02: da_co_ket_qua KHÔNG được set true bởi complete()', async () => {
+  it('TC-CO02: complete() không tự set da_co_ket_qua=true — giữ nguyên giá trị cũ', async () => {
+    // id=1: confirmed, da_co_ket_qua=false trong mock
     const updated = await svc.complete(1)
-    // BUG-1 fix: complete() chỉ đổi status, không set da_co_ket_qua
-    expect(updated.da_co_ket_qua).toBe(true) // id=1 đã có kết quả trong mock
-  })
-
-  it('TC-CO02b: complete id=2 — da_co_ket_qua vẫn false', async () => {
-    // id=2: confirmed, da_co_ket_qua=false
-    const updated = await svc.complete(2)
-    expect(updated.status).toBe('completed')
-    expect(updated.da_co_ket_qua).toBe(false) // KHÔNG tự set true
+    expect(updated.da_co_ket_qua).toBe(false)
   })
 
   it('complete không tồn tại → throw', async () => {
@@ -187,12 +205,13 @@ describe('complete() — đánh dấu hoàn thành', () => {
   })
 
   it('BUG-GUARD: complete pending → phải bị từ chối', async () => {
-    // id=11: pending — không thể hoàn thành trực tiếp
-    await expect(svc.complete(11)).rejects.toThrow(/chỉ hoàn thành lịch.*đã xác nhận/i)
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    item.status = 'pending'
+    await expect(svc.complete(1)).rejects.toThrow(/chỉ hoàn thành lịch.*đã xác nhận/i)
   })
 
   it('BUG-GUARD: complete đã cancelled → phải bị từ chối', async () => {
-    await expect(svc.complete(10)).rejects.toThrow(/chỉ hoàn thành lịch.*đã xác nhận/i)
+    await expect(svc.complete(9)).rejects.toThrow(/chỉ hoàn thành lịch.*đã xác nhận/i)
   })
 })
 
@@ -201,19 +220,31 @@ describe('complete() — đánh dấu hoàn thành', () => {
 describe('cancelConfirmed() — bác sĩ hủy lịch đã xác nhận', () => {
   let svc: Awaited<ReturnType<typeof freshService>>
 
-  beforeEach(async () => { svc = await freshService() })
+  // Pin Date.now() (KHÔNG dùng fake timers — delay() trong service dùng setTimeout thật,
+  // fake timers sẽ treo promise vĩnh viễn). Giữa ngày để id=1 (hôm nay) và id=4 (ngày mai)
+  // đều nằm trong 24h emergency-cancel window một cách xác định, không phụ thuộc giờ chạy
+  // test thật (tránh flaky nếu chạy gần nửa đêm).
+  beforeEach(async () => {
+    svc = await freshService()
+    vi.spyOn(Date, 'now').mockReturnValue(new Date(`${TODAY}T10:00:00Z`).getTime())
+  })
+
+  afterEach(() => { vi.restoreAllMocks() })
 
   it('TC-CC01: confirmed+paid → cancelled+refunded', async () => {
-    // id=5: confirmed+paid
-    const updated = await svc.cancelConfirmed(5, 'Bác sĩ cấp cứu')
+    // id=1: confirmed+paid, hôm nay — trong 24h window
+    const updated = await svc.cancelConfirmed(1, 'Bác sĩ cấp cứu')
     expect(updated.status).toBe('cancelled')
     expect(updated.payment_status).toBe('refunded')
     expect(updated.ly_do_huy).toBe('Bác sĩ cấp cứu')
   })
 
-  it('TC-CC02 (Luồng C): confirmed+unpaid → cancelled, payment_status giữ unpaid (không hoàn tiền)', async () => {
-    // id=16: confirmed+unpaid — Luồng C scenario, chưa thanh toán nên không có gì để hoàn
-    const updated = await svc.cancelConfirmed(16, 'Bác sĩ bận đột xuất')
+  it('quyết định 2026-07-04: confirmed+unpaid → cancelled, payment_status giữ unpaid (không hoàn tiền)', async () => {
+    // Dựng precondition: id=1 confirmed+paid → mutate unpaid rồi hủy
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    item.payment_status = 'unpaid'
+
+    const updated = await svc.cancelConfirmed(1, 'Bác sĩ bận đột xuất')
     expect(updated.status).toBe('cancelled')
     expect(updated.payment_status).toBe('unpaid')
     expect(updated.payment_deadline).toBeNull()
@@ -225,7 +256,23 @@ describe('cancelConfirmed() — bác sĩ hủy lịch đã xác nhận', () => {
 
   it('BUG-GUARD: cancelConfirmed trên pending → phải từ chối', async () => {
     // cancelConfirmed chỉ dành cho confirmed
-    await expect(svc.cancelConfirmed(11, 'lý do')).rejects.toThrow(/chỉ hủy lịch.*đã xác nhận/i)
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    item.status = 'pending'
+    await expect(svc.cancelConfirmed(1, 'lý do')).rejects.toThrow(/chỉ hủy lịch.*đã xác nhận/i)
+  })
+
+  it('quyết định 2026-07-04: clinic confirmed còn hơn 24h → từ chối, phải dùng Yêu cầu hủy', async () => {
+    // id=6: clinic, confirmed, +2 ngày — chắc chắn ngoài 24h bất kể giờ chạy test
+    await expect(svc.cancelConfirmed(6, 'Bác sĩ bận')).rejects.toThrow(/Yêu cầu hủy/i)
+  })
+
+  it('24h window chỉ áp dụng cho clinic — home còn hơn 24h vẫn hủy được ngay', async () => {
+    // Dựng precondition: id=6 (clinic, +2 ngày) → mutate loai_kham='home' để test guard
+    // bỏ qua ràng buộc 24h khi không phải clinic (home không dùng slot system).
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 6)!
+    item.loai_kham = 'home'
+    const updated = await svc.cancelConfirmed(6, 'Bác sĩ bận')
+    expect(updated.status).toBe('cancelled')
   })
 })
 
@@ -237,27 +284,38 @@ describe('State machine: luồng chuyển trạng thái hợp lệ', () => {
   beforeEach(async () => { svc = await freshService() })
 
   it('pending → confirmed → completed (happy path)', async () => {
-    await svc.confirm(11)
-    const afterConfirm = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 11)
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    item.status = 'pending'
+
+    await svc.confirm(1)
+    const afterConfirm = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)
     expect(afterConfirm?.status).toBe('confirmed')
 
-    await svc.complete(11)
-    const afterComplete = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 11)
+    await svc.complete(1)
+    const afterComplete = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)
     expect(afterComplete?.status).toBe('completed')
     expect(afterComplete?.da_co_ket_qua).toBe(false) // vẫn false, chưa nhập kết quả
   })
 
   it('pending → cancelled via reject (happy path)', async () => {
-    await svc.reject(11, 'Lý do')
-    const after = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 11)
+    const item = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)!
+    item.status = 'pending'
+
+    await svc.reject(1, 'Lý do')
+    const after = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)
     expect(after?.status).toBe('cancelled')
     expect(after?.payment_status).toBe('refunded') // paid → refunded
   })
 
   it('confirmed → cancelled via cancelConfirmed (bác sĩ hủy)', async () => {
-    // id=5: confirmed+paid
-    await svc.cancelConfirmed(5, 'Lý do')
-    const after = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 5)
+    // id=1: confirmed+paid, hôm nay — pin Date.now() để nằm trong 24h emergency window
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(new Date(`${TODAY}T10:00:00Z`).getTime())
+    try {
+      await svc.cancelConfirmed(1, 'Lý do')
+    } finally {
+      spy.mockRestore()
+    }
+    const after = (await svc.getAll({ tab: 'all' })).find((a) => a.id === 1)
     expect(after?.status).toBe('cancelled')
     expect(after?.payment_status).toBe('refunded')
   })
@@ -270,37 +328,35 @@ describe('Edge cases — dữ liệu mock', () => {
 
   beforeEach(async () => { svc = await freshService() })
 
-  it('TC-EDG09: id=12 (pending hết hạn) tồn tại trong all', async () => {
+  it('id=9 (cancelled+refunded, -3 ngày) tồn tại trong all và tab=past', async () => {
     const all = await svc.getAll({ tab: 'all' })
-    const expired = all.find((a) => a.id === 12)
-    expect(expired).toBeDefined()
-    expect(expired!.status).toBe('pending')
-    expect(expired!.ngay_kham < TODAY).toBe(true)
-  })
+    const cancelled = all.find((a) => a.id === 9)
+    expect(cancelled).toBeDefined()
+    expect(cancelled!.status).toBe('cancelled')
+    expect(cancelled!.payment_status).toBe('refunded')
 
-  it('TC-EDG09: id=12 xuất hiện trong tab=past', async () => {
     const past = await svc.getAll({ tab: 'past' })
-    expect(past.some((a) => a.id === 12)).toBe(true)
+    expect(past.some((a) => a.id === 9)).toBe(true)
   })
 
-  it('TC-CO03: id=13 completed+da_co_ket_qua=false', async () => {
+  it('id=7, id=8 (completed) đều đã có kết quả khám', async () => {
     const all = await svc.getAll({ tab: 'all' })
-    const noResult = all.find((a) => a.id === 13)
-    expect(noResult?.status).toBe('completed')
-    expect(noResult?.da_co_ket_qua).toBe(false)
+    expect(all.find((a) => a.id === 7)?.da_co_ket_qua).toBe(true)
+    expect(all.find((a) => a.id === 8)?.da_co_ket_qua).toBe(true)
   })
 
-  it('id=11 pending+paid hôm nay tồn tại', async () => {
-    const today = await svc.getAll({ tab: 'today' })
-    const target = today.find((a) => a.id === 11)
-    expect(target).toBeDefined()
-    expect(target!.payment_status).toBe('paid')
-    expect(target!.status).toBe('pending')
+  it('mock chỉ toàn loai_kham=clinic (khám tại nhà tạm bỏ, làm sau)', async () => {
+    const all = await svc.getAll({ tab: 'all' })
+    expect(all.every((a) => a.loai_kham === 'clinic')).toBe(true)
   })
 
-  it('có ít nhất 1 pending+paid trong today → urgentCount > 0', async () => {
-    const today = await svc.getAll({ tab: 'today', status: 'pending' })
-    const paid = today.filter((a) => a.payment_status === 'paid')
-    expect(paid.length).toBeGreaterThan(0)
+  it('không còn appointment nào ở trạng thái pending — clinic luôn auto-confirm khi đặt', async () => {
+    const all = await svc.getAll({ tab: 'all' })
+    expect(all.some((a) => a.status === 'pending')).toBe(false)
+  })
+
+  it('có ít nhất 2 lịch confirmed hôm nay', async () => {
+    const today = await svc.getAll({ tab: 'today', status: 'confirmed' })
+    expect(today.length).toBeGreaterThanOrEqual(2)
   })
 })

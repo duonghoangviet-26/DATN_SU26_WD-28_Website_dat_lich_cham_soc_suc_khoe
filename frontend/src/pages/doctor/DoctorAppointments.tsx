@@ -28,6 +28,11 @@ const STATUS_COLOR: Record<string, 'yellow' | 'blue' | 'green' | 'red' | 'gray'>
   pending: 'yellow', confirmed: 'blue', completed: 'green', cancelled: 'red',
 }
 
+// "Hủy khẩn cấp" (clinic, confirmed) chỉ cho phép trong vòng 24h tới giờ hẹn — thật sự
+// khẩn cấp mới bỏ qua bước Admin duyệt. Còn thời gian thì bắt buộc qua "Yêu cầu hủy"
+// (trang Lịch làm việc) để Admin chủ động chuyển bác sĩ khác/xử lý trước.
+const EMERGENCY_CANCEL_WINDOW_HOURS = 24
+
 const PAYMENT_COLOR: Record<string, 'yellow' | 'blue' | 'gray'> = {
   unpaid: 'yellow', paid: 'blue', refunded: 'gray',
 }
@@ -450,6 +455,15 @@ export default function DoctorAppointments() {
     return a.status === 'pending' && a.ngay_kham < todayStr
   }
 
+  // Chỉ đúng nghĩa "khẩn cấp" khi lịch hẹn còn dưới 24h — quá mốc này phải qua Admin
+  // duyệt (Yêu cầu hủy ở trang Lịch làm việc), không cho tự hủy tức thời.
+  function isWithinEmergencyWindow(a: DoctorAppointmentDetail) {
+    const [h, m] = a.gio_kham.split(':').map(Number)
+    const gioKham = new Date(a.ngay_kham)
+    gioKham.setHours(h, m, 0, 0)
+    return gioKham.getTime() - Date.now() < EMERGENCY_CANCEL_WINDOW_HOURS * 3600 * 1000
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Cập nhật 1 record trong state
   // ─────────────────────────────────────────────────────────────────────────────
@@ -808,7 +822,8 @@ export default function DoctorAppointments() {
                                     thanh toán, không còn ở trạng thái pending nên không có nút Xác nhận/Từ chối) */}
                                 {appt.status === 'pending' && appt.loai_kham === 'home' && (
                                   <>
-                                    {/* Xác nhận — Luồng C (home): BS confirm bất kể đã trả tiền chưa, chỉ chặn khi hết hạn */}
+                                    {/* Xác nhận — pending+unpaid đã bị ẩn hẳn khỏi danh sách từ getAll()
+                                        (quyết định 2026-07-04), nên mọi item tới đây chắc chắn đã paid. */}
                                     {!isExpiredPending(appt) && (
                                       <button
                                         onClick={() => handleConfirm(appt.id)}
@@ -849,15 +864,26 @@ export default function DoctorAppointments() {
                                         </button>
                                       </>
                                     )}
-                                    {/* Hủy: luôn hiện — bác sĩ hủy bất kỳ thời điểm → hoàn tiền 100%.
-                                        Với clinic đây là "Hủy khẩn cấp" (bắt buộc lý do, slot → locked). */}
-                                    <button
-                                      onClick={() => setCancelId(appt.id)}
-                                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
-                                    >
-                                      <Icon name="x" className="h-3 w-3" />
-                                      {appt.loai_kham === 'clinic' ? 'Hủy khẩn cấp' : 'Hủy'}
-                                    </button>
+                                    {/* Hủy: home luôn hiện (hoàn tiền 100%). Clinic là "Hủy khẩn cấp"
+                                        (bắt buộc lý do, slot → locked) — chỉ cho phép trong vòng
+                                        EMERGENCY_CANCEL_WINDOW_HOURS tới giờ hẹn, quá mốc đó phải qua
+                                        "Yêu cầu hủy" (Lịch làm việc) để Admin duyệt/chuyển bác sĩ khác. */}
+                                    {appt.loai_kham === 'clinic' && !isWithinEmergencyWindow(appt) ? (
+                                      <span
+                                        className="inline-flex cursor-default items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-400"
+                                        title={`Còn hơn ${EMERGENCY_CANCEL_WINDOW_HOURS}h tới giờ hẹn — dùng "Yêu cầu hủy" ở trang Lịch làm việc để Admin xử lý`}
+                                      >
+                                        <Icon name="clock" className="h-3 w-3" /> Hủy qua Lịch làm việc
+                                      </span>
+                                    ) : (
+                                      <button
+                                        onClick={() => setCancelId(appt.id)}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
+                                      >
+                                        <Icon name="x" className="h-3 w-3" />
+                                        {appt.loai_kham === 'clinic' ? 'Hủy khẩn cấp' : 'Hủy'}
+                                      </button>
+                                    )}
                                   </>
                                 )}
 

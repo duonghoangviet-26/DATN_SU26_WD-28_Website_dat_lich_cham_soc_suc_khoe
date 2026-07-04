@@ -6,6 +6,19 @@ import { ok, fail } from '../../utils/response.js'
 // Routes: /api/doctor/schedule
 // ============================================================
 
+// Ca đã qua ngày, hoặc cùng ngày nhưng đã qua giờ bắt đầu. Trước đây chỉ FE
+// (effectiveStatus) ẩn nút — gọi thẳng API vẫn sửa được slot đã hết hạn. Chặn thêm ở
+// server để không phụ thuộc hoàn toàn vào việc ẩn nút phía client.
+function isSlotInPast(ngay, gio_bat_dau) {
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const ngayStr = ngay.toISOString().slice(0, 10)
+  if (ngayStr < todayStr) return true
+  if (ngayStr > todayStr) return false
+  const nowStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  return gio_bat_dau <= nowStr
+}
+
 function flattenSchedules(schedules) {
   return schedules.flatMap((sch) =>
     sch.slots.map((s) => ({
@@ -64,6 +77,7 @@ export async function updateSlot(req, res) {
     const slot = schedule.slots.id(slotId)
     if (!slot) return fail(res, 404, 'Không tìm thấy slot')
     if (slot.status === 'booked') return fail(res, 409, 'Không thể sửa slot đã có bệnh nhân đặt')
+    if (isSlotInPast(schedule.ngay, slot.gio_bat_dau)) return fail(res, 409, 'Ca đã qua giờ, không thể thao tác')
 
     if (phong_kham !== undefined) {
       slot.phong_kham = phong_kham || null
@@ -92,6 +106,40 @@ export async function updateSlot(req, res) {
   }
 }
 
+// ─── PATCH /api/doctor/schedule/day-off ─────────────────────────────────────
+// Khóa 1 lần toàn bộ slot 'active' trong 1 ngày, thay vì bấm Tạm nghỉ từng slot.
+// Slot đã 'booked' KHÔNG bị đụng — dùng requestCancelSlot (F7) riêng cho ca đã có bệnh nhân.
+export async function setDayOff(req, res) {
+  try {
+    const bacSi = await BacSi.findOne({ user_id: req.user.id }).select('_id').lean()
+    if (!bacSi) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+    const { ngay } = req.body
+    if (!ngay) return fail(res, 400, 'Ngày là bắt buộc')
+    const ngayDate = new Date(ngay)
+    if (isNaN(ngayDate)) return fail(res, 400, 'Ngày không hợp lệ')
+
+    const schedule = await LichLamViec.findOne({
+      doctor_id: bacSi._id,
+      ngay: { $gte: ngayDate, $lt: new Date(ngayDate.getTime() + 86400000) },
+    })
+    if (!schedule) return fail(res, 404, 'Không tìm thấy lịch làm việc ngày này')
+
+    let count = 0
+    schedule.slots.forEach((slot) => {
+      if (slot.status === 'active') {
+        slot.status = 'locked'
+        count += 1
+      }
+    })
+    await schedule.save()
+
+    return ok(res, { schedule_id: schedule._id, locked: count }, `Đã đặt nghỉ ${count} ca trống trong ngày`)
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
 // ─── POST /api/doctor/schedule/:scheduleId/slots/:slotId/request-cancel ─────
 // F7 — bác sĩ yêu cầu hủy 1 slot đã có bệnh nhân đặt. Slot giữ nguyên 'booked'
 // cho đến khi Admin xử lý (liên hệ BN, dời lịch hoặc hoàn tiền) — B2 doc mục F7.
@@ -111,6 +159,7 @@ export async function requestCancelSlot(req, res) {
     if (!slot) return fail(res, 404, 'Không tìm thấy slot')
     if (slot.status !== 'booked') return fail(res, 409, 'Chỉ yêu cầu hủy slot đã có bệnh nhân đặt')
     if (slot.cancel_requested) return fail(res, 409, 'Đã gửi yêu cầu hủy cho slot này, đang chờ Admin xử lý')
+    if (isSlotInPast(schedule.ngay, slot.gio_bat_dau)) return fail(res, 409, 'Ca đã qua giờ hẹn, không thể yêu cầu hủy — dùng chức năng Lịch hẹn để đóng hồ sơ ca này')
 
     slot.cancel_requested = true
     slot.cancel_reason    = ly_do.trim()

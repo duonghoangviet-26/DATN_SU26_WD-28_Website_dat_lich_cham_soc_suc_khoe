@@ -2,7 +2,6 @@ import type { DoctorSlot } from '@/types'
 import { toLocalDateStr } from '@/utils/format'
 
 // 16 slot/ngày — nghỉ trưa 12:00–13:30
-// slot status: active | pending_payment (BN giữ 15 phút, soft-lock) | booked | locked | cancelled | expired
 const SLOT_TIMES: [string, string][] = [
   ['08:00', '08:30'], ['08:30', '09:00'], ['09:00', '09:30'], ['09:30', '10:00'],
   ['10:00', '10:30'], ['10:30', '11:00'], ['11:00', '11:30'], ['11:30', '12:00'],
@@ -11,13 +10,9 @@ const SLOT_TIMES: [string, string][] = [
   ['15:30', '16:00'], ['16:00', '16:30'], ['16:30', '17:00'], ['17:00', '17:30'],
 ]
 
-const PHONG = [
-  'Phòng 201, Tầng 2, Tòa A',
-  'Phòng 305, Tầng 3, Tòa B',
-  'Phòng 102, Tầng 1, Tòa A',
-]
+const PHONG = 'Phòng 201, Tầng 2, Tòa A'
 
-// Rolling 6 ngày T2–T7 từ hôm nay (bỏ CN) — TBD-2: cron job duy trì window này
+// Rolling 6 ngày T2–T7 từ hôm nay (bỏ CN)
 function getRollingWindow(): string[] {
   const dates: string[] = []
   const cur = new Date()
@@ -28,6 +23,8 @@ function getRollingWindow(): string[] {
   return dates
 }
 
+// Khớp với mock/doctor-appointments.ts: 3 ca đầu hôm nay, ca đầu + ca 2 ngày mai, và ca
+// đầu +2 ngày đã có bệnh nhân đặt (chỉ loai_kham='clinic' — home không dùng slot system).
 function buildSlots(): DoctorSlot[] {
   const window = getRollingWindow()
   const all: DoctorSlot[] = []
@@ -37,57 +34,28 @@ function buildSlots(): DoctorSlot[] {
     const scheduleId = `sched-mock-${String(dayIdx + 1).padStart(3, '0')}`
 
     SLOT_TIMES.forEach(([bat_dau, ket_thuc], slotIdx) => {
-      const base: DoctorSlot = {
+      let slot: DoctorSlot = {
         id: String(slotNum),
         schedule_id: scheduleId,
         ngay,
         gio_bat_dau: bat_dau,
         gio_ket_thuc: ket_thuc,
-        phong_kham: PHONG[slotNum % 3],
+        phong_kham: PHONG,
         benh_nhan: null,
         benh_nhan_id: null,
         status: 'active',
       }
 
-      let slot = base
-
       if (dayIdx === 0) {
-        // Hôm nay — id 1–16
-        // slotIdx=0:  booked          — test Yêu cầu hủy, guard lockSlot/updatePhongKham booked
-        // slotIdx=2:  pending_payment — BN đang giữ slot 15 phút để thanh toán VNPay (soft-lock)
-        // slotIdx=4:  active phong=null — test warning chưa có phòng + lock null phong
-        // slotIdx=8:  locked          — test Mở lại, guard unlockSlot
-        // slotIdx=15: cancelled       — test guard cancelSlot/lockSlot/unlockSlot/updatePhongKham
-        if (slotIdx === 0) {
-          slot = { ...base, status: 'booked', benh_nhan: 'Trần Thị Bình', benh_nhan_id: '2', phong_kham: PHONG[0] }
-        } else if (slotIdx === 2) {
-          // Soft-lock: slot đang bị giữ bởi BN khác, hết hạn sau ~10 phút
-          const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
-          slot = { ...base, status: 'pending_payment', lock_expires_at: expiresAt, phong_kham: PHONG[0] }
-        } else if (slotIdx === 4) {
-          slot = { ...base, phong_kham: null }
-        } else if (slotIdx === 8) {
-          slot = { ...base, status: 'locked', phong_kham: PHONG[1] }
-        } else if (slotIdx === 15) {
-          slot = { ...base, status: 'cancelled', phong_kham: PHONG[0] }
-        }
+        if (slotIdx === 0) slot = { ...slot, status: 'booked', benh_nhan: 'Nguyễn Văn An', benh_nhan_id: '1' }
+        else if (slotIdx === 1) slot = { ...slot, status: 'booked', benh_nhan: 'Trần Thị Bình', benh_nhan_id: '2' }
+        else if (slotIdx === 2) slot = { ...slot, status: 'booked', benh_nhan: 'Võ Thị Hoa', benh_nhan_id: '3' }
+        else if (slotIdx === 8) slot = { ...slot, status: 'locked' } // bác sĩ bận việc riêng đầu giờ chiều
       } else if (dayIdx === 1) {
-        // Ngày mai — id 17–32
-        if (slotIdx === 0) {
-          slot = { ...base, status: 'booked', benh_nhan: 'Phạm Minh Quân', benh_nhan_id: '5', phong_kham: PHONG[0] }
-        } else if (slotIdx === 2) {
-          slot = { ...base, phong_kham: null }
-        }
-      } else if (dayIdx === 2) {
-        // +2 ngày — id 33–48
-        if (slotIdx === 0) {
-          slot = { ...base, status: 'locked', phong_kham: PHONG[0] }
-        } else if (slotIdx === 3) {
-          slot = { ...base, phong_kham: null }
-        }
-      } else {
-        // Days 3–5: all active, rải phong=null để test UI
-        if (slotIdx % 6 === 5) slot = { ...base, phong_kham: null }
+        if (slotIdx === 0) slot = { ...slot, status: 'booked', benh_nhan: 'Phạm Minh Quân', benh_nhan_id: '4' }
+        else if (slotIdx === 1) slot = { ...slot, status: 'booked', benh_nhan: 'Lê Thị Lan', benh_nhan_id: '5' }
+      } else if (dayIdx === 2 && slotIdx === 0) {
+        slot = { ...slot, status: 'booked', benh_nhan: 'Đặng Văn Quân', benh_nhan_id: '6' }
       }
 
       all.push(slot)

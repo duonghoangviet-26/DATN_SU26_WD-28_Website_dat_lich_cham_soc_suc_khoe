@@ -6,7 +6,10 @@ import { ok, created, fail } from '../../utils/response.js'
 // Routes: /api/doctor/appointments
 // ============================================================
 
-const PAYMENT_DEADLINE_HOURS = 2
+// "Hủy khẩn cấp" (clinic, confirmed) chỉ cho phép trong vòng X giờ tới giờ hẹn — thật sự
+// khẩn cấp mới bỏ qua bước Admin duyệt. Quá mốc này bác sĩ phải dùng "Yêu cầu hủy"
+// (POST /doctor/schedule/:scheduleId/slots/:slotId/request-cancel) để Admin xử lý.
+const EMERGENCY_CANCEL_WINDOW_HOURS = 24
 
 async function getDocId(userId) {
   const d = await BacSi.findOne({ user_id: userId }).select('_id').lean()
@@ -62,6 +65,10 @@ export async function list(req, res) {
     const filter = { doctor_id: docId }
     if (status) filter.status = status
     if (date)   filter.ngay_kham = { $gte: new Date(date), $lt: new Date(new Date(date).setDate(new Date(date).getDate() + 1)) }
+    // Ẩn hẳn pending+unpaid (Luồng C legacy, quyết định 2026-07-04) khỏi danh sách bác sĩ
+    // xem — không còn tự phát sinh qua flow đặt lịch thật (mọi lịch mới đều paid ngay lúc
+    // đặt), chỉ gây nhiễu nếu còn sót dữ liệu cũ/tạo tay.
+    filter.$nor = [{ status: 'pending', payment_status: { $ne: 'paid' } }]
 
     const appointments = await LichHen.find(filter)
       .sort({ ngay_kham: 1, gio_kham: 1 })
@@ -107,10 +114,14 @@ export async function confirm(req, res) {
       return fail(res, 409, 'Lịch hẹn đã quá ngày khám, không thể xác nhận')
     }
 
-    a.status = 'confirmed'
-    if (a.payment_status === 'unpaid') {
-      a.payment_deadline = new Date(Date.now() + PAYMENT_DEADLINE_HOURS * 3600 * 1000)
+    // Chỉ lịch đã thanh toán mới được xác nhận — mọi lịch đặt mới đều thanh toán ngay lúc
+    // đặt (quyết định 2026-07-02, xem createBooking()), unpaid chỉ có thể là dữ liệu
+    // cũ/tạo tay, không phải luồng hợp lệ để bác sĩ tự xác nhận.
+    if (a.payment_status !== 'paid') {
+      return fail(res, 409, 'Chỉ xác nhận lịch hẹn đã thanh toán')
     }
+
+    a.status = 'confirmed'
     await a.save()
 
     return ok(res, { id: a._id, status: a.status, payment_deadline: a.payment_deadline }, 'Đã xác nhận lịch hẹn')
@@ -135,8 +146,15 @@ export async function cancel(req, res) {
     }
 
     const isEmergency = a.loai_kham === 'clinic' && a.status === 'confirmed'
-    if (isEmergency && !ly_do?.trim()) {
-      return fail(res, 400, 'Hủy khẩn cấp bắt buộc phải nhập lý do')
+    if (isEmergency) {
+      if (!ly_do?.trim()) return fail(res, 400, 'Hủy khẩn cấp bắt buộc phải nhập lý do')
+
+      const [h, m] = a.gio_kham.split(':').map(Number)
+      const gioKham = new Date(a.ngay_kham)
+      gioKham.setHours(h, m, 0, 0)
+      if (gioKham.getTime() - Date.now() >= EMERGENCY_CANCEL_WINDOW_HOURS * 3600 * 1000) {
+        return fail(res, 403, `Lịch hẹn còn hơn ${EMERGENCY_CANCEL_WINDOW_HOURS}h — vui lòng dùng "Yêu cầu hủy" ở Lịch làm việc để Admin xử lý`)
+      }
     }
 
     a.status    = 'cancelled'
@@ -268,7 +286,12 @@ export async function updateResult(req, res) {
 
     const result = await KetQuaKham.findOne({ appointment_id: a._id })
     if (!result) return fail(res, 404, 'Chưa có kết quả khám')
-    if (!result.co_the_sua) return fail(res, 403, 'Kết quả đã khóa sau 24 giờ, không thể sửa')
+    // co_the_sua chỉ default=true lúc tạo — không có cron nào từng set false (xem comment
+    // model KetQuaKham.js:8 "qua cron/check"), nên khóa 24h chưa bao giờ thực sự có hiệu lực.
+    // Tính trực tiếp từ ngay_tao thay vì dựa vào field tĩnh không ai cập nhật.
+    const KHOA_SAU_GIO = 24
+    const daKhoa = !result.co_the_sua || (Date.now() - result.ngay_tao.getTime() > KHOA_SAU_GIO * 3600 * 1000)
+    if (daKhoa) return fail(res, 403, 'Kết quả đã khóa sau 24 giờ, không thể sửa')
 
     const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham } = req.body
     if (chan_doan)           result.chan_doan          = chan_doan.trim()

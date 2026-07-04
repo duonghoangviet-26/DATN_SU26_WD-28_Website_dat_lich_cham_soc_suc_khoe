@@ -35,6 +35,7 @@ export const examinationService = {
     const thuoc = (data.thuoc ?? []).map((t, i) => ({ ...t, id: i + 1 }))
     const idx = examinations.findIndex(e => e.appointment_id === data.appointment_id)
     if (idx !== -1) {
+      if (!examinations[idx].co_the_sua) throw new Error('Kết quả khám đã bị khóa (quá 24h)')
       const updated: ExaminationResult = { ...examinations[idx], ...data, thuoc }
       examinations[idx] = updated
       return { ...updated }
