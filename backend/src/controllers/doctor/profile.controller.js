@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { BacSi, NguoiDung, ChuyenKhoa, DichVu } from '../../models/index.js'
+import { BacSi, NguoiDung, ChuyenKhoa, DichVu, HoSoChiTietBacSi } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 
 // ============================================================
@@ -15,6 +15,7 @@ async function formatProfile(doc) {
     .lean()
   if (!d) throw new Error('Không tìm thấy hồ sơ')
   const u = d.user_id ?? {}
+  const hoSo = await HoSoChiTietBacSi.findOne({ doctor_id: d._id }).lean()
   return {
     id:                  d._id,
     ho_ten:              u.ho_ten,
@@ -36,6 +37,14 @@ async function formatProfile(doc) {
     specialties:         (d.specialties ?? []).map((s) => ({ id: s._id, ten: s.ten })),
     services:            (d.services    ?? []).map((s) => ({ id: s._id, ten: s.ten, gia: s.gia })),
     ngay_tao:            d.ngay_tao,
+    // Hồ sơ chi tiết (trang chi tiết BN xem) — null nếu bác sĩ chưa điền
+    chuc_danh:           hoSo?.chuc_danh ?? null,
+    chuc_vu:             hoSo?.chuc_vu ?? null,
+    benh_ly_dieu_tri:    hoSo?.benh_ly_dieu_tri ?? [],
+    qua_trinh_cong_tac:  hoSo?.qua_trinh_cong_tac ?? [],
+    qua_trinh_dao_tao:   hoSo?.qua_trinh_dao_tao ?? [],
+    thanh_vien_hoi:      hoSo?.thanh_vien_hoi ?? [],
+    giai_thuong:         hoSo?.giai_thuong ?? [],
   }
 }
 
@@ -59,6 +68,8 @@ export async function updateProfile(req, res) {
       tieu_su, bang_cap, kinh_nghiem,
       so_nam_kinh_nghiem, gia_kham, tuoi_nhan_kham_tu,
       specialties, services,
+      chuc_danh, chuc_vu, benh_ly_dieu_tri,
+      qua_trinh_cong_tac, qua_trinh_dao_tao, thanh_vien_hoi, giai_thuong,
     } = req.body
 
     // Cập nhật thông tin user
@@ -89,6 +100,29 @@ export async function updateProfile(req, res) {
     }
 
     await doc.save()
+
+    // Cập nhật hồ sơ chi tiết (chỉ upsert nếu client có gửi ít nhất 1 trường liên quan)
+    const hoSoFields = {
+      chuc_danh, chuc_vu, benh_ly_dieu_tri,
+      qua_trinh_cong_tac, qua_trinh_dao_tao, thanh_vien_hoi, giai_thuong,
+    }
+    if (Object.values(hoSoFields).some((v) => v !== undefined)) {
+      const hoSoUpdate = {}
+      if (chuc_danh !== undefined) hoSoUpdate.chuc_danh = chuc_danh?.trim() || null
+      if (chuc_vu   !== undefined) hoSoUpdate.chuc_vu   = chuc_vu?.trim()   || null
+      if (Array.isArray(benh_ly_dieu_tri))   hoSoUpdate.benh_ly_dieu_tri   = benh_ly_dieu_tri
+      if (Array.isArray(qua_trinh_cong_tac)) hoSoUpdate.qua_trinh_cong_tac = qua_trinh_cong_tac
+      if (Array.isArray(qua_trinh_dao_tao))  hoSoUpdate.qua_trinh_dao_tao  = qua_trinh_dao_tao
+      if (Array.isArray(thanh_vien_hoi))     hoSoUpdate.thanh_vien_hoi     = thanh_vien_hoi
+      if (Array.isArray(giai_thuong))        hoSoUpdate.giai_thuong        = giai_thuong
+
+      await HoSoChiTietBacSi.findOneAndUpdate(
+        { doctor_id: doc._id },
+        { $set: hoSoUpdate },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      )
+    }
+
     return ok(res, await formatProfile(doc), 'Cập nhật hồ sơ thành công')
   } catch (err) {
     return fail(res, 500, err.message)
