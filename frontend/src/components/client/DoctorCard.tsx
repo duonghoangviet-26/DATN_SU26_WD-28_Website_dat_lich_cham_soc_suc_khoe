@@ -20,6 +20,11 @@ export default function DoctorCard({ doctor, onBook }: Props) {
           <p className="text-sm text-brand-600">{doctor.chuyen_khoa}</p>
           <p className="mt-1 text-sm text-slate-500">{doctor.so_nam_kinh_nghiem} năm kinh nghiệm</p>
           <p className="text-sm text-slate-500">{doctor.bang_cap}</p>
+          {doctor.phong_kham_mac_dinh && (
+            <p className="mt-1 flex items-center gap-1 text-sm text-slate-500">
+              <span aria-hidden>📍</span> {doctor.phong_kham_mac_dinh}
+            </p>
+          )}
           {doctor.diem_danh_gia > 0 && (
             <p className="mt-1 text-sm text-amber-600">
               ★ {doctor.diem_danh_gia.toFixed(1)} ({doctor.so_danh_gia} đánh giá)

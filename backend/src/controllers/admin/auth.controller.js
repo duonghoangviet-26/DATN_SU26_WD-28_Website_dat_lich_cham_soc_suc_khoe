@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { NguoiDung } from '../../models/index.js'
+import { NguoiDung, ThongBao } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
+
+const ADMIN_ID = "000000000000000000000099"
 
 // ============================================================
 // CONTROLLER: Xác thực (A1)
@@ -99,6 +101,14 @@ export async function register(req, res) {
         so_dien_thoai:
           so_dien_thoai || null,
       })
+
+    // Gửi thông báo cho Admin
+    await ThongBao.create({
+      user_id: ADMIN_ID,
+      tieu_de: 'Người dùng mới đăng ký',
+      noi_dung: `Người dùng ${ho_ten} (${email}) vừa tạo tài khoản thành công.`,
+      loai: 'system'
+    })
 
     return created(
       res,

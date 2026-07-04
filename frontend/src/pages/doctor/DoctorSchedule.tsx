@@ -427,7 +427,7 @@ export default function DoctorSchedule() {
             {/* Footer */}
             <div className="flex items-center justify-between border-t border-slate-100 px-6 py-3">
               <button
-                onClick={() => selectRoom(roomPickerSlot.id, null)}
+                onClick={() => selectRoom(roomPickerSlot, null)}
                 disabled={savingRoom || !roomPickerSlot.phong_kham}
                 className="text-xs text-red-500 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
               >

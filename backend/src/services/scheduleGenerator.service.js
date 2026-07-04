@@ -3,7 +3,7 @@ import { BacSi, LichLamViec } from '../models/index.js'
 // ============================================================
 // SINH LỊCH LÀM VIỆC TỰ ĐỘNG (B2 — Rolling Window T2–T7)
 // Dùng chung bởi: cron 23:55 hàng ngày, POST /api/admin/slots/generate,
-// và admin/doctors.controller.js.approve() (sinh lịch lần đầu cho BS mới duyệt).
+// và services/doctor.service.js.approveDoctor() (sinh lịch lần đầu cho BS mới duyệt).
 // Xem docs/Bác sĩ/B2 - Lịch làm việc.md mục 2.
 // ============================================================
 

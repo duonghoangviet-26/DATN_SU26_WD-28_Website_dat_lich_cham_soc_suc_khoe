@@ -7,7 +7,7 @@ import { fail } from './utils/response.js'
 const app = express()
 
 // ----- Middleware nền tảng -----
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }))
+app.use(cors()) // Cho phép tất cả trong môi trường Dev để tránh lỗi đổi port
 app.use(express.json()) // đọc JSON từ body request
 
 // ----- Route kiểm tra sống -----

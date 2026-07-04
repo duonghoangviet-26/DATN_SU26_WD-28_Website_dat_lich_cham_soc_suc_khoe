@@ -1,46 +1,55 @@
-import { mockNotifications } from '@/mock/notifications'
-import type { NotificationItem, NotificationTarget } from '@/types'
+import axios from 'axios'
+import type { NotificationItemAPI, NotificationTargetAPI } from '@/types'
 
-const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const BASE_URL = `${API_URL}/admin/notifications`
 
-const RECIPIENT_COUNT: Record<NotificationTarget, number> = {
-  tat_ca: 1248,
-  benh_nhan: 1162,
-  bac_si: 86,
-}
-
-let notifications = [...mockNotifications]
-let nextId = notifications.length + 1
-
-interface SendPayload {
+interface SendPayloadAPI {
   tieu_de: string
   noi_dung: string
-  doi_tuong: NotificationTarget
+  doi_tuong: NotificationTargetAPI
+  admin_id: string
 }
 
 export const notificationService = {
-  async getAll(): Promise<NotificationItem[]> {
-    await delay()
-    return [...notifications].reverse()
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<NotificationItem[]>>('/admin/notifications')
-    // return res.data.data
+  async getAll(page = 1, limit = 10): Promise<{ data: NotificationItemAPI[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
+    const { data } = await axios.get(BASE_URL, { params: { page, limit } })
+    return {
+      data: data.data,
+      pagination: data.pagination
+    }
   },
 
-  async send(payload: SendPayload): Promise<NotificationItem> {
-    await delay()
-    const newItem: NotificationItem = {
-      id: nextId++,
-      tieu_de: payload.tieu_de,
-      noi_dung: payload.noi_dung,
-      doi_tuong: payload.doi_tuong,
-      so_nguoi_nhan: RECIPIENT_COUNT[payload.doi_tuong] ?? 0,
-      ngay_gui: new Date().toISOString(),
+  async getReceived(page = 1, limit = 10): Promise<{ data: any[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
+    const { data } = await axios.get(`${BASE_URL}/received`, { params: { page, limit } })
+    return {
+      data: data.data,
+      pagination: data.pagination
     }
-    notifications = [newItem, ...notifications]
-    return newItem
-    // Real API:
-    // const res = await axiosInstance.post<ApiResponse<NotificationItem>>('/admin/notifications', payload)
-    // return res.data.data
+  },
+
+  async send(payload: SendPayloadAPI): Promise<NotificationItemAPI> {
+    const { data } = await axios.post(BASE_URL, payload)
+    return data.data
+  },
+
+  async update(id: string, payload: { tieu_de: string; noi_dung: string }): Promise<NotificationItemAPI> {
+    const { data } = await axios.put(`${BASE_URL}/${id}`, payload)
+    return data.data
+  },
+
+  async delete(id: string): Promise<boolean> {
+    await axios.delete(`${BASE_URL}/${id}`)
+    return true
+  },
+
+  async markAsRead(id: string): Promise<boolean> {
+    await axios.put(`${BASE_URL}/received/${id}/read`)
+    return true
+  },
+
+  async getLogs(id: string): Promise<any[]> {
+    const { data } = await axios.get(`${BASE_URL}/${id}/logs`)
+    return data.data
   },
 }

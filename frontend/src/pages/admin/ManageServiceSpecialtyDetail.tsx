@@ -55,7 +55,8 @@ export default function ManageServiceSpecialtyDetail() {
       serviceService.getAll('related', '', '', 1, 9999),
       // Lấy toàn bộ (không chỉ approved) vì trang admin cần thấy cả bác sĩ đã ẩn (suspended) để có thể "Hiện" lại.
       // Trang bệnh nhân dùng doctorService.getBySpecialtySlug (chỉ approved) — không đụng tới ở đây.
-      doctorService.getAll(),
+      // MOCK — ngày demo 2026-07-04 chưa seed đủ dữ liệu thật, giữ mock (xem getAllMock trong doctor.service.ts).
+      doctorService.getAllMock(),
     ])
       .then(([sp, svcResult, allDocs]) => {
         setLoadError(false)
@@ -120,8 +121,8 @@ export default function ManageServiceSpecialtyDetail() {
     const id = String(doctorToggleTarget.id)
     setDoctorToggleTarget(null)
     try {
-      if (wasApproved) await doctorService.suspend(id)
-      else await doctorService.restore(id)
+      if (wasApproved) await doctorService.suspendMock(id)
+      else await doctorService.restoreMock(id)
       showToast(wasApproved ? 'Đã ẩn bác sĩ' : 'Đã hiện bác sĩ')
       triggerReload()
     } catch (err) {
@@ -227,6 +228,11 @@ export default function ManageServiceSpecialtyDetail() {
                       {!!d.tuoi_nhan_kham_tu && (
                         <div className="mt-1 text-xs text-slate-400">Bác sĩ nhận khám từ {d.tuoi_nhan_kham_tu} tuổi trở lên</div>
                       )}
+                      <div className="mt-1 text-xs text-slate-400">
+                        {d.phong_kham_mac_dinh
+                          ? <>📍 {d.phong_kham_mac_dinh}</>
+                          : <span className="text-amber-600">⚠ Chưa được gán phòng khám mặc định</span>}
+                      </div>
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-1">
                       <button

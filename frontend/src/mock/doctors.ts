@@ -15,6 +15,7 @@ export const mockDoctors: DoctorProfile[] = [
       { id: 'mock-svc-001', ten: 'Siêu âm tim', gia: 350000 },
       { id: 'mock-svc-002', ten: 'Điện tâm đồ (ECG)', gia: 150000 },
     ],
+    phong_kham_mac_dinh: 'Phòng 201, Tầng 2, Tòa A',
     ngay_tao: '2026-01-20T09:00:00',
   },
   {
@@ -28,6 +29,7 @@ export const mockDoctors: DoctorProfile[] = [
     loai: 'specialist',
     bao_hiem: { nha_nuoc: true, bao_lanh: false },
     related_services: [],
+    phong_kham_mac_dinh: 'Phòng 202, Tầng 2, Tòa A',
     ngay_tao: '2026-02-05T10:30:00',
   },
   {
@@ -84,6 +86,7 @@ export const mockDoctors: DoctorProfile[] = [
     loai: 'specialist',
     bao_hiem: { nha_nuoc: false, bao_lanh: false },
     related_services: [],
+    phong_kham_mac_dinh: 'Phòng 305, Tầng 3, Tòa B',
     ngay_tao: '2026-02-20T08:00:00',
   },
   // home_staff — nhân viên lấy mẫu xét nghiệm tại nhà (KHÔNG phải bác sĩ chuyên khoa,
@@ -132,6 +135,7 @@ export const mockDoctors: DoctorProfile[] = [
       { id: 'mock-svc-007', ten: 'Chụp X-quang cột sống cổ thẳng nghiêng', gia: 250000 },
       { id: 'mock-svc-008', ten: 'Chụp cộng hưởng từ (MRI) cột sống thắt lưng', gia: 1900000 },
     ],
+    phong_kham_mac_dinh: 'Phòng 201, Tầng 2, Tòa A',
     ngay_tao: '2026-05-01T08:00:00',
   },
 ]

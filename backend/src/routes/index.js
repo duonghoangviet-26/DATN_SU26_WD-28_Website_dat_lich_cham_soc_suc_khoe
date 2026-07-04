@@ -1,12 +1,14 @@
 import { Router } from 'express'
-import authRoutes    from './admin/auth.routes.js'
-import adminRoutes   from './admin/index.js'
-import doctorRoutes  from './doctor/index.js'
-import patientRoutes from './patient/index.js'
-import clinicRoutes from './admin/clinic.routes.js'
-import uploadRoutes from './admin/upload.routes.js'
-import clinicInfoRoutes from './admin/clinic-info.routes.js'
-import appointmentRoutes from './admin/appointment.routes.js'
+import authRoutes         from './admin/auth.routes.js'
+import adminRoutes        from './admin/index.js'
+import doctorRoutes       from './doctor/index.js'
+import patientRoutes      from './patient/index.js'
+import clinicRoutes       from './admin/clinic.routes.js'
+import uploadRoutes       from './admin/upload.routes.js'
+import clinicInfoRoutes   from './admin/clinic-info.routes.js'
+import appointmentRoutes  from './admin/appointment.routes.js'
+import adminDoctorRoutes  from './doctor.routes.js'
+import notificationRoutes from './notification.routes.js'
 
 /**
  * Gom toàn bộ route con của hệ thống
@@ -26,5 +28,7 @@ router.use('/admin', adminRoutes)
 router.use('/admin/upload', uploadRoutes)
 router.use('/admin/clinic-info', clinicInfoRoutes)
 router.use('/admin/appointments', appointmentRoutes)
+router.use('/admin/doctors', adminDoctorRoutes)
+router.use('/admin/notifications', notificationRoutes)
 
 export default router

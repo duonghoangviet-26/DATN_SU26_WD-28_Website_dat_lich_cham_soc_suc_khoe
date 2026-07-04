@@ -144,6 +144,7 @@ export default function ManageUsers() {
       setShowAddModal(false)
       setFormData({ ho_ten: '', email: '', mat_khau: '', so_dien_thoai: '', role: 'user' })
       loadUsers()
+      window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
     } catch (err: any) {
       setFormError(err.response?.data?.message || 'Lỗi khi tạo')
     } finally { setSubmitting(false) }
@@ -157,6 +158,7 @@ export default function ManageUsers() {
       await userService.update(editingUser.id, editingUser)
       setEditingUser(null)
       loadUsers()
+      window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
     } catch (err: any) {
       setFormError(err.response?.data?.message || 'Lỗi khi cập nhật')
     } finally { setSubmitting(false) }
@@ -622,7 +624,7 @@ export default function ManageUsers() {
               <div><label className="text-xs font-bold mb-1 block">Mật khẩu *</label><input required type="password" className="input" value={formData.mat_khau} onChange={e => setFormData({ ...formData, mat_khau: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={formData.so_dien_thoai} onChange={e => setFormData({ ...formData, so_dien_thoai: e.target.value })} /></div>
-                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
+                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as Role })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
               </div>
             </div>
             <div className="flex gap-3 mt-8">
