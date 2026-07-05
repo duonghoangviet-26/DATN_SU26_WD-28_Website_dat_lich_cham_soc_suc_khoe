@@ -19,6 +19,7 @@ export const mockDoctors: DoctorProfile[] = [
     loai: 'specialist',
     bao_hiem: { nha_nuoc: true, bao_lanh: true },
     related_services: [
+      { id: 'mock-svc-000', ten: 'Khám lâm sàng Tai Mũi Họng', gia: 150000 },
       { id: 'mock-svc-001', ten: 'Nội soi tai mũi họng bằng ống mềm', gia: 350000 },
       { id: 'mock-svc-002', ten: 'Rửa mũi xoang bằng máy khí dung', gia: 150000 },
     ],
@@ -43,6 +44,7 @@ export const mockDoctors: DoctorProfile[] = [
     loai: 'specialist',
     bao_hiem: { nha_nuoc: true, bao_lanh: false },
     related_services: [
+      { id: 'mock-svc-000', ten: 'Khám lâm sàng Tai Mũi Họng', gia: 150000 },
       { id: 'mock-svc-002', ten: 'Rửa mũi xoang bằng máy khí dung', gia: 150000 },
     ],
     phong_kham_mac_dinh: 'Phòng 202, Tầng 2, Tòa Nhà A',
@@ -65,7 +67,9 @@ export const mockDoctors: DoctorProfile[] = [
     kinh_nghiem: 'Khám và tư vấn các bệnh lý tai mũi họng phổ thông ở người lớn.',
     loai: 'specialist',
     bao_hiem: { nha_nuoc: false, bao_lanh: false },
-    related_services: [],
+    related_services: [
+      { id: 'mock-svc-000', ten: 'Khám lâm sàng Tai Mũi Họng', gia: 150000 },
+    ],
     phong_kham_mac_dinh: 'Phòng 103, Tầng 1, Tòa Nhà B',
     ngay_tao: '2026-04-10T14:00:00',
   },
@@ -87,6 +91,7 @@ export const mockDoctors: DoctorProfile[] = [
     loai: 'specialist',
     bao_hiem: { nha_nuoc: true, bao_lanh: true },
     related_services: [
+      { id: 'mock-svc-000', ten: 'Khám lâm sàng Tai Mũi Họng', gia: 150000 },
       { id: 'mock-svc-001', ten: 'Nội soi tai mũi họng bằng ống mềm', gia: 350000 },
     ],
     phong_kham_mac_dinh: 'Phòng 301, Tầng 3, Tòa Nhà B',

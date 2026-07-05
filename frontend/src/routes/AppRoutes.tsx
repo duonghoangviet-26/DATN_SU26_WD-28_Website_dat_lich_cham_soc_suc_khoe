@@ -13,6 +13,10 @@ import DoctorList from '@/pages/client/DoctorList'
 import DoctorDetail from '@/pages/client/DoctorDetail'
 import ServiceList from '@/pages/client/ServiceList'
 import ServiceDetail from '@/pages/client/ServiceDetail'
+import Booking from '@/pages/client/Booking'
+import Profile from '@/pages/client/Profile'
+import NewsList from '@/pages/client/NewsList'
+import NewsDetail from '@/pages/client/NewsDetail'
 
 import Dashboard from '@/pages/admin/Dashboard'
 import ManageUsers from '@/pages/admin/ManageUsers'
@@ -42,6 +46,10 @@ export default function AppRoutes() {
         <Route path="/bac-si/:id" element={<DoctorDetail />} />
         <Route path="/dich-vu" element={<ServiceList />} />
         <Route path="/dich-vu/:id" element={<ServiceDetail />} />
+        <Route path="/booking" element={<Booking />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/tin-tuc" element={<NewsList />} />
+        <Route path="/tin-tuc/:slug" element={<NewsDetail />} />
       </Route>
 
       {/* Khu vực xác thực */}

@@ -10,11 +10,10 @@ export default function ServiceList() {
   const [loading, setLoading] = useState(true)
   const [services, setServices] = useState<ServiceItem[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeTab, setActiveTab] = useState<'all' | 'clinic' | 'home'>('all')
 
   useEffect(() => {
     setLoading(true)
-    serviceService.getAll('', '', 'active', 1, 100)
+    serviceService.getAll('related', '', 'active', 1, 100)
       .then((res) => {
         setServices(res.items)
       })
@@ -23,16 +22,10 @@ export default function ServiceList() {
       })
   }, [])
 
-  // Filter based on Search & Tabs
+  // Filter based on Search
   const filteredServices = services.filter((s) => {
-    const matchesSearch = s.ten.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.ma_dich_vu.toLowerCase().includes(searchTerm.toLowerCase())
-
-    let matchesTab = true
-    if (activeTab === 'clinic') matchesTab = s.loai === 'related'
-    else if (activeTab === 'home') matchesTab = s.loai === 'home'
-
-    return matchesSearch && matchesTab
+    return s.ten.toLowerCase().includes(searchTerm.toLowerCase()) || 
+           s.ma_dich_vu.toLowerCase().includes(searchTerm.toLowerCase())
   })
 
   return (
@@ -42,33 +35,13 @@ export default function ServiceList() {
       <div className="text-left space-y-2">
         <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Gói Dịch Vụ Tai Mũi Họng</h1>
         <p className="text-sm text-slate-500 max-w-2xl">
-          Phòng khám cung cấp đầy đủ các dịch vụ nội soi chuẩn đoán, hút rửa xoang mũi lâm sàng và dịch vụ lấy mẫu xét nghiệm tận nhà.
+          Phòng khám cung cấp đầy đủ các dịch vụ nội soi chẩn đoán và hút rửa xoang mũi lâm sàng bởi các chuyên gia.
         </p>
       </div>
 
-      {/* FILTER & TABS SECTION */}
+      {/* FILTER SECTION */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between border-b border-slate-200 pb-4">
-        {/* Tabs */}
-        <div className="flex bg-slate-100 p-1 rounded-xl">
-          {[
-            { key: 'all', label: 'Tất cả dịch vụ' },
-            { key: 'clinic', label: 'Khám lâm sàng' },
-            { key: 'home', label: 'Xét nghiệm tại nhà' },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as any)}
-              className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
-                activeTab === tab.key
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
+        <div /> {/* Spacing */}
         {/* Search */}
         <div className="relative w-full sm:w-72">
           <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
@@ -100,7 +73,7 @@ export default function ServiceList() {
         </div>
       ) : filteredServices.length === 0 ? (
         <div className="rounded-2xl border border-slate-100 bg-white p-8">
-          <Empty title="Không có dịch vụ tương ứng" description="Vui lòng đổi từ khóa hoặc bộ lọc danh mục." icon="search" />
+          <Empty title="Không có dịch vụ tương ứng" description="Vui lòng đổi từ khóa hoặc bộ lọc." icon="search" />
         </div>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -113,15 +86,6 @@ export default function ServiceList() {
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded-md">
                     {s.ma_dich_vu}
-                  </span>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                      s.loai === 'home'
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'bg-emerald-50 text-emerald-600'
-                    }`}
-                  >
-                    {s.loai === 'home' ? 'Tại nhà' : 'Lâm sàng'}
                   </span>
                 </div>
                 <div className="space-y-1.5 text-left">
