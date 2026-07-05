@@ -150,16 +150,12 @@ export default function Home() {
               </div>
 
               {/* Booking Actions */}
-              <div className="p-4 pt-0 border-t border-slate-50 flex items-center justify-between mt-2">
-                <div className="text-left">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase leading-none">Phí khám</p>
-                  <p className="text-sm font-extrabold text-slate-900">{d.gia_kham.toLocaleString('vi-VN')}đ</p>
-                </div>
+              <div className="p-4 pt-3 border-t border-slate-50 flex items-center justify-center mt-2">
                 <Link
                   to={`/booking?doctor_id=${d.id}`}
-                  className="btn-primary px-3 py-1.5 text-xs font-bold shadow-sm shadow-brand-100"
+                  className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100"
                 >
-                  Đặt lịch
+                  Đặt lịch khám
                 </Link>
               </div>
             </div>

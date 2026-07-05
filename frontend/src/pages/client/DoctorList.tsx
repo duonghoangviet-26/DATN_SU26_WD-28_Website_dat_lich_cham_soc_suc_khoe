@@ -140,19 +140,13 @@ export default function DoctorList() {
                 </div>
               </div>
 
-              <div className="p-4 pt-0 border-t border-slate-50 flex items-center justify-between mt-2">
-                <div className="text-left">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase leading-none">Phí khám</p>
-                  <p className="text-sm font-extrabold text-slate-900">{d.gia_kham.toLocaleString('vi-VN')}đ</p>
-                </div>
-                <div className="flex gap-2">
-                  <Link to={`/bac-si/${d.id}`} className="btn-secondary px-2.5 py-1.5 text-xs font-bold">
-                    Chi tiết
-                  </Link>
-                  <Link to={`/booking?doctor_id=${d.id}`} className="btn-primary px-3 py-1.5 text-xs font-bold shadow-sm shadow-brand-100">
-                    Đặt lịch
-                  </Link>
-                </div>
+              <div className="p-4 pt-3 border-t border-slate-50 grid grid-cols-2 gap-2 mt-2">
+                <Link to={`/bac-si/${d.id}`} className="btn-secondary w-full text-center py-2 text-xs font-bold">
+                  Chi tiết
+                </Link>
+                <Link to={`/booking?doctor_id=${d.id}`} className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100">
+                  Đặt lịch
+                </Link>
               </div>
             </div>
           ))}

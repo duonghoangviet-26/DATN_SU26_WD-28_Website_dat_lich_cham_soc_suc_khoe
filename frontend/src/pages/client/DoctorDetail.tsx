@@ -70,14 +70,10 @@ export default function DoctorDetail() {
             <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{doctor.bang_cap}</p>
           </div>
 
-          <div className="grid gap-4 border-y border-slate-50 py-4 sm:grid-cols-3">
+          <div className="grid gap-4 border-y border-slate-50 py-4 sm:grid-cols-2">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase">Kinh nghiệm</p>
               <p className="text-sm font-extrabold text-slate-800">{doctor.so_nam_kinh_nghiem} năm làm việc</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Phí tư vấn ban đầu</p>
-              <p className="text-sm font-extrabold text-brand-600">{doctor.gia_kham.toLocaleString('vi-VN')} đ</p>
             </div>
             {doctor.phong_kham_mac_dinh && (
               <div>

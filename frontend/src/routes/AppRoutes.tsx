@@ -11,11 +11,8 @@ import Register from '@/pages/auth/Register'
 import Home from '@/pages/client/Home'
 import DoctorList from '@/pages/client/DoctorList'
 import DoctorDetail from '@/pages/client/DoctorDetail'
-import ServicesHome from '@/pages/client/ServicesHome'
-import SpecialtyList from '@/pages/client/SpecialtyList'
-import SpecialtyDoctors from '@/pages/client/SpecialtyDoctors'
-import HomeServiceList from '@/pages/client/HomeServiceList'
-import HomeServiceDetail from '@/pages/client/HomeServiceDetail'
+import ServiceList from '@/pages/client/ServiceList'
+import ServiceDetail from '@/pages/client/ServiceDetail'
 
 import Dashboard from '@/pages/admin/Dashboard'
 import ManageUsers from '@/pages/admin/ManageUsers'
@@ -43,11 +40,8 @@ export default function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/bac-si" element={<DoctorList />} />
         <Route path="/bac-si/:id" element={<DoctorDetail />} />
-        <Route path="/dich-vu" element={<ServicesHome />} />
-        <Route path="/dich-vu/chuyen-khoa" element={<SpecialtyList />} />
-        <Route path="/dich-vu/chuyen-khoa/:slug" element={<SpecialtyDoctors />} />
-        <Route path="/dich-vu/xet-nghiem" element={<HomeServiceList />} />
-        <Route path="/dich-vu/xet-nghiem/:id" element={<HomeServiceDetail />} />
+        <Route path="/dich-vu" element={<ServiceList />} />
+        <Route path="/dich-vu/:id" element={<ServiceDetail />} />
       </Route>
 
       {/* Khu vực xác thực */}
