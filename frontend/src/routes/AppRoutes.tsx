@@ -9,6 +9,8 @@ import ProtectedRoute from '@/routes/ProtectedRoute'
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
 import Home from '@/pages/client/Home'
+import DoctorList from '@/pages/client/DoctorList'
+import DoctorDetail from '@/pages/client/DoctorDetail'
 import ServicesHome from '@/pages/client/ServicesHome'
 import SpecialtyList from '@/pages/client/SpecialtyList'
 import SpecialtyDoctors from '@/pages/client/SpecialtyDoctors'
@@ -39,6 +41,8 @@ export default function AppRoutes() {
       {/* Khu vực khách (client) */}
       <Route element={<ClientLayout />}>
         <Route path="/" element={<Home />} />
+        <Route path="/bac-si" element={<DoctorList />} />
+        <Route path="/bac-si/:id" element={<DoctorDetail />} />
         <Route path="/dich-vu" element={<ServicesHome />} />
         <Route path="/dich-vu/chuyen-khoa" element={<SpecialtyList />} />
         <Route path="/dich-vu/chuyen-khoa/:slug" element={<SpecialtyDoctors />} />
