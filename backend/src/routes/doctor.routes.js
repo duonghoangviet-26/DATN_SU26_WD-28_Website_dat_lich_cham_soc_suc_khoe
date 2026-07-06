@@ -14,6 +14,9 @@ const router = Router()
 // Danh sách bác sĩ (filter + phân trang)
 router.get('/', doctorController.listDoctors)
 
+// Tạo bác sĩ mới từ admin
+router.post('/', doctorController.createDoctor)
+
 // Chi tiết một bác sĩ
 router.get('/:id', doctorController.getDoctorById)
 

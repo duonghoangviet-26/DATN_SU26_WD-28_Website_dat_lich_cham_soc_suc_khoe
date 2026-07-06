@@ -30,16 +30,29 @@ async function ghiLog({ adminId, hanhDong, doiTuongId, lyDo = null, duLieuCu = n
 }
 
 // ── 1. Danh sách bác sĩ (có filter + phân trang) ─────────────
-export async function getDoctorList({ trang_thai, chuyen_khoa, keyword, page = 1, limit = 10 } = {}) {
+export async function getDoctorList({
+  trang_thai,
+  trang_thai_duyet,
+  chuyen_khoa,
+  chi_nhanh_id,
+  keyword,
+  page = 1,
+  limit = 10,
+} = {}) {
   const filter = {}
 
+  if (trang_thai && ['active', 'nghi_phep', 'nghi_viec'].includes(trang_thai)) {
+    filter.trang_thai = trang_thai
+  }
+
   // Lọc theo trạng thái duyệt
-  if (trang_thai) {
+  if (trang_thai_duyet || (trang_thai && ['pending', 'approved', 'rejected', 'suspended'].includes(trang_thai))) {
     const validStatus = ['pending', 'approved', 'rejected', 'suspended']
-    if (!validStatus.includes(trang_thai)) {
+    const statusValue = trang_thai_duyet || trang_thai
+    if (!validStatus.includes(statusValue)) {
       throw new Error(`trang_thai không hợp lệ. Chấp nhận: ${validStatus.join(', ')}`)
     }
-    filter.trang_thai_duyet = trang_thai
+    filter.trang_thai_duyet = statusValue
   }
 
   // Lọc theo chuyên khoa (ObjectId)
@@ -48,6 +61,13 @@ export async function getDoctorList({ trang_thai, chuyen_khoa, keyword, page = 1
       throw new Error('chuyen_khoa không phải ObjectId hợp lệ')
     }
     filter.specialties = chuyen_khoa
+  }
+
+  if (chi_nhanh_id) {
+    if (!mongoose.Types.ObjectId.isValid(chi_nhanh_id)) {
+      throw new Error('chi_nhanh_id không phải ObjectId hợp lệ')
+    }
+    filter.chi_nhanh_id = chi_nhanh_id
   }
 
   // Tính offset phân trang
@@ -92,6 +112,107 @@ export async function getDoctorList({ trang_thai, chuyen_khoa, keyword, page = 1
       totalPages: Math.ceil(total / Number(limit)),
     },
   }
+}
+
+export async function createDoctorByAdmin(payload) {
+  const {
+    admin_id,
+    email,
+    mat_khau,
+    ho_ten,
+    so_dien_thoai,
+    anh_dai_dien,
+    chi_nhanh_id,
+    phi_kham,
+    gia_kham,
+    trang_thai = 'active',
+    specialties = [],
+    services = [],
+    tieu_su,
+    bang_cap,
+    kinh_nghiem,
+    so_nam_kinh_nghiem,
+    phong_kham_mac_dinh,
+    la_hien,
+  } = payload
+
+  if (!admin_id) throw new Error('admin_id la bat buoc')
+  if (!email) throw new Error('email la bat buoc')
+  if (!mat_khau) throw new Error('mat_khau la bat buoc')
+  if (!ho_ten) throw new Error('ho_ten la bat buoc')
+  if (phi_kham === undefined || phi_kham === null) throw new Error('phi_kham la bat buoc')
+  if (!Number.isFinite(Number(phi_kham)) || Number(phi_kham) < 0) {
+    throw new Error('phi_kham khong hop le')
+  }
+
+  if (chi_nhanh_id && !mongoose.Types.ObjectId.isValid(chi_nhanh_id)) {
+    throw new Error('chi_nhanh_id khong hop le')
+  }
+
+  if (!['active', 'nghi_phep', 'nghi_viec'].includes(trang_thai)) {
+    throw new Error('trang_thai khong hop le')
+  }
+
+  const normalizedSpecialties = Array.isArray(specialties) ? specialties : []
+  const normalizedServices = Array.isArray(services) ? services : []
+
+  for (const specialtyId of normalizedSpecialties) {
+    if (!mongoose.Types.ObjectId.isValid(specialtyId)) {
+      throw new Error('specialties co ObjectId khong hop le')
+    }
+  }
+
+  for (const serviceId of normalizedServices) {
+    if (!mongoose.Types.ObjectId.isValid(serviceId)) {
+      throw new Error('services co ObjectId khong hop le')
+    }
+  }
+
+  const existingUser = await NguoiDung.findOne({ email: String(email).trim().toLowerCase() }).lean()
+  if (existingUser) {
+    throw new Error('email da ton tai')
+  }
+
+  const user = await NguoiDung.create({
+    email,
+    mat_khau,
+    ho_ten,
+    so_dien_thoai: so_dien_thoai ?? null,
+    anh_dai_dien: anh_dai_dien ?? null,
+    role: 'doctor',
+    status: 'active',
+  })
+
+  const doctor = await BacSi.create({
+    user_id: user._id,
+    chi_nhanh_id: chi_nhanh_id ?? null,
+    phi_kham: Number(phi_kham),
+    gia_kham: gia_kham ?? Number(phi_kham),
+    trang_thai,
+    specialties: normalizedSpecialties,
+    services: normalizedServices,
+    tieu_su: tieu_su ?? null,
+    bang_cap: bang_cap ?? null,
+    kinh_nghiem: kinh_nghiem ?? null,
+    so_nam_kinh_nghiem: so_nam_kinh_nghiem ?? 0,
+    phong_kham_mac_dinh: phong_kham_mac_dinh ?? null,
+    la_hien: la_hien ?? true,
+    trang_thai_duyet: 'approved',
+  })
+
+  await ghiLog({
+    adminId: admin_id,
+    hanhDong: 'CREATE_DOCTOR',
+    doiTuongId: doctor._id,
+    duLieuMoi: {
+      user_id: doctor.user_id,
+      chi_nhanh_id: doctor.chi_nhanh_id,
+      phi_kham: doctor.phi_kham,
+      trang_thai: doctor.trang_thai,
+    },
+  })
+
+  return await getDoctorDetail(doctor._id)
 }
 
 // ── 2. Chi tiết một bác sĩ ───────────────────────────────────
@@ -309,13 +430,61 @@ export async function updateDoctorInfo(doctorId, updateData, adminId) {
   const doctor = await BacSi.findById(doctorId)
   if (!doctor) throw new Error('Không tìm thấy bác sĩ')
 
-  const allowedFields = ['tieu_su', 'bang_cap', 'kinh_nghiem', 'so_nam_kinh_nghiem', 'phi_tu_van', 'la_hien', 'phong_kham_mac_dinh']
+  const allowedFields = [
+    'tieu_su',
+    'bang_cap',
+    'kinh_nghiem',
+    'so_nam_kinh_nghiem',
+    'phi_tu_van',
+    'la_hien',
+    'phong_kham_mac_dinh',
+    'phi_kham',
+    'chi_nhanh_id',
+    'trang_thai',
+    'specialties',
+  ]
   const duLieuCu = {}
   const duLieuMoi = {}
   let hasChanges = false
 
   for (const field of allowedFields) {
-    if (updateData[field] !== undefined && updateData[field] !== doctor[field]) {
+    if (field === 'chi_nhanh_id' && updateData[field] !== undefined && updateData[field] !== null) {
+      if (!mongoose.Types.ObjectId.isValid(updateData[field])) {
+        throw new Error('chi_nhanh_id khong hop le')
+      }
+    }
+
+    if (field === 'phi_kham' && updateData[field] !== undefined) {
+      if (updateData[field] === null || !Number.isFinite(Number(updateData[field])) || Number(updateData[field]) < 0) {
+        throw new Error('phi_kham khong hop le')
+      }
+      updateData[field] = Number(updateData[field])
+    }
+
+    if (field === 'trang_thai' && updateData[field] !== undefined) {
+      if (!['active', 'nghi_phep', 'nghi_viec'].includes(updateData[field])) {
+        throw new Error('trang_thai khong hop le')
+      }
+    }
+
+    if (field === 'specialties' && updateData[field] !== undefined) {
+      if (!Array.isArray(updateData[field])) {
+        throw new Error('specialties phai la mang')
+      }
+      for (const specialtyId of updateData[field]) {
+        if (!mongoose.Types.ObjectId.isValid(specialtyId)) {
+          throw new Error('specialties co ObjectId khong hop le')
+        }
+      }
+    }
+
+    const oldValue = doctor[field]
+    const newValue = updateData[field]
+    const sameValue = Array.isArray(oldValue) || Array.isArray(newValue)
+      ? JSON.stringify(oldValue ?? []) === JSON.stringify(newValue ?? [])
+      : String(oldValue ?? '') === String(newValue ?? '')
+
+    if (updateData[field] !== undefined && !sameValue) {
       duLieuCu[field] = doctor[field]
       duLieuMoi[field] = updateData[field]
       doctor[field] = updateData[field]

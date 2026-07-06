@@ -1,203 +1,177 @@
 import mongoose from 'mongoose'
-import ThongBaoHeThong from '../models/ThongBaoHeThong.js'
-import NguoiDung from '../models/NguoiDung.js'
-import ThongBao from '../models/ThongBao.js'
-import NhatKyThaoTac from '../models/NhatKyThaoTac.js'
 
-export async function getSystemNotifications(page = 1, limit = 10) {
-  const skip = (page - 1) * limit
+import ThongBao from '../models/ThongBao.js'
+
+function isValidObjectId(value) {
+  return mongoose.Types.ObjectId.isValid(value)
+}
+
+function formatNotification(notification) {
+  return {
+    _id: notification._id,
+    user_id: notification.user_id?._id ?? notification.user_id ?? null,
+    tieu_de: notification.tieu_de,
+    noi_dung: notification.noi_dung,
+    loai: notification.loai,
+    related_id: notification.related_id ?? null,
+    related_type: notification.related_type ?? null,
+    da_doc: notification.da_doc ?? false,
+    du_lieu_dinh_kem: notification.du_lieu_dinh_kem ?? null,
+    kenh_gui: notification.kenh_gui ?? null,
+    da_gui: notification.da_gui ?? false,
+    thoi_diem_gui: notification.thoi_diem_gui ?? null,
+    thoi_diem_doc: notification.thoi_diem_doc ?? null,
+    ngay_gui_du_kien: notification.ngay_gui_du_kien ?? null,
+    ngay_tao: notification.ngay_tao ?? null,
+  }
+}
+
+export async function getNotifications({ page = 1, limit = 10, user_id = null }) {
+  const pageNum = Math.max(1, Number(page) || 1)
+  const limitNum = Math.max(1, Number(limit) || 10)
+  const skip = (pageNum - 1) * limitNum
+
+  const filter = {}
+  if (user_id) {
+    if (!isValidObjectId(user_id)) {
+      throw new Error('user_id khong hop le')
+    }
+    filter.user_id = user_id
+  }
 
   const [notifications, total] = await Promise.all([
-    ThongBaoHeThong.find()
-      .populate({ path: 'tao_boi', select: 'ho_ten email' })
-      .sort({ ngay_gui: -1 })
+    ThongBao.find(filter)
+      .sort({ ngay_tao: -1, _id: -1 })
       .skip(skip)
-      .limit(limit)
+      .limit(limitNum)
       .lean(),
-    ThongBaoHeThong.countDocuments(),
+    ThongBao.countDocuments(filter),
   ])
 
   return {
-    data: notifications,
+    data: notifications.map(formatNotification),
     pagination: {
       total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages: Math.ceil(total / limit),
+      page: pageNum,
+      limit: limitNum,
+      totalPages: total === 0 ? 1 : Math.ceil(total / limitNum),
     },
   }
 }
 
-export async function sendSystemNotification({ tieu_de, noi_dung, doi_tuong, admin_id }) {
-  if (!tieu_de || !noi_dung || !doi_tuong || !admin_id) {
-    throw new Error('Vui lòng cung cấp đủ thông tin: tieu_de, noi_dung, doi_tuong, admin_id')
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(admin_id)) {
-    throw new Error('admin_id không hợp lệ')
-  }
-
-  // Đếm số lượng người nhận dựa trên đối tượng
-  let so_nguoi_nhan = 0
-  if (doi_tuong === 'tat_ca') {
-    so_nguoi_nhan = await NguoiDung.countDocuments({ role: { $in: ['user', 'doctor'] }, status: 'active', ngay_xoa: null })
-  } else if (doi_tuong === 'benh_nhan') {
-    so_nguoi_nhan = await NguoiDung.countDocuments({ role: 'user', status: 'active', ngay_xoa: null })
-  } else if (doi_tuong === 'bac_si') {
-    so_nguoi_nhan = await NguoiDung.countDocuments({ role: 'doctor', status: 'active', ngay_xoa: null })
-  } else {
-    throw new Error('doi_tuong không hợp lệ (tat_ca, benh_nhan, bac_si)')
-  }
-
-  const newNotification = new ThongBaoHeThong({
+export async function createNotification(payload) {
+  const {
+    user_id,
     tieu_de,
     noi_dung,
-    doi_tuong,
-    tao_boi: admin_id,
-    so_nguoi_nhan,
-    ngay_gui: new Date()
+    loai,
+    related_id = null,
+    related_type = null,
+    du_lieu_dinh_kem = null,
+    kenh_gui = null,
+    da_gui = false,
+    thoi_diem_gui = null,
+    thoi_diem_doc = null,
+    ngay_gui_du_kien,
+  } = payload
+
+  if (!user_id || !tieu_de || !noi_dung || !loai || !ngay_gui_du_kien) {
+    throw new Error('Thieu truong bat buoc khi tao thong bao')
+  }
+
+  if (!isValidObjectId(user_id)) {
+    throw new Error('user_id khong hop le')
+  }
+
+  if (related_id && !isValidObjectId(related_id)) {
+    throw new Error('related_id khong hop le')
+  }
+
+  const notification = await ThongBao.create({
+    user_id,
+    tieu_de,
+    noi_dung,
+    loai,
+    related_id,
+    related_type,
+    du_lieu_dinh_kem,
+    kenh_gui,
+    da_gui,
+    thoi_diem_gui: thoi_diem_gui ? new Date(thoi_diem_gui) : null,
+    thoi_diem_doc: thoi_diem_doc ? new Date(thoi_diem_doc) : null,
+    ngay_gui_du_kien: new Date(ngay_gui_du_kien),
   })
 
-  await newNotification.save()
-
-  // Lấy dữ liệu vừa tạo kèm thông tin admin để trả về
-  const populatedNotification = await ThongBaoHeThong.findById(newNotification._id)
-    .populate({ path: 'tao_boi', select: 'ho_ten email' })
-    .lean()
-
-  // Batch insert vào bảng thông báo cá nhân
-  const targetQuery = { status: 'active', ngay_xoa: null }
-  if (doi_tuong === 'tat_ca') targetQuery.role = { $in: ['user', 'doctor'] }
-  else if (doi_tuong === 'benh_nhan') targetQuery.role = 'user'
-  else targetQuery.role = 'doctor'
-
-  const targetUsers = await NguoiDung.find(targetQuery).select('_id').lean()
-  
-  const BATCH_SIZE = 100
-  for (let i = 0; i < targetUsers.length; i += BATCH_SIZE) {
-    const batch = targetUsers.slice(i, i + BATCH_SIZE)
-    const notifications = batch.map(user => ({
-      user_id: user._id,
-      tieu_de,
-      noi_dung,
-      loai: 'system',
-      related_id: newNotification._id,
-      related_type: 'system_notification'
-    }))
-    await ThongBao.insertMany(notifications)
-  }
-
-  return populatedNotification
+  return formatNotification(notification.toObject())
 }
 
-export async function updateSystemNotification(id, { tieu_de, noi_dung }, admin_id) {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new Error('ID thông báo không hợp lệ')
-  }
-
-  if (!tieu_de || !noi_dung) {
-    throw new Error('Vui lòng cung cấp đủ tiêu đề và nội dung cần sửa')
-  }
-
-  const notification = await ThongBaoHeThong.findById(id)
-  if (!notification) {
-    throw new Error('Không tìm thấy thông báo')
-  }
-
-  const oldData = { tieu_de: notification.tieu_de, noi_dung: notification.noi_dung }
-
-  notification.tieu_de = tieu_de
-  notification.noi_dung = noi_dung
-  await notification.save()
-
-  if (admin_id) {
-    await NhatKyThaoTac.create({
-      nguoi_thuc_hien_id: admin_id,
-      vai_tro: 'admin',
-      hanh_dong: 'UPDATE_NOTIFICATION',
-      loai_doi_tuong: 'system_notification',
-      doi_tuong_id: id,
-      du_lieu_cu: oldData,
-      du_lieu_moi: { tieu_de, noi_dung }
-    })
-  }
-
-  // Cập nhật đồng bộ sang các thông báo cá nhân đã gửi
-  await ThongBao.updateMany(
-    { related_id: id, related_type: 'system_notification' },
-    { $set: { tieu_de, noi_dung } }
-  )
-
-  const updatedNotification = await ThongBaoHeThong.findById(id)
-    .populate({ path: 'tao_boi', select: 'ho_ten email' })
-    .lean()
-
-  return updatedNotification
-}
-
-export async function deleteSystemNotification(id) {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new Error('ID thông báo không hợp lệ')
-  }
-
-  const notification = await ThongBaoHeThong.findById(id)
-  if (!notification) {
-    throw new Error('Không tìm thấy thông báo')
-  }
-
-  await ThongBaoHeThong.findByIdAndDelete(id)
-  
-  // Xóa đồng bộ các thông báo cá nhân đã gửi
-  await ThongBao.deleteMany({ related_id: id, related_type: 'system_notification' })
-
-  return true
-}
-
-export async function getReceivedNotifications(admin_id, page = 1, limit = 10) {
-  const skip = (page - 1) * limit
-
-  const [notifications, total] = await Promise.all([
-    ThongBao.find({ user_id: admin_id })
-      .sort({ ngay_tao: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    ThongBao.countDocuments({ user_id: admin_id }),
-  ])
-
-  return {
-    data: notifications,
-    pagination: {
-      total,
-      page: Number(page),
-      limit: Number(limit),
-      totalPages: Math.ceil(total / limit),
-    },
-  }
-}
-
-export async function markNotificationAsRead(id) {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new Error('ID thông báo không hợp lệ')
+export async function updateNotification(id, payload) {
+  if (!isValidObjectId(id)) {
+    throw new Error('ID thong bao khong hop le')
   }
 
   const notification = await ThongBao.findById(id)
   if (!notification) {
-    throw new Error('Không tìm thấy thông báo')
+    throw new Error('Khong tim thay thong bao')
+  }
+
+  const allowedFields = [
+    'tieu_de',
+    'noi_dung',
+    'loai',
+    'related_type',
+    'du_lieu_dinh_kem',
+    'kenh_gui',
+    'da_gui',
+    'thoi_diem_gui',
+    'thoi_diem_doc',
+    'ngay_gui_du_kien',
+  ]
+
+  for (const field of allowedFields) {
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) continue
+
+    if (['thoi_diem_gui', 'thoi_diem_doc', 'ngay_gui_du_kien'].includes(field) && payload[field]) {
+      notification[field] = new Date(payload[field])
+    } else {
+      notification[field] = payload[field]
+    }
+  }
+
+  await notification.save()
+  return formatNotification(notification.toObject())
+}
+
+export async function deleteNotification(id) {
+  if (!isValidObjectId(id)) {
+    throw new Error('ID thong bao khong hop le')
+  }
+
+  const notification = await ThongBao.findByIdAndDelete(id).lean()
+  if (!notification) {
+    throw new Error('Khong tim thay thong bao')
+  }
+
+  return true
+}
+
+export async function markNotificationAsRead(id) {
+  if (!isValidObjectId(id)) {
+    throw new Error('ID thong bao khong hop le')
+  }
+
+  const notification = await ThongBao.findById(id)
+  if (!notification) {
+    throw new Error('Khong tim thay thong bao')
   }
 
   notification.da_doc = true
+  notification.thoi_diem_doc = notification.thoi_diem_doc || new Date()
   await notification.save()
 
-  return notification
+  return formatNotification(notification.toObject())
 }
 
-export async function getNotificationLogs(id) {
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new Error('ID thông báo không hợp lệ')
-  }
-  return await NhatKyThaoTac.find({ loai_doi_tuong: 'system_notification', doi_tuong_id: id })
-    .populate({ path: 'nguoi_thuc_hien_id', select: 'ho_ten email' })
-    .sort({ ngay_tao: -1 })
-    .lean()
+export async function getNotificationLogs() {
+  return []
 }

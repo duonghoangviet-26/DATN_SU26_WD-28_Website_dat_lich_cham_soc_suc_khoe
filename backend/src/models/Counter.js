@@ -1,18 +1,37 @@
 import mongoose from 'mongoose'
 
-// Atomic sequence counter — tránh race condition khi 2 admin tạo đồng thời
-// Dùng findByIdAndUpdate + $inc: MongoDB đảm bảo atomic, không cần transaction
-const counterSchema = new mongoose.Schema({
-  _id: { type: String, required: true }, // tên counter, VD: 'dich_vu'
-  seq: { type: Number, default: 0 },
-})
+const counterSchema = new mongoose.Schema(
+  {
+    key: {
+      type: String,
+      unique: true,
+      required: true,
+      trim: true,
+    },
+    seq: {
+      type: Number,
+      default: 0,
+    },
+  },
+  {
+    collection: 'counters',
+  }
+)
 
 counterSchema.statics.nextSeq = async function (name) {
-  const doc = await this.findByIdAndUpdate(
-    name,
-    { $inc: { seq: 1 } },
-    { new: true, upsert: true }
+  const doc = await this.findOneAndUpdate(
+    { key: name },
+    {
+      $inc: { seq: 1 },
+      $setOnInsert: { key: name },
+    },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+    }
   )
+
   return doc.seq
 }
 
