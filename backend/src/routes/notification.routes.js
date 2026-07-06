@@ -1,7 +1,9 @@
 import { Router } from 'express'
+import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
 import * as notificationController from '../controllers/notification.controller.js'
 
 const router = Router()
+router.use(verifyToken, requireRole('admin'))
 
 // GET /api/admin/notifications - Lấy danh sách thông báo hệ thống đã gửi
 router.get('/', notificationController.getNotifications)

@@ -16,10 +16,12 @@ import * as doctorService from '../services/doctor.service.js'
 // Query params: trang_thai, chuyen_khoa, keyword, page, limit
 export async function listDoctors(req, res) {
   try {
-    const { trang_thai, chuyen_khoa, keyword, page, limit } = req.query
+    const { trang_thai, trang_thai_duyet, chuyen_khoa, chi_nhanh_id, keyword, page, limit } = req.query
     const result = await doctorService.getDoctorList({
       trang_thai,
+      trang_thai_duyet,
       chuyen_khoa,
+      chi_nhanh_id,
       keyword,
       page,
       limit,
@@ -27,6 +29,25 @@ export async function listDoctors(req, res) {
     return ok(res, result, 'Lấy danh sách bác sĩ thành công')
   } catch (err) {
     const status = err.message.includes('không hợp lệ') ? 400 : 500
+    return fail(res, status, err.message)
+  }
+}
+
+// POST /api/admin/doctors
+export async function createDoctor(req, res) {
+  try {
+    const doctor = await doctorService.createDoctorByAdmin(req.body)
+    return res.status(201).json({
+      success: true,
+      message: 'Tao bac si thanh cong',
+      data: doctor,
+    })
+  } catch (err) {
+    const status = ['bat buoc', 'hop le', 'da ton tai', 'phi_kham'].some((keyword) =>
+      err.message.toLowerCase().includes(keyword)
+    )
+      ? 400
+      : 500
     return fail(res, status, err.message)
   }
 }

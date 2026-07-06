@@ -1,11 +1,23 @@
 import mongoose from 'mongoose'
 
-// ============================================================
-// EXAMINATION RESULT — Kết quả khám bác sĩ ghi (B4)
-// SQL tương đương: examination_results
-// ============================================================
-// 1 lịch hẹn 1 kết quả (appointment_id unique).
-// co_the_sua: bác sĩ sửa được trong 24h đầu; sau 24h → false (khóa) qua cron/check.
+const lichSuSuaSchema = new mongoose.Schema(
+  {
+    nguoi_sua_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'NguoiDung',
+      default: null,
+    },
+    thoi_diem_sua: {
+      type: Date,
+      default: Date.now,
+    },
+    noi_dung: {
+      type: String,
+      default: null,
+    },
+  },
+  { _id: false }
+)
 
 const examinationResultSchema = new mongoose.Schema(
   {
@@ -15,15 +27,58 @@ const examinationResultSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    nguoi_nhap_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'NguoiDung',
+      default: null,
+    },
+    bac_si_phu_trach_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'BacSi',
+      default: null,
+    },
+    nguoi_xac_nhan_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'NguoiDung',
+      default: null,
+    },
+    thoi_diem_xac_nhan: {
+      type: Date,
+      default: null,
+    },
     chan_doan: {
       type: String,
-      required: [true, 'Chẩn đoán là bắt buộc'],
+      required: [true, 'Chan doan la bat buoc'],
       trim: true,
     },
     huong_dan_dieu_tri: { type: String, default: null },
-    ghi_chu:            { type: String, default: null },
-    ngay_tai_kham:      { type: Date, default: null },
-    co_the_sua:         { type: Boolean, default: true },
+    ghi_chu: { type: String, default: null },
+    ngay_tai_kham: { type: Date, default: null },
+    co_the_sua: { type: Boolean, default: true },
+    dich_vu_phat_sinh: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    dich_vu_tu_choi: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    chi_dinh_tai_kham: {
+      type: Boolean,
+      default: false,
+    },
+    da_dat_lich_tai_kham: {
+      type: Boolean,
+      default: false,
+    },
+    da_gui_cho_benh_nhan: {
+      type: Boolean,
+      default: false,
+    },
+    lich_su_sua: {
+      type: [lichSuSuaSchema],
+      default: [],
+    },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },

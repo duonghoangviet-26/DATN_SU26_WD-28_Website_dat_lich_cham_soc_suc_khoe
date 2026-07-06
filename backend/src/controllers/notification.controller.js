@@ -1,56 +1,58 @@
-import { ok, fail } from '../utils/response.js'
+import { ok, created, fail } from '../utils/response.js'
 import * as notificationService from '../services/notification.service.js'
 
 export async function getNotifications(req, res) {
   try {
-    const page = parseInt(req.query.page) || 1
-    const limit = parseInt(req.query.limit) || 10
-    const result = await notificationService.getSystemNotifications(page, limit)
-    
+    const page = parseInt(req.query.page, 10) || 1
+    const limit = parseInt(req.query.limit, 10) || 10
+    const result = await notificationService.getNotifications({
+      page,
+      limit,
+      user_id: req.query.user_id || null,
+    })
+
     return res.status(200).json({
       success: true,
-      message: 'Lấy danh sách thông báo hệ thống thành công',
       data: result.data,
-      pagination: result.pagination
+      pagination: result.pagination,
     })
   } catch (err) {
+    if (err.message.includes('khong hop le')) {
+      return fail(res, 400, err.message)
+    }
     return fail(res, 500, err.message)
   }
 }
 
 export async function getReceivedNotifications(req, res) {
   try {
-    const page = parseInt(req.query.page) || 1
-    const limit = parseInt(req.query.limit) || 10
-    // Lấy hardcode ADMIN_ID tương tự như bên ManageDoctors.tsx
-    const adminId = "000000000000000000000099" 
-    
-    const result = await notificationService.getReceivedNotifications(adminId, page, limit)
-    
+    const page = parseInt(req.query.page, 10) || 1
+    const limit = parseInt(req.query.limit, 10) || 10
+    const result = await notificationService.getNotifications({
+      page,
+      limit,
+      user_id: req.user.id,
+    })
+
     return res.status(200).json({
       success: true,
-      message: 'Lấy danh sách thông báo nhận thành công',
       data: result.data,
-      pagination: result.pagination
+      pagination: result.pagination,
     })
   } catch (err) {
+    if (err.message.includes('khong hop le')) {
+      return fail(res, 400, err.message)
+    }
     return fail(res, 500, err.message)
   }
 }
 
 export async function sendNotification(req, res) {
   try {
-    const { tieu_de, noi_dung, doi_tuong, admin_id } = req.body
-    const newNotif = await notificationService.sendSystemNotification({
-      tieu_de,
-      noi_dung,
-      doi_tuong,
-      admin_id
-    })
-    
-    return ok(res, newNotif, 'Gửi thông báo thành công', 201)
+    const notification = await notificationService.createNotification(req.body)
+    return created(res, notification, 'Tao thong bao thanh cong')
   } catch (err) {
-    if (err.message.includes('không hợp lệ') || err.message.includes('Vui lòng cung cấp')) {
+    if (err.message.includes('Thieu truong') || err.message.includes('khong hop le') || err.message.includes('bat buoc')) {
       return fail(res, 400, err.message)
     }
     return fail(res, 500, err.message)
@@ -59,22 +61,11 @@ export async function sendNotification(req, res) {
 
 export async function updateNotification(req, res) {
   try {
-    const { id } = req.params
-    const { tieu_de, noi_dung } = req.body
-    
-    // Lấy admin_id hiện tại từ request (phụ thuộc vào auth middleware)
-    // Hoặc lấy trực tiếp giống như adminId hardcode nếu auth chưa gắn (tạm thời lấy adminId hardcode cho an toàn nếu jwt chưa gắn chặt)
-    const adminId = req.user?.id || "000000000000000000000099"
-    
-    const updatedNotif = await notificationService.updateSystemNotification(id, {
-      tieu_de,
-      noi_dung
-    }, adminId)
-    
-    return ok(res, updatedNotif, 'Cập nhật thông báo thành công', 200)
+    const updatedNotif = await notificationService.updateNotification(req.params.id, req.body)
+    return ok(res, updatedNotif, 'Cap nhat thong bao thanh cong')
   } catch (err) {
-    if (err.message === 'Không tìm thấy thông báo') return fail(res, 404, err.message)
-    if (err.message.includes('không hợp lệ') || err.message.includes('Vui lòng cung cấp')) {
+    if (err.message === 'Khong tim thay thong bao') return fail(res, 404, err.message)
+    if (err.message.includes('khong hop le') || err.message.includes('bat buoc')) {
       return fail(res, 400, err.message)
     }
     return fail(res, 500, err.message)
@@ -83,12 +74,11 @@ export async function updateNotification(req, res) {
 
 export async function deleteNotification(req, res) {
   try {
-    const { id } = req.params
-    await notificationService.deleteSystemNotification(id)
-    return ok(res, null, 'Xóa thông báo thành công', 200)
+    await notificationService.deleteNotification(req.params.id)
+    return ok(res, null, 'Xoa thong bao thanh cong')
   } catch (err) {
-    if (err.message === 'Không tìm thấy thông báo') return fail(res, 404, err.message)
-    if (err.message.includes('không hợp lệ')) {
+    if (err.message === 'Khong tim thay thong bao') return fail(res, 404, err.message)
+    if (err.message.includes('khong hop le')) {
       return fail(res, 400, err.message)
     }
     return fail(res, 500, err.message)
@@ -97,12 +87,11 @@ export async function deleteNotification(req, res) {
 
 export async function markNotificationAsRead(req, res) {
   try {
-    const { id } = req.params
-    const updatedNotif = await notificationService.markNotificationAsRead(id)
-    return ok(res, updatedNotif, 'Đánh dấu đã đọc thành công', 200)
+    const updatedNotif = await notificationService.markNotificationAsRead(req.params.id)
+    return ok(res, updatedNotif, 'Danh dau da doc thanh cong')
   } catch (err) {
-    if (err.message === 'Không tìm thấy thông báo') return fail(res, 404, err.message)
-    if (err.message.includes('không hợp lệ')) {
+    if (err.message === 'Khong tim thay thong bao') return fail(res, 404, err.message)
+    if (err.message.includes('khong hop le')) {
       return fail(res, 400, err.message)
     }
     return fail(res, 500, err.message)
@@ -111,11 +100,10 @@ export async function markNotificationAsRead(req, res) {
 
 export async function getNotificationLogs(req, res) {
   try {
-    const { id } = req.params
-    const logs = await notificationService.getNotificationLogs(id)
-    return ok(res, logs, 'Lấy lịch sử thành công', 200)
+    const logs = await notificationService.getNotificationLogs(req.params.id)
+    return ok(res, logs, 'Lay lich su thanh cong')
   } catch (err) {
-    if (err.message.includes('không hợp lệ')) return fail(res, 400, err.message)
+    if (err.message.includes('khong hop le')) return fail(res, 400, err.message)
     return fail(res, 500, err.message)
   }
 }
