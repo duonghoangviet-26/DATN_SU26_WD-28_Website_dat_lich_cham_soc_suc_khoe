@@ -1,0 +1,11 @@
+[
+  {
+    "name": "005-create-hoa-don-for-existing-appointments",
+    "started_at": "2026-07-06T06:14:09.378Z",
+    "finished_at": "2026-07-06T06:14:16.986Z",
+    "affected_documents": 83,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
+  }
+]

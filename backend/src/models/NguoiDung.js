@@ -1,40 +1,32 @@
 import mongoose from 'mongoose'
 
-// ============================================================
-// USER — Tài khoản người dùng (benh nhan / bac si / admin)
-// SQL tương đương: bảng users
-// ============================================================
-// Role chỉ đổi sang 'doctor' SAU KHI Admin duyệt hồ sơ bác sĩ (C2)
-// password hash bằng bcrypt 10 rounds — không lưu plaintext
-
 const userSchema = new mongoose.Schema(
   {
     email: {
       type: String,
-      required: [true, 'Email là bắt buộc'],
+      required: [true, 'Email la bat buoc'],
       unique: true,
       lowercase: true,
       trim: true,
       maxlength: 255,
-      // Không đổi sau khi đăng ký
     },
     mat_khau: {
       type: String,
-      required: [true, 'Mật khẩu là bắt buộc'],
+      required: [true, 'Mat khau la bat buoc'],
       maxlength: 255,
-      select: false, // Không trả về trong query thông thường
+      select: false,
     },
     ho_ten: {
       type: String,
-      required: [true, 'Họ tên là bắt buộc'],
+      required: [true, 'Ho ten la bat buoc'],
       trim: true,
       maxlength: 255,
     },
     so_dien_thoai: { type: String, default: null, maxlength: 20 },
-    anh_dai_dien:  { type: String, default: null, maxlength: 500 },
+    anh_dai_dien: { type: String, default: null, maxlength: 500 },
     role: {
       type: String,
-      enum: ['user', 'doctor', 'admin'],
+      enum: ['user', 'patient', 'doctor', 'admin', 'receptionist', 'nurse'],
       default: 'user',
     },
     status: {
@@ -42,7 +34,29 @@ const userSchema = new mongoose.Schema(
       enum: ['active', 'locked'],
       default: 'active',
     },
-    ngay_xoa: { type: Date, default: null }, // Hỗ trợ Soft Delete
+    so_lan_huy_trong_thang: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    thang_dem_huy: {
+      type: String,
+      default: null,
+    },
+    bi_han_che_dat_lich: {
+      type: Boolean,
+      default: false,
+    },
+    han_che_den_ngay: {
+      type: Date,
+      default: null,
+    },
+    tong_so_lan_huy_lich_su: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    ngay_xoa: { type: Date, default: null },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
@@ -55,8 +69,8 @@ const userSchema = new mongoose.Schema(
         delete ret._id
         delete ret.__v
         delete ret.mat_khau
-      }
-    }
+      },
+    },
   }
 )
 

@@ -7,8 +7,10 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
     "db:init": "node src/scripts/init-db.js",
-    "db:seed": "node src/scripts/seed-all.js"
+    "db:seed": "node src/scripts/seed-all.js",
+    "db:test-dbs": "node src/scripts/manage-test-databases.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

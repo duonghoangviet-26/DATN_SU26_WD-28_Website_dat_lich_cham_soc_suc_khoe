@@ -1,13 +1,5 @@
 import mongoose from 'mongoose'
 
-// ============================================================
-// NOTIFICATION — Thông báo cá nhân (A7)
-// SQL tương đương: notifications
-// ============================================================
-// related_id + related_type: điều hướng đến đúng trang khi click.
-// KHÔNG dùng TTL index (sẽ xóa nhầm thông báo chưa đọc).
-// Thay vào đó: cron hàng tuần xóa da_doc=true quá 90 ngày.
-
 const notificationSchema = new mongoose.Schema(
   {
     user_id: {
@@ -15,16 +7,41 @@ const notificationSchema = new mongoose.Schema(
       ref: 'NguoiDung',
       required: true,
     },
-    tieu_de:  { type: String, required: true, maxlength: 255 },
+    tieu_de: { type: String, required: true, maxlength: 255 },
     noi_dung: { type: String, required: true },
     loai: {
       type: String,
-      enum: ['appointment', 'medicine', 'system'],
+      enum: ['appointment', 'medicine', 'system', 'reminder', 'payment', 'refund'],
       required: true,
     },
-    related_id:   { type: mongoose.Schema.Types.ObjectId, default: null },
-    related_type: { type: String, default: null, maxlength: 50 }, // 'appointment' | 'medical_record' | 'reminder'
-    da_doc:       { type: Boolean, default: false },
+    related_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+    related_type: { type: String, default: null, maxlength: 50 },
+    da_doc: { type: Boolean, default: false },
+    du_lieu_dinh_kem: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    kenh_gui: {
+      type: String,
+      enum: ['in_app', 'email', 'sms', 'zalo'],
+      default: null,
+    },
+    da_gui: {
+      type: Boolean,
+      default: false,
+    },
+    thoi_diem_gui: {
+      type: Date,
+      default: null,
+    },
+    thoi_diem_doc: {
+      type: Date,
+      default: null,
+    },
+    ngay_gui_du_kien: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: false },
@@ -32,7 +49,13 @@ const notificationSchema = new mongoose.Schema(
   }
 )
 
-notificationSchema.index({ user_id: 1, da_doc: 1 }) // unread count
-notificationSchema.index({ ngay_tao: 1 }) // cron cleanup (KHÔNG phải TTL)
+notificationSchema.index({ user_id: 1, da_doc: 1 })
+notificationSchema.index({ ngay_tao: 1 })
+
+notificationSchema.pre('validate', function () {
+  if (this.isNew && !this.ngay_gui_du_kien) {
+    throw new Error('Thong bao moi bat buoc co ngay_gui_du_kien')
+  }
+})
 
 export default mongoose.model('ThongBao', notificationSchema)

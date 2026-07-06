@@ -4,6 +4,7 @@ import LichLamViec from '../../models/LichLamViec.js'
 import LichSuLichHen from '../../models/LichSuLichHen.js'
 import BacSi from '../../models/BacSi.js'
 import DichVu from '../../models/DichVu.js'
+import HoaDon from '../../models/HoaDon.js'
 import ThanhToan from '../../models/ThanhToan.js'
 import HoanTien from '../../models/HoanTien.js'
 import CaiDatThanhToan from '../../models/CaiDatThanhToan.js'
@@ -24,8 +25,16 @@ function formatDateOnly(value) {
 function formatAppointmentItem(appointment) {
   return {
     _id: appointment._id,
+    ma_lich_hen: appointment.ma_lich_hen ?? null,
     user_id: appointment.user_id?._id ?? appointment.user_id ?? null,
     service_id: appointment.service_id?._id ?? appointment.service_id ?? null,
+    chi_nhanh_id: appointment.chi_nhanh_id ?? null,
+    specialty_id: appointment.specialty_id ?? null,
+    loai_benh_nhan: appointment.loai_benh_nhan ?? null,
+    khach_vang_lai_id: appointment.khach_vang_lai_id ?? null,
+    dat_ho: appointment.dat_ho ?? false,
+    nguoi_dat_ho_id: appointment.nguoi_dat_ho_id ?? null,
+    hinh_thuc_dat_lich: appointment.hinh_thuc_dat_lich ?? null,
     benh_nhan: appointment.ten_khach || appointment.user_id?.ho_ten || 'Khach vang lai',
     sdt_benh_nhan: appointment.so_dien_thoai_khach || appointment.user_id?.so_dien_thoai || null,
     doctor_id: appointment.doctor_id?._id ?? appointment.doctor_id ?? null,
@@ -36,6 +45,8 @@ function formatAppointmentItem(appointment) {
     loai_kham: appointment.loai_kham,
     status: appointment.status,
     payment_status: appointment.payment_status,
+    trang_thai_den: appointment.trang_thai_den ?? null,
+    so_lan_thay_doi: appointment.so_lan_thay_doi ?? 0,
     gia_kham: appointment.gia_kham,
     dia_chi_kham: appointment.dia_chi_kham,
     ngay_cap_nhat: appointment.ngay_cap_nhat,
@@ -89,6 +100,33 @@ function doctorSupportsService(doctor, serviceId) {
   return doctor.services.some((item) => String(item) === String(serviceId))
 }
 
+function formatDatePart(date) {
+  const year = String(date.getUTCFullYear()).slice(-2)
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  return `${year}${month}${day}`
+}
+
+async function nextCounterCode(session, keyPrefix, codePrefix, date) {
+  const datePart = formatDatePart(date)
+  const counter = await mongoose.connection.collection('counters').findOneAndUpdate(
+    { key: `${keyPrefix}_${datePart}` },
+    {
+      $inc: { seq: 1 },
+      $setOnInsert: { key: `${keyPrefix}_${datePart}` },
+    },
+    {
+      upsert: true,
+      returnDocument: 'after',
+      session,
+    }
+  )
+
+  const counterDocument = counter?.value ?? counter
+  const sequence = String(counterDocument.seq).padStart(4, '0')
+  return `${codePrefix}-${datePart}-${sequence}`
+}
+
 async function getAdminRefundPercent() {
   const setting = await CaiDatThanhToan.findOne({
     ten_cai_dat: { $in: ADMIN_REFUND_SETTING_KEYS },
@@ -106,13 +144,29 @@ async function getAdminRefundPercent() {
   return percent
 }
 
+async function findInvoiceAndPaymentsForAppointment(appointmentId, session) {
+  const invoice = await HoaDon.findOne({ appointment_id: appointmentId }).session(session)
+
+  if (!invoice) {
+    return { invoice: null, payments: [] }
+  }
+
+  const payments = await ThanhToan.find({
+    $or: [{ hoa_don_id: invoice._id }, { appointment_id: appointmentId }],
+  }).session(session)
+
+  return { invoice, payments }
+}
+
 async function syncRefundForCancelledAppointment({ appointment, lyDoHuy, adminUserId, session }) {
-  const payment = await ThanhToan.findOne({ appointment_id: appointment._id }).session(session)
+  const { invoice, payments } = await findInvoiceAndPaymentsForAppointment(appointment._id, session)
 
   if (appointment.payment_status !== 'paid') {
-    if (payment && payment.status === 'pending') {
-      payment.status = 'failed'
-      await payment.save({ session })
+    for (const payment of payments) {
+      if (payment.status === 'pending') {
+        payment.status = 'failed'
+        await payment.save({ session })
+      }
     }
 
     return {
@@ -121,37 +175,59 @@ async function syncRefundForCancelledAppointment({ appointment, lyDoHuy, adminUs
     }
   }
 
-  if (!payment) {
-    throw new Error('Khong tim thay ban ghi thanh toan cua lich hen')
+  const paidPayments = payments.filter((payment) => payment.status === 'paid')
+  if (paidPayments.length === 0) {
+    throw new Error('Khong tim thay ban ghi thanh toan da thu cua lich hen')
   }
 
   const refundPercent = await getAdminRefundPercent()
-  const refundAmount = Math.round((payment.so_tien * refundPercent) / 100)
+  const totalPaid = paidPayments.reduce((sum, payment) => sum + Number(payment.so_tien || 0), 0)
+  const refundAmount = Math.round((totalPaid * refundPercent) / 100)
 
-  payment.status = 'refunded'
-  await payment.save({ session })
+  for (const payment of paidPayments) {
+    payment.status = 'refunded'
+    payment.ngay_hoan_tien = new Date()
+    await payment.save({ session })
+  }
 
   const existingRefund = await HoanTien.findOne({ appointment_id: appointment._id }).session(session)
   if (existingRefund) {
-    existingRefund.payment_id = payment._id
+    existingRefund.payment_id = paidPayments[0]._id
     existingRefund.so_tien_hoan = refundAmount
+    existingRefund.so_tien_da_thu = totalPaid
+    existingRefund.phi_huy = 0
+    existingRefund.chinh_sach_hoan = 'Hoan tien thu cong boi admin'
     existingRefund.phan_tram_hoan = refundPercent
     existingRefund.ly_do = lyDoHuy
+    existingRefund.ly_do_hoan = lyDoHuy
     existingRefund.status = 'completed'
     existingRefund.xu_ly_boi = adminUserId
+    existingRefund.nguoi_xu_ly_id = adminUserId
     existingRefund.ngay_xu_ly = new Date()
+    existingRefund.thoi_diem_hoan_thanh = new Date()
     await existingRefund.save({ session })
   } else {
     await HoanTien.create([{
-      payment_id: payment._id,
+      payment_id: paidPayments[0]._id,
       appointment_id: appointment._id,
       so_tien_hoan: refundAmount,
+      so_tien_da_thu: totalPaid,
+      phi_huy: 0,
+      chinh_sach_hoan: 'Hoan tien thu cong boi admin',
       phan_tram_hoan: refundPercent,
       ly_do: lyDoHuy,
+      ly_do_hoan: lyDoHuy,
       status: 'completed',
       xu_ly_boi: adminUserId,
+      nguoi_xu_ly_id: adminUserId,
       ngay_xu_ly: new Date(),
+      thoi_diem_hoan_thanh: new Date(),
     }], { session })
+  }
+
+  if (invoice) {
+    invoice.trang_thai_hoa_don = 'chua_thanh_toan'
+    await invoice.save({ session })
   }
 
   const oldPaymentStatus = appointment.payment_status
@@ -181,17 +257,25 @@ export async function getAllAppointments(req, res) {
     const {
       keyword,
       status,
+      payment_status,
       loai_kham,
       startDate,
       endDate,
       page = 1,
       limit = 20,
       doctor_id,
+      chi_nhanh_id,
+      specialty_id,
+      ma_lich_hen,
     } = req.query
 
     const query = {}
     if (loai_kham) query.loai_kham = loai_kham
     if (doctor_id) query.doctor_id = doctor_id
+    if (chi_nhanh_id) query.chi_nhanh_id = chi_nhanh_id
+    if (specialty_id) query.specialty_id = specialty_id
+    if (payment_status) query.payment_status = payment_status
+    if (ma_lich_hen) query.ma_lich_hen = ma_lich_hen
 
     if (startDate || endDate) {
       query.ngay_kham = {}
@@ -352,15 +436,16 @@ export async function cancelAppointment(req, res) {
       ly_do: appointment.ly_do_huy,
     }], { session })
 
-    await LichLamViec.findOneAndUpdate(
-      {
-        _id: appointment.schedule_id,
-        'slots._id': appointment.slot_id,
-        'slots.so_benh_nhan_hien_tai': { $gt: 0 },
-      },
-      { $inc: { 'slots.$.so_benh_nhan_hien_tai': -1 } },
-      { session }
-    )
+    if (appointment.schedule_id && appointment.slot_id) {
+      const schedule = await LichLamViec.findById(appointment.schedule_id).session(session)
+      const slot = schedule?.slots.id(appointment.slot_id)
+      if (slot) {
+        slot.status = 'active'
+        slot.benh_nhan_id = null
+        slot.benh_nhan_tam_giu_id = null
+        await schedule.save({ session })
+      }
+    }
 
     await session.commitTransaction()
     session.endSession()
@@ -447,9 +532,75 @@ export async function createAppointment(req, res) {
     if (slot.status !== 'active') {
       throw new Error('Khung gio nay da bi khoa hoac huy')
     }
-    if (slot.so_benh_nhan_hien_tai >= slot.so_benh_nhan_toi_da) {
-      throw new Error('Khung gio nay da kin cho')
-    }
+    slot.status = 'booked'
+    slot.benh_nhan_id = user_id || null
+    slot.benh_nhan_tam_giu_id = null
+    await schedule.save({ session })
+
+    const appointmentDate = toDateOnly(schedule.ngay)
+    const maLichHen = await nextCounterCode(session, 'ma_lich_hen', 'LH', appointmentDate)
+    const soHoaDon = await nextCounterCode(session, 'so_hoa_don', 'HD', appointmentDate)
+
+    const appointmentDoc = new LichHen({
+      user_id: user_id || null,
+      doctor_id: doctor._id,
+      schedule_id: schedule._id,
+      slot_id: slot._id,
+      service_id: service._id,
+      chi_nhanh_id: schedule.chi_nhanh_id ?? doctor.chi_nhanh_id ?? null,
+      specialty_id: slot.specialty_id ?? doctor.specialties?.[0] ?? null,
+      ma_lich_hen: maLichHen,
+      hinh_thuc_dat_lich: 'admin',
+      loai_kham,
+      ngay_kham: appointmentDate,
+      gio_kham: slot.gio_bat_dau,
+      gia_kham: service.gia,
+      dia_chi_kham,
+      ly_do_kham: ly_do_kham?.trim() || null,
+      ten_khach: ten_khach.trim(),
+      so_dien_thoai_khach,
+      status: 'confirmed',
+      payment_status: 'unpaid',
+    })
+
+    await appointmentDoc.save({ session })
+
+    await HoaDon.create([{
+      appointment_id: appointmentDoc._id,
+      so_hoa_don: soHoaDon,
+      chi_nhanh_id: appointmentDoc.chi_nhanh_id,
+      specialty_id: appointmentDoc.specialty_id,
+      tong_tien_kham: service.gia,
+      chi_tiet_thu_phi: [
+        {
+          loai: 'phi_kham',
+          ten: 'Phi kham',
+          so_tien: service.gia,
+          so_luong: 1,
+          thanh_tien: service.gia,
+        },
+      ],
+      tong_tien_phat_sinh: 0,
+      tong_thanh_toan: service.gia,
+      trang_thai_hoa_don: 'chua_thanh_toan',
+    }], { session })
+
+    await LichSuLichHen.create([{
+      appointment_id: appointmentDoc._id,
+      tu_trang_thai: null,
+      den_trang_thai: 'confirmed',
+      tu_payment_status: null,
+      den_payment_status: 'unpaid',
+      nguoi_thuc_hien_id: req.user.id,
+      vai_tro: 'admin',
+      ly_do: 'Admin dat lich thay khach',
+    }], { session })
+
+    await session.commitTransaction()
+    session.endSession()
+
+    const createdAppointmentPayload = await loadAppointmentForResponse(appointmentDoc._id)
+    return created(res, formatAppointmentItem(createdAppointmentPayload), 'Da tao lich hen thanh cong')
 
     const updatedSchedule = await LichLamViec.findOneAndUpdate(
       {
@@ -552,6 +703,47 @@ export async function rescheduleAppointment(req, res) {
     if (newSlot.status !== 'active') {
       throw new Error('Khung gio moi da bi khoa')
     }
+    const oldSchedule = await LichLamViec.findById(appointment.schedule_id).session(session)
+    const oldSlot = oldSchedule?.slots.id(appointment.slot_id)
+    if (oldSlot) {
+      oldSlot.status = 'active'
+      oldSlot.benh_nhan_id = null
+      oldSlot.benh_nhan_tam_giu_id = null
+      await oldSchedule.save({ session })
+    }
+
+    newSlot.status = 'booked'
+    newSlot.benh_nhan_id = appointment.user_id ?? null
+    newSlot.benh_nhan_tam_giu_id = null
+    await newSchedule.save({ session })
+
+    appointment.doctor_id = doctor._id
+    appointment.schedule_id = newSchedule._id
+    appointment.slot_id = newSlot._id
+    appointment.chi_nhanh_id = newSchedule.chi_nhanh_id ?? doctor.chi_nhanh_id ?? appointment.chi_nhanh_id
+    appointment.specialty_id = newSlot.specialty_id ?? doctor.specialties?.[0] ?? appointment.specialty_id
+    appointment.ngay_kham = toDateOnly(newSchedule.ngay)
+    appointment.gio_kham = newSlot.gio_bat_dau
+    appointment.so_lan_thay_doi = (appointment.so_lan_thay_doi ?? 0) + 1
+    await appointment.save({ session })
+
+    await LichSuLichHen.create([{
+      appointment_id: appointment._id,
+      tu_trang_thai: appointment.status,
+      den_trang_thai: appointment.status,
+      tu_payment_status: appointment.payment_status,
+      den_payment_status: appointment.payment_status,
+      nguoi_thuc_hien_id: req.user.id,
+      vai_tro: 'admin',
+      ly_do: `Admin doi lich sang ${newSlot.gio_bat_dau} ngay ${formatDateOnly(newSchedule.ngay)}`,
+    }], { session })
+
+    await session.commitTransaction()
+    session.endSession()
+
+    const updatedAppointmentPayload = await loadAppointmentForResponse(appointment._id)
+    return ok(res, formatAppointmentItem(updatedAppointmentPayload), 'Da doi lich thanh cong')
+
     if (newSlot.so_benh_nhan_hien_tai >= newSlot.so_benh_nhan_toi_da) {
       throw new Error('Khung gio moi da kin cho')
     }
@@ -687,7 +879,6 @@ export async function getDoctorSchedules(req, res) {
           ngay: scheduleDate,
           slots: schedule.slots.filter((slot) => {
             if (slot.status !== 'active') return false
-            if (slot.so_benh_nhan_hien_tai >= slot.so_benh_nhan_toi_da) return false
             // Nếu lịch hôm nay: loại slot đã bắt đầu hoặc đã qua (gio_bat_dau <= giờ hiện tại)
             if (isToday && slot.gio_bat_dau <= currentTimeStr) return false
             return true
