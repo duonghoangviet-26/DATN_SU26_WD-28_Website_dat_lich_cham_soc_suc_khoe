@@ -229,7 +229,7 @@ export default function ClientLayout() {
                   <span className="text-brand-500 font-bold">📞 Hotline:</span> 1900 6060
                 </p>
                 <p className="flex items-center gap-2">
-                  <span className="text-brand-500 font-bold">✉️ Email:</span> contact@vitafamily.vn
+                  <span className="text-brand-500 font-bold">✉️ Email:</span> vitafamily@gmail.com
                 </p>
               </div>
             </div>
