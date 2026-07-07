@@ -9,7 +9,7 @@ export type AppointmentStatus =
     | "confirmed"
     | "completed"
     | "cancelled";
-export type PaymentStatus = "unpaid" | "paid" | "refunded";
+export type PaymentStatus = "unpaid" | "partial" | "paid" | "refunded";
 
 export interface User {
     id: string;
@@ -285,12 +285,13 @@ export interface AdminAppointmentDoctorOption {
     ten: string;
     chuyen_khoa: string;
     service_ids: string[];
+    phi_kham: number;
 }
 
 export interface AdminAppointmentServiceOption {
     _id: string;
     ten: string;
-    loai: "clinic" | "home";
+    loai: ServiceType;
     gia: number;
 }
 
@@ -316,14 +317,22 @@ export interface NotificationItem {
     ngay_gui: string;
 }
 
-export type PaymentMethod = "momo" | "vnpay" | "cash" | "bank" | "mock";
+export type PaymentMethod =
+    | "tien_mat"
+    | "chuyen_khoan"
+    | "vi_dien_tu"
+    | "the_ngan_hang"
+    | "momo"
+    | "vnpay"
+    | "cash"
+    | "bank";
 
 // Trạng thái giao dịch thanh toán — KHÁC với LichHen.payment_status (GAP-21)
 // LichHen dùng PaymentStatus ('unpaid'|'paid'|'refunded'), ThanhToan dùng TransactionStatus
 export type TransactionStatus = "pending" | "paid" | "failed" | "refunded";
 
 export interface PaymentItem {
-    id: number;
+    id: string | number;
     ma_giao_dich: string; // "TXN0001" — auto-gen bởi backend (GAP-21)
     benh_nhan: string;
     bac_si: string;

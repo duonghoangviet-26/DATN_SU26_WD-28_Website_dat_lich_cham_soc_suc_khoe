@@ -1,22 +1,95 @@
-import { mockServices } from '@/mock/services'
-import { mockSpecialties } from '@/mock/hospitals'
-import type { ServiceItem, ServiceFormData, ServiceType, ServiceStatus } from '@/types'
-
-const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
-
-let services = [...mockServices]
-let idCounter = services.length + 1
-
-function lookupSpecialtyTen(specialtyId: string | null | undefined): string | null {
-  if (!specialtyId) return null
-  return mockSpecialties.find(sp => String(sp.id) === specialtyId)?.ten ?? null
-}
+import axiosInstance from '@/services/axiosInstance'
+import type { ApiResponse, ServiceItem, ServiceFormData, ServiceType, ServiceStatus } from '@/types'
 
 export interface PagedResult<T> {
   items: T[]
   total: number
   page: number
   totalPages: number
+}
+
+interface PublicHomeServiceItem {
+  id: string
+  ten: string
+  gia: number
+  mo_ta?: string | null
+  mo_ta_ngan?: string | null
+  thoi_gian_phut?: number | null
+  gio_dat_truoc_toi_thieu?: number | null
+  khu_vuc?: string[]
+  chuyen_khoa?: string | null
+}
+
+function getCurrentRole(): string | null {
+  const storage = globalThis.localStorage
+  if (!storage) return null
+
+  try {
+    const raw = storage.getItem('user')
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return typeof parsed?.role === 'string' ? parsed.role : null
+  } catch {
+    return null
+  }
+}
+
+function isAdminContext(): boolean {
+  return getCurrentRole() === 'admin'
+}
+
+function mapServiceItem(item: Partial<ServiceItem> & { id?: string; _id?: string }): ServiceItem {
+  return {
+    id: String(item.id ?? item._id ?? ''),
+    ma_dich_vu: item.ma_dich_vu ?? '',
+    ten: item.ten ?? '',
+    loai: item.loai ?? 'home',
+    gia: Number(item.gia ?? 0),
+    mo_ta_ngan: item.mo_ta_ngan ?? null,
+    mo_ta: item.mo_ta ?? null,
+    thoi_gian_phut: item.thoi_gian_phut ?? null,
+    gio_dat_truoc_toi_thieu: item.gio_dat_truoc_toi_thieu ?? undefined,
+    ngay_ap_dung: item.ngay_ap_dung ?? null,
+    gio_bat_dau: item.gio_bat_dau ?? null,
+    gio_ket_thuc: item.gio_ket_thuc ?? null,
+    chuan_bi_truoc: item.chuan_bi_truoc ?? null,
+    specialty_id: item.specialty_id ?? null,
+    specialty_ten: item.specialty_ten ?? null,
+    khu_vuc: item.khu_vuc ?? [],
+    so_bac_si: item.so_bac_si ?? 0,
+    so_luot_dat: item.so_luot_dat ?? 0,
+    active_appointments: item.active_appointments ?? 0,
+    nguoi_tao: item.nguoi_tao ?? null,
+    status: item.status ?? 'inactive',
+    ngay_tao: item.ngay_tao,
+    ngay_cap_nhat: item.ngay_cap_nhat,
+    lich_su_thay_doi: item.lich_su_thay_doi ?? [],
+  }
+}
+
+function mapPublicHomeService(item: PublicHomeServiceItem): ServiceItem {
+  return mapServiceItem({
+    id: item.id,
+    ma_dich_vu: '',
+    ten: item.ten,
+    loai: 'home',
+    gia: item.gia,
+    mo_ta: item.mo_ta ?? null,
+    mo_ta_ngan: item.mo_ta_ngan ?? null,
+    thoi_gian_phut: item.thoi_gian_phut ?? null,
+    gio_dat_truoc_toi_thieu: item.gio_dat_truoc_toi_thieu ?? undefined,
+    ngay_ap_dung: 'T2-T7',
+    gio_bat_dau: '08:00',
+    gio_ket_thuc: '17:00',
+    specialty_ten: item.chuyen_khoa ?? null,
+    khu_vuc: item.khu_vuc ?? [],
+    status: 'active',
+  })
+}
+
+async function getPublicHomeServices(): Promise<ServiceItem[]> {
+  const res = await axiosInstance.get<ApiResponse<PublicHomeServiceItem[]>>('/patient/booking/services')
+  return (Array.isArray(res.data.data) ? res.data.data : []).map(mapPublicHomeService)
 }
 
 export const serviceService = {
@@ -27,139 +100,69 @@ export const serviceService = {
     page = 1,
     limit = 10,
   ): Promise<PagedResult<ServiceItem>> {
-    await delay()
-    let list = [...services]
-    if (loai)   list = list.filter(s => s.loai === loai)
-    if (status) list = list.filter(s => s.status === status)
-    if (search?.trim()) {
-      const q = search.trim().toLowerCase()
-      list = list.filter(s =>
-        s.ten.toLowerCase().includes(q) ||
-        s.ma_dich_vu.toLowerCase().includes(q) ||
-        (s.mo_ta_ngan?.toLowerCase().includes(q) ?? false)
-      )
+    if (!isAdminContext()) {
+      const publicItems = await getPublicHomeServices()
+      let filtered = publicItems
+
+      if (loai) filtered = filtered.filter((item) => item.loai === loai)
+      if (status) filtered = filtered.filter((item) => item.status === status)
+      if (search?.trim()) {
+        const keyword = search.trim().toLowerCase()
+        filtered = filtered.filter((item) =>
+          item.ten.toLowerCase().includes(keyword) ||
+          (item.mo_ta_ngan?.toLowerCase().includes(keyword) ?? false)
+        )
+      }
+
+      const total = filtered.length
+      const totalPages = Math.max(1, Math.ceil(total / limit))
+      const safePage = Math.min(Math.max(1, page), totalPages)
+      const items = filtered.slice((safePage - 1) * limit, safePage * limit)
+
+      return { items, total, page: safePage, totalPages }
     }
-    const total      = list.length
-    const totalPages = Math.max(1, Math.ceil(total / limit))
-    const safePage   = Math.min(Math.max(1, page), totalPages)
-    const items      = list.slice((safePage - 1) * limit, safePage * limit)
-    return { items, total, page: safePage, totalPages }
-    // Real API:
-    // const params: Record<string, string | number> = { page, limit }
-    // if (loai)   params.loai   = loai
-    // if (status) params.status = status
-    // if (search?.trim()) params.search = search.trim()
-    // const res = await axiosInstance.get<ApiResponse<PagedResult<ServiceItem>>>('/admin/services', { params })
-    // return res.data.data
+
+    const params: Record<string, string | number> = { page, limit }
+    if (loai) params.loai = loai
+    if (status) params.status = status
+    if (search?.trim()) params.search = search.trim()
+
+    const res = await axiosInstance.get<ApiResponse<PagedResult<ServiceItem>>>('/admin/services', { params })
+    const payload = res.data.data
+
+    return {
+      items: Array.isArray(payload?.items) ? payload.items.map(mapServiceItem) : [],
+      total: Number(payload?.total ?? 0),
+      page: Number(payload?.page ?? page),
+      totalPages: Number(payload?.totalPages ?? 1),
+    }
   },
 
   async getById(id: string): Promise<ServiceItem> {
-    await delay()
-    const item = services.find(s => s.id === id)
-    if (!item) throw new Error('Không tìm thấy dịch vụ')
-    return { ...item }
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<ServiceItem>>(`/admin/services/${id}`)
-    // return res.data.data
+    if (!isAdminContext()) {
+      const items = await getPublicHomeServices()
+      const item = items.find((service) => service.id === id)
+      if (!item) throw new Error('Khong tim thay dich vu')
+      return item
+    }
+
+    const res = await axiosInstance.get<ApiResponse<ServiceItem>>(`/admin/services/${id}`)
+    return mapServiceItem(res.data.data ?? {})
   },
 
   async create(data: ServiceFormData): Promise<ServiceItem> {
-    await delay()
-    // Validate đồng bộ với backend
-    if (!data.ten?.trim()) throw new Error('Tên dịch vụ là bắt buộc')
-    if (!Number.isInteger(data.gia) || data.gia < 1) throw new Error('Giá phải là số nguyên lớn hơn 0')
-    if (data.loai === 'related' && !data.specialty_id) throw new Error('Dịch vụ liên quan bắt buộc phải có chuyên khoa')
-    if (data.loai === 'home' && (!data.khu_vuc || data.khu_vuc.length === 0))
-      throw new Error('Dịch vụ tại nhà cần chọn ít nhất 1 khu vực phục vụ')
-
-    const n = idCounter++
-    const newItem: ServiceItem = {
-      id:         `mock-svc-${String(n).padStart(3, '0')}`,
-      ma_dich_vu: `DV${String(n).padStart(3, '0')}`,
-      ...data,
-      ten:          data.ten.trim(),
-      specialty_ten: lookupSpecialtyTen(data.specialty_id),
-      khu_vuc:       data.loai === 'home' ? (data.khu_vuc ?? []) : [],
-      thoi_gian_phut: data.loai === 'home' ? 60 : null,
-      ngay_ap_dung:  data.loai === 'home' ? 'T2–T7' : null,
-      gio_bat_dau:   data.loai === 'home' ? '08:00' : null,
-      gio_ket_thuc:  data.loai === 'home' ? '17:00' : null,
-      chuan_bi_truoc: data.loai === 'related' ? (data.chuan_bi_truoc?.trim() || null) : null,
-      status:    'inactive', // Admin review trước khi bật public
-      so_bac_si: 0,
-      so_luot_dat: 0,
-      ngay_tao:       new Date().toISOString(),
-      ngay_cap_nhat:  new Date().toISOString(),
-      lich_su_thay_doi: [{
-        id:             `log-new-${n}`,
-        thoi_gian:      new Date().toISOString(),
-        hanh_dong:      'tao_moi',
-        nguoi_thay_doi: 'Admin',
-        mo_ta:          'Tạo dịch vụ mới',
-      }],
-    }
-    services = [newItem, ...services]
-    return newItem
-    // Real API:
-    // const res = await axiosInstance.post<ApiResponse<ServiceItem>>('/admin/services', data)
-    // return res.data.data
+    const res = await axiosInstance.post<ApiResponse<ServiceItem>>('/admin/services', data)
+    return mapServiceItem(res.data.data ?? {})
   },
 
   async update(id: string, data: ServiceFormData, mo_ta_thay_doi?: string): Promise<ServiceItem> {
-    await delay()
-    const idx = services.findIndex(s => s.id === id)
-    if (idx === -1) throw new Error('Không tìm thấy dịch vụ')
-    const updated: ServiceItem = {
-      ...services[idx],
-      ...data,
-      ten:           data.ten.trim(),
-      specialty_ten: lookupSpecialtyTen(data.specialty_id),
-      khu_vuc:       data.loai === 'home' ? (data.khu_vuc ?? []) : [],
-      thoi_gian_phut: data.loai === 'home' ? 60 : null,
-      ngay_ap_dung:  data.loai === 'home' ? 'T2–T7' : null,
-      gio_bat_dau:   data.loai === 'home' ? '08:00' : null,
-      gio_ket_thuc:  data.loai === 'home' ? '17:00' : null,
-      chuan_bi_truoc: data.loai === 'related' ? (data.chuan_bi_truoc?.trim() || null) : null,
-      ngay_cap_nhat: new Date().toISOString(),
-    }
-    updated.lich_su_thay_doi = [
-      {
-        id:             `log-upd-${Date.now()}`,
-        thoi_gian:      new Date().toISOString(),
-        hanh_dong:      'cap_nhat',
-        nguoi_thay_doi: 'Admin',
-        mo_ta:          mo_ta_thay_doi?.trim() || `Cập nhật dịch vụ "${data.ten || services[idx].ten}"`,
-      },
-      ...(updated.lich_su_thay_doi ?? []),
-    ]
-    services[idx] = updated
-    return { ...updated }
-    // Real API:
-    // const body = mo_ta_thay_doi?.trim() ? { ...data, mo_ta_thay_doi } : data
-    // const res = await axiosInstance.put<ApiResponse<ServiceItem>>(`/admin/services/${id}`, body)
-    // return res.data.data
+    const body = mo_ta_thay_doi?.trim() ? { ...data, mo_ta_thay_doi } : data
+    const res = await axiosInstance.put<ApiResponse<ServiceItem>>(`/admin/services/${id}`, body)
+    return mapServiceItem(res.data.data ?? {})
   },
 
   async toggle(id: string): Promise<ServiceItem> {
-    await delay()
-    const item = services.find(s => s.id === id)
-    if (!item) throw new Error('Không tìm thấy dịch vụ')
-    item.status = item.status === 'active' ? 'inactive' : 'active'
-    item.ngay_cap_nhat = new Date().toISOString()
-    const action = item.status === 'inactive' ? 'an' : 'hien'
-    item.lich_su_thay_doi = [
-      {
-        id:             `log-tog-${Date.now()}`,
-        thoi_gian:      new Date().toISOString(),
-        hanh_dong:      action,
-        nguoi_thay_doi: 'Admin',
-        mo_ta:          action === 'an' ? `Ẩn dịch vụ "${item.ten}"` : `Hiện dịch vụ "${item.ten}"`,
-      },
-      ...(item.lich_su_thay_doi ?? []),
-    ]
-    return { ...item }
-    // Real API:
-    // const res = await axiosInstance.patch<ApiResponse<ServiceItem>>(`/admin/services/${id}/toggle`)
-    // return res.data.data
+    const res = await axiosInstance.patch<ApiResponse<ServiceItem>>(`/admin/services/${id}/toggle`)
+    return mapServiceItem(res.data.data ?? {})
   },
 }

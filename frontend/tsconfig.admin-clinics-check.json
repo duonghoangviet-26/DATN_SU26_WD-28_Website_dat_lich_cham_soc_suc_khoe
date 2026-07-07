@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/services/clinic.service.ts",
+    "src/pages/admin/ManageHospitals/ManageHospitals.tsx",
+    "src/pages/admin/ManageHospitals/EditClinic.tsx",
+    "src/pages/admin/ManageHospitals/SpecialtyList.tsx",
+    "src/pages/admin/ManageHospitals/AddSpecialty.tsx",
+    "src/pages/admin/ManageHospitals/EditSpecialty.tsx",
+    "src/pages/admin/ManageHospitals/SpecialtyDoctorsModal.tsx",
+    "src/pages/admin/ManageHospitals/HospitalAuditLogModal.tsx",
+    "src/routes/adminMenu.ts"
+  ]
+}

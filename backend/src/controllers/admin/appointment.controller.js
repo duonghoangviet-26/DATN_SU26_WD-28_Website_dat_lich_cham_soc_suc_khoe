@@ -39,7 +39,11 @@ function formatAppointmentItem(appointment) {
     sdt_benh_nhan: appointment.so_dien_thoai_khach || appointment.user_id?.so_dien_thoai || null,
     doctor_id: appointment.doctor_id?._id ?? appointment.doctor_id ?? null,
     bac_si: appointment.doctor_id?.user_id?.ho_ten || 'Khong ro',
-    chuyen_khoa: appointment.service_id?.ten || 'Kham tong quat',
+    chuyen_khoa:
+      appointment.service_id?.ten ||
+      appointment.specialty_id?.ten ||
+      appointment.doctor_id?.specialties?.[0]?.ten ||
+      'Kham tong quat',
     ngay_kham: formatDateOnly(appointment.ngay_kham),
     gio_kham: appointment.gio_kham,
     loai_kham: appointment.loai_kham,
@@ -244,9 +248,13 @@ async function loadAppointmentForResponse(id) {
     .populate({ path: 'user_id', select: 'ho_ten email so_dien_thoai' })
     .populate({
       path: 'doctor_id',
-      populate: { path: 'user_id', select: 'ho_ten' },
+      populate: [
+        { path: 'user_id', select: 'ho_ten' },
+        { path: 'specialties', select: 'ten' },
+      ],
     })
     .populate('service_id', 'ten')
+    .populate('specialty_id', 'ten')
     .lean()
 }
 
@@ -287,9 +295,13 @@ export async function getAllAppointments(req, res) {
       .populate({ path: 'user_id', select: 'ho_ten email so_dien_thoai' })
       .populate({
         path: 'doctor_id',
-        populate: { path: 'user_id', select: 'ho_ten' },
+        populate: [
+          { path: 'user_id', select: 'ho_ten' },
+          { path: 'specialties', select: 'ten' },
+        ],
       })
       .populate('service_id', 'ten')
+      .populate('specialty_id', 'ten')
       .sort({ ngay_kham: -1, gio_kham: -1 })
       .lean()
 
@@ -516,12 +528,15 @@ export async function createAppointment(req, res) {
 
     if (!doctor_id) throw new Error('Bac si la bat buoc')
     if (!schedule_id || !slot_id) throw new Error('Lich lam viec va khung gio la bat buoc')
-    if (!service_id) throw new Error('Dich vu la bat buoc')
+    if (loai_kham === 'home' && !service_id) throw new Error('Dich vu la bat buoc cho lich kham tai nha')
+    if (loai_kham === 'home' && !dia_chi_kham?.trim()) throw new Error('Dia chi kham la bat buoc cho lich kham tai nha')
     if (!ten_khach?.trim()) throw new Error('Ten benh nhan la bat buoc')
 
     const doctor = await getDoctorOrThrow(doctor_id, session)
-    const service = await getServiceOrThrow(service_id, loai_kham, session)
-    if (!doctorSupportsService(doctor, service._id)) {
+    const service = loai_kham === 'home' && service_id
+      ? await getServiceOrThrow(service_id, 'home', session)
+      : null
+    if (service && !doctorSupportsService(doctor, service._id)) {
       throw new Error('Bac si khong ho tro dich vu da chon')
     }
 
@@ -546,7 +561,7 @@ export async function createAppointment(req, res) {
       doctor_id: doctor._id,
       schedule_id: schedule._id,
       slot_id: slot._id,
-      service_id: service._id,
+      service_id: service?._id ?? null,
       chi_nhanh_id: schedule.chi_nhanh_id ?? doctor.chi_nhanh_id ?? null,
       specialty_id: slot.specialty_id ?? doctor.specialties?.[0] ?? null,
       ma_lich_hen: maLichHen,
@@ -554,8 +569,8 @@ export async function createAppointment(req, res) {
       loai_kham,
       ngay_kham: appointmentDate,
       gio_kham: slot.gio_bat_dau,
-      gia_kham: service.gia,
-      dia_chi_kham,
+      gia_kham: service?.gia ?? doctor.phi_kham ?? doctor.gia_kham ?? 0,
+      dia_chi_kham: loai_kham === 'home' ? dia_chi_kham?.trim() : null,
       ly_do_kham: ly_do_kham?.trim() || null,
       ten_khach: ten_khach.trim(),
       so_dien_thoai_khach,
@@ -570,18 +585,18 @@ export async function createAppointment(req, res) {
       so_hoa_don: soHoaDon,
       chi_nhanh_id: appointmentDoc.chi_nhanh_id,
       specialty_id: appointmentDoc.specialty_id,
-      tong_tien_kham: service.gia,
+      tong_tien_kham: appointmentDoc.gia_kham,
       chi_tiet_thu_phi: [
         {
           loai: 'phi_kham',
           ten: 'Phi kham',
-          so_tien: service.gia,
+          so_tien: appointmentDoc.gia_kham,
           so_luong: 1,
-          thanh_tien: service.gia,
+          thanh_tien: appointmentDoc.gia_kham,
         },
       ],
       tong_tien_phat_sinh: 0,
-      tong_thanh_toan: service.gia,
+      tong_thanh_toan: appointmentDoc.gia_kham,
       trang_thai_hoa_don: 'chua_thanh_toan',
     }], { session })
 
@@ -601,64 +616,6 @@ export async function createAppointment(req, res) {
 
     const createdAppointmentPayload = await loadAppointmentForResponse(appointmentDoc._id)
     return created(res, formatAppointmentItem(createdAppointmentPayload), 'Da tao lich hen thanh cong')
-
-    const updatedSchedule = await LichLamViec.findOneAndUpdate(
-      {
-        _id: schedule_id,
-        'slots._id': slot_id,
-        'slots.so_benh_nhan_hien_tai': { $lt: slot.so_benh_nhan_toi_da }
-      },
-      { $inc: { 'slots.$.so_benh_nhan_hien_tai': 1 } },
-      { session, new: true }
-    )
-
-    if (!updatedSchedule) {
-      throw new Error('Khung giờ này vừa mới có người đặt hết chỗ, vui lòng chọn khung giờ khác')
-    }
-
-    const newAppointment = new LichHen({
-      user_id: user_id || null,
-      doctor_id: doctor._id,
-      schedule_id: schedule._id,
-      slot_id: slot._id,
-      service_id: service._id,
-      loai_kham,
-      ngay_kham: toDateOnly(schedule.ngay),
-      gio_kham: slot.gio_bat_dau,
-      gia_kham: service.gia,
-      dia_chi_kham,
-      ly_do_kham: ly_do_kham?.trim() || null,
-      ten_khach: ten_khach.trim(),
-      so_dien_thoai_khach,
-      status: 'confirmed',
-      payment_status: 'unpaid',
-    })
-
-    await newAppointment.save({ session })
-
-    await ThanhToan.create([{
-      appointment_id: newAppointment._id,
-      benh_nhan_id: user_id || null,
-      so_tien: service.gia,
-      status: 'pending',
-    }], { session })
-
-    await LichSuLichHen.create([{
-      appointment_id: newAppointment._id,
-      tu_trang_thai: null,
-      den_trang_thai: 'confirmed',
-      tu_payment_status: null,
-      den_payment_status: 'unpaid',
-      nguoi_thuc_hien_id: req.user.id,
-      vai_tro: 'admin',
-      ly_do: 'Admin dat lich thay khach',
-    }], { session })
-
-    await session.commitTransaction()
-    session.endSession()
-
-    const createdAppointment = await loadAppointmentForResponse(newAppointment._id)
-    return created(res, formatAppointmentItem(createdAppointment), 'Da tao lich hen thanh cong')
   } catch (err) {
     await session.abortTransaction()
     session.endSession()
@@ -743,58 +700,6 @@ export async function rescheduleAppointment(req, res) {
 
     const updatedAppointmentPayload = await loadAppointmentForResponse(appointment._id)
     return ok(res, formatAppointmentItem(updatedAppointmentPayload), 'Da doi lich thanh cong')
-
-    if (newSlot.so_benh_nhan_hien_tai >= newSlot.so_benh_nhan_toi_da) {
-      throw new Error('Khung gio moi da kin cho')
-    }
-
-    await LichLamViec.findOneAndUpdate(
-      {
-        _id: appointment.schedule_id,
-        'slots._id': appointment.slot_id,
-        'slots.so_benh_nhan_hien_tai': { $gt: 0 },
-      },
-      { $inc: { 'slots.$.so_benh_nhan_hien_tai': -1 } },
-      { session }
-    )
-
-    const updatedNewSchedule = await LichLamViec.findOneAndUpdate(
-      {
-        _id: schedule_id,
-        'slots._id': slot_id,
-        'slots.so_benh_nhan_hien_tai': { $lt: newSlot.so_benh_nhan_toi_da }
-      },
-      { $inc: { 'slots.$.so_benh_nhan_hien_tai': 1 } },
-      { session, new: true }
-    )
-
-    if (!updatedNewSchedule) {
-      throw new Error('Khung giờ mới vừa có người đặt hết chỗ, vui lòng chọn khung giờ khác')
-    }
-
-    appointment.doctor_id = doctor._id
-    appointment.schedule_id = newSchedule._id
-    appointment.slot_id = newSlot._id
-    appointment.ngay_kham = toDateOnly(newSchedule.ngay)
-    appointment.gio_kham = newSlot.gio_bat_dau
-    await appointment.save({ session })
-
-    await LichSuLichHen.create([{
-      appointment_id: appointment._id,
-      tu_trang_thai: appointment.status,
-      den_trang_thai: appointment.status,
-      tu_payment_status: appointment.payment_status,
-      den_payment_status: appointment.payment_status,
-      nguoi_thuc_hien_id: req.user.id,
-      vai_tro: 'admin',
-      ly_do: `Admin doi lich sang ${newSlot.gio_bat_dau} ngay ${formatDateOnly(newSchedule.ngay)}`,
-    }], { session })
-
-    await session.commitTransaction()
-    session.endSession()
-
-    const updatedAppointment = await loadAppointmentForResponse(appointment._id)
-    return ok(res, formatAppointmentItem(updatedAppointment), 'Da doi lich thanh cong')
   } catch (err) {
     await session.abortTransaction()
     session.endSession()
@@ -816,6 +721,7 @@ export async function getActiveDoctors(req, res) {
       ten: doctor.user_id?.ho_ten,
       chuyen_khoa: doctor.specialties?.map((specialty) => specialty.ten).join(', ') || 'Chua ro',
       service_ids: doctor.services?.map((serviceId) => String(serviceId)) || [],
+      phi_kham: doctor.phi_kham ?? doctor.gia_kham ?? 0,
     }))
 
     return ok(res, formatted)

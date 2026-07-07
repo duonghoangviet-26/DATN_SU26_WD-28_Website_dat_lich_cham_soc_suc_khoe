@@ -6,7 +6,6 @@ import type {
 } from '@/types'
 import Icon from '@/components/admin/icons'
 
-// Format "2026-07-05" → "Thứ 7, 05/07/2026" (tránh lệch múi giờ UTC)
 function formatScheduleDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number)
   const date = new Date(year, month - 1, day)
@@ -42,20 +41,24 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
   const [doctors, setDoctors] = useState<AdminAppointmentDoctorOption[]>([])
   const [services, setServices] = useState<AdminAppointmentServiceOption[]>([])
   const [schedules, setSchedules] = useState<any[]>([])
-
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     appointmentService.getActiveDoctors()
       .then(setDoctors)
-      .catch(() => setError('Lỗi lấy danh sách bác sĩ'))
+      .catch(() => setError('Loi lay danh sach bac si'))
   }, [])
 
   useEffect(() => {
-    appointmentService.getActiveServices(form.loai_kham)
+    if (form.loai_kham !== 'home') {
+      setServices([])
+      return
+    }
+
+    appointmentService.getActiveServices('home')
       .then(setServices)
-      .catch(() => setError('Lỗi lấy danh sách dịch vụ'))
+      .catch(() => setError('Loi lay danh sach dich vu'))
   }, [form.loai_kham])
 
   useEffect(() => {
@@ -66,7 +69,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
 
     appointmentService.getDoctorSchedules(form.doctor_id)
       .then(setSchedules)
-      .catch(() => setError('Lỗi lấy lịch làm việc của bác sĩ'))
+      .catch(() => setError('Loi lay lich lam viec cua bac si'))
   }, [form.doctor_id])
 
   const selectedDoctor = doctors.find((doctor) => doctor._id === form.doctor_id)
@@ -75,12 +78,20 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
   )
   const selectedService = availableServices.find((service) => service._id === form.service_id)
   const selectedSchedule = schedules.find((schedule) => schedule._id === form.schedule_id)
+  const estimatedPrice = form.loai_kham === 'home'
+    ? selectedService?.gia ?? 0
+    : selectedDoctor?.phi_kham ?? 0
 
   useEffect(() => {
+    if (form.loai_kham !== 'home' && form.service_id) {
+      setForm((prev) => ({ ...prev, service_id: '' }))
+      return
+    }
+
     if (form.service_id && !availableServices.some((service) => service._id === form.service_id)) {
       setForm((prev) => ({ ...prev, service_id: '' }))
     }
-  }, [availableServices, form.service_id])
+  }, [availableServices, form.loai_kham, form.service_id])
 
   useEffect(() => {
     setForm((prev) => ({
@@ -111,24 +122,32 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
     setError(null)
 
     if (!form.ten_khach.trim()) {
-      setError('Vui lòng nhập tên bệnh nhân.')
+      setError('Vui long nhap ten benh nhan.')
       return
     }
-    if (!form.doctor_id || !form.service_id || !form.schedule_id || !form.slot_id) {
-      setError('Vui lòng chọn đầy đủ Bác sĩ, Dịch vụ, Ngày khám và Khung giờ.')
+    if (!form.doctor_id || !form.schedule_id || !form.slot_id) {
+      setError('Vui long chon day du Bac si, Ngay kham va Khung gio.')
+      return
+    }
+    if (form.loai_kham === 'home' && !form.service_id) {
+      setError('Kham tai nha bat buoc chon dich vu.')
       return
     }
     if (form.loai_kham === 'home' && !form.dia_chi_kham.trim()) {
-      setError('Khám tại nhà yêu cầu nhập địa chỉ.')
+      setError('Kham tai nha yeu cau nhap dia chi.')
       return
     }
 
     setLoading(true)
     try {
-      await appointmentService.create(form)
+      await appointmentService.create({
+        ...form,
+        service_id: form.service_id || undefined,
+        dia_chi_kham: form.loai_kham === 'home' ? form.dia_chi_kham : undefined,
+      })
       onSaved()
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Lỗi khi đặt lịch')
+      setError(err?.response?.data?.message || err.message || 'Loi khi dat lich')
     } finally {
       setLoading(false)
     }
@@ -138,8 +157,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
     <div className="card p-6">
       <div className="mb-6 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-800">
-          Đặt lịch hộ{' '}
-          <span className="text-sm font-normal text-orange-500">(Can thiệp khẩn cấp)</span>
+          Dat lich ho <span className="text-sm font-normal text-orange-500">(Can thiep khan cap)</span>
         </h3>
         <button onClick={onCancel} className="text-slate-400 hover:text-slate-700">
           <Icon name="x" className="h-5 w-5" />
@@ -155,19 +173,19 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
       <form onSubmit={handleSubmit} className="grid gap-6 sm:grid-cols-2">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Tên bệnh nhân <span className="text-red-500">*</span>
+            Ten benh nhan <span className="text-red-500">*</span>
           </label>
           <input
             name="ten_khach"
             value={form.ten_khach}
             onChange={handleChange}
             className="input w-full"
-            placeholder="Nguyễn Văn A"
+            placeholder="Nguyen Van A"
             required
           />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Số điện thoại</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">So dien thoai</label>
           <input
             name="so_dien_thoai_khach"
             value={form.so_dien_thoai_khach}
@@ -179,7 +197,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Loại khám <span className="text-red-500">*</span>
+            Loai kham <span className="text-red-500">*</span>
           </label>
           <select
             name="loai_kham"
@@ -187,14 +205,14 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             onChange={handleChange}
             className="input w-full"
           >
-            <option value="clinic">Tại phòng khám</option>
-            <option value="home">Tại nhà</option>
+            <option value="clinic">Tai phong kham</option>
+            <option value="home">Tai nha</option>
           </select>
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Bác sĩ phụ trách <span className="text-red-500">*</span>
+            Bac si phu trach <span className="text-red-500">*</span>
           </label>
           <select
             name="doctor_id"
@@ -203,7 +221,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             className="input w-full"
             required
           >
-            <option value="">-- Chọn bác sĩ --</option>
+            <option value="">-- Chon bac si --</option>
             {doctors.map((doctor) => (
               <option key={doctor._id} value={doctor._id}>
                 {doctor.ten} ({doctor.chuyen_khoa})
@@ -212,30 +230,32 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
           </select>
         </div>
 
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Dịch vụ <span className="text-red-500">*</span>
-          </label>
-          <select
-            name="service_id"
-            value={form.service_id}
-            onChange={handleChange}
-            className="input w-full"
-            required
-            disabled={!form.doctor_id}
-          >
-            <option value="">-- Chọn dịch vụ --</option>
-            {availableServices.map((service) => (
-              <option key={service._id} value={service._id}>
-                {service.ten}
-              </option>
-            ))}
-          </select>
-        </div>
+        {form.loai_kham === 'home' && (
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              Dich vu <span className="text-red-500">*</span>
+            </label>
+            <select
+              name="service_id"
+              value={form.service_id}
+              onChange={handleChange}
+              className="input w-full"
+              required
+              disabled={!form.doctor_id}
+            >
+              <option value="">-- Chon dich vu --</option>
+              {availableServices.map((service) => (
+                <option key={service._id} value={service._id}>
+                  {service.ten}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Ngày khám <span className="text-red-500">*</span>
+            Ngay kham <span className="text-red-500">*</span>
           </label>
           <select
             name="schedule_id"
@@ -245,7 +265,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             required
             disabled={!form.doctor_id}
           >
-            <option value="">-- Chọn ngày khám --</option>
+            <option value="">-- Chon ngay kham --</option>
             {schedules.map((schedule) => (
               <option key={schedule._id} value={schedule._id}>
                 {formatScheduleDate(schedule.ngay)}
@@ -254,13 +274,13 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
           </select>
           {form.doctor_id && schedules.length === 0 && (
             <p className="mt-1 text-xs text-amber-600">
-              ⚠ Bác sĩ này chưa có lịch làm việc từ hôm nay trở đi, hoặc tất cả khung giờ đã đầy.
+              Bac si nay chua co lich lam viec tu hom nay tro di, hoac tat ca khung gio da day.
             </p>
           )}
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Khung giờ <span className="text-red-500">*</span>
+            Khung gio <span className="text-red-500">*</span>
           </label>
           <select
             name="slot_id"
@@ -270,40 +290,40 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             required
             disabled={!form.schedule_id}
           >
-            <option value="">-- Chọn giờ khám --</option>
+            <option value="">-- Chon gio kham --</option>
             {selectedSchedule?.slots.map((slot: any) => (
               <option key={slot._id} value={slot._id}>
-                {slot.gio_bat_dau} - {slot.gio_ket_thuc} (Còn {slot.so_benh_nhan_toi_da - slot.so_benh_nhan_hien_tai} chỗ)
+                {slot.gio_bat_dau} - {slot.gio_ket_thuc}
               </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Giá khám</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Gia kham</label>
           <input
             type="number"
-            value={selectedService?.gia ?? 0}
+            value={estimatedPrice}
             className="input w-full bg-slate-50"
             readOnly
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Lý do khám</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Ly do kham</label>
           <input
             name="ly_do_kham"
             value={form.ly_do_kham}
             onChange={handleChange}
             className="input w-full"
-            placeholder="Nhập lý do khám"
+            placeholder="Nhap ly do kham"
           />
         </div>
 
         {form.loai_kham === 'home' && (
           <div className="sm:col-span-2">
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Địa chỉ khám <span className="text-red-500">*</span>
+              Dia chi kham <span className="text-red-500">*</span>
             </label>
             <textarea
               name="dia_chi_kham"
@@ -317,10 +337,10 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
 
         <div className="sm:col-span-2 mt-4 flex justify-end gap-3">
           <button type="button" onClick={onCancel} disabled={loading} className="btn-secondary px-6">
-            Hủy
+            Huy
           </button>
           <button type="submit" disabled={loading} className="btn-primary px-6">
-            {loading ? 'Đang tạo...' : 'Tạo lịch hẹn'}
+            {loading ? 'Dang tao...' : 'Tao lich hen'}
           </button>
         </div>
       </form>

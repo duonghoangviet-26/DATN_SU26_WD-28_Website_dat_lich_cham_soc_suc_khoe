@@ -1,16 +1,14 @@
 import { useState } from 'react'
 import type { SpecialtyItem } from '@/types'
-import { hospitalService } from '@/services/hospital.service'
+import { clinicService } from '@/services/clinic.service'
 import Icon from '@/components/admin/icons'
 
 interface Props {
-  clinicId: string
   onSaved: (specialty: SpecialtyItem) => void
   onCancel: () => void
 }
 
-// Form thêm chuyên khoa mới. Slug tự sinh ở backend từ tên.
-export default function AddSpecialty({ clinicId, onSaved, onCancel }: Props) {
+export default function AddSpecialty({ onSaved, onCancel }: Props) {
   const [form, setForm] = useState({ ten: '', mo_ta: '', icon_url: '', thu_tu: 0 })
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -27,10 +25,10 @@ export default function AddSpecialty({ clinicId, onSaved, onCancel }: Props) {
     try {
       setUploading(true)
       setError(null)
-      const url = await hospitalService.uploadImage(file)
+      const url = await clinicService.uploadImage(file)
       setForm((prev) => ({ ...prev, icon_url: url }))
-    } catch (err) {
-      setError('Lỗi khi tải ảnh lên')
+    } catch (_) {
+      setError('Loi khi tai anh len')
     } finally {
       setUploading(false)
     }
@@ -39,13 +37,14 @@ export default function AddSpecialty({ clinicId, onSaved, onCancel }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.ten.trim()) {
-      setError('Tên chuyên khoa là bắt buộc')
+      setError('Ten chuyen khoa la bat buoc')
       return
     }
+
     try {
       setSaving(true)
       setError(null)
-      const created = await hospitalService.createSpecialty(clinicId, {
+      const created = await clinicService.createSpecialty({
         ten: form.ten.trim(),
         mo_ta: form.mo_ta || undefined,
         icon_url: form.icon_url || undefined,
@@ -53,8 +52,10 @@ export default function AddSpecialty({ clinicId, onSaved, onCancel }: Props) {
       })
       onSaved(created)
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Lỗi khi thêm chuyên khoa'
-      setError(msg)
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Loi khi them chuyen khoa'
+      setError(message)
     } finally {
       setSaving(false)
     }
@@ -63,7 +64,7 @@ export default function AddSpecialty({ clinicId, onSaved, onCancel }: Props) {
   return (
     <div className="card p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-800">Thêm chuyên khoa mới</h2>
+        <h2 className="text-lg font-bold text-slate-800">Them chuyen khoa moi</h2>
         <button onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
           <Icon name="x" className="h-5 w-5" />
         </button>
@@ -78,35 +79,35 @@ export default function AddSpecialty({ clinicId, onSaved, onCancel }: Props) {
       <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Tên chuyên khoa <span className="text-red-500">*</span>
+            Ten chuyen khoa <span className="text-red-500">*</span>
           </label>
           <input
             name="ten"
             value={form.ten}
             onChange={handleChange}
             className="input w-full"
-            placeholder="VD: Nội khoa"
+            placeholder="VD: Noi khoa"
           />
-          <p className="mt-1 text-xs text-slate-400">Slug URL sẽ được tự động tạo từ tên này</p>
+          <p className="mt-1 text-xs text-slate-400">Slug se duoc tu dong tao tu ten chuyen khoa nay.</p>
         </div>
 
         <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Mô tả</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Mo ta</label>
           <textarea
             name="mo_ta"
             value={form.mo_ta}
             onChange={handleChange}
             rows={3}
             className="input w-full resize-none"
-            placeholder="Mô tả ngắn về chuyên khoa này..."
+            placeholder="Mo ta ngan ve chuyen khoa..."
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Hình ảnh / Icon</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Hinh anh / Icon</label>
           <div className="flex items-center gap-3">
             {form.icon_url ? (
-              <img src={form.icon_url} alt="Icon" className="h-12 w-12 rounded-lg object-cover border border-slate-200" />
+              <img src={form.icon_url} alt="Icon" className="h-12 w-12 rounded-lg border border-slate-200 object-cover" />
             ) : (
               <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-slate-400">
                 <Icon name="image" className="h-5 w-5" />
@@ -120,13 +121,13 @@ export default function AddSpecialty({ clinicId, onSaved, onCancel }: Props) {
                 className="w-full text-sm text-slate-500 file:mr-4 file:rounded-full file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-600 hover:file:bg-brand-100"
                 disabled={uploading}
               />
-              {uploading && <p className="mt-1 text-xs text-brand-600">Đang tải lên...</p>}
+              {uploading && <p className="mt-1 text-xs text-brand-600">Dang tai len...</p>}
             </div>
           </div>
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Thứ tự hiển thị</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Thu tu hien thi</label>
           <input
             name="thu_tu"
             type="number"
@@ -139,10 +140,10 @@ export default function AddSpecialty({ clinicId, onSaved, onCancel }: Props) {
 
         <div className="sm:col-span-2 flex justify-end gap-3 pt-2">
           <button type="button" onClick={onCancel} className="btn-secondary" disabled={saving}>
-            Huỷ
+            Huy
           </button>
           <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Đang thêm...' : 'Thêm mới'}
+            {saving ? 'Dang them...' : 'Them moi'}
           </button>
         </div>
       </form>

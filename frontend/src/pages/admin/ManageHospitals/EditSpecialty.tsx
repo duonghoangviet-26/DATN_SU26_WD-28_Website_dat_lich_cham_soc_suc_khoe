@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { SpecialtyItem } from '@/types'
-import { hospitalService } from '@/services/hospital.service'
+import { clinicService } from '@/services/clinic.service'
 import Icon from '@/components/admin/icons'
 
 interface Props {
@@ -9,7 +9,6 @@ interface Props {
   onCancel: () => void
 }
 
-// Form chỉnh sửa chuyên khoa. Slug sẽ tự tính lại ở backend từ tên mới.
 export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
   const [form, setForm] = useState({
     ten: specialty.ten,
@@ -42,10 +41,10 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
     try {
       setUploading(true)
       setError(null)
-      const url = await hospitalService.uploadImage(file)
+      const url = await clinicService.uploadImage(file)
       setForm((prev) => ({ ...prev, icon_url: url }))
-    } catch (err) {
-      setError('Lỗi khi tải ảnh lên')
+    } catch (_) {
+      setError('Loi khi tai anh len')
     } finally {
       setUploading(false)
     }
@@ -54,13 +53,14 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.ten.trim()) {
-      setError('Tên chuyên khoa là bắt buộc')
+      setError('Ten chuyen khoa la bat buoc')
       return
     }
+
     try {
       setSaving(true)
       setError(null)
-      const updated = await hospitalService.updateSpecialty(specialty._id, {
+      const updated = await clinicService.updateSpecialty(specialty._id, {
         ten: form.ten.trim(),
         mo_ta: form.mo_ta || undefined,
         icon_url: form.icon_url || undefined,
@@ -68,8 +68,10 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       })
       onSaved(updated)
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Lỗi khi cập nhật'
-      setError(msg)
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Loi khi cap nhat'
+      setError(message)
     } finally {
       setSaving(false)
     }
@@ -79,7 +81,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
     <div className="card p-6">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-lg font-bold text-slate-800">
-          Chỉnh sửa: <span className="text-brand-600">{specialty.ten}</span>
+          Chinh sua: <span className="text-brand-600">{specialty.ten}</span>
         </h2>
         <button onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
           <Icon name="x" className="h-5 w-5" />
@@ -87,8 +89,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       </div>
 
       <div className="mb-4 rounded-lg bg-slate-50 px-4 py-2 text-xs text-slate-500">
-        Slug hiện tại: <span className="font-mono font-medium text-slate-700">{specialty.slug}</span>
-        {' '}→ sẽ cập nhật tự động nếu đổi tên
+        Slug hien tai: <span className="font-mono font-medium text-slate-700">{specialty.slug}</span>
       </div>
 
       {error && (
@@ -100,18 +101,13 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Tên chuyên khoa <span className="text-red-500">*</span>
+            Ten chuyen khoa <span className="text-red-500">*</span>
           </label>
-          <input
-            name="ten"
-            value={form.ten}
-            onChange={handleChange}
-            className="input w-full"
-          />
+          <input name="ten" value={form.ten} onChange={handleChange} className="input w-full" />
         </div>
 
         <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Mô tả</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Mo ta</label>
           <textarea
             name="mo_ta"
             value={form.mo_ta}
@@ -122,10 +118,10 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Hình ảnh / Icon</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Hinh anh / Icon</label>
           <div className="flex items-center gap-3">
             {form.icon_url ? (
-              <img src={form.icon_url} alt="Icon" className="h-12 w-12 rounded-lg object-cover border border-slate-200" />
+              <img src={form.icon_url} alt="Icon" className="h-12 w-12 rounded-lg border border-slate-200 object-cover" />
             ) : (
               <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-slate-400">
                 <Icon name="image" className="h-5 w-5" />
@@ -139,13 +135,13 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
                 className="w-full text-sm text-slate-500 file:mr-4 file:rounded-full file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-600 hover:file:bg-brand-100"
                 disabled={uploading}
               />
-              {uploading && <p className="mt-1 text-xs text-brand-600">Đang tải lên...</p>}
+              {uploading && <p className="mt-1 text-xs text-brand-600">Dang tai len...</p>}
             </div>
           </div>
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Thứ tự hiển thị</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Thu tu hien thi</label>
           <input
             name="thu_tu"
             type="number"
@@ -158,10 +154,10 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
 
         <div className="sm:col-span-2 flex justify-end gap-3 pt-2">
           <button type="button" onClick={onCancel} className="btn-secondary" disabled={saving}>
-            Huỷ
+            Huy
           </button>
           <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
+            {saving ? 'Dang luu...' : 'Luu thay doi'}
           </button>
         </div>
       </form>

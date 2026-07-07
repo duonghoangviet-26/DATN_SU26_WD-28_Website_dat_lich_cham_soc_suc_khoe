@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/services/axiosInstance.ts",
+    "src/services/specialty.service.ts",
+    "src/pages/admin/ManageServices.tsx",
+    "src/pages/admin/ManageServiceSpecialtyDetail.tsx",
+    "src/components/admin/services/ServiceFormModal.tsx",
+    "src/pages/client/SpecialtyList.tsx",
+    "src/pages/client/SpecialtyDoctors.tsx"
+  ]
+}

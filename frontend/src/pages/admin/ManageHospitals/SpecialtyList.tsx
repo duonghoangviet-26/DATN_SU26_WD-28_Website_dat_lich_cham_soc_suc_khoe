@@ -1,48 +1,54 @@
+import { useState } from 'react'
 import type { SpecialtyItem } from '@/types'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
-import { useState } from 'react'
-import { hospitalService } from '@/services/hospital.service'
-import CopySpecialtyModal from './CopySpecialtyModal'
+import { clinicService } from '@/services/clinic.service'
 import SpecialtyDoctorsModal from './SpecialtyDoctorsModal'
 
 interface Props {
   specialties: SpecialtyItem[]
   loading: boolean
   onAdd: () => void
-  onEdit: (s: SpecialtyItem) => void
+  onEdit: (specialty: SpecialtyItem) => void
   onChange: (updated: SpecialtyItem) => void
-  onViewLogs: (s: SpecialtyItem) => void
+  onViewLogs: (specialty: SpecialtyItem) => void
 }
 
-// Bảng danh sách chuyên khoa với các thao tác: Thêm, Sửa, Ẩn/Hiện.
-export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onChange, onViewLogs }: Props) {
+export default function SpecialtyList({
+  specialties,
+  loading,
+  onAdd,
+  onEdit,
+  onChange,
+  onViewLogs,
+}: Props) {
   const [confirmItem, setConfirmItem] = useState<SpecialtyItem | null>(null)
   const [toggling, setToggling] = useState<string | null>(null)
-  const [copyingSpecialty, setCopyingSpecialty] = useState<SpecialtyItem | null>(null)
   const [viewingDoctorsSpec, setViewingDoctorsSpec] = useState<SpecialtyItem | null>(null)
   const [activeTab, setActiveTab] = useState<'active' | 'hidden'>('active')
   const [page, setPage] = useState(1)
-  const itemsPerPage = 6
 
-  const handleTabChange = (tab: 'active' | 'hidden') => {
+  const itemsPerPage = 6
+  const filteredItems = specialties.filter((specialty) => specialty.status === activeTab)
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / itemsPerPage))
+  const startIndex = (page - 1) * itemsPerPage
+  const visibleSpecialties = filteredItems.slice(startIndex, startIndex + itemsPerPage)
+
+  function handleTabChange(tab: 'active' | 'hidden') {
     setActiveTab(tab)
     setPage(1)
   }
 
-  const displayedSpecialties = specialties.filter((s) => s.status === activeTab)
-  const totalPages = Math.ceil(displayedSpecialties.length / itemsPerPage)
-  const startIndex = (page - 1) * itemsPerPage
-  const visibleSpecialties = displayedSpecialties.slice(startIndex, startIndex + itemsPerPage)
-
   async function handleToggle() {
     if (!confirmItem) return
+
     const id = confirmItem._id
     setConfirmItem(null)
     setToggling(id)
+
     try {
-      const updated = await hospitalService.toggleSpecialtyStatus(id)
+      const updated = await clinicService.toggleSpecialtyStatus(id)
       onChange(updated)
     } finally {
       setToggling(null)
@@ -51,161 +57,145 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
 
   return (
     <div className="card overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
         <div>
-          <h3 className="font-semibold text-slate-800">Danh sách chuyên khoa ({specialties.length})</h3>
-          <p className="mt-0.5 text-xs text-slate-400">Bệnh nhân tìm kiếm bác sĩ theo chuyên khoa này</p>
+          <h3 className="font-semibold text-slate-800">Danh sach chuyen khoa ({specialties.length})</h3>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Toan bo chuyen khoa duoi day deu thuoc co so duy nhat cua he thong.
+          </p>
         </div>
         <button
           onClick={onAdd}
           className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
         >
           <Icon name="plus" className="h-4 w-4" />
-          Thêm mới
+          Them moi
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-6 px-5 pt-3 border-b border-slate-100 bg-slate-50/50">
+      <div className="flex items-center gap-6 border-b border-slate-100 bg-slate-50/50 px-5 pt-3">
         <button
           onClick={() => handleTabChange('active')}
-          className={`font-medium text-sm pb-3 border-b-2 transition-colors ${
+          className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
             activeTab === 'active'
               ? 'border-brand-500 text-brand-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
           }`}
         >
-          Đang hoạt động ({specialties.filter(s => s.status === 'active').length})
+          Dang hoat dong ({specialties.filter((item) => item.status === 'active').length})
         </button>
         <button
           onClick={() => handleTabChange('hidden')}
-          className={`font-medium text-sm pb-3 border-b-2 transition-colors ${
+          className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
             activeTab === 'hidden'
               ? 'border-brand-500 text-brand-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
           }`}
         >
-          Đã ẩn ({specialties.filter(s => s.status === 'hidden').length})
+          Da an ({specialties.filter((item) => item.status === 'hidden').length})
         </button>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
-              <th className="px-5 py-3 font-medium text-center w-16">STT</th>
+              <th className="w-16 px-5 py-3 text-center font-medium">STT</th>
               <th className="px-5 py-3 font-medium">Icon</th>
-              <th className="px-5 py-3 font-medium">Tên chuyên khoa</th>
+              <th className="px-5 py-3 font-medium">Ten chuyen khoa</th>
               <th className="hidden px-5 py-3 font-medium md:table-cell">Slug</th>
-              <th className="hidden px-5 py-3 font-medium md:table-cell">Mô tả</th>
-              <th className="hidden px-5 py-3 font-medium text-center md:table-cell">Số bác sĩ</th>
-              <th className="px-5 py-3 font-medium">Trạng thái</th>
-              <th className="px-5 py-3 text-right font-medium">Thao tác</th>
+              <th className="hidden px-5 py-3 font-medium md:table-cell">Mo ta</th>
+              <th className="hidden px-5 py-3 text-center font-medium md:table-cell">So bac si</th>
+              <th className="px-5 py-3 font-medium">Trang thai</th>
+              <th className="px-5 py-3 text-right font-medium">Thao tac</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-slate-400">Đang tải...</td>
+                <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
+                  Dang tai...
+                </td>
               </tr>
-            ) : displayedSpecialties.length === 0 ? (
+            ) : filteredItems.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
-                  {activeTab === 'active' ? 'Chưa có chuyên khoa nào đang hoạt động' : 'Chưa có chuyên khoa nào bị ẩn'}
+                  {activeTab === 'active'
+                    ? 'Chua co chuyen khoa nao dang hoat dong'
+                    : 'Chua co chuyen khoa nao bi an'}
                 </td>
               </tr>
             ) : (
-              visibleSpecialties.map((s, index) => (
-                <tr key={s._id} className={`hover:bg-slate-50 ${toggling === s._id ? 'opacity-50' : ''}`}>
-                  {/* STT */}
-                  <td className="px-5 py-3 text-center font-medium text-slate-500">{startIndex + index + 1}</td>
-
-                  {/* Icon */}
+              visibleSpecialties.map((specialty, index) => (
+                <tr key={specialty._id} className={`hover:bg-slate-50 ${toggling === specialty._id ? 'opacity-50' : ''}`}>
+                  <td className="px-5 py-3 text-center font-medium text-slate-500">
+                    {startIndex + index + 1}
+                  </td>
                   <td className="px-5 py-3">
-                    {s.icon_url ? (
-                      <img src={s.icon_url} alt={s.ten} className="h-8 w-8 rounded object-cover border border-slate-200 bg-white" />
+                    {specialty.icon_url ? (
+                      <img
+                        src={specialty.icon_url}
+                        alt={specialty.ten}
+                        className="h-8 w-8 rounded border border-slate-200 bg-white object-cover"
+                      />
                     ) : (
-                      <span className="text-slate-400 text-xs italic">Không có</span>
+                      <span className="text-xs italic text-slate-400">Khong co</span>
                     )}
                   </td>
-
-                  {/* Tên */}
-                  <td className="px-5 py-3 font-medium text-slate-800">{s.ten}</td>
-
-                  {/* Slug */}
+                  <td className="px-5 py-3 font-medium text-slate-800">{specialty.ten}</td>
                   <td className="hidden px-5 py-3 md:table-cell">
-                    <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">{s.slug}</span>
+                    <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
+                      {specialty.slug}
+                    </span>
                   </td>
-
-                  {/* Mô tả */}
                   <td className="hidden max-w-[200px] px-5 py-3 text-slate-500 md:table-cell">
-                    <span className="line-clamp-2">{s.mo_ta || <em className="text-slate-400">Chưa có</em>}</span>
+                    <span className="line-clamp-2">
+                      {specialty.mo_ta || <em className="text-slate-400">Chua co</em>}
+                    </span>
                   </td>
-
-                  {/* Số bác sĩ */}
                   <td className="hidden px-5 py-3 text-center md:table-cell">
                     <button
-                      onClick={() => setViewingDoctorsSpec(s)}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 font-semibold text-blue-600 transition-colors hover:bg-blue-100 border border-blue-100 whitespace-nowrap"
+                      onClick={() => setViewingDoctorsSpec(specialty)}
+                      className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-blue-100 bg-blue-50 px-3 py-1 font-semibold text-blue-600 transition-colors hover:bg-blue-100"
                     >
                       <Icon name="users" className="h-3.5 w-3.5" />
-                      {s.doctor_count || 0} Bác sĩ
+                      {specialty.doctor_count || 0} Bac si
                     </button>
                   </td>
-
-                  {/* Trạng thái */}
                   <td className="px-5 py-3">
-                    <Badge color={s.status === 'active' ? 'green' : 'gray'}>
-                      {s.status === 'active' ? 'Hiển thị' : 'Đã ẩn'}
+                    <Badge color={specialty.status === 'active' ? 'green' : 'gray'}>
+                      {specialty.status === 'active' ? 'Hien thi' : 'Da an'}
                     </Badge>
                   </td>
-
-                  {/* Thao tác */}
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      {/* Nút Sao chép */}
                       <button
-                        onClick={() => setCopyingSpecialty(s)}
-                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-600"
-                        title="Sao chép"
-                      >
-                        <Icon name="copy" className="h-4 w-4" />
-                      </button>
-
-                      {/* Nút Sửa */}
-                      <button
-                        onClick={() => onEdit(s)}
+                        onClick={() => onEdit(specialty)}
                         className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600"
-                        title="Chỉnh sửa"
+                        title="Chinh sua"
                       >
                         <Icon name="file-text" className="h-4 w-4" />
                       </button>
-
-                      {/* Nút Ẩn/Khôi phục */}
                       <button
-                        onClick={() => setConfirmItem(s)}
-                        disabled={toggling === s._id}
-                        title={s.status === 'active' ? 'Ẩn chuyên khoa' : 'Khôi phục chuyên khoa'}
+                        onClick={() => setConfirmItem(specialty)}
+                        disabled={toggling === specialty._id}
                         className={`inline-flex items-center justify-center rounded-lg border p-2 transition-colors ${
-                          s.status === 'active'
+                          specialty.status === 'active'
                             ? 'border-slate-200 bg-white text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
                             : 'border-green-200 bg-green-50 text-green-600 hover:bg-green-100'
                         }`}
+                        title={specialty.status === 'active' ? 'An chuyen khoa' : 'Khoi phuc chuyen khoa'}
                       >
-                        {s.status === 'active' ? (
+                        {specialty.status === 'active' ? (
                           <Icon name="eye-off" className="h-4 w-4" />
                         ) : (
                           <Icon name="refresh-cw" className="h-4 w-4" />
                         )}
                       </button>
-
-                      {/* Nút Lịch sử */}
                       <button
-                        onClick={() => onViewLogs(s)}
+                        onClick={() => onViewLogs(specialty)}
                         className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
-                        title="Lịch sử chỉnh sửa"
+                        title="Lich su chinh sua"
                       >
                         <Icon name="clock" className="h-4 w-4" />
                       </button>
@@ -218,21 +208,25 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t p-4 bg-slate-50/50">
+      {filteredItems.length > itemsPerPage && (
+        <div className="flex items-center justify-between border-t bg-slate-50/50 p-4">
           <span className="text-sm text-slate-500">
-            Hiển thị <span className="font-medium text-slate-700">{startIndex + 1}</span> - <span className="font-medium text-slate-700">{Math.min(startIndex + itemsPerPage, displayedSpecialties.length)}</span> / <span className="font-medium text-slate-700">{displayedSpecialties.length}</span> chuyên khoa
+            Hien thi <span className="font-medium text-slate-700">{startIndex + 1}</span> -{' '}
+            <span className="font-medium text-slate-700">
+              {Math.min(startIndex + itemsPerPage, filteredItems.length)}
+            </span>{' '}
+            / <span className="font-medium text-slate-700">{filteredItems.length}</span> chuyen khoa
           </span>
           <div className="flex gap-2">
             <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={page === 1}
               className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
             >
-              Trước
+              Truoc
             </button>
             <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
               disabled={page === totalPages}
               className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
             >
@@ -244,22 +238,15 @@ export default function SpecialtyList({ specialties, loading, onAdd, onEdit, onC
 
       <ConfirmDialog
         open={!!confirmItem}
-        title={confirmItem?.status === 'active' ? 'Ẩn chuyên khoa' : 'Khôi phục chuyên khoa'}
-        message={`Bạn có chắc muốn ${confirmItem?.status === 'active' ? 'ẩn' : 'khôi phục'} chuyên khoa "${confirmItem?.ten}"?`}
-        confirmText={confirmItem?.status === 'active' ? 'Ẩn' : 'Khôi phục'}
+        title={confirmItem?.status === 'active' ? 'An chuyen khoa' : 'Khoi phuc chuyen khoa'}
+        message={`Ban co chac muon ${
+          confirmItem?.status === 'active' ? 'an' : 'khoi phuc'
+        } chuyen khoa "${confirmItem?.ten}"?`}
+        confirmText={confirmItem?.status === 'active' ? 'An' : 'Khoi phuc'}
         danger={confirmItem?.status === 'active'}
         onConfirm={handleToggle}
         onCancel={() => setConfirmItem(null)}
       />
-
-      {copyingSpecialty && (
-        <CopySpecialtyModal
-          specialty={copyingSpecialty}
-          currentClinicId={copyingSpecialty.phong_kham_id}
-          onClose={() => setCopyingSpecialty(null)}
-          onSuccess={() => setCopyingSpecialty(null)}
-        />
-      )}
 
       {viewingDoctorsSpec && (
         <SpecialtyDoctorsModal

@@ -67,7 +67,7 @@ const doctorScheduleSchema = new mongoose.Schema(
     },
     chi_nhanh_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ChiNhanh',
+      ref: 'ThongTinPhongKham',
       default: null,
     },
     ngay: { type: Date, required: true },

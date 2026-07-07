@@ -45,8 +45,8 @@ export default function ManageServices() {
     home:     allServices.filter(s => s.loai === 'home').length,
   }
 
-  function countRelated(specialtyId: number) {
-    return allServices.filter(s => s.loai === 'related' && s.specialty_id === String(specialtyId)).length
+  function countRelated(specialtyId: string) {
+    return allServices.filter(s => s.loai === 'related' && s.specialty_id === specialtyId).length
   }
 
   // ── Tầng 1 — nhóm dịch vụ lớn đang mở ──
@@ -224,7 +224,7 @@ export default function ManageServices() {
                       <span className="font-medium text-slate-700">{sp.ten}</span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-slate-400">
-                      <span>{countRelated(Number(sp.id))} dịch vụ liên quan</span>
+                      <span>{countRelated(String(sp.id))} dịch vụ liên quan</span>
                       <span>{sp.so_bac_si} bác sĩ</span>
                       <span className="text-slate-300">›</span>
                     </div>
