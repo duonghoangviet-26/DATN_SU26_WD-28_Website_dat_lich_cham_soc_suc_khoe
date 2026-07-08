@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/services/axiosInstance.ts",
+    "src/services/service.service.ts",
+    "src/pages/admin/ManageServices.tsx",
+    "src/pages/admin/ManageServiceSpecialtyDetail.tsx",
+    "src/components/admin/services/ServiceFormModal.tsx",
+    "src/components/admin/services/ServiceViewModal.tsx",
+    "src/pages/client/HomeServiceList.tsx",
+    "src/pages/client/HomeServiceDetail.tsx"
+  ]
+}

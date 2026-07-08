@@ -64,9 +64,9 @@ export const appointmentService = {
     doctor_id: string
     schedule_id: string
     slot_id: string
-    service_id: string
+    service_id?: string
     loai_kham: 'clinic' | 'home'
-    dia_chi_kham: string
+    dia_chi_kham?: string
     ly_do_kham?: string
   }): Promise<AppointmentItem> {
     const res = await axiosInstance.post('/admin/appointments', data)

@@ -1,54 +1,115 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-async function freshService() {
-  vi.resetModules()
-  const mod = await import('@/services/specialty.service')
-  return mod.specialtyService
+vi.mock('@/services/axiosInstance', () => ({
+  default: {
+    get: vi.fn(),
+  },
+}))
+
+import axiosInstance from '@/services/axiosInstance'
+import { specialtyService } from '@/services/specialty.service'
+
+const mockedGet = vi.mocked(axiosInstance.get)
+
+const publicSpecialties = [
+  { id: 'sp-1', ten: 'Tim mach', mo_ta: 'Mo ta tim mach', icon_url: 'TM', slug: 'tim-mach' },
+  { id: 'sp-2', ten: 'Nhi khoa', mo_ta: 'Mo ta nhi khoa', icon_url: 'NK', slug: 'nhi-khoa' },
+]
+
+function mockSpecialtyApis() {
+  mockedGet.mockImplementation((url, config) => {
+    if (url === '/admin/specialties') {
+      expect(config?.params).toEqual({ status: 'active' })
+      return Promise.resolve({
+        data: {
+          data: [
+            { _id: 'sp-1', ten: 'Tim mach' },
+            { _id: 'sp-2', ten: 'Nhi khoa' },
+          ],
+        },
+      })
+    }
+
+    if (url === '/patient/booking/specialties') {
+      return Promise.resolve({
+        data: {
+          data: publicSpecialties,
+        },
+      })
+    }
+
+    if (url === '/patient/booking/doctors') {
+      const specialtyId = config?.params?.specialty_id
+      const doctorsBySpecialty: Record<string, unknown[]> = {
+        'sp-1': [{ id: 'doc-1' }],
+        'sp-2': [{ id: 'doc-2' }, { id: 'doc-3' }],
+      }
+
+      return Promise.resolve({
+        data: {
+          data: doctorsBySpecialty[String(specialtyId)] ?? [],
+        },
+      })
+    }
+
+    return Promise.reject(new Error(`Unexpected GET ${String(url)}`))
+  })
 }
 
-describe('getAllActive()', () => {
-  let svc: Awaited<ReturnType<typeof freshService>>
-  beforeEach(async () => { svc = await freshService() })
-
-  it('không trả về chuyên khoa status=hidden (Tai Mũi Họng)', async () => {
-    const list = await svc.getAllActive()
-    expect(list.some((s) => s.slug === 'tai-mui-hong')).toBe(false)
+describe('specialtyService', () => {
+  beforeEach(() => {
+    mockedGet.mockReset()
+    mockSpecialtyApis()
   })
 
-  it('mỗi item có slug khớp mock', async () => {
-    const list = await svc.getAllActive()
-    expect(list.find((s) => s.ten === 'Tim mạch')?.slug).toBe('tim-mach')
+  it('getAll() maps active admin specialties from real API', async () => {
+    const list = await specialtyService.getAll()
+
+    expect(list).toEqual([
+      { id: 'sp-1', ten: 'Tim mach' },
+      { id: 'sp-2', ten: 'Nhi khoa' },
+    ])
   })
 
-  it('so_bac_si đếm đúng bác sĩ approved theo chuyên khoa Tim mạch', async () => {
-    const list = await svc.getAllActive()
-    const timMach = list.find((s) => s.slug === 'tim-mach')
-    expect(timMach?.so_bac_si).toBe(1) // chỉ BS Lê Hoàng Cường approved
+  it('getAllActive() reads public specialties and computes doctor counts', async () => {
+    const list = await specialtyService.getAllActive()
+
+    expect(list).toEqual([
+      {
+        id: 'sp-1',
+        ten: 'Tim mach',
+        mo_ta: 'Mo ta tim mach',
+        icon_url: 'TM',
+        slug: 'tim-mach',
+        so_bac_si: 1,
+      },
+      {
+        id: 'sp-2',
+        ten: 'Nhi khoa',
+        mo_ta: 'Mo ta nhi khoa',
+        icon_url: 'NK',
+        slug: 'nhi-khoa',
+        so_bac_si: 2,
+      },
+    ])
   })
 
-  it('sắp xếp theo thu_tu tăng dần — Tim mạch trước Nhi khoa', async () => {
-    const list = await svc.getAllActive()
-    expect(list[0].slug).toBe('tim-mach')
-    expect(list[1].slug).toBe('nhi-khoa')
-  })
-})
+  it('getBySlug() returns the matching specialty with live doctor count', async () => {
+    const specialty = await specialtyService.getBySlug('tim-mach')
 
-describe('getBySlug()', () => {
-  let svc: Awaited<ReturnType<typeof freshService>>
-  beforeEach(async () => { svc = await freshService() })
-
-  it('slug tồn tại + active → trả về đúng chuyên khoa', async () => {
-    const sp = await svc.getBySlug('tim-mach')
-    expect(sp?.ten).toBe('Tim mạch')
+    expect(specialty).toEqual({
+      id: 'sp-1',
+      ten: 'Tim mach',
+      mo_ta: 'Mo ta tim mach',
+      icon_url: 'TM',
+      slug: 'tim-mach',
+      so_bac_si: 1,
+    })
   })
 
-  it('slug thuộc chuyên khoa hidden → trả về null', async () => {
-    const sp = await svc.getBySlug('tai-mui-hong')
-    expect(sp).toBeNull()
-  })
+  it('getBySlug() returns null for an unknown slug', async () => {
+    const specialty = await specialtyService.getBySlug('khong-ton-tai')
 
-  it('slug không tồn tại → trả về null', async () => {
-    const sp = await svc.getBySlug('khong-ton-tai')
-    expect(sp).toBeNull()
+    expect(specialty).toBeNull()
   })
 })

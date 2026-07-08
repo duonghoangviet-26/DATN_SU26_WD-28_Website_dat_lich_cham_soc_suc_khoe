@@ -29,7 +29,7 @@ export default function ReceiveNotificationTab() {
         notificationService.markAsRead(n._id).then(() => {
           setNotifications(prev => prev.map(item => item._id === n._id ? { ...item, da_doc: true } : item))
           window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
-        }).catch(err => console.error('Lỗi mark as read từ header:', err))
+        }).catch(() => {})
       }
 
       // Dùng navigate của React Router để ép xóa bộ nhớ đệm state
@@ -51,8 +51,7 @@ export default function ReceiveNotificationTab() {
         setTotalPages(pagination.totalPages)
         setTotalRecords(pagination.total)
       }
-    } catch (err) {
-      console.error('Lỗi tải danh sách thông báo nhận:', err)
+    } catch {
     } finally {
       if (!ignore) setLoading(false)
     }
@@ -137,8 +136,7 @@ export default function ReceiveNotificationTab() {
                             await notificationService.markAsRead(n._id)
                             setNotifications(prev => prev.map(item => item._id === n._id ? { ...item, da_doc: true } : item))
                             window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
-                          } catch (err) {
-                            console.error('Lỗi khi đánh dấu đã đọc:', err)
+                          } catch {
                           }
                         }
                       }}

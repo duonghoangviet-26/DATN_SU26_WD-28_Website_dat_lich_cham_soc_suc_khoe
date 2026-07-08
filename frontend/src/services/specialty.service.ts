@@ -1,14 +1,11 @@
-import { mockSpecialties } from '@/mock/hospitals'
-import { mockDoctors } from '@/mock/doctors'
-
-const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
+import axiosInstance from '@/services/axiosInstance'
+import type { ApiResponse } from '@/types'
 
 export interface SpecialtyOption {
   id: string
   ten: string
 }
 
-// ViewModel cho trang duyệt dịch vụ (client) — nhiều field hơn SpecialtyOption
 export interface SpecialtyBrowseItem {
   id: string
   ten: string
@@ -18,57 +15,69 @@ export interface SpecialtyBrowseItem {
   so_bac_si: number
 }
 
-function countApprovedDoctors(specialtyTen: string): number {
-  return mockDoctors.filter(
-    (d) => d.trang_thai_duyet === 'approved' && d.chuyen_khoa === specialtyTen,
-  ).length
+interface SpecialtyApiItem {
+  id?: string
+  _id?: string
+  ten: string
+  mo_ta?: string | null
+  icon_url?: string | null
+  slug: string
+}
+
+function normalizeId(item: SpecialtyApiItem): string {
+  return String(item.id ?? item._id ?? '')
+}
+
+function toBrowseItem(item: SpecialtyApiItem, so_bac_si: number): SpecialtyBrowseItem {
+  return {
+    id: normalizeId(item),
+    ten: item.ten,
+    mo_ta: item.mo_ta ?? '',
+    icon_url: item.icon_url ?? '',
+    slug: item.slug,
+    so_bac_si,
+  }
+}
+
+async function getApprovedDoctorCountBySpecialty(specialtyId: string): Promise<number> {
+  const res = await axiosInstance.get<ApiResponse<unknown[]>>('/patient/booking/doctors', {
+    params: { specialty_id: specialtyId },
+  })
+  return Array.isArray(res.data.data) ? res.data.data.length : 0
+}
+
+async function getPublicSpecialties(): Promise<SpecialtyApiItem[]> {
+  const res = await axiosInstance.get<ApiResponse<SpecialtyApiItem[]>>('/patient/booking/specialties')
+  return Array.isArray(res.data.data) ? res.data.data : []
 }
 
 export const specialtyService = {
   async getAll(): Promise<SpecialtyOption[]> {
-    await delay()
-    return mockSpecialties
-      .filter(s => s.status === 'active')
-      .map(s => ({ id: String(s.id), ten: s.ten }))
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<SpecialtyOption[]>>('/admin/specialties')
-    // return res.data.data
+    const res = await axiosInstance.get<ApiResponse<SpecialtyApiItem[]>>('/admin/specialties', {
+      params: { status: 'active' },
+    })
+
+    return (Array.isArray(res.data.data) ? res.data.data : []).map((item) => ({
+      id: normalizeId(item),
+      ten: item.ten,
+    }))
   },
 
-  // Tầng 2 — danh sách chuyên khoa cho trang duyệt dịch vụ (client)
   async getAllActive(): Promise<SpecialtyBrowseItem[]> {
-    await delay()
-    return mockSpecialties
-      .filter((s) => s.status === 'active')
-      .sort((a, b) => a.thu_tu - b.thu_tu)
-      .map((s) => ({
-        id: String(s.id),
-        ten: s.ten,
-        mo_ta: s.mo_ta,
-        icon_url: s.icon_url,
-        slug: s.slug,
-        so_bac_si: countApprovedDoctors(s.ten),
-      }))
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<SpecialtyBrowseItem[]>>('/specialties')
-    // return res.data.data
+    const specialties = await getPublicSpecialties()
+    const counts = await Promise.all(
+      specialties.map((item) => getApprovedDoctorCountBySpecialty(normalizeId(item)))
+    )
+
+    return specialties.map((item, index) => toBrowseItem(item, counts[index] ?? 0))
   },
 
-  // Tầng 3 — chi tiết 1 chuyên khoa theo slug (dùng làm tiêu đề trang danh sách bác sĩ)
   async getBySlug(slug: string): Promise<SpecialtyBrowseItem | null> {
-    await delay()
-    const found = mockSpecialties.find((s) => s.slug === slug && s.status === 'active')
+    const specialties = await getPublicSpecialties()
+    const found = specialties.find((item) => item.slug === slug)
     if (!found) return null
-    return {
-      id: String(found.id),
-      ten: found.ten,
-      mo_ta: found.mo_ta,
-      icon_url: found.icon_url,
-      slug: found.slug,
-      so_bac_si: countApprovedDoctors(found.ten),
-    }
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<SpecialtyBrowseItem>>(`/specialties/${slug}`)
-    // return res.data.data
+
+    const so_bac_si = await getApprovedDoctorCountBySpecialty(normalizeId(found))
+    return toBrowseItem(found, so_bac_si)
   },
 }

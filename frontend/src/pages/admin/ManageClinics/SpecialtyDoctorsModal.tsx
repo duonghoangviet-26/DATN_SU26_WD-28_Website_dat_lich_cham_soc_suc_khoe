@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { hospitalService } from '@/services/hospital.service'
+import { clinicService } from '@/services/clinic.service'
 import Icon from '@/components/admin/icons'
 import { useNavigate } from 'react-router-dom'
 
@@ -15,9 +15,9 @@ export default function SpecialtyDoctorsModal({ specialtyId, specialtyName, onCl
   const navigate = useNavigate()
 
   useEffect(() => {
-    hospitalService.getDoctorsBySpecialty(specialtyId)
+    clinicService.getDoctorsBySpecialty(specialtyId)
       .then((data) => setDoctors(data))
-      .catch((err) => console.error('Lỗi lấy danh sách bác sĩ:', err))
+      .catch(() => setDoctors([]))
       .finally(() => setLoading(false))
   }, [specialtyId])
 

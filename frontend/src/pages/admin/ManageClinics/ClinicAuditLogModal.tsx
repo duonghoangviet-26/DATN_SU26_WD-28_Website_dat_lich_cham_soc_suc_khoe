@@ -32,7 +32,7 @@ function getActionLabel(action: string) {
   return map[action] || { text: action, color: 'bg-slate-100 text-slate-700', icon: 'info' }
 }
 
-export default function HospitalAuditLogModal({ open, onClose, title, logs, loading }: Props) {
+export default function ClinicAuditLogModal({ open, onClose, title, logs, loading }: Props) {
   if (!open) return null
 
   return (

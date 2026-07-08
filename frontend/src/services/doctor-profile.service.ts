@@ -22,7 +22,10 @@ interface ProfileUpdateData {
 export const doctorProfileService = {
   async get() {
     await delay()
-    return { ...profile }
+    return {
+      profile: { ...profile },
+      tieu_su: profile.tieu_su ?? '',
+    }
     // Real API:
     // const res = await axiosInstance.get<ApiResponse<Record<string, unknown>>>('/doctor/profile')
     // return res.data.data
@@ -51,5 +54,15 @@ export const doctorProfileService = {
     // Real API:
     // const res = await axiosInstance.get<ApiResponse<DoctorReview[]>>('/doctor/stats/reviews')
     // return res.data.data
+  },
+
+  async submitForReview() {
+    await delay()
+    profile = {
+      ...profile,
+      trang_thai_duyet: 'pending',
+      ly_do_tu_choi: null,
+    }
+    return { ...profile }
   },
 }

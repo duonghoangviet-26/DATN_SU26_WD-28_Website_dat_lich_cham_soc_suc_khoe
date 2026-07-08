@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/types/index.ts",
+    "src/utils/constants.ts",
+    "src/services/axiosInstance.ts",
+    "src/services/payment.service.ts",
+    "src/pages/admin/ManagePayments.tsx"
+  ]
+}
