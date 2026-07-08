@@ -55,8 +55,7 @@ export default function SendNotificationTab() {
         setTotalPages(pagination.totalPages)
         setTotalRecords(pagination.total)
       }
-    } catch (err) {
-      console.error('Lỗi tải danh sách thông báo:', err)
+    } catch {
     } finally {
       if (!ignore) setLoading(false)
     }
@@ -73,8 +72,8 @@ export default function SendNotificationTab() {
       setLoadingLogs(true)
       notificationService.getLogs(targetLogs._id).then(data => {
         setLogs(data)
-      }).catch(err => {
-        console.error('Lỗi tải lịch sử:', err)
+      }).catch(() => {
+        setLogs([])
       }).finally(() => {
         setLoadingLogs(false)
       })

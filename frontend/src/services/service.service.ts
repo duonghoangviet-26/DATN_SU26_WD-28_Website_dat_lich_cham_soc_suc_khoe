@@ -142,7 +142,7 @@ export const serviceService = {
     if (!isAdminContext()) {
       const items = await getPublicHomeServices()
       const item = items.find((service) => service.id === id)
-      if (!item) throw new Error('Khong tim thay dich vu')
+      if (!item) throw new Error('Không tìm thấy dịch vụ')
       return item
     }
 

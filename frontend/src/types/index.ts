@@ -468,7 +468,7 @@ export interface DoctorProfileAPI {
   bang_cap?: string | null
   kinh_nghiem?: string | null
   so_nam_kinh_nghiem: number
-  phi_tu_van: number
+  phi_kham: number
   trang_thai_duyet: DoctorApproval
   ly_do_tu_choi?: string | null
   so_lan_nop: number
@@ -512,7 +512,7 @@ export interface DoctorUpdatePayload {
   bang_cap?: string | null
   kinh_nghiem?: string | null
   so_nam_kinh_nghiem?: number
-  phi_tu_van?: number
+  phi_kham?: number
   la_hien?: boolean
   admin_id: string
 }

@@ -19,14 +19,14 @@ Excluded domains such as `admin/doctors`, `admin/users`, `doctor`, `patient`, `n
 | Domain | Public path | Route file | Controller file(s) | Status |
 | --- | --- | --- | --- | --- |
 | Clinics | `/api/admin/clinics` | `backend/src/routes/admin/clinics.routes.js` | `backend/src/controllers/admin/clinic-info.controller.js` | canonical |
-| Clinics | `/api/admin/clinic-info` | `backend/src/routes/admin/clinics.routes.js` | `backend/src/controllers/admin/clinic-info.controller.js` | legacy compatibility mount |
+| Clinics | `/api/admin/clinic-info` | `backend/src/routes/admin/clinics.routes.js` | `backend/src/controllers/admin/clinic-info.controller.js` | legacy compatibility mount, including `/current`, `/current/logs`, `PUT /current` |
 | Specialties | `/api/admin/specialties` | `backend/src/routes/admin/specialties.routes.js` | `backend/src/controllers/admin/specialties.controller.js`, `backend/src/controllers/admin/clinic-info.controller.js` | canonical + compatibility handlers |
 | Specialties | `/api/admin/clinic` | `backend/src/routes/admin/specialties.routes.js` | `backend/src/controllers/admin/specialties.controller.js` | legacy compatibility mount |
 | Specialties | `/api/admin/clinic-info/:id/specialties` and related nested endpoints | `backend/src/routes/admin/specialties.routes.js` | `backend/src/controllers/admin/clinic-info.controller.js` | legacy compatibility mount |
 | Services | `/api/admin/services` | `backend/src/routes/admin/services.routes.js` | `backend/src/controllers/admin/services.controller.js` | mounted through `backend/src/routes/admin/index.js` |
 | Appointments | `/api/admin/appointments` | `backend/src/routes/admin/appointment.routes.js` | `backend/src/controllers/admin/appointment.controller.js` | canonical |
 | Payments | `/api/admin/payments` | `backend/src/routes/admin/payments.routes.js` | `backend/src/controllers/admin/payments.controller.js` | canonical |
-| Reviews | `/api/admin/reviews` | `backend/src/routes/admin/review.routes.js` | `backend/src/controllers/admin/review.controller.js` | canonical |
+| Reviews | `/api/admin/reviews` | `backend/src/routes/admin/review.routes.js` | `backend/src/controllers/admin/review.controller.js` | canonical, including `/doctors` |
 | Notifications | `/api/admin/notifications` | `backend/src/routes/admin/notifications.routes.js` | `backend/src/controllers/notification.controller.js` | canonical path, controller still outside `controllers/admin` |
 
 ## Legacy/Overlap Findings
@@ -50,6 +50,9 @@ Excluded domains such as `admin/doctors`, `admin/users`, `doctor`, `patient`, `n
 
 ### `backend/src/routes/admin/clinics.routes.js`
 
+- `GET /current`
+- `GET /current/logs`
+- `PUT /current`
 - `GET /`
 - `POST /`
 - `GET /:id`
@@ -109,6 +112,7 @@ Excluded domains such as `admin/doctors`, `admin/users`, `doctor`, `patient`, `n
 ### `backend/src/routes/admin/review.routes.js`
 
 - `GET /`
+- `GET /doctors`
 - `POST /batch`
 - `GET /:id`
 - `PATCH /:id/hide`

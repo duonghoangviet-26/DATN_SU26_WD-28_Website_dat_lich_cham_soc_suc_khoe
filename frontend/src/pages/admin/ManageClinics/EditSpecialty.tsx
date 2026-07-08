@@ -44,7 +44,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       const url = await clinicService.uploadImage(file)
       setForm((prev) => ({ ...prev, icon_url: url }))
     } catch (_) {
-      setError('Loi khi tai anh len')
+      setError('Lỗi khi tải ảnh lên')
     } finally {
       setUploading(false)
     }
@@ -53,7 +53,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.ten.trim()) {
-      setError('Ten chuyen khoa la bat buoc')
+      setError('Tên chuyên khoa là bắt buộc')
       return
     }
 
@@ -70,7 +70,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Loi khi cap nhat'
+        'Lỗi khi cập nhật'
       setError(message)
     } finally {
       setSaving(false)
@@ -81,7 +81,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
     <div className="card p-6">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-lg font-bold text-slate-800">
-          Chinh sua: <span className="text-brand-600">{specialty.ten}</span>
+          Chỉnh sửa: <span className="text-brand-600">{specialty.ten}</span>
         </h2>
         <button onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
           <Icon name="x" className="h-5 w-5" />
@@ -89,7 +89,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       </div>
 
       <div className="mb-4 rounded-lg bg-slate-50 px-4 py-2 text-xs text-slate-500">
-        Slug hien tai: <span className="font-mono font-medium text-slate-700">{specialty.slug}</span>
+        Slug hiện tại: <span className="font-mono font-medium text-slate-700">{specialty.slug}</span>
       </div>
 
       {error && (
@@ -101,13 +101,13 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Ten chuyen khoa <span className="text-red-500">*</span>
+             Tên chuyên khoa <span className="text-red-500">*</span>
           </label>
           <input name="ten" value={form.ten} onChange={handleChange} className="input w-full" />
         </div>
 
         <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Mo ta</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Mô tả</label>
           <textarea
             name="mo_ta"
             value={form.mo_ta}
@@ -118,7 +118,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Hinh anh / Icon</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Hình ảnh / Icon</label>
           <div className="flex items-center gap-3">
             {form.icon_url ? (
               <img src={form.icon_url} alt="Icon" className="h-12 w-12 rounded-lg border border-slate-200 object-cover" />
@@ -135,13 +135,13 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
                 className="w-full text-sm text-slate-500 file:mr-4 file:rounded-full file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-600 hover:file:bg-brand-100"
                 disabled={uploading}
               />
-              {uploading && <p className="mt-1 text-xs text-brand-600">Dang tai len...</p>}
+              {uploading && <p className="mt-1 text-xs text-brand-600">Đang tải lên...</p>}
             </div>
           </div>
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">Thu tu hien thi</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Thứ tự hiển thị</label>
           <input
             name="thu_tu"
             type="number"
@@ -154,10 +154,10 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
 
         <div className="sm:col-span-2 flex justify-end gap-3 pt-2">
           <button type="button" onClick={onCancel} className="btn-secondary" disabled={saving}>
-            Huy
+            Hủy
           </button>
           <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Dang luu...' : 'Luu thay doi'}
+            {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
           </button>
         </div>
       </form>

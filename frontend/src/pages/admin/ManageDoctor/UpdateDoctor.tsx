@@ -35,7 +35,7 @@ export default function UpdateDoctor({ doctor, onClose, onSuccess }: Props) {
           setBangCap(detail.bang_cap || '')
           setKinhNghiem(detail.kinh_nghiem || '')
           setSoNam(detail.so_nam_kinh_nghiem || 0)
-          setPhiTuVan(detail.phi_tu_van || 0)
+          setPhiTuVan(detail.phi_kham || 0)
           setLaHien(detail.la_hien ?? true)
           setFetching(false)
         }
@@ -59,7 +59,7 @@ export default function UpdateDoctor({ doctor, onClose, onSuccess }: Props) {
       bang_cap: bangCap,
       kinh_nghiem: kinhNghiem,
       so_nam_kinh_nghiem: Number(soNam),
-      phi_tu_van: Number(phiTuVan),
+      phi_kham: Number(phiTuVan),
       la_hien: laHien,
       admin_id: CURRENT_ADMIN_ID
     }

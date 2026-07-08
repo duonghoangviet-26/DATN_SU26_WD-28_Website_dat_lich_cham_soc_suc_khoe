@@ -12,8 +12,8 @@ function mapPaymentItem(item: Partial<PaymentItem> & { id?: string | number; _id
   return {
     id: item.id ?? item._id ?? '',
     ma_giao_dich: item.ma_giao_dich ?? '',
-    benh_nhan: item.benh_nhan ?? 'Khong ro',
-    bac_si: item.bac_si ?? 'Khong ro',
+    benh_nhan: item.benh_nhan ?? 'Không rõ',
+    bac_si: item.bac_si ?? 'Không rõ',
     so_tien: Number(item.so_tien ?? 0),
     phuong_thuc: item.phuong_thuc ?? 'chuyen_khoan',
     status: (item.status as TransactionStatus) ?? 'pending',

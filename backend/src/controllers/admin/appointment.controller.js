@@ -14,7 +14,7 @@ const ADMIN_REFUND_SETTING_KEYS = ['hoan_tien_admin_huy', 'hoan_tien_admin_huy_k
 
 function toDateOnly(value) {
   const date = new Date(value)
-  date.setHours(0, 0, 0, 0)
+  date.setUTCHours(0, 0, 0, 0)
   return date
 }
 
@@ -606,6 +606,8 @@ export async function createAppointment(req, res) {
       den_trang_thai: 'confirmed',
       tu_payment_status: null,
       den_payment_status: 'unpaid',
+      nguoi_thay_doi_id: req.user.id,
+      kenh_thay_doi: 'admin',
       nguoi_thuc_hien_id: req.user.id,
       vai_tro: 'admin',
       ly_do: 'Admin dat lich thay khach',
@@ -690,6 +692,8 @@ export async function rescheduleAppointment(req, res) {
       den_trang_thai: appointment.status,
       tu_payment_status: appointment.payment_status,
       den_payment_status: appointment.payment_status,
+      nguoi_thay_doi_id: req.user.id,
+      kenh_thay_doi: 'admin',
       nguoi_thuc_hien_id: req.user.id,
       vai_tro: 'admin',
       ly_do: `Admin doi lich sang ${newSlot.gio_bat_dau} ngay ${formatDateOnly(newSchedule.ngay)}`,

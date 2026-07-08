@@ -17,7 +17,7 @@ export default function SpecialtyDoctorsModal({ specialtyId, specialtyName, onCl
   useEffect(() => {
     clinicService.getDoctorsBySpecialty(specialtyId)
       .then((data) => setDoctors(data))
-      .catch((err) => console.error('Lỗi lấy danh sách bác sĩ:', err))
+      .catch(() => setDoctors([]))
       .finally(() => setLoading(false))
   }, [specialtyId])
 

@@ -52,46 +52,46 @@ export default function ManagePayments() {
   return (
     <div>
       <PageHeader
-        title="Quan ly thanh toan"
-        description="Theo doi giao dich, xac nhan thanh toan va xu ly yeu cau hoan tien."
+        title="Quản lý thanh toán"
+        description="Theo dõi giao dịch, xác nhận thanh toán và xử lý yêu cầu hoàn tiền."
       />
 
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
         <div className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <p className="text-sm font-medium text-slate-500">Doanh thu (hien thi)</p>
+              <p className="text-sm font-medium text-slate-500">Doanh thu (hiển thị)</p>
               <p className="mt-1.5 text-xl font-bold text-slate-800">{formatPrice(revenue.total)}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-100">
               <Icon name="trending" className="h-6 w-6 text-green-600" />
             </div>
           </div>
-          <p className="mt-3 text-xs text-green-600">tu cac giao dich thanh cong</p>
+          <p className="mt-3 text-xs text-green-600">từ các giao dịch thành công</p>
         </div>
         <div className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <p className="text-sm font-medium text-slate-500">Cho thanh toan</p>
+              <p className="text-sm font-medium text-slate-500">Chờ thanh toán</p>
               <p className="mt-1.5 text-2xl font-bold text-slate-800">{revenue.pending}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-yellow-100">
               <Icon name="clock" className="h-6 w-6 text-yellow-600" />
             </div>
           </div>
-          <p className="mt-3 text-xs text-slate-500">giao dich can xu ly</p>
+          <p className="mt-3 text-xs text-slate-500">giao dịch cần xử lý</p>
         </div>
         <div className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <p className="text-sm font-medium text-slate-500">Da hoan tra</p>
+              <p className="text-sm font-medium text-slate-500">Đã hoàn trả</p>
               <p className="mt-1.5 text-xl font-bold text-slate-800">{formatPrice(revenue.refunded)}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100">
               <Icon name="payment" className="h-6 w-6 text-slate-600" />
             </div>
           </div>
-          <p className="mt-3 text-xs text-slate-500">tong tien hoan tra</p>
+          <p className="mt-3 text-xs text-slate-500">tổng tiền hoàn trả</p>
         </div>
       </div>
 
@@ -103,17 +103,17 @@ export default function ManagePayments() {
             </span>
             <input
               className="input pl-9"
-              placeholder="Tim ten, ma giao dich, bac si..."
+              placeholder="Tìm tên, mã giao dịch, bác sĩ..."
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
           </div>
           <select className="input" value={status} onChange={(e) => setStatus(e.target.value as TransactionStatus | '')}>
-            <option value="">Tat ca trang thai</option>
-            <option value="paid">Da thanh toan</option>
-            <option value="pending">Cho thanh toan</option>
-            <option value="failed">That bai</option>
-            <option value="refunded">Da hoan tien</option>
+            <option value="">Tất cả trạng thái</option>
+            <option value="paid">Đã thanh toán</option>
+            <option value="pending">Chờ thanh toán</option>
+            <option value="failed">Thất bại</option>
+            <option value="refunded">Đã hoàn tiền</option>
           </select>
         </div>
       </div>
@@ -123,21 +123,21 @@ export default function ManagePayments() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
-                <th className="px-4 py-3 font-medium">Ma GD</th>
-                <th className="px-4 py-3 font-medium">Benh nhan</th>
-                <th className="px-4 py-3 font-medium">Bac si</th>
-                <th className="px-4 py-3 font-medium">Ngay</th>
-                <th className="px-4 py-3 font-medium">So tien</th>
-                <th className="px-4 py-3 font-medium">Phuong thuc</th>
-                <th className="px-4 py-3 font-medium">Trang thai</th>
-                <th className="px-4 py-3 text-right font-medium">Thao tac</th>
+                <th className="px-4 py-3 font-medium">Mã GD</th>
+                <th className="px-4 py-3 font-medium">Bệnh nhân</th>
+                <th className="px-4 py-3 font-medium">Bác sĩ</th>
+                <th className="px-4 py-3 font-medium">Ngày</th>
+                <th className="px-4 py-3 font-medium">Số tiền</th>
+                <th className="px-4 py-3 font-medium">Phương thức</th>
+                <th className="px-4 py-3 font-medium">Trạng thái</th>
+                <th className="px-4 py-3 text-right font-medium">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Dang tai...</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Đang tải...</td></tr>
               ) : payments.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Khong tim thay giao dich.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Không tìm thấy giao dịch.</td></tr>
               ) : payments.map((payment) => (
                 <tr key={payment.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-mono text-xs text-slate-500">{payment.ma_giao_dich}</td>
@@ -155,7 +155,7 @@ export default function ManagePayments() {
                         onClick={() => setConfirm(payment)}
                         className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-600 transition-colors hover:bg-orange-100"
                       >
-                        <Icon name="payment" className="h-3 w-3" /> Hoan tien
+                        <Icon name="payment" className="h-3 w-3" /> Hoàn tiền
                       </button>
                     )}
                   </td>
@@ -167,15 +167,15 @@ export default function ManagePayments() {
       </div>
 
       {!loading && (
-        <p className="mt-3 text-sm text-slate-500">Tong cong {payments.length} giao dich</p>
+        <p className="mt-3 text-sm text-slate-500">Tổng cộng {payments.length} giao dịch</p>
       )}
 
       <ConfirmDialog
         open={!!confirm}
         danger
-        title="Xac nhan hoan tien"
-        message={`Hoan ${formatPrice(confirm?.so_tien ?? 0)} cho "${confirm?.benh_nhan}"? Thao tac nay khong the hoan tac.`}
-        confirmText="Xac nhan hoan tien"
+        title="Xác nhận hoàn tiền"
+        message={`Hoàn ${formatPrice(confirm?.so_tien ?? 0)} cho "${confirm?.benh_nhan}"? Thao tác này không thể hoàn tác.`}
+        confirmText="Xác nhận hoàn tiền"
         onConfirm={handleRefund}
         onCancel={() => setConfirm(null)}
       />

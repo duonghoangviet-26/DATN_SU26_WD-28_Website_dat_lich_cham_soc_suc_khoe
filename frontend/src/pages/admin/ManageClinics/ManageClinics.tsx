@@ -30,8 +30,7 @@ export default function ManageClinics() {
     try {
       const data = await clinicService.getCurrentClinic()
       setClinic(data)
-    } catch (error) {
-      console.error('Loi khi tai thong tin phong kham', error)
+    } catch {
     } finally {
       setClinicLoading(false)
     }
@@ -42,8 +41,7 @@ export default function ManageClinics() {
     try {
       const data = await clinicService.getSpecialties()
       setSpecialties(data)
-    } catch (error) {
-      console.error('Loi khi tai danh sach chuyen khoa', error)
+    } catch {
     } finally {
       setSpecialtyLoading(false)
     }
@@ -81,30 +79,28 @@ export default function ManageClinics() {
   }
 
   async function handleViewClinicLogs() {
-    setAuditTitle('Thong tin phong kham')
+    setAuditTitle('Thông tin phòng khám')
     setAuditModalOpen(true)
     setAuditLoading(true)
     try {
       const logs = await clinicService.getCurrentClinicLogs()
       setAuditLogs(logs)
     } catch (error: any) {
-      console.error(error)
-      alert('Loi tai lich su: ' + (error.response?.data?.message || error.message))
+      alert('Lỗi tải lịch sử: ' + (error.response?.data?.message || error.message))
     } finally {
       setAuditLoading(false)
     }
   }
 
   async function handleViewSpecialtyLogs(specialty: SpecialtyItem) {
-    setAuditTitle(`Chuyen khoa ${specialty.ten}`)
+    setAuditTitle(`Chuyên khoa ${specialty.ten}`)
     setAuditModalOpen(true)
     setAuditLoading(true)
     try {
       const logs = await clinicService.getSpecialtyLogs(specialty._id)
       setAuditLogs(logs)
     } catch (error: any) {
-      console.error(error)
-      alert('Loi tai lich su: ' + (error.response?.data?.message || error.message))
+      alert('Lỗi tải lịch sử: ' + (error.response?.data?.message || error.message))
     } finally {
       setAuditLoading(false)
     }
@@ -113,8 +109,8 @@ export default function ManageClinics() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Phong Kham & Chuyen Khoa"
-        description="Quan ly thong tin co so duy nhat cua VitaFamily va danh sach chuyen khoa dang van hanh."
+        title="Phòng khám & Chuyên khoa"
+        description="Quản lý thông tin cơ sở duy nhất của VitaFamily và danh sách chuyên khoa đang vận hành."
       />
 
       <EditClinic
@@ -127,7 +123,7 @@ export default function ManageClinics() {
 
       {!clinic && !clinicLoading ? (
         <div className="card rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-700">
-          Hay luu thong tin phong kham truoc khi quan ly chuyen khoa. Toan bo chuyen khoa admin se duoc gan vao co so duy nhat nay.
+          Hãy lưu thông tin phòng khám trước khi quản lý chuyên khoa. Toàn bộ chuyên khoa admin sẽ được gắn vào cơ sở duy nhất này.
         </div>
       ) : (
         <div className="space-y-4">

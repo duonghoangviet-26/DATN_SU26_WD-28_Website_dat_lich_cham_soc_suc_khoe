@@ -54,7 +54,7 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
       const url = await clinicService.uploadImage(file)
       setForm((prev) => ({ ...prev, logo_url: url }))
     } catch (_) {
-      setError('Loi khi tai anh len')
+      setError('Lỗi khi tải ảnh lên')
     } finally {
       setUploading(false)
     }
@@ -63,7 +63,7 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.ten.trim()) {
-      setError('Ten phong kham la bat buoc')
+      setError('Tên phòng khám là bắt buộc')
       return
     }
 
@@ -75,7 +75,7 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Loi khi luu thong tin'
+        'Lỗi khi lưu thông tin'
       setError(message)
     } finally {
       setSaving(false)
@@ -87,10 +87,10 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-slate-800">
-            {clinic ? 'Thong tin phong kham' : 'Khoi tao thong tin phong kham'}
+            {clinic ? 'Thông tin phòng khám' : 'Khởi tạo thông tin phòng khám'}
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            He thong admin chi quan ly 1 co so duy nhat. Toan bo chuyen khoa se gan vao ban ghi nay.
+            Hệ thống admin chỉ quản lý 1 cơ sở duy nhất. Toàn bộ chuyên khoa sẽ gắn vào bản ghi này.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
           >
             <Icon name="clock" className="h-4 w-4" />
-            Lich su
+            Lịch sử
           </button>
           <button
             type="button"
@@ -109,14 +109,14 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
             disabled={saving || loading}
           >
             <Icon name="refresh-cw" className="h-4 w-4" />
-            Tai lai
+            Tải lại
           </button>
         </div>
       </div>
 
       {loading ? (
         <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-10 text-center text-slate-400">
-          Dang tai thong tin phong kham...
+          Đang tải thông tin phòng khám...
         </div>
       ) : (
         <>
@@ -129,7 +129,7 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
           <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Ten phong kham <span className="text-red-500">*</span>
+                Tên phòng khám <span className="text-red-500">*</span>
               </label>
               <input
                 name="ten"
@@ -141,18 +141,18 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Dia chi</label>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Địa chỉ</label>
               <input
                 name="dia_chi"
                 value={form.dia_chi}
                 onChange={handleChange}
                 className="input w-full"
-                placeholder="VD: 123 Nguyen Van A, Quan 1, TP.HCM"
+                placeholder="VD: 123 Nguyễn Văn A, Quận 1, TP.HCM"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">So dien thoai</label>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Số điện thoại</label>
               <input
                 name="so_dien_thoai"
                 value={form.so_dien_thoai}
@@ -175,25 +175,25 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Gio lam viec</label>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Giờ làm việc</label>
               <input
                 name="gio_lam_viec"
                 value={form.gio_lam_viec}
                 onChange={handleChange}
                 className="input w-full"
-                placeholder="VD: 8:00 - 17:00 Thu 2 - Thu 7"
+                placeholder="VD: 8:00 - 17:00 Thứ 2 - Thứ 7"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Mo ta</label>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Mô tả</label>
               <textarea
                 name="mo_ta"
                 value={form.mo_ta}
                 onChange={handleChange}
                 rows={3}
                 className="input w-full resize-none"
-                placeholder="Gioi thieu ngan ve phong kham..."
+                placeholder="Giới thiệu ngắn về phòng khám..."
               />
             </div>
 
@@ -215,13 +215,13 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
                     className="w-full text-sm text-slate-500 file:mr-4 file:rounded-full file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-600 hover:file:bg-brand-100"
                     disabled={uploading}
                   />
-                  {uploading && <p className="mt-1 text-xs text-brand-600">Dang tai len...</p>}
+                  {uploading && <p className="mt-1 text-xs text-brand-600">Đang tải lên...</p>}
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">URL ban do</label>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">URL bản đồ</label>
               <input
                 name="ban_do_url"
                 value={form.ban_do_url}
@@ -233,10 +233,10 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
 
             <div className="sm:col-span-2 flex justify-end gap-3 pt-2">
               <button type="button" onClick={onCancel} className="btn-secondary" disabled={saving}>
-                Dat lai
+                Đặt lại
               </button>
               <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? 'Dang luu...' : clinic ? 'Luu thay doi' : 'Tao phong kham'}
+                {saving ? 'Đang lưu...' : clinic ? 'Lưu thay đổi' : 'Tạo phòng khám'}
               </button>
             </div>
           </form>

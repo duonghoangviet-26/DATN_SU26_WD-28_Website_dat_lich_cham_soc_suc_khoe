@@ -18,10 +18,10 @@ const EMPTY_SUMMARY: AdminDashboardSummary = {
 }
 
 const QUICK_LINKS = [
-  { label: 'Quan ly lich hen', to: '/admin/appointments', icon: 'calendar' },
-  { label: 'Quan ly thanh toan', to: '/admin/payments', icon: 'payment' },
-  { label: 'Quan ly danh gia', to: '/admin/reviews', icon: 'star' },
-  { label: 'Phong kham & chuyen khoa', to: '/admin/clinics', icon: 'hospital' },
+  { label: 'Quản lý lịch hẹn', to: '/admin/appointments', icon: 'calendar' },
+  { label: 'Quản lý thanh toán', to: '/admin/payments', icon: 'payment' },
+  { label: 'Quản lý đánh giá', to: '/admin/reviews', icon: 'star' },
+  { label: 'Phòng khám & chuyên khoa', to: '/admin/clinics', icon: 'hospital' },
 ]
 
 function formatCurrency(value: number) {
@@ -33,7 +33,7 @@ function formatCurrency(value: number) {
 }
 
 function formatDateTime(value: string) {
-  if (!value) return 'Chua cap nhat'
+  if (!value) return 'Chưa cập nhật'
   return new Intl.DateTimeFormat('vi-VN', {
     dateStyle: 'short',
     timeStyle: 'short',
@@ -58,7 +58,7 @@ export default function Dashboard() {
         }
       } catch (err: any) {
         if (active) {
-          setError(err?.response?.data?.message || err.message || 'Khong tai duoc dashboard')
+          setError(err?.response?.data?.message || err.message || 'Không tải được dashboard')
         }
       } finally {
         if (active) {
@@ -75,23 +75,23 @@ export default function Dashboard() {
 
   const stats = [
     {
-      label: 'Lich hen hom nay',
+      label: 'Lịch hẹn hôm nay',
       value: String(summary.appointments_today),
       icon: 'calendar',
-      helper: 'Tong lich hen co ngay_kham trong hom nay.',
+      helper: 'Tổng lịch hẹn có ngày_kham trong hôm nay.',
       iconBg: 'bg-purple-100',
       iconColor: 'text-purple-600',
     },
     {
-      label: 'Bac si dang hoat dong',
+      label: 'Bác sĩ đang hoạt động',
       value: String(summary.doctors_active),
       icon: 'doctor',
-      helper: "Dem tu BacSi.trang_thai = 'active'.",
+      helper: "Đếm từ BacSi.trang_thai = 'active'.",
       iconBg: 'bg-brand-100',
       iconColor: 'text-brand-600',
     },
     {
-      label: 'Doanh thu da thu',
+      label: 'Doanh thu đã thu',
       value: formatCurrency(summary.revenue.collected_total),
       icon: 'payment',
       helper: "Tong ThanhToan.status = 'paid'.",
@@ -99,10 +99,10 @@ export default function Dashboard() {
       iconColor: 'text-blue-600',
     },
     {
-      label: 'Doanh thu xuat hoa don',
+      label: 'Doanh thu xuất hóa đơn',
       value: formatCurrency(summary.revenue.invoiced_total),
       icon: 'file-text',
-      helper: 'Tong tong_thanh_toan tren hoa don.',
+      helper: 'Tổng tong_thanh_toan trên hóa đơn.',
       iconBg: 'bg-orange-100',
       iconColor: 'text-orange-600',
     },
@@ -112,7 +112,7 @@ export default function Dashboard() {
     <div>
       <PageHeader
         title="Dashboard"
-        description="Tong quan nhanh tu du lieu that cua lich hen, hoa don, thanh toan va bac si."
+        description="Tổng quan nhanh từ dữ liệu thật của lịch hẹn, hóa đơn, thanh toán và bác sĩ."
       />
 
       {error && (
@@ -146,26 +146,26 @@ export default function Dashboard() {
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100">
               <Icon name="payment" className="h-3.5 w-3.5 text-blue-600" />
             </span>
-            Tong quan doanh thu
+            Tổng quan doanh thu
           </h2>
 
           <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
             <div className="flex items-center justify-between text-sm text-slate-600">
-              <span>Da thu</span>
+              <span>Đã thu</span>
               <strong className="text-slate-800">
                 {loading ? '...' : formatCurrency(summary.revenue.collected_total)}
               </strong>
             </div>
 
             <div className="flex items-center justify-between text-sm text-slate-600">
-              <span>Da xuat hoa don</span>
+              <span>Đã xuất hóa đơn</span>
               <strong className="text-slate-800">
                 {loading ? '...' : formatCurrency(summary.revenue.invoiced_total)}
               </strong>
             </div>
 
             <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-sm text-slate-600">
-              <span>Con can thu</span>
+              <span>Còn cần thu</span>
               <strong className="text-orange-600">
                 {loading ? '...' : formatCurrency(summary.revenue.outstanding_total)}
               </strong>
@@ -173,7 +173,7 @@ export default function Dashboard() {
           </div>
 
           <p className="mt-4 text-xs text-slate-400">
-            Cap nhat luc: {formatDateTime(summary.generated_at)}
+            Cập nhật lúc: {formatDateTime(summary.generated_at)}
           </p>
         </div>
 
@@ -182,7 +182,7 @@ export default function Dashboard() {
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-100">
               <Icon name="dashboard" className="h-3.5 w-3.5 text-brand-600" />
             </span>
-            Truy cap nhanh
+            Truy cập nhanh
           </h2>
 
           <div className="grid gap-3 sm:grid-cols-2">

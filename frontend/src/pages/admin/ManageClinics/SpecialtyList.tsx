@@ -59,9 +59,9 @@ export default function SpecialtyList({
     <div className="card overflow-hidden">
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
         <div>
-          <h3 className="font-semibold text-slate-800">Danh sach chuyen khoa ({specialties.length})</h3>
+          <h3 className="font-semibold text-slate-800">Danh sách chuyên khoa ({specialties.length})</h3>
           <p className="mt-0.5 text-xs text-slate-400">
-            Toan bo chuyen khoa duoi day deu thuoc co so duy nhat cua he thong.
+            Toàn bộ chuyên khoa dưới đây đều thuộc cơ sở duy nhất của hệ thống.
           </p>
         </div>
         <button
@@ -69,7 +69,7 @@ export default function SpecialtyList({
           className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
         >
           <Icon name="plus" className="h-4 w-4" />
-          Them moi
+          Thêm mới
         </button>
       </div>
 
@@ -82,7 +82,7 @@ export default function SpecialtyList({
               : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
           }`}
         >
-          Dang hoat dong ({specialties.filter((item) => item.status === 'active').length})
+          Đang hoạt động ({specialties.filter((item) => item.status === 'active').length})
         </button>
         <button
           onClick={() => handleTabChange('hidden')}
@@ -92,7 +92,7 @@ export default function SpecialtyList({
               : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
           }`}
         >
-          Da an ({specialties.filter((item) => item.status === 'hidden').length})
+          Đã ẩn ({specialties.filter((item) => item.status === 'hidden').length})
         </button>
       </div>
 
@@ -102,27 +102,27 @@ export default function SpecialtyList({
             <tr>
               <th className="w-16 px-5 py-3 text-center font-medium">STT</th>
               <th className="px-5 py-3 font-medium">Icon</th>
-              <th className="px-5 py-3 font-medium">Ten chuyen khoa</th>
+               <th className="px-5 py-3 font-medium">Tên chuyên khoa</th>
               <th className="hidden px-5 py-3 font-medium md:table-cell">Slug</th>
-              <th className="hidden px-5 py-3 font-medium md:table-cell">Mo ta</th>
-              <th className="hidden px-5 py-3 text-center font-medium md:table-cell">So bac si</th>
-              <th className="px-5 py-3 font-medium">Trang thai</th>
-              <th className="px-5 py-3 text-right font-medium">Thao tac</th>
+               <th className="hidden px-5 py-3 font-medium md:table-cell">Mô tả</th>
+               <th className="hidden px-5 py-3 text-center font-medium md:table-cell">Số bác sĩ</th>
+               <th className="px-5 py-3 font-medium">Trạng thái</th>
+               <th className="px-5 py-3 text-right font-medium">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
                 <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
-                  Dang tai...
+                  Đang tải...
                 </td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
                   {activeTab === 'active'
-                    ? 'Chua co chuyen khoa nao dang hoat dong'
-                    : 'Chua co chuyen khoa nao bi an'}
+                    ? 'Chưa có chuyên khoa nào đang hoạt động'
+                    : 'Chưa có chuyên khoa nào bị ẩn'}
                 </td>
               </tr>
             ) : (
@@ -139,7 +139,7 @@ export default function SpecialtyList({
                         className="h-8 w-8 rounded border border-slate-200 bg-white object-cover"
                       />
                     ) : (
-                      <span className="text-xs italic text-slate-400">Khong co</span>
+                       <span className="text-xs italic text-slate-400">Không có</span>
                     )}
                   </td>
                   <td className="px-5 py-3 font-medium text-slate-800">{specialty.ten}</td>
@@ -150,7 +150,7 @@ export default function SpecialtyList({
                   </td>
                   <td className="hidden max-w-[200px] px-5 py-3 text-slate-500 md:table-cell">
                     <span className="line-clamp-2">
-                      {specialty.mo_ta || <em className="text-slate-400">Chua co</em>}
+                       {specialty.mo_ta || <em className="text-slate-400">Chưa có</em>}
                     </span>
                   </td>
                   <td className="hidden px-5 py-3 text-center md:table-cell">
@@ -159,12 +159,12 @@ export default function SpecialtyList({
                       className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-blue-100 bg-blue-50 px-3 py-1 font-semibold text-blue-600 transition-colors hover:bg-blue-100"
                     >
                       <Icon name="users" className="h-3.5 w-3.5" />
-                      {specialty.doctor_count || 0} Bac si
+                       {specialty.doctor_count || 0} Bác sĩ
                     </button>
                   </td>
                   <td className="px-5 py-3">
                     <Badge color={specialty.status === 'active' ? 'green' : 'gray'}>
-                      {specialty.status === 'active' ? 'Hien thi' : 'Da an'}
+                      {specialty.status === 'active' ? 'Hiển thị' : 'Đã ẩn'}
                     </Badge>
                   </td>
                   <td className="px-5 py-3">
@@ -172,7 +172,7 @@ export default function SpecialtyList({
                       <button
                         onClick={() => onEdit(specialty)}
                         className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600"
-                        title="Chinh sua"
+                        title="Chỉnh sửa"
                       >
                         <Icon name="file-text" className="h-4 w-4" />
                       </button>
@@ -184,7 +184,7 @@ export default function SpecialtyList({
                             ? 'border-slate-200 bg-white text-slate-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
                             : 'border-green-200 bg-green-50 text-green-600 hover:bg-green-100'
                         }`}
-                        title={specialty.status === 'active' ? 'An chuyen khoa' : 'Khoi phuc chuyen khoa'}
+                        title={specialty.status === 'active' ? 'Ẩn chuyên khoa' : 'Khôi phục chuyên khoa'}
                       >
                         {specialty.status === 'active' ? (
                           <Icon name="eye-off" className="h-4 w-4" />
@@ -195,7 +195,7 @@ export default function SpecialtyList({
                       <button
                         onClick={() => onViewLogs(specialty)}
                         className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
-                        title="Lich su chinh sua"
+                        title="Lịch sử chỉnh sửa"
                       >
                         <Icon name="clock" className="h-4 w-4" />
                       </button>
@@ -211,11 +211,11 @@ export default function SpecialtyList({
       {filteredItems.length > itemsPerPage && (
         <div className="flex items-center justify-between border-t bg-slate-50/50 p-4">
           <span className="text-sm text-slate-500">
-            Hien thi <span className="font-medium text-slate-700">{startIndex + 1}</span> -{' '}
+            Hiển thị <span className="font-medium text-slate-700">{startIndex + 1}</span> -{' '}
             <span className="font-medium text-slate-700">
               {Math.min(startIndex + itemsPerPage, filteredItems.length)}
             </span>{' '}
-            / <span className="font-medium text-slate-700">{filteredItems.length}</span> chuyen khoa
+            / <span className="font-medium text-slate-700">{filteredItems.length}</span> chuyên khoa
           </span>
           <div className="flex gap-2">
             <button
@@ -223,7 +223,7 @@ export default function SpecialtyList({
               disabled={page === 1}
               className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
             >
-              Truoc
+              Trước
             </button>
             <button
               onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
@@ -238,11 +238,11 @@ export default function SpecialtyList({
 
       <ConfirmDialog
         open={!!confirmItem}
-        title={confirmItem?.status === 'active' ? 'An chuyen khoa' : 'Khoi phuc chuyen khoa'}
-        message={`Ban co chac muon ${
-          confirmItem?.status === 'active' ? 'an' : 'khoi phuc'
-        } chuyen khoa "${confirmItem?.ten}"?`}
-        confirmText={confirmItem?.status === 'active' ? 'An' : 'Khoi phuc'}
+        title={confirmItem?.status === 'active' ? 'Ẩn chuyên khoa' : 'Khôi phục chuyên khoa'}
+        message={`Bạn có chắc muốn ${
+          confirmItem?.status === 'active' ? 'ẩn' : 'khôi phục'
+        } chuyên khoa "${confirmItem?.ten}"?`}
+        confirmText={confirmItem?.status === 'active' ? 'Ẩn' : 'Khôi phục'}
         danger={confirmItem?.status === 'active'}
         onConfirm={handleToggle}
         onCancel={() => setConfirmItem(null)}
