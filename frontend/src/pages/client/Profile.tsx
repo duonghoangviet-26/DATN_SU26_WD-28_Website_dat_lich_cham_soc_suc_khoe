@@ -9,18 +9,22 @@ import Modal from '@/components/common/Modal'
 
 interface Appointment {
   _id: string
-  benh_nhan: string
-  sdt_benh_nhan: string
-  bac_si: string
-  chuyen_khoa: string
+  user_id?: string
+  doctor_id?: string
+  schedule_id?: string
+  slot_id?: string
+  service_id?: string | null
+  loai_kham: 'clinic' | 'home'
   ngay_kham: string
   gio_kham: string
-  loai_kham: string
-  status: 'pending' | 'approved' | 'completed' | 'cancelled'
-  payment_status: 'paid' | 'unpaid'
+  ly_do_kham: string
+  status: 'pending' | 'confirmed' | 'checked_in' | 'in_progress' | 'completed' | 'cancelled' | 'no_show'
+  payment_status: 'unpaid' | 'partial' | 'paid' | 'refunded'
   gia_kham: number
   ten_dich_vu: string
-  ly_do_kham: string
+  ten_khach?: string
+  so_dien_thoai_khach?: string
+  bac_si: string
   // EHR details if completed
   chan_doan?: string
   don_thuoc?: string[]
@@ -31,10 +35,9 @@ interface Appointment {
 const SEEDED_PAST_APPOINTMENTS: Appointment[] = [
   {
     _id: 'app-completed-1',
-    benh_nhan: 'Nguyễn Văn Bệnh Nhân',
-    sdt_benh_nhan: '0987654321',
+    ten_khach: 'Nguyễn Văn Bệnh Nhân',
+    so_dien_thoai_khach: '0987654321',
     bac_si: 'PGS. TS. BS. Nguyễn Văn Cương',
-    chuyen_khoa: 'Tai Mũi Họng',
     ngay_kham: '2026-06-15',
     gio_kham: '09:00 - 09:30',
     loai_kham: 'clinic',
@@ -53,10 +56,9 @@ const SEEDED_PAST_APPOINTMENTS: Appointment[] = [
   },
   {
     _id: 'app-completed-2',
-    benh_nhan: 'Nguyễn Văn Bệnh Nhân',
-    sdt_benh_nhan: '0987654321',
+    ten_khach: 'Nguyễn Văn Bệnh Nhân',
+    so_dien_thoai_khach: '0987654321',
     bac_si: 'ThS. BS. Phạm Thu Dung',
-    chuyen_khoa: 'Tai Mũi Họng',
     ngay_kham: '2026-05-20',
     gio_kham: '14:30 - 15:00',
     loai_kham: 'clinic',

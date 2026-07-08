@@ -73,10 +73,10 @@ export default function ServiceDetail() {
         {/* RIGHT COLUMN: BOOKING BOX */}
         <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm text-left space-y-6">
           <div className="space-y-1">
-            <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">Phí dịch vụ trọn gói</p>
-            <p className="text-2xl font-extrabold text-brand-600">{service.gia.toLocaleString('vi-VN')} đ</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">Phí dịch vụ tham khảo</p>
+            <p className="text-2xl font-extrabold text-slate-800">{service.gia.toLocaleString('vi-VN')} đ</p>
             <p className="text-[10px] text-slate-400 leading-normal">
-              * Giá đã bao gồm phí thăm khám lâm sàng và các dụng cụ nội soi chuyên sâu dùng một lần.
+              * Dịch vụ này thực hiện theo chỉ định chuyên môn của bác sĩ trong quá trình thăm khám lâm sàng.
             </p>
           </div>
 
@@ -92,10 +92,10 @@ export default function ServiceDetail() {
           </div>
 
           <Link
-            to={`/booking?service_id=${service.id}`}
+            to="/booking"
             className="btn-primary w-full text-center block py-3 font-bold shadow-md shadow-brand-100"
           >
-            Đặt lịch dịch vụ ngay
+            Đặt lịch hẹn khám ngay
           </Link>
         </div>
       </div>

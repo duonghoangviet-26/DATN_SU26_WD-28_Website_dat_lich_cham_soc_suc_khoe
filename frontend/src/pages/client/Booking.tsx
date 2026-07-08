@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { mockDoctors } from '@/mock/doctors'
-import { mockServices } from '@/mock/services'
 import Breadcrumb from '@/components/common/Breadcrumb'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
@@ -10,24 +9,29 @@ import Textarea from '@/components/common/Textarea'
 import Toast from '@/components/common/Toast'
 import Loading from '@/components/common/Loading'
 
-// Mock slots list for doctors
-const MOCK_TIME_SLOTS = [
-  '08:00 - 08:30',
-  '08:30 - 09:00',
-  '09:00 - 09:30',
-  '09:30 - 10:00',
-  '10:00 - 10:30',
-  '10:30 - 11:00',
-  '14:00 - 14:30',
-  '14:30 - 15:00',
-  '15:00 - 15:30',
-  '15:30 - 16:00',
+// Mock slots list for doctors, including mock slot IDs mapping to database slots
+interface TimeSlot {
+  id: string
+  gio: string
+}
+
+const MOCK_TIME_SLOTS: TimeSlot[] = [
+  { id: 'slot-1', gio: '08:00 - 08:30' },
+  { id: 'slot-2', gio: '08:30 - 09:00' },
+  { id: 'slot-3', gio: '09:00 - 09:30' },
+  { id: 'slot-4', gio: '09:30 - 10:00' },
+  { id: 'slot-5', gio: '10:00 - 10:30' },
+  { id: 'slot-6', gio: '10:30 - 11:00' },
+  { id: 'slot-7', gio: '14:00 - 14:30' },
+  { id: 'slot-8', gio: '14:30 - 15:00' },
+  { id: 'slot-9', gio: '15:00 - 15:30' },
+  { id: 'slot-10', gio: '15:30 - 16:00' },
 ]
 
 // Simulate some random booked slots to test disabled states
 const SIMULATED_BOOKED_SLOTS: Record<string, string[]> = {
-  '1': ['09:00 - 09:30', '14:30 - 15:00'],
-  '2': ['08:00 - 08:30', '10:30 - 11:00'],
+  '1': ['slot-3', 'slot-8'],
+  '2': ['slot-1', 'slot-6'],
 }
 
 export default function Booking() {
@@ -46,14 +50,12 @@ export default function Booking() {
 
   // Routing params fallback
   const queryDoctorId = searchParams.get('doctor_id')
-  const queryServiceId = searchParams.get('service_id')
 
   // Booking Wizard States
   const [step, setStep] = useState<number>(1)
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>(queryDoctorId || '')
-  const [selectedServiceId, setSelectedServiceId] = useState<string>(queryServiceId || '')
   const [selectedDate, setSelectedDate] = useState<string>('')
-  const [selectedSlot, setSelectedSlot] = useState<string>('')
+  const [selectedSlotId, setSelectedSlotId] = useState<string>('')
 
   // Form States
   const [patientName, setPatientName] = useState(user?.ho_ten || '')
@@ -103,36 +105,18 @@ export default function Booking() {
   }, [user])
 
   const selectedDoctor = mockDoctors.find((d) => String(d.id) === selectedDoctorId)
-  const selectedService = mockServices.find((s) => s.id === selectedServiceId)
-
-  const availableDoctors = selectedServiceId
-    ? mockDoctors.filter(
-        (d) =>
-          d.loai === 'specialist' &&
-          d.trang_thai_duyet === 'approved' &&
-          d.related_services.some((rs) => rs.id === selectedServiceId)
-      )
-    : []
-
-  const handleSelectService = (id: string) => {
-    setSelectedServiceId(id)
-    setSelectedDoctorId('') // Reset selected doctor when service changes
-  }
+  const selectedSlot = MOCK_TIME_SLOTS.find((s) => s.id === selectedSlotId)
 
   // Handle Wizard Steps Navigation
   const handleNextStep = () => {
     if (step === 1) {
-      if (!selectedServiceId) {
-        setToast('Vui lòng chọn dịch vụ khám lâm sàng.')
-        return
-      }
       if (!selectedDoctorId) {
-        setToast('Vui lòng chọn bác sĩ phụ trách khám.')
+        setToast('Vui lòng chọn bác sĩ khám chuyên khoa.')
         return
       }
       setStep(2)
     } else if (step === 2) {
-      if (!selectedDate || !selectedSlot) {
+      if (!selectedDate || !selectedSlotId) {
         setToast('Vui lòng chọn ngày khám và khung giờ còn trống.')
         return
       }
@@ -150,15 +134,6 @@ export default function Booking() {
     }
   }
 
-  // Prevent flash or render if checking auth
-  if (authLoading) {
-    return <Loading message="Đang kiểm tra thông tin đăng nhập..." />
-  }
-
-  if (!user) {
-    return null
-  }
-
   const handlePrevStep = () => {
     if (step > 1) setStep(step - 1)
   }
@@ -168,21 +143,25 @@ export default function Booking() {
     setLoading(true)
     setTimeout(() => {
       setLoading(false)
-      // Save appointment mock to localStorage to display in profile later
+      // Save appointment mock strictly matching LichHen schema model structure
       const newApp = {
         _id: `app-mock-${Date.now()}`,
-        benh_nhan: patientName,
-        sdt_benh_nhan: patientPhone,
-        bac_si: selectedDoctor?.ho_ten || '',
-        chuyen_khoa: 'Tai Mũi Họng',
-        ngay_kham: selectedDate,
-        gio_kham: selectedSlot,
+        user_id: user?._id || 'mock-user-123',
+        doctor_id: selectedDoctorId,
+        schedule_id: `sch-mock-${selectedDoctorId}-${selectedDate}`, // sch-mock-[doc]-[date]
+        slot_id: selectedSlotId,
+        service_id: null, // Clinic appointments enforce service_id = null in schema check!
         loai_kham: 'clinic',
+        ngay_kham: selectedDate,
+        gio_kham: selectedSlot?.gio || '',
+        ly_do_kham: symptoms,
         status: 'pending',
         payment_status: 'unpaid',
-        gia_kham: selectedService?.gia || 0,
-        ten_dich_vu: selectedService?.ten || '',
-        ly_do_kham: symptoms,
+        gia_kham: selectedDoctor?.gia_kham || 150000, // Saves doctor consultation fee
+        ten_khach: patientName,
+        so_dien_thoai_khach: patientPhone,
+        bac_si: selectedDoctor?.ho_ten || '',
+        ten_dich_vu: 'Khám lâm sàng Tai Mũi Họng',
       }
       const existing = JSON.parse(localStorage.getItem('my_appointments') || '[]')
       localStorage.setItem('my_appointments', JSON.stringify([newApp, ...existing]))
@@ -193,12 +172,21 @@ export default function Booking() {
   }
 
   // Check if slot is already booked
-  const isSlotBooked = (slot: string) => {
+  const isSlotBooked = (slotId: string) => {
     if (selectedDoctorId) {
       const booked = SIMULATED_BOOKED_SLOTS[selectedDoctorId] || []
-      return booked.includes(slot)
+      return booked.includes(slotId)
     }
     return false
+  }
+
+  // Prevent flash or render if checking auth
+  if (authLoading) {
+    return <Loading message="Đang kiểm tra thông tin đăng nhập..." />
+  }
+
+  if (!user) {
+    return null
   }
 
   return (
@@ -206,16 +194,16 @@ export default function Booking() {
       <Breadcrumb items={[{ label: 'Đặt lịch khám' }]} />
 
       <div className="text-left space-y-2">
-        <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Đặt Lịch Khám Trực Tuyến</h1>
+        <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Đặt Lịch Khám Tai Mũi Họng</h1>
         <p className="text-sm text-slate-500">
-          Vui lòng hoàn thành các bước bên dưới để nhận mã số khám đúng giờ hẹn tại phòng khám.
+          Đăng ký lịch khám trực tiếp với bác sĩ chuyên khoa. Các xét nghiệm và nội soi cận lâm sàng sẽ được thực hiện theo chỉ định của bác sĩ tại phòng khám.
         </p>
       </div>
 
       {/* STEP INDICATORS */}
       <div className="grid grid-cols-4 gap-2 border-b border-slate-200 pb-6 text-center">
         {[
-          { num: 1, label: 'Dịch vụ & Bác sĩ' },
+          { num: 1, label: 'Chọn Bác sĩ' },
           { num: 2, label: 'Thời gian khám' },
           { num: 3, label: 'Thông tin triệu chứng' },
           { num: 4, label: 'Xác nhận' },
@@ -235,76 +223,43 @@ export default function Booking() {
         ))}
       </div>
 
-      {/* STEP 1: SELECT SERVICE & MATCHING DOCTOR */}
+      {/* STEP 1: SELECT SPECIALIST */}
       {step === 1 && (
         <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm text-left space-y-6">
-          {/* Chọn dịch vụ cần khám */}
           <div className="space-y-3">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">1. Chọn dịch vụ Tai Mũi Họng</label>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {mockServices
-                .filter((s) => s.status === 'active')
-                .map((s) => (
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Chọn bác sĩ Tai Mũi Họng phụ trách</label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {mockDoctors
+                .filter((d) => d.loai === 'specialist' && d.trang_thai_duyet === 'approved')
+                .map((d) => (
                   <button
-                    key={s.id}
+                    key={d.id}
                     type="button"
-                    onClick={() => handleSelectService(s.id)}
-                    className={`flex items-start gap-4 rounded-xl border p-4 text-left transition-all ${
-                      selectedServiceId === s.id
-                        ? 'border-brand-500 bg-brand-50/20 ring-1 ring-brand-500'
+                    onClick={() => setSelectedDoctorId(String(d.id))}
+                    className={`flex items-start gap-3 rounded-xl border p-3 text-left transition-all ${
+                      selectedDoctorId === String(d.id)
+                        ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500'
                         : 'border-slate-200 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="text-2xl mt-1">🩺</span>
-                    <div className="flex-1">
-                      <h4 className="text-sm font-bold text-slate-800">{s.ten}</h4>
-                      <p className="text-[10px] text-slate-500 leading-tight mt-1 line-clamp-2">{s.mo_ta_ngan}</p>
-                      <p className="text-xs font-bold text-brand-600 mt-2">{s.gia.toLocaleString('vi-VN')} đ</p>
+                    <div className="h-12 w-12 shrink-0 bg-slate-100 rounded-full overflow-hidden">
+                      {d.anh_dai_dien ? (
+                        <img src={d.anh_dai_dien} alt={d.ho_ten} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="grid h-full w-full place-items-center bg-brand-100 text-brand-600 font-extrabold text-lg">
+                          {d.ho_ten.split(' ').pop()?.charAt(0)}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 leading-snug">{d.ho_ten}</h4>
+                      <p className="text-[9px] text-slate-400 font-medium uppercase mt-0.5">{d.bang_cap.split('chuyên ngành')[0]}</p>
+                      <p className="text-[9px] text-brand-600 font-bold mt-1">⭐ {d.diem_danh_gia.toFixed(1)} ({d.so_danh_gia} đánh giá)</p>
                     </div>
                   </button>
                 ))}
             </div>
           </div>
-
-          {/* Chọn bác sĩ tương ứng khi chọn dịch vụ */}
-          {selectedServiceId && (
-            <div className="space-y-3 border-t border-slate-50 pt-4">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">2. Chọn bác sĩ phụ trách chuyên khoa</label>
-              {availableDoctors.length === 0 ? (
-                <p className="text-xs text-slate-400">Hiện chưa có lịch bác sĩ thực hiện dịch vụ này. Vui lòng chọn dịch vụ khác.</p>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {availableDoctors.map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      onClick={() => setSelectedDoctorId(String(d.id))}
-                      className={`flex items-start gap-3 rounded-xl border p-3 text-left transition-all ${
-                        selectedDoctorId === String(d.id)
-                          ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500'
-                          : 'border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="h-10 w-10 shrink-0 bg-slate-100 rounded-full overflow-hidden">
-                        {d.anh_dai_dien ? (
-                          <img src={d.anh_dai_dien} alt={d.ho_ten} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="grid h-full w-full place-items-center bg-brand-100 text-brand-600 font-extrabold text-lg">
-                            {d.ho_ten.split(' ').pop()?.charAt(0)}
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-800 leading-snug">{d.ho_ten}</h4>
-                        <p className="text-[9px] text-slate-400 font-medium uppercase mt-0.5">{d.bang_cap.split('chuyên ngành')[0]}</p>
-                        <p className="text-[9px] text-brand-600 font-bold mt-1">⭐ {d.diem_danh_gia.toFixed(1)} ({d.so_danh_gia} đánh giá)</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -321,7 +276,7 @@ export default function Booking() {
                   type="button"
                   onClick={() => {
                     setSelectedDate(d.value)
-                    setSelectedSlot('') // clear previous hours
+                    setSelectedSlotId('') // clear previous hours
                   }}
                   className={`flex flex-col items-center justify-center shrink-0 w-24 py-2.5 border rounded-xl text-center transition-all ${
                     selectedDate === d.value
@@ -341,22 +296,22 @@ export default function Booking() {
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Chọn khung giờ khám</label>
             <div className="grid gap-2 grid-cols-2 sm:grid-cols-5">
               {MOCK_TIME_SLOTS.map((slot) => {
-                const booked = isSlotBooked(slot)
+                const booked = isSlotBooked(slot.id)
                 return (
                   <button
-                    key={slot}
+                    key={slot.id}
                     type="button"
                     disabled={booked}
-                    onClick={() => setSelectedSlot(slot)}
+                    onClick={() => setSelectedSlotId(slot.id)}
                     className={`py-2 text-xs font-semibold rounded-lg border text-center transition-all ${
                       booked
                         ? 'bg-slate-50 border-slate-100 text-slate-350 cursor-not-allowed line-through'
-                        : selectedSlot === slot
+                        : selectedSlotId === slot.id
                         ? 'border-brand-500 bg-brand-500 text-white font-bold shadow-md shadow-brand-100'
                         : 'border-slate-200 hover:bg-slate-50 text-slate-600 bg-white'
                     }`}
                   >
-                    {slot.split(' - ')[0]}
+                    {slot.gio.split(' - ')[0]}
                   </button>
                 )
               })}
@@ -389,7 +344,7 @@ export default function Booking() {
 
           <Textarea
             label="Mô tả triệu chứng bệnh"
-            placeholder="Ví dụ: Đau tai trong kéo dài, ho khan rát họng, khàn tiếng..."
+            placeholder="Ví dụ: Đau họng rát buốt khi nuốt, nghẹt mũi kéo dài, đau buốt vùng tai..."
             value={symptoms}
             onChange={(e) => setSymptoms(e.target.value)}
             required
@@ -400,16 +355,12 @@ export default function Booking() {
       {/* STEP 4: CONFIRMATION SUMMARY */}
       {step === 4 && (
         <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm text-left space-y-6">
-          <h3 className="text-sm font-bold text-slate-800 border-b border-slate-50 pb-2">Tóm tắt lịch hẹn</h3>
+          <h3 className="text-sm font-bold text-slate-800 border-b border-slate-50 pb-2">Tóm tắt lịch hẹn khám</h3>
           
           <div className="grid gap-4 sm:grid-cols-2 text-sm text-slate-600">
             <div className="space-y-2">
               <p>
-                <span className="font-semibold text-slate-500">Hình thức:</span> Khám trực tiếp tại phòng khám
-              </p>
-              <p>
-                <span className="font-semibold text-slate-500">Dịch vụ chỉ định:</span>{' '}
-                <span className="font-bold text-slate-800">{selectedService?.ten}</span>
+                <span className="font-semibold text-slate-500">Hình thức:</span> Khám chuyên khoa Tai Mũi Họng tại phòng khám
               </p>
               <p>
                 <span className="font-semibold text-slate-500">Bác sĩ phụ trách:</span>{' '}
@@ -417,7 +368,7 @@ export default function Booking() {
               </p>
               <p>
                 <span className="font-semibold text-slate-500">Thời gian:</span>{' '}
-                <span className="font-semibold text-brand-600">{selectedSlot}</span>, ngày {selectedDate}
+                <span className="font-semibold text-brand-600">{selectedSlot?.gio}</span>, ngày {selectedDate}
               </p>
             </div>
 
