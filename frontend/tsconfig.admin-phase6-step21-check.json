@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/types/index.ts",
+    "src/__tests__/admin-phase6-step21-imports.ts",
+    "src/pages/admin/ManageClinics/ManageClinics.tsx",
+    "src/pages/admin/ManageClinics/EditClinic.tsx",
+    "src/pages/admin/ManageClinics/SpecialtyList.tsx",
+    "src/pages/admin/ManageClinics/AddSpecialty.tsx",
+    "src/pages/admin/ManageClinics/EditSpecialty.tsx",
+    "src/pages/admin/ManageClinics/SpecialtyDoctorsModal.tsx",
+    "src/pages/admin/ManageClinics/ClinicAuditLogModal.tsx",
+    "src/pages/admin/ManageAppointments/ManageAppointments.tsx",
+    "src/pages/admin/ManageAppointments/DoctorAppointmentGroupList.tsx",
+    "src/pages/admin/ManageAppointments/AppointmentDetail.tsx",
+    "src/pages/admin/ManageAppointments/AddAppointment.tsx",
+    "src/pages/admin/ManageAppointments/RescheduleAppointment.tsx",
+    "src/pages/admin/ManageAppointments/AppointmentHistoryModal.tsx",
+    "src/pages/admin/ManageNotifications/ManageNotifications.tsx",
+    "src/pages/admin/ManageNotifications/SendNotificationTab.tsx",
+    "src/pages/admin/ManageNotifications/ReceiveNotificationTab.tsx",
+    "src/routes/adminMenu.ts"
+  ]
+}

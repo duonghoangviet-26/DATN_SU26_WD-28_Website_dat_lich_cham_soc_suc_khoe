@@ -1,13 +1,13 @@
-import type { HospitalItem, SpecialtyItem } from '@/types'
+import type { ClinicItem, SpecialtyItem } from '@/types'
 import axiosInstance from './axiosInstance'
 
 export const clinicService = {
-  async getCurrentClinic(): Promise<HospitalItem | null> {
+  async getCurrentClinic(): Promise<ClinicItem | null> {
     const res = await axiosInstance.get('/admin/clinics/current')
     return res.data.data
   },
 
-  async saveCurrentClinic(payload: Partial<HospitalItem>): Promise<HospitalItem> {
+  async saveCurrentClinic(payload: Partial<ClinicItem>): Promise<ClinicItem> {
     const res = await axiosInstance.put('/admin/clinics/current', payload)
     return res.data.data
   },

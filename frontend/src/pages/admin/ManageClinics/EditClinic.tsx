@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { HospitalItem } from '@/types'
+import type { ClinicItem } from '@/types'
 import { clinicService } from '@/services/clinic.service'
 import Icon from '@/components/admin/icons'
 
 interface Props {
-  clinic?: HospitalItem | null
+  clinic?: ClinicItem | null
   loading?: boolean
-  onSaved: (updated: HospitalItem) => void
+  onSaved: (updated: ClinicItem) => void
   onCancel: () => void
   onViewLogs: () => void
 }

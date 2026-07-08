@@ -44,7 +44,7 @@ export interface Doctor {
     ngay_tao: string;
 }
 
-export interface Hospital {
+export interface ClinicSummary {
     id: number;
     ten: string;
     dia_chi?: string;
@@ -137,7 +137,7 @@ export interface DoctorProfile {
     ngay_tao: string;
 }
 
-export interface HospitalItem {
+export interface ClinicItem {
     _id: string;
     ten: string;
     dia_chi?: string | null;
@@ -343,6 +343,17 @@ export interface PaymentItem {
 }
 
 // Kiểu cho API response chuẩn { success, message, data }
+export interface AdminDashboardSummary {
+    appointments_today: number;
+    doctors_active: number;
+    revenue: {
+        invoiced_total: number;
+        collected_total: number;
+        outstanding_total: number;
+    };
+    generated_at: string;
+}
+
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message: string;

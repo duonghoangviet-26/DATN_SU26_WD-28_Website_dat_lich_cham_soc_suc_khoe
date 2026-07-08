@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/types/index.ts",
+    "src/services/axiosInstance.ts",
+    "src/services/dashboard.service.ts",
+    "src/pages/admin/Dashboard.tsx",
+    "src/components/common/PageHeader.tsx",
+    "src/components/admin/icons.tsx"
+  ]
+}

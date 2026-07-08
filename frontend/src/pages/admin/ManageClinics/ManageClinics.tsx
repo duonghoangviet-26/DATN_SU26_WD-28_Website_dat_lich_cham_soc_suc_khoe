@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { HospitalItem, SpecialtyItem } from '@/types'
+import type { ClinicItem, SpecialtyItem } from '@/types'
 import { clinicService } from '@/services/clinic.service'
 import PageHeader from '@/components/common/PageHeader'
 
@@ -7,12 +7,12 @@ import EditClinic from './EditClinic'
 import SpecialtyList from './SpecialtyList'
 import AddSpecialty from './AddSpecialty'
 import EditSpecialty from './EditSpecialty'
-import HospitalAuditLogModal from './HospitalAuditLogModal'
+import ClinicAuditLogModal from './ClinicAuditLogModal'
 
 type SpecialtyView = 'list' | 'add' | 'edit'
 
 export default function ManageClinics() {
-  const [clinic, setClinic] = useState<HospitalItem | null>(null)
+  const [clinic, setClinic] = useState<ClinicItem | null>(null)
   const [clinicLoading, setClinicLoading] = useState(true)
 
   const [specialties, setSpecialties] = useState<SpecialtyItem[]>([])
@@ -54,7 +54,7 @@ export default function ManageClinics() {
     fetchSpecialties()
   }, [])
 
-  async function handleClinicSaved(updatedClinic: HospitalItem) {
+  async function handleClinicSaved(updatedClinic: ClinicItem) {
     setClinic(updatedClinic)
     await fetchSpecialties()
   }
@@ -162,7 +162,7 @@ export default function ManageClinics() {
         </div>
       )}
 
-      <HospitalAuditLogModal
+      <ClinicAuditLogModal
         open={auditModalOpen}
         onClose={() => setAuditModalOpen(false)}
         title={auditTitle}
