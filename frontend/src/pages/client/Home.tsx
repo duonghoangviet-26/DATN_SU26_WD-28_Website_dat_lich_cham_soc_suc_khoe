@@ -12,9 +12,18 @@ export default function Home() {
   return (
     <div className="space-y-20 pb-16">
       {/* 1. HERO BANNER */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-brand-800 to-slate-900 py-20 text-white rounded-3xl mx-4 sm:mx-0">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-        <div className="relative mx-auto max-w-4xl px-6 text-center space-y-6">
+      <section className="relative overflow-hidden bg-slate-950 py-20 text-white rounded-3xl mx-4 sm:mx-0 min-h-[420px] flex items-center justify-center">
+        {/* Background Image */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="https://thienhanhhospital.com/wp-content/uploads/2024/09/lienkhoa-Noi-soi-tai-mui-hong-1-768x480.webp"
+            alt="Tai Mũi Họng Chuyên Khoa"
+            className="w-full h-full object-cover opacity-25 object-center"
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-brand-950/90 via-brand-900/85 to-slate-950/80" />
+        </div>
+        
+        <div className="relative z-10 mx-auto max-w-4xl px-6 text-center space-y-6">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/25 px-4 py-1 text-sm font-semibold text-brand-300 ring-1 ring-brand-500/30">
             🏥 Phòng khám chuyên khoa Tai Mũi Họng
           </span>
@@ -30,9 +39,6 @@ export default function Home() {
           <div className="pt-4 flex flex-wrap justify-center gap-4">
             <Link to="/booking" className="btn-primary bg-white text-brand-900 hover:bg-slate-100 px-6 py-3 text-base shadow-lg shadow-brand-950/20">
               Đặt lịch khám ngay
-            </Link>
-            <Link to="/gioi-thieu" className="btn-secondary border-brand-500 text-brand-200 hover:bg-brand-800/40 hover:text-white px-6 py-3 text-base">
-              Tìm hiểu phòng khám
             </Link>
           </div>
         </div>
