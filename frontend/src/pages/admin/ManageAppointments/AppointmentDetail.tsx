@@ -1,5 +1,5 @@
 import type { AppointmentItem } from '@/types'
-import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL, SERVICE_TYPE_LABEL } from '@/utils/constants'
+import { APPOINTMENT_STATUS_LABEL, EXAM_TYPE_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
 import { formatPrice } from '@/utils/format'
 import Icon from '@/components/admin/icons'
 
@@ -31,8 +31,8 @@ export default function AppointmentDetail({ detail, loading, onClose }: Props) {
                 ['SĐT', detail.sdt_benh_nhan || 'Không có'],
                 ['Bác sĩ', detail.bac_si],
                 ['Ngày khám', `${detail.ngay_kham} lúc ${detail.gio_kham}`],
-                ['Loại khám', SERVICE_TYPE_LABEL[detail.loai_kham]],
-                ['Dịch vụ', detail.chuyen_khoa],
+                ['Loại khám', EXAM_TYPE_LABEL[detail.loai_kham]],
+                ['Chuyên khoa', detail.chuyen_khoa],
                 ['Địa chỉ (nếu khám tại nhà)', detail.dia_chi_kham || '-'],
                 ['Lý do khám', detail.ly_do_kham || '-'],
                 ['Phí khám', formatPrice(detail.gia_kham)],

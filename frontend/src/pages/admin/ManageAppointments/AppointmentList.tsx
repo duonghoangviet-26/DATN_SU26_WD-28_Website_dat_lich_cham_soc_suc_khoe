@@ -1,13 +1,18 @@
 import type { AppointmentItem, AppointmentStatus } from '@/types'
-import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL, SERVICE_TYPE_LABEL } from '@/utils/constants'
+import { APPOINTMENT_STATUS_LABEL, EXAM_TYPE_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
 import { formatPrice } from '@/utils/format'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
-import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { useState } from 'react'
 
-const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red'> = {
-  pending: 'yellow', confirmed: 'blue', completed: 'green', cancelled: 'red',
+const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red' | 'gray'> = {
+  pending: 'yellow',
+  confirmed: 'blue',
+  checked_in: 'blue',
+  in_progress: 'green',
+  completed: 'green',
+  cancelled: 'red',
+  no_show: 'gray',
 }
 
 const PAYMENT_COLOR: Record<string, 'yellow' | 'green' | 'gray'> = {
@@ -19,12 +24,24 @@ interface Props {
   loading: boolean
   onView: (a: AppointmentItem) => void
   onHistory: (a: AppointmentItem) => void
-  onCancel: (a: AppointmentItem) => void
+  onCancel: (a: AppointmentItem, reason: string) => void
   onReschedule: (a: AppointmentItem) => void
+  onRestore: (a: AppointmentItem) => void
+  onHardDelete: (a: AppointmentItem) => void
 }
 
-export default function AppointmentList({ appointments, loading, onView, onHistory, onCancel, onReschedule }: Props) {
+export default function AppointmentList({
+  appointments,
+  loading,
+  onView,
+  onHistory,
+  onCancel,
+  onReschedule,
+  onRestore,
+  onHardDelete,
+}: Props) {
   const [confirmItem, setConfirmItem] = useState<AppointmentItem | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
 
   return (
     <div className="card overflow-hidden">
@@ -62,8 +79,8 @@ export default function AppointmentList({ appointments, loading, onView, onHisto
                   <p className="text-xs text-slate-400">{a.gio_kham}</p>
                 </td>
                 <td className="px-4 py-3">
-                  <Badge color={a.loai_kham === 'clinic' ? 'blue' : a.loai_kham === 'home' ? 'yellow' : 'green'}>
-                    {SERVICE_TYPE_LABEL[a.loai_kham]}
+                  <Badge color={a.loai_kham === 'clinic' ? 'blue' : 'yellow'}>
+                    {EXAM_TYPE_LABEL[a.loai_kham]}
                   </Badge>
                 </td>
                 <td className="px-4 py-3 font-medium text-slate-700">{formatPrice(a.gia_kham)}</td>
@@ -103,6 +120,22 @@ export default function AppointmentList({ appointments, loading, onView, onHisto
                         <Icon name="x" className="h-3 w-3" /> Hủy
                       </button>
                     )}
+                    {a.status === 'cancelled' && (
+                      <button
+                        onClick={() => onRestore(a)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-600 transition-colors hover:bg-green-100"
+                      >
+                        <Icon name="refresh-cw" className="h-3 w-3" /> Khôi phục
+                      </button>
+                    )}
+                    {a.status === 'cancelled' && (
+                      <button
+                        onClick={() => onHardDelete(a)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
+                      >
+                        <Icon name="trash" className="h-3 w-3" /> Xóa cứng
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -110,18 +143,52 @@ export default function AppointmentList({ appointments, loading, onView, onHisto
           </tbody>
         </table>
       </div>
-      <ConfirmDialog
-        open={!!confirmItem}
-        danger
-        title="Hủy lịch hẹn"
-        message={`Xác nhận hủy lịch hẹn của "${confirmItem?.benh_nhan}" với ${confirmItem?.bac_si}?`}
-        confirmText="Hủy lịch"
-        onConfirm={() => {
-          if (confirmItem) onCancel(confirmItem)
-          setConfirmItem(null)
-        }}
-        onCancel={() => setConfirmItem(null)}
-      />
+      {confirmItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-800">Hủy lịch hẹn</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Xác nhận hủy lịch hẹn của "{confirmItem.benh_nhan}" với {confirmItem.bac_si}.
+            </p>
+            <div className="mt-4">
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Lý do hủy <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                value={cancelReason}
+                onChange={(event) => setCancelReason(event.target.value)}
+                className="input w-full resize-none"
+                placeholder="Nhập lý do hủy lịch..."
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setConfirmItem(null)
+                  setCancelReason('')
+                }}
+                className="btn-secondary"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={() => {
+                  if (!cancelReason.trim()) {
+                    return
+                  }
+                  onCancel(confirmItem, cancelReason.trim())
+                  setConfirmItem(null)
+                  setCancelReason('')
+                }}
+                className="btn-danger"
+              >
+                Hủy lịch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

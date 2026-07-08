@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+
+import PageHeader from '@/components/common/PageHeader'
+import Icon from '@/components/admin/icons'
 import { appointmentService } from '@/services/appointment.service'
 import type {
   AppointmentItem,
@@ -7,14 +10,12 @@ import type {
   AppointmentStatus,
   AppointmentSummary,
 } from '@/types'
-import PageHeader from '@/components/common/PageHeader'
-import Icon from '@/components/admin/icons'
 
-import DoctorAppointmentGroupList from './DoctorAppointmentGroupList'
-import AppointmentDetail from './AppointmentDetail'
 import AddAppointment from './AddAppointment'
-import RescheduleAppointment from './RescheduleAppointment'
+import AppointmentDetail from './AppointmentDetail'
 import AppointmentHistoryModal from './AppointmentHistoryModal'
+import AppointmentList from './AppointmentList'
+import RescheduleAppointment from './RescheduleAppointment'
 
 type ViewMode = 'list' | 'add' | 'reschedule'
 
@@ -43,16 +44,13 @@ export default function ManageAppointments() {
   const [keyword, setKeyword] = useState('')
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [status, setStatus] = useState<AppointmentStatus | ''>('')
-  const [loaiKham, setLoaiKham] = useState('')
+  const [loaiKham, setLoaiKham] = useState<'clinic' | ''>('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState<AppointmentPagination>(EMPTY_PAGINATION)
   const [summary, setSummary] = useState<AppointmentSummary>(EMPTY_SUMMARY)
-  
-  // Lưu data grouped khi view_mode = 'doctor_grouped'
-  const [groupedAppointments, setGroupedAppointments] = useState<any[]>([])
 
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -67,6 +65,7 @@ export default function ManageAppointments() {
         setPage(1)
       }
     }, 500)
+
     return () => clearTimeout(timer)
   }, [keyword, debouncedKeyword])
 
@@ -76,20 +75,17 @@ export default function ManageAppointments() {
       const res = await appointmentService.getAll({
         keyword: debouncedKeyword,
         status,
-        loai_kham: loaiKham,
+        loai_kham: loaiKham || undefined,
         startDate,
         endDate,
         page: nextPage,
         limit: 10,
-        view_mode: 'doctor_grouped', // Thêm cờ này để backend tự gom nhóm
-        doctor_id: filterDoctorId || undefined
+        doctor_id: filterDoctorId || undefined,
       })
-      // Khi view_mode=doctor_grouped, res.data là mảng các DoctorGroup
-      setGroupedAppointments(res.data)
-      setSummary(res.summary)
-      if (res.pagination) {
-        setPagination(res.pagination)
-      }
+
+      setAppointments(Array.isArray(res.data) ? res.data : [])
+      setSummary(res.summary ?? EMPTY_SUMMARY)
+      setPagination(res.pagination ?? EMPTY_PAGINATION)
     } finally {
       setLoading(false)
     }
@@ -102,27 +98,28 @@ export default function ManageAppointments() {
   async function handleCancel(appointment: AppointmentItem, reason: string) {
     try {
       await appointmentService.cancel(appointment._id, reason, appointment.ngay_cap_nhat)
-      await fetchAppointments()
-    } catch (err: any) {
-      alert(err.response?.data?.message || err.message)
-      await fetchAppointments() // Tải lại để lấy dữ liệu mới nhất
+      await fetchAppointments(page)
+    } catch (error: any) {
+      alert(error.response?.data?.message || error.message)
+      await fetchAppointments(page)
     }
   }
 
   async function handleRestore(appointment: AppointmentItem) {
     await appointmentService.restore(appointment._id)
-    await fetchAppointments()
+    await fetchAppointments(page)
   }
 
   async function handleHardDelete(appointment: AppointmentItem) {
     await appointmentService.hardDelete(appointment._id)
-    await fetchAppointments()
+    await fetchAppointments(page)
   }
 
   async function handleView(appointment: AppointmentItem) {
     setDetailOpen(true)
     setDetailLoading(true)
     setDetail(null)
+
     try {
       const fullDetail = await appointmentService.getById(appointment._id)
       setDetail(fullDetail)
@@ -150,7 +147,7 @@ export default function ManageAppointments() {
     <div>
       <PageHeader
         title="Lịch hẹn hệ thống"
-        description="Xem toàn bộ lịch hẹn, theo dõi trạng thái và xử lý các vấn đề phát sinh."
+        description="Hiển thị dữ liệu lịch hẹn thật từ hệ thống admin. Luồng đặt lịch mới hiện chỉ cho phép khám tại phòng khám."
       />
 
       {view === 'list' && (
@@ -186,17 +183,15 @@ export default function ManageAppointments() {
                   className="input w-full pl-9"
                   placeholder="Tìm bác sĩ/bệnh nhân..."
                   value={keyword}
-                  onChange={(e) => {
-                    setKeyword(e.target.value)
-                  }}
+                  onChange={(event) => setKeyword(event.target.value)}
                 />
               </div>
               <input
                 type="date"
                 className="input w-full"
                 value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value)
+                onChange={(event) => {
+                  setStartDate(event.target.value)
                   setPage(1)
                 }}
                 title="Từ ngày"
@@ -205,8 +200,8 @@ export default function ManageAppointments() {
                 type="date"
                 className="input w-full"
                 value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value)
+                onChange={(event) => {
+                  setEndDate(event.target.value)
                   setPage(1)
                 }}
                 title="Đến ngày"
@@ -214,30 +209,33 @@ export default function ManageAppointments() {
               <select
                 className="input"
                 value={status}
-                onChange={(e) => {
-                  setStatus(e.target.value as AppointmentStatus | '')
+                onChange={(event) => {
+                  setStatus(event.target.value as AppointmentStatus | '')
                   setPage(1)
                 }}
               >
                 <option value="">Tất cả trạng thái</option>
                 <option value="pending">Chờ xác nhận</option>
                 <option value="confirmed">Đã xác nhận</option>
+                <option value="checked_in">Đã đến</option>
+                <option value="in_progress">Đang khám</option>
                 <option value="completed">Hoàn thành</option>
                 <option value="cancelled">Đã hủy</option>
+                <option value="no_show">Không đến khám</option>
               </select>
               <select
                 className="input"
                 value={loaiKham}
-                onChange={(e) => {
-                  setLoaiKham(e.target.value)
+                onChange={(event) => {
+                  setLoaiKham(event.target.value as 'clinic' | '')
                   setPage(1)
                 }}
               >
                 <option value="">Tất cả loại khám</option>
                 <option value="clinic">Phòng khám</option>
-                <option value="home">Tại nhà</option>
               </select>
             </div>
+
             <button
               onClick={() => setView('add')}
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
@@ -248,7 +246,7 @@ export default function ManageAppointments() {
           </div>
 
           {filterDoctorId && (
-            <div className="mb-6 flex items-center justify-between rounded-xl bg-blue-50 p-4 border border-blue-100">
+            <div className="mb-6 flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 p-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-200 text-blue-700">
                   <Icon name="users" className="h-5 w-5" />
@@ -265,7 +263,7 @@ export default function ManageAppointments() {
                   setSearchParams(searchParams)
                   setPage(1)
                 }}
-                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
               >
                 <Icon name="x" className="h-4 w-4" />
                 Xóa bộ lọc
@@ -273,8 +271,8 @@ export default function ManageAppointments() {
             </div>
           )}
 
-          <DoctorAppointmentGroupList
-            groupedAppointments={groupedAppointments}
+          <AppointmentList
+            appointments={appointments}
             loading={loading}
             onView={handleView}
             onHistory={handleHistory}
@@ -284,18 +282,19 @@ export default function ManageAppointments() {
             onHardDelete={handleHardDelete}
           />
 
-          {!loading && groupedAppointments.length > 0 && pagination.totalPages > 1 && (
-            <div className="mt-6 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 sm:px-6 rounded-lg shadow-sm">
+          {!loading && pagination.totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-between rounded-lg border-t border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-6">
               <div className="flex flex-1 items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-700">
-                    Hiển thị trang <span className="font-medium">{pagination.page}</span> / <span className="font-medium">{pagination.totalPages}</span>
+                    Hiển thị trang <span className="font-medium">{pagination.page}</span> /{' '}
+                    <span className="font-medium">{pagination.totalPages}</span>
                   </p>
                 </div>
                 <div>
                   <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
                     <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
                       disabled={pagination.page <= 1}
                       className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                     >
@@ -303,7 +302,7 @@ export default function ManageAppointments() {
                       <Icon name="chevron-left" className="h-5 w-5" />
                     </button>
                     <button
-                      onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                      onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))}
                       disabled={pagination.page >= pagination.totalPages}
                       className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                     >
@@ -335,7 +334,7 @@ export default function ManageAppointments() {
           onCancel={() => setView('list')}
           onSaved={async () => {
             setView('list')
-            await fetchAppointments()
+            await fetchAppointments(page)
           }}
         />
       )}
@@ -345,10 +344,7 @@ export default function ManageAppointments() {
       )}
 
       {historyItem && (
-        <AppointmentHistoryModal 
-          appointment={historyItem} 
-          onClose={() => setHistoryItem(null)} 
-        />
+        <AppointmentHistoryModal appointment={historyItem} onClose={() => setHistoryItem(null)} />
       )}
     </div>
   )

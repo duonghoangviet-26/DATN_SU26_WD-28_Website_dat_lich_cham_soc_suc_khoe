@@ -1,13 +1,19 @@
 import { useState, useMemo } from 'react'
 import type { AppointmentItem, AppointmentStatus } from '@/types'
-import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL, SERVICE_TYPE_LABEL } from '@/utils/constants'
+import { APPOINTMENT_STATUS_LABEL, EXAM_TYPE_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
 import { formatPrice } from '@/utils/format'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 
-const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red'> = {
-  pending: 'yellow', confirmed: 'blue', completed: 'green', cancelled: 'red',
+const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red' | 'gray'> = {
+  pending: 'yellow',
+  confirmed: 'blue',
+  checked_in: 'blue',
+  in_progress: 'green',
+  completed: 'green',
+  cancelled: 'red',
+  no_show: 'gray',
 }
 const PAYMENT_COLOR: Record<string, 'yellow' | 'green' | 'gray'> = {
   unpaid: 'yellow', paid: 'green', refunded: 'gray',
@@ -181,8 +187,8 @@ export default function DoctorAppointmentGroupList({
                             <p className="text-xs text-slate-400">{a.gio_kham}</p>
                           </td>
                           <td className="px-4 py-3">
-                            <Badge color={a.loai_kham === 'clinic' ? 'blue' : a.loai_kham === 'home' ? 'yellow' : 'green'}>
-                              {SERVICE_TYPE_LABEL[a.loai_kham]}
+                            <Badge color={a.loai_kham === 'clinic' ? 'blue' : 'yellow'}>
+                              {EXAM_TYPE_LABEL[a.loai_kham]}
                             </Badge>
                           </td>
                           <td className="px-4 py-3 font-medium text-slate-700">{formatPrice(a.gia_kham)}</td>

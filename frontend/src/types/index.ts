@@ -7,8 +7,11 @@ export type DoctorApproval = "pending" | "approved" | "rejected" | "suspended";
 export type AppointmentStatus =
     | "pending"
     | "confirmed"
+    | "checked_in"
+    | "in_progress"
     | "completed"
-    | "cancelled";
+    | "cancelled"
+    | "no_show";
 export type PaymentStatus = "unpaid" | "partial" | "paid" | "refunded";
 
 export interface User {

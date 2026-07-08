@@ -18,10 +18,11 @@ Mục tiêu của file:
 
 1. [admin-refactor-summary.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-refactor-summary.md)
 2. [admin-refactor-fix-log.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-refactor-fix-log.md)
-3. [admin-id-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-id-audit.md)
-4. [admin-routes-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-routes-audit.md)
+3. [admin-service-specialty-appointment-fix.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-service-specialty-appointment-fix.md)
+4. [admin-id-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-id-audit.md)
+5. [admin-routes-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-routes-audit.md)
 
-Nếu cần làm tiếp code, sau khi đọc 4 file trên thì mới đối chiếu lại file code/test thật được nhắc tới trong từng tài liệu.
+Nếu cần làm tiếp code, sau khi đọc các file trên thì mới đối chiếu lại file code/test thật được nhắc tới trong từng tài liệu.
 
 ## Phạm vi đã khóa
 
@@ -55,6 +56,12 @@ Tính đến lần cập nhật gần nhất:
 
 - các bước 1-28 trong chuỗi admin refactor đã được đi qua và đã được log lại
 - các bước 20-28 đã được cập nhật lại đúng theo kết quả test/runtime thật
+- đã có thêm một đợt sửa riêng cho 3 luồng:
+  - `admin/services`
+  - `admin/specialties`
+  - `admin/appointments`
+- báo cáo của đợt sửa này nằm tại:
+  - [admin-service-specialty-appointment-fix.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-service-specialty-appointment-fix.md)
 - frontend admin route trong phạm vi đã được kiểm tra runtime HTTP
 - dashboard admin đã dùng API thật
 - summary cuối cùng đã được siết lại để phần tồn đọng chỉ còn đúng 4 ý
@@ -63,7 +70,7 @@ Tính đến lần cập nhật gần nhất:
 
 Các điểm sau đã có bằng chứng test hoặc kiểm tra runtime thật:
 
-- backend full suite pass: `87/87`
+- backend full suite pass: `88/88`
 - frontend build pass
 - các route admin sau trả `200` ở runtime check:
   - `/admin/clinics`
@@ -75,6 +82,17 @@ Các điểm sau đã có bằng chứng test hoặc kiểm tra runtime thật:
 - dashboard backend test pass
 - auth matrix cho route admin trong phạm vi đã có test
 - luồng bỏ `admin_id` từ body và lấy admin từ token đã có test khóa
+- đợt sửa riêng `services/specialties/appointments` đã pass:
+  - `GET /api/admin/specialties` trả đúng `4` chuyên khoa thật
+  - `GET /api/admin/services?loai=related` trả đúng `3` dịch vụ liên quan thật
+  - `GET /api/admin/appointments` trả đúng dữ liệu thật với đủ status:
+    - `pending`
+    - `confirmed`
+    - `checked_in`
+    - `in_progress`
+    - `completed`
+    - `cancelled`
+    - `no_show`
 
 ## 4 tồn đọng còn lại
 
@@ -98,11 +116,12 @@ Nên làm theo trình tự:
 
 1. Đọc `summary`
 2. Đọc `fix-log`
-3. Xác nhận lại phạm vi hiện tại
-4. Chọn đúng bước tiếp theo hoặc đúng tồn đọng cần xử lý
-5. Test trước
-6. Chỉ sửa đúng nguyên nhân gốc
-7. Test lại và chỉ đánh PASS khi có output thật
+3. Đọc `admin-service-specialty-appointment-fix.md` nếu công việc liên quan `services/specialties/appointments`
+4. Xác nhận lại phạm vi hiện tại
+5. Chọn đúng bước tiếp theo hoặc đúng tồn đọng cần xử lý
+6. Test trước
+7. Chỉ sửa đúng nguyên nhân gốc
+8. Test lại và chỉ đánh PASS khi có output thật
 
 ## Quy ước làm tiếp
 
@@ -129,6 +148,7 @@ Nếu muốn tiếp tục ngay mà không mất ngữ cảnh, nên kiểm lại 
 
 - `docs/reviews/admin-refactor-summary.md`
 - `docs/reviews/admin-refactor-fix-log.md`
+- `docs/reviews/admin-service-specialty-appointment-fix.md`
 - `backend/tests/admin/`
 - `frontend/src/routes/AppRoutes.tsx`
 - `frontend/src/routes/adminMenu.ts`

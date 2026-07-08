@@ -56,7 +56,7 @@ export default function ManageServiceSpecialtyDetail() {
     setLoading(true)
 
     Promise.all([
-      specialtyService.getBySlug(slug),
+      specialtyService.getAdminBySlug(slug),
       serviceService.getAll('related', '', '', 1, 9999),
     ])
       .then(async ([foundSpecialty, serviceResult]) => {

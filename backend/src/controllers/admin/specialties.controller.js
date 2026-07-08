@@ -1,15 +1,20 @@
 import { ChuyenKhoa } from '../../models/index.js'
 import { getSingletonClinicIdOrThrow } from '../../services/admin/singleton-clinic.service.js'
 import { ok, created, fail } from '../../utils/response.js'
+import BacSi from '../../models/BacSi.js'
 
-function fmt(specialty) {
-  return { ...specialty, id: specialty._id }
+async function fmtWithDoctorCount(specialty) {
+  return {
+    ...specialty,
+    id: specialty._id,
+    doctor_count: await BacSi.countDocuments({ specialties: specialty._id }),
+  }
 }
 
 export async function list(req, res) {
   try {
     const { status, search } = req.query
-    const filter = { phong_kham_id: await getSingletonClinicIdOrThrow() }
+    const filter = {}
     if (status) filter.status = status
     if (search) filter.ten = { $regex: search, $options: 'i' }
 
@@ -17,7 +22,7 @@ export async function list(req, res) {
       .sort({ thu_tu: 1, ten: 1 })
       .lean()
 
-    return ok(res, specialties.map(fmt))
+    return ok(res, await Promise.all(specialties.map(fmtWithDoctorCount)))
   } catch (err) {
     if (err.message === 'He thong chua co thong tin phong kham') {
       return ok(res, [])
@@ -28,10 +33,9 @@ export async function list(req, res) {
 
 export async function getById(req, res) {
   try {
-    const clinicId = await getSingletonClinicIdOrThrow()
-    const specialty = await ChuyenKhoa.findOne({ _id: req.params.id, phong_kham_id: clinicId }).lean()
+    const specialty = await ChuyenKhoa.findById(req.params.id).lean()
     if (!specialty) return fail(res, 404, 'Khong tim thay chuyen khoa')
-    return ok(res, fmt(specialty))
+    return ok(res, await fmtWithDoctorCount(specialty))
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -50,7 +54,7 @@ export async function create(req, res) {
       thu_tu: thu_tu ?? 0,
     })
 
-    return created(res, fmt(specialty.toObject()), 'Tao chuyen khoa thanh cong')
+    return created(res, await fmtWithDoctorCount(specialty.toObject()), 'Tao chuyen khoa thanh cong')
   } catch (err) {
     if (err.code === 11000) return fail(res, 409, 'Ten hoac slug da ton tai')
     return fail(res, 500, err.message)
@@ -59,8 +63,7 @@ export async function create(req, res) {
 
 export async function update(req, res) {
   try {
-    const clinicId = await getSingletonClinicIdOrThrow()
-    const specialty = await ChuyenKhoa.findOne({ _id: req.params.id, phong_kham_id: clinicId })
+    const specialty = await ChuyenKhoa.findById(req.params.id)
     if (!specialty) return fail(res, 404, 'Khong tim thay chuyen khoa')
 
     const { ten, mo_ta, icon_url, thu_tu } = req.body
@@ -70,7 +73,7 @@ export async function update(req, res) {
     if (thu_tu !== undefined) specialty.thu_tu = thu_tu
 
     await specialty.save()
-    return ok(res, fmt(specialty.toObject()), 'Cap nhat chuyen khoa thanh cong')
+    return ok(res, await fmtWithDoctorCount(specialty.toObject()), 'Cap nhat chuyen khoa thanh cong')
   } catch (err) {
     if (err.code === 11000) return fail(res, 409, 'Ten da ton tai')
     return fail(res, 500, err.message)
@@ -79,8 +82,7 @@ export async function update(req, res) {
 
 export async function toggle(req, res) {
   try {
-    const clinicId = await getSingletonClinicIdOrThrow()
-    const specialty = await ChuyenKhoa.findOne({ _id: req.params.id, phong_kham_id: clinicId })
+    const specialty = await ChuyenKhoa.findById(req.params.id)
     if (!specialty) return fail(res, 404, 'Khong tim thay chuyen khoa')
 
     specialty.status = specialty.status === 'active' ? 'hidden' : 'active'
@@ -88,7 +90,7 @@ export async function toggle(req, res) {
 
     return ok(
       res,
-      fmt(specialty.toObject()),
+      await fmtWithDoctorCount(specialty.toObject()),
       `Da ${specialty.status === 'hidden' ? 'an' : 'hien'} chuyen khoa`
     )
   } catch (err) {
