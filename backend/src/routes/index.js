@@ -9,6 +9,7 @@ import clinicInfoRoutes   from './admin/clinic-info.routes.js'
 import appointmentRoutes  from './admin/appointment.routes.js'
 import adminDoctorRoutes  from './doctor.routes.js'
 import notificationRoutes from './notification.routes.js'
+import receptionistRoutes from './receptionist/index.js'
 
 /**
  * Gom toàn bộ route con của hệ thống
@@ -30,5 +31,6 @@ router.use('/admin/clinic-info', clinicInfoRoutes)
 router.use('/admin/appointments', appointmentRoutes)
 router.use('/admin/doctors', adminDoctorRoutes)
 router.use('/admin/notifications', notificationRoutes)
+router.use('/receptionist', receptionistRoutes)
 
 export default router

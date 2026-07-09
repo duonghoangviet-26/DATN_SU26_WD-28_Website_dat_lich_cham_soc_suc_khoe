@@ -6,6 +6,11 @@ import AuthLayout from '@/layouts/AuthLayout'
 import ClientLayout from '@/layouts/ClientLayout'
 import ProtectedRoute from '@/routes/ProtectedRoute'
 
+import ReceptionistLayout from '@/pages/receptionist/Layout'
+import ReceptionistDashboard from '@/pages/receptionist/Dashboard'
+import ReceptionistAppointments from '@/pages/receptionist/Appointments'
+import ReceptionistPayments from '@/pages/receptionist/Payments'
+
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
 import Home from '@/pages/client/Home'
@@ -71,6 +76,20 @@ export default function AppRoutes() {
         <Route path="reviews" element={<ManageReviews />} />       {/* C6 */}
         <Route path="notifications" element={<ManageNotifications />} /> {/* C7 */}
         <Route path="payments" element={<ManagePayments />} />     {/* C8 */}
+      </Route>
+
+      {/* Khu vực Lễ tân — yêu cầu role = receptionist hoặc admin */}
+      <Route
+        path="/receptionist"
+        element={
+          <ProtectedRoute roles={['receptionist', 'admin']}>
+            <ReceptionistLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ReceptionistDashboard />} />
+        <Route path="appointments" element={<ReceptionistAppointments />} />
+        <Route path="payments" element={<ReceptionistPayments />} />
       </Route>
 
       {/* Khu vực Doctor — yêu cầu role = doctor */}
