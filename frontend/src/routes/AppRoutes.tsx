@@ -30,6 +30,8 @@ import DoctorDashboard from '@/pages/doctor/DoctorDashboard'
 import DoctorProfile from '@/pages/doctor/DoctorProfile'
 import DoctorSchedule from '@/pages/doctor/DoctorSchedule'
 import DoctorAppointments from '@/pages/doctor/DoctorAppointments'
+import DoctorPendingRecords from '@/pages/doctor/DoctorPendingRecords'
+import DoctorLeaveRequests from '@/pages/doctor/DoctorLeaveRequests'
 
 import NotFound from '@/pages/NotFound'
 
@@ -84,7 +86,9 @@ export default function AppRoutes() {
       >
         <Route index element={<DoctorDashboard />} />                  {/* B5 */}
         <Route path="appointments" element={<DoctorAppointments />} /> {/* B3+B4 */}
+        <Route path="pending-records" element={<DoctorPendingRecords />} /> {/* B4 — hồ sơ chờ xác nhận */}
         <Route path="schedule" element={<DoctorSchedule />} />         {/* B2 */}
+        <Route path="leave-requests" element={<DoctorLeaveRequests />} /> {/* B8 — xin nghỉ */}
         <Route path="profile" element={<DoctorProfile />} />           {/* B1 */}
       </Route>
 

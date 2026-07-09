@@ -46,6 +46,13 @@ const examinationResultSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Luồng xác nhận hồ sơ khám (B4): mọi hồ sơ mới tạo đều 'cho_xac_nhan' — bác sĩ xem lại rồi
+    // "Xác nhận hồ sơ" (→ da_xac_nhan) hoặc "Yêu cầu chỉnh sửa" (→ yeu_cau_chinh_sua).
+    status: {
+      type: String,
+      enum: ['cho_xac_nhan', 'da_xac_nhan', 'yeu_cau_chinh_sua'],
+      default: 'cho_xac_nhan',
+    },
     chan_doan: {
       type: String,
       required: [true, 'Chan doan la bat buoc'],

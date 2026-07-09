@@ -1,5 +1,6 @@
-import { mockDoctorStats, mockDoctorReviews, mockDoctorProfile, mockDoctorProfileExtra } from '@/mock/doctor-stats'
-import type { DoctorStats, DoctorReview } from '@/types'
+import axiosInstance from './axiosInstance'
+import { mockDoctorProfile, mockDoctorProfileExtra } from '@/mock/doctor-stats'
+import type { ApiResponse, DoctorStats, DoctorReview, DoctorTodayOverview } from '@/types'
 
 const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
 
@@ -38,18 +39,17 @@ export const doctorProfileService = {
   },
 
   async getStats(): Promise<DoctorStats> {
-    await delay()
-    return { ...mockDoctorStats }
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<DoctorStats>>('/doctor/stats')
-    // return res.data.data
+    const res = await axiosInstance.get<ApiResponse<DoctorStats>>('/doctor/stats')
+    return res.data.data
   },
 
   async getReviews(): Promise<DoctorReview[]> {
-    await delay()
-    return [...mockDoctorReviews]
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<DoctorReview[]>>('/doctor/stats/reviews')
-    // return res.data.data
+    const res = await axiosInstance.get<ApiResponse<DoctorReview[]>>('/doctor/stats/reviews')
+    return res.data.data
+  },
+
+  async getTodayOverview(): Promise<DoctorTodayOverview> {
+    const res = await axiosInstance.get<ApiResponse<DoctorTodayOverview>>('/doctor/stats/today')
+    return res.data.data
   },
 }

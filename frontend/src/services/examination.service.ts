@@ -7,7 +7,7 @@ let examinations = [...mockExaminations]
 let nextId = examinations.length + 1
 
 interface ExamPayload {
-  appointment_id: number
+  appointment_id: string | number
   chan_doan: string
   huong_dan_dieu_tri?: string | null
   ghi_chu?: string | null
@@ -16,7 +16,7 @@ interface ExamPayload {
 }
 
 export const examinationService = {
-  async getByAppointment(appointmentId: number): Promise<ExaminationResult | null> {
+  async getByAppointment(appointmentId: string | number): Promise<ExaminationResult | null> {
     await delay()
     const exam = examinations.find(e => e.appointment_id === appointmentId)
     return exam ? { ...exam } : null

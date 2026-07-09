@@ -369,14 +369,46 @@ export interface DoctorSlot {
     cancel_requested?: boolean;
 }
 
-export interface DoctorAppointmentDetail {
-    id: number;
+// Yêu cầu nghỉ bác sĩ tự gửi (vd: form "Xin nghỉ" hoặc nút "Gửi yêu cầu nghỉ cho
+// ca đó" ở Lịch làm việc). Luôn tạo ở trang_thai='cho_duyet' — chỉ Admin duyệt/
+// từ chối; bác sĩ chỉ được hủy (→ 'da_huy') khi còn 'cho_duyet'.
+export interface DoctorLeaveRequest {
+    id: string;
+    tu_ngay: string;
+    den_ngay: string;
+    gio_bat_dau?: string | null; // để trống = xin nghỉ cả ngày
+    gio_ket_thuc?: string | null;
+    ly_do: string | null;
+    trang_thai: "cho_duyet" | "da_duyet" | "tu_choi" | "da_huy";
+    ngay_tao?: string | null;
+}
+
+// Trạng thái xác nhận hồ sơ khám (KetQuaKham.status) — xem docs/Bác sĩ/Audit - Truong du lieu
+// thieu va thua trong DB. cho_xac_nhan = "WAITING_DOCTOR_CONFIRM" theo yêu cầu nghiệp vụ.
+export type KetQuaKhamStatus = "cho_xac_nhan" | "da_xac_nhan" | "yeu_cau_chinh_sua";
+
+// 1 dòng trong "Danh sách hồ sơ chờ bác sĩ xác nhận" — rút gọn, không cần đủ field
+// như DoctorAppointmentDetail (màn này chỉ để lọc nhanh hồ sơ cần xử lý).
+export interface DoctorPendingRecord {
+    id: string; // KetQuaKham._id
+    appointment_id: string;
+    ngay_kham: string;
     benh_nhan: string;
-    benh_nhan_id: number;
+    ten_dich_vu: string | null;
+    nguoi_nhap: string | null; // tên người nhập hồ sơ — hiện tại luôn là bác sĩ (chưa có luồng y tá nhập)
+    status: KetQuaKhamStatus;
+}
+
+export interface DoctorAppointmentDetail {
+    id: string; // Mongo ObjectId — backend trả về string, không phải number
+    ma_lich_hen?: string | null;
+    benh_nhan: string;
+    benh_nhan_id: string;
     so_dien_thoai: string;
     ngay_kham: string;
     gio_kham: string;
     loai_kham: "clinic" | "home";
+    chuyen_khoa?: string | null; // joined từ specialty_id.ten — backend trả về
     status: AppointmentStatus;
     payment_status: PaymentStatus;
     gia_kham: number;
@@ -389,6 +421,7 @@ export interface DoctorAppointmentDetail {
     di_ung?: string | null;
     benh_nen?: string | null;
     da_co_ket_qua: boolean; // computed bởi backend (exists in ket_qua_kham)
+    ket_qua_status?: KetQuaKhamStatus | null; // null nếu chưa có hồ sơ
     ly_do_huy?: string | null;
     payment_deadline?: string | null; // ISO datetime — deadline BN thanh toán sau khi BS confirm (Luồng C)
     // home only — URL PDF kết quả xét nghiệm do CSKH upload sau khi lab xong
@@ -408,7 +441,7 @@ export interface PrescriptionDrug {
 
 export interface ExaminationResult {
     id: number;
-    appointment_id: number;
+    appointment_id: string | number; // string khi tới từ DoctorAppointmentDetail.id (Mongo), number khi mock cũ
     chan_doan: string;
     huong_dan_dieu_tri: string;
     ghi_chu?: string | null; // ghi chú bổ sung — field trong DB ket_qua_kham
@@ -434,6 +467,31 @@ export interface DoctorReview {
     diem: number;
     noi_dung: string;
     ngay_tao: string;
+}
+
+// Dòng rút gọn cho "lịch hẹn gần nhất" ở Dashboard — không cần đủ field như
+// DoctorAppointmentDetail (backend không query thêm tuổi/giới tính/da_co_ket_qua... cho danh sách này).
+export interface DoctorTodayAppointment {
+    id: number | string;
+    gio_kham: string;
+    benh_nhan: string;
+    ten_dich_vu?: string | null;
+    status: AppointmentStatus;
+}
+
+// Tổng quan công việc "hôm nay" cho Dashboard bác sĩ — khác DoctorStats (tích lũy/tháng).
+// y_ta_ho_tro luôn null ở giai đoạn hiện tại — hệ thống chưa có module gán y tá cho ca làm việc.
+export interface DoctorTodayOverview {
+    ho_ten: string;
+    chuyen_khoa: string;
+    ca_lam_viec: { gio_bat_dau: string; gio_ket_thuc: string } | null;
+    phong_kham: string | null;
+    y_ta_ho_tro: string | null;
+    tong_lich_hen: number;
+    cho_kham: number;
+    dang_kham: number;
+    hoan_thanh: number;
+    lich_hen_gan_nhat: DoctorTodayAppointment[];
 }
 
 // ─── API Types (MongoDB Response) ─────────────────────────────
