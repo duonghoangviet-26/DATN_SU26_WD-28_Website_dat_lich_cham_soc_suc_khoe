@@ -21,12 +21,12 @@ import NewsDetail from '@/pages/client/NewsDetail'
 import Dashboard from '@/pages/admin/Dashboard'
 import ManageUsers from '@/pages/admin/ManageUsers'
 import ManageDoctors from '@/pages/admin/ManageDoctors'
-import ManageHospitals from '@/pages/admin/ManageHospitals/index'
+import ManageClinics from '@/pages/admin/ManageClinics/ManageClinics'
 import ManageServices from '@/pages/admin/ManageServices'
 import ManageServiceSpecialtyDetail from '@/pages/admin/ManageServiceSpecialtyDetail'
-import ManageAppointments from '@/pages/admin/ManageAppointments'
+import ManageAppointments from '@/pages/admin/ManageAppointments/ManageAppointments'
 import ManageReviews from '@/pages/admin/ManageReviews'
-import ManageNotifications from '@/pages/admin/ManageNotifications'
+import ManageNotifications from '@/pages/admin/ManageNotifications/ManageNotifications'
 import ManagePayments from '@/pages/admin/ManagePayments'
 
 import DoctorDashboard from '@/pages/doctor/DoctorDashboard'
@@ -70,7 +70,8 @@ export default function AppRoutes() {
         <Route index element={<Dashboard />} />
         <Route path="users" element={<ManageUsers />} />           {/* C1 */}
         <Route path="doctors" element={<ManageDoctors />} />       {/* C2 */}
-        <Route path="hospitals" element={<ManageHospitals />} />   {/* C3 */}
+        <Route path="clinics" element={<ManageClinics />} />       {/* C3 */}
+        <Route path="hospitals" element={<Navigate to="/admin/clinics" replace />} />
         <Route path="services" element={<ManageServices />} />     {/* C4 */}
         <Route path="services/chuyen-khoa/:slug" element={<ManageServiceSpecialtyDetail />} />
         <Route path="appointments" element={<ManageAppointments />} /> {/* C5 */}

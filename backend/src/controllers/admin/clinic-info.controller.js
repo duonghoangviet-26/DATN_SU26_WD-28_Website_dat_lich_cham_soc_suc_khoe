@@ -3,21 +3,97 @@ import ChuyenKhoa from '../../models/ChuyenKhoa.js'
 import NhatKyThaoTac from '../../models/NhatKyThaoTac.js'
 import BacSi from '../../models/BacSi.js'
 import LichHen from '../../models/LichHen.js'
+import {
+  getSingletonClinic,
+  getSingletonClinicIdOrThrow,
+  sanitizeClinicPayload,
+} from '../../services/admin/singleton-clinic.service.js'
 import { ok, fail } from '../../utils/response.js'
 
-// Helper: Lấy lịch sử thao tác chung
-const getAuditLogs = async (loai_doi_tuong, doi_tuong_id) => {
-  const logs = await NhatKyThaoTac.find({ loai_doi_tuong, doi_tuong_id })
+const toSlug = (value) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+
+async function getAuditLogs(loaiDoiTuong, doiTuongId) {
+  const logs = await NhatKyThaoTac.find({ loai_doi_tuong: loaiDoiTuong, doi_tuong_id: doiTuongId })
     .populate('nguoi_thuc_hien_id', 'ho_ten')
     .sort({ ngay_tao: -1 })
     .lean()
+
   return logs.map((log) => ({
     id: log._id,
     thoi_gian: log.ngay_tao,
     hanh_dong: log.hanh_dong,
-    nguoi_thay_doi: log.nguoi_thuc_hien_id?.ho_ten ?? 'Hệ thống',
+    nguoi_thay_doi: log.nguoi_thuc_hien_id?.ho_ten ?? 'He thong',
     mo_ta: log.ly_do ?? '',
   }))
+}
+
+async function writeAuditLog(req, hanhDong, doiTuongId, lyDo) {
+  try {
+    await NhatKyThaoTac.create({
+      nguoi_thuc_hien_id: req.user?.id || null,
+      vai_tro: req.user?.role || 'admin',
+      hanh_dong: hanhDong,
+      loai_doi_tuong: 'clinic_info',
+      doi_tuong_id: doiTuongId,
+      ly_do: lyDo,
+    })
+  } catch (_) {
+    // Do not block the main flow if audit logging fails.
+  }
+}
+
+async function writeSpecialtyAuditLog(req, hanhDong, specialtyId, lyDo) {
+  try {
+    await NhatKyThaoTac.create({
+      nguoi_thuc_hien_id: req.user?.id || null,
+      vai_tro: req.user?.role || 'admin',
+      hanh_dong: hanhDong,
+      loai_doi_tuong: 'specialty',
+      doi_tuong_id: specialtyId,
+      ly_do: lyDo,
+    })
+  } catch (_) {
+    // Do not block the main flow if audit logging fails.
+  }
+}
+
+async function checkDuplicateClinicInfo(data, excludeId = null) {
+  const { dia_chi, so_dien_thoai, email, ban_do_url } = data
+  const query = excludeId ? { _id: { $ne: excludeId } } : {}
+  const errors = []
+
+  if (dia_chi?.trim()) {
+    const exists = await ThongTinPhongKham.findOne({ dia_chi: dia_chi.trim(), ...query })
+    if (exists) errors.push('Dia chi nay da duoc su dung o chi nhanh khac')
+  }
+
+  if (so_dien_thoai?.trim()) {
+    const exists = await ThongTinPhongKham.findOne({ so_dien_thoai: so_dien_thoai.trim(), ...query })
+    if (exists) errors.push('So dien thoai nay da duoc su dung o chi nhanh khac')
+  }
+
+  if (email?.trim()) {
+    const exists = await ThongTinPhongKham.findOne({
+      email: email.trim().toLowerCase(),
+      ...query,
+    })
+    if (exists) errors.push('Email nay da duoc su dung o chi nhanh khac')
+  }
+
+  if (ban_do_url?.trim()) {
+    const exists = await ThongTinPhongKham.findOne({ ban_do_url: ban_do_url.trim(), ...query })
+    if (exists) errors.push('URL ban do nay da duoc su dung o chi nhanh khac')
+  }
+
+  return errors
 }
 
 export const getClinicLogs = async (req, res) => {
@@ -29,16 +105,28 @@ export const getClinicLogs = async (req, res) => {
   }
 }
 
-export const getSpecialtyLogs = async (req, res) => {
+export const getCurrentClinicLogs = async (_req, res) => {
   try {
-    const logs = await getAuditLogs('specialty', req.params.specialtyId)
+    const clinic = await getSingletonClinic()
+    if (!clinic) return ok(res, [])
+
+    const logs = await getAuditLogs('clinic_info', clinic._id)
     return ok(res, logs)
   } catch (error) {
     return fail(res, 500, error.message)
   }
 }
 
-// Lấy danh sách tất cả các chi nhánh (bao gồm cả active và inactive, hoặc có thể lọc)
+export const getSpecialtyLogs = async (req, res) => {
+  try {
+    const specialtyId = req.params.specialtyId ?? req.params.id
+    const logs = await getAuditLogs('specialty', specialtyId)
+    return ok(res, logs)
+  } catch (error) {
+    return fail(res, 500, error.message)
+  }
+}
+
 export const getAllClinics = async (req, res) => {
   try {
     const status = req.query.status
@@ -46,146 +134,142 @@ export const getAllClinics = async (req, res) => {
     const clinics = await ThongTinPhongKham.find(filter).sort({ ngay_tao: 1 })
     return ok(res, clinics)
   } catch (error) {
-    return fail(res, 500, 'Lỗi server khi lấy danh sách phòng khám: ' + error.message)
+    return fail(res, 500, 'Loi server khi lay danh sach phong kham: ' + error.message)
   }
 }
 
-// Lấy thông tin 1 chi nhánh
+export const getCurrentClinic = async (_req, res) => {
+  try {
+    const clinic = await getSingletonClinic()
+    return ok(res, clinic)
+  } catch (error) {
+    return fail(res, 500, 'Loi server khi lay thong tin phong kham: ' + error.message)
+  }
+}
+
 export const getClinicById = async (req, res) => {
   try {
     const clinic = await ThongTinPhongKham.findById(req.params.id)
-    if (!clinic) return fail(res, 404, 'Không tìm thấy chi nhánh')
+    if (!clinic) return fail(res, 404, 'Khong tim thay phong kham')
     return ok(res, clinic)
   } catch (error) {
-    return fail(res, 500, 'Lỗi server: ' + error.message)
+    return fail(res, 500, 'Loi server: ' + error.message)
   }
 }
 
-// Hàm helper kiểm tra trùng lặp thông tin quan trọng
-const checkDuplicateClinicInfo = async (data, excludeId = null) => {
-  const { dia_chi, so_dien_thoai, email, ban_do_url } = data
-  const query = excludeId ? { _id: { $ne: excludeId } } : {}
-  const errors = []
-
-  if (dia_chi && dia_chi.trim()) {
-    const exists = await ThongTinPhongKham.findOne({ dia_chi: dia_chi.trim(), ...query })
-    if (exists) errors.push('Địa chỉ này đã được sử dụng ở chi nhánh khác')
-  }
-  if (so_dien_thoai && so_dien_thoai.trim()) {
-    const exists = await ThongTinPhongKham.findOne({ so_dien_thoai: so_dien_thoai.trim(), ...query })
-    if (exists) errors.push('Số điện thoại này đã được sử dụng ở chi nhánh khác')
-  }
-  if (email && email.trim()) {
-    const exists = await ThongTinPhongKham.findOne({ email: email.trim().toLowerCase(), ...query })
-    if (exists) errors.push('Email này đã được sử dụng ở chi nhánh khác')
-  }
-  if (ban_do_url && ban_do_url.trim()) {
-    const exists = await ThongTinPhongKham.findOne({ ban_do_url: ban_do_url.trim(), ...query })
-    if (exists) errors.push('URL Bản đồ này đã được sử dụng ở chi nhánh khác')
-  }
-  
-  return errors
-}
-
-// Thêm 1 chi nhánh mới
 export const createClinic = async (req, res) => {
   try {
-    const { ten } = req.body
-    if (!ten) return fail(res, 400, 'Tên chi nhánh là bắt buộc')
+    const payload = sanitizeClinicPayload(req.body)
+    if (!payload.ten?.trim()) return fail(res, 400, 'Ten phong kham la bat buoc')
 
-    const duplicateErrors = await checkDuplicateClinicInfo(req.body)
+    const existingClinic = await getSingletonClinic()
+    if (existingClinic) {
+      return fail(res, 409, 'He thong chi duoc phep co 1 phong kham. Hay cap nhat ban ghi hien tai.')
+    }
+
+    const duplicateErrors = await checkDuplicateClinicInfo(payload)
     if (duplicateErrors.length > 0) {
       return fail(res, 400, duplicateErrors.join(', '))
     }
 
-    const newClinic = new ThongTinPhongKham(req.body)
-    await newClinic.save()
+    const newClinic = await ThongTinPhongKham.create(payload)
+    await writeAuditLog(req, 'CREATE_CLINIC_INFO', newClinic._id, `Tao thong tin phong kham "${newClinic.ten}"`)
 
-    try {
-      await NhatKyThaoTac.create({
-        nguoi_thuc_hien_id: req.user?.id || null,
-        vai_tro: req.user?.role || 'admin',
-        hanh_dong: 'CREATE_CLINIC_INFO',
-        loai_doi_tuong: 'clinic_info',
-        doi_tuong_id: newClinic._id,
-        ly_do: `Thêm mới chi nhánh "${newClinic.ten_chi_nhanh || ten}"`,
-      })
-    } catch (e) {}
-
-    return ok(res, newClinic, 'Thêm chi nhánh thành công')
+    return ok(res, newClinic, 'Tao thong tin phong kham thanh cong')
   } catch (error) {
-    return fail(res, 400, 'Dữ liệu không hợp lệ: ' + error.message)
+    return fail(res, 400, 'Du lieu khong hop le: ' + error.message)
   }
 }
 
-// Cập nhật thông tin 1 chi nhánh
+export const upsertCurrentClinic = async (req, res) => {
+  try {
+    const payload = sanitizeClinicPayload(req.body)
+    if (!payload.ten?.trim()) {
+      return fail(res, 400, 'Ten phong kham la bat buoc')
+    }
+
+    const currentClinic = await getSingletonClinic()
+    const duplicateErrors = await checkDuplicateClinicInfo(payload, currentClinic?._id ?? null)
+    if (duplicateErrors.length > 0) {
+      return fail(res, 400, duplicateErrors.join(', '))
+    }
+
+    let clinic
+    let action
+    let message
+
+    if (!currentClinic) {
+      clinic = await ThongTinPhongKham.create(payload)
+      action = 'CREATE_CLINIC_INFO'
+      message = 'Tao thong tin phong kham thanh cong'
+    } else {
+      clinic = await ThongTinPhongKham.findByIdAndUpdate(
+        currentClinic._id,
+        { $set: payload },
+        { new: true, runValidators: true }
+      )
+      action = 'UPDATE_CLINIC_INFO'
+      message = 'Cap nhat thong tin phong kham thanh cong'
+    }
+
+    await writeAuditLog(req, action, clinic._id, `${action === 'CREATE_CLINIC_INFO' ? 'Tao' : 'Cap nhat'} thong tin phong kham "${clinic.ten}"`)
+    return ok(res, clinic, message)
+  } catch (error) {
+    return fail(res, 400, 'Du lieu khong hop le: ' + error.message)
+  }
+}
+
 export const updateClinicInfo = async (req, res) => {
   try {
-    const { ten } = req.body
-    if (ten !== undefined && !ten) return fail(res, 400, 'Tên chi nhánh không được để trống')
+    const payload = sanitizeClinicPayload(req.body)
+    if (payload.ten !== undefined && !payload.ten?.trim()) {
+      return fail(res, 400, 'Ten phong kham khong duoc de trong')
+    }
 
-    const duplicateErrors = await checkDuplicateClinicInfo(req.body, req.params.id)
+    const duplicateErrors = await checkDuplicateClinicInfo(payload, req.params.id)
     if (duplicateErrors.length > 0) {
       return fail(res, 400, duplicateErrors.join(', '))
     }
 
     const updated = await ThongTinPhongKham.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: payload },
       { new: true, runValidators: true }
     )
-    
+
     if (!updated) {
-      return fail(res, 404, 'Không tìm thấy chi nhánh để cập nhật')
+      return fail(res, 404, 'Khong tim thay phong kham de cap nhat')
     }
 
-    // CASCADE: Cập nhật trạng thái chuyên khoa theo trạng thái chi nhánh
-    if (req.body.trang_thai === 'inactive') {
-      await ChuyenKhoa.updateMany(
-        { phong_kham_id: req.params.id },
-        { status: 'hidden' }
-      )
-    } else if (req.body.trang_thai === 'active') {
-      await ChuyenKhoa.updateMany(
-        { phong_kham_id: req.params.id },
-        { status: 'active' }
-      )
+    if (payload.trang_thai === 'inactive') {
+      await ChuyenKhoa.updateMany({ phong_kham_id: req.params.id }, { status: 'hidden' })
+    } else if (payload.trang_thai === 'active') {
+      await ChuyenKhoa.updateMany({ phong_kham_id: req.params.id }, { status: 'active' })
     }
 
-    try {
-      await NhatKyThaoTac.create({
-        nguoi_thuc_hien_id: req.user?.id || null,
-        vai_tro: req.user?.role || 'admin',
-        hanh_dong: 'UPDATE_CLINIC_INFO',
-        loai_doi_tuong: 'clinic_info',
-        doi_tuong_id: updated._id,
-        ly_do: `Cập nhật chi nhánh "${updated.ten_chi_nhanh}"`,
-      })
-    } catch (e) {}
-
-    return ok(res, updated, 'Cập nhật thành công')
+    await writeAuditLog(req, 'UPDATE_CLINIC_INFO', updated._id, `Cap nhat thong tin phong kham "${updated.ten}"`)
+    return ok(res, updated, 'Cap nhat thong tin phong kham thanh cong')
   } catch (error) {
-    return fail(res, 400, 'Dữ liệu cập nhật không hợp lệ: ' + error.message)
+    return fail(res, 400, 'Du lieu cap nhat khong hop le: ' + error.message)
   }
 }
 
-// Xóa mềm 1 chi nhánh (chuyển trang_thai thành inactive)
 export const deleteClinic = async (req, res) => {
   try {
-    // Ràng buộc Business: Không cho xóa nếu có lịch hẹn pending/confirmed
     const specialties = await ChuyenKhoa.find({ phong_kham_id: req.params.id }).select('_id').lean()
     if (specialties.length > 0) {
-      const specIds = specialties.map(s => s._id)
-      const doctors = await BacSi.find({ specialties: { $in: specIds } }).select('_id').lean()
+      const specialtyIds = specialties.map((item) => item._id)
+      const doctors = await BacSi.find({ specialties: { $in: specialtyIds } }).select('_id').lean()
+
       if (doctors.length > 0) {
-        const docIds = doctors.map(d => d._id)
+        const doctorIds = doctors.map((item) => item._id)
         const activeAppointments = await LichHen.countDocuments({
-          doctor_id: { $in: docIds },
-          status: { $in: ['pending', 'confirmed'] }
+          doctor_id: { $in: doctorIds },
+          status: { $in: ['pending', 'confirmed'] },
         })
-        
+
         if (activeAppointments > 0) {
-          return fail(res, 400, `Không thể ngừng hoạt động chi nhánh vì còn ${activeAppointments} lịch hẹn đang chờ khám hoặc đã xác nhận.`)
+          return fail(res, 400, `Khong the ngung hoat dong phong kham vi con ${activeAppointments} lich hen dang cho kham hoac da xac nhan.`)
         }
       }
     }
@@ -195,256 +279,148 @@ export const deleteClinic = async (req, res) => {
       { trang_thai: 'inactive' },
       { new: true }
     )
-    if (!deleted) return fail(res, 404, 'Không tìm thấy chi nhánh')
+    if (!deleted) return fail(res, 404, 'Khong tim thay phong kham')
 
-    // CASCADE: Ẩn tất cả chuyên khoa thuộc chi nhánh này
-    await ChuyenKhoa.updateMany(
-      { phong_kham_id: req.params.id },
-      { status: 'hidden' }
-    )
+    await ChuyenKhoa.updateMany({ phong_kham_id: req.params.id }, { status: 'hidden' })
+    await writeAuditLog(req, 'HIDE_CLINIC_INFO', deleted._id, `Ngung hoat dong phong kham "${deleted.ten}"`)
 
-    try {
-      await NhatKyThaoTac.create({
-        nguoi_thuc_hien_id: req.user?.id || null,
-        vai_tro: req.user?.role || 'admin',
-        hanh_dong: 'HIDE_CLINIC_INFO',
-        loai_doi_tuong: 'clinic_info',
-        doi_tuong_id: deleted._id,
-        ly_do: `Ngừng hoạt động chi nhánh "${deleted.ten_chi_nhanh}"`,
-      })
-    } catch (e) {}
-
-    return ok(res, deleted, 'Đã ngừng hoạt động chi nhánh và các chuyên khoa trực thuộc')
+    return ok(res, deleted, 'Da ngung hoat dong phong kham va cac chuyen khoa truc thuoc')
   } catch (error) {
-    return fail(res, 500, 'Lỗi server khi xóa: ' + error.message)
+    return fail(res, 500, 'Loi server khi xoa: ' + error.message)
   }
 }
 
-// ==========================================
-// QUẢN LÝ CHUYÊN KHOA CỦA TỪNG CHI NHÁNH
-// ==========================================
-
-// Lấy danh sách chuyên khoa của 1 chi nhánh
 export const getSpecialtiesByClinic = async (req, res) => {
   try {
-    const specialties = await ChuyenKhoa.find({ phong_kham_id: req.params.id }).sort({ thu_tu: 1, ngay_tao: 1 }).lean()
-    
-    // Đếm số lượng bác sĩ cho từng chuyên khoa
+    const clinicId = await getSingletonClinicIdOrThrow()
+    if (String(req.params.id) !== String(clinicId)) {
+      return fail(res, 404, 'Khong tim thay phong kham')
+    }
+
+    const specialties = await ChuyenKhoa.find({ phong_kham_id: clinicId })
+      .sort({ thu_tu: 1, ngay_tao: 1 })
+      .lean()
+
     const specialtiesWithCount = await Promise.all(
-      specialties.map(async (spec) => {
-        const count = await BacSi.countDocuments({ specialties: spec._id })
-        return { ...spec, doctor_count: count }
-      })
+      specialties.map(async (specialty) => ({
+        ...specialty,
+        doctor_count: await BacSi.countDocuments({ specialties: specialty._id }),
+      }))
     )
-    
+
     return ok(res, specialtiesWithCount)
   } catch (error) {
-    return fail(res, 500, 'Lỗi server: ' + error.message)
+    return fail(res, 500, 'Loi server: ' + error.message)
   }
 }
 
-// Lấy danh sách bác sĩ thuộc 1 chuyên khoa cụ thể
 export const getDoctorsBySpecialty = async (req, res) => {
   try {
-    const { specialtyId } = req.params
-    // Tìm các bác sĩ có specialtyId trong mảng specialties, populate thông tin NguoiDung để lấy tên
+    const specialtyId = req.params.specialtyId ?? req.params.id
     const doctors = await BacSi.find({ specialties: specialtyId })
       .populate('user_id', 'ho_ten')
       .lean()
-      
-    // Format lại dữ liệu trả về
-    const result = doctors.map(doc => ({
-      _id: doc._id,
-      user_id: doc.user_id ? doc.user_id._id : null,
-      ho_ten: doc.user_id ? doc.user_id.ho_ten : 'N/A',
-      bang_cap: doc.bang_cap || 'N/A'
+
+    const result = doctors.map((doctor) => ({
+      _id: doctor._id,
+      user_id: doctor.user_id ? doctor.user_id._id : null,
+      ho_ten: doctor.user_id ? doctor.user_id.ho_ten : 'N/A',
+      bang_cap: doctor.bang_cap || 'N/A',
     }))
-    
+
     return ok(res, result)
   } catch (error) {
-    return fail(res, 500, 'Lỗi server khi lấy danh sách bác sĩ: ' + error.message)
+    return fail(res, 500, 'Loi server khi lay danh sach bac si: ' + error.message)
   }
 }
 
-// Thêm chuyên khoa mới cho 1 chi nhánh
 export const createSpecialtyForClinic = async (req, res) => {
   try {
-    const { id } = req.params // clinic_id
+    const { id } = req.params
     const { ten, mo_ta, icon_url, thu_tu } = req.body
+
     if (!ten || !ten.trim()) {
-      return fail(res, 400, 'Tên chuyên khoa là bắt buộc')
+      return fail(res, 400, 'Ten chuyen khoa la bat buoc')
     }
-    
-    // Kiểm tra xem chi nhánh có tồn tại không
-    const clinic = await ThongTinPhongKham.findById(id)
-    if (!clinic) return fail(res, 404, 'Không tìm thấy chi nhánh')
+
+    const clinic = await getSingletonClinic()
+    if (!clinic || String(clinic._id) !== String(id)) {
+      return fail(res, 404, 'Khong tim thay phong kham')
+    }
 
     const specialty = await ChuyenKhoa.create({
-      phong_kham_id: id,
+      phong_kham_id: clinic._id,
       ten: ten.trim(),
       mo_ta: mo_ta || null,
       icon_url: icon_url || null,
       thu_tu: thu_tu ?? 0,
     })
 
-    try {
-      await NhatKyThaoTac.create({
-        nguoi_thuc_hien_id: req.user?.id || null,
-        vai_tro: req.user?.role || 'admin',
-        hanh_dong: 'CREATE_SPECIALTY',
-        loai_doi_tuong: 'specialty',
-        doi_tuong_id: specialty._id,
-        ly_do: `Thêm chuyên khoa "${specialty.ten}" cho chi nhánh`,
-      })
-    } catch (e) {}
-
-    return ok(res, specialty.toObject(), 'Đã thêm chuyên khoa mới')
-  } catch (err) {
-    if (err.code === 11000) {
-      return fail(res, 409, 'Tên chuyên khoa này đã tồn tại trong chi nhánh')
+    await writeSpecialtyAuditLog(req, 'CREATE_SPECIALTY', specialty._id, `Them chuyen khoa "${specialty.ten}" cho phong kham`)
+    return ok(res, specialty.toObject(), 'Da them chuyen khoa moi')
+  } catch (error) {
+    if (error.code === 11000) {
+      return fail(res, 409, 'Ten chuyen khoa nay da ton tai trong phong kham')
     }
-    return fail(res, 400, 'Lỗi dữ liệu: ' + err.message)
+    return fail(res, 400, 'Loi du lieu: ' + error.message)
   }
 }
 
-// Cập nhật thông tin chuyên khoa
 export const updateSpecialty = async (req, res) => {
   try {
     const { specialtyId } = req.params
     const { ten, mo_ta, icon_url, thu_tu } = req.body
-    if (!ten || !ten.trim()) {
-      return fail(res, 400, 'Tên chuyên khoa là bắt buộc')
-    }
 
-    // Cập nhật slug khi tên thay đổi
-    function toSlug(str) {
-      return str
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/đ/g, 'd').replace(/Đ/g, 'D')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '')
+    if (!ten || !ten.trim()) {
+      return fail(res, 400, 'Ten chuyen khoa la bat buoc')
     }
 
     const updated = await ChuyenKhoa.findByIdAndUpdate(
       specialtyId,
-      { ten: ten.trim(), slug: toSlug(ten.trim()), mo_ta: mo_ta || null, icon_url: icon_url || null, thu_tu: thu_tu ?? 0 },
+      {
+        ten: ten.trim(),
+        slug: toSlug(ten.trim()),
+        mo_ta: mo_ta || null,
+        icon_url: icon_url || null,
+        thu_tu: thu_tu ?? 0,
+      },
       { new: true, runValidators: true }
     ).lean()
 
-    if (!updated) return fail(res, 404, 'Không tìm thấy chuyên khoa')
+    if (!updated) return fail(res, 404, 'Khong tim thay chuyen khoa')
 
-    try {
-      await NhatKyThaoTac.create({
-        nguoi_thuc_hien_id: req.user?.id || null,
-        vai_tro: req.user?.role || 'admin',
-        hanh_dong: 'UPDATE_SPECIALTY',
-        loai_doi_tuong: 'specialty',
-        doi_tuong_id: updated._id,
-        ly_do: `Cập nhật thông tin chuyên khoa "${updated.ten}"`,
-      })
-    } catch (e) {}
-
-    return ok(res, updated, 'Đã cập nhật chuyên khoa')
-  } catch (err) {
-    if (err.code === 11000) {
-      return fail(res, 409, 'Tên chuyên khoa này đã tồn tại trong chi nhánh')
+    await writeSpecialtyAuditLog(req, 'UPDATE_SPECIALTY', updated._id, `Cap nhat thong tin chuyen khoa "${updated.ten}"`)
+    return ok(res, updated, 'Da cap nhat chuyen khoa')
+  } catch (error) {
+    if (error.code === 11000) {
+      return fail(res, 409, 'Ten chuyen khoa nay da ton tai trong phong kham')
     }
-    return fail(res, 400, 'Lỗi dữ liệu: ' + err.message)
+    return fail(res, 400, 'Loi du lieu: ' + error.message)
   }
 }
 
-// Ẩn/Hiện chuyên khoa
 export const toggleSpecialty = async (req, res) => {
   try {
     const { specialtyId } = req.params
     const specialty = await ChuyenKhoa.findById(specialtyId)
-    if (!specialty) return fail(res, 404, 'Không tìm thấy chuyên khoa')
+    if (!specialty) return fail(res, 404, 'Khong tim thay chuyen khoa')
 
     specialty.status = specialty.status === 'active' ? 'hidden' : 'active'
     await specialty.save()
 
-    try {
-      await NhatKyThaoTac.create({
-        nguoi_thuc_hien_id: req.user?.id || null,
-        vai_tro: req.user?.role || 'admin',
-        hanh_dong: specialty.status === 'hidden' ? 'HIDE_SPECIALTY' : 'SHOW_SPECIALTY',
-        loai_doi_tuong: 'specialty',
-        doi_tuong_id: specialty._id,
-        ly_do: `${specialty.status === 'hidden' ? 'Ẩn' : 'Hiện'} chuyên khoa "${specialty.ten}"`,
-      })
-    } catch (e) {}
+    await writeSpecialtyAuditLog(
+      req,
+      specialty.status === 'hidden' ? 'HIDE_SPECIALTY' : 'SHOW_SPECIALTY',
+      specialty._id,
+      `${specialty.status === 'hidden' ? 'An' : 'Hien'} chuyen khoa "${specialty.ten}"`
+    )
 
-    return ok(res, specialty.toObject(), `Đã ${specialty.status === 'active' ? 'hiện' : 'ẩn'} chuyên khoa`)
-  } catch (err) {
-    return fail(res, 500, 'Lỗi server: ' + err.message)
+    return ok(res, specialty.toObject(), `Da ${specialty.status === 'active' ? 'hien' : 'an'} chuyen khoa`)
+  } catch (error) {
+    return fail(res, 500, 'Loi server: ' + error.message)
   }
 }
 
-// Copy chuyên khoa sang nhiều chi nhánh khác
-export const copySpecialty = async (req, res) => {
-  try {
-    const { specialtyId } = req.params
-    const { targetClinicIds } = req.body
-
-    if (!Array.isArray(targetClinicIds) || targetClinicIds.length === 0) {
-      return fail(res, 400, 'Danh sách chi nhánh đích không hợp lệ')
-    }
-
-    const sourceSpecialty = await ChuyenKhoa.findById(specialtyId)
-    if (!sourceSpecialty) return fail(res, 404, 'Không tìm thấy chuyên khoa gốc')
-
-    let copiedCount = 0
-    let skippedCount = 0
-
-    for (const clinicId of targetClinicIds) {
-      // Bỏ qua nếu chính là chi nhánh hiện tại
-      if (clinicId.toString() === sourceSpecialty.phong_kham_id.toString()) {
-        skippedCount++
-        continue
-      }
-
-      // Kiểm tra xem chi nhánh có tồn tại không
-      const clinicExists = await ThongTinPhongKham.exists({ _id: clinicId })
-      if (!clinicExists) {
-        skippedCount++
-        continue
-      }
-
-      // Kiểm tra trùng lặp (dựa vào slug trong phạm vi chi nhánh)
-      const existingSpecialty = await ChuyenKhoa.findOne({ phong_kham_id: clinicId, slug: sourceSpecialty.slug })
-      if (existingSpecialty) {
-        skippedCount++
-        continue
-      }
-
-      const copied = await ChuyenKhoa.create({
-        phong_kham_id: clinicId,
-        ten: sourceSpecialty.ten,
-        mo_ta: sourceSpecialty.mo_ta,
-        icon_url: sourceSpecialty.icon_url,
-        slug: sourceSpecialty.slug,
-        thu_tu: sourceSpecialty.thu_tu,
-        status: sourceSpecialty.status
-      })
-      
-      try {
-        await NhatKyThaoTac.create({
-          nguoi_thuc_hien_id: req.user?.id || null,
-          vai_tro: req.user?.role || 'admin',
-          hanh_dong: 'CREATE_SPECIALTY',
-          loai_doi_tuong: 'specialty',
-          doi_tuong_id: copied._id,
-          ly_do: `Nhân bản chuyên khoa "${sourceSpecialty.ten}"`,
-        })
-      } catch (e) {}
-      
-      copiedCount++
-    }
-
-    return ok(res, null, `Đã copy thành công sang ${copiedCount} chi nhánh. Bỏ qua ${skippedCount} chi nhánh do đã tồn tại hoặc lỗi.`)
-  } catch (err) {
-    return fail(res, 500, 'Lỗi server: ' + err.message)
-  }
+export const copySpecialty = async (_req, res) => {
+  return fail(res, 400, 'He thong chi co 1 phong kham. Khong ho tro sao chep chuyen khoa giua nhieu chi nhanh.')
 }

@@ -24,7 +24,7 @@ export default function DoctorProfile() {
   // Form state
   const [form, setForm] = useState({
     ho_ten: '', chuyen_khoa: '', so_nam_kinh_nghiem: 0,
-    phi_tu_van: 0, bang_cap: '', tieu_su: '',
+    gia_kham: 0, bang_cap: '', tieu_su: '',
   })
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export default function DoctorProfile() {
         ho_ten: p.ho_ten,
         chuyen_khoa: p.chuyen_khoa,
         so_nam_kinh_nghiem: p.so_nam_kinh_nghiem,
-        phi_tu_van: p.phi_tu_van,
+        gia_kham: p.gia_kham,
         bang_cap: p.bang_cap,
         tieu_su: ts,
       })
@@ -144,8 +144,8 @@ export default function DoctorProfile() {
                 </div>
                 <div>
                   <label className="input-label">Phí tư vấn (VND)</label>
-                  <input type="number" min={0} step={10000} className="input" value={form.phi_tu_van}
-                    onChange={(e) => setForm({ ...form, phi_tu_van: Number(e.target.value) })} />
+                  <input type="number" min={0} step={10000} className="input" value={form.gia_kham}
+                    onChange={(e) => setForm({ ...form, gia_kham: Number(e.target.value) })} />
                 </div>
               </div>
               <div>
@@ -171,7 +171,7 @@ export default function DoctorProfile() {
                 { label: 'Họ và tên', value: profile.ho_ten },
                 { label: 'Chuyên khoa', value: profile.chuyen_khoa },
                 { label: 'Kinh nghiệm', value: `${profile.so_nam_kinh_nghiem} năm` },
-                { label: 'Phí tư vấn', value: formatPrice(profile.phi_tu_van) },
+                { label: 'Phí tư vấn', value: formatPrice(profile.gia_kham) },
                 { label: 'Bằng cấp', value: profile.bang_cap },
               ].map(({ label, value }) => (
                 <div key={label} className="flex gap-4">

@@ -125,3 +125,12 @@ export async function batchAction(req, res) {
     return fail(res, 400, err.message)
   }
 }
+
+export async function getReviewDoctors(req, res) {
+  try {
+    const data = await reviewService.getReviewDoctors()
+    return ok(res, data, 'Lay danh sach bac si thanh cong')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}

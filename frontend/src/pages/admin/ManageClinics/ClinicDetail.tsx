@@ -1,8 +1,8 @@
-import type { HospitalItem } from '@/types'
+import type { ClinicItem } from '@/types'
 import Icon from '@/components/admin/icons'
 
 interface Props {
-  clinic: HospitalItem
+  clinic: ClinicItem
   onEdit: () => void
 }
 
