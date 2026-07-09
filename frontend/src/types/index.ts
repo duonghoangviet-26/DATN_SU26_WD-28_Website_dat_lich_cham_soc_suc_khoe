@@ -257,6 +257,8 @@ export interface AppointmentItem {
     service_id?: string | null;
     specialty_id?: string | null;
     dat_ho?: boolean;
+    loai_dat_lich?: "self" | "proxy";
+    hinh_thuc_dat_lich?: string | null;
     nguoi_dat_ho_id?: string | null;
     nguoi_dat_ho_ten?: string | null;
     nguoi_dat_sdt?: string | null;
@@ -303,6 +305,7 @@ export interface AppointmentSummary {
     cancelled?: number;
     unpaid?: number;
     need_attention?: number;
+    proxy_booking?: number;
 }
 
 export interface AppointmentPagination {
@@ -350,6 +353,57 @@ export interface AdminAppointmentServiceOption {
     ten: string;
     loai: ServiceType;
     gia: number;
+}
+
+export interface AdminDoctorWorkdayItem {
+    _id: string | null;
+    doctor_id: string;
+    chi_nhanh_id?: string | null;
+    ngay: string;
+    trang_thai_ngay: "lam_viec" | "nghi" | "nghi_phep" | "chua_tao";
+    ghi_chu_ngay?: string | null;
+    co_di_lam: boolean;
+    tong_slot: number;
+    slot_trong: number;
+    slot_da_dat: number;
+    slot_bi_khoa: number;
+    slot_da_huy: number;
+    gio_bat_dau?: string | null;
+    gio_ket_thuc?: string | null;
+    nguon_lich: "stored" | "derived";
+}
+
+export interface AdminDoctorWorkdayResponse {
+    doctor: { _id: string; ten: string };
+    range: { from: string; to: string };
+    items: AdminDoctorWorkdayItem[];
+}
+
+export interface AdminDoctorScheduleSlot {
+    _id: string;
+    gio_bat_dau: string;
+    gio_ket_thuc: string;
+    benh_nhan_id?: string | null;
+    benh_nhan_tam_giu_id?: string | null;
+    specialty_id?: string | null;
+    phong_kham?: string | null;
+    status: "active" | "pending_payment" | "booked" | "locked" | "cancelled" | "expired";
+    lock_expires_at?: string | null;
+    pending_expired_at?: string | null;
+    cancel_requested?: boolean;
+    cancel_reason?: string | null;
+    bi_khoa_boi_nghi_phep?: boolean;
+    nghi_phep_id?: string | null;
+}
+
+export interface AdminDoctorScheduleDetail {
+    _id: string;
+    doctor_id: string;
+    chi_nhanh_id?: string | null;
+    ngay: string;
+    trang_thai_ngay: "lam_viec" | "nghi" | "nghi_phep";
+    ghi_chu_ngay?: string | null;
+    slots: AdminDoctorScheduleSlot[];
 }
 
 export interface ReviewItem {

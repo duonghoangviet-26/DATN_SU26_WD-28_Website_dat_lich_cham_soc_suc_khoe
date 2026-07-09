@@ -99,13 +99,21 @@ export default function AppointmentList({
                   <p className="text-xs text-slate-400">{EXAM_TYPE_LABEL[appointment.loai_kham]}</p>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="font-medium text-slate-800">{appointment.benh_nhan}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-slate-800">{appointment.benh_nhan}</p>
+                    {appointment.dat_ho && (
+                      <Badge color="blue">Đặt hộ</Badge>
+                    )}
+                  </div>
                   {appointment.dat_ho && appointment.nguoi_dat_ho_ten && appointment.nguoi_dat_ho_ten !== appointment.benh_nhan && (
                     <p className="text-xs font-medium text-blue-600">Người đặt hộ: {appointment.nguoi_dat_ho_ten}</p>
                   )}
                   <p className="text-xs text-slate-500">{appointment.sdt_benh_nhan || 'Chưa có số điện thoại'}</p>
                   {appointment.dat_ho && appointment.nguoi_dat_sdt && appointment.nguoi_dat_sdt !== appointment.sdt_benh_nhan && (
                     <p className="text-xs text-blue-500">SĐT người đặt hộ: {appointment.nguoi_dat_sdt}</p>
+                  )}
+                  {appointment.hinh_thuc_dat_lich && (
+                    <p className="text-xs text-slate-400">Kênh tạo: {appointment.hinh_thuc_dat_lich}</p>
                   )}
                   {appointment.user_email && (
                     <p className="text-xs text-slate-400">{appointment.user_email}</p>

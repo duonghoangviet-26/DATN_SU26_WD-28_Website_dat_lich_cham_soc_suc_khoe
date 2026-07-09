@@ -13,11 +13,16 @@ export default function AppointmentDetail({ detail, loading, onClose }: Props) {
   const rows = detail ? [
     ['Mã lịch hẹn', detail.ma_lich_hen || 'Chưa có dữ liệu'],
     ['Bệnh nhân', detail.benh_nhan],
+    ['Loại đặt lịch', detail.loai_dat_lich === 'proxy' ? 'Đặt hộ' : 'Tự đặt'],
+    ['Người đặt hộ', detail.nguoi_dat_ho_ten || 'Không có'],
+    ['SĐT người đặt hộ', detail.nguoi_dat_sdt || 'Không có'],
     ['ID tài khoản', detail.user_id || 'Không có'],
+    ['ID thành viên', detail.member_id || 'Không có'],
     ['Email', detail.user_email || 'Không có'],
-    ['SĐT', detail.sdt_benh_nhan || 'Không có'],
+    ['SĐT bệnh nhân', detail.sdt_benh_nhan || 'Không có'],
+    ['Kênh tạo lịch', detail.hinh_thuc_dat_lich || 'Không có'],
     ['Bác sĩ', detail.bac_si || 'Không tìm thấy bác sĩ'],
-    ['Chuyên khoa', detail.chuyen_khoa || 'Không tìm thấy chuyên khoa'],
+    ['Chuyên khoa / dịch vụ', detail.chuyen_khoa || 'Không tìm thấy chuyên khoa'],
     ['Ngày khám', `${detail.ngay_kham} lúc ${detail.gio_kham}`],
     ['Loại khám', EXAM_TYPE_LABEL[detail.loai_kham]],
     ['Địa chỉ khám', detail.dia_chi_kham || 'Chưa có dữ liệu'],
@@ -38,7 +43,7 @@ export default function AppointmentDetail({ detail, loading, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-3xl rounded-xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-800">Chi tiết lịch hẹn</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700">

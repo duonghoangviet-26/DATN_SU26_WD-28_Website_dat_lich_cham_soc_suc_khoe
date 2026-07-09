@@ -22,6 +22,7 @@ import ManageClinics from '@/pages/admin/ManageClinics/ManageClinics'
 import ManageServices from '@/pages/admin/ManageServices'
 import ManageServiceSpecialtyDetail from '@/pages/admin/ManageServiceSpecialtyDetail'
 import ManageAppointments from '@/pages/admin/ManageAppointments/ManageAppointments'
+import ManageDoctorSchedules from '@/pages/admin/ManageDoctorSchedules'
 import ManageReviews from '@/pages/admin/ManageReviews'
 import ManageNotifications from '@/pages/admin/ManageNotifications/ManageNotifications'
 import ManagePayments from '@/pages/admin/ManagePayments'
@@ -69,6 +70,7 @@ export default function AppRoutes() {
         <Route path="services" element={<ManageServices />} />     {/* C4 */}
         <Route path="services/chuyen-khoa/:slug" element={<ManageServiceSpecialtyDetail />} />
         <Route path="appointments" element={<ManageAppointments />} /> {/* C5 */}
+        <Route path="doctor-schedules" element={<ManageDoctorSchedules />} />
         <Route path="reviews" element={<ManageReviews />} />       {/* C6 */}
         <Route path="notifications" element={<ManageNotifications />} /> {/* C7 */}
         <Route path="payments" element={<ManagePayments />} />     {/* C8 */}

@@ -101,6 +101,7 @@ export const serviceService = {
     status?: ServiceStatus | '',
     page = 1,
     limit = 10,
+    la_goi?: boolean | '',
   ): Promise<PagedResult<ServiceItem>> {
     if (!isAdminContext()) {
       const publicItems = await getPublicHomeServices()
@@ -128,6 +129,7 @@ export const serviceService = {
     if (loai) params.loai = loai
     if (status) params.status = status
     if (search?.trim()) params.search = search.trim()
+    if (la_goi !== '' && la_goi !== undefined) params.la_goi = la_goi ? 'true' : 'false'
 
     const res = await axiosInstance.get<ApiResponse<PagedResult<ServiceItem>>>('/admin/services', { params })
     const payload = res.data.data

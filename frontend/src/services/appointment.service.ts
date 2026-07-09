@@ -20,6 +20,7 @@ export const appointmentService = {
     specialty_id?: string
     ma_lich_hen?: string
     quick_filter?: string
+    booking_scope?: 'self' | 'proxy'
   }): Promise<any> {
     const res = await axiosInstance.get('/admin/appointments', { params })
     return {

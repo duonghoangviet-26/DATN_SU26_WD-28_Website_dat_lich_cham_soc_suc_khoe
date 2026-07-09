@@ -8,7 +8,7 @@ import HoaDon from '../../models/HoaDon.js'
 import ThanhToan from '../../models/ThanhToan.js'
 import HoanTien from '../../models/HoanTien.js'
 import CaiDatThanhToan from '../../models/CaiDatThanhToan.js'
-import { ok, created, fail } from '../../utils/response.js'
+import { ok, fail } from '../../utils/response.js'
 
 const ADMIN_REFUND_SETTING_KEYS = ['hoan_tien_admin_huy', 'hoan_tien_admin_huy_khan_cap']
 const APPOINTMENT_LIST_LIMIT_MAX = 100
@@ -72,6 +72,8 @@ function getQuickFilterConditions(quickFilter) {
           { so_lan_thay_doi: { $gte: 2 } },
         ],
       }
+    case 'proxy_booking':
+      return { dat_ho: true }
     default:
       return null
   }
@@ -117,6 +119,8 @@ async function buildKeywordFilter(keyword) {
       { ma_lich_hen: keywordRegex },
       { ten_khach: keywordRegex },
       { so_dien_thoai_khach: keywordRegex },
+      { nguoi_dat_ho_ten: keywordRegex },
+      { nguoi_dat_sdt: keywordRegex },
       ...(userIds.length > 0 ? [{ user_id: { $in: userIds } }] : []),
       ...(doctorIds.length > 0 ? [{ doctor_id: { $in: doctorIds } }] : []),
     ],
@@ -135,6 +139,7 @@ async function buildAppointmentQuery({
   specialty_id,
   ma_lich_hen,
   quick_filter,
+  booking_scope,
 }) {
   const query = {}
 
@@ -165,6 +170,12 @@ async function buildAppointmentQuery({
 
   if (ma_lich_hen?.trim()) {
     query.ma_lich_hen = ma_lich_hen.trim()
+  }
+
+  if (booking_scope === 'proxy') {
+    query.dat_ho = true
+  } else if (booking_scope === 'self') {
+    query.dat_ho = { $ne: true }
   }
 
   if (startDate || endDate) {
@@ -248,6 +259,7 @@ function formatAppointmentItem(appointment) {
     nguoi_dat_ho_ten: bookerName,
     nguoi_dat_sdt: bookerPhone,
     hinh_thuc_dat_lich: appointment.hinh_thuc_dat_lich ?? null,
+    loai_dat_lich: appointment.dat_ho ? 'proxy' : 'self',
     benh_nhan: patientName,
     sdt_benh_nhan: patientPhone,
     doctor_id: appointment.doctor_id?._id ?? appointment.doctor_id ?? null,
@@ -532,6 +544,7 @@ export async function getAllAppointments(req, res) {
       cancelledCount,
       unpaidCount,
       abnormalCount,
+      proxyBookingCount,
     ] = await Promise.all([
       LichHen.countDocuments(query),
       LichHen.find(query)
@@ -576,6 +589,10 @@ export async function getAllAppointments(req, res) {
           { so_lan_thay_doi: { $gte: 2 } },
         ],
       }),
+      LichHen.countDocuments({
+        ...summaryBaseQuery,
+        dat_ho: true,
+      }),
     ])
 
     const totalPages = total === 0 ? 1 : Math.ceil(total / limitNum)
@@ -598,6 +615,7 @@ export async function getAllAppointments(req, res) {
         cancelled: cancelledCount,
         unpaid: unpaidCount,
         need_attention: abnormalCount,
+        proxy_booking: proxyBookingCount,
       },
     })
   } catch (err) {
@@ -809,121 +827,13 @@ export async function deleteAppointment(req, res) {
 }
 
 // POST /api/admin/appointments
-// Admin tao lich kham thay khach hang
+// Admin khong duoc tao lich hen moi do nghiep vu thanh toan thuoc user/le tan
 export async function createAppointment(req, res) {
-  const session = await mongoose.startSession()
-  session.startTransaction()
-  try {
-    const {
-      user_id,
-      doctor_id,
-      schedule_id,
-      slot_id,
-      service_id,
-      loai_kham,
-      dia_chi_kham,
-      ly_do_kham,
-      ten_khach,
-      so_dien_thoai_khach,
-    } = req.body
-
-    if (!doctor_id) throw new Error('Bac si la bat buoc')
-    if (!schedule_id || !slot_id) throw new Error('Lich lam viec va khung gio la bat buoc')
-    if (loai_kham === 'home' && !service_id) throw new Error('Dich vu la bat buoc cho lich kham tai nha')
-    if (loai_kham === 'home' && !dia_chi_kham?.trim()) throw new Error('Dia chi kham la bat buoc cho lich kham tai nha')
-    if (!ten_khach?.trim()) throw new Error('Ten benh nhan la bat buoc')
-
-    const doctor = await getDoctorOrThrow(doctor_id, session)
-    const service = loai_kham === 'home' && service_id
-      ? await getServiceOrThrow(service_id, 'home', session)
-      : null
-    if (service && !doctorSupportsService(doctor, service._id)) {
-      throw new Error('Bac si khong ho tro dich vu da chon')
-    }
-
-    const { schedule, slot } = await getScheduleAndSlot(schedule_id, slot_id, session)
-    if (String(schedule.doctor_id) !== String(doctor._id)) {
-      throw new Error('Lich lam viec khong thuoc bac si da chon')
-    }
-    if (slot.status !== 'active') {
-      throw new Error('Khung gio nay da bi khoa hoac huy')
-    }
-    slot.status = 'booked'
-    slot.benh_nhan_id = user_id || null
-    slot.benh_nhan_tam_giu_id = null
-    await schedule.save({ session })
-
-    const appointmentDate = toDateOnly(schedule.ngay)
-    const maLichHen = await nextCounterCode(session, 'ma_lich_hen', 'LH', appointmentDate)
-    const soHoaDon = await nextCounterCode(session, 'so_hoa_don', 'HD', appointmentDate)
-
-    const appointmentDoc = new LichHen({
-      user_id: user_id || null,
-      doctor_id: doctor._id,
-      schedule_id: schedule._id,
-      slot_id: slot._id,
-      service_id: service?._id ?? null,
-      chi_nhanh_id: schedule.chi_nhanh_id ?? doctor.chi_nhanh_id ?? null,
-      specialty_id: slot.specialty_id ?? doctor.specialties?.[0] ?? null,
-      ma_lich_hen: maLichHen,
-      hinh_thuc_dat_lich: 'admin',
-      loai_kham,
-      ngay_kham: appointmentDate,
-      gio_kham: slot.gio_bat_dau,
-      gia_kham: service?.gia ?? doctor.phi_kham ?? doctor.gia_kham ?? 0,
-      dia_chi_kham: loai_kham === 'home' ? dia_chi_kham?.trim() : null,
-      ly_do_kham: ly_do_kham?.trim() || null,
-      ten_khach: ten_khach.trim(),
-      so_dien_thoai_khach,
-      status: 'confirmed',
-      payment_status: 'unpaid',
-    })
-
-    await appointmentDoc.save({ session })
-
-    await HoaDon.create([{
-      appointment_id: appointmentDoc._id,
-      so_hoa_don: soHoaDon,
-      chi_nhanh_id: appointmentDoc.chi_nhanh_id,
-      specialty_id: appointmentDoc.specialty_id,
-      tong_tien_kham: appointmentDoc.gia_kham,
-      chi_tiet_thu_phi: [
-        {
-          loai: 'phi_kham',
-          ten: 'Phi kham',
-          so_tien: appointmentDoc.gia_kham,
-          so_luong: 1,
-          thanh_tien: appointmentDoc.gia_kham,
-        },
-      ],
-      tong_tien_phat_sinh: 0,
-      tong_thanh_toan: appointmentDoc.gia_kham,
-      trang_thai_hoa_don: 'chua_thanh_toan',
-    }], { session })
-
-    await LichSuLichHen.create([{
-      appointment_id: appointmentDoc._id,
-      tu_trang_thai: null,
-      den_trang_thai: 'confirmed',
-      tu_payment_status: null,
-      den_payment_status: 'unpaid',
-      nguoi_thay_doi_id: req.user.id,
-      kenh_thay_doi: 'admin',
-      nguoi_thuc_hien_id: req.user.id,
-      vai_tro: 'admin',
-      ly_do: 'Admin dat lich thay khach',
-    }], { session })
-
-    await session.commitTransaction()
-    session.endSession()
-
-    const createdAppointmentPayload = await loadAppointmentForResponse(appointmentDoc._id)
-    return created(res, formatAppointmentItem(createdAppointmentPayload), 'Da tao lich hen thanh cong')
-  } catch (err) {
-    await session.abortTransaction()
-    session.endSession()
-    return fail(res, 400, err.message)
-  }
+  return fail(
+    res,
+    403,
+    'Admin khong duoc tao lich hen moi. Chi nguoi dung hoac le tan duoc dat lich do lien quan den thanh toan.'
+  )
 }
 
 // PATCH /api/admin/appointments/:id/reschedule

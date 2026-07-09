@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
+import PageHeader from '@/components/common/PageHeader'
 import { appointmentService } from '@/services/appointment.service'
 import type {
   AppointmentItem,
@@ -12,14 +12,14 @@ import type {
   PaymentStatus,
 } from '@/types'
 
-import AddAppointment from './AddAppointment'
 import AppointmentDetail from './AppointmentDetail'
 import AppointmentHistoryModal from './AppointmentHistoryModal'
 import AppointmentList from './AppointmentList'
 import RescheduleAppointment from './RescheduleAppointment'
 
-type ViewMode = 'list' | 'add' | 'reschedule'
-type QuickFilter = 'all' | 'today' | 'upcoming' | 'unpaid' | 'cancelled' | 'need_attention'
+type ViewMode = 'list' | 'reschedule'
+type QuickFilter = 'all' | 'today' | 'upcoming' | 'unpaid' | 'cancelled' | 'need_attention' | 'proxy_booking'
+type BookingScope = '' | 'self' | 'proxy'
 
 const EMPTY_SUMMARY: AppointmentSummary = {
   today: 0,
@@ -30,6 +30,7 @@ const EMPTY_SUMMARY: AppointmentSummary = {
   cancelled: 0,
   unpaid: 0,
   need_attention: 0,
+  proxy_booking: 0,
 }
 
 const EMPTY_PAGINATION: AppointmentPagination = {
@@ -53,6 +54,7 @@ export default function ManageAppointments() {
   const [status, setStatus] = useState<AppointmentStatus | ''>('')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | ''>('')
   const [loaiKham, setLoaiKham] = useState<'clinic' | ''>('')
+  const [bookingScope, setBookingScope] = useState<BookingScope>('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
@@ -88,6 +90,7 @@ export default function ManageAppointments() {
         status,
         payment_status: paymentStatus || undefined,
         loai_kham: loaiKham || undefined,
+        booking_scope: bookingScope || undefined,
         startDate,
         endDate,
         page: nextPage,
@@ -107,7 +110,7 @@ export default function ManageAppointments() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedKeyword, status, paymentStatus, loaiKham, startDate, endDate, page, filterDoctorId, quickFilter])
+  }, [debouncedKeyword, status, paymentStatus, loaiKham, bookingScope, startDate, endDate, page, filterDoctorId, quickFilter])
 
   useEffect(() => {
     fetchAppointments()
@@ -173,18 +176,22 @@ export default function ManageAppointments() {
     { label: 'Lịch hẹn hôm nay', value: summary.today, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', icon: 'calendar' },
     { label: 'Chờ xác nhận', value: summary.pending, iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600', icon: 'clock' },
     { label: 'Chưa thanh toán', value: summary.unpaid ?? 0, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', icon: 'payment' },
-    { label: 'Cần xử lý', value: summary.need_attention ?? 0, iconBg: 'bg-red-100', iconColor: 'text-red-600', icon: 'alert-circle' },
+    { label: 'Đặt hộ', value: summary.proxy_booking ?? appointments.filter((item) => item.dat_ho).length, iconBg: 'bg-cyan-100', iconColor: 'text-cyan-600', icon: 'users' },
   ]
 
   return (
     <div>
       <PageHeader
         title="Lịch hẹn hệ thống"
-        description="Rà soát và xử lý lịch hẹn admin theo dữ liệu thật, có lọc nhanh cho vận hành hằng ngày."
+        description="Admin chỉ rà soát, dời lịch, hủy và theo dõi đặt hộ. Việc tạo lịch mới thuộc về người dùng hoặc lễ tân do liên quan trực tiếp tới thanh toán."
       />
 
       {view === 'list' && (
         <>
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Admin không được đặt lịch hay thêm lịch hẹn mới cho người dùng. Chỉ người dùng hoặc lễ tân được tạo lịch để tránh lệch luồng thanh toán và đối soát.
+          </div>
+
           <div className="mb-4 flex flex-wrap gap-2">
             {[
               ['all', 'Tất cả'],
@@ -193,6 +200,7 @@ export default function ManageAppointments() {
               ['unpaid', 'Chưa thanh toán'],
               ['cancelled', 'Đã hủy'],
               ['need_attention', 'Cần xử lý'],
+              ['proxy_booking', 'Đặt hộ'],
             ].map(([value, label]) => (
               <button
                 key={value}
@@ -228,8 +236,8 @@ export default function ManageAppointments() {
             ))}
           </div>
 
-          <div className="card mb-4 flex flex-col justify-between gap-3 p-4 md:flex-row">
-            <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="card mb-4 p-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">
                   <Icon name="search" className="h-4 w-4" />
@@ -303,15 +311,19 @@ export default function ManageAppointments() {
                 <option value="">Tất cả loại khám</option>
                 <option value="clinic">Phòng khám</option>
               </select>
+              <select
+                className="input"
+                value={bookingScope}
+                onChange={(event) => {
+                  setBookingScope(event.target.value as BookingScope)
+                  setPage(1)
+                }}
+              >
+                <option value="">Tất cả hình thức đặt</option>
+                <option value="self">Tự đặt</option>
+                <option value="proxy">Đặt hộ</option>
+              </select>
             </div>
-
-            <button
-              onClick={() => setView('add')}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-            >
-              <Icon name="plus" className="h-4 w-4" />
-              Đặt lịch mới
-            </button>
           </div>
 
           {error && (
@@ -390,17 +402,6 @@ export default function ManageAppointments() {
             </div>
           )}
         </>
-      )}
-
-      {view === 'add' && (
-        <AddAppointment
-          onCancel={() => setView('list')}
-          onSaved={async () => {
-            setView('list')
-            setPage(1)
-            await fetchAppointments(1)
-          }}
-        />
       )}
 
       {view === 'reschedule' && rescheduleData && (

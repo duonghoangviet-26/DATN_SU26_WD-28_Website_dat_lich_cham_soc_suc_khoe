@@ -7,6 +7,8 @@ import { specialtyService } from '@/services/specialty.service'
 import type { SpecialtyBrowseItem } from '@/services/specialty.service'
 import type { ServiceItem } from '@/types'
 
+type ServiceTab = 'all' | 'packages' | 'regular'
+
 export default function ManageServices() {
   const navigate = useNavigate()
 
@@ -14,6 +16,7 @@ export default function ManageServices() {
   const [services, setServices] = useState<ServiceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<ServiceTab>('all')
 
   useEffect(() => {
     let ignore = false
@@ -50,30 +53,44 @@ export default function ManageServices() {
     }
   }, [])
 
-  function countRelatedServices(specialtyId: string) {
-    return services.filter((service) => service.specialty_id === specialtyId).length
+  function countServicesBySpecialty(specialtyId: string) {
+    return services.filter((service) => {
+      if (service.specialty_id !== specialtyId) return false
+      if (activeTab === 'packages') return service.la_goi === true
+      if (activeTab === 'regular') return service.la_goi !== true
+      return true
+    }).length
   }
 
   const stats = {
     specialties: specialties.length,
     services: services.length,
+    packageServices: services.filter((item) => item.la_goi === true).length,
+    regularServices: services.filter((item) => item.la_goi !== true).length,
     activeServices: services.filter((item) => item.status === 'active').length,
     inactiveServices: services.filter((item) => item.status === 'inactive').length,
   }
+
+  const tabDescription =
+    activeTab === 'packages'
+      ? 'Đang lọc riêng các gói dịch vụ theo từng chuyên khoa.'
+      : activeTab === 'regular'
+        ? 'Đang lọc riêng các dịch vụ lẻ, không phải gói.'
+        : 'Đang hiển thị toàn bộ dịch vụ liên quan và gói dịch vụ theo từng chuyên khoa.'
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Quản lý dịch vụ"
-        description="Admin hiện quản lý dịch vụ liên quan theo từng chuyên khoa. Luồng khám tại nhà đã được tạm ẩn khỏi giao diện quản trị."
+        description="Admin quản lý dịch vụ liên quan theo từng chuyên khoa, đồng thời có tab riêng để rà soát gói dịch vụ."
       />
 
       <div className="grid gap-3 md:grid-cols-4">
         {[
           { label: 'Chuyên khoa đang hiển thị', value: stats.specialties, color: 'text-slate-700' },
-          { label: 'Dịch vụ liên quan', value: stats.services, color: 'text-blue-600' },
-          { label: 'Đang hoạt động', value: stats.activeServices, color: 'text-green-600' },
-          { label: 'Đã ẩn', value: stats.inactiveServices, color: 'text-slate-400' },
+          { label: 'Tổng dịch vụ', value: stats.services, color: 'text-blue-600' },
+          { label: 'Gói dịch vụ', value: stats.packageServices, color: 'text-cyan-600' },
+          { label: 'Dịch vụ lẻ', value: stats.regularServices, color: 'text-amber-600' },
         ].map((item) => (
           <div key={item.label} className="card p-4 text-center">
             <div className={`text-2xl font-bold ${item.color}`}>{item.value}</div>
@@ -84,14 +101,36 @@ export default function ManageServices() {
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
         Lưu ý: giao diện admin hiện chỉ cho phép xem và quản lý dịch vụ liên quan theo chuyên khoa.
-        Tùy chọn tạo và hiển thị dịch vụ khám tại nhà đã được tạm ẩn để tránh làm lệch luồng đặt lịch hiện tại.
+        Luồng khám tại nhà tiếp tục được ẩn khỏi UI quản trị để tránh lệch với luồng đặt lịch và thanh toán hiện tại.
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {[
+          ['all', `Tất cả (${stats.services})`],
+          ['packages', `Gói (${stats.packageServices})`],
+          ['regular', `Dịch vụ lẻ (${stats.regularServices})`],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setActiveTab(value as ServiceTab)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === value
+                ? 'bg-brand-500 text-white'
+                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="card overflow-hidden">
         <div className="border-b border-slate-100 px-5 py-4">
           <h3 className="font-semibold text-slate-800">Dịch vụ theo chuyên khoa</h3>
-          <p className="mt-0.5 text-xs text-slate-400">
-            Dữ liệu được lấy từ admin API thật của chuyên khoa và dịch vụ liên quan.
+          <p className="mt-0.5 text-xs text-slate-400">{tabDescription}</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Đang hoạt động: {stats.activeServices} | Đã ẩn: {stats.inactiveServices}
           </p>
         </div>
 
@@ -108,7 +147,7 @@ export default function ManageServices() {
             {specialties.map((specialty) => (
               <button
                 key={specialty.id}
-                onClick={() => navigate(`/admin/services/chuyen-khoa/${specialty.slug}`)}
+                onClick={() => navigate(`/admin/services/chuyen-khoa/${specialty.slug}?tab=${activeTab}`)}
                 className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-slate-50"
               >
                 <div className="flex items-center gap-3">
@@ -125,7 +164,12 @@ export default function ManageServices() {
 
                 <div className="text-right">
                   <div className="text-sm font-semibold text-slate-700">
-                    {countRelatedServices(specialty.id)} dịch vụ liên quan
+                    {countServicesBySpecialty(specialty.id)}{' '}
+                    {activeTab === 'packages'
+                      ? 'gói dịch vụ'
+                      : activeTab === 'regular'
+                        ? 'dịch vụ lẻ'
+                        : 'dịch vụ'}
                   </div>
                   <div className="mt-0.5 text-xs text-slate-400">
                     {specialty.so_bac_si} bác sĩ
