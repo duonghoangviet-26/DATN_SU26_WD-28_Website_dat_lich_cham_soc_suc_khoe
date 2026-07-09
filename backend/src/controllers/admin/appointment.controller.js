@@ -11,6 +11,11 @@ import CaiDatThanhToan from '../../models/CaiDatThanhToan.js'
 import { ok, created, fail } from '../../utils/response.js'
 
 const ADMIN_REFUND_SETTING_KEYS = ['hoan_tien_admin_huy', 'hoan_tien_admin_huy_khan_cap']
+const APPOINTMENT_LIST_LIMIT_MAX = 100
+
+function isValidObjectId(value) {
+  return mongoose.Types.ObjectId.isValid(value)
+}
 
 function toDateOnly(value) {
   const date = new Date(value)
@@ -18,25 +23,233 @@ function toDateOnly(value) {
   return date
 }
 
+function endOfDateOnly(value) {
+  const date = toDateOnly(value)
+  date.setUTCHours(23, 59, 59, 999)
+  return date
+}
+
 function formatDateOnly(value) {
   return new Date(value).toISOString().slice(0, 10)
 }
 
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function clampPositiveInt(value, fallback, max) {
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback
+  }
+
+  return Math.min(parsed, max)
+}
+
+function getQuickFilterConditions(quickFilter) {
+  const today = toDateOnly(new Date())
+
+  switch (quickFilter) {
+    case 'today':
+      return { ngay_kham: { $gte: today, $lte: endOfDateOnly(today) } }
+    case 'upcoming':
+      return {
+        ngay_kham: { $gte: today },
+        status: { $in: ['pending', 'confirmed', 'checked_in', 'in_progress'] },
+      }
+    case 'unpaid':
+      return {
+        payment_status: { $in: ['unpaid', 'partial'] },
+        status: { $ne: 'cancelled' },
+      }
+    case 'cancelled':
+      return { status: 'cancelled' }
+    case 'need_attention':
+      return {
+        $or: [
+          { status: 'pending' },
+          { payment_status: { $in: ['unpaid', 'partial'] } },
+          { so_lan_thay_doi: { $gte: 2 } },
+        ],
+      }
+    default:
+      return null
+  }
+}
+
+async function buildKeywordFilter(keyword) {
+  const normalizedKeyword = keyword?.trim()
+  if (!normalizedKeyword) {
+    return null
+  }
+
+  const safeKeyword = escapeRegex(normalizedKeyword)
+  const keywordRegex = new RegExp(safeKeyword, 'i')
+
+  const [matchedUsers, matchedDoctorUsers] = await Promise.all([
+    mongoose.connection.collection('nguoi_dung')
+      .find(
+        {
+          $or: [
+            { ho_ten: keywordRegex },
+            { so_dien_thoai: keywordRegex },
+            { email: keywordRegex },
+          ],
+        },
+        { projection: { _id: 1 } }
+      )
+      .toArray(),
+    mongoose.connection.collection('nguoi_dung')
+      .find({ ho_ten: keywordRegex, role: 'doctor' }, { projection: { _id: 1 } })
+      .toArray(),
+  ])
+
+  const matchedDoctorUserIds = matchedDoctorUsers.map((item) => item._id)
+  const matchedDoctors = matchedDoctorUserIds.length > 0
+    ? await BacSi.find({ user_id: { $in: matchedDoctorUserIds } }).select('_id').lean()
+    : []
+
+  const userIds = matchedUsers.map((item) => item._id)
+  const doctorIds = matchedDoctors.map((item) => item._id)
+
+  return {
+    $or: [
+      { ma_lich_hen: keywordRegex },
+      { ten_khach: keywordRegex },
+      { so_dien_thoai_khach: keywordRegex },
+      ...(userIds.length > 0 ? [{ user_id: { $in: userIds } }] : []),
+      ...(doctorIds.length > 0 ? [{ doctor_id: { $in: doctorIds } }] : []),
+    ],
+  }
+}
+
+async function buildAppointmentQuery({
+  keyword,
+  status,
+  payment_status,
+  loai_kham,
+  startDate,
+  endDate,
+  doctor_id,
+  chi_nhanh_id,
+  specialty_id,
+  ma_lich_hen,
+  quick_filter,
+}) {
+  const query = {}
+
+  if (loai_kham) query.loai_kham = loai_kham
+  if (status) query.status = status
+  if (payment_status) query.payment_status = payment_status
+
+  if (doctor_id) {
+    if (!isValidObjectId(doctor_id)) {
+      throw new Error('doctor_id khong hop le')
+    }
+    query.doctor_id = doctor_id
+  }
+
+  if (chi_nhanh_id) {
+    if (!isValidObjectId(chi_nhanh_id)) {
+      throw new Error('chi_nhanh_id khong hop le')
+    }
+    query.chi_nhanh_id = chi_nhanh_id
+  }
+
+  if (specialty_id) {
+    if (!isValidObjectId(specialty_id)) {
+      throw new Error('specialty_id khong hop le')
+    }
+    query.specialty_id = specialty_id
+  }
+
+  if (ma_lich_hen?.trim()) {
+    query.ma_lich_hen = ma_lich_hen.trim()
+  }
+
+  if (startDate || endDate) {
+    query.ngay_kham = {}
+    if (startDate) query.ngay_kham.$gte = toDateOnly(startDate)
+    if (endDate) query.ngay_kham.$lte = endOfDateOnly(endDate)
+  }
+
+  const andConditions = []
+  const quickFilterConditions = getQuickFilterConditions(quick_filter)
+  if (quickFilterConditions) {
+    andConditions.push(quickFilterConditions)
+  }
+
+  const keywordFilter = await buildKeywordFilter(keyword)
+  if (keywordFilter) {
+    andConditions.push(keywordFilter)
+  }
+
+  if (andConditions.length > 0) {
+    query.$and = andConditions
+  }
+
+  return query
+}
+
+function getSummaryBaseQuery(query) {
+  const summaryQuery = { ...query }
+  delete summaryQuery.status
+  delete summaryQuery.payment_status
+  delete summaryQuery.$and
+
+  const retainedAndConditions = (query.$and ?? []).filter((condition) => {
+    if (condition.$or) {
+      return true
+    }
+
+    return condition.ngay_kham == null
+  })
+
+  if (retainedAndConditions.length > 0) {
+    summaryQuery.$and = retainedAndConditions
+  }
+
+  return summaryQuery
+}
+
 function formatAppointmentItem(appointment) {
+  const patientName =
+    appointment.member_id?.ho_ten ||
+    appointment.ten_khach ||
+    appointment.user_id?.ho_ten ||
+    'Khach vang lai'
+  const patientPhone =
+    appointment.so_dien_thoai_khach ||
+    appointment.member_id?.tai_khoan_id?.so_dien_thoai ||
+    appointment.user_id?.so_dien_thoai ||
+    null
+  const bookerName =
+    appointment.nguoi_dat_ho_ten ||
+    appointment.nguoi_dat_ho_id?.ho_ten ||
+    null
+  const bookerPhone =
+    appointment.nguoi_dat_sdt ||
+    appointment.nguoi_dat_ho_id?.so_dien_thoai ||
+    null
+
   return {
     _id: appointment._id,
     ma_lich_hen: appointment.ma_lich_hen ?? null,
     user_id: appointment.user_id?._id ?? appointment.user_id ?? null,
+    member_id: appointment.member_id?._id ?? appointment.member_id ?? null,
+    user_email: appointment.user_id?.email ?? appointment.email_khach ?? null,
     service_id: appointment.service_id?._id ?? appointment.service_id ?? null,
     chi_nhanh_id: appointment.chi_nhanh_id ?? null,
-    specialty_id: appointment.specialty_id ?? null,
+    specialty_id: appointment.specialty_id?._id ?? appointment.specialty_id ?? null,
     loai_benh_nhan: appointment.loai_benh_nhan ?? null,
     khach_vang_lai_id: appointment.khach_vang_lai_id ?? null,
     dat_ho: appointment.dat_ho ?? false,
-    nguoi_dat_ho_id: appointment.nguoi_dat_ho_id ?? null,
+    nguoi_dat_ho_id: appointment.nguoi_dat_ho_id?._id ?? appointment.nguoi_dat_ho_id ?? null,
+    nguoi_dat_ho_ten: bookerName,
+    nguoi_dat_sdt: bookerPhone,
     hinh_thuc_dat_lich: appointment.hinh_thuc_dat_lich ?? null,
-    benh_nhan: appointment.ten_khach || appointment.user_id?.ho_ten || 'Khach vang lai',
-    sdt_benh_nhan: appointment.so_dien_thoai_khach || appointment.user_id?.so_dien_thoai || null,
+    benh_nhan: patientName,
+    sdt_benh_nhan: patientPhone,
     doctor_id: appointment.doctor_id?._id ?? appointment.doctor_id ?? null,
     bac_si: appointment.doctor_id?.user_id?.ho_ten || 'Khong ro',
     chuyen_khoa:
@@ -53,6 +266,28 @@ function formatAppointmentItem(appointment) {
     so_lan_thay_doi: appointment.so_lan_thay_doi ?? 0,
     gia_kham: appointment.gia_kham,
     dia_chi_kham: appointment.dia_chi_kham,
+    ly_do_kham: appointment.ly_do_kham ?? null,
+    ly_do_huy: appointment.ly_do_huy ?? null,
+    huy_boi: appointment.huy_boi ?? null,
+    thoi_diem_huy: appointment.thoi_diem_huy ?? null,
+    ghi_chu_le_tan: appointment.ghi_chu_le_tan ?? null,
+    ghi_chu_tiep_nhan: appointment.ghi_chu_tiep_nhan ?? null,
+    canh_bao: {
+      unpaid:
+        appointment.status !== 'cancelled' &&
+        ['unpaid', 'partial'].includes(appointment.payment_status),
+      rescheduled_multiple_times: (appointment.so_lan_thay_doi ?? 0) >= 2,
+      missing_linkage: !appointment.doctor_id || !appointment.specialty_id,
+      cancelled: appointment.status === 'cancelled',
+    },
+    invoice: appointment.invoice
+      ? {
+          _id: appointment.invoice._id,
+          so_hoa_don: appointment.invoice.so_hoa_don ?? null,
+          trang_thai_hoa_don: appointment.invoice.trang_thai_hoa_don ?? null,
+          tong_thanh_toan: appointment.invoice.tong_thanh_toan ?? null,
+        }
+      : null,
     ngay_cap_nhat: appointment.ngay_cap_nhat,
   }
 }
@@ -244,8 +479,13 @@ async function syncRefundForCancelledAppointment({ appointment, lyDoHuy, adminUs
 }
 
 async function loadAppointmentForResponse(id) {
-  return LichHen.findById(id)
+  const appointment = await LichHen.findById(id)
     .populate({ path: 'user_id', select: 'ho_ten email so_dien_thoai' })
+    .populate({
+      path: 'member_id',
+      select: 'ho_ten tai_khoan_id',
+      populate: { path: 'tai_khoan_id', select: 'so_dien_thoai' },
+    })
     .populate({
       path: 'doctor_id',
       populate: [
@@ -256,131 +496,112 @@ async function loadAppointmentForResponse(id) {
     .populate('service_id', 'ten')
     .populate('specialty_id', 'ten')
     .lean()
+
+  if (!appointment) {
+    return null
+  }
+
+  const invoice = await HoaDon.findOne({ appointment_id: appointment._id })
+    .select('so_hoa_don trang_thai_hoa_don tong_thanh_toan')
+    .lean()
+
+  return {
+    ...appointment,
+    invoice,
+  }
 }
 
 // GET /api/admin/appointments
 // Lay danh sach lich hen voi filter
 export async function getAllAppointments(req, res) {
   try {
-    const {
-      keyword,
-      status,
-      payment_status,
-      loai_kham,
-      startDate,
-      endDate,
-      page = 1,
-      limit = 20,
-      doctor_id,
-      chi_nhanh_id,
-      specialty_id,
-      ma_lich_hen,
-    } = req.query
+    const pageNum = clampPositiveInt(req.query.page, 1, Number.MAX_SAFE_INTEGER)
+    const limitNum = clampPositiveInt(req.query.limit, 20, APPOINTMENT_LIST_LIMIT_MAX)
+    const skip = (pageNum - 1) * limitNum
+    const query = await buildAppointmentQuery(req.query)
+    const summaryBaseQuery = getSummaryBaseQuery(query)
 
-    const query = {}
-    if (loai_kham) query.loai_kham = loai_kham
-    if (doctor_id) query.doctor_id = doctor_id
-    if (chi_nhanh_id) query.chi_nhanh_id = chi_nhanh_id
-    if (specialty_id) query.specialty_id = specialty_id
-    if (payment_status) query.payment_status = payment_status
-    if (ma_lich_hen) query.ma_lich_hen = ma_lich_hen
-
-    if (startDate || endDate) {
-      query.ngay_kham = {}
-      if (startDate) query.ngay_kham.$gte = toDateOnly(startDate)
-      if (endDate) query.ngay_kham.$lte = toDateOnly(endDate)
-    }
-
-    let allAppointments = await LichHen.find(query)
-      .populate({ path: 'user_id', select: 'ho_ten email so_dien_thoai' })
-      .populate({
-        path: 'doctor_id',
-        populate: [
-          { path: 'user_id', select: 'ho_ten' },
-          { path: 'specialties', select: 'ten' },
+    const [
+      total,
+      appointments,
+      todayCount,
+      pendingCount,
+      confirmedCount,
+      inProgressCount,
+      completedCount,
+      cancelledCount,
+      unpaidCount,
+      abnormalCount,
+    ] = await Promise.all([
+      LichHen.countDocuments(query),
+      LichHen.find(query)
+        .populate({ path: 'user_id', select: 'ho_ten email so_dien_thoai' })
+        .populate({
+          path: 'member_id',
+          select: 'ho_ten tai_khoan_id',
+          populate: { path: 'tai_khoan_id', select: 'so_dien_thoai' },
+        })
+        .populate({
+          path: 'doctor_id',
+          populate: [
+            { path: 'user_id', select: 'ho_ten' },
+            { path: 'specialties', select: 'ten' },
+          ],
+        })
+        .populate('service_id', 'ten')
+        .populate('specialty_id', 'ten')
+        .sort({ ngay_kham: 1, gio_kham: 1, ngay_tao: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      LichHen.countDocuments({
+        ...summaryBaseQuery,
+        ngay_kham: { $gte: toDateOnly(new Date()), $lte: endOfDateOnly(new Date()) },
+      }),
+      LichHen.countDocuments({ ...summaryBaseQuery, status: 'pending' }),
+      LichHen.countDocuments({ ...summaryBaseQuery, status: 'confirmed' }),
+      LichHen.countDocuments({ ...summaryBaseQuery, status: 'in_progress' }),
+      LichHen.countDocuments({ ...summaryBaseQuery, status: 'completed' }),
+      LichHen.countDocuments({ ...summaryBaseQuery, status: 'cancelled' }),
+      LichHen.countDocuments({
+        ...summaryBaseQuery,
+        payment_status: { $in: ['unpaid', 'partial'] },
+        status: { $ne: 'cancelled' },
+      }),
+      LichHen.countDocuments({
+        ...summaryBaseQuery,
+        $or: [
+          { status: 'pending' },
+          { payment_status: { $in: ['unpaid', 'partial'] }, status: { $ne: 'cancelled' } },
+          { so_lan_thay_doi: { $gte: 2 } },
         ],
-      })
-      .populate('service_id', 'ten')
-      .populate('specialty_id', 'ten')
-      .sort({ ngay_kham: -1, gio_kham: -1 })
-      .lean()
-
-    if (keyword) {
-      const kw = keyword.toLowerCase().trim()
-      allAppointments = allAppointments.filter((appointment) => {
-        const tenBenhNhan = appointment.ten_khach || appointment.user_id?.ho_ten || ''
-        const tenBacSi = appointment.doctor_id?.user_id?.ho_ten || ''
-        const sdt = appointment.so_dien_thoai_khach || appointment.user_id?.so_dien_thoai || ''
-        return (
-          tenBenhNhan.toLowerCase().includes(kw) ||
-          tenBacSi.toLowerCase().includes(kw) ||
-          sdt.includes(kw)
-        )
-      })
-    }
-
-    const todayStr = formatDateOnly(new Date())
-
-    const summary = {
-      today: allAppointments.filter((appointment) => formatDateOnly(appointment.ngay_kham) === todayStr).length,
-      pending: allAppointments.filter((appointment) => appointment.status === 'pending').length,
-      confirmed: allAppointments.filter((appointment) => appointment.status === 'confirmed').length,
-      completed: allAppointments.filter((appointment) => appointment.status === 'completed').length,
-    }
-
-    let displayAppointments = allAppointments
-    if (status) {
-      displayAppointments = displayAppointments.filter((appointment) => appointment.status === status)
-    }
-
-    const total = displayAppointments.length
-    const pageNum = Number.parseInt(page, 10)
-    const limitNum = Number.parseInt(limit, 10)
-    
-    // Nếu view_mode là doctor_grouped, trả về toàn bộ và gom nhóm
-    if (req.query.view_mode === 'doctor_grouped') {
-      const grouped = {}
-      for (const app of displayAppointments) {
-        const doctorName = app.doctor_id?.user_id?.ho_ten || 'Không rõ'
-        const doctorId = app.doctor_id?._id ? String(app.doctor_id._id) : 'unknown'
-        if (!grouped[doctorId]) {
-          grouped[doctorId] = {
-            doctor_id: doctorId,
-            doctor_name: doctorName,
-            appointments: []
-          }
-        }
-        grouped[doctorId].appointments.push(formatAppointmentItem(app))
-      }
-
-      return res.status(200).json({
-        success: true,
-        data: Object.values(grouped),
-        summary,
-      })
-    }
+      }),
+    ])
 
     const totalPages = total === 0 ? 1 : Math.ceil(total / limitNum)
-    const startIndex = (pageNum - 1) * limitNum
-    const endIndex = startIndex + limitNum
-
-    const formattedData = displayAppointments
-      .slice(startIndex, endIndex)
-      .map(formatAppointmentItem)
 
     return res.status(200).json({
       success: true,
-      data: formattedData,
+      data: appointments.map(formatAppointmentItem),
       pagination: {
         total,
         page: pageNum,
         limit: limitNum,
         totalPages,
       },
-      summary,
+      summary: {
+        today: todayCount,
+        pending: pendingCount,
+        confirmed: confirmedCount,
+        in_progress: inProgressCount,
+        completed: completedCount,
+        cancelled: cancelledCount,
+        unpaid: unpaidCount,
+        need_attention: abnormalCount,
+      },
     })
   } catch (err) {
-    return fail(res, 500, err.message)
+    return fail(res, 400, err.message)
   }
 }
 
@@ -388,6 +609,9 @@ export async function getAllAppointments(req, res) {
 export async function getAppointmentById(req, res) {
   try {
     const { id } = req.params
+    if (!isValidObjectId(id)) {
+      return fail(res, 400, 'ID lich hen khong hop le')
+    }
     const appointment = await loadAppointmentForResponse(id)
 
     if (!appointment) return fail(res, 404, 'Khong tim thay lich hen')
@@ -404,6 +628,19 @@ export async function cancelAppointment(req, res) {
   session.startTransaction()
   try {
     const { id } = req.params
+    if (!isValidObjectId(id)) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 400, 'ID lich hen khong hop le')
+    }
+
+    const cancelReason = req.body.ly_do_huy?.trim()
+    if (!cancelReason) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 400, 'Ly do huy la bat buoc')
+    }
+
     const appointment = await LichHen.findById(id).session(session)
 
     if (!appointment) {
@@ -426,7 +663,10 @@ export async function cancelAppointment(req, res) {
 
     const oldStatus = appointment.status
     appointment.status = 'cancelled'
-    appointment.ly_do_huy = req.body.ly_do_huy || 'Huy boi Admin'
+    appointment.ly_do_huy = cancelReason
+    appointment.huy_boi = 'admin'
+    appointment.nguoi_huy_id = req.user.id
+    appointment.thoi_diem_huy = new Date()
 
     const { oldPaymentStatus, newPaymentStatus } = await syncRefundForCancelledAppointment({
       appointment,
@@ -443,6 +683,8 @@ export async function cancelAppointment(req, res) {
       den_trang_thai: 'cancelled',
       tu_payment_status: oldPaymentStatus,
       den_payment_status: newPaymentStatus,
+      nguoi_thay_doi_id: req.user.id,
+      kenh_thay_doi: 'admin',
       nguoi_thuc_hien_id: req.user.id,
       vai_tro: 'admin',
       ly_do: appointment.ly_do_huy,
@@ -473,22 +715,72 @@ export async function cancelAppointment(req, res) {
 
 // PATCH /api/admin/appointments/:id/restore
 export async function restoreAppointment(req, res) {
+  const session = await mongoose.startSession()
+  session.startTransaction()
   try {
     const { id } = req.params
-    const appointment = await LichHen.findById(id)
-
-    if (!appointment) return fail(res, 404, 'Không tìm thấy lịch hẹn')
-    if (appointment.status !== 'cancelled') {
-      return fail(res, 400, 'Chỉ có thể khôi phục lịch hẹn đã hủy')
+    if (!isValidObjectId(id)) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 400, 'ID lich hen khong hop le')
     }
 
-    // Chuyển lại trạng thái thành pending
+    const appointment = await LichHen.findById(id).session(session)
+
+    if (!appointment) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 404, 'Khong tim thay lich hen')
+    }
+
+    if (appointment.status !== 'cancelled') {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 400, 'Chi co the khoi phuc lich hen da huy')
+    }
+
+    const schedule = appointment.schedule_id
+      ? await LichLamViec.findById(appointment.schedule_id).session(session)
+      : null
+    const slot = schedule?.slots.id(appointment.slot_id)
+    if (!schedule || !slot || slot.status !== 'active') {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 409, 'Khong the khoi phuc vi slot cu khong con trong')
+    }
+
+    slot.status = 'booked'
+    slot.benh_nhan_id = appointment.user_id ?? null
+    slot.benh_nhan_tam_giu_id = null
+    await schedule.save({ session })
+
     appointment.status = 'pending'
     appointment.ly_do_huy = null
-    await appointment.save()
+    appointment.huy_boi = null
+    appointment.nguoi_huy_id = null
+    appointment.thoi_diem_huy = null
+    await appointment.save({ session })
 
-    return ok(res, null, 'Khôi phục lịch hẹn thành công')
+    await LichSuLichHen.create([{
+      appointment_id: appointment._id,
+      tu_trang_thai: 'cancelled',
+      den_trang_thai: 'pending',
+      tu_payment_status: appointment.payment_status,
+      den_payment_status: appointment.payment_status,
+      nguoi_thay_doi_id: req.user.id,
+      kenh_thay_doi: 'admin',
+      nguoi_thuc_hien_id: req.user.id,
+      vai_tro: 'admin',
+      ly_do: 'Admin khoi phuc lich hen da huy',
+    }], { session })
+
+    await session.commitTransaction()
+    session.endSession()
+
+    return ok(res, null, 'Khoi phuc lich hen thanh cong')
   } catch (err) {
+    await session.abortTransaction()
+    session.endSession()
     return fail(res, 500, err.message)
   }
 }
@@ -497,11 +789,20 @@ export async function restoreAppointment(req, res) {
 export async function deleteAppointment(req, res) {
   try {
     const { id } = req.params
-    const appointment = await LichHen.findByIdAndDelete(id)
+    if (!isValidObjectId(id)) {
+      return fail(res, 400, 'ID lich hen khong hop le')
+    }
 
-    if (!appointment) return fail(res, 404, 'Không tìm thấy lịch hẹn')
+    const appointment = await LichHen.findById(id)
 
-    return ok(res, null, 'Xóa cứng lịch hẹn thành công')
+    if (!appointment) return fail(res, 404, 'Khong tim thay lich hen')
+    if (appointment.status !== 'cancelled') {
+      return fail(res, 400, 'Chi duoc xoa cung lich hen da huy')
+    }
+
+    await LichHen.findByIdAndDelete(id)
+
+    return ok(res, null, 'Xoa cung lich hen thanh cong')
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -631,10 +932,20 @@ export async function rescheduleAppointment(req, res) {
   session.startTransaction()
   try {
     const { id } = req.params
-    const { doctor_id, schedule_id, slot_id } = req.body
+    const { doctor_id, schedule_id, slot_id, ly_do } = req.body
+    const reason = ly_do?.trim()
 
+    if (!isValidObjectId(id)) {
+      throw new Error('ID lich hen khong hop le')
+    }
     if (!doctor_id || !schedule_id || !slot_id) {
       throw new Error('Bac si, lich lam viec va khung gio moi la bat buoc')
+    }
+    if (!isValidObjectId(doctor_id) || !isValidObjectId(schedule_id) || !isValidObjectId(slot_id)) {
+      throw new Error('Du lieu doi lich khong hop le')
+    }
+    if (!reason) {
+      throw new Error('Ly do doi lich la bat buoc')
     }
 
     const appointment = await LichHen.findById(id).session(session)
@@ -647,7 +958,15 @@ export async function rescheduleAppointment(req, res) {
     }
 
     if (req.body.updatedAt && new Date(req.body.updatedAt).getTime() !== new Date(appointment.ngay_cap_nhat).getTime()) {
-      throw new Error('Lịch hẹn đã bị thay đổi bởi người khác (Concurrency Conflict). Vui lòng tải lại trang.')
+      throw new Error('Lich hen da bi thay doi boi nguoi khac (Concurrency Conflict). Vui long tai lai trang.')
+    }
+
+    if (
+      String(appointment.doctor_id) === String(doctor_id) &&
+      String(appointment.schedule_id) === String(schedule_id) &&
+      String(appointment.slot_id) === String(slot_id)
+    ) {
+      throw new Error('Khung gio moi dang trung voi lich hien tai')
     }
 
     const doctor = await getDoctorOrThrow(doctor_id, session)
@@ -662,6 +981,19 @@ export async function rescheduleAppointment(req, res) {
     if (newSlot.status !== 'active') {
       throw new Error('Khung gio moi da bi khoa')
     }
+
+    const nextDateTime = new Date(formatDateOnly(newSchedule.ngay) + 'T' + newSlot.gio_bat_dau + ':00')
+    if (nextDateTime.getTime() <= Date.now()) {
+      throw new Error('Khong the doi lich vao thoi diem trong qua khu')
+    }
+
+    const oldDoctorId = appointment.doctor_id
+    const oldScheduleId = appointment.schedule_id
+    const oldSlotId = appointment.slot_id
+    const oldSpecialtyId = appointment.specialty_id
+    const oldNgayKham = appointment.ngay_kham
+    const oldGioKham = appointment.gio_kham
+
     const oldSchedule = await LichLamViec.findById(appointment.schedule_id).session(session)
     const oldSlot = oldSchedule?.slots.id(appointment.slot_id)
     if (oldSlot) {
@@ -692,11 +1024,25 @@ export async function rescheduleAppointment(req, res) {
       den_trang_thai: appointment.status,
       tu_payment_status: appointment.payment_status,
       den_payment_status: appointment.payment_status,
+      bac_si_cu_id: oldDoctorId,
+      bac_si_moi_id: doctor._id,
+      specialty_cu_id: oldSpecialtyId,
+      specialty_moi_id: appointment.specialty_id,
+      schedule_cu_id: oldScheduleId,
+      schedule_moi_id: newSchedule._id,
+      slot_cu_id: oldSlotId,
+      slot_moi_id: newSlot._id,
+      ngay_kham_cu: oldNgayKham,
+      ngay_kham_moi: appointment.ngay_kham,
+      gio_kham_cu: oldGioKham,
+      gio_kham_moi: appointment.gio_kham,
       nguoi_thay_doi_id: req.user.id,
       kenh_thay_doi: 'admin',
       nguoi_thuc_hien_id: req.user.id,
       vai_tro: 'admin',
-      ly_do: `Admin doi lich sang ${newSlot.gio_bat_dau} ngay ${formatDateOnly(newSchedule.ngay)}`,
+      ly_do: reason,
+      ly_do_thay_doi: reason,
+      loai_thay_doi: 'reschedule',
     }], { session })
 
     await session.commitTransaction()
@@ -763,15 +1109,17 @@ export async function getActiveServices(req, res) {
 export async function getDoctorSchedules(req, res) {
   try {
     const { id } = req.params
+    if (!isValidObjectId(id)) {
+      return fail(res, 400, 'ID bac si khong hop le')
+    }
 
     const now = new Date()
     const today = new Date(now)
     today.setHours(0, 0, 0, 0)
 
-    // Giờ hiện tại dạng "HH:MM" — để lọc slot đã qua trong ngày hôm nay
     const hh = String(now.getHours()).padStart(2, '0')
     const mm = String(now.getMinutes()).padStart(2, '0')
-    const currentTimeStr = `${hh}:${mm}`
+    const currentTimeStr = hh + ':' + mm
     const todayStr = formatDateOnly(today)
 
     const schedules = await LichLamViec.find({
@@ -789,7 +1137,6 @@ export async function getDoctorSchedules(req, res) {
           ngay: scheduleDate,
           slots: schedule.slots.filter((slot) => {
             if (slot.status !== 'active') return false
-            // Nếu lịch hôm nay: loại slot đã bắt đầu hoặc đã qua (gio_bat_dau <= giờ hiện tại)
             if (isToday && slot.gio_bat_dau <= currentTimeStr) return false
             return true
           }),
@@ -808,10 +1155,13 @@ export async function getDoctorSchedules(req, res) {
 export async function getAppointmentHistory(req, res) {
   try {
     const { id } = req.params
+    if (!isValidObjectId(id)) {
+      return fail(res, 400, 'ID lich hen khong hop le')
+    }
 
     const history = await LichSuLichHen.find({ appointment_id: id })
       .populate('nguoi_thuc_hien_id', 'ho_ten email')
-      .sort({ thoi_diem: -1 })
+      .sort({ thoi_diem: -1, thoi_diem_thay_doi: -1 })
       .lean()
 
     const formatted = history.map((item) => ({
@@ -821,10 +1171,16 @@ export async function getAppointmentHistory(req, res) {
       tu_payment_status: item.tu_payment_status,
       den_payment_status: item.den_payment_status,
       vai_tro: item.vai_tro,
-      nguoi_thuc_hien: item.nguoi_thuc_hien_id ? item.nguoi_thuc_hien_id.ho_ten : (item.vai_tro === 'system' ? 'Hệ thống' : 'Khách'),
+      loai_thay_doi: item.loai_thay_doi ?? null,
+      ly_do_thay_doi: item.ly_do_thay_doi ?? null,
+      nguoi_thuc_hien: item.nguoi_thuc_hien_id ? item.nguoi_thuc_hien_id.ho_ten : (item.vai_tro === 'system' ? 'He thong' : 'Khach'),
       nguoi_thuc_hien_email: item.nguoi_thuc_hien_id ? item.nguoi_thuc_hien_id.email : '',
       ly_do: item.ly_do,
       thoi_diem: item.thoi_diem,
+      ngay_kham_cu: item.ngay_kham_cu ? formatDateOnly(item.ngay_kham_cu) : null,
+      ngay_kham_moi: item.ngay_kham_moi ? formatDateOnly(item.ngay_kham_moi) : null,
+      gio_kham_cu: item.gio_kham_cu ?? null,
+      gio_kham_moi: item.gio_kham_moi ?? null,
     }))
 
     return ok(res, formatted)

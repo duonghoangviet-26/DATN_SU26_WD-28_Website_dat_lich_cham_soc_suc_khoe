@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import Icon from '@/components/admin/icons'
 import { specialtyService } from '@/services/specialty.service'
-import type { ServiceFormData, ServiceItem } from '@/types'
+import type { ServiceFormData, ServiceItem, ServiceTargetAudience } from '@/types'
 
 const EMPTY_FORM: ServiceFormData = {
   ten: '',
@@ -12,8 +12,17 @@ const EMPTY_FORM: ServiceFormData = {
   mo_ta: '',
   chuan_bi_truoc: '',
   specialty_id: null,
+  la_goi: false,
+  doi_tuong_ap_dung: null,
   khu_vuc: [],
 }
+
+const DOI_TUONG_OPTIONS: { value: ServiceTargetAudience; label: string }[] = [
+  { value: 'tre_em', label: 'Trẻ em' },
+  { value: 'nguoi_lon', label: 'Người lớn' },
+  { value: 'gia_dinh', label: 'Gia đình' },
+  { value: 'khong_gioi_han', label: 'Không giới hạn' },
+]
 
 function validate(data: ServiceFormData): Record<string, string> {
   const errors: Record<string, string> = {}
@@ -83,6 +92,8 @@ export default function ServiceFormModal({
         mo_ta: service.mo_ta ?? '',
         chuan_bi_truoc: service.chuan_bi_truoc ?? '',
         specialty_id: service.specialty_id ?? null,
+        la_goi: service.la_goi ?? false,
+        doi_tuong_ap_dung: service.doi_tuong_ap_dung ?? null,
         khu_vuc: [],
       })
     } else {
@@ -192,6 +203,51 @@ export default function ServiceFormModal({
                 </option>
               ))}
             </select>
+          </FormField>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={form.la_goi ?? false}
+                onChange={(event) => {
+                  const checked = event.target.checked
+                  setForm((current) => ({
+                    ...current,
+                    la_goi: checked,
+                    doi_tuong_ap_dung: checked ? current.doi_tuong_ap_dung : null,
+                  }))
+                }}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-200"
+              />
+              <span>
+                <span className="block text-sm font-medium text-slate-700">Đánh dấu là gói dịch vụ</span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  Bật tùy chọn này khi dịch vụ là gói theo chuyên khoa, theo đối tượng hoặc theo năm.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <FormField label="Đối tượng áp dụng">
+            <select
+              value={form.doi_tuong_ap_dung ?? ''}
+              onChange={(event) =>
+                setField('doi_tuong_ap_dung', event.target.value ? event.target.value as ServiceTargetAudience : null)
+              }
+              className="input w-full"
+              disabled={!(form.la_goi ?? false)}
+            >
+              <option value="">— Không chọn —</option>
+              {DOI_TUONG_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-400">
+              Trường này là tùy chọn. Nếu chưa rõ đối tượng áp dụng, có thể để trống.
+            </p>
           </FormField>
 
           <FormField label="Giá dịch vụ (VNĐ)" required error={errors.gia}>

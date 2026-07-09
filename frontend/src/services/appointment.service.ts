@@ -1,6 +1,6 @@
 import type {
   AppointmentItem,
-  AppointmentListResponse,
+  AppointmentHistoryItem,
   AdminAppointmentDoctorOption,
   AdminAppointmentServiceOption,
 } from '@/types'
@@ -11,12 +11,15 @@ export const appointmentService = {
     keyword?: string
     status?: string
     loai_kham?: string
+    payment_status?: string
     startDate?: string
     endDate?: string
     page?: number
     limit?: number
-    view_mode?: string
     doctor_id?: string
+    specialty_id?: string
+    ma_lich_hen?: string
+    quick_filter?: string
   }): Promise<any> {
     const res = await axiosInstance.get('/admin/appointments', { params })
     return {
@@ -31,7 +34,7 @@ export const appointmentService = {
     return res.data.data
   },
 
-  async getAppointmentHistory(id: string): Promise<any[]> {
+  async getAppointmentHistory(id: string): Promise<AppointmentHistoryItem[]> {
     const res = await axiosInstance.get(`/admin/appointments/${id}/history`)
     return res.data.data
   },
@@ -51,7 +54,7 @@ export const appointmentService = {
 
   async reschedule(
     id: string,
-    data: { doctor_id: string, schedule_id: string, slot_id: string, updatedAt?: string }
+    data: { doctor_id: string, schedule_id: string, slot_id: string, ly_do: string, updatedAt?: string }
   ): Promise<AppointmentItem> {
     const res = await axiosInstance.patch(`/admin/appointments/${id}/reschedule`, data)
     return res.data.data

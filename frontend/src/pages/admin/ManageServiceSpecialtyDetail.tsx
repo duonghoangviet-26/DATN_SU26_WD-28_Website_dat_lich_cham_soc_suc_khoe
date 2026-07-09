@@ -21,6 +21,13 @@ interface SpecialtyDoctorItem {
   user_id: string | null
 }
 
+const DOI_TUONG_LABEL: Record<string, string> = {
+  tre_em: 'Trẻ em',
+  nguoi_lon: 'Người lớn',
+  gia_dinh: 'Gia đình',
+  khong_gioi_han: 'Không giới hạn',
+}
+
 export default function ManageServiceSpecialtyDetail() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
@@ -308,7 +315,13 @@ export default function ManageServiceSpecialtyDetail() {
                         {service.ma_dich_vu}
                       </td>
                       <td className={`px-4 py-3 ${dim}`}>
-                        <div className="font-medium text-slate-800">{service.ten}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="font-medium text-slate-800">{service.ten}</div>
+                          {service.la_goi && <Badge color="blue">Gói</Badge>}
+                          {service.la_goi && service.doi_tuong_ap_dung && (
+                            <Badge color="yellow">{DOI_TUONG_LABEL[service.doi_tuong_ap_dung] ?? service.doi_tuong_ap_dung}</Badge>
+                          )}
+                        </div>
                         {service.mo_ta_ngan && (
                           <div className="mt-0.5 line-clamp-1 text-xs text-slate-400">
                             {service.mo_ta_ngan}

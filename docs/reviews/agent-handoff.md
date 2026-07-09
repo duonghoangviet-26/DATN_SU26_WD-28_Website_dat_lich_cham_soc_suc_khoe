@@ -1,156 +1,200 @@
-# Agent Handoff - Admin Refactor VitaFamily
+# Agent Handoff - VitaFamily Admin
 
 ## Mục đích
 
-File này là điểm vào nhanh cho người mới hoặc AI agent mới khi tiếp quản phần refactor admin của VitaFamily.
+File này là điểm vào nhanh cho AI agent hoặc người mới tiếp quản phần việc admin của VitaFamily.
 
-Mục tiêu của file:
+Mục tiêu:
 
-- giúp nắm đúng phạm vi đã xử lý
-- biết đọc tài liệu nào trước
-- biết những gì đã PASS thật
-- biết những gì cố ý chưa xử lý
-- tránh làm lại các bước đã khóa bằng test
+- nắm đúng phần nào đã làm xong thật
+- biết báo cáo nào phải đọc trước
+- biết những gì đã PASS bằng test/runtime
+- biết phần nào cố ý chưa làm hoặc ngoài phạm vi
+- tránh làm lại việc cũ hoặc mở rộng sai hướng
 
-## Thứ tự nên đọc
-
-Đọc theo đúng thứ tự này:
+## Đọc theo thứ tự này
 
 1. [admin-refactor-summary.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-refactor-summary.md)
 2. [admin-refactor-fix-log.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-refactor-fix-log.md)
 3. [admin-service-specialty-appointment-fix.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-service-specialty-appointment-fix.md)
-4. [admin-id-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-id-audit.md)
-5. [admin-routes-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-routes-audit.md)
+4. [admin-appointments-deep-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-appointments-deep-audit.md)
+5. [specialty-service-family-update.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/specialty-service-family-update.md)
+6. [admin-id-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-id-audit.md)
+7. [admin-routes-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-routes-audit.md)
 
-Nếu cần làm tiếp code, sau khi đọc các file trên thì mới đối chiếu lại file code/test thật được nhắc tới trong từng tài liệu.
+Nếu làm tiếp code, chỉ sau khi đọc xong các file trên mới đối chiếu lại code và test hiện tại trong repo.
 
-## Phạm vi đã khóa
+## Ảnh chụp trạng thái hiện tại
 
-Refactor hiện tại chỉ tính trong 7 domain admin:
+### Khối admin refactor gốc
 
-- `admin/clinics`
-- `admin/specialties`
-- `admin/services`
-- `admin/appointments`
-- `admin/payments`
-- `admin/reviews`
-- `admin/notifications`
+- 7 domain admin đã được rà và khóa tương đối:
+  - `admin/clinics`
+  - `admin/specialties`
+  - `admin/services`
+  - `admin/appointments`
+  - `admin/payments`
+  - `admin/reviews`
+  - `admin/notifications`
+- Chuỗi bước refactor admin trước đó đã được tổng hợp lại trong `summary` và `fix-log`.
 
-Các phần sau hiện được xem là ngoài phạm vi chính của roadmap này:
+### Đợt cập nhật mới nhất đã hoàn tất
+
+Đợt mới nhất đã xử lý xong nhóm việc:
+
+- gộp chuyên khoa Tai/Mũi/Họng
+- thêm `Nhi khoa`, `Da liễu`
+- chuẩn hóa admin CRUD chuyên khoa
+- mở rộng `DichVu` để hỗ trợ gói dịch vụ
+- seed gói dịch vụ mẫu theo chuyên khoa
+- chuẩn hóa admin CRUD dịch vụ có gói
+- xác nhận nền dữ liệu đặt hộ gia đình ở mức model/data/admin appointments
+- xác nhận `BacSi.tuoi_nhan_kham_tu` tồn tại ở tầng model/data
+- test tổng backend + build frontend và ghi báo cáo
+
+Báo cáo chốt của đợt này là:
+
+- [specialty-service-family-update.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/specialty-service-family-update.md)
+
+## Những gì đã PASS thật
+
+### PASS từ đợt admin refactor trước
+
+- backend full suite đã từng PASS cho mốc trước
+- frontend admin build PASS
+- runtime HTTP/admin route đã được kiểm tra cho các route trong phạm vi
+- dashboard admin đã dùng API thật
+- các route admin trong phạm vi đã có test auth/token tương ứng
+
+### PASS từ đợt `specialty/service/family`
+
+- `backend npm test`: `89/89 PASS`
+- `frontend npm run build`: PASS
+- API admin specialties active trả đúng:
+  - `Tai Mũi Họng`
+  - `Nhi khoa`
+  - `Da liễu`
+- reference cũ tới các chuyên khoa Tai/Mũi/Họng đã hidden không còn tồn tại ở các collection liên quan đã kiểm
+- API admin services hỗ trợ filter `la_goi`
+- seed 7 gói dịch vụ mẫu đã tồn tại đúng chuyên khoa
+- admin UI đã tạo/sửa được gói dịch vụ với:
+  - `la_goi`
+  - `doi_tuong_ap_dung`
+- admin appointments đã hiển thị tách biệt:
+  - người được khám
+  - người đặt hộ
+
+## File code chính đã thay đổi ở đợt mới nhất
+
+- `backend/src/models/DichVu.js`
+- `backend/src/controllers/admin/services.controller.js`
+- `backend/src/controllers/admin/appointment.controller.js`
+- `frontend/src/types/index.ts`
+- `frontend/src/services/service.service.ts`
+- `frontend/src/components/admin/services/ServiceFormModal.tsx`
+- `frontend/src/pages/admin/ManageServiceSpecialtyDetail.tsx`
+- `frontend/src/pages/admin/ManageAppointments/AppointmentList.tsx`
+
+## Script đã thêm ở đợt mới nhất
+
+- `backend/scripts/admin/step1-merge-ent-specialties.js`
+- `backend/scripts/admin/step2-seed-new-specialties.js`
+- `backend/scripts/admin/step4-backfill-service-package-fields.js`
+- `backend/scripts/admin/step5-seed-package-services.js`
+
+## Phạm vi ngoài scope, chưa được phép hiểu nhầm là đã xong
 
 - `backend/src/routes/doctor.routes.js`
 - `backend/src/controllers/doctor.controller.js`
 - `frontend/src/pages/admin/ManageDoctor*`
-- domain quản trị người dùng
-- domain y tá
-- domain lễ tân
+- patient/client booking UI
+- user management
+- y tá
+- lễ tân
 
-Lưu ý:
+Lưu ý rất quan trọng:
 
-- Bước 7 trước đây đã được mở rộng cục bộ để xử lý phần doctor/ManageDoctor liên quan tới `phi_tu_van` và typecheck.
-- Việc mở rộng đó không có nghĩa là toàn bộ domain doctor đã được refactor xong.
+- Bước 8 chỉ xác nhận `BacSi.tuoi_nhan_kham_tu` ở tầng model/data.
+- Không có nghĩa `ManageDoctors` đã được làm.
+- Bước 7 chỉ dựng nền dữ liệu đặt hộ gia đình và admin hiển thị đúng.
+- Không có nghĩa UI đặt lịch phía khách hàng đã được triển khai.
 
-## Trạng thái hiện tại
+## 4 tồn đọng cũ vẫn còn giữ nguyên
 
-Tính đến lần cập nhật gần nhất:
-
-- các bước 1-28 trong chuỗi admin refactor đã được đi qua và đã được log lại
-- các bước 20-28 đã được cập nhật lại đúng theo kết quả test/runtime thật
-- đã có thêm một đợt sửa riêng cho 3 luồng:
-  - `admin/services`
-  - `admin/specialties`
-  - `admin/appointments`
-- báo cáo của đợt sửa này nằm tại:
-  - [admin-service-specialty-appointment-fix.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-service-specialty-appointment-fix.md)
-- frontend admin route trong phạm vi đã được kiểm tra runtime HTTP
-- dashboard admin đã dùng API thật
-- summary cuối cùng đã được siết lại để phần tồn đọng chỉ còn đúng 4 ý
-
-## Những gì đã PASS thật
-
-Các điểm sau đã có bằng chứng test hoặc kiểm tra runtime thật:
-
-- backend full suite pass: `88/88`
-- frontend build pass
-- các route admin sau trả `200` ở runtime check:
-  - `/admin/clinics`
-  - `/admin/services`
-  - `/admin/appointments`
-  - `/admin/reviews`
-  - `/admin/notifications`
-  - `/admin/payments`
-- dashboard backend test pass
-- auth matrix cho route admin trong phạm vi đã có test
-- luồng bỏ `admin_id` từ body và lấy admin từ token đã có test khóa
-- đợt sửa riêng `services/specialties/appointments` đã pass:
-  - `GET /api/admin/specialties` trả đúng `4` chuyên khoa thật
-  - `GET /api/admin/services?loai=related` trả đúng `3` dịch vụ liên quan thật
-  - `GET /api/admin/appointments` trả đúng dữ liệu thật với đủ status:
-    - `pending`
-    - `confirmed`
-    - `checked_in`
-    - `in_progress`
-    - `completed`
-    - `cancelled`
-    - `no_show`
-
-## 4 tồn đọng còn lại
-
-Đây là 4 mục còn lại đã được chốt ở cuối summary. Không tự ý diễn giải thành ít hơn hoặc nhiều hơn:
+Đây là 4 mục đã được chốt trong summary cũ, chưa được đánh dấu hoàn tất:
 
 1. `doctor.routes.js` vẫn thiếu `verifyToken` và `requireRole('admin')`
 2. `doctor.controller.js` vẫn nhận `admin_id` từ body
 3. `ManageDoctors` frontend chưa được dọn theo chuẩn refactor hiện tại
 4. domain quản trị người dùng/y tá/lễ tân chưa được xử lý trong lộ trình này
 
-## Những điều không được hiểu sai
+## Những gì tuyệt đối không được hiểu sai
 
-- Không được nói rằng toàn bộ admin của dự án đã refactor xong. Chỉ 7 domain ở trên là đã được khóa tương đối kỹ.
-- Không được nói rằng domain doctor đã hoàn tất. Mới chỉ xử lý phần liên quan cần thiết để qua các bước trước.
-- Không được bỏ qua `fix-log`. File này là nguồn đúng nhất để biết mỗi bước đã fail vì gì, sửa gì, và pass bằng test nào.
-- Không được coi docs là chân lý tuyệt đối nếu code đã đổi tiếp sau thời điểm cập nhật. Khi làm tiếp, luôn phải đối chiếu lại code thật.
+- Không được nói toàn bộ admin của dự án đã refactor xong.
+- Không được nói domain doctor đã hoàn tất.
+- Không được coi docs là nguồn duy nhất nếu code đã đổi tiếp sau thời điểm viết báo cáo.
+- Không được bỏ qua `admin-refactor-fix-log.md` khi cần hiểu vì sao một bước từng FAIL rồi mới PASS.
 
-## Nếu AI agent khác làm tiếp
+## Nếu agent khác vào làm tiếp ngay
 
-Nên làm theo trình tự:
+### Checklist khởi động
 
-1. Đọc `summary`
-2. Đọc `fix-log`
-3. Đọc `admin-service-specialty-appointment-fix.md` nếu công việc liên quan `services/specialties/appointments`
-4. Xác nhận lại phạm vi hiện tại
-5. Chọn đúng bước tiếp theo hoặc đúng tồn đọng cần xử lý
-6. Test trước
-7. Chỉ sửa đúng nguyên nhân gốc
-8. Test lại và chỉ đánh PASS khi có output thật
+1. Đọc `agent-handoff.md` này.
+2. Đọc `admin-refactor-summary.md`.
+3. Đọc `admin-refactor-fix-log.md`.
+4. Đọc báo cáo đúng domain mình sắp chạm:
+   - `admin-service-specialty-appointment-fix.md`
+   - `admin-appointments-deep-audit.md`
+   - `specialty-service-family-update.md`
+5. Kiểm tra `git status` để phân biệt file đã sửa với file đang dở.
+6. Đối chiếu lại code thật trước khi kết luận docs còn đúng 100%.
+7. Giữ kỷ luật `test -> sửa -> pass -> bước tiếp theo`.
+
+### Nếu tiếp tục nhánh `specialty/service/family`
+
+Ưu tiên đọc:
+
+- [specialty-service-family-update.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/specialty-service-family-update.md)
+
+Sau đó kiểm tra nhanh:
+
+- `backend/src/models/DichVu.js`
+- `backend/src/controllers/admin/services.controller.js`
+- `backend/src/controllers/admin/appointment.controller.js`
+- `frontend/src/pages/admin/ManageServiceSpecialtyDetail.tsx`
+- `frontend/src/pages/admin/ManageAppointments/AppointmentList.tsx`
+
+### Nếu tiếp tục nhánh `appointments`
+
+Ưu tiên đọc:
+
+- [admin-appointments-deep-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-appointments-deep-audit.md)
+
+Vì đây là báo cáo gần nhất mô tả kỹ rủi ro và hành vi thực tế của luồng lịch hẹn admin.
 
 ## Quy ước làm tiếp
 
-Nếu tiếp tục theo phong cách hiện tại, nên giữ nguyên kỷ luật này:
+- chỉ đánh PASS khi có output test/runtime thật
+- nếu FAIL phải quay lại nguyên nhân gốc
+- không nhảy cóc bước
+- không tự mở rộng phạm vi nếu chưa chốt rõ
+- sau mỗi đợt sửa đủ lớn phải cập nhật lại `docs/reviews`
 
-- `test -> sửa -> pass -> bước tiếp theo`
-- không đánh PASS nếu chưa có output test/runtime thật
-- nếu fail thì quay lại đúng nguyên nhân gốc
-- không mở rộng phạm vi khi chưa ghi rõ
-- cập nhật lại `docs/reviews` sau mỗi bước đủ lớn
-
-## Nguồn sự thật gần nhất
-
-Khi có mâu thuẫn giữa các nguồn, ưu tiên theo thứ tự:
+## Thứ tự ưu tiên khi có mâu thuẫn thông tin
 
 1. code và test hiện tại trong repo
-2. `admin-refactor-fix-log.md`
-3. `admin-refactor-summary.md`
-4. các suy luận miệng từ hội thoại cũ
+2. `docs/reviews/admin-refactor-fix-log.md`
+3. `docs/reviews/specialty-service-family-update.md`
+4. `docs/reviews/admin-refactor-summary.md`
+5. trao đổi cũ trong hội thoại
 
-## Gợi ý checkpoint trước khi làm tiếp
+## Gợi ý câu mở đầu cho agent mới
 
-Nếu muốn tiếp tục ngay mà không mất ngữ cảnh, nên kiểm lại nhanh:
+Nếu muốn vào làm tiếp đúng mạch, nên bắt đầu bằng việc tự xác nhận:
 
-- `docs/reviews/admin-refactor-summary.md`
-- `docs/reviews/admin-refactor-fix-log.md`
-- `docs/reviews/admin-service-specialty-appointment-fix.md`
-- `backend/tests/admin/`
-- `frontend/src/routes/AppRoutes.tsx`
-- `frontend/src/routes/adminMenu.ts`
+- mình đang tiếp quản nhánh nào
+- phạm vi hiện tại có bao gồm doctor hay không
+- cần tiếp tục theo roadmap cũ hay theo báo cáo `specialty-service-family-update`
+- tiêu chí PASS của bước sắp làm là gì
 
-Sau đó mới chọn nhánh tiếp theo để làm.
+Sau đó mới sửa code.
