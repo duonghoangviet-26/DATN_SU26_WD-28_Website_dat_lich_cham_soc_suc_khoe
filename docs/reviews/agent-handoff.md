@@ -1,200 +1,280 @@
-# Agent Handoff - VitaFamily Admin
+# Agent Handoff - VitaFamily
 
-## Mục đích
+## Muc dich
 
-File này là điểm vào nhanh cho AI agent hoặc người mới tiếp quản phần việc admin của VitaFamily.
+File nay la diem vao nhanh cho AI agent hoac nguoi tiep quan du an. Muc tieu la:
 
-Mục tiêu:
+- biet tai lieu nao phai doc truoc
+- biet phan nao da PASS that
+- biet phan nao chi moi audit hoac moi dung nen
+- biet pham vi nao tuyet doi khong duoc hieu nham la da xong
+- tranh doc nham bao cao cu roi sua sai huong
 
-- nắm đúng phần nào đã làm xong thật
-- biết báo cáo nào phải đọc trước
-- biết những gì đã PASS bằng test/runtime
-- biết phần nào cố ý chưa làm hoặc ngoài phạm vi
-- tránh làm lại việc cũ hoặc mở rộng sai hướng
+## Doc theo thu tu nay
 
-## Đọc theo thứ tự này
-
-1. [admin-refactor-summary.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-refactor-summary.md)
-2. [admin-refactor-fix-log.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-refactor-fix-log.md)
-3. [admin-service-specialty-appointment-fix.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-service-specialty-appointment-fix.md)
+1. [frontend-skill-gate.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/frontend-skill-gate.md)
+2. [admin-refactor-summary.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-refactor-summary.md)
+3. [admin-refactor-fix-log.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-refactor-fix-log.md)
 4. [admin-appointments-deep-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-appointments-deep-audit.md)
 5. [specialty-service-family-update.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/specialty-service-family-update.md)
-6. [admin-id-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-id-audit.md)
-7. [admin-routes-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-routes-audit.md)
+6. [admin-service-specialty-appointment-fix.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-service-specialty-appointment-fix.md)
+7. [admin-id-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-id-audit.md)
+8. [admin-routes-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-routes-audit.md)
 
-Nếu làm tiếp code, chỉ sau khi đọc xong các file trên mới đối chiếu lại code và test hiện tại trong repo.
+Neu tiep tuc sua code, chi ket luan sau khi doi chieu lai code that trong repo.
 
-## Ảnh chụp trạng thái hiện tại
+## UI Skill Gate
 
-### Khối admin refactor gốc
+Neu lam bat ky giao dien nao cua bat ky role nao, phai doc truoc:
 
-- 7 domain admin đã được rà và khóa tương đối:
-  - `admin/clinics`
-  - `admin/specialties`
-  - `admin/services`
-  - `admin/appointments`
-  - `admin/payments`
-  - `admin/reviews`
-  - `admin/notifications`
-- Chuỗi bước refactor admin trước đó đã được tổng hợp lại trong `summary` và `fix-log`.
+- [.agents/skills/impeccable/SKILL.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/.agents/skills/impeccable/SKILL.md)
+- [.agents/skills/design-taste-frontend/SKILL.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/.agents/skills/design-taste-frontend/SKILL.md)
 
-### Đợt cập nhật mới nhất đã hoàn tất
+Ap dung cho tat ca role:
 
-Đợt mới nhất đã xử lý xong nhóm việc:
+- admin
+- patient/client/user
+- le tan
+- y ta
+- bac si
+- role noi bo khac neu co
 
-- gộp chuyên khoa Tai/Mũi/Họng
-- thêm `Nhi khoa`, `Da liễu`
-- chuẩn hóa admin CRUD chuyên khoa
-- mở rộng `DichVu` để hỗ trợ gói dịch vụ
-- seed gói dịch vụ mẫu theo chuyên khoa
-- chuẩn hóa admin CRUD dịch vụ có gói
-- xác nhận nền dữ liệu đặt hộ gia đình ở mức model/data/admin appointments
-- xác nhận `BacSi.tuoi_nhan_kham_tu` tồn tại ở tầng model/data
-- test tổng backend + build frontend và ghi báo cáo
+Quy uoc nay ap dung cho page, form, list, detail, dashboard, modal, empty state, error state, va moi luong UI.
 
-Báo cáo chốt của đợt này là:
+## Su that hien tai
 
-- [specialty-service-family-update.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/specialty-service-family-update.md)
+### 1. Nhanh admin refactor co ban da co nen
 
-## Những gì đã PASS thật
+Da co tong hop va fix-log cho cac domain admin chinh:
 
-### PASS từ đợt admin refactor trước
+- clinics
+- specialties
+- services
+- appointments
+- payments
+- reviews
+- notifications
 
-- backend full suite đã từng PASS cho mốc trước
-- frontend admin build PASS
-- runtime HTTP/admin route đã được kiểm tra cho các route trong phạm vi
-- dashboard admin đã dùng API thật
-- các route admin trong phạm vi đã có test auth/token tương ứng
+### 2. Chuyen khoa hien tai chi con 3 active muc canonical
 
-### PASS từ đợt `specialty/service/family`
+Day la su that hien tai phai bam theo:
+
+- `Tai Mui Hong`
+- `Nhi khoa`
+- `Da lieu`
+
+Khong duoc quay lai logic cu coi `Tai`, `Mui`, `Hong` la 3 chuyen khoa active rieng. Bao cao `admin-service-specialty-appointment-fix.md` co gia tri lich su audit, nhung da bi supersede ve mat du lieu boi [specialty-service-family-update.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/specialty-service-family-update.md).
+
+### 3. Dich vu admin hien tai da tach ro "goi" va "dich vu le"
+
+Model `DichVu` da co:
+
+- `la_goi`
+- `doi_tuong_ap_dung`
+
+Admin services hien tai da di theo huong:
+
+- trang landing theo chuyen khoa
+- co tab/boc tach cho `Tat ca`, `Goi`, `Dich vu le`
+- chi quan ly luong `related`
+- badge `Goi` tren danh sach khi `la_goi=true`
+
+### 4. Admin appointments chi duoc quan ly lich da co, khong duoc tao lich moi
+
+Route `POST /api/admin/appointments` van ton tai de giu contract frontend/service, nhung backend da khoa nghiep vu:
+
+- admin khong duoc tao lich hen moi
+- chi nguoi dung hoac le tan duoc dat lich vi lien quan thanh toan
+
+Do do:
+
+- khong duoc dung route nay de mo lai UI dat lich cho admin
+- khong duoc tu y them flow "admin tao lich" neu chua co xac nhan nghiep vu moi
+
+### 5. Nen du lieu dat ho gia dinh da co o model/data/admin appointments
+
+Da xac nhan:
+
+- `GiaDinh`
+- `ThanhVien`
+- `LichHen.dat_ho`
+- `LichHen.nguoi_dat_ho_id`
+- snapshot thong tin nguoi dat ho
+
+Admin appointments hien tai phai hien thi tach:
+
+- nguoi duoc kham
+- nguoi dat ho
+
+Khong duoc gop nham 2 nguoi nay tren UI admin.
+
+### 6. Admin doctor schedules da co route va man hinh rieng
+
+Trang:
+
+- `/admin/doctor-schedules`
+
+Route backend:
+
+- `GET /api/admin/slots/calendar`
+- `POST /api/admin/slots/ensure-day`
+- `PATCH /api/admin/slots/:id/workday`
+- `GET /api/admin/slots/:id`
+- `PATCH /api/admin/slots/:id/slots/:slotId`
+- `POST /api/admin/slots/generate`
+
+Nghiep vu hien tai:
+
+- admin xem lich lam viec bac si theo khoang ngay
+- ngay chua co document duoc hien thi `chua_tao`
+- admin co the tao/ensure lich cho ngay trong
+- admin co the chinh trang thai ngay: `lam_viec`, `nghi`, `nghi_phep`
+- admin co the sua slot gio, phong kham, trang thai slot
+- slot da `booked` hoac `pending_payment` khong duoc sua tuy tien nhu slot trong
+
+## Nhung gi da PASS that
+
+### PASS cua nhanh specialty/service/family
+
+Theo [specialty-service-family-update.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/specialty-service-family-update.md):
 
 - `backend npm test`: `89/89 PASS`
 - `frontend npm run build`: PASS
-- API admin specialties active trả đúng:
-  - `Tai Mũi Họng`
+- active specialties dung 3 muc:
+  - `Tai Mui Hong`
   - `Nhi khoa`
-  - `Da liễu`
-- reference cũ tới các chuyên khoa Tai/Mũi/Họng đã hidden không còn tồn tại ở các collection liên quan đã kiểm
-- API admin services hỗ trợ filter `la_goi`
-- seed 7 gói dịch vụ mẫu đã tồn tại đúng chuyên khoa
-- admin UI đã tạo/sửa được gói dịch vụ với:
-  - `la_goi`
-  - `doi_tuong_ap_dung`
-- admin appointments đã hiển thị tách biệt:
-  - người được khám
-  - người đặt hộ
+  - `Da lieu`
+- API admin services da ho tro `la_goi=true`
+- seed 7 goi dich vu mau da co dung specialty
+- admin UI da tao/sua goi dich vu dung `la_goi` va `doi_tuong_ap_dung`
+- admin appointments da hien thi dung thong tin dat ho
 
-## File code chính đã thay đổi ở đợt mới nhất
+### PASS cua nhanh appointments audit/fix
 
-- `backend/src/models/DichVu.js`
-- `backend/src/controllers/admin/services.controller.js`
-- `backend/src/controllers/admin/appointment.controller.js`
-- `frontend/src/types/index.ts`
-- `frontend/src/services/service.service.ts`
-- `frontend/src/components/admin/services/ServiceFormModal.tsx`
-- `frontend/src/pages/admin/ManageServiceSpecialtyDetail.tsx`
-- `frontend/src/pages/admin/ManageAppointments/AppointmentList.tsx`
+Theo [admin-appointments-deep-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-appointments-deep-audit.md):
 
-## Script đã thêm ở đợt mới nhất
+- list appointments da doi sang filter/search/paginate o DB
+- cancel bat buoc co ly do va ghi metadata huy
+- restore chi duoc khi slot cu van con trong
+- delete cung chi duoc voi lich da huy
+- reschedule bat buoc co ly do va chan no-op / qua khu
+- history da ghi before/after ro hon
+- UI admin appointments da co quick filter, payment filter, summary, warning badge, detail/history ro hon
 
-- `backend/scripts/admin/step1-merge-ent-specialties.js`
-- `backend/scripts/admin/step2-seed-new-specialties.js`
-- `backend/scripts/admin/step4-backfill-service-package-fields.js`
-- `backend/scripts/admin/step5-seed-package-services.js`
+### PASS cua cap nhat frontend moi nhat
 
-## Phạm vi ngoài scope, chưa được phép hiểu nhầm là đã xong
+- [frontend/src/pages/admin/ManageServices.tsx](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/pages/admin/ManageServices.tsx) da duoc sua loi render `icon_url` thanh text
+- fallback avatar specialty da an toan khi URL anh loi
+- `frontend npm run build` da PASS sau khi sua loi giao dien nay
+
+## Tai lieu cu de tham khao, khong duoc coi la "su that moi nhat"
+
+### `admin-service-specialty-appointment-fix.md`
+
+Tai lieu nay van huu ich de hieu dot audit/fix truoc, nhung khong con la nguon su that moi nhat cho specialty/service data vi:
+
+- no ghi snapshot specialty active cu
+- no thuoc dot truoc khi gom `Tai/Mui/Hong` thanh `Tai Mui Hong`
+
+Neu co mau thuan giua file nay va `specialty-service-family-update.md`, uu tien file `specialty-service-family-update.md`, roi doi chieu code that.
+
+### `admin-refactor-summary.md`
+
+Dung de hieu tong quan lo trinh cu. Khong duoc dung mot minh de ket luan trang thai hien tai neu da co fix-log va bao cao moi hon.
+
+## Pham vi ngoai scope hoac chua duoc phep hieu nham la da xong
 
 - `backend/src/routes/doctor.routes.js`
 - `backend/src/controllers/doctor.controller.js`
-- `frontend/src/pages/admin/ManageDoctor*`
-- patient/client booking UI
-- user management
-- y tá
-- lễ tân
+- `frontend/src/pages/admin/ManageDoctor*` cho domain ho so bac si
+- patient/client booking UI thuc te cho dat ho gia dinh
+- UI trong `ManageDoctors` de set `tuoi_nhan_kham_tu`
+- user management toan bo
+- y ta toan bo
+- le tan toan bo, tru phan lien quan den quy tac dat lich da duoc nhac trong admin docs
 
-Lưu ý rất quan trọng:
+Luu y:
 
-- Bước 8 chỉ xác nhận `BacSi.tuoi_nhan_kham_tu` ở tầng model/data.
-- Không có nghĩa `ManageDoctors` đã được làm.
-- Bước 7 chỉ dựng nền dữ liệu đặt hộ gia đình và admin hiển thị đúng.
-- Không có nghĩa UI đặt lịch phía khách hàng đã được triển khai.
+- `BacSi.tuoi_nhan_kham_tu` moi chi duoc xac nhan ton tai o model/data
+- khong co nghia flow CRUD bac si da duoc don dep xong
+- khong co nghia client booking da xong
 
-## 4 tồn đọng cũ vẫn còn giữ nguyên
+## 4 ton dong cu van con gia tri canh bao
 
-Đây là 4 mục đã được chốt trong summary cũ, chưa được đánh dấu hoàn tất:
+Theo nhanh refactor truoc, 4 muc sau van phai coi la ton dong neu chua co bang chung moi cho thay da dong:
 
-1. `doctor.routes.js` vẫn thiếu `verifyToken` và `requireRole('admin')`
-2. `doctor.controller.js` vẫn nhận `admin_id` từ body
-3. `ManageDoctors` frontend chưa được dọn theo chuẩn refactor hiện tại
-4. domain quản trị người dùng/y tá/lễ tân chưa được xử lý trong lộ trình này
+1. `doctor.routes.js` van la diem can review ky ve auth/guard
+2. `doctor.controller.js` van la diem can review ky ve viec nhan `admin_id` tu request
+3. `ManageDoctors` frontend chua duoc don dep theo chuan refactor hien tai
+4. domain user / y ta / le tan chua nam trong pham vi da hoan tat
 
-## Những gì tuyệt đối không được hiểu sai
+Neu muon dong 1 muc nao o tren, phai co code change + test/runtime evidence moi.
 
-- Không được nói toàn bộ admin của dự án đã refactor xong.
-- Không được nói domain doctor đã hoàn tất.
-- Không được coi docs là nguồn duy nhất nếu code đã đổi tiếp sau thời điểm viết báo cáo.
-- Không được bỏ qua `admin-refactor-fix-log.md` khi cần hiểu vì sao một bước từng FAIL rồi mới PASS.
+## File code hot spot nen mo truoc khi sua
 
-## Nếu agent khác vào làm tiếp ngay
+### Specialty / Service
 
-### Checklist khởi động
+- [backend/src/models/DichVu.js](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/backend/src/models/DichVu.js)
+- [backend/src/controllers/admin/services.controller.js](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/backend/src/controllers/admin/services.controller.js)
+- [frontend/src/pages/admin/ManageServices.tsx](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/pages/admin/ManageServices.tsx)
+- [frontend/src/pages/admin/ManageServiceSpecialtyDetail.tsx](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/pages/admin/ManageServiceSpecialtyDetail.tsx)
+- [frontend/src/components/admin/services/ServiceFormModal.tsx](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/components/admin/services/ServiceFormModal.tsx)
+- [frontend/src/services/service.service.ts](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/services/service.service.ts)
 
-1. Đọc `agent-handoff.md` này.
-2. Đọc `admin-refactor-summary.md`.
-3. Đọc `admin-refactor-fix-log.md`.
-4. Đọc báo cáo đúng domain mình sắp chạm:
-   - `admin-service-specialty-appointment-fix.md`
-   - `admin-appointments-deep-audit.md`
-   - `specialty-service-family-update.md`
-5. Kiểm tra `git status` để phân biệt file đã sửa với file đang dở.
-6. Đối chiếu lại code thật trước khi kết luận docs còn đúng 100%.
-7. Giữ kỷ luật `test -> sửa -> pass -> bước tiếp theo`.
+### Appointments
 
-### Nếu tiếp tục nhánh `specialty/service/family`
+- [backend/src/controllers/admin/appointment.controller.js](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/backend/src/controllers/admin/appointment.controller.js)
+- [backend/src/routes/admin/appointment.routes.js](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/backend/src/routes/admin/appointment.routes.js)
+- [frontend/src/pages/admin/ManageAppointments/ManageAppointments.tsx](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/pages/admin/ManageAppointments/ManageAppointments.tsx)
+- [frontend/src/pages/admin/ManageAppointments/AppointmentList.tsx](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/pages/admin/ManageAppointments/AppointmentList.tsx)
+- [frontend/src/pages/admin/ManageAppointments/AppointmentDetail.tsx](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/pages/admin/ManageAppointments/AppointmentDetail.tsx)
+- [frontend/src/services/appointment.service.ts](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/services/appointment.service.ts)
 
-Ưu tiên đọc:
+### Doctor schedules
 
-- [specialty-service-family-update.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/specialty-service-family-update.md)
+- [backend/src/controllers/admin/slots.controller.js](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/backend/src/controllers/admin/slots.controller.js)
+- [backend/src/routes/admin/slots.routes.js](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/backend/src/routes/admin/slots.routes.js)
+- [frontend/src/pages/admin/ManageDoctorSchedules.tsx](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/pages/admin/ManageDoctorSchedules.tsx)
+- [frontend/src/services/admin-doctor-schedule.service.ts](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/frontend/src/services/admin-doctor-schedule.service.ts)
 
-Sau đó kiểm tra nhanh:
+## Quy uoc lam tiep
 
-- `backend/src/models/DichVu.js`
-- `backend/src/controllers/admin/services.controller.js`
-- `backend/src/controllers/admin/appointment.controller.js`
-- `frontend/src/pages/admin/ManageServiceSpecialtyDetail.tsx`
-- `frontend/src/pages/admin/ManageAppointments/AppointmentList.tsx`
+- chi danh PASS khi co output test/runtime that
+- neu FAIL thi quay lai nguyen nhan goc, khong nhay tiep
+- khong nhay coc buoc
+- khong mo rong scope neu chua co xac nhan ro
+- sau moi dot sua lon, cap nhat `docs/reviews`
+- neu dong vao giao dien cua bat ky role nao, doc `frontend-skill-gate.md` va 2 skill bat buoc truoc
 
-### Nếu tiếp tục nhánh `appointments`
+## Thu tu uu tien khi co mau thuan thong tin
 
-Ưu tiên đọc:
+1. code va test hien tai trong repo
+2. `docs/reviews/frontend-skill-gate.md` neu dang lam UI
+3. `docs/reviews/admin-refactor-fix-log.md`
+4. `docs/reviews/specialty-service-family-update.md`
+5. `docs/reviews/admin-appointments-deep-audit.md`
+6. `docs/reviews/admin-refactor-summary.md`
+7. hoi thoai cu
 
-- [admin-appointments-deep-audit.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/admin-appointments-deep-audit.md)
+## Checklist cho agent moi
 
-Vì đây là báo cáo gần nhất mô tả kỹ rủi ro và hành vi thực tế của luồng lịch hẹn admin.
+1. Doc file handoff nay.
+2. Neu lam UI, doc `frontend-skill-gate.md` va 2 skill bat buoc.
+3. Xac dinh dang tiep quan nhanh nao:
+   - specialties/services
+   - appointments
+   - doctor schedules
+   - doctor domain
+   - role khac
+4. Doi chieu lai code that o cac file hot spot truoc khi sua.
+5. Chay dung test/build lien quan truoc khi danh dau PASS.
+6. Neu thay docs cu mau thuan voi code moi, uu tien code + bao cao moi hon.
 
-## Quy ước làm tiếp
+## Trang thai repo lien quan den handoff nay
 
-- chỉ đánh PASS khi có output test/runtime thật
-- nếu FAIL phải quay lại nguyên nhân gốc
-- không nhảy cóc bước
-- không tự mở rộng phạm vi nếu chưa chốt rõ
-- sau mỗi đợt sửa đủ lớn phải cập nhật lại `docs/reviews`
+Tai thoi diem viet lai file nay:
 
-## Thứ tự ưu tiên khi có mâu thuẫn thông tin
+- `.agents/` da duoc bo ignore khoi `.gitignore` de co the commit/push skill xuong may khac
+- [docs/reviews/frontend-skill-gate.md](/E:/DATN/DATN_SU26_WD-28_Website_dat_lich_cham_soc_suc_khoe/docs/reviews/frontend-skill-gate.md) da duoc them de khoa quy trinh doc skill truoc khi lam UI
 
-1. code và test hiện tại trong repo
-2. `docs/reviews/admin-refactor-fix-log.md`
-3. `docs/reviews/specialty-service-family-update.md`
-4. `docs/reviews/admin-refactor-summary.md`
-5. trao đổi cũ trong hội thoại
-
-## Gợi ý câu mở đầu cho agent mới
-
-Nếu muốn vào làm tiếp đúng mạch, nên bắt đầu bằng việc tự xác nhận:
-
-- mình đang tiếp quản nhánh nào
-- phạm vi hiện tại có bao gồm doctor hay không
-- cần tiếp tục theo roadmap cũ hay theo báo cáo `specialty-service-family-update`
-- tiêu chí PASS của bước sắp làm là gì
-
-Sau đó mới sửa code.
+Neu may khac pull code moi va `.agents/` da duoc commit, thi co the doc skill ngay trong repo ma khong can cai lai tu dau.

@@ -29,7 +29,6 @@ nul
 
 # Claude Code / Agent tools (chỉ trên máy local)
 .claude
-.agents/
 .temp_ag_kit/
 ag-kit-doc
 tests

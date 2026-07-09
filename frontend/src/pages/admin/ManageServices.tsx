@@ -9,6 +9,18 @@ import type { ServiceItem } from '@/types'
 
 type ServiceTab = 'all' | 'packages' | 'regular'
 
+function getSpecialtyFallbackLabel(name: string) {
+  const label = name
+    .split(' ')
+    .map((part) => part.trim()[0])
+    .filter(Boolean)
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
+  return label || 'CK'
+}
+
 export default function ManageServices() {
   const navigate = useNavigate()
 
@@ -17,6 +29,7 @@ export default function ManageServices() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<ServiceTab>('all')
+  const [brokenIcons, setBrokenIcons] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     let ignore = false
@@ -35,6 +48,7 @@ export default function ManageServices() {
 
         setSpecialties(specialtyItems)
         setServices(serviceResult.items.filter((item) => item.loai === 'related'))
+        setBrokenIcons({})
       } catch {
         if (!ignore) {
           setError('Không thể tải dữ liệu dịch vụ và chuyên khoa.')
@@ -151,8 +165,22 @@ export default function ManageServices() {
                 className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-slate-50"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-50 text-lg text-brand-600">
-                    {specialty.icon_url || 'CK'}
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-50 text-sm font-semibold text-brand-600">
+                    {specialty.icon_url && !brokenIcons[specialty.id] ? (
+                      <img
+                        src={specialty.icon_url}
+                        alt={specialty.ten}
+                        className="h-full w-full object-cover"
+                        onError={() =>
+                          setBrokenIcons((prev) => ({
+                            ...prev,
+                            [specialty.id]: true,
+                          }))
+                        }
+                      />
+                    ) : (
+                      getSpecialtyFallbackLabel(specialty.ten)
+                    )}
                   </div>
                   <div>
                     <div className="font-medium text-slate-800">{specialty.ten}</div>
