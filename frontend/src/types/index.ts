@@ -533,3 +533,15 @@ export interface DoctorAppointmentHistory {
   gia_kham: number
   payment_status: PaymentStatus
 }
+
+export interface NewsItem {
+  id: string;
+  tieu_de: string;
+  slug: string;
+  noi_dung_ngan: string;
+  noi_dung: string;
+  anh_dai_dien: string;
+  nguoi_viet: string;
+  luot_xem: number;
+  ngay_tao: string;
+}
