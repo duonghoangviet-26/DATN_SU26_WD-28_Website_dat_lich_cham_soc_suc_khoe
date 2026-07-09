@@ -48,7 +48,7 @@ const hoaDonSchema = new mongoose.Schema(
     },
     chi_nhanh_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ChiNhanh',
+      ref: 'ThongTinPhongKham',
       default: null,
     },
     specialty_id: {

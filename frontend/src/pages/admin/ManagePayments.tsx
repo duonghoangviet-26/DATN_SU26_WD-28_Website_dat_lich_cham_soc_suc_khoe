@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { paymentService } from '@/services/payment.service'
-import type { PaymentItem, PaymentStatus } from '@/types'
+import type { PaymentItem, TransactionStatus } from '@/types'
 import { PAYMENT_STATUS_LABEL, PAYMENT_METHOD_LABEL } from '@/utils/constants'
 import { formatPrice, formatDate } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader'
@@ -8,15 +8,18 @@ import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
 
-const STATUS_COLOR: Record<PaymentStatus, 'green' | 'yellow' | 'gray'> = {
-  paid: 'green', unpaid: 'yellow', refunded: 'gray',
+const STATUS_COLOR: Record<TransactionStatus, 'green' | 'yellow' | 'gray'> = {
+  pending: 'yellow',
+  paid: 'green',
+  failed: 'gray',
+  refunded: 'gray',
 }
 
 export default function ManagePayments() {
   const [payments, setPayments] = useState<PaymentItem[]>([])
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
-  const [status, setStatus] = useState<PaymentStatus | ''>('')
+  const [status, setStatus] = useState<TransactionStatus | ''>('')
   const [confirm, setConfirm] = useState<PaymentItem | null>(null)
 
   useEffect(() => {
@@ -24,14 +27,18 @@ export default function ManagePayments() {
     setLoading(true)
     paymentService.getAll({ keyword, status }).then((data) => {
       if (!ignore) setPayments(data)
-    }).finally(() => { if (!ignore) setLoading(false) })
-    return () => { ignore = true }
+    }).finally(() => {
+      if (!ignore) setLoading(false)
+    })
+    return () => {
+      ignore = true
+    }
   }, [keyword, status])
 
   const revenue = {
-    total: payments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.so_tien, 0),
-    unpaid: payments.filter((p) => p.status === 'unpaid').length,
-    refunded: payments.filter((p) => p.status === 'refunded').reduce((s, p) => s + p.so_tien, 0),
+    total: payments.filter((payment) => payment.status === 'paid').reduce((sum, payment) => sum + payment.so_tien, 0),
+    pending: payments.filter((payment) => payment.status === 'pending').length,
+    refunded: payments.filter((payment) => payment.status === 'refunded').reduce((sum, payment) => sum + payment.so_tien, 0),
   }
 
   async function handleRefund() {
@@ -39,7 +46,7 @@ export default function ManagePayments() {
     const id = confirm.id
     setConfirm(null)
     const updated = await paymentService.refund(id)
-    setPayments((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    setPayments((prev) => prev.map((payment) => (payment.id === updated.id ? updated : payment)))
   }
 
   return (
@@ -49,7 +56,6 @@ export default function ManagePayments() {
         description="Theo dõi giao dịch, xác nhận thanh toán và xử lý yêu cầu hoàn tiền."
       />
 
-      {/* Thẻ thống kê tài chính */}
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
         <div className="card p-5">
           <div className="flex items-start justify-between">
@@ -61,13 +67,13 @@ export default function ManagePayments() {
               <Icon name="trending" className="h-6 w-6 text-green-600" />
             </div>
           </div>
-          <p className="mt-3 text-xs text-green-600">↑ từ các giao dịch thành công</p>
+          <p className="mt-3 text-xs text-green-600">từ các giao dịch thành công</p>
         </div>
         <div className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm font-medium text-slate-500">Chờ thanh toán</p>
-              <p className="mt-1.5 text-2xl font-bold text-slate-800">{revenue.unpaid}</p>
+              <p className="mt-1.5 text-2xl font-bold text-slate-800">{revenue.pending}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-yellow-100">
               <Icon name="clock" className="h-6 w-6 text-yellow-600" />
@@ -89,7 +95,6 @@ export default function ManagePayments() {
         </div>
       </div>
 
-      {/* Bộ lọc */}
       <div className="card mb-4 p-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="relative">
@@ -103,16 +108,16 @@ export default function ManagePayments() {
               onChange={(e) => setKeyword(e.target.value)}
             />
           </div>
-          <select className="input" value={status} onChange={(e) => setStatus(e.target.value as PaymentStatus | '')}>
+          <select className="input" value={status} onChange={(e) => setStatus(e.target.value as TransactionStatus | '')}>
             <option value="">Tất cả trạng thái</option>
             <option value="paid">Đã thanh toán</option>
-            <option value="unpaid">Chưa thanh toán</option>
+            <option value="pending">Chờ thanh toán</option>
+            <option value="failed">Thất bại</option>
             <option value="refunded">Đã hoàn tiền</option>
           </select>
         </div>
       </div>
 
-      {/* Bảng giao dịch */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -133,21 +138,21 @@ export default function ManagePayments() {
                 <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Đang tải...</td></tr>
               ) : payments.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Không tìm thấy giao dịch.</td></tr>
-              ) : payments.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">{p.ma_giao_dich}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{p.benh_nhan}</td>
-                  <td className="px-4 py-3 text-slate-600">{p.bac_si}</td>
-                  <td className="px-4 py-3 text-slate-500">{formatDate(p.ngay_tao)}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-800">{formatPrice(p.so_tien)}</td>
-                  <td className="px-4 py-3 text-slate-600">{PAYMENT_METHOD_LABEL[p.phuong_thuc]}</td>
+              ) : payments.map((payment) => (
+                <tr key={payment.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 font-mono text-xs text-slate-500">{payment.ma_giao_dich}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">{payment.benh_nhan}</td>
+                  <td className="px-4 py-3 text-slate-600">{payment.bac_si}</td>
+                  <td className="px-4 py-3 text-slate-500">{formatDate(payment.ngay_tao)}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-800">{formatPrice(payment.so_tien)}</td>
+                  <td className="px-4 py-3 text-slate-600">{PAYMENT_METHOD_LABEL[payment.phuong_thuc]}</td>
                   <td className="px-4 py-3">
-                    <Badge color={STATUS_COLOR[p.status]}>{PAYMENT_STATUS_LABEL[p.status]}</Badge>
+                    <Badge color={STATUS_COLOR[payment.status]}>{PAYMENT_STATUS_LABEL[payment.status]}</Badge>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {p.status === 'paid' && (
+                    {payment.status === 'paid' && (
                       <button
-                        onClick={() => setConfirm(p)}
+                        onClick={() => setConfirm(payment)}
                         className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-600 transition-colors hover:bg-orange-100"
                       >
                         <Icon name="payment" className="h-3 w-3" /> Hoàn tiền

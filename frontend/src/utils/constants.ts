@@ -68,11 +68,18 @@ export const EXAM_TYPE_LABEL: Record<string, string> = {
 
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {
   unpaid: 'Chưa thanh toán',
+  partial: 'Thanh toán một phần',
+  pending: 'Chờ thanh toán',
   paid: 'Đã thanh toán',
+  failed: 'Thất bại',
   refunded: 'Đã hoàn tiền',
 }
 
 export const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  tien_mat: 'Tiền mặt',
+  chuyen_khoan: 'Chuyển khoản',
+  vi_dien_tu: 'Ví điện tử',
+  the_ngan_hang: 'Thẻ ngân hàng',
   momo: 'MoMo',
   vnpay: 'VNPay',
   cash: 'Tiền mặt',

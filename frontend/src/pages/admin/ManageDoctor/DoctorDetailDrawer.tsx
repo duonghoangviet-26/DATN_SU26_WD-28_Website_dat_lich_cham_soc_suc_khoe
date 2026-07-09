@@ -227,7 +227,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                         </div>
                         <div>
                           <p className="text-slate-400 text-xs mb-1">Phí tư vấn cơ bản</p>
-                          <p className="font-medium text-brand-600">{formatPrice(doctor.phi_tu_van)}</p>
+                          <p className="font-medium text-brand-600">{formatPrice(doctor.phi_kham)}</p>
                         </div>
                         <div className="col-span-2">
                           <p className="text-slate-400 text-xs mb-1">Bằng cấp</p>

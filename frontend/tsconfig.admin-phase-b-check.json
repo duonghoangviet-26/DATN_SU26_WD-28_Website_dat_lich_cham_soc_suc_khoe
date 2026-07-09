@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/types/index.ts",
+    "src/utils/constants.ts",
+    "src/services/appointment.service.ts",
+    "src/services/payment.service.ts",
+    "src/pages/admin/ManageAppointments/AddAppointment.tsx",
+    "src/pages/admin/ManagePayments.tsx"
+  ]
+}

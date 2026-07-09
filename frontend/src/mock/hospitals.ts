@@ -2,7 +2,17 @@
 // 2 type đó đã được nhánh main tái sử dụng cho ManageHospitals (C3, gọi API thật /admin/clinic-info,
 // dạng Mongo _id/trang_thai, không còn slug). Mock ở đây vẫn phục vụ specialty.service.ts
 // (Tầng 2/3 Quản lý dịch vụ + trang duyệt bác sĩ theo chuyên khoa của bệnh nhân) — cần giữ slug.
-import type { Hospital, Specialty } from '@/types'
+import type { Specialty } from '@/types'
+
+interface Hospital {
+  id: number
+  ten: string
+  dia_chi?: string
+  so_dien_thoai?: string
+  gio_lam_viec?: string
+  status: 'active' | 'hidden'
+  ngay_tao: string
+}
 
 export const mockHospitals: Hospital[] = [
   { id: 1, ten: 'Bệnh viện Đa khoa VitaFamily', dia_chi: '123 Đường Phổ Quang, Tân Bình, TP.HCM', so_dien_thoai: '1900 1234', gio_lam_viec: '07:00 - 21:00', status: 'active', ngay_tao: '2024-01-01' },

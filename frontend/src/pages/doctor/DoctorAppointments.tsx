@@ -522,10 +522,13 @@ export default function DoctorAppointments() {
                 <thead className="bg-slate-50 text-left">
                   <tr>
                     <th className={TH_PLAIN}>Giờ khám</th>
+                    <th className={TH_PLAIN}>Mã lịch hẹn</th>
                     <th className={TH_PLAIN}>Tên bệnh nhân</th>
+                    <th className={TH_PLAIN}>Tuổi/Giới tính</th>
                     <th className={TH_PLAIN}>Dịch vụ</th>
                     <th className={TH_PLAIN}>Phòng</th>
                     <th className={TH_PLAIN}>Y tá</th>
+                    <th className={TH_PLAIN}>Thanh toán</th>
                     <th className={TH_PLAIN}>Trạng thái</th>
                     <th className="px-4 py-3" />
                   </tr>
@@ -534,7 +537,7 @@ export default function DoctorAppointments() {
                 <tbody className="divide-y divide-slate-100">
                   {displayed.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-16 text-center">
+                      <td colSpan={10} className="py-16 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <Icon name="calendar" className="h-10 w-10 text-slate-200" />
                           <p className="text-base font-medium text-slate-500">
@@ -560,6 +563,11 @@ export default function DoctorAppointments() {
                             <div className="text-xs text-slate-400">{formatDate(appt.ngay_kham)}</div>
                           </td>
 
+                          {/* Mã lịch hẹn */}
+                          <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                            {appt.ma_lich_hen ?? '—'}
+                          </td>
+
                           {/* Tên bệnh nhân */}
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
@@ -568,6 +576,15 @@ export default function DoctorAppointments() {
                               </div>
                               <p className="font-medium text-slate-800">{appt.benh_nhan}</p>
                             </div>
+                          </td>
+
+                          {/* Tuổi/Giới tính */}
+                          <td className="px-4 py-3 text-slate-600">
+                            {appt.tuoi !== undefined || appt.gioi_tinh
+                              ? [appt.tuoi !== undefined ? `${appt.tuoi} tuổi` : null, appt.gioi_tinh ?? null]
+                                  .filter(Boolean)
+                                  .join(' · ')
+                              : '—'}
                           </td>
 
                           {/* Dịch vụ */}
@@ -585,6 +602,13 @@ export default function DoctorAppointments() {
                           {/* Y tá — hệ thống chưa có module gán y tá cho lịch hẹn */}
                           <td className="px-4 py-3 text-xs text-slate-400">
                             Chưa phân công y tá
+                          </td>
+
+                          {/* Thanh toán */}
+                          <td className="px-4 py-3">
+                            <Badge color={PAYMENT_COLOR[appt.payment_status]}>
+                              {PAYMENT_STATUS_LABEL[appt.payment_status]}
+                            </Badge>
                           </td>
 
                           {/* Trạng thái */}

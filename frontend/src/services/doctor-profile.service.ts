@@ -1,10 +1,5 @@
 import axiosInstance from './axiosInstance'
-import { mockDoctorProfile, mockDoctorProfileExtra } from '@/mock/doctor-stats'
-import type { ApiResponse, DoctorStats, DoctorReview, DoctorTodayOverview } from '@/types'
-
-const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
-
-let profile = { ...mockDoctorProfile, ...mockDoctorProfileExtra }
+import type { ApiResponse, DoctorStats, DoctorReview, DoctorTodayOverview, DoctorSelfProfile } from '@/types'
 
 interface ProfileUpdateData {
   ho_ten?: string
@@ -16,26 +11,17 @@ interface ProfileUpdateData {
   so_nam_kinh_nghiem?: number
   gia_kham?: number
   tuoi_nhan_kham_tu?: number
-  specialties?: string[]
-  services?: string[]
 }
 
 export const doctorProfileService = {
-  async get() {
-    await delay()
-    return { ...profile }
-    // Real API:
-    // const res = await axiosInstance.get<ApiResponse<Record<string, unknown>>>('/doctor/profile')
-    // return res.data.data
+  async get(): Promise<DoctorSelfProfile> {
+    const res = await axiosInstance.get<ApiResponse<DoctorSelfProfile>>('/doctor/profile')
+    return res.data.data
   },
 
-  async update(data: ProfileUpdateData) {
-    await delay()
-    profile = { ...profile, ...data }
-    return { ...profile }
-    // Real API:
-    // const res = await axiosInstance.put<ApiResponse<Record<string, unknown>>>('/doctor/profile', data)
-    // return res.data.data
+  async update(data: ProfileUpdateData): Promise<DoctorSelfProfile> {
+    const res = await axiosInstance.put<ApiResponse<DoctorSelfProfile>>('/doctor/profile', data)
+    return res.data.data
   },
 
   async getStats(): Promise<DoctorStats> {
