@@ -37,15 +37,21 @@ export const DOCTOR_APPROVAL = {
 export const APPOINTMENT_STATUS = {
   PENDING: 'pending',
   CONFIRMED: 'confirmed',
+  CHECKED_IN: 'checked_in',
+  IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
+  NO_SHOW: 'no_show',
 }
 
 export const APPOINTMENT_STATUS_LABEL: Record<string, string> = {
   pending: 'Chờ xác nhận',
   confirmed: 'Đã xác nhận',
+  checked_in: 'Đã đến',
+  in_progress: 'Đang khám',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
+  no_show: 'Không đến khám',
 }
 
 export const DOCTOR_APPROVAL_LABEL: Record<string, string> = {

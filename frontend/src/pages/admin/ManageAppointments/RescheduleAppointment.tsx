@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
+
+import Icon from '@/components/admin/icons'
 import { appointmentService } from '@/services/appointment.service'
 import type { AdminAppointmentDoctorOption, AppointmentItem } from '@/types'
-import Icon from '@/components/admin/icons'
 
 interface Props {
   appointment: AppointmentItem
@@ -14,6 +15,7 @@ export default function RescheduleAppointment({ appointment, onSaved, onCancel }
     doctor_id: appointment.doctor_id || '',
     schedule_id: '',
     slot_id: '',
+    ly_do: '',
   })
 
   const [doctors, setDoctors] = useState<AdminAppointmentDoctorOption[]>([])
@@ -41,13 +43,15 @@ export default function RescheduleAppointment({ appointment, onSaved, onCancel }
 
   const selectedSchedule = schedules.find((schedule) => schedule._id === form.schedule_id)
 
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const { name, value } = e.target
+  function handleChange(
+    event: React.ChangeEvent<HTMLSelectElement | HTMLTextAreaElement>
+  ) {
+    const { name, value } = event.target
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
-  function handleScheduleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const scheduleId = e.target.value
+  function handleScheduleChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    const scheduleId = event.target.value
     setForm((prev) => ({
       ...prev,
       schedule_id: scheduleId,
@@ -55,8 +59,8 @@ export default function RescheduleAppointment({ appointment, onSaved, onCancel }
     }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
     setError(null)
 
     if (!form.doctor_id || !form.schedule_id || !form.slot_id) {
@@ -64,12 +68,21 @@ export default function RescheduleAppointment({ appointment, onSaved, onCancel }
       return
     }
 
+    if (!form.ly_do.trim()) {
+      setError('Vui lòng nhập lý do dời lịch.')
+      return
+    }
+
     setLoading(true)
     try {
-      await appointmentService.reschedule(appointment._id, { ...form, updatedAt: appointment.ngay_cap_nhat })
+      await appointmentService.reschedule(appointment._id, {
+        ...form,
+        ly_do: form.ly_do.trim(),
+        updatedAt: appointment.ngay_cap_nhat,
+      })
       onSaved()
-    } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Lỗi khi dời lịch')
+    } catch (nextError: any) {
+      setError(nextError?.response?.data?.message || nextError.message || 'Lỗi khi dời lịch')
     } finally {
       setLoading(false)
     }
@@ -91,6 +104,11 @@ export default function RescheduleAppointment({ appointment, onSaved, onCancel }
         <p className="text-sm text-slate-600">
           Lịch cũ: <strong className="text-slate-800">{appointment.gio_kham} ngày {appointment.ngay_kham} ({appointment.bac_si})</strong>
         </p>
+        {(appointment.so_lan_thay_doi ?? 0) >= 2 && (
+          <p className="mt-2 text-xs font-medium text-red-600">
+            Lịch này đã bị dời nhiều lần, cần kiểm tra kỹ trước khi thao tác tiếp.
+          </p>
+        )}
       </div>
 
       {error && (
@@ -110,6 +128,7 @@ export default function RescheduleAppointment({ appointment, onSaved, onCancel }
             onChange={handleChange}
             className="input w-full"
             required
+            disabled={loading}
           >
             <option value="">-- Chọn bác sĩ --</option>
             {doctors.map((doctor) => (
@@ -130,7 +149,7 @@ export default function RescheduleAppointment({ appointment, onSaved, onCancel }
             onChange={handleScheduleChange}
             className="input w-full"
             required
-            disabled={!form.doctor_id}
+            disabled={!form.doctor_id || loading}
           >
             <option value="">-- Chọn ngày khám --</option>
             {schedules.map((schedule) => (
@@ -151,18 +170,33 @@ export default function RescheduleAppointment({ appointment, onSaved, onCancel }
             onChange={handleChange}
             className="input w-full"
             required
-            disabled={!form.schedule_id}
+            disabled={!form.schedule_id || loading}
           >
             <option value="">-- Chọn giờ khám --</option>
             {selectedSchedule?.slots.map((slot: any) => (
               <option key={slot._id} value={slot._id}>
-                {slot.gio_bat_dau} - {slot.gio_ket_thuc} (Còn {slot.so_benh_nhan_toi_da - slot.so_benh_nhan_hien_tai} chỗ)
+                {slot.gio_bat_dau} - {slot.gio_ket_thuc}
               </option>
             ))}
           </select>
         </div>
 
-        <div className="sm:col-span-2 mt-4 flex justify-end gap-3">
+        <div className="sm:col-span-2">
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">
+            Lý do dời lịch <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            name="ly_do"
+            rows={4}
+            value={form.ly_do}
+            onChange={handleChange}
+            className="input w-full resize-none"
+            placeholder="Nhập lý do dời lịch để lưu vào lịch sử thao tác..."
+            disabled={loading}
+          />
+        </div>
+
+        <div className="mt-4 flex justify-end gap-3 sm:col-span-2">
           <button type="button" onClick={onCancel} disabled={loading} className="btn-secondary px-6">
             Hủy
           </button>

@@ -71,6 +71,15 @@ const doctorScheduleSchema = new mongoose.Schema(
       default: null,
     },
     ngay: { type: Date, required: true },
+    trang_thai_ngay: {
+      type: String,
+      enum: ['lam_viec', 'nghi', 'nghi_phep'],
+      default: 'lam_viec',
+    },
+    ghi_chu_ngay: {
+      type: String,
+      default: null,
+    },
     slots: { type: [slotSchema], default: [] },
   },
   {

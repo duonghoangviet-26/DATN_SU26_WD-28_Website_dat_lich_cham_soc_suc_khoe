@@ -33,7 +33,13 @@ async function generateSlotsForDoctorDate(doctorId, date, phongMacDinh) {
   }))
 
   try {
-    await LichLamViec.create({ doctor_id: doctorId, ngay: date, slots })
+    await LichLamViec.create({
+      doctor_id: doctorId,
+      ngay: date,
+      trang_thai_ngay: 'lam_viec',
+      ghi_chu_ngay: null,
+      slots,
+    })
     return true
   } catch (err) {
     if (err.code === 11000) return false // race condition — đã có ai tạo trước, bỏ qua

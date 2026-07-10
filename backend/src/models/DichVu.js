@@ -13,6 +13,25 @@ import Counter from './Counter.js'
 // ma_dich_vu: backend tự sinh "DV001", "DV002"... (client KHÔNG truyền vào).
 // Giá khám clinic (30 phút/slot) lưu trực tiếp ở BacSi.gia_kham — KHÔNG phải DichVu.
 
+async function ensureServiceCounterSeeded() {
+  const counters = mongoose.connection.collection('counters')
+  const currentServices = await mongoose.connection
+    .collection('dich_vu')
+    .find({ ma_dich_vu: /^DV\d+$/ }, { projection: { ma_dich_vu: 1 } })
+    .toArray()
+
+  const maxSeq = currentServices.reduce((max, item) => {
+    const match = /^DV(\d+)$/.exec(item.ma_dich_vu ?? '')
+    if (!match) return max
+    return Math.max(max, Number.parseInt(match[1], 10))
+  }, 0)
+
+  const existingCounter = await counters.findOne({ key: 'dich_vu' }, { projection: { seq: 1 } })
+  if (existingCounter?.seq >= maxSeq) return
+
+  await counters.updateOne({ key: 'dich_vu' }, { $set: { seq: maxSeq } }, { upsert: true })
+}
+
 const serviceSchema = new mongoose.Schema(
   {
     ma_dich_vu: { type: String, unique: true, trim: true }, // auto-gen, xem pre-validate
@@ -61,6 +80,15 @@ const serviceSchema = new mongoose.Schema(
     chuan_bi_truoc: { type: String, default: null, maxlength: 1000 },
     // related: required (validate controller) | home: không dùng
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', default: null },
+    la_goi: { type: Boolean, default: false },
+    doi_tuong_ap_dung: {
+      type: String,
+      default: null,
+      validate: {
+        validator: (value) => value == null || ['tre_em', 'nguoi_lon', 'gia_dinh', 'khong_gioi_han'].includes(value),
+        message: 'Doi tuong ap dung khong hop le',
+      },
+    },
     khu_vuc:      { type: [String], default: [] }, // home only
     nguoi_tao_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     // inactive mặc định — Admin review nội dung trước khi công khai (tránh BN thấy giá/mô tả sai)
@@ -85,6 +113,7 @@ serviceSchema.index({ status: 1, loai: 1 })
 //        để trả 400 thay vì 500
 serviceSchema.pre('validate', async function () {
   if (!this.ma_dich_vu) {
+    await ensureServiceCounterSeeded()
     const seq = await Counter.nextSeq('dich_vu')
     this.ma_dich_vu = 'DV' + String(seq).padStart(3, '0')
   }
