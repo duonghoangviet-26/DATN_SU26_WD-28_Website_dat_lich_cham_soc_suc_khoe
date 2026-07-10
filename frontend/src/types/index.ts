@@ -451,6 +451,16 @@ export interface PaymentItem {
     phuong_thuc: PaymentMethod;
     status: TransactionStatus;
     ngay_tao: string;
+    hoa_don_id?: string | null;
+    appointment_id?: string | null;
+    so_hoa_don?: string | null;
+    loai_thanh_toan?: string | null;
+    email?: string | null;
+    so_dien_thoai?: string | null;
+    nguoi_thu_id?: string | null;
+    thoi_diem_thanh_toan?: string | null;
+    ngay_thanh_toan?: string | null;
+    trang_thai_hoa_don?: string | null;
 }
 
 // Kiểu cho API response chuẩn { success, message, data }

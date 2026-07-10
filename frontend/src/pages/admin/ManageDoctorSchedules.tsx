@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 
 import Badge from '@/components/common/Badge'
 import PageHeader from '@/components/common/PageHeader'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { adminDoctorScheduleService } from '@/services/admin-doctor-schedule.service'
 import { appointmentService } from '@/services/appointment.service'
 import type {
@@ -54,17 +55,23 @@ function SlotEditorModal({
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
+  const itemsPerPage = 8
   const [workingCopy, setWorkingCopy] = useState<AdminDoctorScheduleDetail | null>(schedule)
   const [savingSlotId, setSavingSlotId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     setWorkingCopy(schedule)
     setError(null)
     setSavingSlotId(null)
+    setPage(1)
   }, [schedule])
 
   if (!workingCopy) return null
+
+  const totalPages = Math.max(1, Math.ceil(workingCopy.slots.length / itemsPerPage))
+  const visibleSlots = workingCopy.slots.slice((page - 1) * itemsPerPage, page * itemsPerPage)
 
   async function saveSlot(slot: AdminDoctorScheduleSlot) {
     setSavingSlotId(slot._id)
@@ -130,7 +137,7 @@ function SlotEditorModal({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {workingCopy.slots.map((slot) => {
+              {visibleSlots.map((slot) => {
                 const immutableStatus = slot.status === 'booked' || slot.status === 'pending_payment'
 
                 return (
@@ -197,6 +204,18 @@ function SlotEditorModal({
             </tbody>
           </table>
         </div>
+
+        {workingCopy.slots.length > itemsPerPage && (
+          <TablePaginationFooter
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={workingCopy.slots.length}
+            currentItemCount={visibleSlots.length}
+            itemLabel="slot"
+            pageSize={itemsPerPage}
+            onPageChange={setPage}
+          />
+        )}
       </div>
     </div>
   )

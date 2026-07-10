@@ -7,6 +7,7 @@ import ServiceViewModal from '@/components/admin/services/ServiceViewModal'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import PageHeader from '@/components/common/PageHeader'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { clinicService } from '@/services/clinic.service'
 import { serviceService } from '@/services/service.service'
 import { specialtyService } from '@/services/specialty.service'
@@ -31,6 +32,8 @@ const DOI_TUONG_LABEL: Record<string, string> = {
 }
 
 export default function ManageServiceSpecialtyDetail() {
+  const doctorItemsPerPage = 5
+  const serviceItemsPerPage = 8
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -42,6 +45,8 @@ export default function ManageServiceSpecialtyDetail() {
   const [doctors, setDoctors] = useState<SpecialtyDoctorItem[]>([])
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
+  const [doctorPage, setDoctorPage] = useState(1)
+  const [servicePage, setServicePage] = useState(1)
 
   const [formTarget, setFormTarget] = useState<ServiceItem | 'new' | null>(null)
   const [viewTarget, setViewTarget] = useState<ServiceItem | null>(null)
@@ -165,6 +170,30 @@ export default function ManageServiceSpecialtyDetail() {
 
   const packageCount = services.filter((service) => service.la_goi === true).length
   const regularCount = services.filter((service) => service.la_goi !== true).length
+  const doctorTotalPages = Math.max(1, Math.ceil(doctors.length / doctorItemsPerPage))
+  const serviceTotalPages = Math.max(1, Math.ceil(filteredServices.length / serviceItemsPerPage))
+  const visibleDoctors = doctors.slice((doctorPage - 1) * doctorItemsPerPage, doctorPage * doctorItemsPerPage)
+  const visibleServices = filteredServices.slice((servicePage - 1) * serviceItemsPerPage, servicePage * serviceItemsPerPage)
+
+  useEffect(() => {
+    setDoctorPage(1)
+  }, [specialty?.id, doctors.length])
+
+  useEffect(() => {
+    setServicePage(1)
+  }, [activeTab, specialty?.id, filteredServices.length])
+
+  useEffect(() => {
+    if (doctorPage > doctorTotalPages) {
+      setDoctorPage(doctorTotalPages)
+    }
+  }, [doctorPage, doctorTotalPages])
+
+  useEffect(() => {
+    if (servicePage > serviceTotalPages) {
+      setServicePage(serviceTotalPages)
+    }
+  }, [servicePage, serviceTotalPages])
 
   if (loading && !specialty) {
     return <div className="py-16 text-center text-slate-400">Đang tải...</div>
@@ -248,7 +277,7 @@ export default function ManageServiceSpecialtyDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {doctors.map((doctor) => (
+                  {visibleDoctors.map((doctor) => (
                     <tr key={doctor._id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -295,6 +324,18 @@ export default function ManageServiceSpecialtyDetail() {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {!loading && doctors.length > doctorItemsPerPage && (
+            <TablePaginationFooter
+              currentPage={doctorPage}
+              totalPages={doctorTotalPages}
+              totalItems={doctors.length}
+              currentItemCount={visibleDoctors.length}
+              itemLabel="bác sĩ"
+              pageSize={doctorItemsPerPage}
+              onPageChange={setDoctorPage}
+            />
           )}
         </div>
 
@@ -364,7 +405,7 @@ export default function ManageServiceSpecialtyDetail() {
                     </td>
                   </tr>
                 )}
-                {filteredServices.map((service) => {
+                {visibleServices.map((service) => {
                   const dim = service.status === 'inactive' ? 'opacity-40' : ''
                   return (
                     <tr key={service.id} className="hover:bg-slate-50">
@@ -427,6 +468,18 @@ export default function ManageServiceSpecialtyDetail() {
               </tbody>
             </table>
           </div>
+
+          {!loading && filteredServices.length > serviceItemsPerPage && (
+            <TablePaginationFooter
+              currentPage={servicePage}
+              totalPages={serviceTotalPages}
+              totalItems={filteredServices.length}
+              currentItemCount={visibleServices.length}
+              itemLabel={activeTab === 'packages' ? 'gói dịch vụ' : 'dịch vụ'}
+              pageSize={serviceItemsPerPage}
+              onPageChange={setServicePage}
+            />
+          )}
         </div>
 
         <ServiceFormModal
