@@ -20,7 +20,8 @@ export default function Login() {
     setLoading(true)
     try {
       const user = await login({ email, password })
-      const from = (location.state as { from?: { pathname?: string } })?.from?.pathname
+      const fromLocation = (location.state as { from?: { pathname?: string; search?: string } })?.from
+      const from = fromLocation?.pathname ? `${fromLocation.pathname}${fromLocation.search || ''}` : undefined
       if (user.role === 'admin') {
         navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true })
       } else if (user.role === 'doctor') {

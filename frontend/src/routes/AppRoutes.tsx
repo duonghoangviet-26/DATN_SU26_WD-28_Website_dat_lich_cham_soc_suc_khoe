@@ -47,8 +47,22 @@ export default function AppRoutes() {
         <Route path="/bac-si/:id" element={<DoctorDetail />} />
         <Route path="/dich-vu" element={<ServiceList />} />
         <Route path="/dich-vu/:id" element={<ServiceDetail />} />
-        <Route path="/booking" element={<Booking />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route
+          path="/booking"
+          element={
+            <ProtectedRoute roles={['user']}>
+              <Booking />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute roles={['user']}>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/tin-tuc" element={<NewsList />} />
         <Route path="/tin-tuc/:slug" element={<NewsDetail />} />
       </Route>

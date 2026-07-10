@@ -34,6 +34,29 @@ interface Props {
   onHardDelete: (a: AppointmentItem) => void
 }
 
+interface ActionIconButtonProps {
+  label: string
+  icon: string
+  title: string
+  className: string
+  onClick: () => void
+}
+
+function ActionIconButton({ label, icon, title, className, onClick }: ActionIconButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={label}
+      className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border shadow-sm transition-all duration-200 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-1 ${className}`}
+    >
+      <Icon name={icon} className="h-4 w-4" />
+      <span className="sr-only">{label}</span>
+    </button>
+  )
+}
+
 export default function AppointmentList({
   appointments,
   loading,
@@ -76,7 +99,7 @@ export default function AppointmentList({
               <th className="px-4 py-3 font-medium">Trạng thái</th>
               <th className="px-4 py-3 font-medium">Thanh toán</th>
               <th className="px-4 py-3 font-medium">Cảnh báo</th>
-              <th className="px-4 py-3 text-right font-medium">Thao tác</th>
+              <th className="w-[188px] px-4 py-3 text-right font-medium">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -151,51 +174,57 @@ export default function AppointmentList({
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <button
+                <td className="w-[188px] px-4 py-3 align-middle">
+                  <div className="ml-auto flex w-[172px] flex-wrap justify-end gap-2">
+                    <ActionIconButton
+                      label="Xem chi tiết"
+                      title="Xem chi tiết"
+                      icon="eye"
                       onClick={() => onView(appointment)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
-                    >
-                      <Icon name="eye" className="h-3 w-3" /> Xem
-                    </button>
-                    <button
+                      className="border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 focus:ring-slate-200"
+                    />
+                    <ActionIconButton
+                      label="Lịch sử"
+                      title="Lịch sử"
+                      icon="clock"
                       onClick={() => onHistory(appointment)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-600 transition-colors hover:bg-purple-100"
-                    >
-                      <Icon name="clock" className="h-3 w-3" /> Lịch sử
-                    </button>
+                      className="border-purple-200 bg-purple-50 text-purple-600 hover:border-purple-300 hover:bg-purple-100 focus:ring-purple-200"
+                    />
                     {(appointment.status === 'pending' || appointment.status === 'confirmed') && (
                       <>
-                        <button
+                        <ActionIconButton
+                          label="Dời lịch"
+                          title="Dời lịch"
+                          icon="calendar"
                           onClick={() => onReschedule(appointment)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600 transition-colors hover:bg-blue-100"
-                        >
-                          <Icon name="calendar" className="h-3 w-3" /> Dời
-                        </button>
-                        <button
+                          className="border-blue-200 bg-blue-50 text-blue-600 hover:border-blue-300 hover:bg-blue-100 focus:ring-blue-200"
+                        />
+                        <ActionIconButton
+                          label="Hủy lịch"
+                          title="Hủy lịch"
+                          icon="x"
                           onClick={() => setConfirmItem(appointment)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
-                        >
-                          <Icon name="x" className="h-3 w-3" /> Hủy
-                        </button>
+                          className="border-red-200 bg-red-50 text-red-600 hover:border-red-300 hover:bg-red-100 focus:ring-red-200"
+                        />
                       </>
                     )}
                     {appointment.status === 'cancelled' && (
-                      <button
+                      <ActionIconButton
+                        label="Khôi phục"
+                        title="Khôi phục"
+                        icon="refresh-cw"
                         onClick={() => onRestore(appointment)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-600 transition-colors hover:bg-green-100"
-                      >
-                        <Icon name="refresh-cw" className="h-3 w-3" /> Khôi phục
-                      </button>
+                        className="border-green-200 bg-green-50 text-green-600 hover:border-green-300 hover:bg-green-100 focus:ring-green-200"
+                      />
                     )}
                     {appointment.status === 'cancelled' && (
-                      <button
+                      <ActionIconButton
+                        label="Xóa cứng"
+                        title="Xóa cứng"
+                        icon="trash"
                         onClick={() => onHardDelete(appointment)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
-                      >
-                        <Icon name="trash" className="h-3 w-3" /> Xóa cứng
-                      </button>
+                        className="border-red-200 bg-red-50 text-red-600 hover:border-red-300 hover:bg-red-100 focus:ring-red-200"
+                      />
                     )}
                   </div>
                 </td>

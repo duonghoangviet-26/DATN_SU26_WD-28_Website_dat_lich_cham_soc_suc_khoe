@@ -1,11 +1,11 @@
 import React, { forwardRef } from 'react'
 
-interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextareaElement> {
+interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
   error?: string
 }
 
-const Textarea = forwardRef<HTMLTextareaElement, TextareaProps>(
+const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ label, error, className = '', id, ...props }, ref) => {
     const textareaId = id || `textarea-${Math.random().toString(36).substr(2, 9)}`
 

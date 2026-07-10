@@ -12,6 +12,8 @@ import { ok, fail } from '../../utils/response.js'
 
 const ADMIN_REFUND_SETTING_KEYS = ['hoan_tien_admin_huy', 'hoan_tien_admin_huy_khan_cap']
 const APPOINTMENT_LIST_LIMIT_MAX = 100
+const ACTIVE_OPERATIONAL_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress']
+const CLINIC_TIME_OFFSET_MS = 7 * 60 * 60 * 1000
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
@@ -19,18 +21,19 @@ function isValidObjectId(value) {
 
 function toDateOnly(value) {
   const date = new Date(value)
-  date.setUTCHours(0, 0, 0, 0)
-  return date
+  const shiftedDate = new Date(date.getTime() + CLINIC_TIME_OFFSET_MS)
+  shiftedDate.setUTCHours(0, 0, 0, 0)
+  return new Date(shiftedDate.getTime() - CLINIC_TIME_OFFSET_MS)
 }
 
 function endOfDateOnly(value) {
   const date = toDateOnly(value)
-  date.setUTCHours(23, 59, 59, 999)
-  return date
+  return new Date(date.getTime() + (24 * 60 * 60 * 1000) - 1)
 }
 
 function formatDateOnly(value) {
-  return new Date(value).toISOString().slice(0, 10)
+  const date = new Date(value)
+  return new Date(date.getTime() + CLINIC_TIME_OFFSET_MS).toISOString().slice(0, 10)
 }
 
 function escapeRegex(value) {
@@ -46,29 +49,137 @@ function clampPositiveInt(value, fallback, max) {
   return Math.min(parsed, max)
 }
 
+function withAndConditions(baseQuery, ...conditions) {
+  const query = { ...baseQuery }
+  const baseAndConditions = Array.isArray(baseQuery?.$and) ? [...baseQuery.$and] : []
+  delete query.$and
+
+  const nextAndConditions = [
+    ...baseAndConditions,
+    ...conditions.filter(Boolean),
+  ]
+
+  if (nextAndConditions.length > 0) {
+    query.$and = nextAndConditions
+  }
+
+  return query
+}
+
+function buildOperationalScopeQuery(baseQuery) {
+  return withAndConditions(
+    baseQuery,
+    { status: { $in: ACTIVE_OPERATIONAL_STATUSES } },
+    { ngay_kham: { $gte: toDateOnly(new Date()) } },
+  )
+}
+
+function buildSortedAppointmentIdsPipeline(query, skip, limit) {
+  const today = toDateOnly(new Date())
+
+  return [
+    { $match: query },
+    {
+      $addFields: {
+        __status_group: {
+          $switch: {
+            branches: [
+              {
+                case: {
+                  $and: [
+                    { $in: ['$status', ACTIVE_OPERATIONAL_STATUSES] },
+                    { $gte: ['$ngay_kham', today] },
+                  ],
+                },
+                then: 0,
+              },
+              {
+                case: {
+                  $and: [
+                    { $in: ['$status', ACTIVE_OPERATIONAL_STATUSES] },
+                    { $lt: ['$ngay_kham', today] },
+                  ],
+                },
+                then: 1,
+              },
+              { case: { $eq: ['$status', 'completed'] }, then: 2 },
+              { case: { $eq: ['$status', 'cancelled'] }, then: 3 },
+              { case: { $eq: ['$status', 'no_show'] }, then: 4 },
+            ],
+            default: 5,
+          },
+        },
+        __sort_datetime: {
+          $dateFromString: {
+            dateString: {
+              $concat: [
+                { $dateToString: { format: '%Y-%m-%d', date: '$ngay_kham', timezone: 'Asia/Ho_Chi_Minh' } },
+                'T',
+                { $ifNull: ['$gio_kham', '00:00'] },
+                ':00',
+              ],
+            },
+            timezone: 'Asia/Ho_Chi_Minh',
+          },
+        },
+      },
+    },
+    {
+      $addFields: {
+        __future_datetime: {
+          $cond: [{ $eq: ['$__status_group', 0] }, '$__sort_datetime', null],
+        },
+        __history_datetime: {
+          $cond: [{ $eq: ['$__status_group', 0] }, null, '$__sort_datetime'],
+        },
+      },
+    },
+    {
+      $sort: {
+        __status_group: 1,
+        __future_datetime: 1,
+        __history_datetime: -1,
+        ngay_tao: -1,
+        _id: 1,
+      },
+    },
+    { $skip: skip },
+    { $limit: limit },
+    { $project: { _id: 1 } },
+  ]
+}
+
 function getQuickFilterConditions(quickFilter) {
   const today = toDateOnly(new Date())
 
   switch (quickFilter) {
     case 'today':
-      return { ngay_kham: { $gte: today, $lte: endOfDateOnly(today) } }
+      return {
+        ngay_kham: { $gte: today, $lte: endOfDateOnly(today) },
+        status: { $in: ACTIVE_OPERATIONAL_STATUSES },
+      }
     case 'upcoming':
       return {
         ngay_kham: { $gte: today },
-        status: { $in: ['pending', 'confirmed', 'checked_in', 'in_progress'] },
+        status: { $in: ACTIVE_OPERATIONAL_STATUSES },
       }
     case 'unpaid':
       return {
+        ngay_kham: { $gte: today },
         payment_status: { $in: ['unpaid', 'partial'] },
-        status: { $ne: 'cancelled' },
+        status: { $in: ACTIVE_OPERATIONAL_STATUSES },
       }
     case 'cancelled':
       return { status: 'cancelled' }
     case 'need_attention':
       return {
+        status: { $in: ACTIVE_OPERATIONAL_STATUSES },
         $or: [
-          { status: 'pending' },
-          { payment_status: { $in: ['unpaid', 'partial'] } },
+          { ngay_kham: { $lt: today } },
+          {
+            ngay_kham: { $gte: today },
+            payment_status: { $in: ['unpaid', 'partial'] },
+          },
           { so_lan_thay_doi: { $gte: 2 } },
         ],
       }
@@ -286,7 +397,7 @@ function formatAppointmentItem(appointment) {
     ghi_chu_tiep_nhan: appointment.ghi_chu_tiep_nhan ?? null,
     canh_bao: {
       unpaid:
-        appointment.status !== 'cancelled' &&
+        ACTIVE_OPERATIONAL_STATUSES.includes(appointment.status) &&
         ['unpaid', 'partial'].includes(appointment.payment_status),
       rescheduled_multiple_times: (appointment.so_lan_thay_doi ?? 0) >= 2,
       missing_linkage: !appointment.doctor_id || !appointment.specialty_id,
@@ -535,7 +646,7 @@ export async function getAllAppointments(req, res) {
 
     const [
       total,
-      appointments,
+      sortedAppointmentIds,
       todayCount,
       pendingCount,
       confirmedCount,
@@ -547,7 +658,40 @@ export async function getAllAppointments(req, res) {
       proxyBookingCount,
     ] = await Promise.all([
       LichHen.countDocuments(query),
-      LichHen.find(query)
+      LichHen.aggregate(buildSortedAppointmentIdsPipeline(query, skip, limitNum)),
+      LichHen.countDocuments(withAndConditions(
+        summaryBaseQuery,
+        { status: { $in: ACTIVE_OPERATIONAL_STATUSES } },
+        { ngay_kham: { $gte: toDateOnly(new Date()), $lte: endOfDateOnly(new Date()) } },
+      )),
+      LichHen.countDocuments(withAndConditions(buildOperationalScopeQuery(summaryBaseQuery), { status: 'pending' })),
+      LichHen.countDocuments(withAndConditions(buildOperationalScopeQuery(summaryBaseQuery), { status: 'confirmed' })),
+      LichHen.countDocuments(withAndConditions(buildOperationalScopeQuery(summaryBaseQuery), { status: 'in_progress' })),
+      LichHen.countDocuments({ ...summaryBaseQuery, status: 'completed' }),
+      LichHen.countDocuments({ ...summaryBaseQuery, status: 'cancelled' }),
+      LichHen.countDocuments(withAndConditions(
+        buildOperationalScopeQuery(summaryBaseQuery),
+        { payment_status: { $in: ['unpaid', 'partial'] } },
+      )),
+      LichHen.countDocuments(withAndConditions(
+        buildOperationalScopeQuery(summaryBaseQuery),
+        {
+          $or: [
+            { payment_status: { $in: ['unpaid', 'partial'] } },
+            { so_lan_thay_doi: { $gte: 2 } },
+          ],
+        },
+      )),
+      LichHen.countDocuments(withAndConditions(
+        buildOperationalScopeQuery(summaryBaseQuery),
+        { dat_ho: true },
+      )),
+    ])
+
+    const appointmentIds = sortedAppointmentIds.map((item) => item._id)
+    const appointmentsRaw = appointmentIds.length === 0
+      ? []
+      : await LichHen.find({ _id: { $in: appointmentIds } })
         .populate({ path: 'user_id', select: 'ho_ten email so_dien_thoai' })
         .populate({
           path: 'member_id',
@@ -563,37 +707,12 @@ export async function getAllAppointments(req, res) {
         })
         .populate('service_id', 'ten')
         .populate('specialty_id', 'ten')
-        .sort({ ngay_kham: 1, gio_kham: 1, ngay_tao: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      LichHen.countDocuments({
-        ...summaryBaseQuery,
-        ngay_kham: { $gte: toDateOnly(new Date()), $lte: endOfDateOnly(new Date()) },
-      }),
-      LichHen.countDocuments({ ...summaryBaseQuery, status: 'pending' }),
-      LichHen.countDocuments({ ...summaryBaseQuery, status: 'confirmed' }),
-      LichHen.countDocuments({ ...summaryBaseQuery, status: 'in_progress' }),
-      LichHen.countDocuments({ ...summaryBaseQuery, status: 'completed' }),
-      LichHen.countDocuments({ ...summaryBaseQuery, status: 'cancelled' }),
-      LichHen.countDocuments({
-        ...summaryBaseQuery,
-        payment_status: { $in: ['unpaid', 'partial'] },
-        status: { $ne: 'cancelled' },
-      }),
-      LichHen.countDocuments({
-        ...summaryBaseQuery,
-        $or: [
-          { status: 'pending' },
-          { payment_status: { $in: ['unpaid', 'partial'] }, status: { $ne: 'cancelled' } },
-          { so_lan_thay_doi: { $gte: 2 } },
-        ],
-      }),
-      LichHen.countDocuments({
-        ...summaryBaseQuery,
-        dat_ho: true,
-      }),
-    ])
+        .lean()
+
+    const appointmentMap = new Map(appointmentsRaw.map((item) => [String(item._id), item]))
+    const appointments = appointmentIds
+      .map((id) => appointmentMap.get(String(id)))
+      .filter(Boolean)
 
     const totalPages = total === 0 ? 1 : Math.ceil(total / limitNum)
 

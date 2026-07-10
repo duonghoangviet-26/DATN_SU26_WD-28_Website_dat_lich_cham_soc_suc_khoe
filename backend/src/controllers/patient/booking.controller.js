@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import {
   BacSi, LichLamViec, LichHen,
-  ChuyenKhoa, DichVu, GiaDinh, ThanhVien,
+  ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan,
 } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 
@@ -9,6 +9,53 @@ import { ok, created, fail } from '../../utils/response.js'
 // A5 — Đặt lịch khám (Bệnh nhân)
 // Routes: /api/patient/booking
 // ============================================================
+
+function formatDatePart(date) {
+  const year = String(date.getUTCFullYear()).slice(-2)
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
+  return `${year}${month}${day}`
+}
+
+async function nextInvoiceNumber(session, invoiceDate) {
+  const datePart = formatDatePart(invoiceDate)
+  const counter = await mongoose.connection.collection('counters').findOneAndUpdate(
+    { key: `so_hoa_don_${datePart}` },
+    {
+      $inc: { seq: 1 },
+      $setOnInsert: { key: `so_hoa_don_${datePart}` },
+    },
+    {
+      upsert: true,
+      returnDocument: 'after',
+      session,
+    }
+  )
+
+  const counterDocument = counter?.value ?? counter
+  const sequence = String(counterDocument.seq).padStart(4, '0')
+  return `HD-${datePart}-${sequence}`
+}
+
+async function nextAppointmentCode(session, appointmentDate) {
+  const datePart = formatDatePart(appointmentDate)
+  const counter = await mongoose.connection.collection('counters').findOneAndUpdate(
+    { key: `ma_lich_hen_${datePart}` },
+    {
+      $inc: { seq: 1 },
+      $setOnInsert: { key: `ma_lich_hen_${datePart}` },
+    },
+    {
+      upsert: true,
+      returnDocument: 'after',
+      session,
+    }
+  )
+
+  const counterDocument = counter?.value ?? counter
+  const sequence = String(counterDocument.seq).padStart(4, '0')
+  return `LH-${datePart}-${sequence}`
+}
 
 // ─── GET /api/patient/booking/specialties ───────────────────────────────────
 export async function getSpecialties(req, res) {
@@ -154,7 +201,15 @@ export async function getSlots(req, res) {
 
 // ─── POST /api/patient/booking ───────────────────────────────────────────────
 export async function createBooking(req, res) {
+  const session = await mongoose.startSession()
+  session.startTransaction()
   try {
+    async function rollbackFail(statusCode, message) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, statusCode, message)
+    }
+
     const {
       loai_kham, doctor_id,
       schedule_id, slot_id,
@@ -163,36 +218,39 @@ export async function createBooking(req, res) {
       member_id, ten_khach, so_dien_thoai_khach, nam_sinh_khach,
     } = req.body
 
-    if (!loai_kham)  return fail(res, 400, 'Loại khám là bắt buộc')
-    if (!['clinic', 'home'].includes(loai_kham)) return fail(res, 400, 'loai_kham phải là clinic hoặc home')
-    if (!ngay_kham)  return fail(res, 400, 'Ngày khám là bắt buộc')
-    if (!member_id && !ten_khach) return fail(res, 400, 'Phải có member_id hoặc ten_khach')
+    if (!loai_kham)  return rollbackFail(400, 'Loại khám là bắt buộc')
+    if (!['clinic', 'home'].includes(loai_kham)) return rollbackFail(400, 'loai_kham phải là clinic hoặc home')
+    if (!ngay_kham)  return rollbackFail(400, 'Ngày khám là bắt buộc')
+    if (!member_id && !ten_khach) return rollbackFail(400, 'Phải có member_id hoặc ten_khach')
 
     // clinic: bắt buộc chọn bác sĩ cụ thể. home: KHÔNG chọn bác sĩ lúc đặt —
     // đây là dịch vụ lấy mẫu xét nghiệm tại nhà, CSKH gán nhân viên sau khi thanh toán
     // (xem docs/superpowers/specs/2026-07-02-home-service-redesign.md mục 2.5).
     let doc = null
     if (loai_kham === 'clinic') {
-      if (!doctor_id) return fail(res, 400, 'Bác sĩ là bắt buộc')
+      if (!doctor_id) return rollbackFail(400, 'Bác sĩ là bắt buộc')
       doc = await BacSi.findOne({ _id: doctor_id, trang_thai_duyet: 'approved', la_hien: true })
         .populate('specialties', 'ten')
-        .lean()
-      if (!doc) return fail(res, 404, 'Bác sĩ không tồn tại hoặc chưa được duyệt')
+        .session(session)
+      if (!doc) return rollbackFail(404, 'Bác sĩ không tồn tại hoặc chưa được duyệt')
     }
 
     // Verify member thuộc family của user
     if (member_id) {
       const family = await GiaDinh.findOne({ user_id: req.user.id }).select('_id').lean()
-      if (!family) return fail(res, 404, 'Chưa có nhóm gia đình')
-      const member = await ThanhVien.findOne({ _id: member_id, family_id: family._id, ngay_xoa: null }).lean()
-      if (!member) return fail(res, 404, 'Không tìm thấy thành viên trong gia đình')
+      if (!family) return rollbackFail(404, 'Chưa có nhóm gia đình')
+      const member = await ThanhVien.findOne({ _id: member_id, family_id: family._id, ngay_xoa: null }).session(session).lean()
+      if (!member) return rollbackFail(404, 'Không tìm thấy thành viên trong gia đình')
     }
 
     let gia_kham, ten_dich_vu, phong_kham = null, gio_dat
+    let chi_nhanh_id = null
+    let specialty_id = null
+    let paymentLineType = 'phi_kham'
 
     if (loai_kham === 'clinic') {
       if (!schedule_id || !slot_id) {
-        return fail(res, 400, 'Khám tại phòng khám yêu cầu schedule_id và slot_id')
+        return rollbackFail(400, 'Khám tại phòng khám yêu cầu schedule_id và slot_id')
       }
 
       // Atomic claim slot để tránh double-booking
@@ -204,73 +262,130 @@ export async function createBooking(req, res) {
           'slots.status':       'active',
           'slots.benh_nhan_id': null,
         },
-        { $set: { 'slots.$.status': 'booked', 'slots.$.benh_nhan_id': req.user.id } },
-        { new: true },
+        { $set: { 'slots.$.status': 'pending_payment', 'slots.$.benh_nhan_id': req.user.id } },
+        { new: true, session },
       )
-      if (!updated) return fail(res, 409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
+      if (!updated) return rollbackFail(409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
 
       const claimedSlot = updated.slots.id(slot_id)
       phong_kham = claimedSlot.phong_kham
       gio_dat    = claimedSlot.gio_bat_dau
-      gia_kham   = doc.gia_kham
+      gia_kham   = doc.phi_kham ?? doc.gia_kham ?? 0
       ten_dich_vu = doc.specialties?.[0]?.ten ?? 'Khám tổng quát'
+      chi_nhanh_id = updated.chi_nhanh_id ?? doc.chi_nhanh_id ?? null
+      specialty_id = claimedSlot.specialty_id ?? doc.specialties?.[0]?._id ?? null
 
     } else {
       // home — dịch vụ lấy mẫu xét nghiệm tại nhà, không chọn bác sĩ, chọn khu vực + giờ tự do
-      if (!service_id)          return fail(res, 400, 'Khám tại nhà yêu cầu service_id')
-      if (!khu_vuc?.trim())     return fail(res, 400, 'Khu vực là bắt buộc')
-      if (!dia_chi_kham?.trim()) return fail(res, 400, 'Địa chỉ khám là bắt buộc')
-      if (!gio_kham)             return fail(res, 400, 'Giờ khám là bắt buộc')
+      if (!service_id)          return rollbackFail(400, 'Khám tại nhà yêu cầu service_id')
+      if (!khu_vuc?.trim())     return rollbackFail(400, 'Khu vực là bắt buộc')
+      if (!dia_chi_kham?.trim()) return rollbackFail(400, 'Địa chỉ khám là bắt buộc')
+      if (!gio_kham)             return rollbackFail(400, 'Giờ khám là bắt buộc')
 
-      const service = await DichVu.findOne({ _id: service_id, loai: 'home', status: 'active' }).lean()
-      if (!service) return fail(res, 404, 'Dịch vụ không tồn tại')
+      const service = await DichVu.findOne({ _id: service_id, loai: 'home', status: 'active' }).session(session).lean()
+      if (!service) return rollbackFail(404, 'Dịch vụ không tồn tại')
 
       if (service.khu_vuc?.length && !service.khu_vuc.includes(khu_vuc.trim())) {
-        return fail(res, 400, 'Dịch vụ này không hỗ trợ khu vực đã chọn')
+        return rollbackFail(400, 'Dịch vụ này không hỗ trợ khu vực đã chọn')
       }
 
       gia_kham    = service.gia
       ten_dich_vu = service.ten
       gio_dat     = gio_kham
+      specialty_id = service.specialty_id ?? null
+      paymentLineType = 'dich_vu'
     }
 
-    // Thanh toán ngay khi đặt cho cả 2 loại — clinic auto-confirm, home giá cố định nên
-    // thanh toán trước an toàn (quyết định 2026-07-02, xem spec mục 2.1/2.5). doctor_id=null
-    // cho home — CSKH gán nhân viên lấy mẫu sau qua PATCH /api/admin/appointments/:id/assign-home-staff.
-    const appointment = await LichHen.create({
+    const appointmentCode = await nextAppointmentCode(session, new Date(ngay_kham))
+
+    const [appointment] = await LichHen.create([{
       user_id:      req.user.id,
       member_id:    member_id    || null,
       doctor_id:    loai_kham === 'clinic' ? doc._id : null,
       schedule_id:  loai_kham === 'clinic' ? schedule_id  : null,
       slot_id:      loai_kham === 'clinic' ? slot_id      : null,
       service_id:   loai_kham === 'home'   ? service_id   : null,
+      chi_nhanh_id,
+      specialty_id,
+      ma_lich_hen:  appointmentCode,
       loai_kham,
       ngay_kham:    new Date(ngay_kham),
       gio_kham:     gio_dat,
       ly_do_kham:   ly_do_kham?.trim() || null,
       phong_kham:   loai_kham === 'clinic' ? phong_kham   : null,
       dia_chi_kham: loai_kham === 'home'   ? dia_chi_kham.trim() : null,
-      status:         loai_kham === 'clinic' ? 'confirmed' : 'pending',
-      payment_status: 'paid',
+      status:         'pending',
+      payment_status: 'unpaid',
       gia_kham,
       ten_dich_vu,
       ten_khach:           ten_khach           || null,
       so_dien_thoai_khach: so_dien_thoai_khach || null,
       nam_sinh_khach:      nam_sinh_khach       || null,
-    })
+    }], { session })
+
+    const invoiceDate = appointment.ngay_tao instanceof Date ? appointment.ngay_tao : new Date()
+    const so_hoa_don = await nextInvoiceNumber(session, invoiceDate)
+
+    const [invoice] = await HoaDon.create([{
+      appointment_id: appointment._id,
+      so_hoa_don,
+      chi_nhanh_id,
+      specialty_id,
+      tong_tien_kham: gia_kham,
+      chi_tiet_thu_phi: [
+        {
+          loai: paymentLineType,
+          ten: ten_dich_vu,
+          so_tien: gia_kham,
+          so_luong: 1,
+          thanh_tien: gia_kham,
+          ghi_chu: loai_kham === 'clinic' ? 'Phi dat lich online cho kham tai phong kham' : 'Phi dat lich online cho dich vu tai nha',
+          created_at: new Date(),
+        },
+      ],
+      tong_tien_phat_sinh: 0,
+      tong_thanh_toan: gia_kham,
+      trang_thai_hoa_don: 'chua_thanh_toan',
+      ghi_chu_ke_toan: 'Tao tu luong dat lich online - cho xac nhan thanh toan',
+    }], { session })
+
+    const [payment] = await ThanhToan.create([{
+      appointment_id: appointment._id,
+      hoa_don_id: invoice._id,
+      benh_nhan_id: req.user.id,
+      so_tien: gia_kham,
+      loai_thanh_toan: 'phi_dat_lich',
+      phuong_thuc: req.body.phuong_thuc || 'chuyen_khoan',
+      status: 'pending',
+      ngay_thanh_toan: null,
+      gateway_response: {
+        provider: 'fake_gateway',
+        created_from: 'patient_booking',
+      },
+    }], { session })
+
+    await session.commitTransaction()
+    session.endSession()
 
     return created(res, {
       id:             appointment._id,
+      appointment_id: appointment._id,
+      invoice_id:     invoice._id,
+      payment_id:     payment._id,
+      so_hoa_don:     invoice.so_hoa_don,
+      ma_giao_dich:   payment.ma_giao_dich,
       status:         appointment.status,
       payment_status: appointment.payment_status,
+      payment_record_status: payment.status,
+      invoice_status: invoice.trang_thai_hoa_don,
       gia_kham:       appointment.gia_kham,
       ten_dich_vu:    appointment.ten_dich_vu,
       ngay_kham:      appointment.ngay_kham,
       gio_kham:       appointment.gio_kham,
-    }, loai_kham === 'clinic'
-      ? 'Đặt lịch thành công, lịch hẹn đã được xác nhận'
-      : 'Đặt lịch và thanh toán thành công, chúng tôi sẽ liên hệ xác nhận lịch lấy mẫu')
+    }, 'Tao lich hen thanh cong, vui long tiep tuc xac nhan thanh toan')
   } catch (err) {
+    await session.abortTransaction()
+    session.endSession()
     return fail(res, 500, err.message)
   }
 }
