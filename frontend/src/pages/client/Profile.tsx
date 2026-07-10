@@ -235,7 +235,7 @@ export default function Profile() {
                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                               app.status === 'completed'
                                 ? 'bg-emerald-50 text-emerald-600'
-                                : app.status === 'approved'
+                                : app.status === 'confirmed'
                                 ? 'bg-blue-50 text-blue-600'
                                 : app.status === 'cancelled'
                                 ? 'bg-red-50 text-red-600'
@@ -244,7 +244,7 @@ export default function Profile() {
                           >
                             {app.status === 'completed'
                               ? 'Đã khám'
-                              : app.status === 'approved'
+                              : app.status === 'confirmed'
                               ? 'Đã duyệt'
                               : app.status === 'cancelled'
                               ? 'Đã hủy'

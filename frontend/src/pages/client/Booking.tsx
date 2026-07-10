@@ -146,7 +146,7 @@ export default function Booking() {
       // Save appointment mock strictly matching LichHen schema model structure
       const newApp = {
         _id: `app-mock-${Date.now()}`,
-        user_id: user?._id || 'mock-user-123',
+        user_id: user?.id || 'mock-user-123',
         doctor_id: selectedDoctorId,
         schedule_id: `sch-mock-${selectedDoctorId}-${selectedDate}`, // sch-mock-[doc]-[date]
         slot_id: selectedSlotId,
