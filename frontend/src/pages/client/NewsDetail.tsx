@@ -77,7 +77,7 @@ export default function NewsDetail() {
               "{article.noi_dung_ngan}"
             </p>
             <p>{article.noi_dung}</p>
-            
+
             <h3 className="text-base font-bold text-slate-800 pt-4">1. Những nguyên nhân gây bệnh phổ biến</h3>
             <p>
               Các thay đổi thất thường về thời tiết, ô nhiễm không khí tại các đô thị lớn cùng thói quen lạm dụng máy lạnh điều hòa trong phòng kín là những tác nhân chính xúc tác vi khuẩn đường hô hấp phát triển nhanh, gây sưng đau và thương tổn niêm mạc tai mũi họng.
