@@ -9,11 +9,14 @@ import ProtectedRoute from '@/routes/ProtectedRoute'
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
 import Home from '@/pages/client/Home'
-import ServicesHome from '@/pages/client/ServicesHome'
-import SpecialtyList from '@/pages/client/SpecialtyList'
-import SpecialtyDoctors from '@/pages/client/SpecialtyDoctors'
-import HomeServiceList from '@/pages/client/HomeServiceList'
-import HomeServiceDetail from '@/pages/client/HomeServiceDetail'
+import DoctorList from '@/pages/client/DoctorList'
+import DoctorDetail from '@/pages/client/DoctorDetail'
+import ServiceList from '@/pages/client/ServiceList'
+import ServiceDetail from '@/pages/client/ServiceDetail'
+import Booking from '@/pages/client/Booking'
+import Profile from '@/pages/client/Profile'
+import NewsList from '@/pages/client/NewsList'
+import NewsDetail from '@/pages/client/NewsDetail'
 
 import Dashboard from '@/pages/admin/Dashboard'
 import ManageUsers from '@/pages/admin/ManageUsers'
@@ -41,11 +44,14 @@ export default function AppRoutes() {
       {/* Khu vực khách (client) */}
       <Route element={<ClientLayout />}>
         <Route path="/" element={<Home />} />
-        <Route path="/dich-vu" element={<ServicesHome />} />
-        <Route path="/dich-vu/chuyen-khoa" element={<SpecialtyList />} />
-        <Route path="/dich-vu/chuyen-khoa/:slug" element={<SpecialtyDoctors />} />
-        <Route path="/dich-vu/xet-nghiem" element={<HomeServiceList />} />
-        <Route path="/dich-vu/xet-nghiem/:id" element={<HomeServiceDetail />} />
+        <Route path="/bac-si" element={<DoctorList />} />
+        <Route path="/bac-si/:id" element={<DoctorDetail />} />
+        <Route path="/dich-vu" element={<ServiceList />} />
+        <Route path="/dich-vu/:id" element={<ServiceDetail />} />
+        <Route path="/booking" element={<Booking />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/tin-tuc" element={<NewsList />} />
+        <Route path="/tin-tuc/:slug" element={<NewsDetail />} />
       </Route>
 
       {/* Khu vực xác thực */}
@@ -98,3 +104,4 @@ export default function AppRoutes() {
     </Routes>
   )
 }
+
