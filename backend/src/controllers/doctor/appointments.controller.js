@@ -241,6 +241,7 @@ export async function createResult(req, res) {
     let prescription = null
     if (Array.isArray(thuoc) && thuoc.length) {
       prescription = await DonThuoc.create({
+        ket_qua_kham_id:   result._id, // bắt buộc theo schema (DonThuoc.js) — thiếu field này sẽ bị Mongoose reject
         medical_record_id: result._id,
         member_id:         a.member_id,
         ten_khach:         a.ten_khach ?? null,

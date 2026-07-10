@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import bcrypt from 'bcryptjs'
 import {
   NguoiDung, BacSi, ChuyenKhoa, PhongKham, LichLamViec, LichHen, KetQuaKham, NghiPhepBacSi,
+  GiaDinh, ThanhVien, DonThuoc, SinhHieuKham,
 } from '../models/index.js'
 
 // ============================================================
@@ -23,6 +24,11 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 dotenv.config({ path: path.join(__dirname, '../../.env') })
 
+if (process.env.NODE_ENV === 'production') {
+  console.error('❌ Không chạy script seed dữ liệu test khi NODE_ENV=production.')
+  process.exit(1)
+}
+
 const uri = process.env.MONGODB_URI
 if (!uri) {
   console.error('❌ Lỗi: Chưa có MONGODB_URI trong file .env')
@@ -34,6 +40,18 @@ const TEST_DOCTOR_PASSWORD = 'Test123456' // chỉ dùng để hash — KHÔNG l
 const TEST_DOCTOR_NAME = 'BS. Trần Minh Khang (TEST)' // có hậu tố (TEST) để không trùng tên với bác sĩ demo thật đã seed trước đó
 const TEST_DOCTOR_PHONE = '0909000099'
 const TEST_ROOM_LABEL_FALLBACK = 'Phòng 102, Tầng 1, Tòa A'
+
+// Bác sĩ khác — chỉ để test phân quyền (đăng nhập bằng TEST_DOCTOR_EMAIL không được thấy dữ liệu của bác sĩ này)
+const TEST_OTHER_DOCTOR_EMAIL = 'doctor.other.test@vitafamily.local'
+const TEST_OTHER_DOCTOR_PASSWORD = 'Test123456'
+const TEST_OTHER_DOCTOR_NAME = 'BS. Lê Phương Thảo (TEST — bác sĩ khác)'
+const TEST_OTHER_DOCTOR_PHONE = '0909000098'
+
+// Bệnh nhân có tài khoản thật — để test luồng đặt lịch qua member_id (khác với khách vãng lai ten_khach)
+const TEST_PATIENT_EMAIL = 'patient.test@vitafamily.local'
+const TEST_PATIENT_PASSWORD = 'Test123456'
+const TEST_PATIENT_NAME = 'Nguyễn Thị Hạnh (TEST)'
+const TEST_PATIENT_PHONE = '0909000097'
 
 function startOfDay(d) {
   const x = new Date(d)
@@ -126,6 +144,89 @@ async function findOrCreateLeave(doctorId, tuNgay, buildFn) {
   return { leave, created: true }
 }
 
+// ── Bác sĩ khác (test phân quyền) ───────────────────────────────────────────
+async function findOrCreateOtherDoctor() {
+  let user = await NguoiDung.findOne({ email: TEST_OTHER_DOCTOR_EMAIL })
+  let userCreated = false
+  if (!user) {
+    const hash = await bcrypt.hash(TEST_OTHER_DOCTOR_PASSWORD, 10)
+    user = await NguoiDung.create({
+      email: TEST_OTHER_DOCTOR_EMAIL,
+      mat_khau: hash,
+      ho_ten: TEST_OTHER_DOCTOR_NAME,
+      so_dien_thoai: TEST_OTHER_DOCTOR_PHONE,
+      role: 'doctor',
+      status: 'active',
+    })
+    userCreated = true
+  }
+
+  let doc = await BacSi.findOne({ user_id: user._id })
+  let docCreated = false
+  if (!doc) {
+    // Ưu tiên chuyên khoa khác với bác sĩ chính để 2 bác sĩ tách biệt rõ ràng khi test phân quyền
+    const specialty = await ChuyenKhoa.findOne({ ten: 'Nội tổng quát' }) || await ChuyenKhoa.findOne({})
+    doc = await BacSi.create({
+      user_id: user._id,
+      specialties: specialty ? [specialty._id] : [],
+      services: [],
+      tieu_su: '(TEST) Bác sĩ khác — chỉ dùng để kiểm thử phân quyền, không phải bác sĩ thật.',
+      bang_cap: 'Bác sĩ Chuyên khoa I',
+      so_nam_kinh_nghiem: 5,
+      gia_kham: 200000,
+      phi_kham: 200000,
+      tuoi_nhan_kham_tu: 0,
+      trang_thai_duyet: 'approved',
+      phong_kham_mac_dinh: TEST_ROOM_LABEL_FALLBACK,
+    })
+    docCreated = true
+  }
+
+  return { user, doc, userCreated, docCreated }
+}
+
+// ── Bệnh nhân có tài khoản thật (GiaDinh + ThanhVien) ───────────────────────
+async function findOrCreatePatientAccount() {
+  let user = await NguoiDung.findOne({ email: TEST_PATIENT_EMAIL })
+  let userCreated = false
+  if (!user) {
+    const hash = await bcrypt.hash(TEST_PATIENT_PASSWORD, 10)
+    user = await NguoiDung.create({
+      email: TEST_PATIENT_EMAIL,
+      mat_khau: hash,
+      ho_ten: TEST_PATIENT_NAME,
+      so_dien_thoai: TEST_PATIENT_PHONE,
+      role: 'user',
+      status: 'active',
+    })
+    userCreated = true
+  }
+
+  let family = await GiaDinh.findOne({ user_id: user._id })
+  let familyCreated = false
+  if (!family) {
+    family = await GiaDinh.create({ user_id: user._id, ten_nhom: `Gia đình ${TEST_PATIENT_NAME}` })
+    familyCreated = true
+  }
+
+  let member = await ThanhVien.findOne({ family_id: family._id, la_chu_ho: true })
+  let memberCreated = false
+  if (!member) {
+    member = await ThanhVien.create({
+      family_id: family._id,
+      tai_khoan_id: user._id,
+      ho_ten: TEST_PATIENT_NAME,
+      ngay_sinh: new Date('1993-05-10'),
+      gioi_tinh: 'nu',
+      quan_he: 'ban_than',
+      la_chu_ho: true,
+    })
+    memberCreated = true
+  }
+
+  return { user, family, member, userCreated, familyCreated, memberCreated }
+}
+
 async function main() {
   console.log('⏳ Đang kết nối MongoDB Cloud...')
   await mongoose.connect(uri)
@@ -145,6 +246,15 @@ async function main() {
 
   // Y tá đã có sẵn trong DB — tái sử dụng để test luồng "hồ sơ do y tá nhập"
   const nurse = await NguoiDung.findOne({ role: 'nurse' })
+
+  // ── 1b. Bác sĩ khác (test phân quyền) + bệnh nhân tài khoản thật ────────
+  const { user: otherDoctorUser, doc: otherDoc, userCreated: otherUserCreated, docCreated: otherDocCreated } = await findOrCreateOtherDoctor()
+  bump(otherUserCreated ? 'created' : 'existed', 'other_doctor_user')
+  bump(otherDocCreated ? 'created' : 'existed', 'other_doctor_profile')
+
+  const { user: patientUser, member: patientMember, userCreated: patientUserCreated, memberCreated: patientMemberCreated } = await findOrCreatePatientAccount()
+  bump(patientUserCreated ? 'created' : 'existed', 'patient_user')
+  bump(patientMemberCreated ? 'created' : 'existed', 'patient_member')
 
   // ── 2. Lịch làm việc: 6 ngày làm việc gần nhất, bỏ Chủ nhật ─────────────
   const workDays = next6WorkingDays()
@@ -170,10 +280,44 @@ async function main() {
   })
   if (fullDayNeedsSave) await fullDaySchedule.save()
 
-  // ── 3. Appointments (8 lịch hẹn, đủ trạng thái thật của hệ thống) ───────
-  // Lưu ý: enum LichHen.status có 'checked_in'/'in_progress' nhưng KHÔNG route nào của hệ thống
-  // hiện set 2 giá trị này (đã xác nhận qua audit code trước đó) — cố tình KHÔNG tạo dữ liệu test
-  // cho 2 trạng thái này để tránh tạo dữ liệu test không phản ánh đúng nghiệp vụ thật.
+  // ── 2b. Lịch + lịch hẹn của BÁC SĨ KHÁC hôm nay (test phân quyền) ───────
+  // Mục tiêu: đăng nhập bằng TEST_DOCTOR_EMAIL không được thấy 2 lịch hẹn này.
+  const { schedule: otherSchedule } = await findOrCreateSchedule(otherDoc._id, workDays[0], [
+    { gio_bat_dau: '09:00', gio_ket_thuc: '09:30', status: 'active' },
+    { gio_bat_dau: '09:30', gio_ket_thuc: '10:00', status: 'active' },
+  ])
+
+  const otherDoctorPlan = [
+    { maLichHen: 'TEST_OTHER_DOCTOR_APT_01', slot: 0, status: 'confirmed', payment: 'paid', ten: 'TEST_PATIENT_OTHER_01 Ngô Bảo Châu', gioi_tinh: 'male', nam: 1982 },
+    { maLichHen: 'TEST_OTHER_DOCTOR_APT_02', slot: 1, status: 'pending',   payment: 'unpaid', ten: 'TEST_PATIENT_OTHER_02 Lý Thu Trang', gioi_tinh: 'female', nam: 1998 },
+  ]
+  for (const p of otherDoctorPlan) {
+    const slot = otherSchedule.slots[p.slot]
+    const { created } = await findOrCreateAppointment(p.maLichHen, async () => ({
+      doctor_id: otherDoc._id,
+      schedule_id: otherSchedule._id,
+      slot_id: slot._id,
+      loai_kham: 'clinic',
+      ngay_kham: startOfDay(workDays[0]),
+      gio_kham: slot.gio_bat_dau,
+      gio_ket_thuc: slot.gio_ket_thuc,
+      ly_do_kham: 'Khám định kỳ (dữ liệu test — bác sĩ khác)',
+      phong_kham: otherDoc.phong_kham_mac_dinh,
+      status: p.status,
+      payment_status: p.payment,
+      gia_kham: otherDoc.gia_kham,
+      ten_dich_vu: 'Khám tổng quát',
+      ten_khach: p.ten,
+      gioi_tinh_khach: p.gioi_tinh,
+      nam_sinh_khach: p.nam,
+      ma_lich_hen: p.maLichHen,
+    }))
+    bump(created ? 'created' : 'existed', 'other_doctor_appointment')
+    if (created && slot.status === 'active') { slot.status = 'booked'; await otherSchedule.save() }
+  }
+
+  // ── 3. Appointments (8 lịch hẹn, đủ trạng thái có action API thật) ──────
+  // 'checked_in'/'in_progress' được seed riêng ở mục 3b (không qua action API — xem comment ở đó).
   const reasons = [
     'Đau đầu kéo dài', 'Ho, sốt, đau họng', 'Đau bụng sau ăn', 'Tái khám huyết áp',
     'Mệt mỏi, chóng mặt', 'Kiểm tra sức khỏe tổng quát', 'Đau lưng', 'Khó ngủ kéo dài',
@@ -245,6 +389,44 @@ async function main() {
     appointments.push({ ...p, appt })
   }
 
+  // ── 3b. Lịch hẹn trạng thái checked_in/in_progress + bệnh nhân tài khoản thật ─
+  // Lưu ý: 'checked_in' và 'in_progress' tồn tại trong enum LichHen.status nhưng KHÔNG có
+  // route/action nào trong hệ thống hiện set được 2 giá trị này (không có nút Check-in/Bắt đầu
+  // khám) — seed thẳng bằng create() chỉ để test hiển thị/lọc trạng thái trên UI, không phản
+  // ánh có action API tương ứng. Đồng thời dùng member_id (bệnh nhân có tài khoản) thay vì
+  // ten_khach (khách vãng lai) để test luồng đặt lịch qua tài khoản thật.
+  const todaySchedule = schedules[0]
+  const memberPlan = [
+    { maLichHen: 'TEST_APT_CHECKED_IN_01', slot: 2, status: 'checked_in', reason: 'Tái khám theo lịch hẹn định kỳ' },
+    { maLichHen: 'TEST_APT_IN_PROGRESS_01', slot: 3, status: 'in_progress', reason: 'Khám sức khỏe tổng quát' },
+  ]
+  for (const p of memberPlan) {
+    const slot = todaySchedule.slots[p.slot]
+    const { appt, created } = await findOrCreateAppointment(p.maLichHen, async () => ({
+      user_id: patientUser._id,
+      member_id: patientMember._id,
+      doctor_id: docId,
+      schedule_id: todaySchedule._id,
+      slot_id: slot._id,
+      loai_kham: 'clinic',
+      ngay_kham: startOfDay(workDays[0]),
+      gio_kham: slot.gio_bat_dau,
+      gio_ket_thuc: slot.gio_ket_thuc,
+      ly_do_kham: p.reason,
+      phong_kham: bacSi.phong_kham_mac_dinh,
+      status: p.status,
+      payment_status: 'paid',
+      gia_kham: bacSi.gia_kham,
+      ten_dich_vu: 'Khám tổng quát',
+      ma_lich_hen: p.maLichHen,
+      trang_thai_den: p.status === 'checked_in' || p.status === 'in_progress' ? 'da_den' : null,
+      gio_den_thuc_te: p.status === 'checked_in' || p.status === 'in_progress' ? new Date() : null,
+    }))
+    bump(created ? 'created' : 'existed', 'appointment')
+    if (created && slot.status === 'active') { slot.status = 'booked'; await todaySchedule.save() }
+    appointments.push({ day: 0, slot: p.slot, status: p.status, appt })
+  }
+
   // ── 4. Hồ sơ khám (KetQuaKham) cho 3 appointment cần test luồng xác nhận ─
   for (const item of appointments) {
     if (!item.result) continue
@@ -296,6 +478,63 @@ async function main() {
     }
   }
 
+  // ── 4b. Sinh hiệu + đơn thuốc mẫu cho các hồ sơ khám vừa tạo/tái sử dụng ─
+  for (const item of appointments) {
+    if (!item.result) continue
+    const { appt } = item
+    const result = await KetQuaKham.findOne({ appointment_id: appt._id })
+    if (!result) continue
+
+    const existingVitals = await SinhHieuKham.findOne({ appointment_id: appt._id })
+    if (!existingVitals) {
+      await SinhHieuKham.create({
+        appointment_id: appt._id,
+        can_nang: 62,
+        chieu_cao: 165,
+        huyet_ap: '120/80',
+        nhiet_do: 37,
+        nhip_tim: 78,
+        nguoi_do_id: nurse ? nurse._id : doctorUser._id,
+      })
+      bump('created', 'vital_signs')
+    } else {
+      bump('existed', 'vital_signs')
+    }
+
+    // Lưu ý field kép: `ket_qua_kham_id` là field BẮT BUỘC theo schema (DonThuoc.js), nhưng
+    // toàn bộ code đọc hiện tại (doctor getResult, patient records.controller.js) lại tra cứu
+    // đơn thuốc qua field `medical_record_id` bằng chính result._id (quy ước thực tế của cả
+    // codebase, dù lệch tên so với ref khai báo trong schema — đã audit, xem tài liệu seed).
+    // Set cả 2 field để: (a) qua validate bắt buộc, (b) hiển thị đúng trên API/FE hiện tại.
+    const existingRx = await DonThuoc.findOne({ ket_qua_kham_id: result._id })
+    if (!existingRx) {
+      await DonThuoc.create({
+        ket_qua_kham_id: result._id,
+        medical_record_id: result._id,
+        ten_khach: appt.ten_khach ?? null,
+        doctor_id: docId,
+        nguon: 'bac_si',
+        items: [{
+          ten_thuoc: '(TEST) Paracetamol 500mg',
+          lieu_luong: '1 viên',
+          tan_suat: '3 lần/ngày',
+          gio_uong: ['07:00', '12:00', '19:00'],
+          ngay_bat_dau: new Date(),
+          ngay_ket_thuc: new Date(Date.now() + 5 * 24 * 3600 * 1000),
+          ghi_chu: 'Uống sau ăn (dữ liệu test)',
+        }],
+      })
+      bump('created', 'prescription')
+    } else {
+      // Vá dữ liệu cũ (nếu chạy lại seed sau khi đã tồn tại nhưng thiếu medical_record_id)
+      if (!existingRx.medical_record_id) {
+        existingRx.medical_record_id = result._id
+        await existingRx.save()
+      }
+      bump('existed', 'prescription')
+    }
+  }
+
   // ── 5. Yêu cầu xin nghỉ (NghiPhepBacSi) — pending / approved / rejected ─
   const admin = await NguoiDung.findOne({ role: 'admin' })
 
@@ -340,10 +579,15 @@ async function main() {
   console.log('# SEED DOCTOR TEST DATA RESULT\n')
   console.log('Mới tạo:', report.created)
   console.log('Đã tồn tại (bỏ qua, không tạo trùng):', report.existed)
-  console.log('\nTest login:')
+  console.log('\nTest login (bác sĩ chính — dùng để xem đầy đủ dữ liệu):')
   console.log('  email:', TEST_DOCTOR_EMAIL)
-  console.log('  password: (xem trong mã nguồn / tài liệu — không in ra log)')
-  console.log('\nDoctor._id:', docId.toString())
+  console.log('Test login (bác sĩ khác — dùng để xác nhận KHÔNG thấy dữ liệu ở trên):')
+  console.log('  email:', TEST_OTHER_DOCTOR_EMAIL)
+  console.log('Test login (bệnh nhân tài khoản thật):')
+  console.log('  email:', TEST_PATIENT_EMAIL)
+  console.log('  password: (giống nhau cho cả 3 tài khoản — xem hằng số *_PASSWORD trong mã nguồn, không in ra log)')
+  console.log('\nDoctor._id (chính):', docId.toString())
+  console.log('Doctor._id (khác):', otherDoc._id.toString())
 
   await mongoose.disconnect()
 }

@@ -481,7 +481,7 @@ export interface DoctorAppointmentDetail {
 }
 
 export interface PrescriptionDrug {
-    id: number;
+    id: string | number; // string (Mongo ObjectId) khi tới từ API thật, number khi mock cũ
     ten_thuoc: string;
     lieu_luong: string; // liều lượng mỗi lần uống (khớp DB don_thuoc.items.lieu_luong)
     tan_suat: string; // '3 lần/ngày' — mô tả hiển thị
@@ -492,7 +492,7 @@ export interface PrescriptionDrug {
 }
 
 export interface ExaminationResult {
-    id: number;
+    id: string | number; // string (Mongo ObjectId) khi tới từ API thật, number khi mock cũ
     appointment_id: string | number; // string khi tới từ DoctorAppointmentDetail.id (Mongo), number khi mock cũ
     chan_doan: string;
     huong_dan_dieu_tri: string;
