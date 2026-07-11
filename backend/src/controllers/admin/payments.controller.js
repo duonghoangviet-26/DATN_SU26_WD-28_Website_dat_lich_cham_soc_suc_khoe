@@ -42,6 +42,35 @@ function mapPaymentDetail(payment) {
   }
 }
 
+async function syncAppointmentPaymentStatusFromPayment(payment, invoiceState = null) {
+  let appointmentId = payment.appointment_id ?? null
+
+  if (!appointmentId && payment.hoa_don_id) {
+    const invoice = await HoaDon.findById(payment.hoa_don_id).select('appointment_id').lean()
+    appointmentId = invoice?.appointment_id ?? null
+  }
+
+  if (!appointmentId) {
+    return
+  }
+
+  let nextPaymentStatus = 'unpaid'
+  if (payment.status === 'refunded') {
+    nextPaymentStatus = 'refunded'
+  } else if (invoiceState?.trang_thai_hoa_don === 'da_thanh_toan_du' || payment.status === 'paid') {
+    nextPaymentStatus = 'paid'
+  } else if (invoiceState?.trang_thai_hoa_don === 'da_dat_coc') {
+    nextPaymentStatus = 'partial'
+  }
+
+  const update = { payment_status: nextPaymentStatus }
+  if (nextPaymentStatus === 'paid') {
+    update.thoi_diem_thanh_toan = payment.ngay_thanh_toan || payment.thoi_diem_thanh_toan || new Date()
+  }
+
+  await LichHen.findByIdAndUpdate(appointmentId, update)
+}
+
 // ============================================================
 // C8 — Quản lý thanh toán (Admin)
 // Routes: /api/admin/payments
@@ -139,6 +168,7 @@ export async function create(req, res) {
     })
 
     const invoiceState = await tinhTrangThaiHoaDon(hoa_don_id)
+    await syncAppointmentPaymentStatusFromPayment(payment, invoiceState)
 
     return res.status(201).json({
       success: true,
@@ -229,6 +259,7 @@ export async function update(req, res) {
     const invoiceState = payment.hoa_don_id
       ? await tinhTrangThaiHoaDon(payment.hoa_don_id)
       : null
+    await syncAppointmentPaymentStatusFromPayment(payment, invoiceState)
 
     return ok(res, {
       ...mapPaymentDetail(payment.toObject()),
@@ -255,11 +286,7 @@ export async function refund(req, res) {
       await tinhTrangThaiHoaDon(payment.hoa_don_id)
     }
 
-    if (payment.appointment_id) {
-      await LichHen.findByIdAndUpdate(payment.appointment_id, {
-        payment_status: 'refunded',
-      })
-    }
+    await syncAppointmentPaymentStatusFromPayment(payment, { trang_thai_hoa_don: 'chua_thanh_toan' })
 
     try {
       await HoanTien.create({

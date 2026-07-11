@@ -362,7 +362,12 @@ export interface AdminDoctorWorkdayItem {
     ngay: string;
     trang_thai_ngay: "lam_viec" | "nghi" | "nghi_phep" | "chua_tao";
     ghi_chu_ngay?: string | null;
+    trang_thai_xac_nhan: "cho_xac_nhan" | "da_xac_nhan" | "tu_choi";
+    ly_do_tu_choi_xac_nhan?: string | null;
+    thoi_diem_xac_nhan?: string | null;
     co_di_lam: boolean;
+    so_lich_hen_xung_dot: number;
+    canh_bao_xung_dot_xac_nhan: boolean;
     tong_slot: number;
     slot_trong: number;
     slot_da_dat: number;
@@ -403,7 +408,45 @@ export interface AdminDoctorScheduleDetail {
     ngay: string;
     trang_thai_ngay: "lam_viec" | "nghi" | "nghi_phep";
     ghi_chu_ngay?: string | null;
+    trang_thai_xac_nhan?: "cho_xac_nhan" | "da_xac_nhan" | "tu_choi";
+    ly_do_tu_choi_xac_nhan?: string | null;
+    thoi_diem_xac_nhan?: string | null;
     slots: AdminDoctorScheduleSlot[];
+}
+
+export interface AdminDoctorScheduleAuditLog {
+    _id: string;
+    schedule_id?: string | null;
+    doctor_id?: string | null;
+    doctor_name?: string | null;
+    ngay?: string | null;
+    slot_id?: string | null;
+    nguoi_thuc_hien_id?: string | null;
+    nguoi_thuc_hien: string;
+    nguoi_thuc_hien_email?: string | null;
+    vai_tro: "admin" | "doctor" | "system";
+    hanh_dong:
+        | "auto_generate"
+        | "manual_create"
+        | "update_workday"
+        | "update_slot"
+        | "doctor_confirm"
+        | "doctor_reject"
+        | "doctor_request_cancel_slot";
+    du_lieu_cu?: Record<string, unknown> | null;
+    du_lieu_moi?: Record<string, unknown> | null;
+    ghi_chu?: string | null;
+    thoi_diem: string;
+}
+
+export interface AdminDoctorScheduleAuditResponse {
+    items: AdminDoctorScheduleAuditLog[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+    };
 }
 
 export interface ReviewItem {
