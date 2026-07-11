@@ -3,6 +3,23 @@ import { DichVu, NhatKyThaoTac, LichHen, BacSi } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 
 const isValidId = (id) => id && mongoose.Types.ObjectId.isValid(id)
+const DOI_TUONG_AP_DUNG_VALUES = ['tre_em', 'nguoi_lon', 'gia_dinh', 'khong_gioi_han']
+
+function normalizePackageFields(input = {}) {
+  const laGoi = input.la_goi === undefined ? undefined : Boolean(input.la_goi)
+  const doiTuongRaw = typeof input.doi_tuong_ap_dung === 'string'
+    ? input.doi_tuong_ap_dung.trim()
+    : input.doi_tuong_ap_dung
+
+  if (doiTuongRaw != null && doiTuongRaw !== '' && !DOI_TUONG_AP_DUNG_VALUES.includes(doiTuongRaw)) {
+    return { error: 'Đối tượng áp dụng không hợp lệ' }
+  }
+
+  return {
+    la_goi: laGoi,
+    doi_tuong_ap_dung: doiTuongRaw ? doiTuongRaw : null,
+  }
+}
 
 // ============================================================
 // C4 — Quản lý dịch vụ (Admin)
@@ -93,13 +110,14 @@ async function writeAuditLog(userId, role, hanh_dong, serviceId, ly_do) {
 // ─── GET /api/admin/services?loai=&status=&search=&page=&limit= ─────────────
 export async function list(req, res) {
   try {
-    const { loai, status, search } = req.query
+    const { loai, status, search, la_goi } = req.query
     const page  = Math.max(1, parseInt(req.query.page,  10) || 1)
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10))
 
     const filter = {}
     if (loai)   filter.loai   = loai
     if (status) filter.status = status
+    if (la_goi !== undefined) filter.la_goi = ['true', '1'].includes(String(la_goi).toLowerCase())
     if (search?.trim()) filter.$or = [
       { ten:        { $regex: search.trim(), $options: 'i' } },
       { ma_dich_vu: { $regex: search.trim(), $options: 'i' } },
@@ -165,8 +183,10 @@ export async function create(req, res) {
   try {
     const {
       ten, loai, gia, mo_ta_ngan, mo_ta,
-      gio_dat_truoc_toi_thieu, specialty_id, khu_vuc, chuan_bi_truoc,
+      gio_dat_truoc_toi_thieu, specialty_id, khu_vuc, chuan_bi_truoc, la_goi, doi_tuong_ap_dung,
     } = req.body
+    const normalizedPackage = normalizePackageFields({ la_goi, doi_tuong_ap_dung })
+    if (normalizedPackage.error) return fail(res, 400, normalizedPackage.error)
 
     // ── Validate bắt buộc ────────────────────────────────────────────────────
     if (!ten?.trim())  return fail(res, 400, 'Tên dịch vụ là bắt buộc')
@@ -204,6 +224,8 @@ export async function create(req, res) {
       gio_bat_dau:    loai === 'home' ? '08:00' : null,
       gio_ket_thuc:   loai === 'home' ? '17:00' : null,
       specialty_id:   loai === 'related' ? specialty_id : null,
+      la_goi:         normalizedPackage.la_goi ?? false,
+      doi_tuong_ap_dung: normalizedPackage.la_goi === false ? null : normalizedPackage.doi_tuong_ap_dung,
       khu_vuc:        loai === 'home' ? (khu_vuc ?? []) : [],
       chuan_bi_truoc: loai === 'related' ? (chuan_bi_truoc?.trim() || null) : null,
       nguoi_tao_id:   req.user.id,
@@ -234,6 +256,8 @@ export async function update(req, res) {
   try {
     service = await DichVu.findById(req.params.id)
     if (!service) return fail(res, 404, 'Không tìm thấy dịch vụ')
+    const normalizedPackage = normalizePackageFields(req.body)
+    if (normalizedPackage.error) return fail(res, 400, normalizedPackage.error)
 
     // ── Validate tên ─────────────────────────────────────────────────────────
     if (req.body.ten !== undefined) {
@@ -316,6 +340,14 @@ export async function update(req, res) {
       service.chuan_bi_truoc = req.body.chuan_bi_truoc?.trim() || null
     } else {
       service.chuan_bi_truoc = null
+    }
+
+    if (normalizedPackage.la_goi !== undefined) {
+      service.la_goi = normalizedPackage.la_goi
+    }
+    if (req.body.doi_tuong_ap_dung !== undefined || normalizedPackage.la_goi === false) {
+      service.doi_tuong_ap_dung =
+        service.la_goi === false ? null : normalizedPackage.doi_tuong_ap_dung
     }
 
     await service.save()

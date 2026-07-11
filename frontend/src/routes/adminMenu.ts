@@ -11,6 +11,7 @@ export const adminMenu: AdminMenuItem[] = [
   { type: 'item', path: '/admin/services', label: 'Dịch vụ', icon: 'service' },
   { type: 'section', label: 'Hoạt động' },
   { type: 'item', path: '/admin/appointments', label: 'Lịch hẹn', icon: 'calendar' },
+  { type: 'item', path: '/admin/doctor-schedules', label: 'Lịch làm việc bác sĩ', icon: 'clock' },
   { type: 'item', path: '/admin/reviews', label: 'Đánh giá', icon: 'star' },
   { type: 'item', path: '/admin/notifications', label: 'Thông báo', icon: 'bell' },
   { type: 'item', path: '/admin/payments', label: 'Thanh toán', icon: 'payment' },

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { appointmentService } from '@/services/appointment.service'
-import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
-import Badge from '@/components/common/Badge'
+
 import Icon from '@/components/admin/icons'
-import type { AppointmentItem, AppointmentStatus } from '@/types'
+import Badge from '@/components/common/Badge'
+import { appointmentService } from '@/services/appointment.service'
+import type { AppointmentHistoryItem, AppointmentItem, AppointmentStatus } from '@/types'
+import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
 
 interface Props {
   appointment: AppointmentItem
@@ -25,12 +26,21 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 const STATUS_COLOR: Record<string, 'yellow' | 'blue' | 'green' | 'red' | 'gray'> = {
-  pending: 'yellow', confirmed: 'blue', completed: 'green', cancelled: 'red',
-  unpaid: 'yellow', paid: 'green', refunded: 'gray'
+  pending: 'yellow',
+  confirmed: 'blue',
+  checked_in: 'blue',
+  in_progress: 'green',
+  completed: 'green',
+  cancelled: 'red',
+  no_show: 'gray',
+  unpaid: 'yellow',
+  partial: 'yellow',
+  paid: 'green',
+  refunded: 'gray',
 }
 
 export default function AppointmentHistoryModal({ appointment, onClose }: Props) {
-  const [history, setHistory] = useState<any[]>([])
+  const [history, setHistory] = useState<AppointmentHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,13 +48,13 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
     setLoading(true)
     appointmentService.getAppointmentHistory(appointment._id)
       .then(setHistory)
-      .catch((err) => setError(err?.response?.data?.message || 'Lỗi tải lịch sử'))
+      .catch((nextError) => setError(nextError?.response?.data?.message || 'Lỗi tải lịch sử'))
       .finally(() => setLoading(false))
   }, [appointment._id])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <div>
             <h3 className="text-lg font-semibold text-slate-800">Lịch sử thay đổi</h3>
@@ -57,7 +67,7 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto">
+        <div className="overflow-y-auto p-6">
           {loading ? (
             <div className="py-10 text-center text-slate-400">Đang tải lịch sử...</div>
           ) : error ? (
@@ -65,12 +75,11 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
           ) : history.length === 0 ? (
             <div className="py-10 text-center text-slate-400">Chưa có lịch sử thay đổi nào.</div>
           ) : (
-            <div className="relative border-l-2 border-slate-200 ml-4 space-y-8">
+            <div className="relative ml-4 space-y-8 border-l-2 border-slate-200">
               {history.map((item) => (
                 <div key={item._id} className="relative pl-6">
-                  {/* Timeline dot */}
                   <div className="absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 border-white bg-blue-500" />
-                  
+
                   <div className="mb-1 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-800">{item.nguoi_thuc_hien}</span>
@@ -82,13 +91,12 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
                       {new Date(item.thoi_diem).toLocaleString('vi-VN')}
                     </time>
                   </div>
-                  
+
                   {item.nguoi_thuc_hien_email && (
-                    <div className="text-xs text-slate-500 mb-3">{item.nguoi_thuc_hien_email}</div>
+                    <div className="mb-3 text-xs text-slate-500">{item.nguoi_thuc_hien_email}</div>
                   )}
 
                   <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm">
-                    {/* Thay đổi trạng thái lịch */}
                     {item.tu_trang_thai !== item.den_trang_thai && item.den_trang_thai && (
                       <div className="mb-2 flex items-center gap-2">
                         <span className="text-slate-600">Trạng thái khám:</span>
@@ -97,7 +105,7 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
                             {APPOINTMENT_STATUS_LABEL[item.tu_trang_thai as AppointmentStatus] || item.tu_trang_thai}
                           </Badge>
                         ) : (
-                          <span className="text-slate-400 italic">Mới tạo</span>
+                          <span className="italic text-slate-400">Mới tạo</span>
                         )}
                         <Icon name="arrow-right" className="h-3 w-3 text-slate-400" />
                         <Badge color={STATUS_COLOR[item.den_trang_thai] || 'gray'}>
@@ -106,29 +114,40 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
                       </div>
                     )}
 
-                    {/* Thay đổi trạng thái thanh toán */}
                     {item.tu_payment_status !== item.den_payment_status && item.den_payment_status && (
                       <div className="mb-2 flex items-center gap-2">
                         <span className="text-slate-600">Thanh toán:</span>
                         {item.tu_payment_status ? (
                           <Badge color={STATUS_COLOR[item.tu_payment_status] || 'gray'}>
-                            {PAYMENT_STATUS_LABEL[item.tu_payment_status as string] || item.tu_payment_status}
+                            {PAYMENT_STATUS_LABEL[item.tu_payment_status] || item.tu_payment_status}
                           </Badge>
                         ) : (
-                          <span className="text-slate-400 italic">Mới tạo</span>
+                          <span className="italic text-slate-400">Mới tạo</span>
                         )}
                         <Icon name="arrow-right" className="h-3 w-3 text-slate-400" />
                         <Badge color={STATUS_COLOR[item.den_payment_status] || 'gray'}>
-                          {PAYMENT_STATUS_LABEL[item.den_payment_status as string] || item.den_payment_status}
+                          {PAYMENT_STATUS_LABEL[item.den_payment_status] || item.den_payment_status}
                         </Badge>
                       </div>
                     )}
 
-                    {/* Lý do */}
-                    {item.ly_do && (
+                    {(item.ngay_kham_cu || item.ngay_kham_moi) && (
+                      <div className="mb-2 text-slate-600">
+                        <span className="font-medium text-slate-700">Dời lịch:</span>{' '}
+                        {item.ngay_kham_cu || '-'} {item.gio_kham_cu || ''} {'->'} {item.ngay_kham_moi || '-'} {item.gio_kham_moi || ''}
+                      </div>
+                    )}
+
+                    {item.loai_thay_doi && (
+                      <div className="mb-2 text-slate-600">
+                        <span className="font-medium text-slate-700">Loại thay đổi:</span> {item.loai_thay_doi}
+                      </div>
+                    )}
+
+                    {(item.ly_do_thay_doi || item.ly_do) && (
                       <div className="mt-3 border-t border-slate-200 pt-2">
                         <span className="font-medium text-slate-700">Ghi chú/Lý do: </span>
-                        <span className="text-slate-600">{item.ly_do}</span>
+                        <span className="text-slate-600">{item.ly_do_thay_doi || item.ly_do}</span>
                       </div>
                     )}
                   </div>

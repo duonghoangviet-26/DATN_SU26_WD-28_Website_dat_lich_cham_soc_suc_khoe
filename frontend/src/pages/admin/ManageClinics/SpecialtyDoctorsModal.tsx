@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { clinicService } from '@/services/clinic.service'
 import Icon from '@/components/admin/icons'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { useNavigate } from 'react-router-dom'
 
 interface Props {
@@ -10,8 +11,10 @@ interface Props {
 }
 
 export default function SpecialtyDoctorsModal({ specialtyId, specialtyName, onClose }: Props) {
+  const itemsPerPage = 6
   const [doctors, setDoctors] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -20,6 +23,13 @@ export default function SpecialtyDoctorsModal({ specialtyId, specialtyName, onCl
       .catch(() => setDoctors([]))
       .finally(() => setLoading(false))
   }, [specialtyId])
+
+  useEffect(() => {
+    setPage(1)
+  }, [specialtyId, doctors.length])
+
+  const totalPages = Math.max(1, Math.ceil(doctors.length / itemsPerPage))
+  const visibleDoctors = doctors.slice((page - 1) * itemsPerPage, page * itemsPerPage)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -55,7 +65,7 @@ export default function SpecialtyDoctorsModal({ specialtyId, specialtyName, onCl
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {doctors.map((doctor) => (
+                  {visibleDoctors.map((doctor) => (
                     <tr key={doctor._id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 font-semibold text-slate-800">{doctor.ho_ten}</td>
                       <td className="px-4 py-3 text-slate-600">
@@ -79,6 +89,18 @@ export default function SpecialtyDoctorsModal({ specialtyId, specialtyName, onCl
                   ))}
                 </tbody>
               </table>
+
+              {!loading && doctors.length > itemsPerPage && (
+                <TablePaginationFooter
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={doctors.length}
+                  currentItemCount={visibleDoctors.length}
+                  itemLabel="bác sĩ"
+                  pageSize={itemsPerPage}
+                  onPageChange={setPage}
+                />
+              )}
             </div>
           )}
         </div>
