@@ -23,6 +23,23 @@ export interface PatientBookingSlot {
   phong_kham?: string | null
 }
 
+export interface FamilyMember {
+  id: string
+  ho_ten: string
+  ngay_sinh: string
+  gioi_tinh: 'nam' | 'nu' | 'khac'
+  nhom_mau?: string | null
+  di_ung?: string | null
+  benh_nen?: string | null
+  la_chu_ho: boolean
+}
+
+export interface FamilyGroup {
+  id: string
+  ten_nhom: string
+  members: FamilyMember[]
+}
+
 export interface CreateBookingPayload {
   loai_kham: 'clinic'
   doctor_id: string
@@ -32,6 +49,7 @@ export interface CreateBookingPayload {
   ly_do_kham: string
   ten_khach: string
   so_dien_thoai_khach: string
+  member_id?: string | null
   phuong_thuc?: 'chuyen_khoan' | 'vi_dien_tu' | 'the_ngan_hang' | 'tien_mat'
 }
 
@@ -119,5 +137,34 @@ export const patientBookingService = {
   async confirmPayment(paymentId: string): Promise<PatientPaymentStatusResult> {
     const res = await axiosInstance.patch<ApiResponse<PatientPaymentStatusResult>>(`/patient/payments/${paymentId}/confirm`)
     return res.data.data
+  },
+
+
+
+
+  
+
+  async getFamilyGroup(): Promise<FamilyGroup | null> {
+    const res = await axiosInstance.get<ApiResponse<FamilyGroup | null>>('/patient/family')
+    return res.data.data
+  },
+
+  async createFamily(payload: { ten_nhom: string; ho_ten: string; ngay_sinh?: string; gioi_tinh?: string }): Promise<FamilyGroup> {
+    const res = await axiosInstance.post<ApiResponse<FamilyGroup>>('/patient/family', payload)
+    return res.data.data
+  },
+
+  async addFamilyMember(payload: { ho_ten: string; ngay_sinh: string; gioi_tinh: string; nhom_mau?: string | null; di_ung?: string | null; benh_nen?: string | null }): Promise<FamilyMember> {
+    const res = await axiosInstance.post<ApiResponse<FamilyMember>>('/patient/family/members', payload)
+    return res.data.data
+  },
+
+  async updateFamilyMember(id: string, payload: { ho_ten?: string; ngay_sinh?: string; gioi_tinh?: string; nhom_mau?: string | null; di_ung?: string | null; benh_nen?: string | null }): Promise<FamilyMember> {
+    const res = await axiosInstance.put<ApiResponse<FamilyMember>>(`/patient/family/members/${id}`, payload)
+    return res.data.data
+  },
+
+  async removeFamilyMember(id: string): Promise<void> {
+    await axiosInstance.delete(`/patient/family/members/${id}`)
   },
 }

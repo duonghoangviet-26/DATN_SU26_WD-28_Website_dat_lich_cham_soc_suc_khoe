@@ -15,6 +15,8 @@ import {
   type PatientBookingDoctor,
   type PatientBookingSlot,
   type PatientPaymentStatusResult,
+  type FamilyMember,
+  type CreateBookingPayload,
 } from '@/services/patient-booking.service'
 
 type BookingStep = 1 | 2 | 3 | 4 | 5
@@ -63,6 +65,11 @@ export default function Booking() {
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedSlotId, setSelectedSlotId] = useState<string>('')
 
+  // Booking target states
+  const [bookingFor, setBookingFor] = useState<'self' | 'member' | 'other'>('self')
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('')
+
   const [patientName, setPatientName] = useState(user?.ho_ten || '')
   const [patientPhone, setPatientPhone] = useState(user?.so_dien_thoai || '')
   const [symptoms, setSymptoms] = useState('')
@@ -108,6 +115,19 @@ export default function Booking() {
     if (user) {
       setPatientName(user.ho_ten)
       setPatientPhone(user.so_dien_thoai || '')
+
+      let ignore = false
+      patientBookingService.getFamilyGroup()
+        .then((group) => {
+          if (!ignore && group) {
+            setFamilyMembers(group.members || [])
+          }
+        })
+        .catch(() => {})
+
+      return () => {
+        ignore = true
+      }
     }
   }, [user])
 
@@ -248,9 +268,9 @@ export default function Booking() {
 
   useEffect(() => {
     if (step === 5 && paymentSnapshot?.payment_status === 'paid' && paymentSnapshot.appointment_status === 'confirmed') {
-      navigate('/profile?booked=true', { replace: true })
+      navigate(`/profile?booked=true&id=${createdBooking?.id || createdBooking?.appointment_id || ''}`, { replace: true })
     }
-  }, [step, paymentSnapshot?.payment_status, paymentSnapshot?.appointment_status, navigate])
+  }, [step, paymentSnapshot?.payment_status, paymentSnapshot?.appointment_status, createdBooking, navigate])
 
   const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) || null
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) || null
@@ -276,14 +296,43 @@ export default function Booking() {
     }
 
     if (step === 3) {
-      if (!patientName.trim() || !patientPhone.trim()) {
+      if (bookingFor === 'member' && !selectedMemberId) {
+        setToast('Vui lòng chọn một thành viên trong gia đình.')
+        return
+      }
+
+      const nameTrimmed = patientName.trim()
+      const phoneTrimmed = patientPhone.trim()
+
+      if (!nameTrimmed || !phoneTrimmed) {
         setToast('Họ tên và số điện thoại liên hệ là bắt buộc.')
         return
       }
-      if (!symptoms.trim()) {
-        setToast('Vui lòng mô tả sơ qua triệu chứng đang gặp phải.')
+
+      // Kiểm tra định dạng Họ tên (chữ cái Tiếng Việt có dấu, khoảng trắng)
+      const nameRegex = /^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂÂÊÔƠƯưăâêôơưẠ-ỹđĐ\s']{2,100}$/
+      if (!nameRegex.test(nameTrimmed)) {
+        setToast('Họ tên bệnh nhân không hợp lệ (phải từ 2 ký tự trở lên và chỉ chứa chữ cái).')
         return
       }
+
+      // Kiểm tra định dạng Số điện thoại (10 chữ số, bắt đầu bằng 0)
+      const phoneRegex = /^0\d{9}$/
+      if (!phoneRegex.test(phoneTrimmed)) {
+        setToast('Số điện thoại liên hệ không hợp lệ (phải gồm 10 chữ số và bắt đầu bằng số 0).')
+        return
+      }
+
+      if (!symptoms.trim()) {
+        setToast('Vui lòng mô tả sơ qua triệu chứng bệnh.')
+        return
+      }
+
+      if (symptoms.trim().length < 5) {
+        setToast('Mô tả triệu chứng quá ngắn (vui lòng nhập tối thiểu 5 ký tự để bác sĩ nắm thông tin).')
+        return
+      }
+
       setStep(4)
     }
   }
@@ -305,7 +354,7 @@ export default function Booking() {
 
     setSubmittingBooking(true)
     try {
-      const created = await patientBookingService.createBooking({
+      const payload: CreateBookingPayload = {
         loai_kham: 'clinic',
         doctor_id: selectedDoctor.id,
         schedule_id: selectedSlot.schedule_id,
@@ -315,7 +364,13 @@ export default function Booking() {
         ten_khach: patientName.trim(),
         so_dien_thoai_khach: patientPhone.trim(),
         phuong_thuc: 'chuyen_khoan',
-      })
+      }
+
+      if (bookingFor === 'member' && selectedMemberId) {
+        payload.member_id = selectedMemberId
+      }
+
+      const created = await patientBookingService.createBooking(payload)
       setCreatedBooking(created)
       setPaymentSnapshot(null)
       setQrCodeDataUrl('')
@@ -505,22 +560,162 @@ export default function Booking() {
         <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
           <h3 className="border-b border-slate-50 pb-2 text-sm font-bold text-slate-800">Thông tin người khám bệnh</h3>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="Họ và tên bệnh nhân"
-              placeholder="Nhập họ tên đầy đủ..."
-              value={patientName}
-              onChange={(event) => setPatientName(event.target.value)}
-              required
-            />
-            <Input
-              label="Số điện thoại liên hệ"
-              placeholder="Nhập số di động..."
-              value={patientPhone}
-              onChange={(event) => setPatientPhone(event.target.value)}
-              required
-            />
+          {/* Chọn đối tượng khám */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Đối tượng khám bệnh</label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingFor('self')
+                  setPatientName(user?.ho_ten || '')
+                  setPatientPhone(user?.so_dien_thoai || '')
+                  setSelectedMemberId('')
+                }}
+                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
+                  bookingFor === 'self'
+                    ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <span className="text-xs font-bold">🙋‍♂️ Tự khám</span>
+                <span className="mt-1 text-[10px] font-normal text-slate-400">Đặt lịch cho bản thân</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingFor('member')
+                  if (familyMembers.length > 0) {
+                    const firstMember = familyMembers[0]
+                    setSelectedMemberId(firstMember.id)
+                    setPatientName(firstMember.ho_ten)
+                  } else {
+                    setSelectedMemberId('')
+                    setPatientName('')
+                  }
+                  setPatientPhone(user?.so_dien_thoai || '')
+                }}
+                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
+                  bookingFor === 'member'
+                    ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <span className="text-xs font-bold">👨‍👩‍👧 Đặt hộ gia đình</span>
+                <span className="mt-1 text-[10px] font-normal text-slate-400">Chọn thành viên đã lưu</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingFor('other')
+                  setPatientName('')
+                  setPatientPhone('')
+                  setSelectedMemberId('')
+                }}
+                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
+                  bookingFor === 'other'
+                    ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <span className="text-xs font-bold">👥 Đặt hộ người khác</span>
+                <span className="mt-1 text-[10px] font-normal text-slate-400">Nhập thủ công thông tin</span>
+              </button>
+            </div>
           </div>
+
+          {/* Hiển thị chi tiết theo đối tượng */}
+          {bookingFor === 'self' && (
+            <div className="space-y-4">
+              <div className="rounded-xl bg-slate-50 p-4 border border-slate-100 space-y-2">
+                <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Thông tin của bạn</p>
+                <div className="text-sm">
+                  <p><span className="font-semibold text-slate-500">Họ và tên:</span> <span className="font-bold text-slate-800">{user?.ho_ten}</span></p>
+                </div>
+              </div>
+              <Input
+                label="Số điện thoại liên hệ nhận SMS/Zalo"
+                placeholder="Nhập số di động liên hệ..."
+                value={patientPhone}
+                onChange={(event) => setPatientPhone(event.target.value)}
+                required
+              />
+            </div>
+          )}
+
+          {bookingFor === 'member' && (
+            <div className="space-y-4">
+              {familyMembers.length === 0 ? (
+                <div className="rounded-xl bg-amber-50 p-4 border border-amber-100 text-sm text-amber-800 space-y-2">
+                  <p className="font-bold">⚠️ Chưa có thành viên gia đình</p>
+                  <p className="text-xs">Bạn chưa thêm thành viên nào vào nhóm gia đình. Vui lòng truy cập trang **Hồ sơ bệnh nhân** để thiết lập nhóm và thêm thành viên trước, hoặc chọn hình thức "Đặt hộ người khác" để nhập thủ công.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn thành viên gia đình</label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {familyMembers.map((member) => (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMemberId(member.id)
+                          setPatientName(member.ho_ten)
+                        }}
+                        className={`rounded-xl border p-3 text-left transition-all ${
+                          selectedMemberId === member.id
+                            ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
+                            : 'border-slate-200 text-slate-650 hover:bg-slate-50'
+                        }`}
+                      >
+                        <h4 className="text-xs font-bold leading-snug">{member.ho_ten}</h4>
+                        <p className="mt-1 text-[10px] text-slate-400 uppercase">
+                          {member.gioi_tinh === 'nam' ? 'Nam' : member.gioi_tinh === 'nu' ? 'Nữ' : 'Khác'} • {new Date(member.ngay_sinh).getFullYear()}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Input
+                      label="Họ và tên bệnh nhân (Tự động điền)"
+                      value={patientName}
+                      disabled
+                      required
+                    />
+                    <Input
+                      label="Số điện thoại liên hệ nhận SMS/Zalo"
+                      placeholder="Nhập số di động liên hệ..."
+                      value={patientPhone}
+                      onChange={(event) => setPatientPhone(event.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {bookingFor === 'other' && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Họ và tên bệnh nhân"
+                placeholder="Nhập họ tên đầy đủ..."
+                value={patientName}
+                onChange={(event) => setPatientName(event.target.value)}
+                required
+              />
+              <Input
+                label="Số điện thoại liên hệ"
+                placeholder="Nhập số di động..."
+                value={patientPhone}
+                onChange={(event) => setPatientPhone(event.target.value)}
+                required
+              />
+            </div>
+          )}
 
           <Textarea
             label="Mô tả triệu chứng bệnh"
