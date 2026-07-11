@@ -65,6 +65,13 @@ const doctorScheduleSchema = new mongoose.Schema(
       ref: 'BacSi',
       required: true,
     },
+    // Y tá phụ trách cả ngày làm việc này (1 y tá/ngày, không tách theo slot/ca) — optional,
+    // gán bởi admin. Ref 'NguoiDung' (không phải model YTa riêng — hệ thống chưa có model đó).
+    nurse_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'NguoiDung',
+      default: null,
+    },
     chi_nhanh_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'ThongTinPhongKham',

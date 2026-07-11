@@ -48,11 +48,18 @@ const examinationResultSchema = new mongoose.Schema(
     },
     // Luồng xác nhận hồ sơ khám (B4): mọi hồ sơ mới tạo đều 'cho_xac_nhan' — bác sĩ xem lại rồi
     // "Xác nhận hồ sơ" (→ da_xac_nhan) hoặc "Yêu cầu chỉnh sửa" (→ yeu_cau_chinh_sua).
+    // 'ban_nhap' chỉ dùng cho luồng y tá nhập hồ sơ (lưu nháp trước khi gửi bác sĩ) — luồng bác
+    // sĩ tự tạo hồ sơ (createResult) giữ nguyên default 'cho_xac_nhan', không đổi hành vi cũ.
     status: {
       type: String,
-      enum: ['cho_xac_nhan', 'da_xac_nhan', 'yeu_cau_chinh_sua'],
+      enum: ['ban_nhap', 'cho_xac_nhan', 'da_xac_nhan', 'yeu_cau_chinh_sua'],
       default: 'cho_xac_nhan',
     },
+    // Lý do bác sĩ yêu cầu chỉnh sửa (bản mới nhất) — tách riêng khỏi lich_su_sua để hiển thị
+    // nhanh trên UI mà không phải đọc lại toàn bộ mảng lịch sử.
+    doctor_revision_note: { type: String, default: null },
+    // Thời điểm y tá/bác sĩ gửi hồ sơ cho bác sĩ xác nhận lần gần nhất.
+    submitted_at: { type: Date, default: null },
     chan_doan: {
       type: String,
       required: [true, 'Chan doan la bat buoc'],
@@ -60,6 +67,10 @@ const examinationResultSchema = new mongoose.Schema(
     },
     huong_dan_dieu_tri: { type: String, default: null },
     ghi_chu: { type: String, default: null },
+    // Phần y tá nhập khi tiếp nhận ban đầu (trước khi bác sĩ kết luận) — tách riêng khỏi
+    // ghi_chu/huong_dan_dieu_tri (thuộc chuyên môn bác sĩ) để không lẫn 2 vai trò.
+    trieu_chung_ban_dau: { type: String, default: null },
+    ghi_chu_dieu_duong: { type: String, default: null },
     ngay_tai_kham: { type: Date, default: null },
     co_the_sua: { type: Boolean, default: true },
     dich_vu_phat_sinh: {

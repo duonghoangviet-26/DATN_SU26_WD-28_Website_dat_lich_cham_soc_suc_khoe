@@ -11,7 +11,8 @@ import { APPOINTMENT_STATUS_LABEL } from '@/utils/constants'
 const DAY_NAMES = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
 
 const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red'> = {
-  pending: 'yellow', confirmed: 'blue', completed: 'green', cancelled: 'red',
+  pending: 'yellow', confirmed: 'blue', checked_in: 'blue', in_progress: 'yellow',
+  waiting_doctor_confirm: 'yellow', completed: 'green', cancelled: 'red', no_show: 'red',
 }
 
 function formatTodayHeader(): string {

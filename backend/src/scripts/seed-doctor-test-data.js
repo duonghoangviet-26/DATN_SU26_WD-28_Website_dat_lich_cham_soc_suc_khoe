@@ -519,8 +519,7 @@ async function main() {
           lieu_luong: '1 viên',
           tan_suat: '3 lần/ngày',
           gio_uong: ['07:00', '12:00', '19:00'],
-          ngay_bat_dau: new Date(),
-          ngay_ket_thuc: new Date(Date.now() + 5 * 24 * 3600 * 1000),
+          so_ngay: 5,
           ghi_chu: 'Uống sau ăn (dữ liệu test)',
         }],
       })

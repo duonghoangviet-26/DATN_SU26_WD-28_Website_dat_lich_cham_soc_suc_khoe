@@ -44,8 +44,12 @@ export const APPOINTMENT_STATUS = {
 export const APPOINTMENT_STATUS_LABEL: Record<string, string> = {
   pending: 'Chờ xác nhận',
   confirmed: 'Đã xác nhận',
+  checked_in: 'Đã check-in',
+  in_progress: 'Đang khám',
+  waiting_doctor_confirm: 'Chờ bác sĩ xác nhận hồ sơ',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
+  no_show: 'Không đến',
 }
 
 export const DOCTOR_APPROVAL_LABEL: Record<string, string> = {

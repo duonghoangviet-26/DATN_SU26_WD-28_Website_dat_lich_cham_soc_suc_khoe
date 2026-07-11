@@ -225,8 +225,8 @@ async function seedAll() {
       medical_record_id: medicalRecord._id, member_id: members[0]._id, doctor_id: doctors[0]._id,
       nguon: 'bac_si', ghi_chu: 'Uống thuốc sau khi ăn no',
       items: [
-        { ten_thuoc: 'Paracetamol 500mg', lieu_luong: '1 viên', tan_suat: '2 lần/ngày', gio_uong: ['08:00', '20:00'], ngay_bat_dau: new Date(), ngay_ket_thuc: new Date(Date.now() + 5*24*60*60*1000) },
-        { ten_thuoc: 'Vitamin C', lieu_luong: '1 lọ', tan_suat: '1 lần/ngày', gio_uong: ['08:00'], ngay_bat_dau: new Date(), ngay_ket_thuc: new Date(Date.now() + 5*24*60*60*1000) }
+        { ten_thuoc: 'Paracetamol 500mg', lieu_luong: '1 viên', tan_suat: '2 lần/ngày', gio_uong: ['08:00', '20:00'], so_ngay: 5 },
+        { ten_thuoc: 'Vitamin C', lieu_luong: '1 lọ', tan_suat: '1 lần/ngày', gio_uong: ['08:00'], so_ngay: 5 }
       ]
     });
 

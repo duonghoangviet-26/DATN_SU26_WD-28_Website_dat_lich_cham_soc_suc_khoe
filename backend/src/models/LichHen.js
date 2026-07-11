@@ -5,6 +5,9 @@ const appointmentSchema = new mongoose.Schema(
     user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     member_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ThanhVien', default: null },
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
+    // Y tá phụ trách lịch hẹn này — copy từ LichLamViec.nurse_id tại thời điểm đặt lịch, giữ
+    // lịch sử đúng nếu sau này ca đó đổi y tá (không phải ref model YTa — chưa có model riêng).
+    nurse_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', default: null },
     slot_id: { type: mongoose.Schema.Types.ObjectId, default: null },
     service_id: { type: mongoose.Schema.Types.ObjectId, ref: 'DichVu', default: null },
@@ -41,7 +44,7 @@ const appointmentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show'],
+      enum: ['pending', 'confirmed', 'checked_in', 'in_progress', 'waiting_doctor_confirm', 'completed', 'cancelled', 'no_show'],
       default: 'pending',
     },
     payment_status: {

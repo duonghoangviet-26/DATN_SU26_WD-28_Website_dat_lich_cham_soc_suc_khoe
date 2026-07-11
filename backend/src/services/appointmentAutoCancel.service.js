@@ -1,4 +1,4 @@
-import { LichHen, NhatKyThaoTac } from '../models/index.js'
+import { LichHen, LichLamViec, NhatKyThaoTac } from '../models/index.js'
 
 // ============================================================
 // AUTO-CANCEL — Lịch HOME confirmed+unpaid quá payment_deadline (B3)
@@ -20,6 +20,15 @@ export async function autoCancelExpiredHomeAppointments() {
     a.ly_do_huy = 'Quá hạn thanh toán — hệ thống tự động hủy'
     a.payment_deadline = null
     await a.save()
+
+    // Mở lại slot đã giữ chỗ — nếu không, slot bị kẹt vĩnh viễn ở trạng thái đã đặt
+    // dù lịch hẹn đã hủy (không ai đặt lại được khung giờ đó nữa).
+    if (a.schedule_id && a.slot_id) {
+      await LichLamViec.findOneAndUpdate(
+        { _id: a.schedule_id, 'slots._id': a.slot_id },
+        { $set: { 'slots.$.status': 'active', 'slots.$.benh_nhan_id': null } },
+      )
+    }
 
     await NhatKyThaoTac.create({
       nguoi_thuc_hien_id: null,

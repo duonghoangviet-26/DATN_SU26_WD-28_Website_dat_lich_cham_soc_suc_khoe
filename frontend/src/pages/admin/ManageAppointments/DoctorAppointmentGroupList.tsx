@@ -7,7 +7,8 @@ import Icon from '@/components/admin/icons'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 
 const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red'> = {
-  pending: 'yellow', confirmed: 'blue', completed: 'green', cancelled: 'red',
+  pending: 'yellow', confirmed: 'blue', checked_in: 'blue', in_progress: 'yellow',
+  waiting_doctor_confirm: 'yellow', completed: 'green', cancelled: 'red', no_show: 'red',
 }
 const PAYMENT_COLOR: Record<string, 'yellow' | 'green' | 'gray'> = {
   unpaid: 'yellow', paid: 'green', refunded: 'gray',

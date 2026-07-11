@@ -8,12 +8,13 @@ import type { DoctorPendingRecord, ExaminationResult, KetQuaKhamStatus } from '@
 import { formatDate } from '@/utils/format'
 
 const KET_QUA_STATUS_LABEL: Record<KetQuaKhamStatus, string> = {
+  ban_nhap: 'Nháp',
   cho_xac_nhan: 'Chờ xác nhận',
   da_xac_nhan: 'Đã xác nhận',
   yeu_cau_chinh_sua: 'Cần chỉnh sửa',
 }
-const KET_QUA_STATUS_COLOR: Record<KetQuaKhamStatus, 'yellow' | 'green' | 'red'> = {
-  cho_xac_nhan: 'yellow', da_xac_nhan: 'green', yeu_cau_chinh_sua: 'red',
+const KET_QUA_STATUS_COLOR: Record<KetQuaKhamStatus, 'yellow' | 'green' | 'red' | 'gray'> = {
+  ban_nhap: 'gray', cho_xac_nhan: 'yellow', da_xac_nhan: 'green', yeu_cau_chinh_sua: 'red',
 }
 
 const TH_PLAIN = 'whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500'

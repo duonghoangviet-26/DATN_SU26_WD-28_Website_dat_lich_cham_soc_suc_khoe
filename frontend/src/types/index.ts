@@ -1,14 +1,18 @@
 // Kiểu dữ liệu dùng chung toàn project.
 // Khớp với cấu trúc bảng trong VitaFamily_Database.sql.
 
-export type Role = "user" | "doctor" | "admin";
+export type Role = "user" | "doctor" | "admin" | "nurse";
 export type UserStatus = "active" | "locked";
 export type DoctorApproval = "pending" | "approved" | "rejected" | "suspended";
 export type AppointmentStatus =
     | "pending"
     | "confirmed"
+    | "checked_in"
+    | "in_progress"
+    | "waiting_doctor_confirm"
     | "completed"
-    | "cancelled";
+    | "cancelled"
+    | "no_show";
 export type PaymentStatus = "unpaid" | "partial" | "paid" | "refunded";
 
 export interface User {
@@ -437,7 +441,8 @@ export interface DoctorLeaveRequest {
 
 // Trạng thái xác nhận hồ sơ khám (KetQuaKham.status) — xem docs/Bác sĩ/Audit - Truong du lieu
 // thieu va thua trong DB. cho_xac_nhan = "WAITING_DOCTOR_CONFIRM" theo yêu cầu nghiệp vụ.
-export type KetQuaKhamStatus = "cho_xac_nhan" | "da_xac_nhan" | "yeu_cau_chinh_sua";
+// ban_nhap = "DRAFT" — chỉ dùng cho luồng y tá nhập hồ sơ (lưu nháp trước khi gửi bác sĩ).
+export type KetQuaKhamStatus = "ban_nhap" | "cho_xac_nhan" | "da_xac_nhan" | "yeu_cau_chinh_sua";
 
 // 1 dòng trong "Danh sách hồ sơ chờ bác sĩ xác nhận" — rút gọn, không cần đủ field
 // như DoctorAppointmentDetail (màn này chỉ để lọc nhanh hồ sơ cần xử lý).
@@ -447,7 +452,7 @@ export interface DoctorPendingRecord {
     ngay_kham: string;
     benh_nhan: string;
     ten_dich_vu: string | null;
-    nguoi_nhap: string | null; // tên người nhập hồ sơ — hiện tại luôn là bác sĩ (chưa có luồng y tá nhập)
+    nguoi_nhap: string | null; // tên người nhập hồ sơ — bác sĩ tự nhập hoặc y tá nhập hộ (xem pages/nurse)
     status: KetQuaKhamStatus;
 }
 
@@ -486,8 +491,7 @@ export interface PrescriptionDrug {
     lieu_luong: string; // liều lượng mỗi lần uống (khớp DB don_thuoc.items.lieu_luong)
     tan_suat: string; // '3 lần/ngày' — mô tả hiển thị
     gio_uong: string[]; // ['07:00', '12:00', '19:00'] — cron dùng để tạo nhac_nho
-    ngay_bat_dau: string; // 'YYYY-MM-DD'
-    ngay_ket_thuc: string; // 'YYYY-MM-DD' (max ngay_bat_dau + 90 ngày)
+    so_ngay: number; // số ngày uống thuốc (tối đa 90 — khớp DonThuoc.js MAX_NGAY)
     ghi_chu?: string | null;
 }
 
@@ -634,4 +638,132 @@ export interface NewsItem {
   nguoi_viet: string;
   luot_xem: number;
   ngay_tao: string;
+}
+
+// ============================================================
+// Trang Y tá (Nurse Portal) — khớp response backend routes/nurse/*
+// ============================================================
+
+export interface NurseDashboardDoctorSupport {
+    doctor_id: string
+    ten_bac_si: string | null
+    chuyen_khoa: string | null
+    phong_kham: string | null
+}
+
+export interface NurseDashboardQueueItem {
+    id: string
+    ma_lich_hen: string | null
+    benh_nhan: string
+    gio_kham: string
+    status: AppointmentStatus
+}
+
+export interface NurseDashboard {
+    ten_y_ta: string | null
+    ngay_hien_tai: string
+    bac_si_ho_tro: NurseDashboardDoctorSupport[]
+    tong_check_in: number
+    dang_cho_kham: number
+    dang_kham: number
+    cho_nhap_ho_so: number
+    ho_so_cho_xac_nhan: number
+    ho_so_can_sua: number
+    ho_so_da_xac_nhan: number
+    hang_doi_gan_nhat: NurseDashboardQueueItem[]
+}
+
+// 1 dòng trong hàng đợi bệnh nhân của y tá (/nurse/appointments)
+export interface NurseQueueItem {
+    id: string
+    ma_lich_hen: string | null
+    benh_nhan: string
+    tuoi?: number
+    gioi_tinh?: string
+    ngay_kham: string
+    gio_kham: string
+    ly_do_kham?: string | null
+    ten_dich_vu?: string | null
+    bac_si: string | null
+    chuyen_khoa: string | null
+    phong_kham?: string | null
+    loai_kham: 'clinic' | 'home'
+    status: AppointmentStatus
+    payment_status: PaymentStatus
+    da_co_ket_qua: boolean
+    ket_qua_status: KetQuaKhamStatus | null
+}
+
+// Chi tiết lịch hẹn/bệnh nhân dành cho y tá (/nurse/appointments/:id)
+export interface NurseAppointmentDetail {
+    id: string
+    ma_lich_hen: string | null
+    benh_nhan: string
+    tuoi?: number
+    gioi_tinh?: string
+    so_dien_thoai: string | null
+    benh_nen: string | null
+    di_ung: string | null
+    ngay_kham: string
+    gio_kham: string
+    bac_si: string | null
+    chuyen_khoa: string | null
+    phong_kham?: string | null
+    dia_chi_kham?: string | null
+    ten_dich_vu?: string | null
+    loai_kham: 'clinic' | 'home'
+    ly_do_kham?: string | null
+    status: AppointmentStatus
+    payment_status: PaymentStatus
+    da_co_ket_qua: boolean
+    ket_qua: NurseMedicalRecord | null
+    sinh_hieu: NurseVitalSigns | null
+}
+
+export interface NurseVitalSigns {
+    can_nang?: number | null
+    chieu_cao?: number | null
+    huyet_ap?: string | null
+    nhiet_do?: number | null
+    nhip_tim?: number | null
+}
+
+// Hồ sơ khám do y tá nhập/xem — subset field liên quan tới vai trò y tá (không có field
+// chỉ bác sĩ dùng như nguoi_xac_nhan_id).
+export interface NurseMedicalRecord {
+    id: string
+    appointment_id?: string
+    status: KetQuaKhamStatus
+    chan_doan: string
+    huong_dan_dieu_tri: string | null
+    ghi_chu: string | null
+    trieu_chung_ban_dau: string | null
+    ghi_chu_dieu_duong: string | null
+    ngay_tai_kham: string | null
+    doctor_revision_note: string | null
+    submitted_at?: string | null
+    ngay_tao?: string
+}
+
+// 1 dòng trong danh sách hồ sơ cần chỉnh sửa (/nurse/medical-records/revisions)
+export interface NurseRevisionItem {
+    id: string
+    appointment_id: string
+    benh_nhan: string
+    bac_si_yeu_cau: string | null
+    ngay_kham: string
+    ly_do_kham?: string | null
+    doctor_revision_note: string | null
+    thoi_diem_yeu_cau: string
+}
+
+export interface NurseMedicalRecordDraftPayload {
+    appointment_id: string
+    chan_doan: string
+    huong_dan_dieu_tri?: string | null
+    ghi_chu?: string | null
+    trieu_chung_ban_dau?: string | null
+    ghi_chu_dieu_duong?: string | null
+    ngay_tai_kham?: string | null
+    sinh_hieu?: NurseVitalSigns
 }

@@ -1,5 +1,6 @@
 import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
+import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
 
 // ============================================================
 // B3 + B4 — Lịch hẹn & Kết quả khám (Bác sĩ)
@@ -227,6 +228,11 @@ export async function createResult(req, res) {
     const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc } = req.body
     if (!chan_doan?.trim()) return fail(res, 400, 'Chẩn đoán là bắt buộc')
 
+    // Ngày tái khám phải sau ngày khám hiện tại — không cho chọn trùng ngày khám hoặc quá khứ.
+    if (ngay_tai_kham && !isNgayTaiKhamHopLe(ngay_tai_kham, a.ngay_kham)) {
+      return fail(res, 400, 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám')
+    }
+
     const result = await KetQuaKham.create({
       appointment_id:      a._id,
       nguoi_nhap_id:        req.user.id,
@@ -251,8 +257,10 @@ export async function createResult(req, res) {
       })
     }
 
-    // Đánh dấu lịch hẹn hoàn thành (nếu chưa — có thể đã completed từ trước)
-    if (a.status !== 'completed') {
+    // Đánh dấu lịch hẹn hoàn thành (nếu chưa — có thể đã completed từ trước).
+    // Không tự complete nếu hồ sơ có dịch vụ phát sinh — phải chờ thanh toán phần
+    // phát sinh đó trước (xem nhánh tương ứng trong confirmResult()).
+    if (a.status !== 'completed' && result.dich_vu_phat_sinh.length === 0) {
       a.status = 'completed'
       await a.save()
     }
@@ -282,7 +290,19 @@ export async function updateResult(req, res) {
     if (chan_doan)           result.chan_doan          = chan_doan.trim()
     if (huong_dan_dieu_tri !== undefined) result.huong_dan_dieu_tri = huong_dan_dieu_tri?.trim() || null
     if (ghi_chu    !== undefined) result.ghi_chu       = ghi_chu?.trim() || null
-    if (ngay_tai_kham !== undefined) result.ngay_tai_kham = ngay_tai_kham ? new Date(ngay_tai_kham) : null
+    if (ngay_tai_kham !== undefined) {
+      const a = await LichHen.findById(result.appointment_id).select('ngay_kham').lean()
+      if (ngay_tai_kham && !isNgayTaiKhamHopLe(ngay_tai_kham, a.ngay_kham)) {
+        return fail(res, 400, 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám')
+      }
+      result.ngay_tai_kham = ngay_tai_kham ? new Date(ngay_tai_kham) : null
+    }
+    // Sửa xong hồ sơ đang "cần chỉnh sửa" → tự động quay lại "chờ xác nhận" (trước đây không có
+    // đường quay lại, hồ sơ bị kẹt vĩnh viễn ở yeu_cau_chinh_sua — xem audit trước, mục 12.1).
+    if (result.status === 'yeu_cau_chinh_sua') {
+      result.status = 'cho_xac_nhan'
+      result.submitted_at = new Date()
+    }
     await result.save()
 
     return ok(res, { ...result.toObject(), id: result._id }, 'Đã cập nhật kết quả khám')
@@ -313,7 +333,9 @@ export async function confirmResult(req, res) {
 
     // Hồ sơ đã có nghĩa là ca khám coi như xong — đề phòng trường hợp appointment
     // chưa ở 'completed' (vd sau này luồng y tá nhập không tự complete như createResult hiện tại).
-    if (a.status !== 'completed') {
+    // Không tự complete nếu còn dịch vụ phát sinh chưa xử lý thanh toán — appointment
+    // giữ nguyên trạng thái hiện tại cho tới khi lễ tân/thu ngân xác nhận xong phần phát sinh.
+    if (a.status !== 'completed' && result.dich_vu_phat_sinh.length === 0) {
       a.status = 'completed'
       await a.save()
     }
@@ -342,6 +364,7 @@ export async function requestResultRevision(req, res) {
     }
 
     result.status = 'yeu_cau_chinh_sua'
+    result.doctor_revision_note = ly_do.trim()
     result.lich_su_sua.push({
       nguoi_sua_id: req.user.id,
       thoi_diem_sua: new Date(),

@@ -27,19 +27,20 @@ const LOAI_LABEL: Record<string, string> = {
 }
 
 const KET_QUA_STATUS_LABEL: Record<KetQuaKhamStatus, string> = {
+  ban_nhap: 'Nháp',
   cho_xac_nhan: 'Chờ bác sĩ xác nhận',
   da_xac_nhan: 'Đã xác nhận',
   yeu_cau_chinh_sua: 'Cần chỉnh sửa',
 }
-const KET_QUA_STATUS_COLOR: Record<KetQuaKhamStatus, 'yellow' | 'green' | 'red'> = {
-  cho_xac_nhan: 'yellow', da_xac_nhan: 'green', yeu_cau_chinh_sua: 'red',
+const KET_QUA_STATUS_COLOR: Record<KetQuaKhamStatus, 'yellow' | 'green' | 'red' | 'gray'> = {
+  ban_nhap: 'gray', cho_xac_nhan: 'yellow', da_xac_nhan: 'green', yeu_cau_chinh_sua: 'red',
 }
 
 const TH_PLAIN = 'whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500'
 
 const EMPTY_DRUG: Omit<PrescriptionDrug, 'id'> = {
   ten_thuoc: '', lieu_luong: '', tan_suat: '2 lần/ngày',
-  gio_uong: ['07:00'], ngay_bat_dau: '', ngay_ket_thuc: '', ghi_chu: '',
+  gio_uong: ['07:00'], so_ngay: 7, ghi_chu: '',
 }
 
 // ─── ExamModal ────────────────────────────────────────────────────────────────
@@ -57,11 +58,7 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
   const [huong_dan, setHuongDan] = useState('')
   const [ghi_chu, setGhiChu] = useState('')
   const [ngay_tai_kham, setNgayTaiKham] = useState('')
-  const [drugs, setDrugs] = useState<Omit<PrescriptionDrug, 'id'>[]>(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    const d30 = new Date(); d30.setDate(d30.getDate() + 30)
-    return [{ ...EMPTY_DRUG, ngay_bat_dau: today, ngay_ket_thuc: d30.toISOString().slice(0, 10) }]
-  })
+  const [drugs, setDrugs] = useState<Omit<PrescriptionDrug, 'id'>[]>([{ ...EMPTY_DRUG }])
   const [saving, setSaving] = useState(false)
   const topRef = useRef<HTMLDivElement>(null)
 
@@ -73,14 +70,21 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
         setHuongDan(res.huong_dan_dieu_tri)
         setGhiChu(res.ghi_chu ?? '')
         setNgayTaiKham(res.ngay_tai_kham)
-        setDrugs(res.thuoc.map(({ ten_thuoc, lieu_luong, tan_suat, gio_uong, ngay_bat_dau, ngay_ket_thuc, ghi_chu }) => ({
-          ten_thuoc, lieu_luong, tan_suat, gio_uong, ngay_bat_dau, ngay_ket_thuc, ghi_chu,
+        setDrugs(res.thuoc.map(({ ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu }) => ({
+          ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu,
         })))
       }
     }).finally(() => setLoading(false))
   }, [appt.id])
 
   const isReadOnly = existing !== null && !existing.co_the_sua
+
+  // Ngày tái khám bắt buộc từ ngày tiếp theo trở đi — không được chọn trùng ngày khám hoặc quá khứ.
+  const minNgayTaiKham = (() => {
+    const d = new Date(appt.ngay_kham)
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().slice(0, 10)
+  })()
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -101,13 +105,7 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
   }
 
   function addDrug() {
-    const today = new Date().toISOString().slice(0, 10)
-    const d30 = new Date(); d30.setDate(d30.getDate() + 30)
-    setDrugs((prev) => [...prev, {
-      ...EMPTY_DRUG,
-      ngay_bat_dau: today,
-      ngay_ket_thuc: d30.toISOString().slice(0, 10),
-    }])
+    setDrugs((prev) => [...prev, { ...EMPTY_DRUG }])
   }
   function removeDrug(i: number) { setDrugs((prev) => prev.filter((_, idx) => idx !== i)) }
   function updateDrug<K extends keyof Omit<PrescriptionDrug, 'id'>>(
@@ -165,7 +163,7 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
 
             <div className="sm:w-48">
               <label className="input-label">Ngày tái khám</label>
-              <input type="date" className="input" readOnly={isReadOnly}
+              <input type="date" className="input" readOnly={isReadOnly} min={minNgayTaiKham}
                 value={ngay_tai_kham} onChange={(e) => setNgayTaiKham(e.target.value)} />
             </div>
 
@@ -214,16 +212,11 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
                           placeholder="VD: 07:00, 12:00, 19:00" />
                       </div>
                       <div>
-                        <label className="input-label text-[10px]">Ngày bắt đầu</label>
-                        <input type="date" className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.ngay_bat_dau}
-                          onChange={(e) => updateDrug(i, 'ngay_bat_dau', e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="input-label text-[10px]">Ngày kết thúc</label>
-                        <input type="date" className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.ngay_ket_thuc}
-                          onChange={(e) => updateDrug(i, 'ngay_ket_thuc', e.target.value)} />
+                        <label className="input-label text-[10px]">Số ngày uống</label>
+                        <input type="number" min={1} max={90} className="input py-1.5 text-sm" readOnly={isReadOnly}
+                          value={drug.so_ngay}
+                          onChange={(e) => updateDrug(i, 'so_ngay', Number(e.target.value))}
+                          placeholder="VD: 7" />
                       </div>
                     </div>
                     <div className="mt-2 flex items-end gap-2">

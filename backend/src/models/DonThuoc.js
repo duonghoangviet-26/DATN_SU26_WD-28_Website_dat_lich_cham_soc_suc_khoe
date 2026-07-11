@@ -23,25 +23,16 @@ const itemSchema = new mongoose.Schema(
         message: 'gio_uong phai la mang gio dang HH:MM',
       },
     },
-    ngay_bat_dau: { type: Date, required: true },
-    ngay_ket_thuc: { type: Date, required: true },
+    so_ngay: {
+      type: Number,
+      required: [true, 'So ngay uong la bat buoc'],
+      min: [1, 'So ngay uong toi thieu la 1'],
+      max: [MAX_NGAY, `So ngay uong toi da ${MAX_NGAY} ngay`],
+    },
     ghi_chu: { type: String, default: null, maxlength: 500 },
   },
   { _id: true }
 )
-
-itemSchema.pre('validate', function () {
-  if (this.ngay_bat_dau && this.ngay_ket_thuc) {
-    if (this.ngay_ket_thuc < this.ngay_bat_dau) {
-      throw new Error('ngay_ket_thuc phai >= ngay_bat_dau')
-    }
-
-    const days = (this.ngay_ket_thuc - this.ngay_bat_dau) / (1000 * 60 * 60 * 24)
-    if (days > MAX_NGAY) {
-      throw new Error(`Moi thuoc toi da ${MAX_NGAY} ngay`)
-    }
-  }
-})
 
 const prescriptionSchema = new mongoose.Schema(
   {
