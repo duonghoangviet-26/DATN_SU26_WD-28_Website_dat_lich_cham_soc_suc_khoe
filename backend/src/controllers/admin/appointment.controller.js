@@ -262,21 +262,21 @@ async function buildAppointmentQuery({
     if (!isValidObjectId(doctor_id)) {
       throw new Error('doctor_id khong hop le')
     }
-    query.doctor_id = doctor_id
+    query.doctor_id = new mongoose.Types.ObjectId(doctor_id)
   }
 
   if (chi_nhanh_id) {
     if (!isValidObjectId(chi_nhanh_id)) {
       throw new Error('chi_nhanh_id khong hop le')
     }
-    query.chi_nhanh_id = chi_nhanh_id
+    query.chi_nhanh_id = new mongoose.Types.ObjectId(chi_nhanh_id)
   }
 
   if (specialty_id) {
     if (!isValidObjectId(specialty_id)) {
       throw new Error('specialty_id khong hop le')
     }
-    query.specialty_id = specialty_id
+    query.specialty_id = new mongoose.Types.ObjectId(specialty_id)
   }
 
   if (ma_lich_hen?.trim()) {

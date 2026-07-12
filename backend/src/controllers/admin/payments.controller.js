@@ -1,6 +1,10 @@
 import mongoose from 'mongoose'
 
 import { ThanhToan, LichHen, HoanTien, HoaDon } from '../../models/index.js'
+import {
+  finalizePendingPayment,
+  withOptionalTransaction,
+} from '../../services/bookingPaymentState.service.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { ok, fail } from '../../utils/response.js'
 
@@ -215,6 +219,8 @@ export async function update(req, res) {
     const payment = await ThanhToan.findById(req.params.id)
     if (!payment) return fail(res, 404, 'Khong tim thay giao dich')
     const previousHoaDonId = payment.hoa_don_id ? payment.hoa_don_id.toString() : null
+    const previousStatus = payment.status
+    let shouldFinalizePayment = false
 
     const allowedFields = [
       'hoa_don_id',
@@ -246,23 +252,72 @@ export async function update(req, res) {
         continue
       }
 
+      if (field === 'status' && value === 'paid' && previousStatus === 'pending') {
+        shouldFinalizePayment = true
+        continue
+      }
+
       payment[field] = value
     }
 
-    payment.ngay_thanh_toan = payment.status === 'paid' ? payment.thoi_diem_thanh_toan : null
-    await payment.save()
+    let invoiceState = null
+
+    if (shouldFinalizePayment) {
+      if (!payment.thoi_diem_thanh_toan) {
+        payment.thoi_diem_thanh_toan = new Date()
+      }
+      await payment.save()
+
+      const appointmentId = payment.appointment_id
+        ?? (payment.hoa_don_id
+          ? (await HoaDon.findById(payment.hoa_don_id).select('appointment_id').lean())?.appointment_id
+          : null)
+
+      if (!appointmentId) {
+        payment.status = 'paid'
+        payment.ngay_thanh_toan = payment.thoi_diem_thanh_toan
+        await payment.save()
+      } else {
+        const result = await withOptionalTransaction((session) =>
+          finalizePendingPayment({
+            paymentId: payment._id,
+            appointment: appointmentId,
+            actorUserId: req.user.id,
+            actorRole: 'admin',
+            channel: 'admin_payment_update',
+            reason: 'Admin xac nhan thanh toan',
+            providerData: {
+              provider: 'admin',
+              mode: 'manual',
+              confirmed_by: 'admin',
+            },
+            session,
+          })
+        )
+        invoiceState = result.invoiceState
+      }
+    } else {
+      payment.ngay_thanh_toan = payment.status === 'paid' ? payment.thoi_diem_thanh_toan : null
+      await payment.save()
+    }
 
     if (previousHoaDonId && previousHoaDonId !== payment.hoa_don_id?.toString()) {
       await tinhTrangThaiHoaDon(previousHoaDonId)
     }
 
-    const invoiceState = payment.hoa_don_id
-      ? await tinhTrangThaiHoaDon(payment.hoa_don_id)
-      : null
-    await syncAppointmentPaymentStatusFromPayment(payment, invoiceState)
+    if (!invoiceState) {
+      invoiceState = payment.hoa_don_id
+        ? await tinhTrangThaiHoaDon(payment.hoa_don_id)
+        : null
+    }
+    if (!shouldFinalizePayment || !payment.appointment_id) {
+      await syncAppointmentPaymentStatusFromPayment(payment, invoiceState)
+    }
+
+    const freshPayment = await ThanhToan.findById(payment._id)
 
     return ok(res, {
-      ...mapPaymentDetail(payment.toObject()),
+      ...mapPaymentDetail(freshPayment.toObject()),
       hoa_don_trang_thai: invoiceState?.trang_thai_hoa_don ?? null,
     }, 'Cap nhat thanh toan thanh cong')
   } catch (err) {
