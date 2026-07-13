@@ -196,7 +196,9 @@ export async function getResult(req, res) {
     const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId }).select('_id').lean()
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
 
-    const result = await KetQuaKham.findOne({ appointment_id: a._id }).lean()
+    const result = await KetQuaKham.findOne({ appointment_id: a._id })
+      .populate('lich_su_sua.nguoi_sua_id', 'ho_ten')
+      .lean()
     if (!result) return fail(res, 404, 'Chưa có kết quả khám')
 
     const prescription = await DonThuoc.findOne({ medical_record_id: result._id }).lean()
@@ -233,14 +235,25 @@ export async function createResult(req, res) {
       return fail(res, 400, 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám')
     }
 
+    // Bác sĩ tự nhập hồ sơ (không qua y tá) → coi như đã xác nhận ngay, không bắt bác sĩ
+    // tự xác nhận lại hồ sơ do chính mình viết (quyết định 2026-07-11 — khác luồng y tá
+    // nhập, vốn luôn bắt đầu 'ban_nhap' và bắt buộc qua bước bác sĩ xác nhận ở createDraft()).
     const result = await KetQuaKham.create({
       appointment_id:      a._id,
       nguoi_nhap_id:        req.user.id,
       bac_si_phu_trach_id:  docId,
+      status:               'da_xac_nhan',
+      nguoi_xac_nhan_id:    req.user.id,
+      thoi_diem_xac_nhan:   new Date(),
       chan_doan:          chan_doan.trim(),
       huong_dan_dieu_tri: huong_dan_dieu_tri?.trim() || null,
       ghi_chu:            ghi_chu?.trim() || null,
       ngay_tai_kham:      ngay_tai_kham ? new Date(ngay_tai_kham) : null,
+      lich_su_sua: [{
+        nguoi_sua_id: req.user.id,
+        thoi_diem_sua: new Date(),
+        noi_dung: 'Bác sĩ tự nhập và xác nhận hồ sơ khám',
+      }],
     })
 
     // Kê đơn thuốc nếu có
@@ -329,6 +342,13 @@ export async function confirmResult(req, res) {
     result.status = 'da_xac_nhan'
     result.nguoi_xac_nhan_id = req.user.id
     result.thoi_diem_xac_nhan = new Date()
+    // Ghi lịch sử thay đổi để đối chiếu sau này (cùng cơ chế lich_su_sua đã dùng cho
+    // yêu cầu chỉnh sửa ở requestResultRevision() — nay bổ sung cho cả bước xác nhận).
+    result.lich_su_sua.push({
+      nguoi_sua_id: req.user.id,
+      thoi_diem_sua: new Date(),
+      noi_dung: 'Bác sĩ xác nhận hồ sơ khám',
+    })
     await result.save()
 
     // Hồ sơ đã có nghĩa là ca khám coi như xong — đề phòng trường hợp appointment
@@ -378,16 +398,38 @@ export async function requestResultRevision(req, res) {
   }
 }
 
-// ─── GET /api/doctor/appointments/pending-results ────────────────────────────
-// Danh sách hồ sơ khám 'cho_xac_nhan' (WAITING_DOCTOR_CONFIRM) của chính bác sĩ đang đăng nhập —
-// lọc qua bac_si_phu_trach_id (không qua LichHen.doctor_id) vì đây là field chuyên trách nghiệp vụ
-// xác nhận hồ sơ, được gán sẵn khi tạo (xem createResult).
+// ─── GET /api/doctor/appointments/pending-results?status= ───────────────────
+// Danh sách hồ sơ khám của chính bác sĩ đang đăng nhập — lọc qua bac_si_phu_trach_id
+// (không qua LichHen.doctor_id) vì đây là field chuyên trách nghiệp vụ xác nhận hồ sơ,
+// được gán sẵn khi tạo (xem createResult).
+// - Không truyền status: giữ nguyên hành vi cũ, chỉ trả 'cho_xac_nhan' (Dashboard đang
+//   dùng gọi không tham số để đếm số hồ sơ CẦN xử lý — không được đổi mặc định).
+// - status='all': trả cả 3 trạng thái liên quan tới bác sĩ (không gồm 'ban_nhap' — đó là
+//   nháp của y tá, chưa gửi bác sĩ) để bác sĩ tra cứu lại hồ sơ đã xử lý.
+// - status=<giá trị cụ thể>: lọc đúng 1 trạng thái đó.
+const DOCTOR_VISIBLE_RECORD_STATUSES = ['cho_xac_nhan', 'da_xac_nhan', 'yeu_cau_chinh_sua']
+
 export async function listPendingResults(req, res) {
   try {
     const docId = await getDocId(req.user.id)
     if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
 
-    const results = await KetQuaKham.find({ bac_si_phu_trach_id: docId, status: 'cho_xac_nhan' })
+    const { status } = req.query
+    const filter = { bac_si_phu_trach_id: docId }
+    if (!status) {
+      filter.status = 'cho_xac_nhan'
+    } else if (status !== 'all' && DOCTOR_VISIBLE_RECORD_STATUSES.includes(status)) {
+      filter.status = status
+    } else if (status !== 'all') {
+      return fail(res, 400, 'Trạng thái lọc không hợp lệ')
+    } else {
+      filter.status = { $in: DOCTOR_VISIBLE_RECORD_STATUSES }
+    }
+
+    // Hàng chờ xử lý (mặc định) ưu tiên chờ lâu nhất trước; xem lại lịch sử thì mới nhất trước.
+    const sortOrder = !status || status === 'cho_xac_nhan' ? 1 : -1
+
+    const results = await KetQuaKham.find(filter)
       .populate('nguoi_nhap_id', 'ho_ten')
       .populate({
         path: 'appointment_id',
@@ -397,7 +439,7 @@ export async function listPendingResults(req, res) {
           { path: 'member_id', select: 'ho_ten' },
         ],
       })
-      .sort({ ngay_tao: 1 })
+      .sort({ ngay_tao: sortOrder })
       .lean()
 
     const data = results

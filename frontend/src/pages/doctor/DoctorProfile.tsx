@@ -5,11 +5,7 @@ import Icon from '@/components/admin/icons'
 import { doctorProfileService } from '@/services/doctor-profile.service'
 import type { DoctorSelfProfile } from '@/types'
 import { formatPrice } from '@/utils/format'
-import { DOCTOR_APPROVAL_LABEL } from '@/utils/constants'
-
-const APPROVAL_COLOR: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
-  approved: 'green', pending: 'yellow', rejected: 'red', suspended: 'gray',
-}
+import { DOCTOR_APPROVAL_LABEL, DOCTOR_APPROVAL_COLOR } from '@/utils/constants'
 
 export default function DoctorProfile() {
   const [profile, setProfile] = useState<DoctorSelfProfile | null>(null)
@@ -111,7 +107,7 @@ export default function DoctorProfile() {
         <div className="card p-6 lg:col-span-2">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="font-semibold text-slate-800">Thông tin hành nghề</h2>
-            <Badge color={APPROVAL_COLOR[profile.trang_thai_duyet]}>
+            <Badge color={DOCTOR_APPROVAL_COLOR[profile.trang_thai_duyet]}>
               {DOCTOR_APPROVAL_LABEL[profile.trang_thai_duyet]}
             </Badge>
           </div>
@@ -205,7 +201,7 @@ export default function DoctorProfile() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-slate-500">Trạng thái</dt>
-                <dd><Badge color={APPROVAL_COLOR[profile.trang_thai_duyet]}>{DOCTOR_APPROVAL_LABEL[profile.trang_thai_duyet]}</Badge></dd>
+                <dd><Badge color={DOCTOR_APPROVAL_COLOR[profile.trang_thai_duyet]}>{DOCTOR_APPROVAL_LABEL[profile.trang_thai_duyet]}</Badge></dd>
               </div>
             </dl>
           </div>

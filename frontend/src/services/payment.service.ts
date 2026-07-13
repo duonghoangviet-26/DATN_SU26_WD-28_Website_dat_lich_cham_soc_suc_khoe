@@ -18,6 +18,16 @@ function mapPaymentItem(item: Partial<PaymentItem> & { id?: string | number; _id
     phuong_thuc: item.phuong_thuc ?? 'chuyen_khoan',
     status: (item.status as TransactionStatus) ?? 'pending',
     ngay_tao: item.ngay_tao ?? '',
+    hoa_don_id: item.hoa_don_id ?? null,
+    appointment_id: item.appointment_id ?? null,
+    so_hoa_don: item.so_hoa_don ?? null,
+    loai_thanh_toan: item.loai_thanh_toan ?? null,
+    email: item.email ?? null,
+    so_dien_thoai: item.so_dien_thoai ?? null,
+    nguoi_thu_id: item.nguoi_thu_id ?? null,
+    thoi_diem_thanh_toan: item.thoi_diem_thanh_toan ?? null,
+    ngay_thanh_toan: item.ngay_thanh_toan ?? null,
+    trang_thai_hoa_don: item.trang_thai_hoa_don ?? null,
   }
 }
 

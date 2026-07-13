@@ -46,10 +46,12 @@ const examinationResultSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    // Luồng xác nhận hồ sơ khám (B4): mọi hồ sơ mới tạo đều 'cho_xac_nhan' — bác sĩ xem lại rồi
-    // "Xác nhận hồ sơ" (→ da_xac_nhan) hoặc "Yêu cầu chỉnh sửa" (→ yeu_cau_chinh_sua).
-    // 'ban_nhap' chỉ dùng cho luồng y tá nhập hồ sơ (lưu nháp trước khi gửi bác sĩ) — luồng bác
-    // sĩ tự tạo hồ sơ (createResult) giữ nguyên default 'cho_xac_nhan', không đổi hành vi cũ.
+    // Luồng xác nhận hồ sơ khám (B4): hồ sơ do Y TÁ nhập luôn bắt đầu 'ban_nhap' → gửi
+    // 'cho_xac_nhan' → bác sĩ "Xác nhận hồ sơ" (→ da_xac_nhan) hoặc "Yêu cầu chỉnh sửa"
+    // (→ yeu_cau_chinh_sua). Hồ sơ do chính BÁC SĨ tự nhập (createResult, không qua y tá)
+    // vào thẳng 'da_xac_nhan' luôn — bác sĩ không cần tự xác nhận lại hồ sơ do chính mình
+    // viết (quyết định 2026-07-11, xem docs/Bác sĩ/Kiem tra - Luong nghiep vu Ho so xac
+    // nhan hien tai). Default schema 'cho_xac_nhan' chỉ áp dụng khi không truyền status rõ ràng.
     status: {
       type: String,
       enum: ['ban_nhap', 'cho_xac_nhan', 'da_xac_nhan', 'yeu_cau_chinh_sua'],

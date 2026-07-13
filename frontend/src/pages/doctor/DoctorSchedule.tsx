@@ -7,12 +7,10 @@ import { scheduleService } from '@/services/schedule.service'
 import { doctorLeaveService } from '@/services/doctor-leave.service'
 import type { DoctorSlot } from '@/types'
 import { toLocalDateStr } from '@/utils/format'
+import { SCHEDULE_SLOT_STATUS_COLOR } from '@/utils/constants'
 
 // ─── Hằng số ──────────────────────────────────────────────────────────────────
 
-const STATUS_COLOR: Record<string, 'green' | 'blue' | 'yellow' | 'red' | 'gray'> = {
-  active: 'green', booked: 'blue', locked: 'yellow', cancelled: 'red', expired: 'gray', pending_payment: 'yellow',
-}
 const STATUS_LABEL: Record<string, string> = {
   active: 'Còn trống', booked: 'Đã đặt', locked: 'Tạm nghỉ',
   cancelled: 'Đã hủy', expired: 'Hết hạn', pending_payment: 'Đang giữ chỗ',
@@ -278,7 +276,7 @@ export default function DoctorSchedule() {
                           </span>
 
                           {/* Badge trạng thái */}
-                          <Badge color={STATUS_COLOR[slot.status]}>{STATUS_LABEL[slot.status]}</Badge>
+                          <Badge color={SCHEDULE_SLOT_STATUS_COLOR[slot.status]}>{STATUS_LABEL[slot.status]}</Badge>
 
                           {/* Tên bệnh nhân */}
                           {slot.benh_nhan && (

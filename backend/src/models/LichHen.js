@@ -93,11 +93,15 @@ const appointmentSchema = new mongoose.Schema(
 
 appointmentSchema.index({ user_id: 1 })
 appointmentSchema.index({ doctor_id: 1 })
+appointmentSchema.index({ specialty_id: 1 })
 appointmentSchema.index({ status: 1 })
 appointmentSchema.index({ payment_status: 1 })
 appointmentSchema.index({ ngay_kham: 1 })
 appointmentSchema.index({ schedule_id: 1 })
 appointmentSchema.index({ doctor_id: 1, status: 1, ngay_kham: 1 })
+appointmentSchema.index({ ngay_kham: 1, status: 1 })
+appointmentSchema.index({ ngay_kham: 1, payment_status: 1 })
+appointmentSchema.index({ ngay_kham: 1, doctor_id: 1 })
 
 appointmentSchema.pre('validate', function () {
   if (this.loai_kham === 'home') {

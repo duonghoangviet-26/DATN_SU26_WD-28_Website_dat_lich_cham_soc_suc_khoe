@@ -4,15 +4,16 @@ import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
 import { doctorProfileService } from '@/services/doctor-profile.service'
+import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import type { DoctorStats, DoctorReview, DoctorTodayOverview, AppointmentStatus } from '@/types'
-import { formatPrice, formatDate } from '@/utils/format'
+import { formatDate } from '@/utils/format'
 import { APPOINTMENT_STATUS_LABEL } from '@/utils/constants'
 
 const DAY_NAMES = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy']
 
 const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red'> = {
   pending: 'yellow', confirmed: 'blue', checked_in: 'blue', in_progress: 'yellow',
-  waiting_doctor_confirm: 'yellow', completed: 'green', cancelled: 'red', no_show: 'red',
+  completed: 'green', cancelled: 'red', no_show: 'red',
 }
 
 function formatTodayHeader(): string {
@@ -40,6 +41,7 @@ export default function DoctorDashboard() {
   const [stats, setStats] = useState<DoctorStats | null>(null)
   const [reviews, setReviews] = useState<DoctorReview[]>([])
   const [overview, setOverview] = useState<DoctorTodayOverview | null>(null)
+  const [pendingRecordCount, setPendingRecordCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
@@ -48,10 +50,12 @@ export default function DoctorDashboard() {
       doctorProfileService.getStats(),
       doctorProfileService.getReviews(),
       doctorProfileService.getTodayOverview(),
-    ]).then(([s, r, o]) => {
+      doctorAppointmentService.listPendingResults(),
+    ]).then(([s, r, o, pendingRecords]) => {
       setStats(s)
       setReviews(r)
       setOverview(o)
+      setPendingRecordCount(pendingRecords.length)
     }).catch(() => {
       setError(true)
     }).finally(() => setLoading(false))
@@ -83,7 +87,14 @@ export default function DoctorDashboard() {
     { label: 'Tổng lượt khám', value: stats.tong_luot_kham.toString(), iconBg: 'bg-blue-100', iconColor: 'text-blue-600', icon: 'users', sub: 'tích lũy' },
     { label: 'Tháng này', value: stats.thang_nay.toString(), iconBg: 'bg-brand-100', iconColor: 'text-brand-600', icon: 'calendar', sub: `hoàn thành ${stats.ty_le_hoan_thanh}%` },
     { label: 'Đánh giá', value: stats.diem_danh_gia.toFixed(1), iconBg: 'bg-amber-100', iconColor: 'text-amber-600', icon: 'star', sub: `${stats.so_danh_gia} lượt đánh giá` },
-    { label: 'Doanh thu tháng', value: formatPrice(stats.doanh_thu_thang), iconBg: 'bg-green-100', iconColor: 'text-green-600', icon: 'payment', sub: `hủy ${stats.ty_le_huy}%` },
+    {
+      label: 'Hồ sơ chờ xác nhận',
+      value: pendingRecordCount.toString(),
+      iconBg: 'bg-yellow-100',
+      iconColor: 'text-yellow-600',
+      icon: 'file-text',
+      sub: pendingRecordCount > 0 ? 'cần bạn xác nhận' : 'không có hồ sơ chờ',
+    },
   ] : []
 
   return (

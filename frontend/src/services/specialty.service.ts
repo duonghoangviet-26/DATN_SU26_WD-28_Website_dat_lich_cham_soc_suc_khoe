@@ -22,6 +22,8 @@ interface SpecialtyApiItem {
   mo_ta?: string | null
   icon_url?: string | null
   slug: string
+  doctor_count?: number
+  status?: string
 }
 
 function normalizeId(item: SpecialtyApiItem): string {
@@ -61,6 +63,21 @@ export const specialtyService = {
       id: normalizeId(item),
       ten: item.ten,
     }))
+  },
+
+  async getAdminBrowse(status: 'active' | 'hidden' | '' = 'active'): Promise<SpecialtyBrowseItem[]> {
+    const res = await axiosInstance.get<ApiResponse<SpecialtyApiItem[]>>('/admin/specialties', {
+      params: status ? { status } : undefined,
+    })
+
+    return (Array.isArray(res.data.data) ? res.data.data : []).map((item) =>
+      toBrowseItem(item, Number(item.doctor_count ?? 0))
+    )
+  },
+
+  async getAdminBySlug(slug: string): Promise<SpecialtyBrowseItem | null> {
+    const specialties = await this.getAdminBrowse('')
+    return specialties.find((item) => item.slug === slug) ?? null
   },
 
   async getAllActive(): Promise<SpecialtyBrowseItem[]> {

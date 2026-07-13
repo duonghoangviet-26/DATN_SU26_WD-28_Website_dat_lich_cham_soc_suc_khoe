@@ -56,9 +56,12 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
-  // Danh sách hồ sơ khám 'cho_xac_nhan' (WAITING_DOCTOR_CONFIRM) của bác sĩ đang đăng nhập
-  async listPendingResults(): Promise<DoctorPendingRecord[]> {
-    const res = await axiosInstance.get<ApiResponse<DoctorPendingRecord[]>>('/doctor/appointments/pending-results')
+  // Không truyền status: chỉ hồ sơ 'cho_xac_nhan' (dùng cho thẻ thống kê Dashboard — không đổi).
+  // status='all': cả 3 trạng thái liên quan bác sĩ (chờ xác nhận/đã xác nhận/cần chỉnh sửa) —
+  // dùng cho trang "Hồ sơ chờ xác nhận" để bác sĩ tra cứu lại hồ sơ đã xử lý.
+  async listPendingResults(status?: 'all' | KetQuaKhamStatus): Promise<DoctorPendingRecord[]> {
+    const params = status ? { status } : undefined
+    const res = await axiosInstance.get<ApiResponse<DoctorPendingRecord[]>>('/doctor/appointments/pending-results', { params })
     return res.data.data
   },
 }

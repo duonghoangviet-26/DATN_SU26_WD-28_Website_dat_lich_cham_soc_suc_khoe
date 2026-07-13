@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
+import Button from '@/components/common/Button'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
@@ -8,19 +9,14 @@ import { examinationService } from '@/services/examination.service'
 import type { DoctorAppointmentDetail, ExaminationResult, PrescriptionDrug, AppointmentStatus, KetQuaKhamStatus } from '@/types'
 import {
   APPOINTMENT_STATUS_LABEL,
+  APPOINTMENT_STATUS_COLOR,
   PAYMENT_STATUS_LABEL,
+  PAYMENT_STATUS_COLOR,
+  KET_QUA_KHAM_STATUS_COLOR,
 } from '@/utils/constants'
 import { formatDate, formatPrice } from '@/utils/format'
 
 // ─── Hằng số ──────────────────────────────────────────────────────────────────
-
-const STATUS_COLOR: Record<string, 'yellow' | 'blue' | 'green' | 'red' | 'gray'> = {
-  pending: 'yellow', confirmed: 'blue', completed: 'green', cancelled: 'red',
-}
-
-const PAYMENT_COLOR: Record<string, 'yellow' | 'blue' | 'gray'> = {
-  unpaid: 'yellow', paid: 'blue', refunded: 'gray',
-}
 
 const LOAI_LABEL: Record<string, string> = {
   clinic: 'Tại phòng khám', home: 'Tại nhà',
@@ -32,11 +28,10 @@ const KET_QUA_STATUS_LABEL: Record<KetQuaKhamStatus, string> = {
   da_xac_nhan: 'Đã xác nhận',
   yeu_cau_chinh_sua: 'Cần chỉnh sửa',
 }
-const KET_QUA_STATUS_COLOR: Record<KetQuaKhamStatus, 'yellow' | 'green' | 'red' | 'gray'> = {
-  ban_nhap: 'gray', cho_xac_nhan: 'yellow', da_xac_nhan: 'green', yeu_cau_chinh_sua: 'red',
-}
 
-const TH_PLAIN = 'whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500'
+// Header bảng: chữ đủ tương phản (slate-600, không phải slate-500 nhạt), không
+// viết hoa toàn bộ để đỡ "cứng" — thay bằng font-semibold + nền slate-50 phân lớp rõ.
+const TH = 'px-4 py-3 text-xs font-semibold text-slate-600'
 
 const EMPTY_DRUG: Omit<PrescriptionDrug, 'id'> = {
   ten_thuoc: '', lieu_luong: '', tan_suat: '2 lần/ngày',
@@ -239,7 +234,7 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
               </div>
             </div>
 
-            <div className={`flex justify-end gap-3 border-t border-slate-100 pt-1 ${isReadOnly ? '' : ''}`}>
+            <div className="flex justify-end gap-3 border-t border-slate-100 pt-1">
               <button type="button" onClick={onClose} className="btn-secondary">Đóng</button>
               {!isReadOnly && (
                 <button type="submit" className="btn-primary" disabled={saving}>
@@ -306,7 +301,11 @@ export default function DoctorAppointments() {
   const [error, setError] = useState(false)
 
   // ── Filter — theo ngày + theo trạng thái (truyền thẳng lên API, backend tự lọc theo doctor_id) ──
-  const [filterDate, setFilterDate] = useState(todayStr)
+  // Mặc định KHÔNG lọc ngày (rỗng) — nếu mặc định "hôm nay", lịch đã thanh toán/xác nhận cho
+  // ngày khác (rất phổ biến vì bệnh nhân đặt trước) sẽ biến mất khỏi màn hình mặc định, dễ bị
+  // hiểu nhầm là lỗi hệ thống dù dữ liệu và API đều đúng — xem docs/Bác sĩ/Debug - Lich da
+  // thanh toan khong hien o trang bac si.
+  const [filterDate, setFilterDate] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | AppointmentStatus>('')
 
   // ── UI state ──────────────────────────────────────────────────────────────────
@@ -445,6 +444,217 @@ export default function DoctorAppointments() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Nội dung mở rộng (chi tiết lịch hẹn) — dùng chung cho hàng bảng (desktop/tablet)
+  // và card (mobile), tránh viết trùng 2 lần.
+  // ─────────────────────────────────────────────────────────────────────────────
+  function renderDetailPanel(appt: DoctorAppointmentDetail) {
+    return (
+      <div className="space-y-3 text-sm">
+        {/* Tầng 0: thông tin lịch hẹn — mã lịch hẹn + chuyên khoa */}
+        <div className="flex flex-wrap gap-x-8 gap-y-3">
+          {appt.ma_lich_hen && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Mã lịch hẹn</p>
+              <p className="mt-0.5 font-mono text-slate-700">{appt.ma_lich_hen}</p>
+            </div>
+          )}
+          {appt.chuyen_khoa && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Chuyên khoa</p>
+              <p className="mt-0.5 text-slate-700">{appt.chuyen_khoa}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Tầng 1: thông tin bệnh nhân + lịch hẹn — flex-wrap để tự điền, không tạo khoảng trống */}
+        <div className="flex flex-wrap gap-x-8 gap-y-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Số điện thoại</p>
+            <p className="mt-0.5 text-slate-700">{appt.so_dien_thoai}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Phí khám</p>
+            <p className="mt-0.5 font-semibold text-slate-700">{formatPrice(appt.gia_kham)}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Thanh toán</p>
+            <p className="mt-0.5">
+              <Badge color={PAYMENT_STATUS_COLOR[appt.payment_status]}>
+                {PAYMENT_STATUS_LABEL[appt.payment_status]}
+              </Badge>
+            </p>
+          </div>
+          {appt.tuoi !== undefined && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tuổi</p>
+              <p className="mt-0.5 text-slate-700">{appt.tuoi} tuổi</p>
+            </div>
+          )}
+          {appt.gioi_tinh && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Giới tính</p>
+              <p className="mt-0.5 text-slate-700">{appt.gioi_tinh}</p>
+            </div>
+          )}
+          {appt.di_ung && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Dị ứng</p>
+              <p className="mt-0.5 font-medium text-red-600">{appt.di_ung}</p>
+            </div>
+          )}
+          {appt.benh_nen && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Bệnh nền</p>
+              <p className="mt-0.5 text-slate-700">{appt.benh_nen}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Cảnh báo Luồng C: BS đã confirm nhưng BN chưa thanh toán */}
+        {appt.status === 'confirmed' && appt.payment_status === 'unpaid' && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+            <Icon name="clock" className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Chờ bệnh nhân thanh toán
+              {appt.payment_deadline && (
+                <span className="ml-1 text-amber-500">
+                  — trước {new Date(appt.payment_deadline).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày {formatDate(appt.payment_deadline.slice(0, 10))}
+                </span>
+              )}
+              . Nếu quá hạn, hệ thống sẽ tự động hủy.
+            </span>
+          </div>
+        )}
+
+        {/* Tầng 2: nội dung rộng — chỉ render khi có ít nhất 1 field */}
+        {(appt.phong_kham || appt.dia_chi_kham || appt.ly_do_kham || appt.ly_do_huy) && (
+          <div className="grid gap-3 border-t border-brand-100 pt-3 sm:grid-cols-2">
+            {appt.loai_kham === 'clinic' && appt.phong_kham && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Phòng khám</p>
+                <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-green-800">
+                  <Icon name="hospital" className="h-3.5 w-3.5 shrink-0" />
+                  {appt.phong_kham}
+                </p>
+              </div>
+            )}
+            {appt.loai_kham === 'home' && appt.dia_chi_kham && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Địa chỉ bác sĩ đến</p>
+                <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-purple-800">
+                  <Icon name="map-pin" className="h-3.5 w-3.5 shrink-0" />
+                  {appt.dia_chi_kham}
+                </p>
+              </div>
+            )}
+            {appt.ly_do_kham && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Lý do khám</p>
+                <p className="mt-0.5 text-slate-700">{appt.ly_do_kham}</p>
+              </div>
+            )}
+            {appt.ly_do_huy && (
+              <div className="sm:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Lý do hủy</p>
+                <p className="mt-0.5 text-red-600">{appt.ly_do_huy}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Hồ sơ khám */}
+        {appt.da_co_ket_qua && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-brand-100 pt-3">
+            <div className="flex items-center gap-2">
+              <Icon name="file-text" className="h-4 w-4 text-slate-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Hồ sơ khám</span>
+              {appt.ket_qua_status && (
+                <Badge color={KET_QUA_KHAM_STATUS_COLOR[appt.ket_qua_status]}>
+                  {KET_QUA_STATUS_LABEL[appt.ket_qua_status]}
+                </Badge>
+              )}
+            </div>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setExamAppt(appt)}
+                icon={<Icon name="eye" className="h-3.5 w-3.5" />}>
+                Xem hồ sơ
+              </Button>
+              {appt.ket_qua_status === 'cho_xac_nhan' && (
+                <>
+                  <Button variant="success" size="sm" onClick={() => setConfirmResultId(appt.id)}
+                    disabled={resultActionLoading === appt.id}
+                    icon={<Icon name="check" className="h-3.5 w-3.5" />}>
+                    {resultActionLoading === appt.id ? 'Đang xác nhận...' : 'Xác nhận hồ sơ'}
+                  </Button>
+                  <Button variant="warning" size="sm" onClick={() => setRevisionId(appt.id)}
+                    disabled={resultActionLoading === appt.id}
+                    icon={<Icon name="edit" className="h-3.5 w-3.5" />}>
+                    Yêu cầu chỉnh sửa
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tầng 3: hành động — theo trạng thái hiện tại (không có nút xóa/sửa lịch) */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-brand-100 pt-3">
+          {/* PENDING — chỉ còn cho HOME (quyết định 2026-07-02: clinic auto-confirm khi
+              thanh toán, không còn ở trạng thái pending nên không có nút Xác nhận/Từ chối) */}
+          {appt.status === 'pending' && appt.loai_kham === 'home' && (
+            <>
+              {!isExpiredPending(appt) && (
+                <Button variant="success" size="sm" onClick={() => handleConfirm(appt.id)}
+                  disabled={actionLoading === appt.id}
+                  icon={<Icon name="check" className="h-3.5 w-3.5" />}>
+                  Xác nhận
+                </Button>
+              )}
+              <Button variant="danger" size="sm" onClick={() => setRejectId(appt.id)}
+                icon={<Icon name="x" className="h-3.5 w-3.5" />}>
+                Từ chối
+              </Button>
+            </>
+          )}
+
+          {/* CONFIRMED */}
+          {appt.status === 'confirmed' && (
+            <>
+              {appt.ngay_kham <= todayStr && (
+                <>
+                  <Button variant="success" size="sm" onClick={() => handleComplete(appt.id)}
+                    disabled={actionLoading === appt.id}
+                    icon={<Icon name="check" className="h-3.5 w-3.5" />}>
+                    Hoàn thành
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setExamAppt(appt)}
+                    icon={<Icon name="edit" className="h-3.5 w-3.5" />}>
+                    Kết quả
+                  </Button>
+                </>
+              )}
+              {/* Hủy: bác sĩ hủy → hoàn tiền 100%. Với clinic đây là "Hủy khẩn cấp"
+                  (bắt buộc lý do, slot → locked, chờ Admin xử lý — không phải xóa lịch hẹn). */}
+              <Button variant="danger" size="sm" onClick={() => setCancelId(appt.id)}
+                icon={<Icon name="x" className="h-3.5 w-3.5" />}>
+                {appt.loai_kham === 'clinic' ? 'Hủy khẩn cấp' : 'Hủy'}
+              </Button>
+            </>
+          )}
+
+          {/* COMPLETED — chưa có hồ sơ khám: cho nhập lần đầu (khối "Hồ sơ khám" ở trên xử lý khi đã có) */}
+          {appt.status === 'completed' && !appt.da_co_ket_qua && (
+            <Button variant="secondary" size="sm" onClick={() => setExamAppt(appt)}
+              icon={<Icon name="edit" className="h-3.5 w-3.5" />}>
+              Nhập kết quả
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // GIAO DIỆN
   // ─────────────────────────────────────────────────────────────────────────────
   return (
@@ -463,8 +673,8 @@ export default function DoctorAppointments() {
           description="Danh sách lịch hẹn của riêng bạn — lọc theo ngày hoặc trạng thái."
         />
 
-        {/* ── Filter: theo ngày + theo trạng thái ── */}
-        <div className="mb-3 flex flex-wrap items-end gap-3">
+        {/* ── Bộ lọc: gom vào 1 khu vực rõ ràng (filter card) ── */}
+        <div className="card mb-4 flex flex-wrap items-end gap-4 p-4">
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-500">Ngày khám</label>
             <input
@@ -491,16 +701,17 @@ export default function DoctorAppointments() {
           </div>
 
           {(filterDate || filterStatus) && (
-            <button
-              onClick={() => { setFilterDate(''); setFilterStatus('') }}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
-            >
+            <Button variant="ghost" size="sm" onClick={() => { setFilterDate(''); setFilterStatus('') }}>
               Xóa lọc
-            </button>
+            </Button>
+          )}
+
+          {!loading && !error && (
+            <span className="ml-auto text-xs text-slate-400">{displayed.length} lịch hẹn</span>
           )}
         </div>
 
-        {/* ── Bảng ── */}
+        {/* ── Nội dung: loading / error / bảng (desktop-tablet) + card list (mobile) ── */}
         {loading ? (
           <div className="flex h-48 items-center justify-center text-slate-400">Đang tải...</div>
         ) : error ? (
@@ -509,363 +720,222 @@ export default function DoctorAppointments() {
             <p className="text-sm font-medium text-red-600">Không tải được danh sách lịch hẹn. Vui lòng thử lại sau.</p>
           </div>
         ) : (
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead className="bg-slate-50 text-left">
-                  <tr>
-                    <th className={TH_PLAIN}>Giờ khám</th>
-                    <th className={TH_PLAIN}>Mã lịch hẹn</th>
-                    <th className={TH_PLAIN}>Tên bệnh nhân</th>
-                    <th className={TH_PLAIN}>Tuổi/Giới tính</th>
-                    <th className={TH_PLAIN}>Dịch vụ</th>
-                    <th className={TH_PLAIN}>Phòng</th>
-                    <th className={TH_PLAIN}>Y tá</th>
-                    <th className={TH_PLAIN}>Thanh toán</th>
-                    <th className={TH_PLAIN}>Trạng thái</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {displayed.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="py-16 text-center">
-                        <div className="flex flex-col items-center gap-3">
-                          <Icon name="calendar" className="h-10 w-10 text-slate-200" />
-                          <p className="text-base font-medium text-slate-500">
-                            {filterDate || filterStatus
-                              ? 'Không có lịch hẹn nào khớp với bộ lọc.'
-                              : 'Không có lịch hẹn nào.'}
-                          </p>
-                        </div>
-                      </td>
+          <>
+            {/* ── Bảng — từ md (≥768px) trở lên ── */}
+            <div className="card hidden overflow-hidden md:block">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px] table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-[11%]" />
+                    <col className="w-[24%]" />
+                    <col className="w-[24%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[11%]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-left">
+                      <th className={TH}>Giờ khám</th>
+                      <th className={TH}>Bệnh nhân</th>
+                      <th className={TH}>Thông tin khám</th>
+                      <th className={TH}>Phòng khám</th>
+                      <th className={TH}>Trạng thái</th>
+                      <th className={TH}>Thao tác</th>
                     </tr>
-                  ) : (
-                    displayed.map((appt) => (
-                      <React.Fragment key={appt.id}>
-                        {/* ── Row chính ── */}
-                        <tr
-                          className={`cursor-pointer transition-colors hover:bg-slate-50 ${expandedId === appt.id ? 'bg-brand-50/60' : ''
-                            }`}
-                          onClick={() => setExpandedId(expandedId === appt.id ? null : appt.id)}
-                        >
-                          {/* Giờ khám */}
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-slate-700">{appt.gio_kham}</div>
-                            <div className="text-xs text-slate-400">{formatDate(appt.ngay_kham)}</div>
-                          </td>
+                  </thead>
 
-                          {/* Mã lịch hẹn */}
-                          <td className="px-4 py-3 font-mono text-xs text-slate-500">
-                            {appt.ma_lich_hen ?? '—'}
-                          </td>
+                  <tbody className="divide-y divide-slate-100">
+                    {displayed.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-16 text-center">
+                          <div className="flex flex-col items-center gap-3">
+                            <Icon name="calendar" className="h-10 w-10 text-slate-200" />
+                            <p className="text-base font-medium text-slate-500">
+                              {filterDate || filterStatus
+                                ? 'Không có lịch hẹn nào khớp với bộ lọc.'
+                                : 'Không có lịch hẹn nào.'}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      displayed.map((appt) => (
+                        <React.Fragment key={appt.id}>
+                          {/* ── Row chính ── */}
+                          <tr
+                            className={`cursor-pointer transition-colors hover:bg-slate-50 ${expandedId === appt.id ? 'bg-brand-50/60' : ''
+                              }`}
+                            onClick={() => setExpandedId(expandedId === appt.id ? null : appt.id)}
+                          >
+                            {/* Giờ khám */}
+                            <td className="px-4 py-3 align-top">
+                              <div className="font-semibold text-slate-700">{appt.gio_kham}</div>
+                              <div className="text-xs text-slate-400">{formatDate(appt.ngay_kham)}</div>
+                            </td>
 
-                          {/* Tên bệnh nhân */}
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
-                                {appt.benh_nhan.charAt(0)}
-                              </div>
-                              <p className="font-medium text-slate-800">{appt.benh_nhan}</p>
-                            </div>
-                          </td>
-
-                          {/* Tuổi/Giới tính */}
-                          <td className="px-4 py-3 text-slate-600">
-                            {appt.tuoi !== undefined || appt.gioi_tinh
-                              ? [appt.tuoi !== undefined ? `${appt.tuoi} tuổi` : null, appt.gioi_tinh ?? null]
-                                  .filter(Boolean)
-                                  .join(' · ')
-                              : '—'}
-                          </td>
-
-                          {/* Dịch vụ */}
-                          <td className="px-4 py-3 text-slate-600">
-                            {appt.ten_dich_vu ?? (appt.loai_kham === 'home' ? LOAI_LABEL.home : '—')}
-                          </td>
-
-                          {/* Phòng */}
-                          <td className="px-4 py-3 text-slate-600">
-                            {appt.loai_kham === 'clinic'
-                              ? (appt.phong_kham ?? <span className="text-amber-500">⚠ Chưa có phòng</span>)
-                              : '—'}
-                          </td>
-
-                          {/* Y tá — hệ thống chưa có module gán y tá cho lịch hẹn */}
-                          <td className="px-4 py-3 text-xs text-slate-400">
-                            Chưa phân công y tá
-                          </td>
-
-                          {/* Thanh toán */}
-                          <td className="px-4 py-3">
-                            <Badge color={PAYMENT_COLOR[appt.payment_status]}>
-                              {PAYMENT_STATUS_LABEL[appt.payment_status]}
-                            </Badge>
-                          </td>
-
-                          {/* Trạng thái */}
-                          <td className="px-4 py-3">
-                            <div className="flex flex-col gap-1">
-                              <Badge color={STATUS_COLOR[appt.status]}>
-                                {APPOINTMENT_STATUS_LABEL[appt.status]}
-                              </Badge>
-                              {isExpiredPending(appt) && (
-                                <Badge color="gray">Hết hạn</Badge>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Xem chi tiết */}
-                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => setExpandedId(expandedId === appt.id ? null : appt.id)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
-                            >
-                              <Icon name="eye" className="h-3 w-3" />
-                              {expandedId === appt.id ? 'Ẩn chi tiết' : 'Xem chi tiết'}
-                            </button>
-                          </td>
-                        </tr>
-
-                        {/* ── Expanded detail row ── */}
-                        {expandedId === appt.id && (
-                          <tr className="bg-brand-50/30">
-                            <td colSpan={7} className="px-6 py-4">
-                              <div className="space-y-3 text-sm">
-
-                                {/* Tầng 0: thông tin lịch hẹn — mã lịch hẹn + chuyên khoa */}
-                                <div className="flex flex-wrap gap-x-8 gap-y-3">
-                                  {appt.ma_lich_hen && (
-                                    <div>
-                                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Mã lịch hẹn</p>
-                                      <p className="mt-0.5 font-mono text-slate-700">{appt.ma_lich_hen}</p>
-                                    </div>
-                                  )}
-                                  {appt.chuyen_khoa && (
-                                    <div>
-                                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Chuyên khoa</p>
-                                      <p className="mt-0.5 text-slate-700">{appt.chuyen_khoa}</p>
-                                    </div>
-                                  )}
+                            {/* Bệnh nhân (+ tuổi/giới tính nếu có) */}
+                            <td className="px-4 py-3 align-top">
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+                                  {appt.benh_nhan.charAt(0)}
                                 </div>
-
-                                {/* Tầng 1: thông tin bệnh nhân + lịch hẹn — flex-wrap để tự điền, không tạo khoảng trống */}
-                                <div className="flex flex-wrap gap-x-8 gap-y-3">
-                                  <div>
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Số điện thoại</p>
-                                    <p className="mt-0.5 text-slate-700">{appt.so_dien_thoai}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Phí khám</p>
-                                    <p className="mt-0.5 font-semibold text-slate-700">{formatPrice(appt.gia_kham)}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Thanh toán</p>
-                                    <p className="mt-0.5">
-                                      <Badge color={PAYMENT_COLOR[appt.payment_status]}>
-                                        {PAYMENT_STATUS_LABEL[appt.payment_status]}
-                                      </Badge>
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium text-slate-800">{appt.benh_nhan}</p>
+                                  {(appt.tuoi !== undefined || appt.gioi_tinh) && (
+                                    <p className="truncate text-xs text-slate-400">
+                                      {[appt.tuoi !== undefined ? `${appt.tuoi} tuổi` : null, appt.gioi_tinh ?? null]
+                                        .filter(Boolean)
+                                        .join(' · ')}
                                     </p>
-                                  </div>
-                                  {appt.tuoi !== undefined && (
-                                    <div>
-                                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tuổi</p>
-                                      <p className="mt-0.5 text-slate-700">{appt.tuoi} tuổi</p>
-                                    </div>
-                                  )}
-                                  {appt.gioi_tinh && (
-                                    <div>
-                                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Giới tính</p>
-                                      <p className="mt-0.5 text-slate-700">{appt.gioi_tinh}</p>
-                                    </div>
-                                  )}
-                                  {appt.di_ung && (
-                                    <div>
-                                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Dị ứng</p>
-                                      <p className="mt-0.5 font-medium text-red-600">{appt.di_ung}</p>
-                                    </div>
-                                  )}
-                                  {appt.benh_nen && (
-                                    <div>
-                                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Bệnh nền</p>
-                                      <p className="mt-0.5 text-slate-700">{appt.benh_nen}</p>
-                                    </div>
                                   )}
                                 </div>
-
-                                {/* Cảnh báo Luồng C: BS đã confirm nhưng BN chưa thanh toán */}
-                                {appt.status === 'confirmed' && appt.payment_status === 'unpaid' && (
-                                  <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-                                    <Icon name="clock" className="h-3.5 w-3.5 shrink-0" />
-                                    <span>
-                                      Chờ bệnh nhân thanh toán
-                                      {appt.payment_deadline && (
-                                        <span className="ml-1 text-amber-500">
-                                          — trước {new Date(appt.payment_deadline).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày {formatDate(appt.payment_deadline.slice(0, 10))}
-                                        </span>
-                                      )}
-                                      . Nếu quá hạn, hệ thống sẽ tự động hủy.
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* Tầng 2: nội dung rộng — chỉ render khi có ít nhất 1 field */}
-                                {(appt.phong_kham || appt.dia_chi_kham || appt.ly_do_kham || appt.ly_do_huy) && (
-                                  <div className="grid gap-3 border-t border-brand-100 pt-3 sm:grid-cols-2">
-                                    {appt.loai_kham === 'clinic' && appt.phong_kham && (
-                                      <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Phòng khám</p>
-                                        <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-green-800">
-                                          <Icon name="hospital" className="h-3.5 w-3.5 shrink-0" />
-                                          {appt.phong_kham}
-                                        </p>
-                                      </div>
-                                    )}
-                                    {appt.loai_kham === 'home' && appt.dia_chi_kham && (
-                                      <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Địa chỉ bác sĩ đến</p>
-                                        <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 text-purple-800">
-                                          <Icon name="map-pin" className="h-3.5 w-3.5 shrink-0" />
-                                          {appt.dia_chi_kham}
-                                        </p>
-                                      </div>
-                                    )}
-                                    {appt.ly_do_kham && (
-                                      <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Lý do khám</p>
-                                        <p className="mt-0.5 text-slate-700">{appt.ly_do_kham}</p>
-                                      </div>
-                                    )}
-                                    {appt.ly_do_huy && (
-                                      <div className="sm:col-span-2">
-                                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Lý do hủy</p>
-                                        <p className="mt-0.5 text-red-600">{appt.ly_do_huy}</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Hồ sơ khám — chỉ hiện khi đã có (mục 6-9 yêu cầu) */}
-                                {appt.da_co_ket_qua && (
-                                  <div className="flex flex-wrap items-center gap-3 border-t border-brand-100 pt-3">
-                                    <div className="flex items-center gap-2">
-                                      <Icon name="file-text" className="h-4 w-4 text-slate-400" />
-                                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Hồ sơ khám</span>
-                                      {appt.ket_qua_status && (
-                                        <Badge color={KET_QUA_STATUS_COLOR[appt.ket_qua_status]}>
-                                          {KET_QUA_STATUS_LABEL[appt.ket_qua_status]}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <div className="ml-auto flex items-center gap-2">
-                                      <button
-                                        onClick={() => setExamAppt(appt)}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
-                                      >
-                                        <Icon name="eye" className="h-3 w-3" /> Xem hồ sơ
-                                      </button>
-                                      {appt.ket_qua_status === 'cho_xac_nhan' && (
-                                        <>
-                                          <button
-                                            onClick={() => setConfirmResultId(appt.id)}
-                                            disabled={resultActionLoading === appt.id}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-600 transition-colors hover:bg-green-100 disabled:opacity-50"
-                                          >
-                                            <Icon name="check" className="h-3 w-3" />
-                                            {resultActionLoading === appt.id ? 'Đang xác nhận...' : 'Xác nhận hồ sơ'}
-                                          </button>
-                                          <button
-                                            onClick={() => setRevisionId(appt.id)}
-                                            disabled={resultActionLoading === appt.id}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-100 disabled:opacity-50"
-                                          >
-                                            <Icon name="edit" className="h-3 w-3" /> Yêu cầu chỉnh sửa
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Tầng 3: hành động — theo trạng thái hiện tại (không có nút xóa/sửa lịch) */}
-                                <div className="flex flex-wrap items-center gap-2 border-t border-brand-100 pt-3">
-                                  {/* PENDING — chỉ còn cho HOME (quyết định 2026-07-02: clinic auto-confirm khi
-                                      thanh toán, không còn ở trạng thái pending nên không có nút Xác nhận/Từ chối) */}
-                                  {appt.status === 'pending' && appt.loai_kham === 'home' && (
-                                    <>
-                                      {!isExpiredPending(appt) && (
-                                        <button
-                                          onClick={() => handleConfirm(appt.id)}
-                                          disabled={actionLoading === appt.id}
-                                          className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-600 transition-colors hover:bg-green-100 disabled:opacity-50"
-                                        >
-                                          <Icon name="check" className="h-3 w-3" /> Xác nhận
-                                        </button>
-                                      )}
-                                      <button
-                                        onClick={() => setRejectId(appt.id)}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
-                                      >
-                                        <Icon name="x" className="h-3 w-3" /> Từ chối
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {/* CONFIRMED */}
-                                  {appt.status === 'confirmed' && (
-                                    <>
-                                      {appt.ngay_kham <= todayStr && (
-                                        <>
-                                          <button
-                                            onClick={() => handleComplete(appt.id)}
-                                            disabled={actionLoading === appt.id}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-100 disabled:opacity-50"
-                                          >
-                                            <Icon name="check" className="h-3 w-3" /> Hoàn thành
-                                          </button>
-                                          <button
-                                            onClick={() => setExamAppt(appt)}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
-                                          >
-                                            <Icon name="edit" className="h-3 w-3" /> Kết quả
-                                          </button>
-                                        </>
-                                      )}
-                                      {/* Hủy: bác sĩ hủy → hoàn tiền 100%. Với clinic đây là "Hủy khẩn cấp"
-                                          (bắt buộc lý do, slot → locked, chờ Admin xử lý — không phải xóa lịch hẹn). */}
-                                      <button
-                                        onClick={() => setCancelId(appt.id)}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
-                                      >
-                                        <Icon name="x" className="h-3 w-3" />
-                                        {appt.loai_kham === 'clinic' ? 'Hủy khẩn cấp' : 'Hủy'}
-                                      </button>
-                                    </>
-                                  )}
-
-                                  {/* COMPLETED — chưa có hồ sơ khám: cho nhập lần đầu (khối "Hồ sơ khám" ở trên xử lý khi đã có) */}
-                                  {appt.status === 'completed' && !appt.da_co_ket_qua && (
-                                    <button
-                                      onClick={() => setExamAppt(appt)}
-                                      className="inline-flex items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-100"
-                                    >
-                                      <Icon name="edit" className="h-3 w-3" /> Nhập kết quả
-                                    </button>
-                                  )}
-                                </div>
-
                               </div>
                             </td>
+
+                            {/* Thông tin khám: dịch vụ (chính) + mã lịch hẹn (metadata) */}
+                            <td className="px-4 py-3 align-top">
+                              <p className="truncate text-slate-700" title={appt.ten_dich_vu ?? undefined}>
+                                {appt.ten_dich_vu ?? (appt.loai_kham === 'home' ? LOAI_LABEL.home : '—')}
+                              </p>
+                              {appt.ma_lich_hen && (
+                                <p className="mt-0.5 truncate font-mono text-xs text-slate-400">{appt.ma_lich_hen}</p>
+                              )}
+                            </td>
+
+                            {/* Phòng khám — ẩn dưới lg, vẫn xem được qua "Chi tiết" */}
+                            <td className="px-4 py-3 align-top">
+                              {appt.loai_kham === 'clinic' ? (
+                                appt.phong_kham
+                                  ? <p className="truncate text-slate-700">{appt.phong_kham}</p>
+                                  : <p className="text-xs font-medium text-amber-600">⚠ Chưa có phòng</p>
+                              ) : (
+                                <p className="text-xs text-slate-400">—</p>
+                              )}
+                            </td>
+
+                            {/* Trạng thái lịch hẹn + thanh toán */}
+                            <td className="px-4 py-3 align-top">
+                              <div className="flex flex-col items-start gap-1">
+                                <Badge color={APPOINTMENT_STATUS_COLOR[appt.status]}>
+                                  {APPOINTMENT_STATUS_LABEL[appt.status]}
+                                </Badge>
+                                <Badge color={PAYMENT_STATUS_COLOR[appt.payment_status]}>
+                                  {PAYMENT_STATUS_LABEL[appt.payment_status]}
+                                </Badge>
+                                {isExpiredPending(appt) && (
+                                  <Badge color="gray">Hết hạn</Badge>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Thao tác */}
+                            <td className="px-4 py-3 align-top" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="whitespace-nowrap"
+                                onClick={() => setExpandedId(expandedId === appt.id ? null : appt.id)}
+                                icon={<Icon name="eye" className="h-3.5 w-3.5" />}
+                              >
+                                {expandedId === appt.id ? 'Ẩn' : 'Chi tiết'}
+                              </Button>
+                            </td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    ))
-                  )}
-                </tbody>
-              </table>
+
+                          {/* ── Expanded detail row ── */}
+                          {expandedId === appt.id && (
+                            <tr className="bg-brand-50/30">
+                              <td colSpan={6} className="px-6 py-4">
+                                {renderDetailPanel(appt)}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+
+            {/* ── Card list — dưới md (<768px) ── */}
+            <div className="space-y-3 md:hidden">
+              {displayed.length === 0 ? (
+                <div className="card flex flex-col items-center gap-3 py-16 text-center">
+                  <Icon name="calendar" className="h-10 w-10 text-slate-200" />
+                  <p className="text-base font-medium text-slate-500">
+                    {filterDate || filterStatus
+                      ? 'Không có lịch hẹn nào khớp với bộ lọc.'
+                      : 'Không có lịch hẹn nào.'}
+                  </p>
+                </div>
+              ) : (
+                displayed.map((appt) => (
+                  <div key={appt.id} className="card p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-700">{appt.gio_kham}</p>
+                        <p className="text-xs text-slate-400">{formatDate(appt.ngay_kham)}</p>
+                      </div>
+                      {isExpiredPending(appt) && <Badge color="gray">Hết hạn</Badge>}
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+                        {appt.benh_nhan.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-800">{appt.benh_nhan}</p>
+                        {(appt.tuoi !== undefined || appt.gioi_tinh) && (
+                          <p className="truncate text-xs text-slate-400">
+                            {[appt.tuoi !== undefined ? `${appt.tuoi} tuổi` : null, appt.gioi_tinh ?? null]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="mt-3 truncate text-sm text-slate-700" title={appt.ten_dich_vu ?? undefined}>
+                      {appt.ten_dich_vu ?? (appt.loai_kham === 'home' ? LOAI_LABEL.home : '—')}
+                    </p>
+
+                    {appt.loai_kham === 'clinic' && (
+                      appt.phong_kham
+                        ? <p className="text-sm text-slate-600">{appt.phong_kham}</p>
+                        : <p className="text-xs font-medium text-amber-600">⚠ Chưa có phòng</p>
+                    )}
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <Badge color={APPOINTMENT_STATUS_COLOR[appt.status]}>
+                        {APPOINTMENT_STATUS_LABEL[appt.status]}
+                      </Badge>
+                      <Badge color={PAYMENT_STATUS_COLOR[appt.payment_status]}>
+                        {PAYMENT_STATUS_LABEL[appt.payment_status]}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-4 border-t border-slate-100 pt-3">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setExpandedId(expandedId === appt.id ? null : appt.id)}
+                        icon={<Icon name="eye" className="h-3.5 w-3.5" />}
+                      >
+                        {expandedId === appt.id ? 'Ẩn chi tiết' : 'Xem chi tiết'}
+                      </Button>
+                      {expandedId === appt.id && (
+                        <div className="mt-3">
+                          {renderDetailPanel(appt)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
         )}
 
         {/* ── Modals ── */}
@@ -925,8 +995,10 @@ export default function DoctorAppointments() {
           <ExamModal
             appt={examAppt}
             onClose={() => setExamAppt(null)}
-            onSaved={() => {
-              updateAppt(examAppt.id, { da_co_ket_qua: true })
+            onSaved={(result) => {
+              // result.status: 'da_xac_nhan' ngay nếu bác sĩ tự nhập (không qua y tá) — cập
+              // nhật luôn ket_qua_status tại chỗ để badge/nút hành động đúng ngay, không cần tải lại trang.
+              updateAppt(examAppt.id, { da_co_ket_qua: true, ket_qua_status: result.status ?? examAppt.ket_qua_status })
               showToast('Đã lưu kết quả khám')
               setExamAppt(null)
             }}

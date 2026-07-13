@@ -1,12 +1,17 @@
 import { BacSi, HoaDon, LichHen, ThanhToan } from '../../models/index.js'
 
+const ACTIVE_OPERATIONAL_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress']
+const CLINIC_TIME_OFFSET_MS = 7 * 60 * 60 * 1000
+
 function startOfToday(date = new Date()) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const shiftedDate = new Date(date.getTime() + CLINIC_TIME_OFFSET_MS)
+  shiftedDate.setUTCHours(0, 0, 0, 0)
+  return new Date(shiftedDate.getTime() - CLINIC_TIME_OFFSET_MS)
 }
 
 function startOfTomorrow(date = new Date()) {
   const today = startOfToday(date)
-  return new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+  return new Date(today.getTime() + (24 * 60 * 60 * 1000))
 }
 
 async function sumField(model, field, match = {}) {
@@ -38,6 +43,7 @@ export async function getAdminDashboardSummary(now = new Date()) {
         $gte: todayStart,
         $lt: tomorrowStart,
       },
+      status: { $in: ACTIVE_OPERATIONAL_STATUSES },
     }),
     BacSi.countDocuments({ trang_thai: 'active' }),
     sumField(HoaDon, 'tong_thanh_toan'),
