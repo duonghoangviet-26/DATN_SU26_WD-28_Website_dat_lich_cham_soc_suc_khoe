@@ -57,7 +57,7 @@ export const APPOINTMENT_STATUS_LABEL: Record<string, string> = {
 
 // Màu badge dùng chung cho trạng thái lịch hẹn — nguồn duy nhất, khớp với cách
 // DoctorDashboard/DoctorAppointments đã dùng trước khi gộp (không đổi màu cũ).
-export type BadgeColor = 'green' | 'red' | 'blue' | 'yellow' | 'gray';
+export type BadgeColor = "green" | "red" | "blue" | "yellow" | "gray";
 
 export const APPOINTMENT_STATUS_COLOR: Record<string, BadgeColor> = {
     pending: "yellow",

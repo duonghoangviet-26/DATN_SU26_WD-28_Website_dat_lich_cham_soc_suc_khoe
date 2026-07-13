@@ -9,7 +9,11 @@ export type AppointmentStatus =
     | "confirmed"
     | "checked_in"
     | "in_progress"
+    | "checked_in"
+    | "in_progress"
     | "completed"
+    | "cancelled"
+    | "no_show";
     | "cancelled"
     | "no_show";
 export type PaymentStatus = "unpaid" | "partial" | "paid" | "refunded";
@@ -231,6 +235,7 @@ export interface SpecialtyItem {
 // 'related' → dịch vụ liên quan theo chuyên khoa (X-quang, MRI...), chỉ hiển thị thông tin
 export type ServiceType = "home" | "related";
 export type ServiceStatus = "active" | "inactive";
+export type ServiceTargetAudience = "tre_em" | "nguoi_lon" | "gia_dinh" | "khong_gioi_han";
 export type ServiceTargetAudience =
     | "tre_em"
     | "nguoi_lon"
@@ -267,6 +272,8 @@ export interface ServiceItem {
     specialty_ten?: string | null; // joined — chỉ dùng để hiển thị
     la_goi?: boolean;
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
+    la_goi?: boolean;
+    doi_tuong_ap_dung?: ServiceTargetAudience | null;
     khu_vuc?: string[]; // home only
     so_bac_si?: number; // computed từ BacSi.services[]
     so_luot_dat?: number; // computed từ LichHen (home only)
@@ -290,6 +297,8 @@ export interface ServiceFormData {
     specialty_id?: string | null;
     la_goi?: boolean;
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
+    la_goi?: boolean;
+    doi_tuong_ap_dung?: ServiceTargetAudience | null;
     khu_vuc?: string[]; // home only
 }
 
@@ -297,10 +306,20 @@ export interface ServiceFormData {
 export interface AppointmentItem {
     _id: string;
     ma_lich_hen?: string | null;
+    ma_lich_hen?: string | null;
     user_id?: string | null;
     member_id?: string | null;
     user_email?: string | null;
+    member_id?: string | null;
+    user_email?: string | null;
     service_id?: string | null;
+    specialty_id?: string | null;
+    dat_ho?: boolean;
+    loai_dat_lich?: "self" | "proxy";
+    hinh_thuc_dat_lich?: string | null;
+    nguoi_dat_ho_id?: string | null;
+    nguoi_dat_ho_ten?: string | null;
+    nguoi_dat_sdt?: string | null;
     specialty_id?: string | null;
     dat_ho?: boolean;
     loai_dat_lich?: "self" | "proxy";
@@ -339,6 +358,24 @@ export interface AppointmentItem {
         trang_thai_hoa_don?: string | null;
         tong_thanh_toan?: number | null;
     } | null;
+    ly_do_huy?: string | null;
+    huy_boi?: string | null;
+    thoi_diem_huy?: string | null;
+    ghi_chu_le_tan?: string | null;
+    ghi_chu_tiep_nhan?: string | null;
+    so_lan_thay_doi?: number;
+    canh_bao?: {
+        unpaid: boolean;
+        rescheduled_multiple_times: boolean;
+        missing_linkage: boolean;
+        cancelled: boolean;
+    };
+    invoice?: {
+        _id: string;
+        so_hoa_don?: string | null;
+        trang_thai_hoa_don?: string | null;
+        tong_thanh_toan?: number | null;
+    } | null;
     ngay_cap_nhat?: string;
 }
 
@@ -347,7 +384,12 @@ export interface AppointmentSummary {
     pending: number;
     confirmed: number;
     in_progress?: number;
+    in_progress?: number;
     completed: number;
+    cancelled?: number;
+    unpaid?: number;
+    need_attention?: number;
+    proxy_booking?: number;
     cancelled?: number;
     unpaid?: number;
     need_attention?: number;
@@ -386,6 +428,25 @@ export interface AppointmentHistoryItem {
     gio_kham_moi?: string | null;
 }
 
+export interface AppointmentHistoryItem {
+    _id: string;
+    tu_trang_thai?: string | null;
+    den_trang_thai?: string | null;
+    tu_payment_status?: string | null;
+    den_payment_status?: string | null;
+    vai_tro: string;
+    loai_thay_doi?: string | null;
+    ly_do_thay_doi?: string | null;
+    nguoi_thuc_hien: string;
+    nguoi_thuc_hien_email?: string;
+    ly_do?: string | null;
+    thoi_diem: string;
+    ngay_kham_cu?: string | null;
+    ngay_kham_moi?: string | null;
+    gio_kham_cu?: string | null;
+    gio_kham_moi?: string | null;
+}
+
 export interface AdminAppointmentDoctorOption {
     _id: string;
     ten: string;
@@ -399,6 +460,57 @@ export interface AdminAppointmentServiceOption {
     ten: string;
     loai: ServiceType;
     gia: number;
+}
+
+export interface AdminDoctorWorkdayItem {
+    _id: string | null;
+    doctor_id: string;
+    chi_nhanh_id?: string | null;
+    ngay: string;
+    trang_thai_ngay: "lam_viec" | "nghi" | "nghi_phep" | "chua_tao";
+    ghi_chu_ngay?: string | null;
+    co_di_lam: boolean;
+    tong_slot: number;
+    slot_trong: number;
+    slot_da_dat: number;
+    slot_bi_khoa: number;
+    slot_da_huy: number;
+    gio_bat_dau?: string | null;
+    gio_ket_thuc?: string | null;
+    nguon_lich: "stored" | "derived";
+}
+
+export interface AdminDoctorWorkdayResponse {
+    doctor: { _id: string; ten: string };
+    range: { from: string; to: string };
+    items: AdminDoctorWorkdayItem[];
+}
+
+export interface AdminDoctorScheduleSlot {
+    _id: string;
+    gio_bat_dau: string;
+    gio_ket_thuc: string;
+    benh_nhan_id?: string | null;
+    benh_nhan_tam_giu_id?: string | null;
+    specialty_id?: string | null;
+    phong_kham?: string | null;
+    status: "active" | "pending_payment" | "booked" | "locked" | "cancelled" | "expired";
+    lock_expires_at?: string | null;
+    pending_expired_at?: string | null;
+    cancel_requested?: boolean;
+    cancel_reason?: string | null;
+    bi_khoa_boi_nghi_phep?: boolean;
+    nghi_phep_id?: string | null;
+}
+
+export interface AdminDoctorScheduleDetail {
+    _id: string;
+    doctor_id: string;
+    chi_nhanh_id?: string | null;
+    ngay: string;
+    trang_thai_ngay: "lam_viec" | "nghi" | "nghi_phep";
+    ghi_chu_ngay?: string | null;
+    slots: AdminDoctorScheduleSlot[];
 }
 
 export interface AdminDoctorWorkdayItem {
@@ -503,6 +615,16 @@ export interface PaymentItem {
     phuong_thuc: PaymentMethod;
     status: TransactionStatus;
     ngay_tao: string;
+    hoa_don_id?: string | null;
+    appointment_id?: string | null;
+    so_hoa_don?: string | null;
+    loai_thanh_toan?: string | null;
+    email?: string | null;
+    so_dien_thoai?: string | null;
+    nguoi_thu_id?: string | null;
+    thoi_diem_thanh_toan?: string | null;
+    ngay_thanh_toan?: string | null;
+    trang_thai_hoa_don?: string | null;
     hoa_don_id?: string | null;
     appointment_id?: string | null;
     so_hoa_don?: string | null;
