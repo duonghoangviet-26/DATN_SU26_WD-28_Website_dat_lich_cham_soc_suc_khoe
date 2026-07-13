@@ -1,26 +1,47 @@
 import LichHen from '../../models/LichHen.js'
+import NguoiDung from '../../models/NguoiDung.js'
 
 export const getAppointments = async (req, res) => {
   try {
-    const { date, status, timeframe } = req.query
+    const { date, status, timeframe, search } = req.query
     const query = { loai_kham: 'clinic' }
     
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
+    if (search) {
+      const users = await NguoiDung.find({
+        $or: [
+          { ho_ten: { $regex: search, $options: 'i' } },
+          { so_dien_thoai: { $regex: search, $options: 'i' } }
+        ]
+      }).select('_id')
+      
+      const userIds = users.map(u => u._id)
+      
+      query.$or = [
+        { ma_lich_hen: { $regex: search, $options: 'i' } },
+        { ten_khach: { $regex: search, $options: 'i' } },
+        { so_dien_thoai_khach: { $regex: search, $options: 'i' } },
+        { user_id: { $in: userIds } }
+      ]
+    }
     
-    const todayEnd = new Date()
-    todayEnd.setHours(23, 59, 59, 999)
-
-    if (timeframe === 'today') {
-      query.ngay_kham = { $gte: todayStart, $lte: todayEnd }
-    } else if (timeframe === 'past') {
-      query.ngay_kham = { $lt: todayStart }
-    } else if (date) {
+    if (date) {
       const startDate = new Date(date)
       startDate.setHours(0, 0, 0, 0)
       const endDate = new Date(date)
       endDate.setHours(23, 59, 59, 999)
       query.ngay_kham = { $gte: startDate, $lte: endDate }
+    } else {
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      
+      const todayEnd = new Date()
+      todayEnd.setHours(23, 59, 59, 999)
+
+      if (timeframe === 'today') {
+        query.ngay_kham = { $gte: todayStart, $lte: todayEnd }
+      } else if (timeframe === 'past') {
+        query.ngay_kham = { $lt: todayStart }
+      }
     }
     
     if (status) query.status = status

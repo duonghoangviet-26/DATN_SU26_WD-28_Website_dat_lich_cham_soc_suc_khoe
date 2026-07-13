@@ -21,6 +21,8 @@ export default function Appointments() {
   const [activeTab, setActiveTab] = useState<'today' | 'past'>('today');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterDate, setFilterDate] = useState('');
   
   // States cho Modal Hủy lịch
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -37,7 +39,16 @@ export default function Appointments() {
     try {
       setLoading(true);
       setError('');
-      const res = await axiosInstance.get(`/receptionist/appointments?timeframe=${activeTab}`);
+      
+      let url = `/receptionist/appointments?timeframe=${activeTab}`;
+      if (filterDate) {
+        url += `&date=${filterDate}`;
+      }
+      if (searchQuery.trim()) {
+        url += `&search=${encodeURIComponent(searchQuery.trim())}`;
+      }
+
+      const res = await axiosInstance.get(url);
       if (res.data.success) {
         setAppointments(res.data.data);
       }
@@ -50,7 +61,15 @@ export default function Appointments() {
 
   useEffect(() => {
     fetchAppointments();
-  }, [activeTab]);
+  }, [activeTab, filterDate]); // Re-fetch when tab or date changes
+
+  // Thêm một useEffect để fetch với debounce cho search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchAppointments();
+    }, 500); // 500ms delay for typing
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const handleArrived = async (id: string) => {
     try {
@@ -144,6 +163,41 @@ export default function Appointments() {
         >
           Đã qua
         </button>
+      </div>
+
+      {/* Toolbar: Tìm kiếm & Lọc */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            placeholder="Tìm theo tên, SĐT, mã lịch hẹn..."
+            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <div className="absolute left-3 top-2.5 text-slate-400">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Ngày khám:</label>
+          <input
+            type="date"
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+          />
+          {filterDate && (
+            <button
+              onClick={() => setFilterDate('')}
+              className="px-3 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
+            >
+              Xóa lọc
+            </button>
+          )}
+        </div>
       </div>
       
       {error && (
