@@ -549,7 +549,7 @@ export default function Profile() {
                                 {member.ho_ten}
                                 {member.la_chu_ho && (
                                   <span className="bg-brand-50 text-brand-600 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded">
-                                    Chủ hộ
+                                    Chủ tài khoản
                                   </span>
                                 )}
                               </h4>
