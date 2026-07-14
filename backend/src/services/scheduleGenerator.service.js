@@ -1,92 +1,257 @@
-import { BacSi, LichLamViec } from '../models/index.js'
+import { BacSi, LichLamViec, LichSuChinhSuaLichLamViec } from '../models/index.js'
 
-// ============================================================
-// SINH LỊCH LÀM VIỆC TỰ ĐỘNG (B2 — Rolling Window T2–T7)
-// Dùng chung bởi: cron 23:55 hàng ngày, POST /api/admin/slots/generate,
-// và services/doctor.service.js.approveDoctor() (sinh lịch lần đầu cho BS mới duyệt).
-// Xem docs/Bác sĩ/B2 - Lịch làm việc.md mục 2.
-// ============================================================
-
-// 16 slot/ngày, nghỉ trưa 12:00–13:30 (TBD-1 = C, đã chốt trong doc)
-const SLOT_TIMES = [
+// Weekly schedule generator for VitaFamily private clinic.
+// The clinic works Monday -> Sunday and always excludes 11:30 -> 13:30.
+export const DEFAULT_SLOT_TIMES = [
   ['08:00', '08:30'], ['08:30', '09:00'], ['09:00', '09:30'], ['09:30', '10:00'],
-  ['10:00', '10:30'], ['10:30', '11:00'], ['11:00', '11:30'], ['11:30', '12:00'],
+  ['10:00', '10:30'], ['10:30', '11:00'], ['11:00', '11:30'],
   ['13:30', '14:00'], ['14:00', '14:30'], ['14:30', '15:00'], ['15:00', '15:30'],
   ['15:30', '16:00'], ['16:00', '16:30'], ['16:30', '17:00'], ['17:00', '17:30'],
 ]
 
-// Lịch chỉ sinh T2–T7 — bỏ Chủ nhật (getDay() === 0)
-function isWorkingDay(date) {
-  return date.getDay() !== 0
+function startOfDateUTC(value) {
+  const date = new Date(value)
+  date.setUTCHours(0, 0, 0, 0)
+  return date
 }
 
-// Sinh lịch cho 1 bác sĩ + 1 ngày cụ thể — bỏ qua nếu đã tồn tại (idempotent)
-async function generateSlotsForDoctorDate(doctorId, date, phongMacDinh) {
-  const existing = await LichLamViec.findOne({ doctor_id: doctorId, ngay: date }).select('_id').lean()
-  if (existing) return false
-
-  const slots = SLOT_TIMES.map(([gio_bat_dau, gio_ket_thuc]) => ({
+export function buildDefaultScheduleSlots({ specialtyId = null, phongKham = null } = {}) {
+  return DEFAULT_SLOT_TIMES.map(([gio_bat_dau, gio_ket_thuc]) => ({
     gio_bat_dau,
     gio_ket_thuc,
-    phong_kham: phongMacDinh ?? null,
+    specialty_id: specialtyId,
+    phong_kham: phongKham ?? null,
     status: 'active',
+    benh_nhan_id: null,
+    benh_nhan_tam_giu_id: null,
+    lock_expires_at: null,
+    pending_expired_at: null,
+    cancel_requested: false,
+    cancel_reason: null,
+    bi_khoa_boi_nghi_phep: false,
+    nghi_phep_id: null,
   }))
+}
+
+export function getWeekStart(value = new Date()) {
+  const date = startOfDateUTC(value)
+  const day = date.getUTCDay()
+  const distanceToMonday = day === 0 ? -6 : 1 - day
+  date.setUTCDate(date.getUTCDate() + distanceToMonday)
+  return date
+}
+
+export function getWeekDates(weekStart = new Date()) {
+  const start = getWeekStart(weekStart)
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start)
+    date.setUTCDate(start.getUTCDate() + index)
+    return date
+  })
+}
+
+function getDoctorId(doctor) {
+  return doctor?._id ?? doctor
+}
+
+function getFirstSpecialtyId(doctor) {
+  return Array.isArray(doctor?.specialties) && doctor.specialties.length > 0
+    ? doctor.specialties[0]
+    : null
+}
+
+async function writeScheduleAudit({
+  schedule,
+  actorRole,
+  actorUserId,
+  action,
+  note,
+}) {
+  await LichSuChinhSuaLichLamViec.create({
+    schedule_id: schedule._id,
+    doctor_id: schedule.doctor_id,
+    ngay: schedule.ngay,
+    nguoi_thuc_hien_id: actorUserId ?? null,
+    vai_tro: actorRole,
+    hanh_dong: action,
+    du_lieu_cu: null,
+    du_lieu_moi: {
+      trang_thai_ngay: schedule.trang_thai_ngay,
+      trang_thai_xac_nhan: schedule.trang_thai_xac_nhan,
+      tong_slot: schedule.slots?.length ?? 0,
+      gio_bat_dau: schedule.slots?.[0]?.gio_bat_dau ?? null,
+      gio_ket_thuc: schedule.slots?.[schedule.slots.length - 1]?.gio_ket_thuc ?? null,
+    },
+    ghi_chu: note ?? null,
+  })
+}
+
+async function generateSlotsForDoctorDate({
+  doctor,
+  date,
+  actorRole = 'system',
+  actorUserId = null,
+  action = 'auto_generate',
+  note = null,
+}) {
+  const doctorId = getDoctorId(doctor)
+  const workday = startOfDateUTC(date)
+  const existing = await LichLamViec.findOne({ doctor_id: doctorId, ngay: workday }).select('_id').lean()
+
+  if (existing) {
+    return { created: false, scheduleId: existing._id, reason: 'exists' }
+  }
 
   try {
-    await LichLamViec.create({
+    const schedule = await LichLamViec.create({
       doctor_id: doctorId,
-      ngay: date,
+      chi_nhanh_id: doctor?.chi_nhanh_id ?? null,
+      ngay: workday,
       trang_thai_ngay: 'lam_viec',
       ghi_chu_ngay: null,
-      slots,
+      trang_thai_xac_nhan: 'cho_xac_nhan',
+      slots: buildDefaultScheduleSlots({
+        specialtyId: getFirstSpecialtyId(doctor),
+        phongKham: doctor?.phong_kham_mac_dinh ?? null,
+      }),
     })
-    return true
+
+    await writeScheduleAudit({
+      schedule,
+      actorRole,
+      actorUserId,
+      action,
+      note,
+    })
+
+    return { created: true, scheduleId: schedule._id, reason: null }
   } catch (err) {
-    if (err.code === 11000) return false // race condition — đã có ai tạo trước, bỏ qua
+    if (err.code === 11000) {
+      return { created: false, scheduleId: null, reason: 'duplicate_race' }
+    }
     throw err
   }
 }
 
-// 6 ngày làm việc (T2–T7) kể từ hôm nay — dùng khi BS mới được duyệt
-function getRollingWindowDates() {
-  const dates = []
-  const cursor = new Date()
-  cursor.setHours(0, 0, 0, 0)
-  while (dates.length < 6) {
-    if (isWorkingDay(cursor)) dates.push(new Date(cursor))
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return dates
-}
-
-// Sinh lịch 6 ngày đầu cho 1 bác sĩ vừa được Admin duyệt (B2 doc mục 2.4)
-export async function generateInitialWindowForDoctor(doctorId, phongMacDinh) {
-  const dates = getRollingWindowDates()
-  for (const d of dates) {
-    await generateSlotsForDoctorDate(doctorId, d, phongMacDinh)
-  }
-}
-
-// Sinh lịch ngày T+7 cho toàn bộ bác sĩ đã duyệt — cron 23:55 hoặc admin trigger thủ công
-// (B2 doc mục 2.3: "Nếu cron fail → Admin có thể trigger thủ công qua POST /api/admin/slots/generate")
-export async function generateRollingWindowForAllDoctors() {
-  const target = new Date()
-  target.setHours(0, 0, 0, 0)
-  target.setDate(target.getDate() + 7)
-
-  if (!isWorkingDay(target)) {
-    return { date: target, generated: 0, total: 0, skipped: true, reason: 'Chủ nhật — không sinh lịch' }
-  }
-
-  const doctors = await BacSi.find({ trang_thai_duyet: 'approved' })
-    .select('_id phong_kham_mac_dinh')
+export async function generateWeeklySchedule({
+  weekStart = new Date(),
+  doctors = null,
+  actorRole = 'system',
+  actorUserId = null,
+  action = 'auto_generate',
+  note = 'Sinh lich lam viec tu dong theo tuan',
+} = {}) {
+  const weekDates = getWeekDates(weekStart)
+  const activeDoctors = doctors ?? await BacSi.find({
+    trang_thai_duyet: 'approved',
+    trang_thai: 'active',
+    la_hien: true,
+  })
+    .select('_id chi_nhanh_id phong_kham_mac_dinh specialties')
     .lean()
 
   let generated = 0
-  for (const doc of doctors) {
-    const created = await generateSlotsForDoctorDate(doc._id, target, doc.phong_kham_mac_dinh)
-    if (created) generated += 1
+  let skipped = 0
+  const details = []
+
+  for (const doctor of activeDoctors) {
+    for (const date of weekDates) {
+      const result = await generateSlotsForDoctorDate({
+        doctor,
+        date,
+        actorRole,
+        actorUserId,
+        action,
+        note,
+      })
+
+      if (result.created) generated += 1
+      else skipped += 1
+
+      details.push({
+        doctor_id: getDoctorId(doctor),
+        date,
+        created: result.created,
+        reason: result.reason,
+      })
+    }
   }
 
-  return { date: target, generated, total: doctors.length, skipped: false }
+  return {
+    week_start: weekDates[0],
+    week_end: weekDates[6],
+    days: weekDates.length,
+    doctors: activeDoctors.length,
+    generated,
+    skipped,
+    details,
+  }
+}
+
+export async function generateAutoScheduleWindowForAllDoctors({
+  fromDate = new Date(),
+  weeksAhead = 2,
+  action = 'auto_generate',
+  note = 'Tu dong sinh bu lich lam viec',
+} = {}) {
+  const start = getWeekStart(fromDate)
+  const weeks = Array.from({ length: weeksAhead + 1 }, (_, index) => {
+    const weekStart = new Date(start)
+    weekStart.setUTCDate(start.getUTCDate() + index * 7)
+    return weekStart
+  })
+
+  const doctors = await BacSi.find({
+    trang_thai_duyet: 'approved',
+    trang_thai: 'active',
+    la_hien: true,
+  })
+    .select('_id chi_nhanh_id phong_kham_mac_dinh specialties')
+    .lean()
+
+  const weeklyResults = []
+  let generated = 0
+  let skipped = 0
+
+  for (const weekStart of weeks) {
+    const result = await generateWeeklySchedule({
+      weekStart,
+      doctors,
+      actorRole: 'system',
+      action,
+      note,
+    })
+
+    weeklyResults.push(result)
+    generated += result.generated
+    skipped += result.skipped
+  }
+
+  return {
+    window_start: weeklyResults[0]?.week_start ?? start,
+    window_end: weeklyResults[weeklyResults.length - 1]?.week_end ?? start,
+    weeks: weeklyResults.length,
+    doctors: doctors.length,
+    generated,
+    skipped,
+    weekly_results: weeklyResults,
+  }
+}
+
+export async function generateInitialWindowForDoctor(doctorId, phongMacDinh) {
+  return generateWeeklySchedule({
+    weekStart: new Date(),
+    doctors: [{ _id: doctorId, phong_kham_mac_dinh: phongMacDinh }],
+    action: 'auto_generate',
+    note: 'Sinh lich tu dong khi duyet bac si',
+  })
+}
+
+export async function generateRollingWindowForAllDoctors() {
+  return generateAutoScheduleWindowForAllDoctors({
+    fromDate: new Date(),
+    weeksAhead: 2,
+    action: 'auto_generate',
+    note: 'Sinh lich rolling window tu dong',
+  })
 }

@@ -55,6 +55,14 @@ function DetailField({ label, value }: { label: string; value: string }) {
   )
 }
 
+function getPaymentTimeLabel(payment: Pick<PaymentItem, 'status' | 'ngay_thanh_toan' | 'thoi_diem_thanh_toan'>) {
+  if (payment.status !== 'paid' && payment.status !== 'refunded') {
+    return 'Chưa thanh toán'
+  }
+
+  return formatDateTime(payment.ngay_thanh_toan || payment.thoi_diem_thanh_toan)
+}
+
 function PaymentDetailModal({ detail, loading, onClose }: PaymentDetailModalProps) {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 p-4 backdrop-blur-sm">
@@ -103,7 +111,7 @@ function PaymentDetailModal({ detail, loading, onClose }: PaymentDetailModalProp
                   <DetailField label="Số tiền" value={formatPrice(detail.so_tien)} />
                   <DetailField label="Loại thanh toán" value={detail.loai_thanh_toan || 'Chưa có dữ liệu'} />
                   <DetailField label="Thời điểm tạo" value={formatDateTime(detail.ngay_tao)} />
-                  <DetailField label="Thời điểm thanh toán" value={formatDateTime(detail.thoi_diem_thanh_toan || detail.ngay_thanh_toan)} />
+                  <DetailField label="Thời điểm thanh toán" value={getPaymentTimeLabel(detail)} />
                   <DetailField label="Mã lịch hẹn" value={detail.appointment_id ? String(detail.appointment_id) : 'Chưa liên kết'} />
                   <DetailField label="Mã hóa đơn" value={detail.hoa_don_id ? String(detail.hoa_don_id) : 'Chưa liên kết'} />
                   <DetailField label="Số hóa đơn" value={detail.so_hoa_don || 'Chưa có'} />
@@ -399,7 +407,7 @@ export default function ManagePayments() {
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Thanh toán lúc</p>
                         <p className="mt-1 font-medium text-slate-700">
-                          {formatDateTime(payment.thoi_diem_thanh_toan || payment.ngay_thanh_toan)}
+                          {getPaymentTimeLabel(payment)}
                         </p>
                       </div>
                     </div>
