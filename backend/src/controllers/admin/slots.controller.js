@@ -1,7 +1,12 @@
 import mongoose from 'mongoose'
 import LichLamViec from '../../models/LichLamViec.js'
-import { generateRollingWindowForAllDoctors } from '../../services/scheduleGenerator.service.js'
+import BacSi from '../../models/BacSi.js'
+import LichHen from '../../models/LichHen.js'
+import LichSuChinhSuaLichLamViec from '../../models/LichSuChinhSuaLichLamViec.js'
+import { buildDefaultScheduleSlots, generateRollingWindowForAllDoctors } from '../../services/scheduleGenerator.service.js'
 import { ok, fail } from '../../utils/response.js'
+
+const APPOINTMENT_CONFLICT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress']
 
 function isValidObjectId(value) {
   return value === null || value === undefined || mongoose.Types.ObjectId.isValid(value)
@@ -37,9 +42,134 @@ function normalizeSlotPayload(slot) {
   return normalized
 }
 
+function toDateOnly(value) {
+  const date = new Date(value)
+  date.setUTCHours(0, 0, 0, 0)
+  return date
+}
+
+function formatDateOnly(value) {
+  return new Date(value).toISOString().slice(0, 10)
+}
+
+function summarizeSlots(slots = []) {
+  const firstSlot = slots[0] ?? null
+  const lastSlot = slots[slots.length - 1] ?? null
+
+  return {
+    tong_slot: slots.length,
+    slot_trong: slots.filter((slot) => slot.status === 'active').length,
+    slot_da_dat: slots.filter((slot) => ['booked', 'pending_payment'].includes(slot.status)).length,
+    slot_bi_khoa: slots.filter((slot) => slot.status === 'locked').length,
+    slot_da_huy: slots.filter((slot) => ['cancelled', 'expired'].includes(slot.status)).length,
+    gio_bat_dau: firstSlot?.gio_bat_dau ?? null,
+    gio_ket_thuc: lastSlot?.gio_ket_thuc ?? null,
+  }
+}
+
+function formatWorkday(schedule, appointmentCount = 0) {
+  const slotSummary = summarizeSlots(schedule.slots)
+  const confirmationStatus = schedule.trang_thai_xac_nhan ?? 'cho_xac_nhan'
+
+  return {
+    _id: schedule._id,
+    doctor_id: schedule.doctor_id,
+    chi_nhanh_id: schedule.chi_nhanh_id ?? null,
+    ngay: formatDateOnly(schedule.ngay),
+    trang_thai_ngay: schedule.trang_thai_ngay ?? 'lam_viec',
+    ghi_chu_ngay: schedule.ghi_chu_ngay ?? null,
+    trang_thai_xac_nhan: confirmationStatus,
+    ly_do_tu_choi_xac_nhan: schedule.ly_do_tu_choi_xac_nhan ?? null,
+    thoi_diem_xac_nhan: schedule.thoi_diem_xac_nhan ?? null,
+    co_di_lam: (schedule.trang_thai_ngay ?? 'lam_viec') === 'lam_viec',
+    so_lich_hen_xung_dot: appointmentCount,
+    canh_bao_xung_dot_xac_nhan: confirmationStatus === 'tu_choi' && appointmentCount > 0,
+    ...slotSummary,
+  }
+}
+
+function buildDefaultSlots({ specialtyId = null, phongKham = null } = {}) {
+  return buildDefaultScheduleSlots({ specialtyId, phongKham })
+}
+
+function compactSlot(slot) {
+  if (!slot) return null
+  return {
+    _id: slot._id,
+    gio_bat_dau: slot.gio_bat_dau,
+    gio_ket_thuc: slot.gio_ket_thuc,
+    phong_kham: slot.phong_kham ?? null,
+    status: slot.status,
+    specialty_id: slot.specialty_id ?? null,
+    benh_nhan_id: slot.benh_nhan_id ?? null,
+    benh_nhan_tam_giu_id: slot.benh_nhan_tam_giu_id ?? null,
+  }
+}
+
+function compactSchedule(schedule) {
+  if (!schedule) return null
+  const plain = typeof schedule.toObject === 'function' ? schedule.toObject() : schedule
+  return {
+    _id: plain._id,
+    doctor_id: plain.doctor_id,
+    chi_nhanh_id: plain.chi_nhanh_id ?? null,
+    ngay: plain.ngay,
+    trang_thai_ngay: plain.trang_thai_ngay,
+    ghi_chu_ngay: plain.ghi_chu_ngay ?? null,
+    trang_thai_xac_nhan: plain.trang_thai_xac_nhan ?? 'cho_xac_nhan',
+    ly_do_tu_choi_xac_nhan: plain.ly_do_tu_choi_xac_nhan ?? null,
+    tong_slot: plain.slots?.length ?? 0,
+    gio_bat_dau: plain.slots?.[0]?.gio_bat_dau ?? null,
+    gio_ket_thuc: plain.slots?.[plain.slots.length - 1]?.gio_ket_thuc ?? null,
+  }
+}
+
+async function writeScheduleAudit({
+  schedule,
+  slotId = null,
+  user,
+  action,
+  before = null,
+  after = null,
+  note = null,
+}) {
+  await LichSuChinhSuaLichLamViec.create({
+    schedule_id: schedule?._id ?? null,
+    doctor_id: schedule?.doctor_id ?? null,
+    ngay: schedule?.ngay ?? null,
+    slot_id: slotId,
+    nguoi_thuc_hien_id: user?.id ?? null,
+    vai_tro: user?.role ?? 'admin',
+    hanh_dong: action,
+    du_lieu_cu: before,
+    du_lieu_moi: after,
+    ghi_chu: note,
+  })
+}
+
+function formatAuditLog(log) {
+  return {
+    _id: log._id,
+    schedule_id: log.schedule_id ?? null,
+    doctor_id: log.doctor_id?._id ?? log.doctor_id ?? null,
+    doctor_name: log.doctor_id?.user_id?.ho_ten ?? null,
+    ngay: log.ngay ? formatDateOnly(log.ngay) : null,
+    slot_id: log.slot_id ?? null,
+    nguoi_thuc_hien_id: log.nguoi_thuc_hien_id?._id ?? log.nguoi_thuc_hien_id ?? null,
+    nguoi_thuc_hien: log.nguoi_thuc_hien_id?.ho_ten ?? (log.vai_tro === 'system' ? 'Hệ thống' : 'Không rõ'),
+    nguoi_thuc_hien_email: log.nguoi_thuc_hien_id?.email ?? null,
+    vai_tro: log.vai_tro,
+    hanh_dong: log.hanh_dong,
+    du_lieu_cu: log.du_lieu_cu ?? null,
+    du_lieu_moi: log.du_lieu_moi ?? null,
+    ghi_chu: log.ghi_chu ?? null,
+    thoi_diem: log.thoi_diem,
+  }
+}
+
 export async function createSchedule(req, res) {
   try {
-    const { doctor_id, chi_nhanh_id, ngay, slots = [] } = req.body
+    const { doctor_id, chi_nhanh_id, ngay, slots = [], trang_thai_ngay, ghi_chu_ngay } = req.body
 
     if (!doctor_id || !mongoose.Types.ObjectId.isValid(doctor_id)) {
       return fail(res, 400, 'doctor_id khong hop le')
@@ -58,7 +188,17 @@ export async function createSchedule(req, res) {
       doctor_id,
       chi_nhanh_id: chi_nhanh_id ?? null,
       ngay: new Date(ngay),
+      trang_thai_ngay: trang_thai_ngay ?? 'lam_viec',
+      ghi_chu_ngay: ghi_chu_ngay?.trim() || null,
       slots: slots.map(normalizeSlotPayload),
+    })
+
+    await writeScheduleAudit({
+      schedule,
+      user: req.user,
+      action: 'manual_create',
+      after: compactSchedule(schedule),
+      note: 'Admin tạo lịch làm việc thủ công',
     })
 
     return res.status(201).json({
@@ -70,6 +210,177 @@ export async function createSchedule(req, res) {
     const status = err.code === 11000 || err.message.includes('bat buoc') || err.message.includes('hop le')
       ? 400
       : 500
+    return fail(res, status, err.message)
+  }
+}
+
+export async function getDoctorWorkdays(req, res) {
+  try {
+    const { doctor_id, from, to } = req.query
+
+    if (!doctor_id || !mongoose.Types.ObjectId.isValid(doctor_id)) {
+      return fail(res, 400, 'doctor_id khong hop le')
+    }
+
+    const doctor = await BacSi.findById(doctor_id)
+      .populate('user_id', 'ho_ten')
+      .lean()
+
+    if (!doctor) {
+      return fail(res, 404, 'Khong tim thay bac si')
+    }
+
+    const start = from ? toDateOnly(from) : toDateOnly(new Date())
+    const end = to ? toDateOnly(to) : toDateOnly(new Date(Date.now() + 13 * 24 * 60 * 60 * 1000))
+
+    if (end < start) {
+      return fail(res, 400, 'Khoang ngay khong hop le')
+    }
+
+    const schedules = await LichLamViec.find({
+      doctor_id,
+      ngay: { $gte: start, $lte: end },
+    })
+      .sort({ ngay: 1 })
+      .lean()
+
+    const scheduleIds = schedules.map((schedule) => schedule._id)
+    const appointmentCounts = scheduleIds.length > 0
+      ? await LichHen.aggregate([
+          {
+            $match: {
+              schedule_id: { $in: scheduleIds },
+              status: { $in: APPOINTMENT_CONFLICT_STATUSES },
+            },
+          },
+          { $group: { _id: '$schedule_id', count: { $sum: 1 } } },
+        ])
+      : []
+    const appointmentCountByScheduleId = new Map(
+      appointmentCounts.map((item) => [String(item._id), item.count])
+    )
+    const byDate = new Map(schedules.map((schedule) => [formatDateOnly(schedule.ngay), schedule]))
+    const items = []
+    const cursor = new Date(start)
+
+    while (cursor <= end) {
+      const key = formatDateOnly(cursor)
+      const existing = byDate.get(key)
+
+      if (existing) {
+        items.push({
+          ...formatWorkday(existing, appointmentCountByScheduleId.get(String(existing._id)) ?? 0),
+          nguon_lich: 'stored',
+        })
+      } else {
+        items.push({
+          _id: null,
+          doctor_id,
+          chi_nhanh_id: doctor.chi_nhanh_id ?? null,
+          ngay: key,
+          trang_thai_ngay: 'chua_tao',
+          ghi_chu_ngay: null,
+          trang_thai_xac_nhan: 'cho_xac_nhan',
+          ly_do_tu_choi_xac_nhan: null,
+          thoi_diem_xac_nhan: null,
+          co_di_lam: false,
+          so_lich_hen_xung_dot: 0,
+          canh_bao_xung_dot_xac_nhan: false,
+          tong_slot: 0,
+          slot_trong: 0,
+          slot_da_dat: 0,
+          slot_bi_khoa: 0,
+          slot_da_huy: 0,
+          gio_bat_dau: null,
+          gio_ket_thuc: null,
+          nguon_lich: 'derived',
+        })
+      }
+
+      cursor.setDate(cursor.getDate() + 1)
+    }
+
+    return ok(res, {
+      doctor: {
+        _id: doctor._id,
+        ten: doctor.user_id?.ho_ten ?? 'Khong ro',
+      },
+      range: {
+        from: formatDateOnly(start),
+        to: formatDateOnly(end),
+      },
+      items,
+    })
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+export async function ensureDoctorWorkday(req, res) {
+  try {
+    const { doctor_id, ngay, chi_nhanh_id, specialty_id, phong_kham, trang_thai_ngay, ghi_chu_ngay } = req.body
+
+    if (!doctor_id || !mongoose.Types.ObjectId.isValid(doctor_id)) {
+      return fail(res, 400, 'doctor_id khong hop le')
+    }
+    if (!ngay) {
+      return fail(res, 400, 'ngay la bat buoc')
+    }
+    if (chi_nhanh_id && !mongoose.Types.ObjectId.isValid(chi_nhanh_id)) {
+      return fail(res, 400, 'chi_nhanh_id khong hop le')
+    }
+    if (specialty_id && !mongoose.Types.ObjectId.isValid(specialty_id)) {
+      return fail(res, 400, 'specialty_id khong hop le')
+    }
+
+    const workday = toDateOnly(ngay)
+
+    const doctor = await BacSi.findById(doctor_id).lean()
+    if (!doctor) {
+      return fail(res, 404, 'Khong tim thay bac si')
+    }
+
+    const existing = await LichLamViec.findOne({ doctor_id, ngay: workday })
+    if (existing) {
+      return ok(res, {
+        ...formatWorkday(existing.toObject()),
+        nguon_lich: 'stored',
+        reused: true,
+      }, 'Ngay nay da co lich lam viec')
+    }
+
+    const fallbackSpecialtyId = specialty_id ?? doctor.specialties?.[0] ?? null
+    const schedule = await LichLamViec.create({
+      doctor_id,
+      chi_nhanh_id: chi_nhanh_id ?? doctor.chi_nhanh_id ?? null,
+      ngay: workday,
+      trang_thai_ngay: trang_thai_ngay ?? 'lam_viec',
+      ghi_chu_ngay: ghi_chu_ngay?.trim() || null,
+      slots: buildDefaultSlots({
+        specialtyId: fallbackSpecialtyId,
+        phongKham: phong_kham ?? doctor.phong_kham_mac_dinh ?? null,
+      }),
+    })
+
+    await writeScheduleAudit({
+      schedule,
+      user: req.user,
+      action: 'manual_create',
+      after: compactSchedule(schedule),
+      note: 'Admin chạy bù lịch cho ngày trống',
+    })
+
+    return res.status(201).json({
+      success: true,
+      message: 'Da sinh lich lam viec tu dong cho ngay trong',
+      data: {
+        ...formatWorkday(schedule.toObject()),
+        nguon_lich: 'stored',
+        reused: false,
+      },
+    })
+  } catch (err) {
+    const status = err.code === 11000 ? 409 : 500
     return fail(res, status, err.message)
   }
 }
@@ -109,6 +420,8 @@ export async function updateSlot(req, res) {
       return fail(res, 404, 'Khong tim thay slot')
     }
 
+    const before = compactSlot(slot.toObject())
+
     const updatableFields = [
       'gio_bat_dau',
       'gio_ket_thuc',
@@ -136,10 +449,130 @@ export async function updateSlot(req, res) {
 
     await schedule.save()
 
+    const updatedSlot = schedule.slots.id(slotId)
+    await writeScheduleAudit({
+      schedule,
+      slotId,
+      user: req.user,
+      action: 'update_slot',
+      before,
+      after: compactSlot(updatedSlot.toObject()),
+      note: 'Admin cập nhật slot khám',
+    })
+
     return ok(res, schedule.toObject(), 'Cap nhat slot thanh cong')
   } catch (err) {
     const status = err.message.includes('phai') || err.message.includes('hop le') ? 400 : 500
     return fail(res, status, err.message)
+  }
+}
+
+export async function updateWorkday(req, res) {
+  try {
+    const { id } = req.params
+    const { trang_thai_ngay, ghi_chu_ngay } = req.body
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return fail(res, 400, 'id khong hop le')
+    }
+
+    if (!['lam_viec', 'nghi', 'nghi_phep'].includes(trang_thai_ngay)) {
+      return fail(res, 400, 'trang_thai_ngay khong hop le')
+    }
+
+    const schedule = await LichLamViec.findById(id)
+    if (!schedule) {
+      return fail(res, 404, 'Khong tim thay lich lam viec')
+    }
+
+    const hasBookedSlots = schedule.slots.some((slot) => ['booked', 'pending_payment'].includes(slot.status))
+    if (trang_thai_ngay !== 'lam_viec' && hasBookedSlots) {
+      return fail(res, 409, 'Khong the danh dau nghi khi van con khung gio da co benh nhan hoac dang cho thanh toan')
+    }
+
+    const before = compactSchedule(schedule)
+    schedule.trang_thai_ngay = trang_thai_ngay
+    schedule.ghi_chu_ngay = ghi_chu_ngay?.trim() || null
+    await schedule.save()
+
+    await writeScheduleAudit({
+      schedule,
+      user: req.user,
+      action: 'update_workday',
+      before,
+      after: compactSchedule(schedule),
+      note: 'Admin cập nhật trạng thái ngày làm việc',
+    })
+
+    return ok(res, formatWorkday(schedule.toObject()), 'Cap nhat trang thai ngay thanh cong')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+export async function getAuditLogs(req, res) {
+  try {
+    const {
+      schedule_id,
+      doctor_id,
+      from,
+      to,
+      page = 1,
+      limit = 20,
+    } = req.query
+
+    const filter = {}
+
+    if (schedule_id) {
+      if (!mongoose.Types.ObjectId.isValid(schedule_id)) {
+        return fail(res, 400, 'schedule_id khong hop le')
+      }
+      filter.schedule_id = schedule_id
+    }
+
+    if (doctor_id) {
+      if (!mongoose.Types.ObjectId.isValid(doctor_id)) {
+        return fail(res, 400, 'doctor_id khong hop le')
+      }
+      filter.doctor_id = doctor_id
+    }
+
+    if (from || to) {
+      filter.ngay = {}
+      if (from) filter.ngay.$gte = toDateOnly(from)
+      if (to) filter.ngay.$lte = toDateOnly(to)
+    }
+
+    const currentPage = Math.max(1, Number(page) || 1)
+    const perPage = Math.min(100, Math.max(5, Number(limit) || 20))
+    const skip = (currentPage - 1) * perPage
+
+    const [logs, total] = await Promise.all([
+      LichSuChinhSuaLichLamViec.find(filter)
+        .populate('nguoi_thuc_hien_id', 'ho_ten email')
+        .populate({
+          path: 'doctor_id',
+          select: 'user_id',
+          populate: { path: 'user_id', select: 'ho_ten' },
+        })
+        .sort({ thoi_diem: -1 })
+        .skip(skip)
+        .limit(perPage)
+        .lean(),
+      LichSuChinhSuaLichLamViec.countDocuments(filter),
+    ])
+
+    return ok(res, {
+      items: logs.map(formatAuditLog),
+      pagination: {
+        page: currentPage,
+        limit: perPage,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / perPage)),
+      },
+    }, 'Lay lich su chinh sua lich lam viec thanh cong')
+  } catch (err) {
+    return fail(res, 500, err.message)
   }
 }
 
@@ -149,9 +582,7 @@ export async function generate(req, res) {
     return ok(
       res,
       result,
-      result.skipped
-        ? result.reason
-        : `Da sinh lich ngay ${result.date.toISOString().slice(0, 10)} cho ${result.generated}/${result.total} bac si`
+      `Da sinh/bu lich tu dong ${result.window_start.toISOString().slice(0, 10)} - ${result.window_end.toISOString().slice(0, 10)}: tao moi ${result.generated}, bo qua ${result.skipped}`
     )
   } catch (err) {
     return fail(res, 500, err.message)

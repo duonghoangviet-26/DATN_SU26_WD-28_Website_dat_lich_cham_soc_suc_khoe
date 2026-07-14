@@ -67,10 +67,38 @@ const doctorScheduleSchema = new mongoose.Schema(
     },
     chi_nhanh_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ChiNhanh',
+      ref: 'ThongTinPhongKham',
       default: null,
     },
     ngay: { type: Date, required: true },
+    trang_thai_ngay: {
+      type: String,
+      enum: ['lam_viec', 'nghi', 'nghi_phep'],
+      default: 'lam_viec',
+    },
+    ghi_chu_ngay: {
+      type: String,
+      default: null,
+    },
+    trang_thai_xac_nhan: {
+      type: String,
+      enum: ['cho_xac_nhan', 'da_xac_nhan', 'tu_choi'],
+      default: 'cho_xac_nhan',
+    },
+    ly_do_tu_choi_xac_nhan: {
+      type: String,
+      default: null,
+      maxlength: 500,
+    },
+    thoi_diem_xac_nhan: {
+      type: Date,
+      default: null,
+    },
+    nguoi_xac_nhan_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'NguoiDung',
+      default: null,
+    },
     slots: { type: [slotSchema], default: [] },
   },
   {
@@ -84,5 +112,6 @@ doctorScheduleSchema.index({ ngay: 1 })
 doctorScheduleSchema.index({ 'slots._id': 1, 'slots.status': 1 })
 doctorScheduleSchema.index({ chi_nhanh_id: 1, ngay: 1 })
 doctorScheduleSchema.index({ 'slots.specialty_id': 1, 'slots.status': 1 })
+doctorScheduleSchema.index({ trang_thai_xac_nhan: 1, ngay: 1 })
 
 export default mongoose.model('LichLamViec', doctorScheduleSchema)

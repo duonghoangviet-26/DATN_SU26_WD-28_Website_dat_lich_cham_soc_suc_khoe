@@ -1,31 +1,62 @@
 import cron from 'node-cron'
-import { generateRollingWindowForAllDoctors } from '../services/scheduleGenerator.service.js'
+import {
+  generateAutoScheduleWindowForAllDoctors,
+  generateRollingWindowForAllDoctors,
+} from '../services/scheduleGenerator.service.js'
 import { autoCancelExpiredHomeAppointments } from '../services/appointmentAutoCancel.service.js'
 
-// ============================================================
-// CRON JOBS — B2 + B3
-// ============================================================
+const CLINIC_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
 export function startCronJobs() {
-  // 23:55 hàng ngày — sinh slot ngày T+7 cho tất cả bác sĩ đã duyệt (B2 doc mục 2.3)
-  cron.schedule('55 23 * * *', async () => {
+  const tasks = []
+
+  async function runScheduleAutoFill(source) {
+    try {
+      const result = await generateAutoScheduleWindowForAllDoctors({
+        weeksAhead: 2,
+        action: 'auto_generate',
+        note: `Auto fill schedule window from ${source}`,
+      })
+      console.log(`[cron] Auto fill lich lam viec (${source}):`, result)
+    } catch (err) {
+      console.error(`[cron] Loi auto fill lich lam viec (${source}):`, err.message)
+    }
+  }
+
+  runScheduleAutoFill('startup')
+
+  // 00:00 every Sunday: make sure current and upcoming weeks are available.
+  tasks.push(cron.schedule('0 0 * * 0', async () => {
     try {
       const result = await generateRollingWindowForAllDoctors()
-      console.log('[cron] Sinh lịch T+7:', result)
+      console.log('[cron] Sinh/bu lich tuan tu dong:', result)
     } catch (err) {
-      console.error('[cron] Lỗi sinh lịch T+7:', err.message)
+      console.error('[cron] Loi sinh/bu lich tuan tu dong:', err.message)
     }
-  })
+  }, { timezone: CLINIC_TIMEZONE }))
 
-  // Mỗi 15 phút — auto-cancel lịch home confirmed+unpaid quá payment_deadline (B3 doc mục 7)
-  cron.schedule('*/15 * * * *', async () => {
+  // Every 15 minutes: auto-cancel expired unpaid home appointments.
+  tasks.push(cron.schedule('*/15 * * * *', async () => {
     try {
       const count = await autoCancelExpiredHomeAppointments()
-      if (count > 0) console.log(`[cron] Đã tự động hủy ${count} lịch home quá hạn thanh toán`)
+      if (count > 0) {
+        console.log(`[cron] Da tu dong huy ${count} lich home qua han thanh toan`)
+      }
     } catch (err) {
-      console.error('[cron] Lỗi auto-cancel home:', err.message)
+      console.error('[cron] Loi auto-cancel home:', err.message)
     }
-  })
+  }, { timezone: CLINIC_TIMEZONE }))
 
-  console.log('✅ Đã khởi động cron jobs (sinh lịch 23:55, auto-cancel mỗi 15 phút)')
+  console.log('Da khoi dong cron jobs (auto fill lich khi startup, sinh/bu lich 00:00 Chu nhat, auto-cancel moi 15 phut)')
+
+  return {
+    stop() {
+      for (const task of tasks) {
+        try {
+          task.stop()
+          task.destroy?.()
+        } catch {}
+      }
+    },
+  }
 }

@@ -17,9 +17,6 @@ const TARGET_LABEL: Record<NotificationTargetAPI, string> = {
   bac_si: 'Bác sĩ'
 }
 
-// Giả lập admin_id cho đến khi có auth thực sự
-const CURRENT_ADMIN_ID = "000000000000000000000099"
-
 export default function SendNotificationTab() {
   const [notifications, setNotifications] = useState<NotificationItemAPI[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,8 +55,7 @@ export default function SendNotificationTab() {
         setTotalPages(pagination.totalPages)
         setTotalRecords(pagination.total)
       }
-    } catch (err) {
-      console.error('Lỗi tải danh sách thông báo:', err)
+    } catch {
     } finally {
       if (!ignore) setLoading(false)
     }
@@ -76,8 +72,8 @@ export default function SendNotificationTab() {
       setLoadingLogs(true)
       notificationService.getLogs(targetLogs._id).then(data => {
         setLogs(data)
-      }).catch(err => {
-        console.error('Lỗi tải lịch sử:', err)
+      }).catch(() => {
+        setLogs([])
       }).finally(() => {
         setLoadingLogs(false)
       })
@@ -112,7 +108,6 @@ export default function SendNotificationTab() {
         tieu_de, 
         noi_dung, 
         doi_tuong,
-        admin_id: CURRENT_ADMIN_ID 
       })
       
       setTieuDe('')

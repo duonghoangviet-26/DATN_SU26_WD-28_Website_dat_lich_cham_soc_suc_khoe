@@ -162,7 +162,7 @@ export default function ManageDoctors() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{doc.so_nam_kinh_nghiem} năm</td>
-                  <td className="px-4 py-3 font-medium text-brand-600 whitespace-nowrap">{formatPrice(doc.phi_tu_van)}</td>
+                  <td className="px-4 py-3 font-medium text-brand-600 whitespace-nowrap">{formatPrice(doc.phi_kham)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <Badge color={APPROVAL_COLOR[doc.trang_thai_duyet]}>
                       {DOCTOR_APPROVAL_LABEL[doc.trang_thai_duyet]}

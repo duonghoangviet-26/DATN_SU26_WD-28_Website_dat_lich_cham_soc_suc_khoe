@@ -1,28 +1,36 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+
+import Icon from '@/components/admin/icons'
+import PageHeader from '@/components/common/PageHeader'
 import { appointmentService } from '@/services/appointment.service'
 import type {
   AppointmentItem,
   AppointmentPagination,
   AppointmentStatus,
   AppointmentSummary,
+  PaymentStatus,
 } from '@/types'
-import PageHeader from '@/components/common/PageHeader'
-import Icon from '@/components/admin/icons'
 
-import DoctorAppointmentGroupList from './DoctorAppointmentGroupList'
 import AppointmentDetail from './AppointmentDetail'
-import AddAppointment from './AddAppointment'
-import RescheduleAppointment from './RescheduleAppointment'
 import AppointmentHistoryModal from './AppointmentHistoryModal'
+import AppointmentList from './AppointmentList'
+import RescheduleAppointment from './RescheduleAppointment'
 
-type ViewMode = 'list' | 'add' | 'reschedule'
+type ViewMode = 'list' | 'reschedule'
+type QuickFilter = 'all' | 'today' | 'upcoming' | 'unpaid' | 'cancelled' | 'need_attention' | 'proxy_booking'
+type BookingScope = '' | 'self' | 'proxy'
 
 const EMPTY_SUMMARY: AppointmentSummary = {
   today: 0,
   pending: 0,
   confirmed: 0,
   completed: 0,
+  in_progress: 0,
+  cancelled: 0,
+  unpaid: 0,
+  need_attention: 0,
+  proxy_booking: 0,
 }
 
 const EMPTY_PAGINATION: AppointmentPagination = {
@@ -35,6 +43,7 @@ export default function ManageAppointments() {
   const [view, setView] = useState<ViewMode>('list')
   const [appointments, setAppointments] = useState<AppointmentItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const filterDoctorId = searchParams.get('doctor_id')
@@ -43,16 +52,16 @@ export default function ManageAppointments() {
   const [keyword, setKeyword] = useState('')
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [status, setStatus] = useState<AppointmentStatus | ''>('')
-  const [loaiKham, setLoaiKham] = useState('')
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | ''>('')
+  const [loaiKham, setLoaiKham] = useState<'clinic' | ''>('')
+  const [bookingScope, setBookingScope] = useState<BookingScope>('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
 
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState<AppointmentPagination>(EMPTY_PAGINATION)
   const [summary, setSummary] = useState<AppointmentSummary>(EMPTY_SUMMARY)
-  
-  // Lưu data grouped khi view_mode = 'doctor_grouped'
-  const [groupedAppointments, setGroupedAppointments] = useState<any[]>([])
 
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -67,33 +76,41 @@ export default function ManageAppointments() {
         setPage(1)
       }
     }, 500)
+
     return () => clearTimeout(timer)
   }, [keyword, debouncedKeyword])
 
   const fetchAppointments = useCallback(async (nextPage = page) => {
     setLoading(true)
+    setError(null)
+
     try {
       const res = await appointmentService.getAll({
         keyword: debouncedKeyword,
         status,
-        loai_kham: loaiKham,
+        payment_status: paymentStatus || undefined,
+        loai_kham: loaiKham || undefined,
+        booking_scope: bookingScope || undefined,
         startDate,
         endDate,
         page: nextPage,
         limit: 10,
-        view_mode: 'doctor_grouped', // Thêm cờ này để backend tự gom nhóm
-        doctor_id: filterDoctorId || undefined
+        doctor_id: filterDoctorId || undefined,
+        quick_filter: quickFilter === 'all' ? undefined : quickFilter,
       })
-      // Khi view_mode=doctor_grouped, res.data là mảng các DoctorGroup
-      setGroupedAppointments(res.data)
-      setSummary(res.summary)
-      if (res.pagination) {
-        setPagination(res.pagination)
-      }
+
+      setAppointments(Array.isArray(res.data) ? res.data : [])
+      setSummary(res.summary ?? EMPTY_SUMMARY)
+      setPagination(res.pagination ?? EMPTY_PAGINATION)
+    } catch (nextError: any) {
+      setAppointments([])
+      setSummary(EMPTY_SUMMARY)
+      setPagination(EMPTY_PAGINATION)
+      setError(nextError?.response?.data?.message || nextError.message || 'Không thể tải danh sách lịch hẹn.')
     } finally {
       setLoading(false)
     }
-  }, [debouncedKeyword, status, loaiKham, startDate, endDate, page, filterDoctorId])
+  }, [debouncedKeyword, status, paymentStatus, loaiKham, bookingScope, startDate, endDate, page, filterDoctorId, quickFilter])
 
   useEffect(() => {
     fetchAppointments()
@@ -102,27 +119,36 @@ export default function ManageAppointments() {
   async function handleCancel(appointment: AppointmentItem, reason: string) {
     try {
       await appointmentService.cancel(appointment._id, reason, appointment.ngay_cap_nhat)
-      await fetchAppointments()
-    } catch (err: any) {
-      alert(err.response?.data?.message || err.message)
-      await fetchAppointments() // Tải lại để lấy dữ liệu mới nhất
+      await fetchAppointments(page)
+    } catch (nextError: any) {
+      alert(nextError.response?.data?.message || nextError.message)
+      await fetchAppointments(page)
     }
   }
 
   async function handleRestore(appointment: AppointmentItem) {
-    await appointmentService.restore(appointment._id)
-    await fetchAppointments()
+    try {
+      await appointmentService.restore(appointment._id)
+      await fetchAppointments(page)
+    } catch (nextError: any) {
+      alert(nextError.response?.data?.message || nextError.message)
+    }
   }
 
   async function handleHardDelete(appointment: AppointmentItem) {
-    await appointmentService.hardDelete(appointment._id)
-    await fetchAppointments()
+    try {
+      await appointmentService.hardDelete(appointment._id)
+      await fetchAppointments(page)
+    } catch (nextError: any) {
+      alert(nextError.response?.data?.message || nextError.message)
+    }
   }
 
   async function handleView(appointment: AppointmentItem) {
     setDetailOpen(true)
     setDetailLoading(true)
     setDetail(null)
+
     try {
       const fullDetail = await appointmentService.getById(appointment._id)
       setDetail(fullDetail)
@@ -146,22 +172,56 @@ export default function ManageAppointments() {
     setDetail(null)
   }
 
+  const summaryCards = [
+    { label: 'Lịch hẹn hôm nay', value: summary.today, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', icon: 'calendar' },
+    { label: 'Chờ xác nhận', value: summary.pending, iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600', icon: 'clock' },
+    { label: 'Chưa thanh toán', value: summary.unpaid ?? 0, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', icon: 'payment' },
+    { label: 'Đặt hộ', value: summary.proxy_booking ?? appointments.filter((item) => item.dat_ho).length, iconBg: 'bg-cyan-100', iconColor: 'text-cyan-600', icon: 'users' },
+  ]
+
   return (
     <div>
       <PageHeader
         title="Lịch hẹn hệ thống"
-        description="Xem toàn bộ lịch hẹn, theo dõi trạng thái và xử lý các vấn đề phát sinh."
+        description="Admin chỉ rà soát, dời lịch, hủy và theo dõi đặt hộ. Việc tạo lịch mới thuộc về người dùng hoặc lễ tân do liên quan trực tiếp tới thanh toán."
       />
 
       {view === 'list' && (
         <>
-          <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Admin không được đặt lịch hay thêm lịch hẹn mới cho người dùng. Chỉ người dùng hoặc lễ tân được tạo lịch để tránh lệch luồng thanh toán và đối soát.
+          </div>
+
+          <div className="mb-4 flex flex-wrap gap-2">
             {[
-              { label: 'Lịch hẹn hôm nay', value: summary.today, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', icon: 'calendar' },
-              { label: 'Chờ xác nhận', value: summary.pending, iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600', icon: 'clock' },
-              { label: 'Đã xác nhận', value: summary.confirmed, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', icon: 'check' },
-              { label: 'Hoàn thành', value: summary.completed, iconBg: 'bg-green-100', iconColor: 'text-green-600', icon: 'star' },
-            ].map((item) => (
+              ['all', 'Tất cả'],
+              ['today', 'Hôm nay'],
+              ['upcoming', 'Sắp tới'],
+              ['unpaid', 'Chưa thanh toán'],
+              ['cancelled', 'Đã hủy'],
+              ['need_attention', 'Cần xử lý'],
+              ['proxy_booking', 'Đặt hộ'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  setQuickFilter(value as QuickFilter)
+                  setPage(1)
+                }}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                  quickFilter === value
+                    ? 'bg-brand-500 text-white'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {summaryCards.map((item) => (
               <div key={item.label} className="card p-5">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -176,27 +236,25 @@ export default function ManageAppointments() {
             ))}
           </div>
 
-          <div className="card mb-4 flex flex-col justify-between gap-3 p-4 md:flex-row">
-            <div className="grid flex-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
+          <div className="card mb-4 p-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">
                   <Icon name="search" className="h-4 w-4" />
                 </span>
                 <input
                   className="input w-full pl-9"
-                  placeholder="Tìm bác sĩ/bệnh nhân..."
+                  placeholder="Tìm mã lịch, bệnh nhân, SĐT, bác sĩ..."
                   value={keyword}
-                  onChange={(e) => {
-                    setKeyword(e.target.value)
-                  }}
+                  onChange={(event) => setKeyword(event.target.value)}
                 />
               </div>
               <input
                 type="date"
                 className="input w-full"
                 value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value)
+                onChange={(event) => {
+                  setStartDate(event.target.value)
                   setPage(1)
                 }}
                 title="Từ ngày"
@@ -205,8 +263,8 @@ export default function ManageAppointments() {
                 type="date"
                 className="input w-full"
                 value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value)
+                onChange={(event) => {
+                  setEndDate(event.target.value)
                   setPage(1)
                 }}
                 title="Đến ngày"
@@ -214,41 +272,68 @@ export default function ManageAppointments() {
               <select
                 className="input"
                 value={status}
-                onChange={(e) => {
-                  setStatus(e.target.value as AppointmentStatus | '')
+                onChange={(event) => {
+                  setStatus(event.target.value as AppointmentStatus | '')
                   setPage(1)
                 }}
               >
                 <option value="">Tất cả trạng thái</option>
                 <option value="pending">Chờ xác nhận</option>
                 <option value="confirmed">Đã xác nhận</option>
+                <option value="checked_in">Đã đến</option>
+                <option value="in_progress">Đang khám</option>
                 <option value="completed">Hoàn thành</option>
                 <option value="cancelled">Đã hủy</option>
+                <option value="no_show">Không đến khám</option>
+              </select>
+              <select
+                className="input"
+                value={paymentStatus}
+                onChange={(event) => {
+                  setPaymentStatus(event.target.value as PaymentStatus | '')
+                  setPage(1)
+                }}
+              >
+                <option value="">Tất cả thanh toán</option>
+                <option value="unpaid">Chưa thanh toán</option>
+                <option value="partial">Thanh toán một phần</option>
+                <option value="paid">Đã thanh toán</option>
+                <option value="refunded">Đã hoàn tiền</option>
               </select>
               <select
                 className="input"
                 value={loaiKham}
-                onChange={(e) => {
-                  setLoaiKham(e.target.value)
+                onChange={(event) => {
+                  setLoaiKham(event.target.value as 'clinic' | '')
                   setPage(1)
                 }}
               >
                 <option value="">Tất cả loại khám</option>
                 <option value="clinic">Phòng khám</option>
-                <option value="home">Tại nhà</option>
+              </select>
+              <select
+                className="input"
+                value={bookingScope}
+                onChange={(event) => {
+                  setBookingScope(event.target.value as BookingScope)
+                  setPage(1)
+                }}
+              >
+                <option value="">Tất cả hình thức đặt</option>
+                <option value="self">Tự đặt</option>
+                <option value="proxy">Đặt hộ</option>
               </select>
             </div>
-            <button
-              onClick={() => setView('add')}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
-            >
-              <Icon name="plus" className="h-4 w-4" />
-              Đặt lịch mới
-            </button>
           </div>
 
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
           {filterDoctorId && (
-            <div className="mb-6 flex items-center justify-between rounded-xl bg-blue-50 p-4 border border-blue-100">
+            <div className="mb-6 flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 p-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-200 text-blue-700">
                   <Icon name="users" className="h-5 w-5" />
@@ -265,7 +350,7 @@ export default function ManageAppointments() {
                   setSearchParams(searchParams)
                   setPage(1)
                 }}
-                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
               >
                 <Icon name="x" className="h-4 w-4" />
                 Xóa bộ lọc
@@ -273,8 +358,8 @@ export default function ManageAppointments() {
             </div>
           )}
 
-          <DoctorAppointmentGroupList
-            groupedAppointments={groupedAppointments}
+          <AppointmentList
+            appointments={appointments}
             loading={loading}
             onView={handleView}
             onHistory={handleHistory}
@@ -284,18 +369,19 @@ export default function ManageAppointments() {
             onHardDelete={handleHardDelete}
           />
 
-          {!loading && groupedAppointments.length > 0 && pagination.totalPages > 1 && (
-            <div className="mt-6 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 sm:px-6 rounded-lg shadow-sm">
+          {!loading && pagination.totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-between rounded-lg border-t border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-6">
               <div className="flex flex-1 items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-700">
-                    Hiển thị trang <span className="font-medium">{pagination.page}</span> / <span className="font-medium">{pagination.totalPages}</span>
+                    Hiển thị trang <span className="font-medium">{pagination.page}</span> /{' '}
+                    <span className="font-medium">{pagination.totalPages}</span>
                   </p>
                 </div>
                 <div>
                   <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
                     <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
                       disabled={pagination.page <= 1}
                       className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                     >
@@ -303,7 +389,7 @@ export default function ManageAppointments() {
                       <Icon name="chevron-left" className="h-5 w-5" />
                     </button>
                     <button
-                      onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                      onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))}
                       disabled={pagination.page >= pagination.totalPages}
                       className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                     >
@@ -318,24 +404,13 @@ export default function ManageAppointments() {
         </>
       )}
 
-      {view === 'add' && (
-        <AddAppointment
-          onCancel={() => setView('list')}
-          onSaved={async () => {
-            setView('list')
-            setPage(1)
-            await fetchAppointments(1)
-          }}
-        />
-      )}
-
       {view === 'reschedule' && rescheduleData && (
         <RescheduleAppointment
           appointment={rescheduleData}
           onCancel={() => setView('list')}
           onSaved={async () => {
             setView('list')
-            await fetchAppointments()
+            await fetchAppointments(page)
           }}
         />
       )}
@@ -345,10 +420,7 @@ export default function ManageAppointments() {
       )}
 
       {historyItem && (
-        <AppointmentHistoryModal 
-          appointment={historyItem} 
-          onClose={() => setHistoryItem(null)} 
-        />
+        <AppointmentHistoryModal appointment={historyItem} onClose={() => setHistoryItem(null)} />
       )}
     </div>
   )

@@ -11,6 +11,7 @@ import clinicConfigRoutes  from './clinic-config.routes.js'
 import guestPatientsRoutes from './guest-patients.routes.js'
 import doctorLeavesRoutes  from './doctor-leaves.routes.js'
 import medicalReadRoutes   from './medical-read.routes.js'
+import dashboardRoutes     from './dashboard.routes.js'
 
 // ============================================================
 // Admin routes — mount tại /api/admin
@@ -36,5 +37,6 @@ router.use('/clinic-config', clinicConfigRoutes)
 router.use('/guest-patients', guestPatientsRoutes)
 router.use('/doctor-leaves', doctorLeavesRoutes)
 router.use('/medical-read', medicalReadRoutes)
+router.use('/dashboard', dashboardRoutes)
 
 export default router

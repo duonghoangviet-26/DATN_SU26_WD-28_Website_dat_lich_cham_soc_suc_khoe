@@ -9,7 +9,7 @@ const appointmentSchema = new mongoose.Schema(
     slot_id: { type: mongoose.Schema.Types.ObjectId, default: null },
     service_id: { type: mongoose.Schema.Types.ObjectId, ref: 'DichVu', default: null },
 
-    chi_nhanh_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChiNhanh', default: null },
+    chi_nhanh_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ThongTinPhongKham', default: null },
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', default: null },
     khach_vang_lai_id: { type: mongoose.Schema.Types.ObjectId, ref: 'KhachVangLai', default: null },
     loai_benh_nhan: { type: String, default: null },
@@ -91,19 +91,24 @@ const appointmentSchema = new mongoose.Schema(
 
 appointmentSchema.index({ user_id: 1 })
 appointmentSchema.index({ doctor_id: 1 })
+appointmentSchema.index({ specialty_id: 1 })
 appointmentSchema.index({ status: 1 })
 appointmentSchema.index({ payment_status: 1 })
 appointmentSchema.index({ ngay_kham: 1 })
 appointmentSchema.index({ schedule_id: 1 })
 appointmentSchema.index({ doctor_id: 1, status: 1, ngay_kham: 1 })
+appointmentSchema.index({ ngay_kham: 1, status: 1 })
+appointmentSchema.index({ ngay_kham: 1, payment_status: 1 })
+appointmentSchema.index({ ngay_kham: 1, doctor_id: 1 })
 
 appointmentSchema.pre('validate', function () {
   if (this.loai_kham === 'home') {
     if (!this.dia_chi_kham) throw new Error('Kham tai nha (home) bat buoc co dia_chi_kham')
     if (!this.service_id) throw new Error('Kham tai nha (home) bat buoc co service_id')
+    if (!this.doctor_id) throw new Error('Kham tai nha (home) bat buoc co doctor_id')
+    if (!this.schedule_id) throw new Error('Kham tai nha (home) bat buoc co schedule_id')
+    if (!this.slot_id) throw new Error('Kham tai nha (home) bat buoc co slot_id')
     this.phong_kham = null
-    this.schedule_id = null
-    this.slot_id = null
   } else if (this.loai_kham === 'clinic') {
     if (!this.doctor_id) throw new Error('Kham tai phong kham (clinic) bat buoc co doctor_id')
     if (!this.schedule_id) throw new Error('Kham tai phong kham (clinic) bat buoc co schedule_id')

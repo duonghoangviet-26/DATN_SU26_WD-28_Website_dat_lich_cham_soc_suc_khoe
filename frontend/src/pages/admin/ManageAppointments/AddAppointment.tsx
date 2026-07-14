@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react'
-import { appointmentService } from '@/services/appointment.service'
-import type {
-  AdminAppointmentDoctorOption,
-  AdminAppointmentServiceOption,
-} from '@/types'
-import Icon from '@/components/admin/icons'
 
-// Format "2026-07-05" → "Thứ 7, 05/07/2026" (tránh lệch múi giờ UTC)
+import Icon from '@/components/admin/icons'
+import { appointmentService } from '@/services/appointment.service'
+import type { AdminAppointmentDoctorOption } from '@/types'
+
 function formatScheduleDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number)
   const date = new Date(year, month - 1, day)
@@ -23,8 +20,6 @@ interface Props {
   onCancel: () => void
 }
 
-type AppointmentType = 'clinic' | 'home'
-
 export default function AddAppointment({ onSaved, onCancel }: Props) {
   const [form, setForm] = useState({
     user_id: '',
@@ -33,16 +28,12 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
     doctor_id: '',
     schedule_id: '',
     slot_id: '',
-    service_id: '',
-    loai_kham: 'clinic' as AppointmentType,
-    dia_chi_kham: '',
+    loai_kham: 'clinic' as const,
     ly_do_kham: '',
   })
 
   const [doctors, setDoctors] = useState<AdminAppointmentDoctorOption[]>([])
-  const [services, setServices] = useState<AdminAppointmentServiceOption[]>([])
   const [schedules, setSchedules] = useState<any[]>([])
-
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,12 +42,6 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
       .then(setDoctors)
       .catch(() => setError('Lỗi lấy danh sách bác sĩ'))
   }, [])
-
-  useEffect(() => {
-    appointmentService.getActiveServices(form.loai_kham)
-      .then(setServices)
-      .catch(() => setError('Lỗi lấy danh sách dịch vụ'))
-  }, [form.loai_kham])
 
   useEffect(() => {
     if (!form.doctor_id) {
@@ -70,65 +55,55 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
   }, [form.doctor_id])
 
   const selectedDoctor = doctors.find((doctor) => doctor._id === form.doctor_id)
-  const availableServices = services.filter((service) =>
-    !selectedDoctor || selectedDoctor.service_ids.includes(service._id)
-  )
-  const selectedService = availableServices.find((service) => service._id === form.service_id)
   const selectedSchedule = schedules.find((schedule) => schedule._id === form.schedule_id)
 
   useEffect(() => {
-    if (form.service_id && !availableServices.some((service) => service._id === form.service_id)) {
-      setForm((prev) => ({ ...prev, service_id: '' }))
-    }
-  }, [availableServices, form.service_id])
-
-  useEffect(() => {
-    setForm((prev) => ({
-      ...prev,
+    setForm((current) => ({
+      ...current,
       schedule_id: '',
       slot_id: '',
     }))
   }, [form.doctor_id])
 
   function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) {
-    const { name, value } = e.target
-    setForm((prev) => ({ ...prev, [name]: value }))
+    const { name, value } = event.target
+    setForm((current) => ({ ...current, [name]: value }))
   }
 
-  function handleScheduleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const scheduleId = e.target.value
-    setForm((prev) => ({
-      ...prev,
+  function handleScheduleChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    const scheduleId = event.target.value
+    setForm((current) => ({
+      ...current,
       schedule_id: scheduleId,
       slot_id: '',
     }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
     setError(null)
 
     if (!form.ten_khach.trim()) {
       setError('Vui lòng nhập tên bệnh nhân.')
       return
     }
-    if (!form.doctor_id || !form.service_id || !form.schedule_id || !form.slot_id) {
-      setError('Vui lòng chọn đầy đủ Bác sĩ, Dịch vụ, Ngày khám và Khung giờ.')
-      return
-    }
-    if (form.loai_kham === 'home' && !form.dia_chi_kham.trim()) {
-      setError('Khám tại nhà yêu cầu nhập địa chỉ.')
+
+    if (!form.doctor_id || !form.schedule_id || !form.slot_id) {
+      setError('Vui lòng chọn đầy đủ Bác sĩ, Ngày khám và Khung giờ.')
       return
     }
 
     setLoading(true)
     try {
-      await appointmentService.create(form)
+      await appointmentService.create({
+        ...form,
+        service_id: undefined,
+      })
       onSaved()
-    } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Lỗi khi đặt lịch')
+    } catch (error: any) {
+      setError(error?.response?.data?.message || error.message || 'Lỗi khi đặt lịch')
     } finally {
       setLoading(false)
     }
@@ -137,10 +112,12 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
   return (
     <div className="card p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-800">
-          Đặt lịch hộ{' '}
-          <span className="text-sm font-normal text-orange-500">(Can thiệp khẩn cấp)</span>
-        </h3>
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800">Đặt lịch hộ</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Giao diện hiện chỉ cho phép tạo lịch khám tại phòng khám.
+          </p>
+        </div>
         <button onClick={onCancel} className="text-slate-400 hover:text-slate-700">
           <Icon name="x" className="h-5 w-5" />
         </button>
@@ -151,6 +128,11 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
           {error}
         </div>
       )}
+
+      <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        Tùy chọn khám tại nhà đã được tạm ẩn khỏi UI admin. Nếu hệ thống còn dữ liệu lịch cũ kiểu
+        này, chúng vẫn được giữ nguyên để xem lịch sử, nhưng form mới chỉ tạo lịch khám tại phòng khám.
+      </div>
 
       <form onSubmit={handleSubmit} className="grid gap-6 sm:grid-cols-2">
         <div>
@@ -166,6 +148,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             required
           />
         </div>
+
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">Số điện thoại</label>
           <input
@@ -178,18 +161,12 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Loại khám <span className="text-red-500">*</span>
-          </label>
-          <select
-            name="loai_kham"
-            value={form.loai_kham}
-            onChange={handleChange}
-            className="input w-full"
-          >
-            <option value="clinic">Tại phòng khám</option>
-            <option value="home">Tại nhà</option>
-          </select>
+          <label className="mb-1.5 block text-sm font-medium text-slate-700">Loại khám</label>
+          <input
+            value="Tại phòng khám"
+            className="input w-full bg-slate-50"
+            readOnly
+          />
         </div>
 
         <div>
@@ -207,27 +184,6 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             {doctors.map((doctor) => (
               <option key={doctor._id} value={doctor._id}>
                 {doctor.ten} ({doctor.chuyen_khoa})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-sm font-medium text-slate-700">
-            Dịch vụ <span className="text-red-500">*</span>
-          </label>
-          <select
-            name="service_id"
-            value={form.service_id}
-            onChange={handleChange}
-            className="input w-full"
-            required
-            disabled={!form.doctor_id}
-          >
-            <option value="">-- Chọn dịch vụ --</option>
-            {availableServices.map((service) => (
-              <option key={service._id} value={service._id}>
-                {service.ten}
               </option>
             ))}
           </select>
@@ -254,10 +210,11 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
           </select>
           {form.doctor_id && schedules.length === 0 && (
             <p className="mt-1 text-xs text-amber-600">
-              ⚠ Bác sĩ này chưa có lịch làm việc từ hôm nay trở đi, hoặc tất cả khung giờ đã đầy.
+              Bác sĩ này chưa có lịch làm việc từ hôm nay trở đi, hoặc tất cả khung giờ đã đầy.
             </p>
           )}
         </div>
+
         <div>
           <label className="mb-1.5 block text-sm font-medium text-slate-700">
             Khung giờ <span className="text-red-500">*</span>
@@ -273,7 +230,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             <option value="">-- Chọn giờ khám --</option>
             {selectedSchedule?.slots.map((slot: any) => (
               <option key={slot._id} value={slot._id}>
-                {slot.gio_bat_dau} - {slot.gio_ket_thuc} (Còn {slot.so_benh_nhan_toi_da - slot.so_benh_nhan_hien_tai} chỗ)
+                {slot.gio_bat_dau} - {slot.gio_ket_thuc}
               </option>
             ))}
           </select>
@@ -283,7 +240,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
           <label className="mb-1.5 block text-sm font-medium text-slate-700">Giá khám</label>
           <input
             type="number"
-            value={selectedService?.gia ?? 0}
+            value={selectedDoctor?.phi_kham ?? 0}
             className="input w-full bg-slate-50"
             readOnly
           />
@@ -300,22 +257,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
           />
         </div>
 
-        {form.loai_kham === 'home' && (
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">
-              Địa chỉ khám <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              name="dia_chi_kham"
-              value={form.dia_chi_kham}
-              onChange={handleChange}
-              className="input w-full resize-none"
-              rows={3}
-            />
-          </div>
-        )}
-
-        <div className="sm:col-span-2 mt-4 flex justify-end gap-3">
+        <div className="mt-4 flex justify-end gap-3 sm:col-span-2">
           <button type="button" onClick={onCancel} disabled={loading} className="btn-secondary px-6">
             Hủy
           </button>

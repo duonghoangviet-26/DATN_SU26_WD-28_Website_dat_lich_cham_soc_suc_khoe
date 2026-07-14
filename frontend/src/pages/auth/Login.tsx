@@ -20,7 +20,8 @@ export default function Login() {
     setLoading(true)
     try {
       const user = await login({ email, password })
-      const from = (location.state as { from?: { pathname?: string } })?.from?.pathname
+      const fromLocation = (location.state as { from?: { pathname?: string; search?: string } })?.from
+      const from = fromLocation?.pathname ? `${fromLocation.pathname}${fromLocation.search || ''}` : undefined
       if (user.role === 'admin') {
         navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true })
       } else if (user.role === 'receptionist') {
@@ -114,9 +115,11 @@ export default function Login() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-700">Tài khoản demo</p>
         <div className="space-y-1.5 text-xs">
           {[
-            { role: 'Admin', email: 'admin@vitafamily.vn' },
-            { role: 'Bác sĩ', email: 'bacsi_a@vitafamily.vn' },
-            { role: 'Bệnh nhân', email: 'benhnhan_c@gmail.com' },
+            { role: 'Admin', email: 'admin.demo@vitafamily.vn' },
+            { role: 'Bác sĩ', email: 'doctor.tai@vitafamily.vn' },
+            { role: 'Bệnh nhân', email: 'patient01.demo@vitafamily.vn' },
+            { role: 'nurse', email: 'nurse.demo@vitafamily.vn' },
+            { role: 'receptionist', email: ' reception.demo@vitafamily.vn' },
           ].map(({ role, email }) => (
             <div key={role} className="flex items-center justify-between">
               <span className="font-medium text-brand-800">{role}</span>

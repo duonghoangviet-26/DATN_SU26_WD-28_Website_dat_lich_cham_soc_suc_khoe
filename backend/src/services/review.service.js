@@ -494,3 +494,17 @@ export async function batchActionReviews(ids, action, adminId, lyDo) {
 
   return { count }
 }
+
+export async function getReviewDoctors() {
+  const doctors = await BacSi.find({ trang_thai_duyet: 'approved', la_hien: true })
+    .populate('user_id', 'ho_ten')
+    .sort({ ngay_tao: -1 })
+    .lean()
+
+  return doctors
+    .filter((doctor) => doctor.user_id?.ho_ten)
+    .map((doctor) => ({
+      id: doctor._id,
+      ho_ten: doctor.user_id.ho_ten,
+    }))
+}

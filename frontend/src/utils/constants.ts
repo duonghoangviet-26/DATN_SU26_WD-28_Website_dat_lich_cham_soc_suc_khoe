@@ -37,15 +37,21 @@ export const DOCTOR_APPROVAL = {
 export const APPOINTMENT_STATUS = {
   PENDING: 'pending',
   CONFIRMED: 'confirmed',
+  CHECKED_IN: 'checked_in',
+  IN_PROGRESS: 'in_progress',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
+  NO_SHOW: 'no_show',
 }
 
 export const APPOINTMENT_STATUS_LABEL: Record<string, string> = {
   pending: 'Chờ xác nhận',
   confirmed: 'Đã xác nhận',
+  checked_in: 'Đã đến',
+  in_progress: 'Đang khám',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
+  no_show: 'Không đến khám',
 }
 
 export const DOCTOR_APPROVAL_LABEL: Record<string, string> = {
@@ -68,11 +74,18 @@ export const EXAM_TYPE_LABEL: Record<string, string> = {
 
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {
   unpaid: 'Chưa thanh toán',
+  partial: 'Thanh toán một phần',
+  pending: 'Chờ thanh toán',
   paid: 'Đã thanh toán',
+  failed: 'Thất bại',
   refunded: 'Đã hoàn tiền',
 }
 
 export const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  tien_mat: 'Tiền mặt',
+  chuyen_khoan: 'Chuyển khoản',
+  vi_dien_tu: 'Ví điện tử',
+  the_ngan_hang: 'Thẻ ngân hàng',
   momo: 'MoMo',
   vnpay: 'VNPay',
   cash: 'Tiền mặt',

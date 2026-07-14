@@ -96,8 +96,8 @@ export default function ManageReviews() {
         setPagination(res.pagination)
         setStatistics(res.statistics)
       })
-      .catch((err) => {
-        console.error('Lỗi tải danh sách đánh giá:', err)
+      .catch(() => {
+        setReviews([])
       })
       .finally(() => {
         setLoading(false)
