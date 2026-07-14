@@ -18,7 +18,7 @@ interface Appointment {
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [activeTab, setActiveTab] = useState<'today' | 'past'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'tomorrow' | 'past'>('today');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -155,6 +155,16 @@ export default function Appointments() {
         </button>
         <button
           className={`py-3 px-6 font-medium text-sm transition-colors border-b-2 ${
+            activeTab === 'tomorrow'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+          }`}
+          onClick={() => setActiveTab('tomorrow')}
+        >
+          Ngày mai
+        </button>
+        <button
+          className={`py-3 px-6 font-medium text-sm transition-colors border-b-2 ${
             activeTab === 'past'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -262,7 +272,7 @@ export default function Appointments() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {activeTab === 'today' ? (
+                        {(activeTab === 'today' || activeTab === 'tomorrow') ? (
                           <>
                             {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                               <button
