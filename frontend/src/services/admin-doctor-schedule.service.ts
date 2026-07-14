@@ -1,5 +1,6 @@
 import axiosInstance from '@/services/axiosInstance'
 import type {
+  AdminDoctorScheduleAuditResponse,
   AdminDoctorScheduleDetail,
   AdminDoctorScheduleSlot,
   AdminDoctorWorkdayItem,
@@ -49,6 +50,18 @@ export const adminDoctorScheduleService = {
     data: Partial<AdminDoctorScheduleSlot>
   ): Promise<AdminDoctorScheduleDetail> {
     const res = await axiosInstance.patch<ApiResponse<AdminDoctorScheduleDetail>>(`/admin/slots/${scheduleId}/slots/${slotId}`, data)
+    return res.data.data
+  },
+
+  async getAuditLogs(params: {
+    schedule_id?: string
+    doctor_id?: string
+    from?: string
+    to?: string
+    page?: number
+    limit?: number
+  }): Promise<AdminDoctorScheduleAuditResponse> {
+    const res = await axiosInstance.get<ApiResponse<AdminDoctorScheduleAuditResponse>>('/admin/slots/audit-logs', { params })
     return res.data.data
   },
 }

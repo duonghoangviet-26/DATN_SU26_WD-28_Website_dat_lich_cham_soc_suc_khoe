@@ -262,21 +262,21 @@ async function buildAppointmentQuery({
     if (!isValidObjectId(doctor_id)) {
       throw new Error('doctor_id khong hop le')
     }
-    query.doctor_id = doctor_id
+    query.doctor_id = new mongoose.Types.ObjectId(doctor_id)
   }
 
   if (chi_nhanh_id) {
     if (!isValidObjectId(chi_nhanh_id)) {
       throw new Error('chi_nhanh_id khong hop le')
     }
-    query.chi_nhanh_id = chi_nhanh_id
+    query.chi_nhanh_id = new mongoose.Types.ObjectId(chi_nhanh_id)
   }
 
   if (specialty_id) {
     if (!isValidObjectId(specialty_id)) {
       throw new Error('specialty_id khong hop le')
     }
-    query.specialty_id = specialty_id
+    query.specialty_id = new mongoose.Types.ObjectId(specialty_id)
   }
 
   if (ma_lich_hen?.trim()) {
@@ -413,6 +413,126 @@ function formatAppointmentItem(appointment) {
       : null,
     ngay_cap_nhat: appointment.ngay_cap_nhat,
   }
+}
+
+function resolveAppointmentPaymentStatus({ appointment, invoice, payments }) {
+  const currentStatus = appointment.payment_status ?? 'unpaid'
+  const linkedPayments = Array.isArray(payments) ? payments : []
+  const hasLinkedFinancialRecord = Boolean(invoice) || linkedPayments.length > 0
+
+  if (!hasLinkedFinancialRecord) {
+    return currentStatus
+  }
+
+  const paidPayments = linkedPayments.filter((payment) => payment.status === 'paid')
+  const refundedPayments = linkedPayments.filter((payment) => payment.status === 'refunded')
+  const totalPaid = paidPayments.reduce((sum, payment) => sum + Number(payment.so_tien || 0), 0)
+  const totalDue = Number(invoice?.tong_thanh_toan || appointment.gia_kham || 0)
+
+  if (refundedPayments.length > 0 && paidPayments.length === 0) {
+    return 'refunded'
+  }
+
+  if (invoice?.trang_thai_hoa_don === 'da_thanh_toan_du') {
+    return 'paid'
+  }
+
+  if (invoice?.trang_thai_hoa_don === 'da_dat_coc') {
+    return 'partial'
+  }
+
+  if (paidPayments.length > 0) {
+    if (totalDue > 0 && totalPaid < totalDue) {
+      return 'partial'
+    }
+
+    return 'paid'
+  }
+
+  if (refundedPayments.length > 0 || currentStatus === 'refunded') {
+    return 'refunded'
+  }
+
+  if (invoice?.trang_thai_hoa_don === 'chua_thanh_toan') {
+    return 'unpaid'
+  }
+
+  return currentStatus
+}
+
+async function enrichAppointmentsWithPaymentData(appointments, { persist = false } = {}) {
+  if (!Array.isArray(appointments) || appointments.length === 0) {
+    return []
+  }
+
+  const appointmentIds = appointments.map((appointment) => appointment._id)
+  const invoices = await HoaDon.find({ appointment_id: { $in: appointmentIds } })
+    .select('_id appointment_id so_hoa_don trang_thai_hoa_don tong_thanh_toan')
+    .lean()
+
+  const invoiceByAppointmentId = new Map(
+    invoices.map((invoice) => [String(invoice.appointment_id), invoice])
+  )
+  const invoiceById = new Map(invoices.map((invoice) => [String(invoice._id), invoice]))
+  const invoiceIds = invoices.map((invoice) => invoice._id)
+
+  const paymentOrConditions = [{ appointment_id: { $in: appointmentIds } }]
+  if (invoiceIds.length > 0) {
+    paymentOrConditions.push({ hoa_don_id: { $in: invoiceIds } })
+  }
+
+  const payments = await ThanhToan.find({ $or: paymentOrConditions })
+    .select('appointment_id hoa_don_id so_tien status')
+    .lean()
+
+  const paymentsByAppointmentId = new Map()
+  for (const payment of payments) {
+    const appointmentId =
+      payment.appointment_id ??
+      invoiceById.get(String(payment.hoa_don_id ?? ''))?.appointment_id ??
+      null
+
+    if (!appointmentId) {
+      continue
+    }
+
+    const mapKey = String(appointmentId)
+    const existing = paymentsByAppointmentId.get(mapKey) ?? []
+    existing.push(payment)
+    paymentsByAppointmentId.set(mapKey, existing)
+  }
+
+  const updates = []
+  const enrichedAppointments = appointments.map((appointment) => {
+    const invoice = invoiceByAppointmentId.get(String(appointment._id)) ?? appointment.invoice ?? null
+    const linkedPayments = paymentsByAppointmentId.get(String(appointment._id)) ?? []
+    const resolvedPaymentStatus = resolveAppointmentPaymentStatus({
+      appointment,
+      invoice,
+      payments: linkedPayments,
+    })
+
+    if (resolvedPaymentStatus !== appointment.payment_status) {
+      updates.push({
+        updateOne: {
+          filter: { _id: appointment._id },
+          update: { $set: { payment_status: resolvedPaymentStatus } },
+        },
+      })
+    }
+
+    return {
+      ...appointment,
+      payment_status: resolvedPaymentStatus,
+      invoice,
+    }
+  })
+
+  if (persist && updates.length > 0) {
+    await LichHen.bulkWrite(updates)
+  }
+
+  return enrichedAppointments
 }
 
 async function getScheduleAndSlot(scheduleId, slotId, session) {
@@ -624,14 +744,8 @@ async function loadAppointmentForResponse(id) {
     return null
   }
 
-  const invoice = await HoaDon.findOne({ appointment_id: appointment._id })
-    .select('so_hoa_don trang_thai_hoa_don tong_thanh_toan')
-    .lean()
-
-  return {
-    ...appointment,
-    invoice,
-  }
+  const [enrichedAppointment] = await enrichAppointmentsWithPaymentData([appointment], { persist: true })
+  return enrichedAppointment ?? null
 }
 
 // GET /api/admin/appointments
@@ -713,12 +827,13 @@ export async function getAllAppointments(req, res) {
     const appointments = appointmentIds
       .map((id) => appointmentMap.get(String(id)))
       .filter(Boolean)
+    const enrichedAppointments = await enrichAppointmentsWithPaymentData(appointments, { persist: true })
 
     const totalPages = total === 0 ? 1 : Math.ceil(total / limitNum)
 
     return res.status(200).json({
       success: true,
-      data: appointments.map(formatAppointmentItem),
+      data: enrichedAppointments.map(formatAppointmentItem),
       pagination: {
         total,
         page: pageNum,

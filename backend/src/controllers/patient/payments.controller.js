@@ -4,7 +4,7 @@ import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen } from '../../mo
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { ok, fail } from '../../utils/response.js'
 
-const VNPAY_SESSION_MINUTES = 15
+const VNPAY_SESSION_MINUTES = Number(process.env.VNPAY_SESSION_MINUTES || process.env.PAYMENT_HOLD_MINUTES || 15)
 const DEFAULT_CLIENT_BASE_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
 
 function isValidObjectId(value) {
@@ -274,6 +274,21 @@ export async function createMockVnpaySession(req, res) {
 
       appointment.payment_deadline = expiresAt
       await appointment.save()
+
+      if (appointment.schedule_id && appointment.slot_id) {
+        await LichLamViec.findOneAndUpdate(
+          {
+            _id: appointment.schedule_id,
+            'slots._id': appointment.slot_id,
+            'slots.status': 'pending_payment',
+          },
+          {
+            $set: {
+              'slots.$.pending_expired_at': expiresAt,
+            },
+          }
+        )
+      }
     }
 
     return ok(res, serializePaymentStatus({ payment, appointment, invoice }), 'Tao session VNPAY mock thanh cong')
