@@ -5,11 +5,16 @@ import type { ServiceItem } from '@/types'
 import Breadcrumb from '@/components/common/Breadcrumb'
 import Empty from '@/components/common/Empty'
 import Skeleton from '@/components/common/Skeleton'
+import Pagination from '@/components/common/Pagination'
 
 export default function ServiceList() {
   const [loading, setLoading] = useState(true)
   const [services, setServices] = useState<ServiceItem[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Phân trang
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 3
 
   useEffect(() => {
     setLoading(true)
@@ -22,11 +27,19 @@ export default function ServiceList() {
       })
   }, [])
 
+  // Reset trang khi lọc thay đổi
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
+
   // Filter based on Search
   const filteredServices = services.filter((s) => {
     return s.ten.toLowerCase().includes(searchTerm.toLowerCase()) || 
            s.ma_dich_vu.toLowerCase().includes(searchTerm.toLowerCase())
   })
+
+  const totalPages = Math.ceil(filteredServices.length / ITEMS_PER_PAGE)
+  const paginatedServices = filteredServices.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 space-y-6">
@@ -76,44 +89,56 @@ export default function ServiceList() {
           <Empty title="Không có dịch vụ tương ứng" description="Vui lòng đổi từ khóa hoặc bộ lọc." icon="search" />
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredServices.map((s) => (
-            <div
-              key={s.id}
-              className="group relative flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:border-brand-100"
-            >
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded-md">
-                    {s.ma_dich_vu}
-                  </span>
+        <div className="space-y-8">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {paginatedServices.map((s) => (
+              <div
+                key={s.id}
+                className="group relative flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:border-brand-100"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded-md">
+                      {s.ma_dich_vu}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 text-left">
+                    <h3 className="font-bold text-slate-800 text-base group-hover:text-brand-600 transition-colors">
+                      {s.ten}
+                    </h3>
+                    <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">
+                      {s.mo_ta_ngan}
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-1.5 text-left">
-                  <h3 className="font-bold text-slate-800 text-base group-hover:text-brand-600 transition-colors">
-                    {s.ten}
-                  </h3>
-                  <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">
-                    {s.mo_ta_ngan}
-                  </p>
-                </div>
-              </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-900">
-                  {s.gia.toLocaleString('vi-VN')} đ
-                </span>
-                <Link
-                  to={`/dich-vu/${s.id}`}
-                  className="text-xs font-semibold text-brand-600 hover:text-brand-800 flex items-center gap-1"
-                >
-                  Xem chi tiết
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
+                <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
+                  <span className="text-sm font-bold text-slate-900">
+                    {s.gia.toLocaleString('vi-VN')} đ
+                  </span>
+                  <Link
+                    to={`/dich-vu/${s.id}`}
+                    className="text-xs font-semibold text-brand-600 hover:text-brand-800 flex items-center gap-1"
+                  >
+                    Xem chi tiết
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                </div>
               </div>
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex justify-center pt-4">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

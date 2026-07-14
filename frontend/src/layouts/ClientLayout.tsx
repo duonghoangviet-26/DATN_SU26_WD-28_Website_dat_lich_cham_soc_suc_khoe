@@ -1,11 +1,27 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { serviceService } from '@/services/service.service'
+import type { ServiceItem } from '@/types'
 
 export default function ClientLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Dịch vụ cho menu và backdrop hover
+  const [navServices, setNavServices] = useState<ServiceItem[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
+
+  useEffect(() => {
+    serviceService.getAll('related', '', 'active', 1, 100)
+      .then((res) => {
+        setNavServices(res.items)
+      })
+      .catch((err) => {
+        console.error('Không tải được danh sách dịch vụ menu:', err)
+      })
+  }, [])
 
   function handleLogout() {
     logout()
@@ -43,7 +59,7 @@ export default function ClientLayout() {
       </div>
 
       {/* 2. MAIN HEADER & NAVBAR */}
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md">
         <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-4">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5">
@@ -62,7 +78,59 @@ export default function ClientLayout() {
           <nav className="hidden lg:flex items-center gap-6">
             <NavLink to="/" className={activeClass}>Trang chủ</NavLink>
             <NavLink to="/bac-si" className={activeClass}>Đội ngũ bác sĩ</NavLink>
-            <NavLink to="/dich-vu" className={activeClass}>Dịch vụ điều trị</NavLink>
+            <div
+              onMouseEnter={() => setShowDropdown(true)}
+              onMouseLeave={() => setShowDropdown(false)}
+              className="relative py-2"
+            >
+              <NavLink to="/dich-vu" className={activeClass}>Dịch vụ điều trị</NavLink>
+
+              {showDropdown && (
+                <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2.5 w-[480px] z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-xl">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {navServices.slice(0, 6).map((service) => (
+                        <Link
+                          key={service.id}
+                          to={`/dich-vu/${service.id}`}
+                          onClick={() => setShowDropdown(false)}
+                          className="group/item flex flex-col justify-between p-3 rounded-xl border border-slate-50 hover:border-brand-100 hover:bg-brand-50/5 transition text-left"
+                        >
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-800 group-hover/item:text-brand-600 transition-colors line-clamp-1">
+                              {service.ten}
+                            </h4>
+                            <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed mt-1">
+                              {service.mo_ta_ngan || 'Dịch vụ chẩn đoán kỹ thuật chuyên sâu.'}
+                            </p>
+                          </div>
+                          <div className="flex justify-between items-center mt-2.5 pt-1.5 border-t border-slate-50">
+                            <span className="text-[10px] font-bold text-slate-650">
+                              {service.gia.toLocaleString('vi-VN')} đ
+                            </span>
+                            <span className="text-[9px] font-bold text-brand-600 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                              Xem thêm →
+                            </span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+
+                    {navServices.length > 6 && (
+                      <div className="border-t border-slate-50 mt-3 pt-2 text-center">
+                        <Link
+                          to="/dich-vu"
+                          onClick={() => setShowDropdown(false)}
+                          className="text-xs font-bold text-brand-600 hover:text-brand-800 transition"
+                        >
+                          Xem tất cả {navServices.length} dịch vụ →
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <NavLink to="/tin-tuc" className={activeClass}>Tin tức</NavLink>
             {user && <NavLink to="/profile" className={activeClass}>Hồ sơ bệnh nhân</NavLink>}
           </nav>
@@ -116,6 +184,10 @@ export default function ClientLayout() {
           </button>
         </div>
       </header>
+
+      {showDropdown && (
+        <div className="fixed inset-0 top-0 bg-slate-950/15 backdrop-blur-sm z-40 transition-opacity duration-300 pointer-events-none" />
+      )}
 
       {/* 3. MOBILE MENU DRAWER */}
       {mobileMenuOpen && (

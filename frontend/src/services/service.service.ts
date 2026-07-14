@@ -11,6 +11,7 @@ export interface PagedResult<T> {
 interface PublicHomeServiceItem {
   id: string
   ten: string
+  loai?: ServiceType
   gia: number
   mo_ta?: string | null
   mo_ta_ngan?: string | null
@@ -74,7 +75,7 @@ function mapPublicHomeService(item: PublicHomeServiceItem): ServiceItem {
     id: item.id,
     ma_dich_vu: '',
     ten: item.ten,
-    loai: 'home',
+    loai: item.loai || 'related',
     gia: item.gia,
     mo_ta: item.mo_ta ?? null,
     mo_ta_ngan: item.mo_ta_ngan ?? null,

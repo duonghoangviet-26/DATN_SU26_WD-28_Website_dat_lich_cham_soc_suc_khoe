@@ -11,6 +11,8 @@ export interface PatientBookingDoctor {
   tong_danh_gia: number
   tuoi_nhan_kham_tu: number
   tieu_su?: string | null
+  bang_cap?: string | null
+  kinh_nghiem?: string | null
   phong_kham_mac_dinh?: string | null
   specialties: { id: string; ten: string }[]
 }
@@ -107,6 +109,11 @@ export const patientBookingService = {
     return Array.isArray(res.data.data) ? res.data.data : []
   },
 
+  async getDoctorById(id: string): Promise<PatientBookingDoctor> {
+    const res = await axiosInstance.get<ApiResponse<PatientBookingDoctor>>(`/patient/booking/doctors/${id}`)
+    return res.data.data
+  },
+
   async getSlots(doctorId: string, date: string): Promise<PatientBookingSlot[]> {
     const res = await axiosInstance.get<ApiResponse<PatientBookingSlot[]>>(`/patient/booking/doctors/${doctorId}/slots`, {
       params: { date },
@@ -131,6 +138,16 @@ export const patientBookingService = {
 
   async completeMockVnpayPayment(paymentId: string): Promise<PatientPaymentStatusResult> {
     const res = await axiosInstance.post<ApiResponse<PatientPaymentStatusResult>>(`/patient/payments/${paymentId}/vnpay/mock-complete`)
+    return res.data.data
+  },
+
+  async getDoctorReviews(doctorId: string): Promise<any[]> {
+    const res = await axiosInstance.get<ApiResponse<any[]>>(`/patient/booking/doctors/${doctorId}/reviews`)
+    return res.data.data
+  },
+
+  async createDoctorReview(doctorId: string, payload: { so_sao: number; noi_dung: string }): Promise<any> {
+    const res = await axiosInstance.post<ApiResponse<any>>(`/patient/booking/doctors/${doctorId}/reviews`, payload)
     return res.data.data
   },
 
