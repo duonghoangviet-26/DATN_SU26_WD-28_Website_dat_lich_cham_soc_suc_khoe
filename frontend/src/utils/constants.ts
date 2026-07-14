@@ -156,6 +156,19 @@ export const SCHEDULE_SLOT_STATUS_COLOR: Record<string, BadgeColor> = {
     pending_payment: "yellow",
 };
 
+// Trạng thái cả NGÀY làm việc (LichLamViec.trang_thai_ngay) — khác DoctorSlot.status (từng slot).
+export const SCHEDULE_DAY_STATUS_LABEL: Record<string, string> = {
+    lam_viec: "Làm việc",
+    nghi: "Nghỉ",
+    nghi_phep: "Nghỉ phép",
+};
+
+export const SCHEDULE_DAY_STATUS_COLOR: Record<string, BadgeColor> = {
+    lam_viec: "green",
+    nghi: "gray",
+    nghi_phep: "red",
+};
+
 // Trạng thái yêu cầu nghỉ (DoctorLeaveRequest.trang_thai) — khớp STATUS_COLOR cũ trong DoctorLeaveRequests.
 export const DOCTOR_LEAVE_STATUS_COLOR: Record<string, BadgeColor> = {
     cho_duyet: "yellow",

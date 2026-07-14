@@ -1,3 +1,4 @@
+import '../config/timezone.js' // PHẢI đứng đầu tiên — ép TZ=UTC để seed ghi `ngay` cùng múi giờ với cron (GAP-8)
 import mongoose from 'mongoose'
 import dotenv from 'dotenv'
 import path from 'path'
@@ -53,10 +54,11 @@ const TEST_PATIENT_PASSWORD = 'Test123456'
 const TEST_PATIENT_NAME = 'Nguyễn Thị Hạnh (TEST)'
 const TEST_PATIENT_PHONE = '0909000097'
 
+// Chuẩn hoá về 00:00:00Z của đúng ngày lịch — độc lập múi giờ (GAP-8). Cùng công thức với
+// toScheduleDayUTC ở scheduleGenerator.service.js để seed và cron KHÔNG ghi lệch múi giờ nhau.
 function startOfDay(d) {
   const x = new Date(d)
-  x.setHours(0, 0, 0, 0)
-  return x
+  return new Date(Date.UTC(x.getFullYear(), x.getMonth(), x.getDate()))
 }
 
 // 6 ngày làm việc gần nhất kể từ hôm nay, bỏ Chủ nhật (getDay() === 0)

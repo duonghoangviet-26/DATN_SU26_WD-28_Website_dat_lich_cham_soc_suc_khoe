@@ -347,6 +347,12 @@ export default function DoctorLeaveRequests() {
                     </td>
                     <td className="px-4 py-3 align-top">
                       <Badge color={DOCTOR_LEAVE_STATUS_COLOR[r.trang_thai]}>{STATUS_LABEL[r.trang_thai]}</Badge>
+                      {/* Ghi chú xử lý của Admin — chỉ hiện khi đã duyệt/từ chối và có ghi chú */}
+                      {r.ghi_chu && (r.trang_thai === 'da_duyet' || r.trang_thai === 'tu_choi') && (
+                        <p className="mt-1 max-w-[180px] truncate text-xs text-slate-400" title={r.ghi_chu}>
+                          {r.ghi_chu}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 align-top">
                       {r.trang_thai === 'cho_duyet' && (

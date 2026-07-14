@@ -9,11 +9,7 @@ export type AppointmentStatus =
     | "confirmed"
     | "checked_in"
     | "in_progress"
-    | "checked_in"
-    | "in_progress"
     | "completed"
-    | "cancelled"
-    | "no_show";
     | "cancelled"
     | "no_show";
 export type PaymentStatus = "unpaid" | "partial" | "paid" | "refunded";
@@ -663,6 +659,10 @@ export type Schedule = DoctorSlot;
 
 // ─── Doctor Panel types (B1–B5) ───────────────────────────────
 
+// Trạng thái vận hành của cả NGÀY làm việc (LichLamViec.trang_thai_ngay) — khác với
+// DoctorSlot.status (trạng thái của TỪNG slot 30 phút bên trong ngày đó).
+export type DoctorScheduleDayStatus = "lam_viec" | "nghi" | "nghi_phep";
+
 export interface DoctorSlot {
     id: string;
     schedule_id: string; // cần để update slot qua API
@@ -682,6 +682,12 @@ export interface DoctorSlot {
         | "expired";
     lock_expires_at?: string | null; // ISO datetime — set khi pending_payment, null các trạng thái khác
     cancel_requested?: boolean;
+    // Dữ liệu cấp NGÀY, lặp lại trên mỗi slot cùng ngày — backend trả từ Prompt 2
+    // (GET /doctor/schedule). null = chưa phân công y tá (dữ liệu thật, không hardcode).
+    trang_thai_ngay?: DoctorScheduleDayStatus | null;
+    chi_nhanh_id?: string | null;
+    nurse_id?: string | null;
+    nurse?: string | null;
 }
 
 // Yêu cầu nghỉ bác sĩ tự gửi (vd: form "Xin nghỉ" hoặc nút "Gửi yêu cầu nghỉ cho
@@ -695,7 +701,83 @@ export interface DoctorLeaveRequest {
     gio_ket_thuc?: string | null;
     ly_do: string | null;
     trang_thai: "cho_duyet" | "da_duyet" | "tu_choi" | "da_huy";
+    // Ghi chú xử lý của Admin (khi duyệt/từ chối) — null nếu Admin chưa xử lý hoặc chưa ghi chú.
+    ghi_chu?: string | null;
+    thoi_diem_duyet?: string | null;
     ngay_tao?: string | null;
+    ngay_cap_nhat?: string | null;
+    // Chỉ có ở response của POST (tạo mới) — số lịch hẹn còn hiệu lực bị ảnh hưởng, tính động.
+    so_lich_hen_anh_huong?: number;
+}
+
+// 1 lịch hẹn trong danh sách "lịch hẹn thuộc ca" — GET /doctor/schedule/:scheduleId.
+// Khác DoctorAppointmentDetail (trang Lịch hẹn của tôi): đây là dữ liệu rút gọn, chỉ đủ
+// để xem nhanh trong ngữ cảnh 1 ngày làm việc, không có đủ field để thao tác (xác nhận/hủy...).
+export interface DoctorScheduleAppointmentItem {
+    id: string;
+    ma_lich_hen: string | null;
+    slot_id: string | null;
+    benh_nhan: string;
+    gio_kham: string;
+    gio_ket_thuc: string | null;
+    loai_kham: "clinic" | "home";
+    hinh_thuc_dat_lich: string | null;
+    la_khach_vang_lai: boolean;
+    chuyen_khoa: string | null;
+    ten_dich_vu: string | null;
+    status: AppointmentStatus;
+    payment_status: PaymentStatus;
+}
+
+// 1 slot trong chi tiết ca — tương tự DoctorSlot nhưng KHÔNG lặp lại field cấp ngày
+// (ngay/schedule_id/nurse/trang_thai_ngay đã nằm ở DoctorScheduleDetail cấp cha).
+export interface DoctorScheduleDetailSlot {
+    id: string;
+    gio_bat_dau: string;
+    gio_ket_thuc: string;
+    phong_kham: string | null;
+    status: DoctorSlot["status"];
+    benh_nhan_id: string | null;
+    benh_nhan: string | null;
+    lock_expires_at: string | null;
+    cancel_requested: boolean;
+    bi_khoa_boi_nghi_phep: boolean;
+}
+
+// Số liệu tổng hợp 1 ngày làm việc — GET /doctor/schedule/:scheduleId (thong_ke).
+// Tất cả đều tính động từ dữ liệu thật (backend/src/utils/appointmentStatus.js) — không có
+// trường nào là ước lượng hay mặc định.
+export interface DoctorScheduleStats {
+    tong_slot: number;
+    slot_trong: number;
+    slot_da_dat: number;
+    slot_bi_khoa: number;
+    slot_da_huy: number;
+    tong_lich_hen: number;
+    cho_kham: number;
+    da_den: number;
+    dang_kham: number;
+    cho_xac_nhan_ho_so: number;
+    cho_tiep_nhan: number;
+    hoan_thanh: number;
+    khong_den: number;
+    da_huy: number;
+    khac: number;
+    so_lich_hen_con_hieu_luc: number;
+}
+
+// Chi tiết đầy đủ 1 ngày làm việc — GET /doctor/schedule/:scheduleId.
+export interface DoctorScheduleDetail {
+    id: string;
+    ngay: string;
+    trang_thai_ngay: DoctorScheduleDayStatus | null;
+    ghi_chu_ngay: string | null;
+    chi_nhanh_id: string | null;
+    nurse_id: string | null;
+    nurse: string | null;
+    slots: DoctorScheduleDetailSlot[];
+    lich_hen: DoctorScheduleAppointmentItem[];
+    thong_ke: DoctorScheduleStats;
 }
 
 // Trạng thái xác nhận hồ sơ khám (KetQuaKham.status) — xem docs/Bác sĩ/Audit - Truong du lieu

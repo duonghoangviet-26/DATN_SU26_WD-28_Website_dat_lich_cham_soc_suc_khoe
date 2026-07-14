@@ -20,10 +20,19 @@ function isWorkingDay(date) {
   return date.getDay() !== 0
 }
 
-// Sinh lịch cho 1 bác sĩ + 1 ngày cụ thể — bỏ qua nếu đã tồn tại (idempotent)
-async function generateSlotsForDoctorDate(doctorId, date, phongMacDinh) {
-  const existing = await LichLamViec.findOne({ doctor_id: doctorId, ngay: date }).select('_id').lean()
-  if (existing) return false
+// Chuẩn hoá 1 ngày lịch về mốc 00:00:00Z (UTC-midnight của đúng ngày lịch đó) — ĐỘC LẬP múi giờ
+// tiến trình. Đây là điểm mấu chốt chống GAP-8: dù seed (+7) hay cron (UTC) gọi, kết quả luôn là
+// cùng một instant 00:00Z cho cùng một ngày → find/upsert theo {doctor_id, ngay} không bao giờ
+// tạo bản trùng. Kết hợp process.env.TZ='UTC' (src/config/timezone.js) để việc chọn "ngày nào"
+// cũng nhất quán. Xem docs/doctor-schedule-database-gap-analysis.md.
+function toScheduleDayUTC(date) {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+}
+
+// Sinh lịch cho 1 bác sĩ + 1 ngày cụ thể — CHOKE POINT DUY NHẤT ghi LichLamViec (cron, admin
+// trigger, duyệt BS mới đều đi qua đây). Idempotent theo ngày lịch (không theo instant thô).
+async function generateSlotsForDoctorDate(doctorId, rawDate, phongMacDinh) {
+  const ngay = toScheduleDayUTC(rawDate)
 
   const slots = SLOT_TIMES.map(([gio_bat_dau, gio_ket_thuc]) => ({
     gio_bat_dau,
@@ -33,14 +42,15 @@ async function generateSlotsForDoctorDate(doctorId, date, phongMacDinh) {
   }))
 
   try {
-    await LichLamViec.create({
-      doctor_id: doctorId,
-      ngay: date,
-      trang_thai_ngay: 'lam_viec',
-      ghi_chu_ngay: null,
-      slots,
-    })
-    return true
+    // Upsert idempotent: chỉ tạo slot khi CHƯA có document cho ngày đó ($setOnInsert) — không bao
+    // giờ ghi đè slot của ngày đã tồn tại. Cùng unique index {doctor_id, ngay} → an toàn cả khi
+    // 2 tiến trình chạy đồng thời (race → E11000 được nuốt, coi như đã có).
+    const res = await LichLamViec.updateOne(
+      { doctor_id: doctorId, ngay },
+      { $setOnInsert: { trang_thai_ngay: 'lam_viec', ghi_chu_ngay: null, slots } },
+      { upsert: true },
+    )
+    return res.upsertedCount > 0
   } catch (err) {
     if (err.code === 11000) return false // race condition — đã có ai tạo trước, bỏ qua
     throw err

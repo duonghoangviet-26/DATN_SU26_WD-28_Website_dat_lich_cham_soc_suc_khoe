@@ -1,5 +1,6 @@
-import { BacSi, NghiPhepBacSi } from '../../models/index.js'
+import { BacSi, NghiPhepBacSi, LichHen } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
+import { AFFECTED_BY_LEAVE_STATUSES } from '../../utils/appointmentStatus.js'
 
 // ============================================================
 // Bác sĩ gửi yêu cầu nghỉ — Routes: /api/doctor/leaves
@@ -22,8 +23,31 @@ function formatLeave(leave) {
     gio_ket_thuc: leave.gio_ket_thuc ?? null,
     ly_do: leave.ly_do ?? null,
     trang_thai: leave.trang_thai,
+    // Ghi chú xử lý của Admin (khi duyệt/từ chối) + thời điểm duyệt — dữ liệu đã có trong DB,
+    // trước đây API không trả nên bác sĩ không xem được (xem docs/doctor-schedule-*).
+    ghi_chu: leave.ghi_chu ?? null,
+    thoi_diem_duyet: leave.thoi_diem_duyet ?? null,
     ngay_tao: leave.ngay_tao ?? null,
+    ngay_cap_nhat: leave.ngay_cap_nhat ?? null,
   }
+}
+
+// Đếm số lịch hẹn CÒN HIỆU LỰC (chưa khám xong, chưa hủy) của bác sĩ trong khoảng ngày nghỉ —
+// nếu có khung giờ thì lọc thêm theo giờ khám. Chỉ ĐẾM (đọc), không lưu vào DB.
+async function demLichHenAnhHuong(docId, start, end, gio_bat_dau, gio_ket_thuc) {
+  const endNextDay = new Date(end)
+  endNextDay.setDate(endNextDay.getDate() + 1)
+
+  let list = await LichHen.find({
+    doctor_id: docId,
+    status: { $in: AFFECTED_BY_LEAVE_STATUSES },
+    ngay_kham: { $gte: start, $lt: endNextDay },
+  }).select('gio_kham').lean()
+
+  if (gio_bat_dau && gio_ket_thuc) {
+    list = list.filter((a) => a.gio_kham >= gio_bat_dau && a.gio_kham < gio_ket_thuc)
+  }
+  return list.length
 }
 
 // ─── GET /api/doctor/leaves ───────────────────────────────────────────────────
@@ -59,18 +83,42 @@ export async function createLeaveRequest(req, res) {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const startDate = new Date(tu_ngay)
+    const endDate = new Date(den_ngay)
     if (startDate < today) return fail(res, 400, 'Không thể xin nghỉ cho ngày đã qua')
+
+    // Chống gửi trùng: đã có yêu cầu đang xử lý (cho_duyet/da_duyet) trùng khoảng ngày.
+    // Xét ở mức NGÀY (không xét giờ) để chắc chắn không có 2 đơn nghỉ chồng nhau cùng đợi
+    // Admin duyệt — tinh chỉnh theo khung giờ để sau (xem docs/doctor-schedule-database-gap-analysis).
+    const trung = await NghiPhepBacSi.findOne({
+      bac_si_id: docId,
+      trang_thai: { $in: ['cho_duyet', 'da_duyet'] },
+      tu_ngay: { $lte: endDate },
+      den_ngay: { $gte: startDate },
+    }).select('_id').lean()
+    if (trung) return fail(res, 409, 'Đã có yêu cầu nghỉ đang xử lý trùng khoảng thời gian này')
+
+    const gioBatDau = gio_bat_dau?.trim() || null
+    const gioKetThuc = gio_ket_thuc?.trim() || null
+
+    // Đếm lịch hẹn bị ảnh hưởng để cảnh báo bác sĩ — không lưu vào DB, tính lại khi cần.
+    const so_lich_hen_anh_huong = await demLichHenAnhHuong(docId, startDate, endDate, gioBatDau, gioKetThuc)
 
     const leave = await NghiPhepBacSi.create({
       bac_si_id: docId,
-      tu_ngay: new Date(tu_ngay),
-      den_ngay: new Date(den_ngay),
-      gio_bat_dau: gio_bat_dau?.trim() || null,
-      gio_ket_thuc: gio_ket_thuc?.trim() || null,
+      tu_ngay: startDate,
+      den_ngay: endDate,
+      gio_bat_dau: gioBatDau,
+      gio_ket_thuc: gioKetThuc,
       ly_do: ly_do.trim(),
     })
 
-    return created(res, formatLeave(leave), 'Đã gửi yêu cầu nghỉ — chờ Admin duyệt')
+    return created(
+      res,
+      { ...formatLeave(leave), so_lich_hen_anh_huong },
+      so_lich_hen_anh_huong > 0
+        ? `Đã gửi yêu cầu nghỉ — chờ Admin duyệt. Có ${so_lich_hen_anh_huong} lịch hẹn sẽ bị ảnh hưởng.`
+        : 'Đã gửi yêu cầu nghỉ — chờ Admin duyệt',
+    )
   } catch (err) {
     return fail(res, 400, err.message)
   }

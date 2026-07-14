@@ -1,13 +1,27 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
+import Button from '@/components/common/Button'
 import Toast from '@/components/common/Toast'
+import Modal from '@/components/common/Modal'
+import Empty from '@/components/common/Empty'
 import Icon from '@/components/admin/icons'
 import { scheduleService } from '@/services/schedule.service'
 import { doctorLeaveService } from '@/services/doctor-leave.service'
-import type { DoctorSlot } from '@/types'
+import type { DoctorSlot, DoctorLeaveRequest, DoctorScheduleDetail } from '@/types'
 import { toLocalDateStr } from '@/utils/format'
-import { SCHEDULE_SLOT_STATUS_COLOR } from '@/utils/constants'
+import { parseLocalDate, getMondayOfWeek, addDays, findCoveringLeave, todayTimeStatus } from '@/utils/scheduleWeek'
+import {
+  SCHEDULE_SLOT_STATUS_COLOR,
+  SCHEDULE_DAY_STATUS_LABEL,
+  SCHEDULE_DAY_STATUS_COLOR,
+  DOCTOR_LEAVE_STATUS_COLOR,
+  APPOINTMENT_STATUS_LABEL,
+  APPOINTMENT_STATUS_COLOR,
+  PAYMENT_STATUS_LABEL,
+  PAYMENT_STATUS_COLOR,
+} from '@/utils/constants'
 
 // ─── Hằng số ──────────────────────────────────────────────────────────────────
 
@@ -15,29 +29,23 @@ const STATUS_LABEL: Record<string, string> = {
   active: 'Còn trống', booked: 'Đã đặt', locked: 'Tạm nghỉ',
   cancelled: 'Đã hủy', expired: 'Hết hạn', pending_payment: 'Đang giữ chỗ',
 }
+const LEAVE_STATUS_LABEL: Record<string, string> = {
+  cho_duyet: 'Chờ Admin duyệt', da_duyet: 'Đã duyệt nghỉ', tu_choi: 'Bị từ chối', da_huy: 'Đã rút',
+}
 const DAY_NAMES = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-// 6 ngày làm việc gần nhất kể từ hôm nay: bỏ Chủ Nhật, không lấy ngày đã qua.
-// Đi từng ngày một bắt đầu từ hôm nay — nếu gặp Chủ Nhật thì bỏ qua và ngày kế tiếp
-// được tính là Thứ 2 (của tuần sau nếu hôm nay đã qua Thứ 2 tuần này), cứ thế đến khi đủ 6 ngày.
-// Vd hôm nay Thứ Tư → Thứ Tư, Thứ Năm, Thứ Sáu, Thứ Bảy, Thứ Hai (tuần sau), Thứ Ba (tuần sau).
-function getNext6WorkingDays(todayStr: string): string[] {
-  const [y, m, d] = todayStr.split('-').map(Number)
-  const cursor = new Date(y, m - 1, d)
-  const result: string[] = []
-  while (result.length < 6) {
-    if (cursor.getDay() !== 0) result.push(toLocalDateStr(cursor))
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return result
-}
+// ─── Helpers thời gian ────────────────────────────────────────────────────────
+// getMondayOfWeek/addDays/findCoveringLeave/todayTimeStatus: xem frontend/src/utils/scheduleWeek.ts
+// (tách riêng để unit test độc lập, không phụ thuộc React).
 
 function formatDayHeader(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  const dow = new Date(y, m - 1, d).getDay()
-  return `${DAY_NAMES[dow]}  ·  ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
+  const d = parseLocalDate(dateStr)
+  return `${DAY_NAMES[d.getDay()]}  ·  ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+}
+
+function isAbortError(err: unknown): boolean {
+  const e = err as { code?: string; name?: string } | null
+  return e?.code === 'ERR_CANCELED' || e?.name === 'CanceledError'
 }
 
 // ─── Sub: Thanh chấm trạng thái slot theo ngày ────────────────────────────────
@@ -71,11 +79,128 @@ function DaySummary({ slots }: { slots: DoctorSlot[] }) {
   return <span className="text-xs text-slate-400">{parts.join(' · ') || 'Chưa có lịch'}</span>
 }
 
+// ─── Sub: Modal chi tiết 1 ngày làm việc ──────────────────────────────────────
+
+function ScheduleDetailModal({ scheduleId, onClose }: { scheduleId: string; onClose: () => void }) {
+  const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [detail, setDetail] = useState<DoctorScheduleDetail | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    setError(false)
+    scheduleService.getDetail(scheduleId, controller.signal)
+      .then(setDetail)
+      .catch((err) => { if (!isAbortError(err)) setError(true) })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [scheduleId])
+
+  const phongList = detail ? [...new Set(detail.slots.map((s) => s.phong_kham).filter((p): p is string => !!p))] : []
+
+  return (
+    <Modal isOpen onClose={onClose} title="Chi tiết ngày làm việc" size="xl">
+      {loading ? (
+        <div className="flex h-40 items-center justify-center text-slate-400">Đang tải...</div>
+      ) : error || !detail ? (
+        <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+          <Icon name="alert-circle" className="h-8 w-8 text-red-400" />
+          <p className="text-sm text-red-600">Không tải được chi tiết ca. Vui lòng thử lại sau.</p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {/* Thông tin ngày */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-slate-800">{formatDayHeader(detail.ngay)}</span>
+            {detail.trang_thai_ngay && detail.trang_thai_ngay !== 'lam_viec' && (
+              <Badge color={SCHEDULE_DAY_STATUS_COLOR[detail.trang_thai_ngay]}>
+                {SCHEDULE_DAY_STATUS_LABEL[detail.trang_thai_ngay]}
+              </Badge>
+            )}
+          </div>
+          {detail.ghi_chu_ngay && (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {detail.ghi_chu_ngay}
+            </p>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Icon name="user" className="h-4 w-4 shrink-0 text-slate-400" />
+              Y tá hỗ trợ: <span className="font-medium text-slate-800">{detail.nurse ?? 'Chưa phân công'}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Icon name="map-pin" className="h-4 w-4 shrink-0 text-slate-400" />
+              Phòng khám: <span className="font-medium text-slate-800">{phongList.length > 0 ? phongList.join(', ') : 'Chưa phân công'}</span>
+            </div>
+          </div>
+
+          {/* Thống kê rút gọn — chỉ số liệu API trả, không suy đoán */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              { label: 'Tổng lịch hẹn', value: detail.thong_ke.tong_lich_hen },
+              { label: 'Đã đến / đang khám', value: detail.thong_ke.da_den + detail.thong_ke.dang_kham },
+              { label: 'Hoàn thành', value: detail.thong_ke.hoan_thanh },
+              { label: 'Hủy / không đến', value: detail.thong_ke.da_huy + detail.thong_ke.khong_den },
+            ].map((tile) => (
+              <div key={tile.label} className="rounded-lg border border-slate-200 bg-white p-2.5 text-center">
+                <p className="text-lg font-bold text-slate-800">{tile.value}</p>
+                <p className="text-[11px] text-slate-500">{tile.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Danh sách lịch hẹn thuộc ca */}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Lịch hẹn trong ngày ({detail.lich_hen.length})
+            </p>
+            {detail.lich_hen.length === 0 ? (
+              <Empty icon="calendar" title="Chưa có lịch hẹn" description="Ngày này chưa có bệnh nhân nào đặt lịch." />
+            ) : (
+              <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                {detail.lich_hen.map((a) => (
+                  <div key={a.id} className="flex flex-wrap items-center gap-2 px-3 py-2.5 text-sm">
+                    <span className="font-semibold text-slate-700">{a.gio_kham}</span>
+                    <span className="min-w-0 flex-1 truncate text-slate-700">{a.benh_nhan}</span>
+                    {a.la_khach_vang_lai && <Badge color="gray">Khách vãng lai</Badge>}
+                    {a.ten_dich_vu && <span className="text-xs text-slate-400">{a.ten_dich_vu}</span>}
+                    <Badge color={APPOINTMENT_STATUS_COLOR[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status]}</Badge>
+                    <Badge color={PAYMENT_STATUS_COLOR[a.payment_status]}>{PAYMENT_STATUS_LABEL[a.payment_status]}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 border-t border-slate-100 pt-3">
+            <Button variant="secondary" size="sm" onClick={onClose}>Đóng</Button>
+            {detail.lich_hen.length > 0 && (
+              <Button variant="primary" size="sm" onClick={() => navigate('/doctor/appointments')}
+                icon={<Icon name="eye" className="h-3.5 w-3.5" />}>
+                Xem trong Lịch hẹn của tôi
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function DoctorSchedule() {
   const todayStr = toLocalDateStr()
-  const workingDays = useMemo(() => getNext6WorkingDays(todayStr), [todayStr])
+
+  const [weekAnchor, setWeekAnchor] = useState(() => new Date())
+  const monday = useMemo(() => getMondayOfWeek(weekAnchor), [weekAnchor])
+  const weekDays = useMemo(() => Array.from({ length: 6 }, (_, i) => toLocalDateStr(addDays(monday, i))), [monday])
+  const mondayStr = weekDays[0]
+  const saturdayStr = weekDays[5]
+  const isCurrentWeek = mondayStr === toLocalDateStr(getMondayOfWeek(new Date()))
 
   const [slots, setSlots] = useState<DoctorSlot[]>([])
   const [loading, setLoading] = useState(true)
@@ -84,42 +209,50 @@ export default function DoctorSchedule() {
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
 
+  // Yêu cầu nghỉ thật của bác sĩ — dùng để đối chiếu với từng slot (GAP-5), không phụ thuộc
+  // state RAM tạm thời. Tải 1 lần, tải lại sau khi gửi/rút yêu cầu.
+  const [leaves, setLeaves] = useState<DoctorLeaveRequest[]>([])
+  const loadLeaves = useCallback(() => {
+    doctorLeaveService.list().then(setLeaves).catch(() => {})
+  }, [])
+  useEffect(() => { loadLeaves() }, [loadLeaves])
+
+  // Modal chi tiết ngày làm việc
+  const [detailScheduleId, setDetailScheduleId] = useState<string | null>(null)
+
   // Dialog yêu cầu hủy (slot đã có bệnh nhân đặt)
   const [cancelDialog, setCancelDialog] = useState<{ slot: DoctorSlot; ly_do: string } | null>(null)
   const [cancelSubmitting, setCancelSubmitting] = useState(false)
 
-  // Dialog gửi yêu cầu nghỉ cho 1 ca
+  // Dialog gửi yêu cầu nghỉ cho 1 slot
   const [leaveDialog, setLeaveDialog] = useState<{ slot: DoctorSlot; ly_do: string } | null>(null)
   const [leaveSubmitting, setLeaveSubmitting] = useState(false)
-  // Ca đã gửi yêu cầu nghỉ trong phiên này — ẩn nút để tránh gửi trùng (chưa có field
-  // trạng thái "đã gửi yêu cầu" ở slot, xem docs/Bác sĩ/Audit - Truong du lieu thieu va thua trong DB)
-  const [leaveRequestedSlotIds, setLeaveRequestedSlotIds] = useState<Set<string>>(new Set())
+
+  // Tăng để buộc tải lại dữ liệu tuần hiện tại (nút "Thử lại" khi lỗi) — đổi weekAnchor không
+  // đủ vì mondayStr/saturdayStr (derive từ weekAnchor) không đổi khi bấm lại đúng tuần đang xem.
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
+    const controller = new AbortController()
     setLoading(true)
     setError(false)
     scheduleService
-      .getAll({ from: workingDays[0], to: workingDays[workingDays.length - 1] })
+      .getAll({ from: mondayStr, to: saturdayStr }, controller.signal)
       .then(setSlots)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
-  }, [workingDays])
+      .catch((err) => { if (!isAbortError(err)) setError(true) })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [mondayStr, saturdayStr, reloadKey])
 
-  // Nhóm slot theo ngày — chỉ giữ đúng 6 ngày làm việc đã tính (phòng vệ nếu backend trả dư,
-  // vd do khoảng from-to trải dài hơn 6 ngày lịch khi vắt qua Chủ Nhật).
   const slotsByDate = useMemo(() => {
-    const validDates = new Set(workingDays)
     const map: Record<string, DoctorSlot[]> = {}
     slots.forEach((s) => {
-      if (!validDates.has(s.ngay)) return
       if (!map[s.ngay]) map[s.ngay] = []
       map[s.ngay].push(s)
     })
     Object.values(map).forEach((arr) => arr.sort((a, b) => a.gio_bat_dau.localeCompare(b.gio_bat_dau)))
     return map
-  }, [slots, workingDays])
-
-  const hasAnySlot = slots.some((s) => workingDays.includes(s.ngay))
+  }, [slots])
 
   function toggleDate(date: string) {
     setExpandedDates((prev) => {
@@ -161,10 +294,14 @@ export default function DoctorSchedule() {
     setLeaveSubmitting(true)
     try {
       const { slot, ly_do } = leaveDialog
-      await doctorLeaveService.create(slot.ngay, slot.ngay, ly_do, slot.gio_bat_dau, slot.gio_ket_thuc)
-      setLeaveRequestedSlotIds((prev) => new Set(prev).add(slot.id))
+      const created = await doctorLeaveService.create(slot.ngay, slot.ngay, ly_do, slot.gio_bat_dau, slot.gio_ket_thuc)
       setLeaveDialog(null)
-      showSuccess('Đã gửi yêu cầu nghỉ tới Admin. Chờ duyệt.')
+      loadLeaves() // tải lại danh sách thật — nút "Gửi yêu cầu nghỉ" sẽ tự ẩn nhờ đối chiếu (GAP-5)
+      showSuccess(
+        created.so_lich_hen_anh_huong && created.so_lich_hen_anh_huong > 0
+          ? `Đã gửi yêu cầu nghỉ tới Admin. Có ${created.so_lich_hen_anh_huong} lịch hẹn sẽ bị ảnh hưởng.`
+          : 'Đã gửi yêu cầu nghỉ tới Admin. Chờ duyệt.'
+      )
     } catch (err) { showError((err as Error).message) }
     finally { setLeaveSubmitting(false) }
   }
@@ -175,8 +312,26 @@ export default function DoctorSchedule() {
     <div>
       <PageHeader
         title="Lịch làm việc"
-        description="6 ngày làm việc gần nhất (bỏ Chủ Nhật, không tính ngày đã qua). Lịch do hệ thống tự sinh — bạn chỉ có thể xem và gửi yêu cầu nghỉ."
-      />
+        description="Lịch làm việc theo tuần — do hệ thống tự sinh, bạn chỉ có thể xem và gửi yêu cầu nghỉ."
+      >
+        <div className="flex items-center gap-1.5">
+          <Button variant="secondary" size="sm" onClick={() => setWeekAnchor(addDays(monday, -7))}
+            icon={<Icon name="chevron-down" className="h-3.5 w-3.5 rotate-90" />}>
+            Tuần trước
+          </Button>
+          <Button variant={isCurrentWeek ? 'secondary' : 'primary'} size="sm" onClick={() => setWeekAnchor(new Date())}>
+            Hôm nay
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setWeekAnchor(addDays(monday, 7))}
+            icon={<Icon name="chevron-down" className="h-3.5 w-3.5 -rotate-90" />}>
+            Tuần sau
+          </Button>
+        </div>
+      </PageHeader>
+
+      <p className="-mt-4 mb-4 text-sm font-medium text-slate-500">
+        Tuần {formatDayHeader(mondayStr).split('  ·  ')[1]} – {formatDayHeader(saturdayStr).split('  ·  ')[1]}
+      </p>
 
       {/* Toast thông báo góc phải */}
       {actionError && (
@@ -192,45 +347,80 @@ export default function DoctorSchedule() {
         <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-red-200 bg-red-50">
           <Icon name="alert-circle" className="h-8 w-8 text-red-400" />
           <p className="text-sm font-medium text-red-600">Không tải được lịch làm việc. Vui lòng thử lại sau.</p>
+          <Button variant="secondary" size="sm" onClick={() => setReloadKey((k) => k + 1)}>Thử lại</Button>
         </div>
-      ) : !hasAnySlot ? (
+      ) : slots.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-white">
           <Icon name="calendar" className="h-8 w-8 text-slate-300" />
-          <p className="text-sm text-slate-500">Chưa có lịch làm việc cho 6 ngày tới. Liên hệ Admin để thiết lập.</p>
+          <p className="text-sm text-slate-500">Tuần này chưa có lịch làm việc. Liên hệ Admin để thiết lập.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {workingDays.map((date) => {
+          {weekDays.map((date) => {
             const daySlots = slotsByDate[date] ?? []
             const isToday = date === todayStr
+            const isPastDay = date < todayStr
             const isExpanded = expandedDates.has(date)
+
+            // Bất thường dữ liệu THẬT phát hiện được (không phải lỗi FE): 1 ngày có thể có
+            // >1 document LichLamViec (schedule_id khác nhau) — unique index {doctor_id, ngay}
+            // không bắt được vì 2 document có Date instant khác nhau dù cùng ngày lịch, rất có
+            // thể do seed script và cron scheduleGenerator cùng tự sinh 1 ngày độc lập nhau.
+            // KHÔNG tự đoán bản ghi nào "đúng" — hiển thị trung thực + cảnh báo, để riêng từng
+            // bản ghi trong "Chi tiết" thay vì gộp/chọn đại 1 bản. Đây là vấn đề DATABASE, ghi
+            // vào docs/doctor-schedule-database-gap-analysis.md, không tự sửa ở đây.
+            const distinctScheduleIds = [...new Set(daySlots.map((s) => s.schedule_id))]
+            const hasDataAnomaly = distinctScheduleIds.length > 1
+
+            const dayStatus = !hasDataAnomaly ? (daySlots[0]?.trang_thai_ngay ?? null) : null
+            // Không coalesce về null — cần phân biệt "không có lịch ngày này" (undefined, ẩn dòng y tá)
+            // với "có lịch nhưng chưa phân công y tá" (null, hiện "Chưa phân công y tá"). Khi có
+            // bất thường (nhiều document), không khẳng định 1 y tá duy nhất — ẩn dòng này.
+            const nurseName = !hasDataAnomaly ? daySlots[0]?.nurse : undefined
+            const timeStatus = isToday ? todayTimeStatus(daySlots) : null
+            const scheduleId = !hasDataAnomaly ? (daySlots[0]?.schedule_id ?? null) : null
 
             return (
               <div key={date} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                {/* ── Header ngày (clickable) ─────────────────────────── */}
+                {/* ── Header ngày — div chứa các nút anh em (không lồng button trong button) ── */}
+                <div className="flex w-full items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50">
                 <button
                   type="button"
                   onClick={() => toggleDate(date)}
-                  className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-slate-50"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
-                    isToday ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-600'
+                    isToday ? 'bg-brand-500 text-white' : isPastDay ? 'bg-slate-100 text-slate-400' : 'bg-slate-100 text-slate-600'
                   }`}>
                     {date.split('-')[2]}
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold text-slate-800">{formatDayHeader(date)}</span>
                       {isToday && (
                         <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-600">
                           Hôm nay
                         </span>
                       )}
+                      {timeStatus && <Badge color={timeStatus.color}>{timeStatus.label}</Badge>}
+                      {isPastDay && <Badge color="gray">Đã qua — chỉ xem</Badge>}
+                      {dayStatus && dayStatus !== 'lam_viec' && (
+                        <Badge color={SCHEDULE_DAY_STATUS_COLOR[dayStatus]}>{SCHEDULE_DAY_STATUS_LABEL[dayStatus]}</Badge>
+                      )}
+                      {hasDataAnomaly && (
+                        <Badge color="red">⚠ {distinctScheduleIds.length} bản ghi trùng ngày — cần Admin kiểm tra</Badge>
+                      )}
                     </div>
-                    <div className="mt-1 flex items-center gap-3">
+                    <div className="mt-1 flex flex-wrap items-center gap-3">
                       <DaySummary slots={daySlots} />
                       <DotBar slots={daySlots} />
+                      {nurseName !== undefined && (
+                        <span className="flex items-center gap-1 text-xs text-slate-400">
+                          <Icon name="user" className="h-3 w-3" />
+                          {nurseName ?? 'Chưa phân công y tá'}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -240,14 +430,65 @@ export default function DoctorSchedule() {
                   />
                 </button>
 
+                {scheduleId && (
+                  <button
+                    type="button"
+                    onClick={() => setDetailScheduleId(scheduleId)}
+                    className="hidden shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 sm:inline-flex"
+                  >
+                    <Icon name="file-text" className="h-3 w-3" /> Chi tiết
+                  </button>
+                )}
+                {/* Bất thường (>1 bản ghi/ngày): không đoán bản ghi nào đúng — cho xem riêng
+                    từng bản ghi thay vì gộp hoặc chọn đại 1 bản. */}
+                {hasDataAnomaly && (
+                  <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+                    {distinctScheduleIds.map((id, i) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setDetailScheduleId(id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
+                      >
+                        <Icon name="file-text" className="h-3 w-3" /> Bản ghi {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                </div>
+
                 {/* ── Danh sách slot ───────────────────────────────────── */}
                 {isExpanded && (
                   <div className="border-t border-slate-100 divide-y divide-slate-50">
+                    {scheduleId && (
+                      <button
+                        type="button"
+                        onClick={() => setDetailScheduleId(scheduleId)}
+                        className="flex w-full items-center gap-1.5 px-5 py-2 text-xs font-semibold text-brand-600 hover:bg-brand-50 sm:hidden"
+                      >
+                        <Icon name="file-text" className="h-3.5 w-3.5" /> Xem chi tiết ngày này
+                      </button>
+                    )}
+                    {hasDataAnomaly && (
+                      <div className="flex flex-wrap items-center gap-2 bg-red-50 px-5 py-2 sm:hidden">
+                        <span className="text-xs font-medium text-red-600">⚠ {distinctScheduleIds.length} bản ghi trùng ngày:</span>
+                        {distinctScheduleIds.map((id, i) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setDetailScheduleId(id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-0.5 text-xs font-semibold text-red-600 hover:bg-red-100"
+                          >
+                            Bản ghi {i + 1}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {daySlots.length === 0 ? (
-                      <p className="px-5 py-4 text-sm text-slate-400">Chưa có lịch cho ngày này.</p>
+                      <p className="px-5 py-4 text-sm text-slate-400">Không có ca làm việc cho ngày này.</p>
                     ) : daySlots.map((slot) => {
-                      const canRequestLeave = slot.status === 'active' && !leaveRequestedSlotIds.has(slot.id)
-                      const leaveRequested = slot.status === 'active' && leaveRequestedSlotIds.has(slot.id)
+                      const coveringLeave = slot.status === 'active' ? findCoveringLeave(slot, leaves) : undefined
+                      const canRequestLeave = slot.status === 'active' && !isPastDay && !coveringLeave
 
                       return (
                         <div key={slot.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
@@ -269,14 +510,15 @@ export default function DoctorSchedule() {
                             )}
                           </span>
 
-                          {/* Y tá hỗ trợ — hệ thống chưa có module gán y tá cho ca làm việc */}
-                          <span className="flex items-center gap-1 text-xs text-slate-400">
-                            <Icon name="user" className="h-3 w-3 shrink-0" />
-                            Chưa phân công y tá
-                          </span>
-
                           {/* Badge trạng thái */}
                           <Badge color={SCHEDULE_SLOT_STATUS_COLOR[slot.status]}>{STATUS_LABEL[slot.status]}</Badge>
+
+                          {/* Đánh dấu slot thuộc bản ghi nào khi 1 ngày có >1 document (bất thường dữ liệu) */}
+                          {hasDataAnomaly && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400">
+                              Bản ghi {distinctScheduleIds.indexOf(slot.schedule_id) + 1}
+                            </span>
+                          )}
 
                           {/* Tên bệnh nhân */}
                           {slot.benh_nhan && (
@@ -286,36 +528,38 @@ export default function DoctorSchedule() {
                             </span>
                           )}
 
-                          {/* Nút hành động */}
-                          <div className="ml-auto flex items-center gap-2">
-                            {canRequestLeave && (
-                              <button
-                                onClick={() => setLeaveDialog({ slot, ly_do: '' })}
-                                className="inline-flex items-center gap-1 rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-semibold text-yellow-700 hover:bg-yellow-100"
-                              >
-                                <Icon name="calendar" className="h-3 w-3" /> Gửi yêu cầu nghỉ
-                              </button>
-                            )}
-                            {leaveRequested && (
-                              <span className="inline-flex cursor-default items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-500">
-                                <Icon name="clock" className="h-3 w-3" /> Chờ Admin duyệt
-                              </span>
-                            )}
-                            {slot.status === 'booked' && (
-                              slot.cancel_requested ? (
-                                <span className="inline-flex cursor-default items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-500">
-                                  <Icon name="clock" className="h-3 w-3" /> Chờ Admin duyệt
-                                </span>
-                              ) : (
+                          {/* Nút hành động — ẩn hoàn toàn với ngày đã qua (chỉ xem) */}
+                          {!isPastDay && (
+                            <div className="ml-auto flex items-center gap-2">
+                              {canRequestLeave && (
                                 <button
-                                  onClick={() => setCancelDialog({ slot, ly_do: '' })}
-                                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
+                                  onClick={() => setLeaveDialog({ slot, ly_do: '' })}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-semibold text-yellow-700 hover:bg-yellow-100"
                                 >
-                                  <Icon name="alert-circle" className="h-3 w-3" /> Yêu cầu hủy
+                                  <Icon name="calendar" className="h-3 w-3" /> Gửi yêu cầu nghỉ
                                 </button>
-                              )
-                            )}
-                          </div>
+                              )}
+                              {coveringLeave && (
+                                <span className="inline-flex cursor-default items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-500">
+                                  <Icon name="clock" className="h-3 w-3" /> {LEAVE_STATUS_LABEL[coveringLeave.trang_thai]}
+                                </span>
+                              )}
+                              {slot.status === 'booked' && (
+                                slot.cancel_requested ? (
+                                  <span className="inline-flex cursor-default items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-500">
+                                    <Icon name="clock" className="h-3 w-3" /> Chờ Admin duyệt
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => setCancelDialog({ slot, ly_do: '' })}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
+                                  >
+                                    <Icon name="alert-circle" className="h-3 w-3" /> Yêu cầu hủy
+                                  </button>
+                                )
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -325,6 +569,11 @@ export default function DoctorSchedule() {
             )
           })}
         </div>
+      )}
+
+      {/* ── Modal chi tiết ngày làm việc ──────────────────────────────────────── */}
+      {detailScheduleId && (
+        <ScheduleDetailModal scheduleId={detailScheduleId} onClose={() => setDetailScheduleId(null)} />
       )}
 
       {/* ── Dialog gửi yêu cầu nghỉ cho 1 ca ─────────────────────────────────── */}
@@ -345,6 +594,7 @@ export default function DoctorSchedule() {
 
             <div className="mb-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               Yêu cầu sẽ được gửi tới Admin duyệt. Ca chỉ được đánh dấu "Tạm nghỉ" sau khi Admin đồng ý.
+              Gửi yêu cầu không tự hủy lịch hẹn nào của bệnh nhân.
             </div>
 
             <div className="mt-4">
