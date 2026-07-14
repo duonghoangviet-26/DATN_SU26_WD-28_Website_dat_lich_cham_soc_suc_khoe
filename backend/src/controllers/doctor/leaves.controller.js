@@ -86,19 +86,27 @@ export async function createLeaveRequest(req, res) {
     const endDate = new Date(den_ngay)
     if (startDate < today) return fail(res, 400, 'Không thể xin nghỉ cho ngày đã qua')
 
-    // Chống gửi trùng: đã có yêu cầu đang xử lý (cho_duyet/da_duyet) trùng khoảng ngày.
-    // Xét ở mức NGÀY (không xét giờ) để chắc chắn không có 2 đơn nghỉ chồng nhau cùng đợi
-    // Admin duyệt — tinh chỉnh theo khung giờ để sau (xem docs/doctor-schedule-database-gap-analysis).
-    const trung = await NghiPhepBacSi.findOne({
+    const gioBatDau = gio_bat_dau?.trim() || null
+    const gioKetThuc = gio_ket_thuc?.trim() || null
+
+    // Chống gửi trùng: xét theo KHUNG GIỜ giao nhau, không còn chặn cả ngày như trước —
+    // cho phép nhiều đơn nghỉ theo ca khác giờ trong cùng 1 ngày (khớp nút "Gửi yêu cầu nghỉ"
+    // theo từng slot ở trang Lịch làm việc). Nếu 1 trong 2 đơn là "cả ngày" (không gio_*) thì
+    // luôn coi là trùng vì phạm vi cả ngày bao trùm mọi khung giờ.
+    const overlappingCandidates = await NghiPhepBacSi.find({
       bac_si_id: docId,
       trang_thai: { $in: ['cho_duyet', 'da_duyet'] },
       tu_ngay: { $lte: endDate },
       den_ngay: { $gte: startDate },
-    }).select('_id').lean()
-    if (trung) return fail(res, 409, 'Đã có yêu cầu nghỉ đang xử lý trùng khoảng thời gian này')
+    }).select('gio_bat_dau gio_ket_thuc').lean()
 
-    const gioBatDau = gio_bat_dau?.trim() || null
-    const gioKetThuc = gio_ket_thuc?.trim() || null
+    const trung = overlappingCandidates.some((existing) => {
+      const existingIsFullDay = !existing.gio_bat_dau || !existing.gio_ket_thuc
+      const newIsFullDay = !gioBatDau || !gioKetThuc
+      if (existingIsFullDay || newIsFullDay) return true
+      return gioBatDau < existing.gio_ket_thuc && gioKetThuc > existing.gio_bat_dau
+    })
+    if (trung) return fail(res, 409, 'Đã có yêu cầu nghỉ đang xử lý trùng khung giờ này')
 
     // Đếm lịch hẹn bị ảnh hưởng để cảnh báo bác sĩ — không lưu vào DB, tính lại khi cần.
     const so_lich_hen_anh_huong = await demLichHenAnhHuong(docId, startDate, endDate, gioBatDau, gioKetThuc)
