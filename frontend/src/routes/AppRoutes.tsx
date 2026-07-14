@@ -10,6 +10,7 @@ import ReceptionistLayout from '@/pages/receptionist/Layout'
 import ReceptionistDashboard from '@/pages/receptionist/Dashboard'
 import ReceptionistAppointments from '@/pages/receptionist/Appointments'
 import ReceptionistPayments from '@/pages/receptionist/Payments'
+import ReceptionistBooking from '@/pages/receptionist/Booking'
 
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
@@ -113,6 +114,7 @@ export default function AppRoutes() {
         <Route index element={<ReceptionistDashboard />} />
         <Route path="appointments" element={<ReceptionistAppointments />} />
         <Route path="payments" element={<ReceptionistPayments />} />
+        <Route path="booking" element={<ReceptionistBooking />} />
       </Route>
 
       {/* Khu vực Doctor — yêu cầu role = doctor */}
