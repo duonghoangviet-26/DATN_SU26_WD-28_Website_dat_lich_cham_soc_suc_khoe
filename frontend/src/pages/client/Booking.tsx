@@ -410,19 +410,6 @@ export default function Booking() {
     }
   }
 
-  function handleUpdateProfile(event: React.FormEvent) {
-    event.preventDefault()
-    if (!user) return
-
-    const updatedUser = {
-      ...user,
-      ho_ten: hoTen,
-      so_dien_thoai: soDienThoai,
-    }
-    localStorage.setItem('user', JSON.stringify(updatedUser))
-    setToast('Cập nhật hồ sơ thông tin cá nhân thành công.')
-  }
-
   function handleDateChange(dateValue: string) {
     const today = new Date()
     const yyyy = today.getFullYear()
