@@ -410,6 +410,33 @@ export default function Booking() {
     }
   }
 
+  function handleUpdateProfile(event: React.FormEvent) {
+    event.preventDefault()
+    if (!user) return
+
+    const updatedUser = {
+      ...user,
+      ho_ten: hoTen,
+      so_dien_thoai: soDienThoai,
+    }
+    localStorage.setItem('user', JSON.stringify(updatedUser))
+    setToast('Cập nhật hồ sơ thông tin cá nhân thành công.')
+  }
+
+  function handleDateChange(dateValue: string) {
+    const today = new Date()
+    const yyyy = today.getFullYear()
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const dd = String(today.getDate()).padStart(2, '0')
+    const todayStr = `${yyyy}-${mm}-${dd}`
+
+    if (dateValue < todayStr) {
+      setToast('Không được chọn ngày khám trong quá khứ.')
+      return
+    }
+    setSelectedDate(dateValue)
+  }
+
   async function handleMockCompletePayment() {
     if (!createdBooking?.payment_id) return
 
@@ -537,8 +564,26 @@ export default function Booking() {
 
       {step === 2 && (
         <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
-          <div className="space-y-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn ngày khám</label>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-3">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn ngày khám</label>
+              
+              {/* Chọn ngày từ lịch */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-semibold">Hoặc chọn ngày khác:</span>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  min={(() => {
+                    const d = new Date()
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                  })()}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none bg-white transition cursor-pointer"
+                />
+              </div>
+            </div>
+
             <div className="flex gap-2 overflow-x-auto pb-2">
               {dates.map((date) => (
                 <button
