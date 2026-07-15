@@ -81,6 +81,7 @@ export default function Booking() {
 
   const [dates, setDates] = useState<{ value: string; label: string }[]>([])
   const [doctors, setDoctors] = useState<PatientBookingDoctor[]>([])
+  const [doctorSearch, setDoctorSearch] = useState('')
   const [slots, setSlots] = useState<PatientBookingSlot[]>([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [loadingSlots, setLoadingSlots] = useState(false)
@@ -110,6 +111,12 @@ export default function Booking() {
       setSelectedDate(datesList[0].value)
     }
   }, [])
+
+  const filteredDoctors = doctors.filter((doc) => {
+    const matchesName = doc.ho_ten.toLowerCase().includes(doctorSearch.toLowerCase())
+    const matchesSpecialty = doc.specialties.some((s) => s.ten.toLowerCase().includes(doctorSearch.toLowerCase()))
+    return matchesName || matchesSpecialty
+  })
 
   useEffect(() => {
     if (user) {
@@ -462,13 +469,36 @@ export default function Booking() {
 
       {step === 1 && (
         <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
-          <div className="space-y-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn bác sĩ phụ trách</label>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-3">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn bác sĩ phụ trách</label>
+              
+              {/* Ô tìm kiếm bác sĩ */}
+              {doctors.length > 0 && (
+                <div className="relative w-full sm:w-72">
+                  <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Tìm theo tên bác sĩ"
+                    value={doctorSearch}
+                    onChange={(e) => setDoctorSearch(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 pl-9 pr-4 py-1.5 text-xs focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none bg-white transition"
+                  />
+                </div>
+              )}
+            </div>
+
             {doctors.length === 0 ? (
               <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Hiện chưa có bác sĩ khả dụng để đặt lịch.</p>
+            ) : filteredDoctors.length === 0 ? (
+              <p className="rounded-xl bg-slate-50 px-4 py-6 text-xs text-slate-400 text-center">Không tìm thấy bác sĩ phù hợp với từ khóa tìm kiếm.</p>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
-                {doctors.map((doctor) => (
+                {filteredDoctors.map((doctor) => (
                   <button
                     key={doctor.id}
                     type="button"
