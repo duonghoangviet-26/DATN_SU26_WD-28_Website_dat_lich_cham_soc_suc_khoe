@@ -231,8 +231,21 @@ export async function getSlots(req, res) {
 
     if (!schedule) return ok(res, [])
 
+    // Lấy các lịch hẹn hợp lệ (chưa bị hủy) của bác sĩ trong ngày này
+    const bookedAppointments = await LichHen.find({
+      doctor_id: doc._id,
+      ngay_kham: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
+      status: { $ne: 'cancelled' },
+    }).select('slot_id').lean()
+
+    const bookedSlotIds = new Set(
+      bookedAppointments
+        .filter((app) => app.slot_id)
+        .map((app) => app.slot_id.toString())
+    )
+
     const slots = schedule.slots
-      .filter((s) => s.status === 'active')
+      .filter((s) => s.status === 'active' && !s.benh_nhan_id && !bookedSlotIds.has(s._id.toString()))
       .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
       .map((s) => ({
         id:          s._id,
