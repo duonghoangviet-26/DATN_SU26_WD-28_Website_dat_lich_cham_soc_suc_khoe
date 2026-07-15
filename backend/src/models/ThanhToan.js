@@ -54,7 +54,7 @@ const paymentSchema = new mongoose.Schema(
     },
     thoi_diem_thanh_toan: {
       type: Date,
-      default: Date.now,
+      default: null,
     },
     gateway_transaction_id: {
       type: String,

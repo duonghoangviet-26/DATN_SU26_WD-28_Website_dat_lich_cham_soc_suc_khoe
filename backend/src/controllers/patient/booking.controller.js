@@ -3,7 +3,48 @@ import {
   BacSi, LichLamViec, LichHen,
   ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan, DanhGia,
 } from '../../models/index.js'
+import {
+  cancelAppointmentWithPaymentSync,
+  withOptionalTransaction,
+} from '../../services/bookingPaymentState.service.js'
 import { ok, created, fail } from '../../utils/response.js'
+
+const PAYMENT_HOLD_MINUTES = Number(process.env.PAYMENT_HOLD_MINUTES || process.env.VNPAY_SESSION_MINUTES || 15)
+
+function getPaymentDeadline(now = new Date()) {
+  return new Date(now.getTime() + PAYMENT_HOLD_MINUTES * 60 * 1000)
+}
+
+function parseDateOnly(value) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  date.setUTCHours(0, 0, 0, 0)
+  return date
+}
+
+function addDays(date, days) {
+  return new Date(date.getTime() + days * 86400000)
+}
+
+function getTodayDateOnly() {
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  return today
+}
+
+function buildSlotDateTime(dateOnly, hhmm) {
+  const [hours, minutes] = String(hhmm || '').split(':').map(Number)
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
+  const dateTime = new Date(dateOnly)
+  dateTime.setUTCHours(hours, minutes, 0, 0)
+  return dateTime
+}
+
+function isSlotInPast(dateOnly, slotStart, now = new Date()) {
+  const slotDateTime = buildSlotDateTime(dateOnly, slotStart)
+  return !slotDateTime || slotDateTime.getTime() <= now.getTime()
+}
 
 // ============================================================
 // A5 — Đặt lịch khám (Bệnh nhân)
@@ -172,22 +213,27 @@ export async function getSlots(req, res) {
     const { date } = req.query
     if (!date) return fail(res, 400, 'Tham số date là bắt buộc (YYYY-MM-DD)')
 
-    const doc = await BacSi.findOne({ _id: req.params.id, trang_thai_duyet: 'approved' })
+    const doc = await BacSi.findOne({ _id: req.params.id, trang_thai_duyet: 'approved', la_hien: true })
       .select('_id').lean()
     if (!doc) return fail(res, 404, 'Không tìm thấy bác sĩ')
 
-    const ngayDate = new Date(date)
+    const ngayDate = parseDateOnly(date)
+    if (!ngayDate) return fail(res, 400, 'Ngay khong hop le')
+    if (ngayDate.getTime() < getTodayDateOnly().getTime()) return ok(res, [])
     if (isNaN(ngayDate)) return fail(res, 400, 'Ngày không hợp lệ')
 
     const schedule = await LichLamViec.findOne({
       doctor_id: doc._id,
-      ngay: { $gte: ngayDate, $lt: new Date(ngayDate.getTime() + 86400000) },
+      ngay: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
+      trang_thai_ngay: 'lam_viec',
+      trang_thai_xac_nhan: { $ne: 'tu_choi' },
     }).lean()
 
     if (!schedule) return ok(res, [])
 
     const slots = schedule.slots
       .filter((s) => s.status === 'active')
+      .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
       .map((s) => ({
         id:          s._id,
         schedule_id: schedule._id,
@@ -229,6 +275,9 @@ export async function createBooking(req, res) {
     // clinic: bắt buộc chọn bác sĩ cụ thể. home: KHÔNG chọn bác sĩ lúc đặt —
     // đây là dịch vụ lấy mẫu xét nghiệm tại nhà, CSKH gán nhân viên sau khi thanh toán
     // (xem docs/superpowers/specs/2026-07-02-home-service-redesign.md mục 2.5).
+    const appointmentDate = parseDateOnly(ngay_kham)
+    if (!appointmentDate) return rollbackFail(400, 'Ngay kham khong hop le')
+
     let doc = null
     if (loai_kham === 'clinic') {
       if (!doctor_id) return rollbackFail(400, 'Bác sĩ là bắt buộc')
@@ -246,6 +295,7 @@ export async function createBooking(req, res) {
       if (!member) return rollbackFail(404, 'Không tìm thấy thành viên trong gia đình')
     }
 
+    const paymentDeadline = getPaymentDeadline()
     let gia_kham, ten_dich_vu, phong_kham = null, gio_dat
     let chi_nhanh_id = null
     let specialty_id = null
@@ -257,15 +307,47 @@ export async function createBooking(req, res) {
       }
 
       // Atomic claim slot để tránh double-booking
+      const scheduleForValidation = await LichLamViec.findOne({
+        _id: schedule_id,
+        doctor_id: doc._id,
+        ngay: { $gte: appointmentDate, $lt: addDays(appointmentDate, 1) },
+        trang_thai_ngay: 'lam_viec',
+        trang_thai_xac_nhan: { $ne: 'tu_choi' },
+      }).session(session)
+
+      if (!scheduleForValidation) {
+        return rollbackFail(400, 'Lich lam viec khong hop le cho ngay kham da chon')
+      }
+
+      const slotForValidation = scheduleForValidation.slots.id(slot_id)
+      if (!slotForValidation) {
+        return rollbackFail(400, 'Khung gio khong thuoc lich lam viec da chon')
+      }
+      if (slotForValidation.status !== 'active' || slotForValidation.benh_nhan_id) {
+        return rollbackFail(409, 'Slot da duoc dat, vui long chon khung gio khac')
+      }
+      if (isSlotInPast(appointmentDate, slotForValidation.gio_bat_dau)) {
+        return rollbackFail(400, 'Khung gio da qua, vui long chon khung gio khac')
+      }
+
       const updated = await LichLamViec.findOneAndUpdate(
         {
           _id:                  schedule_id,
           doctor_id:            doc._id,
+          ngay: { $gte: appointmentDate, $lt: addDays(appointmentDate, 1) },
+          trang_thai_ngay: 'lam_viec',
+          trang_thai_xac_nhan: { $ne: 'tu_choi' },
           'slots._id':          slot_id,
           'slots.status':       'active',
           'slots.benh_nhan_id': null,
         },
-        { $set: { 'slots.$.status': 'pending_payment', 'slots.$.benh_nhan_id': req.user.id } },
+        {
+          $set: {
+            'slots.$.status': 'pending_payment',
+            'slots.$.benh_nhan_id': req.user.id,
+            'slots.$.pending_expired_at': paymentDeadline,
+          },
+        },
         { new: true, session },
       )
       if (!updated) return rollbackFail(409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
@@ -312,13 +394,14 @@ export async function createBooking(req, res) {
       specialty_id,
       ma_lich_hen:  appointmentCode,
       loai_kham,
-      ngay_kham:    new Date(ngay_kham),
+      ngay_kham:    appointmentDate,
       gio_kham:     gio_dat,
       ly_do_kham:   ly_do_kham?.trim() || null,
       phong_kham:   loai_kham === 'clinic' ? phong_kham   : null,
       dia_chi_kham: loai_kham === 'home'   ? dia_chi_kham.trim() : null,
       status:         'pending',
       payment_status: 'unpaid',
+      payment_deadline: paymentDeadline,
       gia_kham,
       ten_dich_vu,
       ten_khach:           ten_khach           || null,
@@ -413,18 +496,27 @@ export async function cancelBooking(req, res) {
       }
     }
 
-    if (a.schedule_id && a.slot_id) {
-      await LichLamViec.findOneAndUpdate(
-        { _id: a.schedule_id, 'slots._id': a.slot_id },
-        { $set: { 'slots.$.status': 'active', 'slots.$.benh_nhan_id': null } },
-      )
-    }
+    const reason = req.body.ly_do?.trim() || 'Benh nhan huy lich'
+    const { appointment } = await withOptionalTransaction((session) =>
+      cancelAppointmentWithPaymentSync({
+        appointmentId: a._id,
+        actorUserId: req.user.id,
+        actorRole: 'user',
+        channel: 'patient_cancel',
+        reason,
+        session,
+      })
+    )
 
+    return ok(res, { id: appointment._id, status: appointment.status, payment_status: appointment.payment_status }, 'Da huy lich hen')
+
+    /*
     a.status          = 'cancelled'
     a.ly_do_huy       = req.body.ly_do?.trim() || 'Bệnh nhân hủy lịch'
     a.payment_deadline = null
     if (a.payment_status === 'paid') a.payment_status = 'refunded'
     await a.save()
+    */
 
     return ok(res, { id: a._id, status: a.status, payment_status: a.payment_status }, 'Đã hủy lịch hẹn')
   } catch (err) {
