@@ -240,6 +240,10 @@ export default function ReceptionistBooking() {
         setToast('Họ tên và số điện thoại liên hệ là bắt buộc.')
         return
       }
+      if (!/^\d{10}$/.test(patientPhone.trim())) {
+        setToast('Số điện thoại phải bao gồm đúng 10 chữ số.')
+        return
+      }
       setStep(4)
     }
   }
