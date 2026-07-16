@@ -28,6 +28,8 @@ export default function Login() {
         navigate(from?.startsWith('/receptionist') ? from : '/receptionist', { replace: true })
       } else if (user.role === 'doctor') {
         navigate(from?.startsWith('/doctor') ? from : '/doctor', { replace: true })
+      } else if (user.role === 'nurse') {
+        navigate(from?.startsWith('/nurse') ? from : '/nurse', { replace: true })
       } else {
         navigate(from || '/', { replace: true })
       }

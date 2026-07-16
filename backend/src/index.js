@@ -1,3 +1,4 @@
+import './config/timezone.js' // PHẢI đứng đầu tiên — ép TZ=UTC trước mọi Date (GAP-8)
 import 'dotenv/config'
 import mongoose from 'mongoose'
 

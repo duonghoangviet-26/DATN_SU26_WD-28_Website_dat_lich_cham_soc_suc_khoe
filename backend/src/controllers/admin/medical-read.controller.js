@@ -51,17 +51,22 @@ function formatSpecialtyResult(result) {
 }
 
 function formatPrescription(prescription) {
+  // medical_record_id thực chất là _id của KetQuaKham (xem model DonThuoc.js) — KetQuaKham
+  // không có ten_khach/ngay_kham (2 field đó thuộc LichHen), nên phải đọc qua appointment_id
+  // đã populate lồng bên trong (xem .populate() ở getPrescriptions/getPrescriptionById).
+  const record = prescription.medical_record_id
+  const appt = record?.appointment_id
   return {
     _id: prescription._id,
     ket_qua_kham_id: prescription.ket_qua_kham_id?._id ?? prescription.ket_qua_kham_id ?? null,
-    medical_record_id: prescription.medical_record_id?._id ?? prescription.medical_record_id ?? null,
-    medical_record: prescription.medical_record_id
+    medical_record_id: record?._id ?? record ?? null,
+    medical_record: record
       ? {
-          _id: prescription.medical_record_id._id ?? prescription.medical_record_id,
-          appointment_id: prescription.medical_record_id.appointment_id ?? null,
-          ten_khach: prescription.medical_record_id.ten_khach ?? null,
-          ngay_kham: prescription.medical_record_id.ngay_kham ?? null,
-          chan_doan: prescription.medical_record_id.chan_doan ?? null,
+          _id: record._id ?? record,
+          appointment_id: appt?._id ?? appt ?? null,
+          ten_khach: appt?.ten_khach ?? null,
+          ngay_kham: appt?.ngay_kham ?? null,
+          chan_doan: record.chan_doan ?? null,
         }
       : null,
     member_id: prescription.member_id ?? null,
@@ -167,7 +172,11 @@ export async function getPrescriptions(req, res) {
     }
 
     const prescriptions = await DonThuoc.find(filter)
-      .populate('medical_record_id', 'appointment_id ten_khach ngay_kham chan_doan')
+      .populate({
+        path: 'medical_record_id',
+        select: 'appointment_id chan_doan',
+        populate: { path: 'appointment_id', select: 'ten_khach ngay_kham' },
+      })
       .sort({ ngay_tao: -1, _id: -1 })
       .lean()
 
@@ -184,7 +193,11 @@ export async function getPrescriptionById(req, res) {
     }
 
     const prescription = await DonThuoc.findById(req.params.id)
-      .populate('medical_record_id', 'appointment_id ten_khach ngay_kham chan_doan')
+      .populate({
+        path: 'medical_record_id',
+        select: 'appointment_id chan_doan',
+        populate: { path: 'appointment_id', select: 'ten_khach ngay_kham' },
+      })
       .lean()
 
     if (!prescription) {

@@ -21,8 +21,8 @@ export default function NewsList() {
 
   // Filter based on Search query
   const filteredNews = news.filter((n) => {
-    return n.tieu_de.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           n.noi_dung_ngan.toLowerCase().includes(searchTerm.toLowerCase())
+    return n.tieu_de.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      n.noi_dung_ngan.toLowerCase().includes(searchTerm.toLowerCase())
   })
 
   const featuredItem = filteredNews[0]
