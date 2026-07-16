@@ -3,7 +3,17 @@ import axiosInstance from '../../services/axiosInstance';
 
 interface Appointment {
   status: string;
+  ngay_kham: string;
+  gio_kham: string;
 }
+
+const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
+  const appointmentDate = new Date(ngay_kham);
+  const [hours, minutes] = gio_kham.split(':').map(Number);
+  appointmentDate.setHours(hours, minutes, 0, 0);
+  const now = new Date();
+  return appointmentDate < now;
+};
 
 export default function Dashboard() {
   const [totalToday, setTotalToday] = useState(0);
@@ -16,7 +26,13 @@ export default function Dashboard() {
         if (res.data.success) {
           const appointments: Appointment[] = res.data.data;
           setTotalToday(appointments.length);
-          setWaiting(appointments.filter(a => a.status === 'pending' || a.status === 'confirmed').length);
+          setWaiting(
+            appointments.filter(
+              (a) =>
+                (a.status === 'pending' || a.status === 'confirmed') &&
+                !isAppointmentOverdue(a.ngay_kham, a.gio_kham)
+            ).length
+          );
         }
       } catch (err) {
         console.error('Lỗi khi lấy dữ liệu tổng quan:', err);

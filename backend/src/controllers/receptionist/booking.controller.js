@@ -168,7 +168,7 @@ export async function createBooking(req, res) {
       return fail(res, statusCode, message)
     }
 
-    const { doctor_id, schedule_id, slot_id, ngay_kham, ten_khach, so_dien_thoai_khach, payment_method } = req.body
+    const { doctor_id, schedule_id, slot_id, ngay_kham, ten_khach, so_dien_thoai_khach, ly_do_kham, payment_method } = req.body
     if (!doctor_id || !schedule_id || !slot_id || !ngay_kham || !ten_khach || !so_dien_thoai_khach || !payment_method) {
       return rollbackFail(400, 'Thiếu thông tin bắt buộc')
     }
@@ -210,6 +210,7 @@ export async function createBooking(req, res) {
       ten_dich_vu: doc.specialties?.[0]?.ten ?? 'Khám tổng quát',
       ten_khach,
       so_dien_thoai_khach,
+      ly_do_kham: ly_do_kham || null,
     }], { session })
 
     const invoiceDate = new Date()

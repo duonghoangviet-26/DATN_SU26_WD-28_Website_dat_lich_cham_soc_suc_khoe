@@ -29,6 +29,7 @@ export interface CreateReceptionistBookingPayload {
   ngay_kham: string
   ten_khach: string
   so_dien_thoai_khach: string
+  ly_do_kham?: string
   payment_method: 'cash' | 'transfer'
 }
 

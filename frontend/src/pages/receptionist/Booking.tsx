@@ -186,6 +186,7 @@ export default function ReceptionistBooking() {
         ngay_kham: selectedDate,
         ten_khach: patientName.trim(),
         so_dien_thoai_khach: patientPhone.trim(),
+        ly_do_kham: symptoms.trim() || undefined,
         payment_method: paymentMethod,
       })
       setCreatedBooking(created)

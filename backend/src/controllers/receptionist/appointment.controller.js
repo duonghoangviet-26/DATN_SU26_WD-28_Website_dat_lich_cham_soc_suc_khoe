@@ -49,6 +49,8 @@ export const getAppointments = async (req, res) => {
         query.ngay_kham = { $gte: todayStart, $lte: todayEnd }
       } else if (timeframe === 'tomorrow') {
         query.ngay_kham = { $gte: tomorrowStart, $lte: tomorrowEnd }
+      } else if (timeframe === 'upcoming') {
+        query.ngay_kham = { $gt: todayEnd }
       } else if (timeframe === 'past') {
         query.ngay_kham = { $lt: todayStart }
       }
