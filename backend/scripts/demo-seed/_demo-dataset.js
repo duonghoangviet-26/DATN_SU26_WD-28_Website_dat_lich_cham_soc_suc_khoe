@@ -898,8 +898,8 @@ export async function buildDemoDataset() {
       nguon: 'bac_si',
       ghi_chu: 'Dung du 5 ngay',
       items: [
-        { _id: fixedObjectId(2101), ten_thuoc: 'Thuoc nho tai A', lieu_luong: '2 giot', tan_suat: '2 lan/ngay', gio_uong: ['08:00', '20:00'], ngay_bat_dau: timeline.day0, ngay_ket_thuc: addDays(timeline.day0, 5), ghi_chu: 'Nho sau khi ve sinh tai' },
-        { _id: fixedObjectId(2102), ten_thuoc: 'Paracetamol 500mg', lieu_luong: '1 vien', tan_suat: '2 lan/ngay', gio_uong: ['08:00', '20:00'], ngay_bat_dau: timeline.day0, ngay_ket_thuc: addDays(timeline.day0, 3), ghi_chu: 'Chi dung khi dau' },
+        { _id: fixedObjectId(2101), ten_thuoc: 'Thuoc nho tai A', lieu_luong: '2 giot', tan_suat: '2 lan/ngay', gio_uong: ['08:00', '20:00'], so_ngay: 5, ghi_chu: 'Nho sau khi ve sinh tai' },
+        { _id: fixedObjectId(2102), ten_thuoc: 'Paracetamol 500mg', lieu_luong: '1 vien', tan_suat: '2 lan/ngay', gio_uong: ['08:00', '20:00'], so_ngay: 3, ghi_chu: 'Chi dung khi dau' },
       ],
     },
     {
@@ -912,7 +912,7 @@ export async function buildDemoDataset() {
       nguon: 'bac_si',
       ghi_chu: 'Uong nhieu nuoc am',
       items: [
-        { _id: fixedObjectId(2103), ten_thuoc: 'Vien ngam hong B', lieu_luong: '1 vien', tan_suat: '3 lan/ngay', gio_uong: ['08:00', '13:00', '20:00'], ngay_bat_dau: timeline.day0, ngay_ket_thuc: addDays(timeline.day0, 5), ghi_chu: 'Dung sau bua an' },
+        { _id: fixedObjectId(2103), ten_thuoc: 'Vien ngam hong B', lieu_luong: '1 vien', tan_suat: '3 lan/ngay', gio_uong: ['08:00', '13:00', '20:00'], so_ngay: 5, ghi_chu: 'Dung sau bua an' },
       ],
     },
   ]

@@ -23,25 +23,16 @@ const itemSchema = new mongoose.Schema(
         message: 'gio_uong phai la mang gio dang HH:MM',
       },
     },
-    ngay_bat_dau: { type: Date, required: true },
-    ngay_ket_thuc: { type: Date, required: true },
+    so_ngay: {
+      type: Number,
+      required: [true, 'So ngay uong la bat buoc'],
+      min: [1, 'So ngay uong toi thieu la 1'],
+      max: [MAX_NGAY, `So ngay uong toi da ${MAX_NGAY} ngay`],
+    },
     ghi_chu: { type: String, default: null, maxlength: 500 },
   },
   { _id: true }
 )
-
-itemSchema.pre('validate', function () {
-  if (this.ngay_bat_dau && this.ngay_ket_thuc) {
-    if (this.ngay_ket_thuc < this.ngay_bat_dau) {
-      throw new Error('ngay_ket_thuc phai >= ngay_bat_dau')
-    }
-
-    const days = (this.ngay_ket_thuc - this.ngay_bat_dau) / (1000 * 60 * 60 * 24)
-    if (days > MAX_NGAY) {
-      throw new Error(`Moi thuoc toi da ${MAX_NGAY} ngay`)
-    }
-  }
-})
 
 const prescriptionSchema = new mongoose.Schema(
   {
@@ -50,9 +41,13 @@ const prescriptionSchema = new mongoose.Schema(
       ref: 'KetQuaKham',
       required: true,
     },
+    // Dù tên field gợi ý 'HoSoYTe', toàn bộ code ghi/đọc thực tế đều gán _id của KetQuaKham vào
+    // đây (xem doctor/appointments.controller.js createResult/updateResult) — ref khai đúng
+    // theo dữ liệu thật để .populate() hoạt động (trước đây khai nhầm 'HoSoYTe', khiến admin
+    // xem đơn thuốc luôn ra null — xem docs/Bác sĩ/Audit tong the, GAP-006).
     medical_record_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'HoSoYTe',
+      ref: 'KetQuaKham',
       default: null,
     },
     member_id: {
@@ -64,7 +59,7 @@ const prescriptionSchema = new mongoose.Schema(
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
     nguon: {
       type: String,
-      enum: ['bac_si', 'tu_nhap'],
+      enum: ['bac_si', 'tu_nhap', 'y_ta'],
       default: 'tu_nhap',
     },
     ghi_chu: { type: String, default: null },

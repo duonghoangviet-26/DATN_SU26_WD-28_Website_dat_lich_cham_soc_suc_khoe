@@ -1,26 +1,47 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { mockDoctors } from '@/mock/doctors'
 import Breadcrumb from '@/components/common/Breadcrumb'
 import Empty from '@/components/common/Empty'
 import Skeleton from '@/components/common/Skeleton'
-import type { DoctorProfile } from '@/types'
+import Pagination from '@/components/common/Pagination'
+import { patientBookingService, type PatientBookingDoctor } from '@/services/patient-booking.service'
 
 export default function DoctorList() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [priceFilter, setPriceFilter] = useState<'all' | 'under_300k' | 'above_300k'>('all')
   const [expFilter, setExpFilter] = useState<'all' | 'under_15_years' | 'above_15_years'>('all')
-  const [doctors, setDoctors] = useState<DoctorProfile[]>([])
+  const [doctors, setDoctors] = useState<PatientBookingDoctor[]>([])
+
+  // Phân trang
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 4
 
   useEffect(() => {
-    // Simulate API fetch delay
-    const timer = setTimeout(() => {
-      setDoctors(mockDoctors.filter((d) => d.loai === 'specialist' && d.trang_thai_duyet === 'approved'))
-      setLoading(false)
-    }, 400)
-    return () => clearTimeout(timer)
+    let ignore = false
+    setLoading(true)
+    patientBookingService.getDoctors()
+      .then((data) => {
+        if (!ignore) {
+          setDoctors(data)
+        }
+      })
+      .catch((err) => {
+        console.error('Không tải được danh sách bác sĩ:', err)
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
   }, [])
+
+  // Reset trang khi lọc thay đổi
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, priceFilter, expFilter])
 
   // Filtering logic
   const filteredDoctors = doctors.filter((d) => {
@@ -36,6 +57,9 @@ export default function DoctorList() {
 
     return matchesSearch && matchesPrice && matchesExp
   })
+
+  const totalPages = Math.ceil(filteredDoctors.length / ITEMS_PER_PAGE)
+  const paginatedDoctors = filteredDoctors.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 space-y-6">
@@ -110,46 +134,55 @@ export default function DoctorList() {
           <Empty title="Không tìm thấy bác sĩ nào" description="Bạn vui lòng thay đổi từ khóa tìm kiếm hoặc mức lọc thích hợp." icon="search" />
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {filteredDoctors.map((d) => (
-            <div key={d.id} className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300">
-              <div>
-                <div className="aspect-square w-full bg-slate-100 relative overflow-hidden">
-                  {d.anh_dai_dien ? (
-                    <img src={d.anh_dai_dien} alt={d.ho_ten} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  ) : (
-                    <div className="grid h-full w-full place-items-center bg-brand-55 text-brand-600 font-extrabold text-3xl">
-                      {d.ho_ten.split(' ').pop()?.charAt(0)}
-                    </div>
-                  )}
-                  <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-white/90 backdrop-blur-md px-2 py-0.5 text-xs font-bold text-slate-800 shadow-sm">
-                    ⭐ {d.diem_danh_gia.toFixed(1)}
-                  </span>
+        <div className="space-y-8">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {paginatedDoctors.map((d) => (
+              <div key={d.id} className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300">
+                <div>
+                  <div className="aspect-square w-full bg-slate-100 relative overflow-hidden">
+                    {d.anh_dai_dien ? (
+                      <img src={d.anh_dai_dien} alt={d.ho_ten} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center bg-brand-55 text-brand-600 font-extrabold text-3xl">
+                        {d.ho_ten.split(' ').pop()?.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 space-y-2 text-left">
+                    <h3 className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors">
+                      {d.ho_ten}
+                    </h3>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                      {d.bang_cap?.split('chuyên ngành')[0] || d.bang_cap || 'Bác sĩ chuyên khoa'}
+                    </p>
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                      {d.kinh_nghiem || 'Phụ trách chẩn đoán và điều trị chuyên khoa.'}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="p-4 space-y-2 text-left">
-                  <h3 className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors">
-                    {d.ho_ten}
-                  </h3>
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                    {d.bang_cap.split('chuyên ngành')[0] || d.bang_cap}
-                  </p>
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                    {d.kinh_nghiem}
-                  </p>
+                <div className="p-4 pt-3 border-t border-slate-50 grid grid-cols-2 gap-2 mt-2">
+                  <Link to={`/bac-si/${d.id}`} className="btn-secondary w-full text-center py-2 text-xs font-bold">
+                    Chi tiết
+                  </Link>
+                  <Link to={`/booking?doctor_id=${d.id}`} className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100">
+                    Đặt lịch
+                  </Link>
                 </div>
               </div>
+            ))}
+          </div>
 
-              <div className="p-4 pt-3 border-t border-slate-50 grid grid-cols-2 gap-2 mt-2">
-                <Link to={`/bac-si/${d.id}`} className="btn-secondary w-full text-center py-2 text-xs font-bold">
-                  Chi tiết
-                </Link>
-                <Link to={`/booking?doctor_id=${d.id}`} className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100">
-                  Đặt lịch
-                </Link>
-              </div>
+          {totalPages > 1 && (
+            <div className="flex justify-center pt-4">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

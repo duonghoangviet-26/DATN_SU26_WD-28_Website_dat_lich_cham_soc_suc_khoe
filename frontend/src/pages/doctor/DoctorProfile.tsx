@@ -3,41 +3,32 @@ import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
 import { doctorProfileService } from '@/services/doctor-profile.service'
-import type { DoctorProfile } from '@/types'
+import type { DoctorSelfProfile } from '@/types'
 import { formatPrice } from '@/utils/format'
-import { DOCTOR_APPROVAL_LABEL } from '@/utils/constants'
-
-const APPROVAL_COLOR: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
-  approved: 'green', pending: 'yellow', rejected: 'red', suspended: 'gray',
-}
-
-const SPECIALTIES = ['Tim mạch', 'Nhi khoa', 'Da liễu', 'Sản phụ khoa', 'Thần kinh', 'Nội tổng quát', 'Mắt', 'Tai Mũi Họng']
+import { DOCTOR_APPROVAL_LABEL, DOCTOR_APPROVAL_COLOR } from '@/utils/constants'
 
 export default function DoctorProfile() {
-  const [profile, setProfile] = useState<DoctorProfile | null>(null)
-  const [tieu_su, setTieuSu] = useState('')
+  const [profile, setProfile] = useState<DoctorSelfProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  // Form state
+  // Form state — chỉ các field bác sĩ tự sửa được (chuyên khoa do Admin gán, không sửa ở đây)
   const [form, setForm] = useState({
-    ho_ten: '', chuyen_khoa: '', so_nam_kinh_nghiem: 0,
+    ho_ten: '', so_nam_kinh_nghiem: 0,
     gia_kham: 0, bang_cap: '', tieu_su: '',
   })
 
   useEffect(() => {
-    doctorProfileService.get().then(({ profile: p, tieu_su: ts }) => {
+    doctorProfileService.get().then((p) => {
       setProfile(p)
-      setTieuSu(ts)
       setForm({
         ho_ten: p.ho_ten,
-        chuyen_khoa: p.chuyen_khoa,
         so_nam_kinh_nghiem: p.so_nam_kinh_nghiem,
         gia_kham: p.gia_kham,
-        bang_cap: p.bang_cap,
-        tieu_su: ts,
+        bang_cap: p.bang_cap ?? '',
+        tieu_su: p.tieu_su ?? '',
       })
     }).finally(() => setLoading(false))
   }, [])
@@ -48,7 +39,6 @@ export default function DoctorProfile() {
     try {
       const updated = await doctorProfileService.update(form)
       setProfile(updated)
-      setTieuSu(form.tieu_su)
       setEditing(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -57,14 +47,12 @@ export default function DoctorProfile() {
     }
   }
 
-  async function handleSubmitReview() {
-    if (!profile) return
-    const updated = await doctorProfileService.submitForReview()
-    setProfile(updated)
-  }
-
   if (loading) return <div className="flex h-64 items-center justify-center text-slate-400">Đang tải...</div>
   if (!profile) return null
+
+  const chuyenKhoaText = profile.specialties.length
+    ? profile.specialties.map((s) => s.ten).join(', ')
+    : 'Chưa được gán chuyên khoa'
 
   return (
     <div>
@@ -97,9 +85,9 @@ export default function DoctorProfile() {
           {profile.ly_do_tu_choi && (
             <p className="mt-1.5 text-sm text-red-700 pl-7">Lý do: {profile.ly_do_tu_choi}</p>
           )}
-          <button onClick={handleSubmitReview} className="mt-3 ml-7 inline-flex items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-600 hover:bg-brand-100 transition-colors">
-            <Icon name="send" className="h-4 w-4" /> Nộp lại hồ sơ
-          </button>
+          <p className="mt-1.5 pl-7 text-xs text-red-500">
+            Vui lòng liên hệ Admin để được hướng dẫn nộp lại hồ sơ.
+          </p>
         </div>
       )}
       {profile.trang_thai_duyet === 'suspended' && (
@@ -119,7 +107,7 @@ export default function DoctorProfile() {
         <div className="card p-6 lg:col-span-2">
           <div className="mb-5 flex items-center justify-between">
             <h2 className="font-semibold text-slate-800">Thông tin hành nghề</h2>
-            <Badge color={APPROVAL_COLOR[profile.trang_thai_duyet]}>
+            <Badge color={DOCTOR_APPROVAL_COLOR[profile.trang_thai_duyet]}>
               {DOCTOR_APPROVAL_LABEL[profile.trang_thai_duyet]}
             </Badge>
           </div>
@@ -133,9 +121,8 @@ export default function DoctorProfile() {
                 </div>
                 <div>
                   <label className="input-label">Chuyên khoa</label>
-                  <select className="input" value={form.chuyen_khoa} onChange={(e) => setForm({ ...form, chuyen_khoa: e.target.value })}>
-                    {SPECIALTIES.map((s) => <option key={s}>{s}</option>)}
-                  </select>
+                  <p className="input flex items-center bg-slate-50 text-slate-500">{chuyenKhoaText}</p>
+                  <p className="mt-1 text-xs text-slate-400">Chuyên khoa do Admin gán khi duyệt hồ sơ — liên hệ Admin để thay đổi.</p>
                 </div>
                 <div>
                   <label className="input-label">Số năm kinh nghiệm</label>
@@ -169,10 +156,10 @@ export default function DoctorProfile() {
             <dl className="space-y-4">
               {[
                 { label: 'Họ và tên', value: profile.ho_ten },
-                { label: 'Chuyên khoa', value: profile.chuyen_khoa },
+                { label: 'Chuyên khoa', value: chuyenKhoaText },
                 { label: 'Kinh nghiệm', value: `${profile.so_nam_kinh_nghiem} năm` },
                 { label: 'Phí tư vấn', value: formatPrice(profile.gia_kham) },
-                { label: 'Bằng cấp', value: profile.bang_cap },
+                { label: 'Bằng cấp', value: profile.bang_cap ?? 'Chưa cập nhật' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex gap-4">
                   <dt className="w-36 shrink-0 text-sm text-slate-500">{label}</dt>
@@ -181,7 +168,7 @@ export default function DoctorProfile() {
               ))}
               <div className="flex gap-4">
                 <dt className="w-36 shrink-0 text-sm text-slate-500">Tiểu sử</dt>
-                <dd className="text-sm leading-relaxed text-slate-700">{tieu_su}</dd>
+                <dd className="text-sm leading-relaxed text-slate-700">{profile.tieu_su ?? 'Chưa cập nhật'}</dd>
               </div>
             </dl>
           )}
@@ -201,7 +188,7 @@ export default function DoctorProfile() {
                   </svg>
                 ))}
               </div>
-              <p className="text-sm text-slate-500">{profile.so_danh_gia} lượt đánh giá</p>
+              <p className="text-sm text-slate-500">{profile.tong_danh_gia} lượt đánh giá</p>
             </div>
           </div>
 
@@ -214,7 +201,7 @@ export default function DoctorProfile() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-slate-500">Trạng thái</dt>
-                <dd><Badge color={APPROVAL_COLOR[profile.trang_thai_duyet]}>{DOCTOR_APPROVAL_LABEL[profile.trang_thai_duyet]}</Badge></dd>
+                <dd><Badge color={DOCTOR_APPROVAL_COLOR[profile.trang_thai_duyet]}>{DOCTOR_APPROVAL_LABEL[profile.trang_thai_duyet]}</Badge></dd>
               </div>
             </dl>
           </div>

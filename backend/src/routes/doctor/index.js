@@ -4,6 +4,7 @@ import profileRoutes      from './profile.routes.js'
 import scheduleRoutes     from './schedule.routes.js'
 import appointmentRoutes  from './appointments.routes.js'
 import statsRoutes        from './stats.routes.js'
+import leavesRoutes       from './leaves.routes.js'
 
 // ============================================================
 // Doctor routes — mount tại /api/doctor
@@ -17,5 +18,6 @@ router.use('/profile',       profileRoutes)
 router.use('/schedule',      scheduleRoutes)
 router.use('/appointments',  appointmentRoutes)
 router.use('/stats',         statsRoutes)
+router.use('/leaves',        leavesRoutes)
 
 export default router

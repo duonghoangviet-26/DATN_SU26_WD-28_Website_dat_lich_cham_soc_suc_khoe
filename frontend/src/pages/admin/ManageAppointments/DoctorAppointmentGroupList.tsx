@@ -11,9 +11,12 @@ const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red
   confirmed: 'blue',
   checked_in: 'blue',
   in_progress: 'green',
+  waiting_record: 'yellow',
+  waiting_doctor_confirm: 'yellow',
   completed: 'green',
   cancelled: 'red',
   no_show: 'gray',
+  skipped: 'gray',
 }
 const PAYMENT_COLOR: Record<string, 'yellow' | 'green' | 'gray'> = {
   unpaid: 'yellow', paid: 'green', refunded: 'gray',
@@ -61,12 +64,12 @@ export default function DoctorAppointmentGroupList({
     if (!expandedDoctor) return null;
     const group = groupedAppointments.find(g => g.doctor_id === expandedDoctor);
     if (!group) return null;
-    
+
     const now = new Date().getTime();
     const buckets: Record<TabType, AppointmentItem[]> = {
       upcoming: [], ongoing: [], completed: [], cancelled: [], overdue: []
     };
-    
+
     group.appointments.forEach(a => {
       const appDate = new Date(`${a.ngay_kham}T${a.gio_kham || '00:00'}:00`);
       const appTime = appDate.getTime();
@@ -84,12 +87,12 @@ export default function DoctorAppointmentGroupList({
         else if (isPast) buckets.overdue.push(a);
       }
     });
-    
+
     // Sort each bucket
     Object.keys(buckets).forEach(key => {
       buckets[key as TabType].sort((a, b) => new Date(`${b.ngay_kham}T${b.gio_kham}`).getTime() - new Date(`${a.ngay_kham}T${a.gio_kham}`).getTime());
     });
-    
+
     return buckets;
   }, [expandedDoctor, groupedAppointments]);
 
@@ -105,7 +108,7 @@ export default function DoctorAppointmentGroupList({
     <div className="space-y-4">
       {groupedAppointments.map((group) => {
         const isExpanded = expandedDoctor === group.doctor_id
-        
+
         return (
           <div key={group.doctor_id} className="card overflow-hidden">
             {/* Accordion Header */}
@@ -142,16 +145,14 @@ export default function DoctorAppointmentGroupList({
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as TabType)}
-                        className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                          activeTab === tab.id
+                        className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === tab.id
                             ? 'bg-brand-50 text-brand-700'
                             : 'text-slate-600 hover:bg-slate-50'
-                        }`}
+                          }`}
                       >
                         {tab.label}
-                        <span className={`rounded-full px-2 py-0.5 text-xs ${
-                          activeTab === tab.id ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'
-                        }`}>
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${activeTab === tab.id ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'
+                          }`}>
                           {count}
                         </span>
                       </button>
@@ -214,7 +215,7 @@ export default function DoctorAppointmentGroupList({
                               >
                                 <Icon name="clock" className="h-4 w-4" />
                               </button>
-                              
+
                               {(activeTab === 'upcoming' || activeTab === 'ongoing' || activeTab === 'overdue') && (
                                 <>
                                   <button
@@ -283,8 +284,8 @@ export default function DoctorAppointmentGroupList({
               />
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <button 
-                onClick={() => { setConfirmCancel(null); setCancelReason('') }} 
+              <button
+                onClick={() => { setConfirmCancel(null); setCancelReason('') }}
                 className="btn-secondary"
               >
                 Hủy bỏ

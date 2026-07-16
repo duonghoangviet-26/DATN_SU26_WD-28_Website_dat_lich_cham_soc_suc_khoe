@@ -422,6 +422,17 @@ export async function updateSlot(req, res) {
 
     const before = compactSlot(slot.toObject())
 
+    // Slot đang bị khóa bởi nghỉ phép đã duyệt (bi_khoa_boi_nghi_phep=true) — không cho đổi
+    // status ngầm mà không tường minh bỏ khóa trước, tránh admin vô tình "mở lại" slot đã khóa
+    // hợp lệ (vd sửa tay status='active') trong khi bác sĩ vẫn đang nghỉ (xem docs/Bác sĩ/Audit
+    // tong the, GAP-010). Đổi bi_khoa_boi_nghi_phep=false trong CÙNG request thì vẫn cho phép.
+    if (slot.bi_khoa_boi_nghi_phep && req.body.status !== undefined && req.body.status !== slot.status) {
+      const dangBoKhoa = req.body.bi_khoa_boi_nghi_phep === false
+      if (!dangBoKhoa) {
+        return fail(res, 409, 'Slot đang bị khóa bởi nghỉ phép đã duyệt — phải gửi kèm bi_khoa_boi_nghi_phep=false để xác nhận bỏ khóa trước khi đổi trạng thái')
+      }
+    }
+
     const updatableFields = [
       'gio_bat_dau',
       'gio_ket_thuc',

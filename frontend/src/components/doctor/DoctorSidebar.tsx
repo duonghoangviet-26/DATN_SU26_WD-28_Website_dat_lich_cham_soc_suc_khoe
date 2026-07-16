@@ -49,9 +49,9 @@ export default function DoctorSidebar({ open, onClose }: Props) {
                 end={item.end}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                  `relative mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                     isActive
-                      ? 'bg-brand-500 text-white shadow-sm'
+                      ? 'bg-brand-50 text-brand-700 before:absolute before:left-0 before:top-1/2 before:h-5 before:w-[3px] before:-translate-y-1/2 before:rounded-r-full before:bg-brand-600'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
                   }`
                 }

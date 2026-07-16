@@ -18,7 +18,7 @@ const router = Router()
 // browse doctors/services/slots. Mutating booking routes protect themselves.
 router.use('/booking', bookingRoutes)
 
-router.use(verifyToken, requireRole('user'))
+router.use(verifyToken, requireRole('user', 'patient'))
 
 router.use('/family',        familyRoutes)
 router.use('/records',       recordsRoutes)

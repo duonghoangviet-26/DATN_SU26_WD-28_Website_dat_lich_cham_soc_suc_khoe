@@ -2,9 +2,16 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 
 import AdminLayout from '@/layouts/AdminLayout'
 import DoctorLayout from '@/layouts/DoctorLayout'
+import NurseLayout from '@/layouts/NurseLayout'
 import AuthLayout from '@/layouts/AuthLayout'
 import ClientLayout from '@/layouts/ClientLayout'
 import ProtectedRoute from '@/routes/ProtectedRoute'
+
+import ReceptionistLayout from '@/pages/receptionist/Layout'
+import ReceptionistDashboard from '@/pages/receptionist/Dashboard'
+import ReceptionistAppointments from '@/pages/receptionist/Appointments'
+import ReceptionistPayments from '@/pages/receptionist/Payments'
+import ReceptionistBooking from '@/pages/receptionist/Booking'
 
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
@@ -34,6 +41,13 @@ import DoctorDashboard from '@/pages/doctor/DoctorDashboard'
 import DoctorProfile from '@/pages/doctor/DoctorProfile'
 import DoctorSchedule from '@/pages/doctor/DoctorSchedule'
 import DoctorAppointments from '@/pages/doctor/DoctorAppointments'
+import DoctorPendingRecords from '@/pages/doctor/DoctorPendingRecords'
+import DoctorLeaveRequests from '@/pages/doctor/DoctorLeaveRequests'
+
+import NurseDashboard from '@/pages/nurse/NurseDashboard'
+import NurseQueue from '@/pages/nurse/NurseQueue'
+import NurseAppointmentDetail from '@/pages/nurse/NurseAppointmentDetail'
+import NurseRevisions from '@/pages/nurse/NurseRevisions'
 
 import NotFound from '@/pages/NotFound'
 
@@ -96,6 +110,21 @@ export default function AppRoutes() {
         <Route path="payments" element={<ManagePayments />} />     {/* C8 */}
       </Route>
 
+      {/* Khu vực Lễ tân — yêu cầu role = receptionist hoặc admin */}
+      <Route
+        path="/receptionist"
+        element={
+          <ProtectedRoute roles={['receptionist', 'admin']}>
+            <ReceptionistLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ReceptionistDashboard />} />
+        <Route path="appointments" element={<ReceptionistAppointments />} />
+        <Route path="payments" element={<ReceptionistPayments />} />
+        <Route path="booking" element={<ReceptionistBooking />} />
+      </Route>
+
       {/* Khu vực Doctor — yêu cầu role = doctor */}
       <Route
         path="/doctor"
@@ -107,8 +136,25 @@ export default function AppRoutes() {
       >
         <Route index element={<DoctorDashboard />} />                  {/* B5 */}
         <Route path="appointments" element={<DoctorAppointments />} /> {/* B3+B4 */}
+        <Route path="pending-records" element={<DoctorPendingRecords />} /> {/* B4 — hồ sơ chờ xác nhận */}
         <Route path="schedule" element={<DoctorSchedule />} />         {/* B2 */}
+        <Route path="leave-requests" element={<DoctorLeaveRequests />} /> {/* B8 — xin nghỉ */}
         <Route path="profile" element={<DoctorProfile />} />           {/* B1 */}
+      </Route>
+
+      {/* Khu vực Nurse — yêu cầu role = nurse */}
+      <Route
+        path="/nurse"
+        element={
+          <ProtectedRoute roles={['nurse']}>
+            <NurseLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<NurseDashboard />} />
+        <Route path="queue" element={<NurseQueue />} />
+        <Route path="appointments/:id" element={<NurseAppointmentDetail />} />
+        <Route path="revisions" element={<NurseRevisions />} />
       </Route>
 
       <Route path="/404" element={<NotFound />} />

@@ -11,9 +11,12 @@ const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red
   confirmed: 'blue',
   checked_in: 'blue',
   in_progress: 'green',
+  waiting_record: 'yellow',
+  waiting_doctor_confirm: 'yellow',
   completed: 'green',
   cancelled: 'red',
   no_show: 'gray',
+  skipped: 'gray',
 }
 
 const PAYMENT_COLOR: Record<string, 'yellow' | 'green' | 'red' | 'gray'> = {

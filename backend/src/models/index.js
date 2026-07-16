@@ -19,10 +19,13 @@ export { default as KhachVangLai }       from './KhachVangLai.js'
 
 export { default as BacSi }              from './BacSi.js'
 export { default as NghiPhepBacSi }      from './NghiPhepBacSi.js'
+export { default as NghiPhepYTa }        from './NghiPhepYTa.js'
 export { default as HoSoChiTietBacSi }   from './HoSoChiTietBacSi.js'
 export { default as LichLamViec }        from './LichLamViec.js'
 export { default as LichSuChinhSuaLichLamViec } from './LichSuChinhSuaLichLamViec.js'
 export { default as PhongKham }          from './PhongKham.js'
+export { default as TrangThaiPhongKham } from './TrangThaiPhongKham.js'
+export { default as HangDoi }            from './HangDoi.js'
 
 export { default as LichHen }            from './LichHen.js'
 export { default as HoaDon }             from './HoaDon.js'
