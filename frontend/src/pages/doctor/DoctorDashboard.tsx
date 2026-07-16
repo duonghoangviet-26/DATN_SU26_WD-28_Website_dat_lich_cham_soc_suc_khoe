@@ -13,7 +13,8 @@ const DAY_NAMES = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ 
 
 const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red'> = {
   pending: 'yellow', confirmed: 'blue', checked_in: 'blue', in_progress: 'yellow',
-  completed: 'green', cancelled: 'red', no_show: 'red',
+  waiting_record: 'yellow', waiting_doctor_confirm: 'yellow',
+  completed: 'green', cancelled: 'red', no_show: 'red', skipped: 'red',
 }
 
 function formatTodayHeader(): string {

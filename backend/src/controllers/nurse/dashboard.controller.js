@@ -39,13 +39,15 @@ export async function getDashboard(req, res) {
     const tong_check_in = apptsToday.filter((a) => a.status !== 'pending' && a.status !== 'cancelled').length
 
     // Chờ nhập hồ sơ: đã khám xong (confirmed/completed) nhưng CHƯA có KetQuaKham
+    // waiting_record = y tá vừa kết thúc khám qua hàng đợi động (Kế hoạch 2, queue.controller.js
+    // finish()) — PHẢI có ở đây, nếu không widget "chờ nhập hồ sơ" bỏ sót đúng lúc y tá cần nó nhất.
     const apptIdsToday = apptsToday.map((a) => a._id)
     const recordedApptIds = new Set(
       (await KetQuaKham.find({ appointment_id: { $in: apptIdsToday } }).select('appointment_id').lean())
         .map((r) => String(r.appointment_id)),
     )
     const cho_nhap_ho_so = apptsToday.filter((a) =>
-      ['confirmed', 'completed'].includes(a.status) && !recordedApptIds.has(String(a._id)),
+      ['confirmed', 'completed', 'waiting_record'].includes(a.status) && !recordedApptIds.has(String(a._id)),
     ).length
 
     // Hồ sơ theo trạng thái — do CHÍNH y tá này nhập (không tính theo ngày, hồ sơ có thể tồn từ hôm trước)
@@ -55,9 +57,11 @@ export async function getDashboard(req, res) {
     const ho_so_da_xac_nhan = myRecords.filter((r) => r.status === 'da_xac_nhan').length
 
     // Danh sách gần nhất trong hàng đợi hôm nay (tối đa 5, sắp theo giờ hẹn — xem ghi chú giới
-    // hạn "chưa có checkin_time thật" trong nurse/appointments.controller.js)
+    // hạn "chưa có checkin_time thật" trong nurse/appointments.controller.js).
+    // waiting_record thêm vào vì đây chính xác là việc y tá cần làm tiếp — không thêm 'skipped'
+    // vào preview này vì đã là trạng thái kết thúc, không phải việc "gần nhất cần chú ý".
     const queueSample = apptsToday
-      .filter((a) => ['confirmed', 'checked_in', 'in_progress', 'waiting_doctor_confirm'].includes(a.status))
+      .filter((a) => ['confirmed', 'checked_in', 'in_progress', 'waiting_record', 'waiting_doctor_confirm'].includes(a.status))
       .sort((a, b) => a.gio_kham.localeCompare(b.gio_kham))
       .slice(0, 5)
 

@@ -55,7 +55,7 @@ const prescriptionSchema = new mongoose.Schema(
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
     nguon: {
       type: String,
-      enum: ['bac_si', 'tu_nhap'],
+      enum: ['bac_si', 'tu_nhap', 'y_ta'],
       default: 'tu_nhap',
     },
     ghi_chu: { type: String, default: null },

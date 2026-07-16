@@ -11,7 +11,9 @@ const GIOI_TINH_LABEL = { nam: 'Nam', nu: 'Nữ', khac: 'Khác' }
 
 // Trạng thái coi là "đang trong luồng khám" — loại pending (chưa xác nhận, chưa tới lượt xử lý
 // của y tá) và cancelled/no_show (không cần y tá xử lý nữa) ra khỏi hàng đợi mặc định.
-const QUEUE_STATUSES = ['confirmed', 'checked_in', 'in_progress', 'waiting_doctor_confirm', 'completed']
+// waiting_record/skipped thêm ở Kế hoạch 1 (DB CHANGES 2026-07-15) — bắt buộc có ở đây, nếu không
+// lịch hẹn "biến mất" khỏi hàng đợi ngay khi y tá kết thúc khám (Kế hoạch 2: finish -> waiting_record).
+const QUEUE_STATUSES = ['confirmed', 'checked_in', 'in_progress', 'waiting_record', 'waiting_doctor_confirm', 'completed', 'skipped']
 
 async function formatQueueItem(a) {
   const [member, result] = await Promise.all([

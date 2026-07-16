@@ -68,8 +68,6 @@ export async function getReviews(req, res) {
 
 // ─── GET /api/doctor/stats/today ─────────────────────────────────────────────
 // Tổng quan công việc "hôm nay" cho Dashboard bác sĩ — khác getStats (tích lũy/tháng).
-// y_ta_ho_tro luôn null — hệ thống chưa có module gán y tá cho ca làm việc (xem
-// docs/Bác sĩ/Audit - Truong du lieu thieu va thua trong DB).
 export async function getTodayOverview(req, res) {
   try {
     const doc = await BacSi.findOne({ user_id: req.user.id })
@@ -84,7 +82,9 @@ export async function getTodayOverview(req, res) {
     todayEnd.setDate(todayEnd.getDate() + 1)
 
     const [schedule, appointments] = await Promise.all([
-      LichLamViec.findOne({ doctor_id: doc._id, ngay: { $gte: todayStart, $lt: todayEnd } }).lean(),
+      LichLamViec.findOne({ doctor_id: doc._id, ngay: { $gte: todayStart, $lt: todayEnd } })
+        .populate('nurse_id', 'ho_ten')
+        .lean(),
       LichHen.find({ doctor_id: doc._id, ngay_kham: { $gte: todayStart, $lt: todayEnd } })
         .sort({ gio_kham: 1 })
         .populate('user_id', 'ho_ten')
@@ -109,9 +109,12 @@ export async function getTodayOverview(req, res) {
       chuyen_khoa: (doc.specialties ?? []).map((s) => s.ten).join(', ') || 'Chưa rõ',
       ca_lam_viec,
       phong_kham,
-      y_ta_ho_tro: null,
+      // Module gán y tá cho ca làm việc đã có từ Kế hoạch 1 (LichLamViec.nurse_id) — trước đây
+      // hardcode null vì module chưa tồn tại, giờ trả đúng dữ liệu thật.
+      y_ta_ho_tro: schedule?.nurse_id ? { id: schedule.nurse_id._id, ho_ten: schedule.nurse_id.ho_ten } : null,
       tong_lich_hen: appointments.length,
-      cho_kham: appointments.filter((a) => a.status === 'confirmed').length,
+      // checked_in cũng là "chờ khám" — khớp cách đếm dang_cho_kham bên nurse/dashboard.controller.js
+      cho_kham: appointments.filter((a) => ['confirmed', 'checked_in'].includes(a.status)).length,
       dang_kham: appointments.filter((a) => a.status === 'in_progress').length,
       hoan_thanh: appointments.filter((a) => a.status === 'completed').length,
       lich_hen_gan_nhat: appointments

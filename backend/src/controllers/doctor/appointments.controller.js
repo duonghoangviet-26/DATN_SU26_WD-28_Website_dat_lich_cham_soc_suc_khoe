@@ -175,8 +175,12 @@ export async function complete(req, res) {
     const docId = await getDocId(req.user.id)
     const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId })
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
-    if (a.status !== 'confirmed') {
-      return fail(res, 409, 'Chỉ đánh dấu hoàn thành cho lịch hẹn đã xác nhận')
+    // Cho phép complete() từ 'in_progress'/'waiting_record' — 2 trạng thái này giờ đạt được qua
+    // hàng đợi động của y tá (Kế hoạch 2: queue.controller.js intoRoom()/finish()), KHÔNG chỉ qua
+    // luồng xác nhận cũ ('confirmed'). Bác sĩ vẫn có thể tự đánh dấu hoàn thành bất kể y tá đã
+    // nhập hồ sơ hay chưa (giữ nguyên hành vi "không bắt buộc đã nhập kết quả" đã có từ trước).
+    if (!['confirmed', 'in_progress', 'waiting_record'].includes(a.status)) {
+      return fail(res, 409, 'Chỉ đánh dấu hoàn thành cho lịch hẹn đã xác nhận, đang khám, hoặc đang chờ nhập hồ sơ')
     }
 
     a.status = 'completed'
@@ -220,8 +224,10 @@ export async function createResult(req, res) {
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
     // Cho phép cả 'completed' — bác sĩ có thể đã bấm "Hoàn thành" (complete()) trước
     // khi nhập kết quả khám, xem comment tại complete() ở trên.
-    if (!['confirmed', 'completed'].includes(a.status)) {
-      return fail(res, 409, 'Chỉ nhập kết quả khi lịch hẹn đã xác nhận hoặc đã hoàn thành')
+    // Cho phép cả 'in_progress'/'waiting_record' — bác sĩ có thể tự nhập kết quả trực tiếp (bỏ
+    // qua luồng nháp của y tá) ngay sau khi bệnh nhân đã vào phòng qua hàng đợi động (Kế hoạch 2).
+    if (!['confirmed', 'in_progress', 'waiting_record', 'completed'].includes(a.status)) {
+      return fail(res, 409, 'Chỉ nhập kết quả khi lịch hẹn đã xác nhận, đang khám, chờ nhập hồ sơ, hoặc đã hoàn thành')
     }
 
     const exists = await KetQuaKham.exists({ appointment_id: a._id })
@@ -292,19 +298,18 @@ export async function createResult(req, res) {
 export async function updateResult(req, res) {
   try {
     const docId = await getDocId(req.user.id)
-    const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId }).select('_id').lean()
+    const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId }).select('_id ngay_kham member_id ten_khach').lean()
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
 
     const result = await KetQuaKham.findOne({ appointment_id: a._id })
     if (!result) return fail(res, 404, 'Chưa có kết quả khám')
     if (!result.co_the_sua) return fail(res, 403, 'Kết quả đã khóa sau 24 giờ, không thể sửa')
 
-    const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham } = req.body
+    const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc } = req.body
     if (chan_doan)           result.chan_doan          = chan_doan.trim()
     if (huong_dan_dieu_tri !== undefined) result.huong_dan_dieu_tri = huong_dan_dieu_tri?.trim() || null
     if (ghi_chu    !== undefined) result.ghi_chu       = ghi_chu?.trim() || null
     if (ngay_tai_kham !== undefined) {
-      const a = await LichHen.findById(result.appointment_id).select('ngay_kham').lean()
       if (ngay_tai_kham && !isNgayTaiKhamHopLe(ngay_tai_kham, a.ngay_kham)) {
         return fail(res, 400, 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám')
       }
@@ -318,7 +323,32 @@ export async function updateResult(req, res) {
     }
     await result.save()
 
-    return ok(res, { ...result.toObject(), id: result._id }, 'Đã cập nhật kết quả khám')
+    // Đơn thuốc: trước đây updateResult() không đọc `thuoc` từ req.body nên mọi thay đổi đơn
+    // thuốc (kể cả so_ngay) trong lần cập nhật sau khi tạo hồ sơ bị bỏ qua hoàn toàn — xem
+    // docs/Bác sĩ (2026-07-16). Cập nhật đơn đã có hoặc tạo mới nếu bác sĩ thêm đơn lúc sửa.
+    let prescription = await DonThuoc.findOne({ medical_record_id: result._id })
+    if (Array.isArray(thuoc) && thuoc.length) {
+      if (prescription) {
+        prescription.items = thuoc
+        await prescription.save()
+      } else {
+        prescription = await DonThuoc.create({
+          ket_qua_kham_id:   result._id,
+          medical_record_id: result._id,
+          member_id:         a.member_id,
+          ten_khach:         a.ten_khach ?? null,
+          doctor_id:         docId,
+          nguon:             'bac_si',
+          items:             thuoc,
+        })
+      }
+    }
+
+    return ok(res, {
+      ...result.toObject(),
+      id: result._id,
+      thuoc: prescription?.items ?? [],
+    }, 'Đã cập nhật kết quả khám')
   } catch (err) {
     return fail(res, 500, err.message)
   }

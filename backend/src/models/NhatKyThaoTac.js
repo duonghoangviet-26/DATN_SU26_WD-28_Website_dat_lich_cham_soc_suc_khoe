@@ -33,6 +33,9 @@ import mongoose from 'mongoose'
 //   CREATE_SCHEDULE | CANCEL_SLOT | UPDATE_SLOT
 // [Doctor – ExaminationResult]
 //   UPDATE_EXAMINATION_RESULT
+// [Nurse – Queue & Room]
+//   CHANGE_DOCTOR_STATUS | CHECKIN_QUEUE | CALL_PATIENT | SKIP_PATIENT | ASSIGN_DOCTOR
+//   loai_doi_tuong mới: queue_entry | room_status
 // [System – Cron]
 //   AUTO_CANCEL_APPOINTMENT (unpaid timeout)
 //   LOCK_EXAMINATION_RESULT  (co_the_sua → false sau 24h)
@@ -48,7 +51,7 @@ const auditLogSchema = new mongoose.Schema(
     },
     vai_tro: {
       type: String,
-      enum: ['admin', 'doctor', 'user', 'system'],
+      enum: ['admin', 'doctor', 'user', 'system', 'nurse', 'receptionist'],
       required: true,
     },
     hanh_dong:      { type: String, required: true, maxlength: 100 },

@@ -64,7 +64,10 @@ function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
         setChanDoan(res.chan_doan)
         setHuongDan(res.huong_dan_dieu_tri)
         setGhiChu(res.ghi_chu ?? '')
-        setNgayTaiKham(res.ngay_tai_kham)
+        // res.ngay_tai_kham la ISO datetime day du (vd "2026-07-20T00:00:00.000Z") tu backend,
+        // trong khi <input type="date"> chi nhan dung format YYYY-MM-DD - neu gan thang se bi
+        // trinh duyet coi la invalid va hien thi rong, tao cam giac "khong luu duoc" du DB da luu dung.
+        setNgayTaiKham(res.ngay_tai_kham ? res.ngay_tai_kham.slice(0, 10) : '')
         setDrugs(res.thuoc.map(({ ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu }) => ({
           ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu,
         })))

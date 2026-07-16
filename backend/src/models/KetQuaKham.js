@@ -19,6 +19,20 @@ const lichSuSuaSchema = new mongoose.Schema(
   { _id: false }
 )
 
+// Dịch vụ cộng thêm bác sĩ chỉ định trong ca — gõ kiểu để tổng hợp HoaDon (thay Mixed).
+const dichVuPhatSinhSchema = new mongoose.Schema(
+  {
+    service_id: { type: mongoose.Schema.Types.ObjectId, ref: 'DichVu', default: null },
+    ten: { type: String, required: true, maxlength: 255 },
+    so_luong: { type: Number, default: 1, min: 1 },
+    don_gia: { type: Number, required: true, min: 0 },
+    thanh_tien: { type: Number, required: true, min: 0 },
+    chi_dinh_boi_bac_si_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
+    them_boi_y_ta_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
+  },
+  { _id: true }
+)
+
 const examinationResultSchema = new mongoose.Schema(
   {
     appointment_id: {
@@ -76,9 +90,10 @@ const examinationResultSchema = new mongoose.Schema(
     ngay_tai_kham: { type: Date, default: null },
     co_the_sua: { type: Boolean, default: true },
     dich_vu_phat_sinh: {
-      type: [mongoose.Schema.Types.Mixed],
+      type: [dichVuPhatSinhSchema],
       default: [],
     },
+    // Giữ Mixed cho dich_vu_tu_choi vì hiện chưa có luồng dùng — sẽ gõ kiểu khi có yêu cầu.
     dich_vu_tu_choi: {
       type: [mongoose.Schema.Types.Mixed],
       default: [],

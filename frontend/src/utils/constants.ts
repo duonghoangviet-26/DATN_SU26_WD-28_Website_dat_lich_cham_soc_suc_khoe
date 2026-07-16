@@ -49,10 +49,12 @@ export const APPOINTMENT_STATUS_LABEL: Record<string, string> = {
     confirmed: "Đã xác nhận",
     checked_in: "Đã check-in",
     in_progress: "Đang khám",
+    waiting_record: "Chờ nhập hồ sơ",
     waiting_doctor_confirm: "Chờ bác sĩ xác nhận hồ sơ",
     completed: "Hoàn thành",
     cancelled: "Đã hủy",
     no_show: "Không đến",
+    skipped: "Bỏ lượt",
 };
 
 // Màu badge dùng chung cho trạng thái lịch hẹn — nguồn duy nhất, khớp với cách
@@ -64,10 +66,12 @@ export const APPOINTMENT_STATUS_COLOR: Record<string, BadgeColor> = {
     confirmed: "blue",
     checked_in: "blue",
     in_progress: "yellow",
+    waiting_record: "yellow",
     waiting_doctor_confirm: "yellow",
     completed: "green",
     cancelled: "red",
     no_show: "red",
+    skipped: "red",
 };
 
 export const DOCTOR_APPROVAL_LABEL: Record<string, string> = {
@@ -144,6 +148,16 @@ export const KET_QUA_KHAM_STATUS_COLOR: Record<string, BadgeColor> = {
     cho_xac_nhan: "yellow",
     da_xac_nhan: "green",
     yeu_cau_chinh_sua: "red",
+};
+
+// Nhãn trạng thái hồ sơ khám (KetQuaKhamStatus) — nguồn duy nhất, khớp KET_QUA_STATUS_LABEL
+// đang lặp lại độc lập ở NurseAppointmentDetail.tsx/DoctorAppointments.tsx/DoctorPendingRecords.tsx
+// (chưa thay các nơi đó — đó là việc của Kế hoạch 5, ở đây chỉ tạo nguồn dùng chung).
+export const KET_QUA_KHAM_STATUS_LABEL: Record<string, string> = {
+    ban_nhap: "Nháp",
+    cho_xac_nhan: "Chờ bác sĩ xác nhận",
+    da_xac_nhan: "Đã xác nhận",
+    yeu_cau_chinh_sua: "Cần chỉnh sửa",
 };
 
 // Trạng thái slot lịch làm việc (DoctorSlot.status) — khớp STATUS_COLOR cũ trong DoctorSchedule.

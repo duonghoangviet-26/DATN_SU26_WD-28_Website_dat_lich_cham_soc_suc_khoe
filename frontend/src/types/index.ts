@@ -9,9 +9,12 @@ export type AppointmentStatus =
     | "confirmed"
     | "checked_in"
     | "in_progress"
+    | "waiting_record"
+    | "waiting_doctor_confirm"
     | "completed"
     | "cancelled"
-    | "no_show";
+    | "no_show"
+    | "skipped";
 export type PaymentStatus = "unpaid" | "partial" | "paid" | "refunded";
 
 export interface User {
@@ -1138,4 +1141,83 @@ export interface NurseMedicalRecordDraftPayload {
     ghi_chu_dieu_duong?: string | null;
     ngay_tai_kham?: string | null;
     sinh_hieu?: NurseVitalSigns;
+}
+
+// ============================================================
+// Hàng đợi động + Trạng thái phòng (Kế hoạch 2) — khớp response
+// backend/src/controllers/nurse/{room-status,queue}.controller.js
+// ============================================================
+
+export type PhongKhamTrangThai = "san_sang" | "tam_nghi" | "dang_don_phong" | "dang_kham";
+
+// GET /nurse/room-status — 1 dòng / bác sĩ y tá phụ trách hôm nay
+export interface NurseRoomStatus {
+    doctor_id: string;
+    ten_bac_si: string | null;
+    chuyen_khoa: string | null;
+    phong_kham: string | null;
+    trang_thai: PhongKhamTrangThai;
+    benh_nhan_hien_tai_id: string | null;
+    y_ta_co_mat: boolean;
+    thoi_gian_kham_tb_phut: number;
+    thoi_diem_doi: string | null;
+}
+
+export type HangDoiMucUuTien = "online_uu_tien" | "online_thuong" | "offline";
+export type HangDoiTrangThai = "dang_cho" | "da_goi" | "trong_phong" | "skipped" | "cancelled" | "hoan_thanh";
+
+// GET /nurse/queue — 1 dòng trong hàng đợi động (khác NurseQueueItem — đó là /nurse/appointments cũ)
+export interface NurseQueueEntry {
+    id: string;
+    nguon: "online" | "offline";
+    ten_benh_nhan: string;
+    tuoi: number | null;
+    gioi_tinh: "nam" | "nu" | "khac" | null;
+    doctor_id: string;
+    phong_kham: string | null;
+    muc_uu_tien: HangDoiMucUuTien;
+    trang_thai: HangDoiTrangThai;
+    checkin_time: string;
+    so_lan_goi: number;
+    thoi_gian_cho_uoc_tinh_phut: number | null;
+}
+
+// POST /nurse/queue/checkin — body: online cần appointment_id, offline cần ten_benh_nhan + so_dien_thoai
+export interface NurseQueueCheckinPayload {
+    appointment_id?: string;
+    doctor_id?: string;
+    ten_benh_nhan?: string;
+    so_dien_thoai?: string;
+    tuoi?: number;
+    gioi_tinh?: "nam" | "nu" | "khac";
+    specialty_id?: string;
+}
+
+// entry trả về từ checkin() là doc Mongoose thô (_id, không phải id như list())
+export interface NurseQueueCheckinEntry {
+    _id: string;
+    nguon: "online" | "offline";
+    appointment_id?: string | null;
+    ten_benh_nhan: string;
+    so_dien_thoai: string | null;
+    tuoi: number | null;
+    gioi_tinh: "nam" | "nu" | "khac" | null;
+    doctor_id: string;
+    phong_kham: string | null;
+    muc_uu_tien: HangDoiMucUuTien;
+    trang_thai: HangDoiTrangThai;
+    checkin_time: string;
+    so_lan_goi: number;
+}
+
+export interface NurseQueueCheckinResult {
+    entry: NurseQueueCheckinEntry;
+    canh_bao_qua_tai: string | null;
+}
+
+// PATCH /nurse/queue/:id/{call,into-room,finish,skip,cancel}
+export interface NurseQueueActionResult {
+    id: string;
+    trang_thai: HangDoiTrangThai;
+    so_lan_goi?: number;
 }
