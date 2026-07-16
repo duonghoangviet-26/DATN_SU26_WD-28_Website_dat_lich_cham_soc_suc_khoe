@@ -6,6 +6,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import PageHeader from '@/components/common/PageHeader'
 import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { paymentService } from '@/services/payment.service'
+import { subscribeAdminRealtime } from '@/services/realtime.service'
 import type { PaymentItem, TransactionStatus } from '@/types'
 import { PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
 import { formatDateTime, formatPrice } from '@/utils/format'
@@ -151,10 +152,12 @@ export default function ManagePayments() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
   const [confirm, setConfirm] = useState<PaymentItem | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detail, setDetail] = useState<PaymentItem | null>(null)
+  const [realtimeTick, setRealtimeTick] = useState(0)
 
   useEffect(() => {
     let ignore = false
@@ -169,14 +172,18 @@ export default function ManagePayments() {
           status,
           from: fromDate || undefined,
           to: toDate || undefined,
+          page,
+          limit: itemsPerPage,
         })
 
         if (!ignore) {
-          setPayments(data)
+          setPayments(data.data)
+          setPagination(data.pagination)
         }
       } catch (nextError: any) {
         if (!ignore) {
           setPayments([])
+          setPagination({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
           setError(nextError?.response?.data?.message || nextError?.message || 'Không tải được danh sách giao dịch.')
         }
       } finally {
@@ -191,7 +198,13 @@ export default function ManagePayments() {
     return () => {
       ignore = true
     }
-  }, [keyword, status, fromDate, toDate])
+  }, [keyword, status, fromDate, toDate, page, realtimeTick])
+
+  useEffect(() => subscribeAdminRealtime({
+    'admin:appointment_created': () => setRealtimeTick((tick) => tick + 1),
+    'admin:appointment_updated': () => setRealtimeTick((tick) => tick + 1),
+    'admin:payment_updated': () => setRealtimeTick((tick) => tick + 1),
+  }), [])
 
   useEffect(() => {
     setPage(1)
@@ -207,18 +220,11 @@ export default function ManagePayments() {
       .reduce((sum, payment) => sum + payment.so_tien, 0),
   }), [payments])
 
-  const totalPages = Math.max(1, Math.ceil(payments.length / itemsPerPage))
-  const visiblePayments = useMemo(() => {
-    const safePage = Math.min(page, totalPages)
-    const startIndex = (safePage - 1) * itemsPerPage
-    return payments.slice(startIndex, startIndex + itemsPerPage)
-  }, [page, payments, totalPages])
-
   useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages)
+    if (page > pagination.totalPages) {
+      setPage(pagination.totalPages)
     }
-  }, [page, totalPages])
+  }, [page, pagination.totalPages])
 
   async function handleRefund() {
     if (!confirm) return
@@ -379,7 +385,7 @@ export default function ManagePayments() {
                     Không tìm thấy giao dịch.
                   </td>
                 </tr>
-              ) : visiblePayments.map((payment) => (
+              ) : payments.map((payment) => (
                 <tr key={payment.id} className="align-top hover:bg-slate-50">
                   <td className="px-4 py-3">
                     <p className="font-mono text-xs font-semibold text-slate-700">{payment.ma_giao_dich || 'Chưa có mã'}</p>
@@ -456,9 +462,9 @@ export default function ManagePayments() {
         {!loading && payments.length > 0 && (
           <TablePaginationFooter
             currentPage={page}
-            totalPages={totalPages}
-            totalItems={payments.length}
-            currentItemCount={visiblePayments.length}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.total}
+            currentItemCount={payments.length}
             itemLabel="giao dịch"
             pageSize={itemsPerPage}
             onPageChange={setPage}

@@ -51,6 +51,24 @@ const SLOT_STATUS_OPTIONS: AdminDoctorScheduleSlot['status'][] = [
   'booked',
 ]
 
+const SLOT_STATUS_LABEL: Record<AdminDoctorScheduleSlot['status'], string> = {
+  active: 'Còn trống',
+  locked: 'Bị khóa',
+  cancelled: 'Đã hủy',
+  expired: 'Đã hết hạn',
+  pending_payment: 'Chờ thanh toán',
+  booked: 'Đã đặt lịch',
+}
+
+const SLOT_STATUS_SELECT_CLASS: Record<AdminDoctorScheduleSlot['status'], string> = {
+  active: 'border-emerald-200 bg-emerald-50 text-emerald-800 focus:border-emerald-400 focus:ring-emerald-100',
+  locked: 'border-slate-200 bg-slate-50 text-slate-700 focus:border-slate-400 focus:ring-slate-100',
+  cancelled: 'border-rose-200 bg-rose-50 text-rose-700 focus:border-rose-400 focus:ring-rose-100',
+  expired: 'border-amber-200 bg-amber-50 text-amber-800 focus:border-amber-400 focus:ring-amber-100',
+  pending_payment: 'border-blue-200 bg-blue-50 text-blue-800 focus:border-blue-400 focus:ring-blue-100',
+  booked: 'border-indigo-200 bg-indigo-50 text-indigo-800 focus:border-indigo-400 focus:ring-indigo-100',
+}
+
 const ACTION_LABEL: Record<AdminDoctorScheduleAuditLog['hanh_dong'], string> = {
   auto_generate: 'Tự động sinh lịch',
   manual_create: 'Tạo lịch thủ công',
@@ -217,12 +235,13 @@ function SlotEditorModal({
                         <select
                           value={slot.status}
                           onChange={(event) => updateSlotField(slot._id, 'status', event.target.value)}
-                          className="input w-full"
+                          className={`h-10 w-full rounded-xl border px-3 text-sm font-semibold shadow-sm outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none ${SLOT_STATUS_SELECT_CLASS[slot.status]}`}
                           disabled={immutableStatus}
+                          title={immutableStatus ? 'Slot đã có lịch hoặc đang chờ thanh toán nên không thể đổi trạng thái tại đây' : 'Chọn trạng thái slot'}
                         >
                           {SLOT_STATUS_OPTIONS.map((status) => (
                             <option key={status} value={status}>
-                              {status}
+                              {SLOT_STATUS_LABEL[status]}
                             </option>
                           ))}
                         </select>

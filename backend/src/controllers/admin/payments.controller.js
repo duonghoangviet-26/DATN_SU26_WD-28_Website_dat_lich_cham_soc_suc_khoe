@@ -7,9 +7,52 @@ import {
 } from '../../services/bookingPaymentState.service.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { ok, fail } from '../../utils/response.js'
+import { emitAdminRealtime } from '../../realtime/socket.js'
+
+const PAYMENT_LIST_LIMIT_MAX = 100
+const CLINIC_TIME_OFFSET_MS = 7 * 60 * 60 * 1000
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
+}
+
+function clampPositiveInt(value, fallback, max) {
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback
+  }
+
+  return Math.min(parsed, max)
+}
+
+function toDateOnly(value) {
+  const date = new Date(value)
+  const shiftedDate = new Date(date.getTime() + CLINIC_TIME_OFFSET_MS)
+  shiftedDate.setUTCHours(0, 0, 0, 0)
+  return new Date(shiftedDate.getTime() - CLINIC_TIME_OFFSET_MS)
+}
+
+function getPopulatedObject(value) {
+  return value && typeof value === 'object' && !mongoose.Types.ObjectId.isValid(value)
+    ? value
+    : null
+}
+
+function resolvePaymentPatient(payment) {
+  const directPatient = getPopulatedObject(payment.benh_nhan_id)
+  const appointment = getPopulatedObject(payment.appointment_id)
+  const appointmentPatient = getPopulatedObject(appointment?.user_id)
+
+  return {
+    ho_ten: directPatient?.ho_ten ?? appointmentPatient?.ho_ten ?? appointment?.ten_khach ?? null,
+    email: directPatient?.email ?? appointmentPatient?.email ?? appointment?.email_khach ?? null,
+    so_dien_thoai:
+      directPatient?.so_dien_thoai
+      ?? appointmentPatient?.so_dien_thoai
+      ?? appointment?.so_dien_thoai_khach
+      ?? appointment?.nguoi_dat_sdt
+      ?? null,
+  }
 }
 
 async function validateInvoiceOrThrow(hoaDonId) {
@@ -26,14 +69,16 @@ async function validateInvoiceOrThrow(hoaDonId) {
 }
 
 function mapPaymentDetail(payment) {
+  const patient = resolvePaymentPatient(payment)
+
   return {
     id: payment._id,
     hoa_don_id: payment.hoa_don_id?._id ?? payment.hoa_don_id ?? null,
     appointment_id: payment.appointment_id?._id ?? payment.appointment_id ?? null,
     ma_giao_dich: payment.ma_giao_dich,
-    benh_nhan: payment.benh_nhan_id?.ho_ten,
-    email: payment.benh_nhan_id?.email,
-    so_dien_thoai: payment.benh_nhan_id?.so_dien_thoai,
+    benh_nhan: patient.ho_ten,
+    email: patient.email,
+    so_dien_thoai: patient.so_dien_thoai,
     bac_si: payment.appointment_id?.doctor_id?.user_id?.ho_ten,
     so_tien: payment.so_tien,
     loai_thanh_toan: payment.loai_thanh_toan,
@@ -84,12 +129,17 @@ async function syncAppointmentPaymentStatusFromPayment(payment, invoiceState = n
 export async function list(req, res) {
   try {
     const { status, search, from, to } = req.query
+    const pageNum = clampPositiveInt(req.query.page, 1, Number.MAX_SAFE_INTEGER)
+    const limitNum = clampPositiveInt(req.query.limit, 20, PAYMENT_LIST_LIMIT_MAX)
+    const skip = (pageNum - 1) * limitNum
     const filter = {}
     if (status) filter.status = status
     if (from || to) {
       filter.ngay_tao = {}
       if (from) filter.ngay_tao.$gte = new Date(from)
       if (to) filter.ngay_tao.$lte = new Date(to)
+    } else if (!search?.trim()) {
+      filter.ngay_tao = { $gte: toDateOnly(new Date()) }
     }
     if (search) {
       filter.$or = [
@@ -97,31 +147,56 @@ export async function list(req, res) {
       ]
     }
 
-    const payments = await ThanhToan.find(filter)
-      .populate('benh_nhan_id', 'ho_ten')
-      .populate('hoa_don_id', 'so_hoa_don trang_thai_hoa_don')
-      .populate({
-        path: 'appointment_id',
-        populate: { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
-      })
-      .sort({ ngay_tao: -1 })
-      .lean()
+    const [total, payments] = await Promise.all([
+      ThanhToan.countDocuments(filter),
+      ThanhToan.find(filter)
+        .populate('benh_nhan_id', 'ho_ten email so_dien_thoai')
+        .populate('hoa_don_id', 'so_hoa_don trang_thai_hoa_don')
+        .populate({
+          path: 'appointment_id',
+          select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt',
+          populate: [
+            { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
+            { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
+          ],
+        })
+        .sort({ ngay_tao: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+    ])
 
-    const result = payments.map((p) => ({
-      id: p._id,
-      hoa_don_id: p.hoa_don_id?._id ?? p.hoa_don_id ?? null,
-      so_hoa_don: p.hoa_don_id?.so_hoa_don ?? null,
-      ma_giao_dich: p.ma_giao_dich,
-      benh_nhan: p.benh_nhan_id?.ho_ten ?? 'Khong ro',
-      bac_si: p.appointment_id?.doctor_id?.user_id?.ho_ten ?? 'Khong ro',
-      so_tien: p.so_tien,
-      loai_thanh_toan: p.loai_thanh_toan,
-      phuong_thuc: p.phuong_thuc,
-      status: p.status,
-      thoi_diem_thanh_toan: p.thoi_diem_thanh_toan,
-      ngay_tao: p.ngay_tao,
-    }))
-    return ok(res, result)
+    const result = payments.map((p) => {
+      const patient = resolvePaymentPatient(p)
+
+      return {
+        id: p._id,
+        hoa_don_id: p.hoa_don_id?._id ?? p.hoa_don_id ?? null,
+        so_hoa_don: p.hoa_don_id?.so_hoa_don ?? null,
+        ma_giao_dich: p.ma_giao_dich,
+        benh_nhan: patient.ho_ten ?? 'Không rõ',
+        email: patient.email,
+        so_dien_thoai: patient.so_dien_thoai,
+        bac_si: p.appointment_id?.doctor_id?.user_id?.ho_ten ?? 'Không rõ',
+        so_tien: p.so_tien,
+        loai_thanh_toan: p.loai_thanh_toan,
+        phuong_thuc: p.phuong_thuc,
+        status: p.status,
+        thoi_diem_thanh_toan: p.thoi_diem_thanh_toan,
+        ngay_tao: p.ngay_tao,
+      }
+    })
+    return res.status(200).json({
+      success: true,
+      message: 'Thành công',
+      data: result,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: total === 0 ? 1 : Math.ceil(total / limitNum),
+      },
+    })
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -194,7 +269,11 @@ export async function getById(req, res) {
       .populate('hoa_don_id', 'so_hoa_don trang_thai_hoa_don')
       .populate({
         path: 'appointment_id',
-        populate: { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
+        select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt',
+        populate: [
+          { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
+          { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
+        ],
       })
       .lean()
     if (!p) return fail(res, 404, 'Khong tim thay giao dich')
@@ -315,6 +394,18 @@ export async function update(req, res) {
     }
 
     const freshPayment = await ThanhToan.findById(payment._id)
+    emitAdminRealtime('admin:payment_updated', {
+      payment_id: payment._id,
+      appointment_id: payment.appointment_id ?? null,
+      status: freshPayment?.status ?? payment.status,
+      source: 'admin_payment_update',
+    })
+    if (payment.appointment_id) {
+      emitAdminRealtime('admin:appointment_updated', {
+        appointment_id: payment.appointment_id,
+        source: 'admin_payment_update',
+      })
+    }
 
     return ok(res, {
       ...mapPaymentDetail(freshPayment.toObject()),
@@ -362,6 +453,18 @@ export async function refund(req, res) {
       })
     } catch (_) {
       // Khong chan luong chinh
+    }
+    emitAdminRealtime('admin:payment_updated', {
+      payment_id: payment._id,
+      appointment_id: payment.appointment_id ?? null,
+      status: payment.status,
+      source: 'admin_payment_refund',
+    })
+    if (payment.appointment_id) {
+      emitAdminRealtime('admin:appointment_updated', {
+        appointment_id: payment.appointment_id,
+        source: 'admin_payment_refund',
+      })
     }
 
     return ok(res, { id: payment._id, status: payment.status }, 'Da hoan tien thanh cong')

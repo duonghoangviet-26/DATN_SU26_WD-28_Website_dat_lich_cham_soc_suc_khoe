@@ -6,6 +6,20 @@ interface PaymentFilters {
   status?: string
   from?: string
   to?: string
+  page?: number
+  limit?: number
+}
+
+interface PaymentPagination {
+  total: number
+  totalPages: number
+  page: number
+  limit: number
+}
+
+interface PaymentListResponse {
+  data: PaymentItem[]
+  pagination: PaymentPagination
 }
 
 function mapPaymentItem(item: Partial<PaymentItem> & { id?: string | number; _id?: string | number }): PaymentItem {
@@ -32,15 +46,25 @@ function mapPaymentItem(item: Partial<PaymentItem> & { id?: string | number; _id
 }
 
 export const paymentService = {
-  async getAll({ keyword = '', status = '', from = '', to = '' }: PaymentFilters = {}): Promise<PaymentItem[]> {
-    const params: Record<string, string> = {}
+  async getAll({ keyword = '', status = '', from = '', to = '', page = 1, limit = 8 }: PaymentFilters = {}): Promise<PaymentListResponse> {
+    const params: Record<string, string | number> = { page, limit }
     if (keyword) params.search = keyword
     if (status) params.status = status
     if (from) params.from = from
     if (to) params.to = to
 
-    const res = await axiosInstance.get<ApiResponse<PaymentItem[]>>('/admin/payments', { params })
-    return (Array.isArray(res.data.data) ? res.data.data : []).map(mapPaymentItem)
+    const res = await axiosInstance.get<ApiResponse<PaymentItem[]> & { pagination?: PaymentPagination }>('/admin/payments', { params })
+    const pagination = res.data.pagination ?? {
+      total: Array.isArray(res.data.data) ? res.data.data.length : 0,
+      totalPages: 1,
+      page,
+      limit,
+    }
+
+    return {
+      data: (Array.isArray(res.data.data) ? res.data.data : []).map(mapPaymentItem),
+      pagination,
+    }
   },
 
   async getById(id: string | number): Promise<PaymentItem> {

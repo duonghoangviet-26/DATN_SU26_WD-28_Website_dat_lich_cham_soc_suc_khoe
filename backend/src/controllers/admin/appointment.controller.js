@@ -9,6 +9,7 @@ import ThanhToan from '../../models/ThanhToan.js'
 import HoanTien from '../../models/HoanTien.js'
 import CaiDatThanhToan from '../../models/CaiDatThanhToan.js'
 import { ok, fail } from '../../utils/response.js'
+import { emitAdminRealtime } from '../../realtime/socket.js'
 
 const ADMIN_REFUND_SETTING_KEYS = ['hoan_tien_admin_huy', 'hoan_tien_admin_huy_khan_cap']
 const APPOINTMENT_LIST_LIMIT_MAX = 100
@@ -293,6 +294,19 @@ async function buildAppointmentQuery({
     query.ngay_kham = {}
     if (startDate) query.ngay_kham.$gte = toDateOnly(startDate)
     if (endDate) query.ngay_kham.$lte = endOfDateOnly(endDate)
+  }
+
+  const hasExplicitHistoryFilter =
+    Boolean(startDate || endDate)
+    || Boolean(keyword?.trim())
+    || Boolean(ma_lich_hen?.trim())
+    || Boolean(status)
+    || Boolean(payment_status)
+    || Boolean(quick_filter)
+
+  if (!hasExplicitHistoryFilter) {
+    query.ngay_kham = { $gte: toDateOnly(new Date()) }
+    query.status = { $in: ACTIVE_OPERATIONAL_STATUSES }
   }
 
   const andConditions = []
@@ -955,6 +969,12 @@ export async function cancelAppointment(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    emitAdminRealtime('admin:appointment_updated', {
+      appointment_id: appointment._id,
+      status: 'cancelled',
+      payment_status: appointment.payment_status,
+      source: 'admin_cancel',
+    })
 
     const updated = await loadAppointmentForResponse(id)
     return ok(res, formatAppointmentItem(updated), 'Đã hủy lịch hẹn thành công')
@@ -1028,6 +1048,12 @@ export async function restoreAppointment(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    emitAdminRealtime('admin:appointment_updated', {
+      appointment_id: appointment._id,
+      status: appointment.status,
+      payment_status: appointment.payment_status,
+      source: 'admin_restore',
+    })
 
     return ok(res, null, 'Khoi phuc lich hen thanh cong')
   } catch (err) {
@@ -1191,6 +1217,12 @@ export async function rescheduleAppointment(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    emitAdminRealtime('admin:appointment_updated', {
+      appointment_id: appointment._id,
+      status: appointment.status,
+      payment_status: appointment.payment_status,
+      source: 'admin_reschedule',
+    })
 
     const updatedAppointmentPayload = await loadAppointmentForResponse(appointment._id)
     return ok(res, formatAppointmentItem(updatedAppointmentPayload), 'Da doi lich thanh cong')
