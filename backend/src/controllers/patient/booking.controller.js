@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import {
   BacSi, LichLamViec, LichHen,
-  ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan,
+  ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan, DanhGia,
 } from '../../models/index.js'
 import {
   cancelAppointmentWithPaymentSync,
@@ -114,13 +114,14 @@ export async function getSpecialties(req, res) {
 // ─── GET /api/patient/booking/services ──────────────────────────────────────
 export async function getServices(req, res) {
   try {
-    const services = await DichVu.find({ loai: 'home', status: 'active' })
+    const services = await DichVu.find({ status: 'active' })
       .populate('specialty_id', 'ten')
       .sort({ ten: 1 })
       .lean()
     return ok(res, services.map((s) => ({
       id:         s._id,
       ten:        s.ten,
+      loai:       s.loai,
       gia:        s.gia,
       mo_ta:      s.mo_ta,
       mo_ta_ngan: s.mo_ta_ngan,
@@ -150,7 +151,7 @@ export async function getDoctors(req, res) {
     const doctors = await BacSi.find(filter)
       .populate('user_id',    'ho_ten anh_dai_dien')
       .populate('specialties','ten')
-      .select('user_id specialties gia_kham so_nam_kinh_nghiem diem_danh_gia tong_danh_gia tuoi_nhan_kham_tu tieu_su phong_kham_mac_dinh')
+      .select('user_id specialties gia_kham so_nam_kinh_nghiem diem_danh_gia tong_danh_gia tuoi_nhan_kham_tu tieu_su bang_cap kinh_nghiem phong_kham_mac_dinh')
       .lean()
 
     return ok(res, doctors.map((d) => ({
@@ -163,6 +164,8 @@ export async function getDoctors(req, res) {
       tong_danh_gia:      d.tong_danh_gia,
       tuoi_nhan_kham_tu:  d.tuoi_nhan_kham_tu,
       tieu_su:            d.tieu_su,
+      bang_cap:           d.bang_cap || '',
+      kinh_nghiem:        d.kinh_nghiem || '',
       phong_kham_mac_dinh: d.phong_kham_mac_dinh,
       specialties: (d.specialties ?? []).map((s) => ({ id: s._id, ten: s.ten })),
     })))
@@ -228,8 +231,21 @@ export async function getSlots(req, res) {
 
     if (!schedule) return ok(res, [])
 
+    // Lấy các lịch hẹn hợp lệ (chưa bị hủy) của bác sĩ trong ngày này
+    const bookedAppointments = await LichHen.find({
+      doctor_id: doc._id,
+      ngay_kham: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
+      status: { $ne: 'cancelled' },
+    }).select('slot_id').lean()
+
+    const bookedSlotIds = new Set(
+      bookedAppointments
+        .filter((app) => app.slot_id)
+        .map((app) => app.slot_id.toString())
+    )
+
     const slots = schedule.slots
-      .filter((s) => s.status === 'active')
+      .filter((s) => s.status === 'active' && !s.benh_nhan_id && !bookedSlotIds.has(s._id.toString()))
       .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
       .map((s) => ({
         id:          s._id,
@@ -516,6 +532,114 @@ export async function cancelBooking(req, res) {
     */
 
     return ok(res, { id: a._id, status: a.status, payment_status: a.payment_status }, 'Đã hủy lịch hẹn')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── GET /api/patient/booking/doctors/:id/reviews ───────────────────────────
+export async function getDoctorReviews(req, res) {
+  try {
+    const doctorId = req.params.id
+    const reviews = await DanhGia.find({ doctor_id: doctorId, status: 'visible', ngay_xoa: null })
+      .populate('user_id', 'ho_ten')
+      .sort({ ngay_tao: -1 })
+      .lean()
+    
+    return ok(res, reviews.map((r) => ({
+      id: r._id,
+      benh_nhan: r.user_id?.ho_ten || 'Bệnh nhân ẩn danh',
+      so_sao: r.so_sao,
+      noi_dung: r.noi_dung,
+      ngay_tao: r.ngay_tao,
+    })))
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── POST /api/patient/booking/doctors/:id/reviews ──────────────────────────
+export async function createDoctorReview(req, res) {
+  try {
+    const doctorId = req.params.id
+    const userId = req.user.id
+    const { so_sao, noi_dung } = req.body
+
+    if (!so_sao || so_sao < 1 || so_sao > 5) {
+      return fail(res, 400, 'Số sao phải từ 1 đến 5')
+    }
+
+    // 1. Tìm lịch hẹn của người dùng này với bác sĩ này
+    const appointments = await LichHen.find({
+      user_id: userId,
+      doctor_id: doctorId
+    }).lean()
+
+    if (appointments.length === 0) {
+      return fail(res, 400, 'Bạn cần đăng ký khám với bác sĩ này trước khi viết đánh giá.')
+    }
+
+    // 2. Tìm lịch hẹn chưa được đánh giá
+    let unreviewedAppointment = null
+    for (const appt of appointments) {
+      const existingReview = await DanhGia.findOne({ appointment_id: appt._id })
+      if (!existingReview) {
+        unreviewedAppointment = appt
+        break
+      }
+    }
+
+    if (!unreviewedAppointment) {
+      return fail(res, 400, 'Bạn đã đánh giá tất cả các lịch hẹn với bác sĩ này.')
+    }
+
+    // 3. Tạo đánh giá mới
+    const review = await DanhGia.create({
+      appointment_id: unreviewedAppointment._id,
+      user_id: userId,
+      doctor_id: doctorId,
+      so_sao: parseInt(so_sao),
+      noi_dung: noi_dung || '',
+      status: 'visible'
+    })
+
+    // 4. Cập nhật lại số sao trung bình & tổng số đánh giá của bác sĩ
+    const result = await DanhGia.aggregate([
+      {
+        $match: {
+          doctor_id: new mongoose.Types.ObjectId(doctorId),
+          status: 'visible',
+          ngay_xoa: null,
+        },
+      },
+      {
+        $group: {
+          _id: '$doctor_id',
+          trungBinhSao: { $avg: '$so_sao' },
+          tongSo: { $sum: 1 },
+        },
+      },
+    ])
+
+    const info = result[0] || { trungBinhSao: 0, tongSo: 0 }
+    const roundedRating = Math.round(info.trungBinhSao * 10) / 10
+
+    await BacSi.updateOne(
+      { _id: doctorId },
+      {
+        $set: {
+          diem_danh_gia: roundedRating,
+          tong_danh_gia: info.tongSo,
+        },
+      }
+    )
+
+    return ok(res, {
+      id: review._id,
+      so_sao: review.so_sao,
+      noi_dung: review.noi_dung,
+      ngay_tao: review.ngay_tao
+    }, 'Đã gửi đánh giá thành công')
   } catch (err) {
     return fail(res, 500, err.message)
   }

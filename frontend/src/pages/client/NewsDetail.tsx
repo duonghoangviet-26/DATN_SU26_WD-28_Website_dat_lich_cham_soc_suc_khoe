@@ -72,29 +72,14 @@ export default function NewsDetail() {
           </div>
 
           {/* Article Body */}
-          <div className="prose prose-slate max-w-none text-sm text-slate-600 space-y-4 leading-relaxed">
-            <p className="font-semibold text-slate-800 text-base italic border-l-4 border-brand-500 pl-4 py-1 bg-slate-50 rounded-r-md">
+          <div className="prose prose-slate max-w-none text-sm text-slate-650 space-y-4 leading-relaxed">
+            <p className="font-semibold text-slate-800 text-base italic border-l-4 border-brand-500 pl-4 py-1.5 bg-slate-50 rounded-r-md">
               "{article.noi_dung_ngan}"
             </p>
-            <p>{article.noi_dung}</p>
-            
-            <h3 className="text-base font-bold text-slate-800 pt-4">1. Những nguyên nhân gây bệnh phổ biến</h3>
-            <p>
-              Các thay đổi thất thường về thời tiết, ô nhiễm không khí tại các đô thị lớn cùng thói quen lạm dụng máy lạnh điều hòa trong phòng kín là những tác nhân chính xúc tác vi khuẩn đường hô hấp phát triển nhanh, gây sưng đau và thương tổn niêm mạc tai mũi họng.
-            </p>
-
-            <h3 className="text-base font-bold text-slate-800 pt-4">2. Cách phòng ngừa hiệu quả và chăm sóc khoa học</h3>
-            <ul className="list-disc list-inside space-y-2 pl-2">
-              <li>Súc họng, rửa mũi bằng dung dịch nước muối sinh lý NaCl 0.9% hàng ngày.</li>
-              <li>Giữ ấm cổ họng khi chuyển mùa, đeo khẩu trang khi ra đường lọc khói bụi.</li>
-              <li>Hạn chế uống nước đá lạnh hoặc đồ ăn cay nóng gây sưng phù nề hầu họng.</li>
-              <li>Đến ngay cơ sở phòng khám chuyên khoa thực hiện chụp soi Tai Mũi Họng khi có dấu hiệu sốt đau kéo dài quá 3 ngày.</li>
-            </ul>
-
-            <h3 className="text-base font-bold text-slate-800 pt-4">3. Khuyến nghị của Bác sĩ chuyên khoa</h3>
-            <p>
-              Tuyệt đối không tự ý ra tiệm thuốc tây mua kháng sinh uống cắt cơn đau họng tạm thời, do viêm họng phần lớn xuất phát từ virus, kháng sinh không có tác dụng và sẽ gây kháng thuốc nguy hiểm về sau. Hãy đi thăm khám để bác sĩ kê đơn điều trị chuẩn xác.
-            </p>
+            <div 
+              className="space-y-4 text-slate-600"
+              dangerouslySetInnerHTML={{ __html: article.noi_dung }}
+            />
           </div>
         </div>
 
