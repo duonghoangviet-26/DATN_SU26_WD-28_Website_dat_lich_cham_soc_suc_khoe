@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen } from '../../models/index.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { ok, fail } from '../../utils/response.js'
+import { emitAdminRealtime } from '../../realtime/socket.js'
 
 const VNPAY_SESSION_MINUTES = Number(process.env.VNPAY_SESSION_MINUTES || process.env.PAYMENT_HOLD_MINUTES || 15)
 const DEFAULT_CLIENT_BASE_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
@@ -353,6 +354,18 @@ export async function completeMockVnpayPayment(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    emitAdminRealtime('admin:payment_updated', {
+      payment_id: payment._id,
+      appointment_id: appointment._id,
+      status: 'paid',
+      source: 'patient_vnpay_mock_complete',
+    })
+    emitAdminRealtime('admin:appointment_updated', {
+      appointment_id: appointment._id,
+      status: 'confirmed',
+      payment_status: 'paid',
+      source: 'patient_vnpay_mock_complete',
+    })
 
     if (invoice?._id) {
       await tinhTrangThaiHoaDon(invoice._id)

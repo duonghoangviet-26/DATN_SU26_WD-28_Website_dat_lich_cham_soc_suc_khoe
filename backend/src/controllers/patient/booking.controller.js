@@ -8,6 +8,7 @@ import {
   withOptionalTransaction,
 } from '../../services/bookingPaymentState.service.js'
 import { ok, created, fail } from '../../utils/response.js'
+import { emitAdminRealtime } from '../../realtime/socket.js'
 
 const PAYMENT_HOLD_MINUTES = Number(process.env.PAYMENT_HOLD_MINUTES || process.env.VNPAY_SESSION_MINUTES || 15)
 
@@ -466,6 +467,18 @@ export async function createBooking(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    emitAdminRealtime('admin:appointment_created', {
+      appointment_id: appointment._id,
+      payment_id: payment._id,
+      invoice_id: invoice._id,
+      doctor_id: appointment.doctor_id,
+      schedule_id: appointment.schedule_id,
+      slot_id: appointment.slot_id,
+      ngay_kham: appointment.ngay_kham,
+      gio_kham: appointment.gio_kham,
+      status: appointment.status,
+      payment_status: appointment.payment_status,
+    })
 
     return created(res, {
       id:             appointment._id,

@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import Icon from '@/components/admin/icons'
 import PageHeader from '@/components/common/PageHeader'
 import { appointmentService } from '@/services/appointment.service'
+import { subscribeAdminRealtime } from '@/services/realtime.service'
 import type {
   AppointmentItem,
   AppointmentPagination,
@@ -115,6 +116,12 @@ export default function ManageAppointments() {
   useEffect(() => {
     fetchAppointments()
   }, [fetchAppointments])
+
+  useEffect(() => subscribeAdminRealtime({
+    'admin:appointment_created': () => fetchAppointments(page),
+    'admin:appointment_updated': () => fetchAppointments(page),
+    'admin:payment_updated': () => fetchAppointments(page),
+  }), [fetchAppointments, page])
 
   async function handleCancel(appointment: AppointmentItem, reason: string) {
     try {
