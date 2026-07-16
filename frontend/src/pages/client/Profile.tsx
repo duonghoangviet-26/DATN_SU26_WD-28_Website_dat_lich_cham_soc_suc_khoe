@@ -331,7 +331,7 @@ export default function Profile() {
     return 'Chưa thanh toán'
   }
 
-  const completedAppointments = appointments.filter((item) => item.status === 'completed')
+  const completedAppointments = appointments.filter((item) => item.status === 'completed' || item.da_co_ket_qua)
 
   if (authLoading || !user) {
     return null
@@ -708,12 +708,7 @@ export default function Profile() {
                     <li key={index} className="text-slate-700">
                       {typeof thuoc === 'string'
                         ? thuoc
-                        : [
-                            thuoc.ten_thuoc,
-                            thuoc.lieu_luong,
-                            thuoc.tan_suat,
-                            thuoc.ghi_chu,
-                          ].filter(Boolean).join(' - ')}
+                        : `${thuoc.ten_thuoc}${thuoc.lieu_luong ? ` (Liều lượng: ${thuoc.lieu_luong})` : ''} - ${thuoc.tan_suat || ''}${thuoc.so_ngay ? ` (Uống trong ${thuoc.so_ngay} ngày)` : ''}${thuoc.ghi_chu ? ` [Lưu ý: ${thuoc.ghi_chu}]` : ''}`}
                     </li>
                   ))}
                 </ul>
