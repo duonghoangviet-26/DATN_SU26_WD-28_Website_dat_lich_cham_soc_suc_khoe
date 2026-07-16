@@ -13,6 +13,7 @@ import {
   type CreatedReceptionistBookingResult,
   type ReceptionistBookingDoctor,
   type ReceptionistBookingSlot,
+  type ReceptionistPaymentStatusResult,
 } from '@/services/receptionist-booking.service'
 
 type BookingStep = 1 | 2 | 3 | 4 | 5
@@ -23,6 +24,22 @@ function formatSlotLabel(slot: ReceptionistBookingSlot) {
 
 function formatCurrency(value: number) {
   return `${value.toLocaleString('vi-VN')}đ`
+}
+
+function formatGatewayExpiry(expiresAt: string | null) {
+  if (!expiresAt) return '--'
+  return new Date(expiresAt).toLocaleString('vi-VN')
+}
+
+function getCountdownLabel(expiresAt: string | null, nowMs: number) {
+  if (!expiresAt) return null
+  const distance = new Date(expiresAt).getTime() - nowMs
+  if (distance <= 0) return 'Mã QR đã hết hạn'
+
+  const totalSeconds = Math.floor(distance / 1000)
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
+  const seconds = String(totalSeconds % 60).padStart(2, '0')
+  return `${minutes}:${seconds}`
 }
 
 export default function ReceptionistBooking() {
@@ -49,6 +66,11 @@ export default function ReceptionistBooking() {
   
   const [createdBooking, setCreatedBooking] = useState<CreatedReceptionistBookingResult | null>(null)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
+
+  const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
+  const [paymentSnapshot, setPaymentSnapshot] = useState<ReceptionistPaymentStatusResult | null>(null)
+  const [completingMockPayment, setCompletingMockPayment] = useState(false)
+  const [nowMs, setNowMs] = useState(Date.now())
 
   useEffect(() => {
     const datesList = []
@@ -115,28 +137,86 @@ export default function ReceptionistBooking() {
   }, [selectedDoctorId, selectedDate])
 
   useEffect(() => {
-    if (step === 5 && createdBooking?.qr_payload) {
-      let cancelled = false
-      QRCode.toDataURL(createdBooking.qr_payload, {
-        width: 320,
-        margin: 1,
-        errorCorrectionLevel: 'M',
+    if (step !== 5 || !createdBooking?.payment_id || paymentMethod !== 'transfer') return
+
+    let cancelled = false
+    setCreatingPaymentSession(true)
+    receptionistBookingService.createVnpaySession(createdBooking.payment_id)
+      .then((data) => {
+        if (!cancelled) setPaymentSnapshot(data)
       })
-        .then((url) => {
-          if (!cancelled) setQrCodeDataUrl(url)
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setQrCodeDataUrl('')
-            setToast('Không render được mã QR')
-          }
-        })
-      return () => { cancelled = true }
+      .catch((error: any) => {
+        if (!cancelled) setToast(error.response?.data?.message || 'Không tạo được session VNPAY mock')
+      })
+      .finally(() => {
+        if (!cancelled) setCreatingPaymentSession(false)
+      })
+
+    return () => {
+      cancelled = true
     }
-  }, [step, createdBooking?.qr_payload])
+  }, [step, createdBooking?.payment_id, paymentMethod])
+
+  useEffect(() => {
+    if (!paymentSnapshot?.gateway.qr_payload) {
+      setQrCodeDataUrl('')
+      return
+    }
+
+    let cancelled = false
+    QRCode.toDataURL(paymentSnapshot.gateway.qr_payload, {
+      width: 320,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    })
+      .then((url) => {
+        if (!cancelled) setQrCodeDataUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQrCodeDataUrl('')
+          setToast('Không render được mã QR VNPAY')
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [paymentSnapshot?.gateway.qr_payload])
+
+  useEffect(() => {
+    if (step !== 5 || !createdBooking?.payment_id || paymentSnapshot?.payment_status !== 'pending' || paymentMethod !== 'transfer') return
+
+    let cancelled = false
+    const intervalId = window.setInterval(() => {
+      receptionistBookingService.getPaymentStatus(createdBooking.payment_id)
+        .then((data) => {
+          if (!cancelled) setPaymentSnapshot(data)
+        })
+        .catch(() => {})
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [step, createdBooking?.payment_id, paymentSnapshot?.payment_status, paymentMethod])
+
+  useEffect(() => {
+    if (step !== 5 || paymentSnapshot?.payment_status !== 'pending' || paymentSnapshot.gateway.is_expired) return
+
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now())
+    }, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [step, paymentSnapshot?.payment_status, paymentSnapshot?.gateway.is_expired])
 
   const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) || null
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) || null
+  const countdownLabel = getCountdownLabel(paymentSnapshot?.gateway.expires_at || null, nowMs)
 
   function handleNextStep() {
     if (step === 1) {
@@ -158,6 +238,10 @@ export default function ReceptionistBooking() {
     if (step === 3) {
       if (!patientName.trim() || !patientPhone.trim()) {
         setToast('Họ tên và số điện thoại liên hệ là bắt buộc.')
+        return
+      }
+      if (!/^\d{10}$/.test(patientPhone.trim())) {
+        setToast('Số điện thoại phải bao gồm đúng 10 chữ số.')
         return
       }
       setStep(4)
@@ -209,6 +293,42 @@ export default function ReceptionistBooking() {
     setPaymentMethod('cash')
     setCreatedBooking(null)
     setQrCodeDataUrl('')
+    setPaymentSnapshot(null)
+    setCreatingPaymentSession(false)
+  }
+
+  async function handleRefreshVnpaySession() {
+    if (!createdBooking?.payment_id) return
+    setCreatingPaymentSession(true)
+    try {
+      const data = await receptionistBookingService.createVnpaySession(createdBooking.payment_id)
+      setPaymentSnapshot(data)
+      setToast('Đã tạo lại session VNPAY mock')
+    } catch (error: any) {
+      setToast(error.response?.data?.message || error.message || 'Lỗi khi tạo lại session')
+    } finally {
+      setCreatingPaymentSession(false)
+    }
+  }
+
+  function handleOpenVnpayPage() {
+    if (paymentSnapshot?.gateway.payment_url) {
+      window.open(paymentSnapshot.gateway.payment_url, '_blank')
+    }
+  }
+
+  async function handleMockCompletePayment() {
+    if (!createdBooking?.payment_id) return
+    setCompletingMockPayment(true)
+    try {
+      const data = await receptionistBookingService.completeMockVnpayPayment(createdBooking.payment_id)
+      setPaymentSnapshot(data)
+      setToast('Đã mô phỏng thanh toán thành công!')
+    } catch (error: any) {
+      setToast(error.response?.data?.message || error.message || 'Lỗi khi mô phỏng thanh toán')
+    } finally {
+      setCompletingMockPayment(false)
+    }
   }
 
   if (loadingDoctors) {
@@ -442,24 +562,114 @@ export default function ReceptionistBooking() {
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <h3 className="text-xl font-extrabold text-slate-800">Chờ Khách Thanh Toán</h3>
-              <p className="text-sm text-slate-500">
-                Lịch hẹn đã tạo, vui lòng đưa khách hàng quét mã QR dưới đây để chuyển khoản.
-              </p>
-              <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 p-6">
-                {qrCodeDataUrl ? (
-                  <img src={qrCodeDataUrl} alt="Fake QR" className="h-64 w-64 rounded-xl shadow-sm" />
-                ) : (
-                  <div className="grid h-64 w-64 place-items-center rounded-xl bg-white text-slate-400">
-                    Đang tạo mã QR...
+            <div className="space-y-6 text-left">
+              <div className="space-y-2 text-center">
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-600">VNPAY Mock QR</p>
+                <h3 className="text-xl font-extrabold text-slate-800">Thanh toán qua mã QR</h3>
+                <p className="text-sm text-slate-500">
+                  Hệ thống đã tạo lịch hẹn và giao dịch thật trong MongoDB. Bước này mô phỏng luồng quét QR VNPAY cho Lễ tân.
+                </p>
+              </div>
+
+              <div className="grid gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-5 sm:grid-cols-2">
+                <div className="space-y-2 text-sm text-slate-600">
+                  <p><span className="font-semibold text-slate-500">Mã lịch hẹn:</span> {createdBooking.appointment_id}</p>
+                </div>
+                <div className="space-y-2 text-sm text-slate-600">
+                  <p><span className="font-semibold text-slate-500">Trạng thái thanh toán:</span> {paymentSnapshot?.payment_status || 'pending'}</p>
+                </div>
+              </div>
+
+              {creatingPaymentSession && !paymentSnapshot ? (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                  Đang tạo session VNPAY và mã QR thanh toán...
+                </div>
+              ) : paymentSnapshot?.payment_status === 'paid' ? (
+                <div className="space-y-4 rounded-2xl border border-slate-100 bg-emerald-50/50 p-8 text-center">
+                  <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-3xl text-emerald-600">
+                    ✓
                   </div>
-                )}
-                <p className="text-xs font-semibold text-slate-400">Mã QR giả định cho Lễ tân</p>
-              </div>
-              <div className="pt-4">
-                <Button onClick={handleReset}>Tạo lịch hẹn khác</Button>
-              </div>
+                  <h3 className="text-xl font-extrabold text-slate-800">Thanh toán VNPAY thành công!</h3>
+                  <p className="text-sm text-slate-500">
+                    Hệ thống đã ghi nhận thanh toán mô phỏng. Lịch hẹn hiện tại đã được xác nhận (Confirmed).
+                  </p>
+                  <div className="pt-4 flex justify-center gap-3">
+                    <Button variant="secondary" onClick={() => navigate('/receptionist/appointments')}>Về Danh sách Lịch hẹn</Button>
+                    <Button onClick={handleReset}>Tạo lịch hẹn khác</Button>
+                  </div>
+                </div>
+              ) : paymentSnapshot ? (
+                <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Mã tham chiếu VNPAY</p>
+                        <p className="mt-1 font-mono text-sm font-semibold text-slate-800">{paymentSnapshot.gateway.vnp_txn_ref || '--'}</p>
+                      </div>
+                      <div className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        paymentSnapshot.gateway.is_expired ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        {countdownLabel || 'Sẵn sàng'}
+                      </div>
+                    </div>
+
+                    <div className="grid place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
+                      {qrCodeDataUrl ? (
+                        <img src={qrCodeDataUrl} alt="Mã QR VNPAY mock" className="h-72 w-72 rounded-xl bg-white p-3 shadow-sm" />
+                      ) : (
+                        <div className="grid h-72 w-72 place-items-center rounded-xl bg-white text-sm text-slate-400 shadow-sm">
+                          Đang render mã QR...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5">
+                    <div className="space-y-2 text-sm text-slate-600">
+                      <p><span className="font-semibold text-slate-500">Nhà cung cấp:</span> {paymentSnapshot.gateway.provider || 'vnpay'}</p>
+                      <p><span className="font-semibold text-slate-500">Mode:</span> {paymentSnapshot.gateway.mode || 'mock'}</p>
+                      <p><span className="font-semibold text-slate-500">Merchant:</span> {paymentSnapshot.gateway.merchant_name || 'VitaFamily'}</p>
+                      <p><span className="font-semibold text-slate-500">Mã merchant:</span> {paymentSnapshot.gateway.merchant_code || 'VITAFAMILY'}</p>
+                      <p><span className="font-semibold text-slate-500">Ngân hàng:</span> {paymentSnapshot.gateway.bank_code || 'VNBANK'}</p>
+                      <p><span className="font-semibold text-slate-500">Hạn thanh toán:</span> {formatGatewayExpiry(paymentSnapshot.gateway.expires_at)}</p>
+                      <p><span className="font-semibold text-slate-500">Trạng thái gateway:</span> {paymentSnapshot.gateway.mock_status || 'waiting_for_customer'}</p>
+                    </div>
+
+                    {paymentSnapshot.gateway.is_expired ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                        Mã QR này đã hết hạn. Lịch hẹn vẫn còn ở trạng thái pending/unpaid, bạn có thể tạo lại mã mới để tiếp tục thanh toán.
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+                        QR này được tạo theo session VNPAY mock. Lịch hẹn sẽ chuyển sang confirmed khi nhận mô phỏng callback.
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-3 pt-2">
+                      <Button variant="secondary" onClick={handleOpenVnpayPage} disabled={!paymentSnapshot.gateway.payment_url}>
+                        Mở trang VNPAY
+                      </Button>
+                      <Button variant="secondary" onClick={handleRefreshVnpaySession} loading={creatingPaymentSession}>
+                        Tạo lại mã QR
+                      </Button>
+                      <Button
+                        onClick={handleMockCompletePayment}
+                        loading={completingMockPayment}
+                        disabled={paymentSnapshot.gateway.is_expired || paymentSnapshot.payment_status !== 'pending'}
+                      >
+                        Mô phỏng thanh toán thành công
+                      </Button>
+                      <Button variant="secondary" onClick={() => navigate('/receptionist/appointments')}>
+                        Thanh toán sau
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-600">
+                  Không tải được session VNPAY mock cho lịch hẹn này.
+                </div>
+              )}
             </div>
           )}
         </div>
