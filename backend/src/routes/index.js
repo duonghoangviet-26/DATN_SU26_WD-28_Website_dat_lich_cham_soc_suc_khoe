@@ -8,6 +8,7 @@ import specialtiesRoutes  from './admin/specialties.routes.js'
 import uploadRoutes       from './admin/upload.routes.js'
 import doctorRoutes       from './doctor/index.js'
 import adminDoctorRoutes  from './doctor.routes.js'
+import receptionistRoutes from './receptionist/index.js'
 import patientRoutes      from './patient/index.js'
 
 const router = Router()
@@ -34,5 +35,6 @@ router.use('/admin/clinic', specialtiesRoutes)
 router.use('/admin/appointments', appointmentRoutes)
 router.use('/admin/doctors', adminDoctorRoutes)
 router.use('/admin/notifications', notificationRoutes)
+router.use('/receptionist', receptionistRoutes)
 
 export default router
