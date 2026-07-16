@@ -6,14 +6,28 @@ import { ok, fail } from '../../utils/response.js'
 // Routes: /api/doctor/stats, /api/doctor/reviews
 // ============================================================
 
+// Toàn tiến trình chạy TZ=UTC (config/timezone.js) nên `new Date(); setHours(0,0,0,0)` tính ra
+// UTC-midnight của "now" theo UTC — SAI trong khung 00:00–06:59 giờ VN (UTC+7, không DST), lúc
+// đó UTC vẫn còn là NGÀY HÔM TRƯỚC (vd VN 2026-07-16 03:00 = UTC 2026-07-15 20:00). Phải cộng
+// bù +7h trước khi lấy Y-M-D thì mới ra đúng ngày lịch Việt Nam (khớp quy ước ngay_kham/ngay lưu
+// UTC-midnight đại diện ngày VN — xem docs/Bác sĩ/Audit tong the, GAP-002).
+const VN_OFFSET_MS = 7 * 3600 * 1000
+function startOfTodayVN(now = new Date()) {
+  const vn = new Date(now.getTime() + VN_OFFSET_MS)
+  return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()))
+}
+function startOfMonthVN(now = new Date()) {
+  const vn = new Date(now.getTime() + VN_OFFSET_MS)
+  return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), 1))
+}
+
 // ─── GET /api/doctor/stats ───────────────────────────────────────────────────
 export async function getStats(req, res) {
   try {
     const doc = await BacSi.findOne({ user_id: req.user.id }).lean()
     if (!doc) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
 
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const startOfMonth = startOfMonthVN()
 
     const [tong, thangNay, completed, cancelled] = await Promise.all([
       LichHen.countDocuments({ doctor_id: doc._id }),
@@ -76,10 +90,9 @@ export async function getTodayOverview(req, res) {
       .lean()
     if (!doc) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
 
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
+    const todayStart = startOfTodayVN()
     const todayEnd = new Date(todayStart)
-    todayEnd.setDate(todayEnd.getDate() + 1)
+    todayEnd.setUTCDate(todayEnd.getUTCDate() + 1)
 
     const [schedule, appointments] = await Promise.all([
       LichLamViec.findOne({ doctor_id: doc._id, ngay: { $gte: todayStart, $lt: todayEnd } })
@@ -112,7 +125,10 @@ export async function getTodayOverview(req, res) {
       // Module gán y tá cho ca làm việc đã có từ Kế hoạch 1 (LichLamViec.nurse_id) — trước đây
       // hardcode null vì module chưa tồn tại, giờ trả đúng dữ liệu thật.
       y_ta_ho_tro: schedule?.nurse_id ? { id: schedule.nurse_id._id, ho_ten: schedule.nurse_id.ho_ten } : null,
-      tong_lich_hen: appointments.length,
+      // Loại cancelled — lịch đã hủy không còn tính là "lịch hẹn hôm nay" (khớp cách
+      // lich_hen_gan_nhat bên dưới đã lọc), tránh card "Tổng" trông vênh so với các card khác
+      // khi có lịch bị hủy trong ngày (xem docs/Bác sĩ/Audit tong the, GAP-008).
+      tong_lich_hen: appointments.filter((a) => a.status !== 'cancelled').length,
       // checked_in cũng là "chờ khám" — khớp cách đếm dang_cho_kham bên nurse/dashboard.controller.js
       cho_kham: appointments.filter((a) => ['confirmed', 'checked_in'].includes(a.status)).length,
       dang_kham: appointments.filter((a) => a.status === 'in_progress').length,

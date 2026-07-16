@@ -6,7 +6,7 @@ import Icon from '@/components/admin/icons'
 import { nurseService } from '@/services/nurse.service'
 import type { NurseAppointmentDetail as NurseAppointmentDetailType } from '@/types'
 import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
-import { formatDate } from '@/utils/format'
+import { formatDate, formatDateTime } from '@/utils/format'
 
 const KET_QUA_STATUS_LABEL: Record<string, string> = {
   ban_nhap: 'Nháp',
@@ -218,6 +218,30 @@ export default function NurseAppointmentDetail() {
                 <p className="font-semibold">Bác sĩ yêu cầu chỉnh sửa</p>
                 <p>{appt.ket_qua.doctor_revision_note}</p>
               </div>
+            </div>
+          )}
+          {/* Lịch sử đầy đủ các lần xác nhận/yêu cầu chỉnh sửa — trước đây y tá chỉ thấy lý do
+              mới nhất ở trên, không thấy toàn bộ dòng thời gian như bác sĩ (GAP-013). */}
+          {appt.ket_qua?.lich_su_sua && appt.ket_qua.lich_su_sua.length > 0 && (
+            <div className="card p-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Lịch sử thay đổi</p>
+              <ul className="space-y-2">
+                {appt.ket_qua.lich_su_sua.map((h, i) => {
+                  const nguoiThucHien = typeof h.nguoi_sua_id === 'object' ? h.nguoi_sua_id?.ho_ten : undefined
+                  return (
+                    <li key={i} className="flex items-start gap-2 text-xs">
+                      <Icon name="clock" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300" />
+                      <div>
+                        <p className="text-slate-700">{h.noi_dung ?? 'Cập nhật hồ sơ'}</p>
+                        <p className="mt-0.5 text-slate-400">
+                          {formatDateTime(h.thoi_diem_sua)}
+                          {nguoiThucHien && ` · ${nguoiThucHien}`}
+                        </p>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
             </div>
           )}
           {ketQuaStatus === 'cho_xac_nhan' && (

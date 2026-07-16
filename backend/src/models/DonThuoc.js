@@ -41,9 +41,13 @@ const prescriptionSchema = new mongoose.Schema(
       ref: 'KetQuaKham',
       required: true,
     },
+    // Dù tên field gợi ý 'HoSoYTe', toàn bộ code ghi/đọc thực tế đều gán _id của KetQuaKham vào
+    // đây (xem doctor/appointments.controller.js createResult/updateResult) — ref khai đúng
+    // theo dữ liệu thật để .populate() hoạt động (trước đây khai nhầm 'HoSoYTe', khiến admin
+    // xem đơn thuốc luôn ra null — xem docs/Bác sĩ/Audit tong the, GAP-006).
     medical_record_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'HoSoYTe',
+      ref: 'KetQuaKham',
       default: null,
     },
     member_id: {

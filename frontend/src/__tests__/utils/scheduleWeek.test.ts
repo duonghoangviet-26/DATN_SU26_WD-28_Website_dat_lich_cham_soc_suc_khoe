@@ -28,10 +28,11 @@ describe('getMondayOfWeek', () => {
     expect(monday.getDay()).toBe(1)
   })
 
-  it('Chủ nhật thuộc tuần bắt đầu từ Thứ Hai TRƯỚC đó (không phải tuần sau)', () => {
-    // 2026-07-19 là Chủ nhật
+  it('Chủ nhật nhảy sang Thứ Hai tuần SAU (không lùi về tuần đã qua) — GAP-009', () => {
+    // 2026-07-19 là Chủ nhật — Chủ nhật không phải ngày làm việc (T2-T7), nên mở trang đúng
+    // hôm đó phải thấy tuần làm việc SẮP TỚI, không phải tuần đã kết thúc hôm qua (Thứ Bảy).
     const monday = getMondayOfWeek(new Date(2026, 6, 19))
-    expect(monday.getDate()).toBe(13)
+    expect(monday.getDate()).toBe(20) // Thứ Hai 20/07 (ngày mai), không phải 13/07
     expect(monday.getDay()).toBe(1)
   })
 

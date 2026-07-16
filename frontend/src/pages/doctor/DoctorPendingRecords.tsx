@@ -3,10 +3,10 @@ import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
 import Icon from '@/components/admin/icons'
+import ExamResultModal from '@/components/doctor/ExamResultModal'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
-import { examinationService } from '@/services/examination.service'
-import type { DoctorPendingRecord, ExaminationResult, KetQuaKhamStatus } from '@/types'
-import { formatDate, formatDateTime } from '@/utils/format'
+import type { DoctorPendingRecord, DoctorAppointmentDetail, KetQuaKhamStatus } from '@/types'
+import { formatDate } from '@/utils/format'
 import { KET_QUA_KHAM_STATUS_COLOR } from '@/utils/constants'
 
 const KET_QUA_STATUS_LABEL: Record<KetQuaKhamStatus, string> = {
@@ -19,136 +19,6 @@ const KET_QUA_STATUS_LABEL: Record<KetQuaKhamStatus, string> = {
 // Header bảng: đủ tương phản, không viết hoa toàn bộ (đồng bộ với DoctorAppointments.tsx).
 const TH = 'px-4 py-3 text-xs font-semibold text-slate-600'
 
-// ─── Modal xem chi tiết hồ sơ (chỉ xem — xác nhận/yêu cầu chỉnh sửa thực hiện ở
-// trang Lịch hẹn của tôi, màn Chi tiết lịch hẹn) ──────────────────────────────
-function RecordViewModal({ record, onClose }: { record: DoctorPendingRecord; onClose: () => void }) {
-  const [loading, setLoading] = useState(true)
-  const [result, setResult] = useState<ExaminationResult | null>(null)
-
-  useEffect(() => {
-    examinationService.getByAppointment(record.appointment_id)
-      .then(setResult)
-      .finally(() => setLoading(false))
-  }, [record.appointment_id])
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
-      <div className="my-6 w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <p className="font-semibold text-slate-800">Hồ sơ khám</p>
-            <p className="text-sm text-slate-500">
-              {record.benh_nhan} · {formatDate(record.ngay_kham)}
-            </p>
-          </div>
-          <button onClick={onClose} className="btn-icon">
-            <Icon name="x" className="h-5 w-5" />
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="flex h-40 items-center justify-center text-slate-400">Đang tải...</div>
-        ) : !result ? (
-          <div className="flex h-40 flex-col items-center justify-center gap-2 text-slate-400">
-            <Icon name="file-text" className="h-8 w-8 text-slate-200" />
-            <p className="text-sm">Không tìm thấy nội dung hồ sơ.</p>
-          </div>
-        ) : (
-          <div className="space-y-4 px-6 py-5 text-sm">
-            <div className="flex flex-wrap gap-x-8 gap-y-2">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Dịch vụ</p>
-                <p className="mt-0.5 text-slate-700">{record.ten_dich_vu ?? '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Y tá nhập</p>
-                <p className="mt-0.5 text-slate-700">{record.nguoi_nhap ?? 'Không rõ'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Trạng thái</p>
-                <p className="mt-0.5">
-                  <Badge color={KET_QUA_KHAM_STATUS_COLOR[record.status]}>{KET_QUA_STATUS_LABEL[record.status]}</Badge>
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Chẩn đoán</p>
-              <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{result.chan_doan}</p>
-            </div>
-
-            {result.huong_dan_dieu_tri && (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Hướng dẫn điều trị</p>
-                <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{result.huong_dan_dieu_tri}</p>
-              </div>
-            )}
-
-            {result.ghi_chu && (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ghi chú</p>
-                <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{result.ghi_chu}</p>
-              </div>
-            )}
-
-            {result.ngay_tai_kham && (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ngày tái khám</p>
-                <p className="mt-0.5 text-slate-700">{formatDate(result.ngay_tai_kham)}</p>
-              </div>
-            )}
-
-            {result.thuoc.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Đơn thuốc</p>
-                <ul className="space-y-1.5">
-                  {result.thuoc.map((t) => (
-                    <li key={t.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                      <span className="font-semibold text-slate-800">{t.ten_thuoc}</span>
-                      {t.lieu_luong && <span> · {t.lieu_luong}</span>}
-                      {t.tan_suat && <span> · {t.tan_suat}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Lịch sử thay đổi — đối chiếu sau này khi hồ sơ đã được xác nhận hoặc yêu cầu chỉnh sửa */}
-            {result.lich_su_sua && result.lich_su_sua.length > 0 && (
-              <div className="border-t border-slate-100 pt-3">
-                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Lịch sử thay đổi</p>
-                <ul className="space-y-2">
-                  {result.lich_su_sua.map((h, i) => {
-                    const nguoiThucHien = typeof h.nguoi_sua_id === 'object' ? h.nguoi_sua_id?.ho_ten : undefined
-                    return (
-                      <li key={i} className="flex items-start gap-2 text-xs">
-                        <Icon name="clock" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300" />
-                        <div>
-                          <p className="text-slate-700">{h.noi_dung ?? 'Cập nhật hồ sơ'}</p>
-                          <p className="mt-0.5 text-slate-400">
-                            {formatDateTime(h.thoi_diem_sua)}
-                            {nguoiThucHien && ` · ${nguoiThucHien}`}
-                          </p>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            )}
-
-            <div className="flex justify-end border-t border-slate-100 pt-3">
-              <button type="button" onClick={onClose} className="btn-secondary">Đóng</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Main page ────────────────────────────────────────────────────────────────
-
 const STATUS_FILTER_OPTIONS: { value: '' | KetQuaKhamStatus; label: string }[] = [
   { value: '', label: 'Tất cả trạng thái' },
   { value: 'cho_xac_nhan', label: 'Chờ xác nhận' },
@@ -160,7 +30,12 @@ export default function DoctorPendingRecords() {
   const [records, setRecords] = useState<DoctorPendingRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [viewing, setViewing] = useState<DoctorPendingRecord | null>(null)
+
+  // Hồ sơ đang mở: `active` là dòng được chọn, `activeAppt` là chi tiết lịch hẹn đã tải (chứa
+  // thông tin bệnh nhân đầy đủ — dị ứng/bệnh nền/tuổi... để bác sĩ chẩn đoán & kê thuốc an toàn).
+  const [active, setActive] = useState<DoctorPendingRecord | null>(null)
+  const [activeAppt, setActiveAppt] = useState<DoctorAppointmentDetail | null>(null)
+  const [openError, setOpenError] = useState(false)
 
   // Bộ lọc — thuần client-side, dữ liệu đã tải đủ (cả lịch sử đã xử lý) trong 1 lần gọi.
   const [search, setSearch] = useState('')
@@ -171,8 +46,8 @@ export default function DoctorPendingRecords() {
   function load() {
     setLoading(true)
     setError(false)
-    // status='all' — bao gồm cả hồ sơ đã xác nhận/cần chỉnh sửa để bác sĩ tra cứu lại sau này,
-    // khác với lời gọi không tham số ở DoctorDashboard (chỉ đếm hồ sơ đang chờ xử lý).
+    // status='all' — gồm cả hồ sơ đã xác nhận/cần chỉnh sửa để bác sĩ tra cứu lại sau này,
+    // khác lời gọi không tham số ở DoctorDashboard (chỉ đếm hồ sơ đang chờ xử lý).
     doctorAppointmentService.listPendingResults('all')
       .then(setRecords)
       .catch(() => setError(true))
@@ -180,6 +55,25 @@ export default function DoctorPendingRecords() {
   }
 
   useEffect(load, [])
+
+  // Mở modal xử lý: tải chi tiết lịch hẹn (getById) để có đủ thông tin bệnh nhân cho modal.
+  async function openRecord(r: DoctorPendingRecord) {
+    setActive(r)
+    setActiveAppt(null)
+    setOpenError(false)
+    try {
+      const appt = await doctorAppointmentService.getById(r.appointment_id)
+      setActiveAppt(appt)
+    } catch {
+      setOpenError(true)
+    }
+  }
+
+  function closeModal() {
+    setActive(null)
+    setActiveAppt(null)
+    setOpenError(false)
+  }
 
   const hasFilter = !!(search || statusFilter || fromDate || toDate)
 
@@ -208,7 +102,7 @@ export default function DoctorPendingRecords() {
     <div>
       <PageHeader
         title="Hồ sơ chờ xác nhận"
-        description="Hồ sơ khám cần bạn xác nhận, và tra cứu lại hồ sơ đã xử lý trước đây."
+        description="Xem thông tin bệnh nhân, chỉnh sửa nếu cần rồi xác nhận hồ sơ khám ngay tại đây."
       />
 
       {/* ── Bộ lọc ── */}
@@ -317,15 +211,27 @@ export default function DoctorPendingRecords() {
                       <Badge color={KET_QUA_KHAM_STATUS_COLOR[r.status]}>{KET_QUA_STATUS_LABEL[r.status]}</Badge>
                     </td>
                     <td className="px-4 py-3 align-top">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="whitespace-nowrap"
-                        onClick={() => setViewing(r)}
-                        icon={<Icon name="eye" className="h-3.5 w-3.5" />}
-                      >
-                        Chi tiết
-                      </Button>
+                      {r.status === 'cho_xac_nhan' ? (
+                        <Button
+                          variant="success"
+                          size="sm"
+                          className="whitespace-nowrap"
+                          onClick={() => openRecord(r)}
+                          icon={<Icon name="check" className="h-3.5 w-3.5" />}
+                        >
+                          Xử lý
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="whitespace-nowrap"
+                          onClick={() => openRecord(r)}
+                          icon={<Icon name="eye" className="h-3.5 w-3.5" />}
+                        >
+                          Chi tiết
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -335,7 +241,32 @@ export default function DoctorPendingRecords() {
         </div>
       )}
 
-      {viewing && <RecordViewModal record={viewing} onClose={() => setViewing(null)} />}
+      {/* Đang tải chi tiết hồ sơ trước khi mở modal */}
+      {active && !activeAppt && !openError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="rounded-2xl bg-white px-8 py-6 text-sm text-slate-400 shadow-xl">Đang tải hồ sơ...</div>
+        </div>
+      )}
+
+      {active && openError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
+            <Icon name="alert-circle" className="mx-auto h-8 w-8 text-red-400" />
+            <p className="mt-2 text-sm text-slate-600">Không tải được hồ sơ. Vui lòng thử lại.</p>
+            <button onClick={closeModal} className="btn-secondary mt-4">Đóng</button>
+          </div>
+        </div>
+      )}
+
+      {active && activeAppt && (
+        <ExamResultModal
+          appt={activeAppt}
+          mode="confirm"
+          onClose={closeModal}
+          onConfirmed={() => { closeModal(); load() }}
+          onSaved={() => { closeModal(); load() }}
+        />
+      )}
     </div>
   )
 }

@@ -36,7 +36,7 @@ Khi debug root cause #1, kiểm tra trực tiếp document `DonThuoc` của fixt
 
 **Sau khi fix root cause #1**, document này đã được "tự vá" đúng schema mới nhờ chính lần `update()` trong test (đã verify lại raw doc: còn `so_ngay`, hết `ngay_bat_dau`/`ngay_ket_thuc`). Nhưng đây chỉ là 1 document được test chạm tới — **các `DonThuoc` khác tạo trước 2026-07-11 mà chưa từng được sửa lại vẫn còn thiếu `so_ngay`** cho tới khi có ai đó update chúng hoặc chạy migration thật.
 
-**Đề xuất cho việc rà soát DB Cloud (mục B trong yêu cầu gốc — sẽ bàn kỹ riêng):** viết 1 script migration một lần, quét toàn bộ `don_thuoc` có `items[].ngay_bat_dau` mà thiếu `so_ngay`, tính `so_ngay = round((ngay_ket_thuc - ngay_bat_dau) / 86400000)` rồi ghi đè, xoá 2 field cũ. Chưa làm trong lần sửa này vì nằm ngoài phạm vi "sửa bug lưu dữ liệu".
+**Cập nhật 2026-07-16 (sau khi bàn riêng mục B) — ĐÃ MIGRATE:** viết `backend/scripts/migrations/009-backfill-don-thuoc-so-ngay.js` (theo khuôn migration `007`), quét toàn bộ `don_thuoc` có item thiếu `so_ngay`, tính `so_ngay = round((ngay_ket_thuc - ngay_bat_dau) / 86400000)` (kẹp `[1, 90]`, mặc định 7 nếu thiếu mốc ngày), ghi đè `items` và bỏ 2 field cũ. Đã chạy trên MongoDB Cloud thật: **5 document / 6 item được migrate**, xác nhận lại `countDocuments` còn thiếu `so_ngay` = 0. Báo cáo chi tiết: `backend/reports/migration/don-thuoc-backfill-so-ngay.md`. Chạy lại `doctor.api.test.js` sau migration: 12/12 PASS, không có gì vỡ.
 
 ## 3. Root cause #2 — `ngay_tai_kham` hiển thị trống sau khi lưu (không phải lỗi lưu)
 
@@ -46,15 +46,27 @@ Backend **lưu đúng** `ngay_tai_kham` (đã xác nhận đọc code `updateRes
 
 **Fix:** cắt chuỗi về `YYYY-MM-DD` khi nạp vào state: `res.ngay_tai_kham ? res.ngay_tai_kham.slice(0, 10) : ''`.
 
+## 4. Mục C — Đơn thuốc không bắt buộc + nút xóa + khóa theo thời gian (2026-07-16)
+
+Khảo sát trước khi sửa: nút xóa từng thuốc (`removeDrug`) **đã có sẵn** trong code, nhưng bị khóa điều kiện `drugs.length > 1` (không bao giờ xóa hết được), và form luôn khởi tạo sẵn **1 dòng thuốc trống** (`useState([{ ...EMPTY_DRUG }])`) — nghĩa là đơn thuốc đang bị ép "phải có" dù backend đã sẵn sàng cho trường hợp không có (chỉ tạo `DonThuoc` `if (thuoc.length)`).
+
+Quyết định khung thời gian sửa/xóa đơn thuốc: **dùng chung khóa `co_the_sua` (24 giờ)** đã có sẵn cho toàn bộ hồ sơ khám, không thêm mốc thời gian riêng cho thuốc — đơn giản, nhất quán, không cần field mới.
+
+**Đã sửa:**
+- `backend/src/controllers/doctor/appointments.controller.js` (`updateResult()`): thêm nhánh — nếu `thuoc` là mảng **rỗng** và đã có `DonThuoc` từ trước, `deleteOne()` luôn (không để lại đơn rỗng/mồ côi trong DB khi bác sĩ xóa hết thuốc đã kê nhầm).
+- `frontend/src/pages/doctor/DoctorAppointments.tsx`: `drugs` mặc định `[]` (không còn dòng trống ép sẵn); bỏ điều kiện `drugs.length > 1` ở nút xóa (xóa được về 0); thêm dòng placeholder "Chưa kê đơn thuốc nào" khi rỗng.
+- `backend/tests/doctor.api.test.js`: thêm test "9" — xóa hết `thuoc` qua PUT phải xóa luôn `DonThuoc` trong DB (GET lại phải thấy `thuoc: []`), test tự phục hồi dữ liệu gốc ở `finally` để không phá fixture cho lần chạy sau.
+
+Chạy `node --test tests/doctor.api.test.js tests/doctor.schedule.test.js tests/doctor.leave-sync.test.js`: **32/32 PASS**. `tsc --noEmit`: không có lỗi mới trong `DoctorAppointments.tsx` (108 lỗi còn lại thuộc `types/index.ts`/`mock/doctor-appointments.ts`, có từ trước, ngoài phạm vi).
+
 ## Tổng kết thay đổi
 
 | File | Thay đổi |
 |---|---|
-| `backend/src/controllers/doctor/appointments.controller.js` | `updateResult()`: đọc `thuoc`, tạo/cập nhật `DonThuoc` tương ứng, mở rộng `.select()` lấy `member_id`/`ten_khach`/`ngay_kham` |
-| `backend/tests/doctor.api.test.js` | Thêm test tái hiện + xác nhận fix (mục "8. Cap nhat ket qua kham") |
-| `frontend/src/pages/doctor/DoctorAppointments.tsx` | Cắt `ngay_tai_kham` về `YYYY-MM-DD` khi nạp vào input date |
+| `backend/src/controllers/doctor/appointments.controller.js` | `updateResult()`: đọc `thuoc`, tạo/cập nhật/xóa `DonThuoc` tương ứng, mở rộng `.select()` lấy `member_id`/`ten_khach`/`ngay_kham` |
+| `backend/tests/doctor.api.test.js` | Test mục 8 (sửa `so_ngay`) + mục 9 (xóa hết thuốc → xóa `DonThuoc`) |
+| `frontend/src/pages/doctor/DoctorAppointments.tsx` | Cắt `ngay_tai_kham` về `YYYY-MM-DD`; `drugs` mặc định rỗng; bỏ giới hạn tối thiểu 1 dòng thuốc; thêm placeholder rỗng |
+| `backend/scripts/migrations/009-backfill-don-thuoc-so-ngay.js` | Migration một lần cho dữ liệu `DonThuoc` cũ trên MongoDB Cloud (đã chạy — mục 2) |
 
-**Chưa làm (ngoài phạm vi lần này, để bàn riêng theo đúng thứ tự bạn đã chọn — B/C/D):**
-- Migration dữ liệu `DonThuoc` cũ thiếu `so_ngay` trong MongoDB Cloud (mục 2 ở trên).
-- Đơn thuốc mặc định không bắt buộc + nút xóa thuốc + khóa sửa/xóa theo khung giờ.
+**Chưa làm (để bàn riêng — mục D):**
 - Lọc lịch hẹn theo luật 6 ngày làm việc / theo thứ + đổi tab lịch sử sang tìm kiếm thay vì hiển thị toàn bộ.

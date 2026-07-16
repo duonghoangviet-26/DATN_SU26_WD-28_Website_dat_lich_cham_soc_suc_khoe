@@ -271,10 +271,6 @@ export default function DoctorDashboard() {
           </ul>
         </div>
       </div>
-
-      <p className="mt-6 text-xs text-slate-400">
-        * Số liệu hiện là dữ liệu mẫu — sẽ thay bằng dữ liệu thật khi kết nối database.
-      </p>
     </div>
   )
 }

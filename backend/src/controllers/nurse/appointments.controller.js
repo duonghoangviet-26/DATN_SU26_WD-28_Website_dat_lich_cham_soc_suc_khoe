@@ -96,7 +96,7 @@ export async function getById(req, res) {
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn hoặc không thuộc ca của bạn')
 
     const [result, vitals] = await Promise.all([
-      KetQuaKham.findOne({ appointment_id: a._id }).lean(),
+      KetQuaKham.findOne({ appointment_id: a._id }).populate('lich_su_sua.nguoi_sua_id', 'ho_ten').lean(),
       SinhHieuKham.findOne({ appointment_id: a._id }).lean(),
     ])
 
@@ -134,6 +134,9 @@ export async function getById(req, res) {
         ghi_chu_dieu_duong: result.ghi_chu_dieu_duong,
         ngay_tai_kham: result.ngay_tai_kham,
         doctor_revision_note: result.doctor_revision_note,
+        // Y tá trước đây chỉ thấy lý do yêu cầu chỉnh sửa MỚI NHẤT (doctor_revision_note),
+        // không thấy toàn bộ lịch sử như bác sĩ — xem docs/Bác sĩ/Audit tong the, GAP-013.
+        lich_su_sua: result.lich_su_sua ?? [],
       } : null,
       sinh_hieu: vitals ? {
         can_nang: vitals.can_nang,

@@ -7,13 +7,15 @@ export function parseLocalDate(dateStr: string): Date {
   return new Date(y, m - 1, d)
 }
 
-// Thứ Hai của tuần chứa `date`. Chủ nhật được coi là thuộc tuần bắt đầu từ Thứ Hai TRƯỚC đó
-// (cơ sở chỉ hoạt động T2–T7, tuần không có mốc bắt đầu là Chủ nhật).
+// Thứ Hai của tuần làm việc chứa/kế tiếp `date`. Cơ sở chỉ hoạt động T2–T7 nên Chủ nhật không
+// có tuần riêng — nhảy sang Thứ Hai NGÀY MAI (tuần sắp tới), không lùi về tuần đã qua (đã sửa
+// GAP-009: trước đây lùi về Thứ Hai tuần trước, khiến mở trang đúng Chủ nhật thấy toàn bộ tuần
+// đã kết thúc thay vì tuần làm việc tiếp theo).
 export function getMondayOfWeek(date: Date): Date {
   const d = new Date(date)
   d.setHours(0, 0, 0, 0)
   const day = d.getDay()
-  const diff = day === 0 ? -6 : 1 - day
+  const diff = 1 - day
   d.setDate(d.getDate() + diff)
   return d
 }

@@ -829,6 +829,16 @@ export interface PrescriptionDrug {
     ghi_chu?: string | null;
 }
 
+// Payload chỉnh sửa hồ sơ khám gửi kèm khi bác sĩ "Lưu & Xác nhận" (confirmResult) hoặc khi
+// cập nhật (examinationService.save). Mọi trường tùy chọn — chỉ gửi phần bác sĩ thực sự sửa.
+export interface ExamResultEditPayload {
+    chan_doan?: string;
+    huong_dan_dieu_tri?: string | null;
+    ghi_chu?: string | null;
+    ngay_tai_kham?: string | null;
+    thuoc?: Omit<PrescriptionDrug, 'id'>[];
+}
+
 // 1 mục trong lịch sử thay đổi hồ sơ khám (KetQuaKham.lich_su_sua) — ghi lại mỗi lần
 // xác nhận hoặc yêu cầu chỉnh sửa, dùng để đối chiếu sau này.
 export interface ExaminationHistoryEntry {
@@ -844,8 +854,10 @@ export interface ExaminationResult {
     chan_doan: string;
     huong_dan_dieu_tri: string;
     ghi_chu?: string | null; // ghi chú bổ sung — field trong DB ket_qua_kham
+    trieu_chung_ban_dau?: string | null; // y tá ghi khi tiếp nhận — bác sĩ tham khảo để chẩn đoán
+    ghi_chu_dieu_duong?: string | null; // ghi chú điều dưỡng (y tá) — tách khỏi ghi chú chuyên môn BS
     ngay_tai_kham: string;
-    co_the_sua: boolean; // false sau 24h — cron set, FE chỉ đọc
+    co_the_sua: boolean; // dự phòng cho khóa thủ công/tương lai — khóa thật hiện dựa vào status==='da_xac_nhan' (GAP-001)
     thuoc: PrescriptionDrug[]; // joined từ don_thuoc (backend trả gộp)
     ngay_tao: string;
     lich_su_sua?: ExaminationHistoryEntry[];
@@ -1118,6 +1130,7 @@ export interface NurseMedicalRecord {
     doctor_revision_note: string | null;
     submitted_at?: string | null;
     ngay_tao?: string;
+    lich_su_sua?: ExaminationHistoryEntry[];
 }
 
 // 1 dòng trong danh sách hồ sơ cần chỉnh sửa (/nurse/medical-records/revisions)

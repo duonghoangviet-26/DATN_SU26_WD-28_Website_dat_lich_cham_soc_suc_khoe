@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
-import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
+import ExamResultModal from '@/components/doctor/ExamResultModal'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
-import { examinationService } from '@/services/examination.service'
-import type { DoctorAppointmentDetail, ExaminationResult, PrescriptionDrug, AppointmentStatus, KetQuaKhamStatus } from '@/types'
+import type { DoctorAppointmentDetail, AppointmentStatus, KetQuaKhamStatus } from '@/types'
 import {
   APPOINTMENT_STATUS_LABEL,
   APPOINTMENT_STATUS_COLOR,
@@ -14,7 +14,29 @@ import {
   PAYMENT_STATUS_COLOR,
   KET_QUA_KHAM_STATUS_COLOR,
 } from '@/utils/constants'
-import { formatDate, formatPrice } from '@/utils/format'
+import { formatDate, formatPrice, toLocalDateStr } from '@/utils/format'
+
+// ─── Tab thời gian + cửa sổ 6 ngày làm việc ─────────────────────────────────
+
+type TimeTab = 'today' | 'upcoming' | 'past' | 'all'
+
+const TIME_TAB_LABEL: Record<TimeTab, string> = {
+  today: 'Hôm nay', upcoming: 'Sắp tới', past: 'Đã qua', all: 'Tất cả',
+}
+
+// Danh sach dung N ngay lam viec ke tiep, tinh tu ngay SAU fromDateStr, bo qua Chu nhat
+// (cung quy uoc isWorkingDay ben backend, scheduleGenerator.service.js). Tra ve mang cac
+// ngay cu the (khong chi mot khoang) de loai tru dut khoat Chu nhat lo lot vao "Sap toi"
+// dinh vi bang ranh gioi khoang ngay (dung Set thanh vien thay vi so sanh <=).
+function getUpcomingWorkingDays(fromDateStr: string, workingDays: number): Set<string> {
+  const d = new Date(fromDateStr + 'T00:00:00')
+  const result = new Set<string>()
+  while (result.size < workingDays) {
+    d.setDate(d.getDate() + 1)
+    if (d.getDay() !== 0) result.add(toLocalDateStr(d))
+  }
+  return result
+}
 
 // ─── Hằng số ──────────────────────────────────────────────────────────────────
 
@@ -32,225 +54,6 @@ const KET_QUA_STATUS_LABEL: Record<KetQuaKhamStatus, string> = {
 // Header bảng: chữ đủ tương phản (slate-600, không phải slate-500 nhạt), không
 // viết hoa toàn bộ để đỡ "cứng" — thay bằng font-semibold + nền slate-50 phân lớp rõ.
 const TH = 'px-4 py-3 text-xs font-semibold text-slate-600'
-
-const EMPTY_DRUG: Omit<PrescriptionDrug, 'id'> = {
-  ten_thuoc: '', lieu_luong: '', tan_suat: '2 lần/ngày',
-  gio_uong: ['07:00'], so_ngay: 7, ghi_chu: '',
-}
-
-// ─── ExamModal ────────────────────────────────────────────────────────────────
-
-interface ExamModalProps {
-  appt: DoctorAppointmentDetail
-  onClose: () => void
-  onSaved: (result: ExaminationResult) => void
-}
-
-function ExamModal({ appt, onClose, onSaved }: ExamModalProps) {
-  const [loading, setLoading] = useState(true)
-  const [existing, setExisting] = useState<ExaminationResult | null>(null)
-  const [chan_doan, setChanDoan] = useState('')
-  const [huong_dan, setHuongDan] = useState('')
-  const [ghi_chu, setGhiChu] = useState('')
-  const [ngay_tai_kham, setNgayTaiKham] = useState('')
-  const [drugs, setDrugs] = useState<Omit<PrescriptionDrug, 'id'>[]>([{ ...EMPTY_DRUG }])
-  const [saving, setSaving] = useState(false)
-  const topRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    examinationService.getByAppointment(appt.id).then((res) => {
-      if (res) {
-        setExisting(res)
-        setChanDoan(res.chan_doan)
-        setHuongDan(res.huong_dan_dieu_tri)
-        setGhiChu(res.ghi_chu ?? '')
-        // res.ngay_tai_kham la ISO datetime day du (vd "2026-07-20T00:00:00.000Z") tu backend,
-        // trong khi <input type="date"> chi nhan dung format YYYY-MM-DD - neu gan thang se bi
-        // trinh duyet coi la invalid va hien thi rong, tao cam giac "khong luu duoc" du DB da luu dung.
-        setNgayTaiKham(res.ngay_tai_kham ? res.ngay_tai_kham.slice(0, 10) : '')
-        setDrugs(res.thuoc.map(({ ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu }) => ({
-          ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu,
-        })))
-      }
-    }).finally(() => setLoading(false))
-  }, [appt.id])
-
-  const isReadOnly = existing !== null && !existing.co_the_sua
-
-  // Ngày tái khám bắt buộc từ ngày tiếp theo trở đi — không được chọn trùng ngày khám hoặc quá khứ.
-  const minNgayTaiKham = (() => {
-    const d = new Date(appt.ngay_kham)
-    d.setDate(d.getDate() + 1)
-    return d.toISOString().slice(0, 10)
-  })()
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      const result = await examinationService.save({
-        appointment_id: appt.id,
-        chan_doan,
-        huong_dan_dieu_tri: huong_dan,
-        ghi_chu: ghi_chu || null,
-        ngay_tai_kham,
-        thuoc: drugs,
-      })
-      onSaved(result)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  function addDrug() {
-    setDrugs((prev) => [...prev, { ...EMPTY_DRUG }])
-  }
-  function removeDrug(i: number) { setDrugs((prev) => prev.filter((_, idx) => idx !== i)) }
-  function updateDrug<K extends keyof Omit<PrescriptionDrug, 'id'>>(
-    i: number, key: K, val: Omit<PrescriptionDrug, 'id'>[K],
-  ) {
-    setDrugs((prev) => prev.map((d, idx) => idx === i ? { ...d, [key]: val } : d))
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
-      <div ref={topRef} className="my-6 w-full max-w-2xl rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <p className="font-semibold text-slate-800">Kết quả khám</p>
-            <p className="text-sm text-slate-500">
-              {appt.benh_nhan} · {formatDate(appt.ngay_kham)} {appt.gio_kham}
-            </p>
-          </div>
-          <button onClick={onClose} className="btn-icon">
-            <Icon name="x" className="h-5 w-5" />
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="flex h-48 items-center justify-center text-slate-400">Đang tải...</div>
-        ) : (
-          <form onSubmit={handleSave} className="space-y-5 px-6 py-5">
-            {isReadOnly && (
-              <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                <Icon name="clock" className="h-4 w-4 shrink-0" />
-                Kết quả đã được lưu trên 24 giờ — không thể chỉnh sửa.
-              </div>
-            )}
-
-            <div>
-              <label className="input-label">Chẩn đoán <span className="text-red-500">*</span></label>
-              <textarea className="input resize-none" rows={2} required readOnly={isReadOnly}
-                value={chan_doan} onChange={(e) => setChanDoan(e.target.value)}
-                placeholder="Nhập chẩn đoán của bệnh nhân..." />
-            </div>
-
-            <div>
-              <label className="input-label">Hướng dẫn điều trị</label>
-              <textarea className="input resize-none" rows={3} readOnly={isReadOnly}
-                value={huong_dan} onChange={(e) => setHuongDan(e.target.value)}
-                placeholder="Hướng dẫn, lưu ý về chế độ ăn uống, nghỉ ngơi..." />
-            </div>
-
-            <div>
-              <label className="input-label">Ghi chú bổ sung</label>
-              <textarea className="input resize-none" rows={2} readOnly={isReadOnly}
-                value={ghi_chu} onChange={(e) => setGhiChu(e.target.value)}
-                placeholder="Ghi chú thêm cho bệnh nhân (nếu có)..." />
-            </div>
-
-            <div className="sm:w-48">
-              <label className="input-label">Ngày tái khám</label>
-              <input type="date" className="input" readOnly={isReadOnly} min={minNgayTaiKham}
-                value={ngay_tai_kham} onChange={(e) => setNgayTaiKham(e.target.value)} />
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <label className="input-label mb-0">Đơn thuốc</label>
-                {!isReadOnly && (
-                  <button type="button" onClick={addDrug}
-                    className="inline-flex items-center gap-1 rounded-lg border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-100 transition-colors">
-                    <Icon name="plus" className="h-3 w-3" /> Thêm thuốc
-                  </button>
-                )}
-              </div>
-              <div className="space-y-3">
-                {drugs.map((drug, i) => (
-                  <div key={i} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div>
-                        <label className="input-label text-[10px]">Tên thuốc</label>
-                        <input className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.ten_thuoc}
-                          onChange={(e) => updateDrug(i, 'ten_thuoc', e.target.value)}
-                          placeholder="VD: Paracetamol 500mg" />
-                      </div>
-                      <div>
-                        <label className="input-label text-[10px]">Liều lượng</label>
-                        <input className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.lieu_luong}
-                          onChange={(e) => updateDrug(i, 'lieu_luong', e.target.value)}
-                          placeholder="VD: 1 viên/lần" />
-                      </div>
-                      <div>
-                        <label className="input-label text-[10px]">Tần suất</label>
-                        <input className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.tan_suat}
-                          onChange={(e) => updateDrug(i, 'tan_suat', e.target.value)}
-                          placeholder="VD: 3 lần/ngày" />
-                      </div>
-                      <div>
-                        <label className="input-label text-[10px]">Giờ uống <span className="font-normal text-slate-400">(cách nhau bằng dấu phẩy)</span></label>
-                        <input className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.gio_uong.join(', ')}
-                          onChange={(e) => updateDrug(i, 'gio_uong',
-                            e.target.value.split(',').map((s) => s.trim()).filter(Boolean)
-                          )}
-                          placeholder="VD: 07:00, 12:00, 19:00" />
-                      </div>
-                      <div>
-                        <label className="input-label text-[10px]">Số ngày uống</label>
-                        <input type="number" min={1} max={90} className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.so_ngay}
-                          onChange={(e) => updateDrug(i, 'so_ngay', Number(e.target.value))}
-                          placeholder="VD: 7" />
-                      </div>
-                    </div>
-                    <div className="mt-2 flex items-end gap-2">
-                      <div className="flex-1">
-                        <label className="input-label text-[10px]">Ghi chú</label>
-                        <input className="input py-1.5 text-sm" readOnly={isReadOnly}
-                          value={drug.ghi_chu ?? ''}
-                          onChange={(e) => updateDrug(i, 'ghi_chu', e.target.value)}
-                          placeholder="Uống sau ăn, tránh ánh nắng..." />
-                      </div>
-                      {!isReadOnly && drugs.length > 1 && (
-                        <button type="button" onClick={() => removeDrug(i)}
-                          className="mb-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors">
-                          <Icon name="trash" className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 border-t border-slate-100 pt-1">
-              <button type="button" onClick={onClose} className="btn-secondary">Đóng</button>
-              {!isReadOnly && (
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? 'Đang lưu...' : (existing ? 'Cập nhật' : 'Lưu kết quả')}
-                </button>
-              )}
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
-  )
-}
 
 // ─── RejectModal ──────────────────────────────────────────────────────────────
 
@@ -296,58 +99,129 @@ function ReasonModal({ title, description, confirmLabel, submitting = false, onC
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function DoctorAppointments() {
-  const todayStr = new Date().toISOString().slice(0, 10)
+  // toLocalDateStr() thay cho new Date().toISOString().slice(0,10) — tránh lệch 1 ngày trong
+  // khung 00:00–07:00 giờ VN (bug đã phát hiện, xem docs/Bác sĩ/Thiet ke tim kiem va loc lich
+  // hen bac si - Bao cao truoc khi code, mục 4).
+  const todayStr = toLocalDateStr()
+  const upcomingWorkingDays = useMemo(() => getUpcomingWorkingDays(todayStr, 6), [todayStr])
 
-  // ── Dữ liệu ──────────────────────────────────────────────────────────────────
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // ── Dữ liệu — tải 1 lần lúc vào trang, mọi tab/lọc xử lý ở client (useMemo bên dưới) ──
   const [all, setAll] = useState<DoctorAppointmentDetail[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
-  // ── Filter — theo ngày + theo trạng thái (truyền thẳng lên API, backend tự lọc theo doctor_id) ──
-  // Mặc định KHÔNG lọc ngày (rỗng) — nếu mặc định "hôm nay", lịch đã thanh toán/xác nhận cho
-  // ngày khác (rất phổ biến vì bệnh nhân đặt trước) sẽ biến mất khỏi màn hình mặc định, dễ bị
-  // hiểu nhầm là lỗi hệ thống dù dữ liệu và API đều đúng — xem docs/Bác sĩ/Debug - Lich da
-  // thanh toan khong hien o trang bac si.
+  // ── Tab thời gian + tìm kiếm + lọc — đồng bộ tối thiểu vào URL (tab/status/q) ──
+  const [timeTab, setTimeTab] = useState<TimeTab>((searchParams.get('tab') as TimeTab) || 'today')
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') ?? '')
+  const [filterStatus, setFilterStatus] = useState<'' | AppointmentStatus>(
+    (searchParams.get('status') as AppointmentStatus) || ''
+  )
+  // Chọn 1 ngày cụ thể — dùng chung mọi tab; riêng tab "Đã qua" còn dùng để "mở khóa" hiển thị.
   const [filterDate, setFilterDate] = useState('')
-  const [filterStatus, setFilterStatus] = useState<'' | AppointmentStatus>('')
 
   // ── UI state ──────────────────────────────────────────────────────────────────
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
-  const [revisionId, setRevisionId] = useState<string | null>(null)
-  const [confirmResultId, setConfirmResultId] = useState<string | null>(null)
-  const [resultActionLoading, setResultActionLoading] = useState<string | null>(null)
   const [examAppt, setExamAppt] = useState<DoctorAppointmentDetail | null>(null)
 
   // ── Toast ────────────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Tải lại mỗi khi đổi filter — status/date truyền thẳng lên API (không tải hết rồi lọc)
+  // Tải đúng 1 lần lúc vào trang — không phụ thuộc filter (loại bỏ race-condition
+  // giữa các lần đổi filter, không load nhấp nháy khi đổi tab/tìm kiếm).
   // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     setLoading(true)
     setError(false)
-    doctorAppointmentService.getAll({ status: filterStatus, date: filterDate })
+    doctorAppointmentService.getAll({})
       .then(setAll)
       .catch(() => setError(true))
       .finally(() => setLoading(false))
-  }, [filterDate, filterStatus])
+  }, [])
+
+  // Đồng bộ tab/status/q vào URL (refresh không mất bộ lọc, copy URL được).
+  useEffect(() => {
+    const next = new URLSearchParams()
+    if (timeTab !== 'today') next.set('tab', timeTab)
+    if (filterStatus) next.set('status', filterStatus)
+    if (searchTerm.trim()) next.set('q', searchTerm.trim())
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeTab, filterStatus, searchTerm])
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
   }
 
-  const displayed = [...all].sort((a, b) => a.gio_kham.localeCompare(b.gio_kham))
+  function ngayKhamLocal(a: DoctorAppointmentDetail): string {
+    return toLocalDateStr(new Date(a.ngay_kham))
+  }
+
+  // Đếm theo tab thời gian trên TOÀN BỘ dữ liệu đã tải (không áp search/status/date) — dùng
+  // cho số trên nhãn tab, kể cả tab "Đã qua" (vẫn hiện tổng số thật dù danh sách đang ẩn).
+  const tabCounts = useMemo(() => ({
+    today: all.filter((a) => ngayKhamLocal(a) === todayStr).length,
+    upcoming: all.filter((a) => upcomingWorkingDays.has(ngayKhamLocal(a))).length,
+    past: all.filter((a) => ngayKhamLocal(a) < todayStr).length,
+    all: all.length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [all, todayStr, upcomingWorkingDays])
+
+  // Tab "Đã qua" (lịch sử) mặc định RỖNG — chỉ hiện khi có từ khóa tìm kiếm hoặc đã chọn 1
+  // ngày cụ thể (quyết định 2026-07-16, khác thiết kế 07-11 vốn hiện sẵn toàn bộ).
+  const historyLocked = timeTab === 'past' && !searchTerm.trim() && !filterDate
+
+  const filtered = useMemo(() => {
+    if (historyLocked) return []
+
+    let list = all
+    if (timeTab === 'today') {
+      list = list.filter((a) => ngayKhamLocal(a) === todayStr)
+    } else if (timeTab === 'upcoming') {
+      list = list.filter((a) => upcomingWorkingDays.has(ngayKhamLocal(a)))
+    } else if (timeTab === 'past') {
+      list = list.filter((a) => ngayKhamLocal(a) < todayStr)
+    }
+
+    if (filterStatus) list = list.filter((a) => a.status === filterStatus)
+    if (filterDate) list = list.filter((a) => ngayKhamLocal(a) === filterDate)
+
+    const q = searchTerm.trim().toLowerCase()
+    if (q) {
+      list = list.filter((a) =>
+        a.benh_nhan.toLowerCase().includes(q) ||
+        (a.ma_lich_hen ?? '').toLowerCase().includes(q) ||
+        (a.so_dien_thoai ?? '').includes(q)
+      )
+    }
+    return list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [all, timeTab, filterStatus, filterDate, searchTerm, todayStr, upcomingWorkingDays, historyLocked])
+
+  const hasActiveFilter = Boolean(filterDate || filterStatus || searchTerm.trim())
+
+  const displayed = [...filtered].sort((a, b) => {
+    const dateCompare = a.ngay_kham.localeCompare(b.ngay_kham)
+    return dateCompare !== 0 ? dateCompare : a.gio_kham.localeCompare(b.gio_kham)
+  })
+
+  const emptyMessage = historyLocked
+    ? 'Nhập từ khóa hoặc chọn ngày cụ thể để xem lịch sử khám.'
+    : hasActiveFilter
+      ? 'Không có lịch hẹn nào khớp với bộ lọc.'
+      : 'Không có lịch hẹn nào.'
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Helper: pending đã quá ngày
   // ─────────────────────────────────────────────────────────────────────────────
   function isExpiredPending(a: DoctorAppointmentDetail) {
-    return a.status === 'pending' && a.ngay_kham < todayStr
+    return a.status === 'pending' && ngayKhamLocal(a) < todayStr
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -417,35 +291,6 @@ export default function DoctorAppointments() {
     setCancelId(null)
   }
 
-  // Xác nhận hồ sơ khám — mở ConfirmDialog trước, chỉ gọi API sau khi bác sĩ bấm Đồng ý
-  async function handleConfirmResult(id: string) {
-    setConfirmResultId(null)
-    setResultActionLoading(id)
-    try {
-      const updated = await doctorAppointmentService.confirmResult(id)
-      updateAppt(id, { ket_qua_status: updated.status, status: updated.appointment_status })
-      showToast('Đã xác nhận hồ sơ khám')
-    } catch {
-      showToast('Không thể xác nhận hồ sơ khám', 'error')
-    } finally {
-      setResultActionLoading(null)
-    }
-  }
-
-  async function handleRequestRevision(id: string, ly_do: string) {
-    setResultActionLoading(id)
-    try {
-      const updated = await doctorAppointmentService.requestResultRevision(id, ly_do)
-      updateAppt(id, { ket_qua_status: updated.status })
-      showToast('Đã gửi yêu cầu chỉnh sửa hồ sơ')
-      setRevisionId(null)
-    } catch {
-      showToast('Không thể gửi yêu cầu chỉnh sửa', 'error')
-    } finally {
-      setResultActionLoading(null)
-    }
-  }
-
   // ─────────────────────────────────────────────────────────────────────────────
   // Nội dung mở rộng (chi tiết lịch hẹn) — dùng chung cho hàng bảng (desktop/tablet)
   // và card (mobile), tránh viết trùng 2 lần.
@@ -473,7 +318,7 @@ export default function DoctorAppointments() {
         <div className="flex flex-wrap gap-x-8 gap-y-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Số điện thoại</p>
-            <p className="mt-0.5 text-slate-700">{appt.so_dien_thoai}</p>
+            <p className="mt-0.5 text-slate-700">{appt.so_dien_thoai ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Phí khám</p>
@@ -582,20 +427,7 @@ export default function DoctorAppointments() {
                 icon={<Icon name="eye" className="h-3.5 w-3.5" />}>
                 Xem hồ sơ
               </Button>
-              {appt.ket_qua_status === 'cho_xac_nhan' && (
-                <>
-                  <Button variant="success" size="sm" onClick={() => setConfirmResultId(appt.id)}
-                    disabled={resultActionLoading === appt.id}
-                    icon={<Icon name="check" className="h-3.5 w-3.5" />}>
-                    {resultActionLoading === appt.id ? 'Đang xác nhận...' : 'Xác nhận hồ sơ'}
-                  </Button>
-                  <Button variant="warning" size="sm" onClick={() => setRevisionId(appt.id)}
-                    disabled={resultActionLoading === appt.id}
-                    icon={<Icon name="edit" className="h-3.5 w-3.5" />}>
-                    Yêu cầu chỉnh sửa
-                  </Button>
-                </>
-              )}
+              {/* Hồ sơ 'cho_xac_nhan' được xác nhận tại trang "Hồ sơ chờ xác nhận" (một nguồn duy nhất). */}
             </div>
           </div>
         )}
@@ -673,11 +505,40 @@ export default function DoctorAppointments() {
       <div>
         <PageHeader
           title="Lịch hẹn của tôi"
-          description="Danh sách lịch hẹn của riêng bạn — lọc theo ngày hoặc trạng thái."
+          description="Danh sách lịch hẹn của riêng bạn — lọc theo thời gian, tìm kiếm hoặc theo ngày cụ thể."
         />
+
+        {/* ── Tab thời gian ── */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          {(Object.keys(TIME_TAB_LABEL) as TimeTab[]).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setTimeTab(tab)}
+              className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors ${
+                timeTab === tab
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-200'
+              }`}
+            >
+              {TIME_TAB_LABEL[tab]} ({tabCounts[tab]})
+            </button>
+          ))}
+        </div>
 
         {/* ── Bộ lọc: gom vào 1 khu vực rõ ràng (filter card) ── */}
         <div className="card mb-4 flex flex-wrap items-end gap-4 p-4">
+          <div className="min-w-[220px] flex-1">
+            <label className="mb-1 block text-xs font-semibold text-slate-500">Tìm kiếm</label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tên bệnh nhân, mã lịch hẹn, số điện thoại..."
+              className="input"
+            />
+          </div>
+
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-500">Ngày khám</label>
             <input
@@ -703,13 +564,13 @@ export default function DoctorAppointments() {
             </select>
           </div>
 
-          {(filterDate || filterStatus) && (
-            <Button variant="ghost" size="sm" onClick={() => { setFilterDate(''); setFilterStatus('') }}>
+          {hasActiveFilter && (
+            <Button variant="ghost" size="sm" onClick={() => { setFilterDate(''); setFilterStatus(''); setSearchTerm('') }}>
               Xóa lọc
             </Button>
           )}
 
-          {!loading && !error && (
+          {!loading && !error && !historyLocked && (
             <span className="ml-auto text-xs text-slate-400">{displayed.length} lịch hẹn</span>
           )}
         </div>
@@ -754,9 +615,7 @@ export default function DoctorAppointments() {
                           <div className="flex flex-col items-center gap-3">
                             <Icon name="calendar" className="h-10 w-10 text-slate-200" />
                             <p className="text-base font-medium text-slate-500">
-                              {filterDate || filterStatus
-                                ? 'Không có lịch hẹn nào khớp với bộ lọc.'
-                                : 'Không có lịch hẹn nào.'}
+                              {emptyMessage}
                             </p>
                           </div>
                         </td>
@@ -867,9 +726,7 @@ export default function DoctorAppointments() {
                 <div className="card flex flex-col items-center gap-3 py-16 text-center">
                   <Icon name="calendar" className="h-10 w-10 text-slate-200" />
                   <p className="text-base font-medium text-slate-500">
-                    {filterDate || filterStatus
-                      ? 'Không có lịch hẹn nào khớp với bộ lọc.'
-                      : 'Không có lịch hẹn nào.'}
+                    {emptyMessage}
                   </p>
                 </div>
               ) : (
@@ -974,29 +831,12 @@ export default function DoctorAppointments() {
           )
         })()}
 
-        {revisionId !== null && (
-          <ReasonModal
-            title="Yêu cầu chỉnh sửa hồ sơ khám"
-            description="Nêu rõ phần cần sửa (vd: thiếu chẩn đoán, sai liều thuốc...). Hồ sơ sẽ chuyển sang trạng thái Cần chỉnh sửa."
-            confirmLabel="Gửi yêu cầu"
-            submitting={resultActionLoading === revisionId}
-            onConfirm={(ly_do) => handleRequestRevision(revisionId, ly_do)}
-            onClose={() => setRevisionId(null)}
-          />
-        )}
-
-        <ConfirmDialog
-          open={confirmResultId !== null}
-          title="Xác nhận hồ sơ khám"
-          message="Bạn có chắc chắn hồ sơ khám này đã đầy đủ và chính xác? Sau khi xác nhận, hồ sơ sẽ chuyển sang trạng thái Đã xác nhận."
-          confirmText="Xác nhận"
-          onConfirm={() => confirmResultId && handleConfirmResult(confirmResultId)}
-          onCancel={() => setConfirmResultId(null)}
-        />
-
+        {/* Xác nhận/chỉnh sửa hồ sơ khám đã chuyển sang trang "Hồ sơ chờ xác nhận" (2026-07-16):
+            bác sĩ sửa trực tiếp rồi "Lưu & Xác nhận" một chỗ. Trang này chỉ còn nhập/xem hồ sơ. */}
         {examAppt && (
-          <ExamModal
+          <ExamResultModal
             appt={examAppt}
+            mode="edit"
             onClose={() => setExamAppt(null)}
             onSaved={(result) => {
               // result.status: 'da_xac_nhan' ngay nếu bác sĩ tự nhập (không qua y tá) — cập

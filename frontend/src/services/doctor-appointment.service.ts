@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance'
-import type { ApiResponse, DoctorAppointmentDetail, AppointmentStatus, PaymentStatus, KetQuaKhamStatus, DoctorPendingRecord } from '@/types'
+import type { ApiResponse, DoctorAppointmentDetail, AppointmentStatus, PaymentStatus, KetQuaKhamStatus, DoctorPendingRecord, ExamResultEditPayload } from '@/types'
 
 interface Filters {
   status?: AppointmentStatus | ''
@@ -43,16 +43,18 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
-  // Xác nhận hồ sơ khám đang 'cho_xac_nhan' (WAITING_DOCTOR_CONFIRM) — backend có thể tự
-  // chuyển lịch hẹn sang 'completed' nếu chưa completed, trả kèm appointment_status.
-  async confirmResult(id: string | number): Promise<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }> {
-    const res = await axiosInstance.patch<ApiResponse<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }>>(`/doctor/appointments/${id}/result/confirm`)
-    return res.data.data
-  },
-
-  // Yêu cầu chỉnh sửa lại hồ sơ khám đang 'cho_xac_nhan'
-  async requestResultRevision(id: string | number, ly_do: string): Promise<{ id: string; status: KetQuaKhamStatus }> {
-    const res = await axiosInstance.patch<ApiResponse<{ id: string; status: KetQuaKhamStatus }>>(`/doctor/appointments/${id}/result/request-revision`, { ly_do })
+  // "Lưu & Xác nhận" hồ sơ khám đang 'cho_xac_nhan' — bác sĩ có thể gửi kèm chỉnh sửa trực tiếp
+  // (chẩn đoán/hướng dẫn/ghi chú/ngày tái khám/đơn thuốc) trong cùng thao tác, backend áp dụng
+  // trước khi chốt da_xac_nhan (xem confirmResult ở BE). payload tùy chọn — bỏ qua = chỉ xác nhận.
+  // Thay cho luồng "yêu cầu chỉnh sửa" (đẩy về y tá) đã gỡ 2026-07-16.
+  async confirmResult(
+    id: string | number,
+    payload?: ExamResultEditPayload,
+  ): Promise<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }> {
+    const res = await axiosInstance.patch<ApiResponse<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }>>(
+      `/doctor/appointments/${id}/result/confirm`,
+      payload,
+    )
     return res.data.data
   },
 

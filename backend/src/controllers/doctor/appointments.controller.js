@@ -82,6 +82,7 @@ export async function list(req, res) {
 export async function getById(req, res) {
   try {
     const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
     const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId })
       .populate('specialty_id', 'ten')
       .lean()
@@ -136,7 +137,11 @@ export async function cancel(req, res) {
     const docId = await getDocId(req.user.id)
     const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId })
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
-    if (['completed', 'cancelled'].includes(a.status)) {
+    // Whitelist thay vì blacklist — trước đây chỉ loại 'completed'/'cancelled' nên 'no_show' và
+    // 'skipped' (lịch đã ghi nhận không đến/bỏ lượt) vẫn hủy được, có thể kích hoạt hoàn tiền sai
+    // cho lịch đã "chốt" là không đến (xem docs/Bác sĩ/Audit tong the, GAP-003).
+    const CANCELLABLE_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'waiting_record', 'waiting_doctor_confirm']
+    if (!CANCELLABLE_STATUSES.includes(a.status)) {
       return fail(res, 409, 'Không thể hủy lịch hẹn ở trạng thái này')
     }
 
@@ -216,6 +221,53 @@ export async function getResult(req, res) {
   }
 }
 
+// Áp dụng các chỉnh sửa hồ sơ (chẩn đoán, hướng dẫn, ghi chú, ngày tái khám, đơn thuốc) từ
+// req.body vào document `result` (CHƯA save — caller tự save sau khi set thêm status). Dùng
+// CHUNG cho updateResult (sửa) và confirmResult (Lưu & Xác nhận) → 1 nguồn logic duy nhất.
+// Trả { ok: true, prescription } hoặc { ok: false, status, message } khi validate thất bại.
+// Lỗi schema đơn thuốc (so_ngay/gio_uong/ten_thuoc...) ném ValidationError để caller trả 400.
+async function applyResultEdits(result, body, appt, docId) {
+  const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc } = body
+
+  if (chan_doan !== undefined) {
+    if (!chan_doan?.trim()) return { ok: false, status: 400, message: 'Chẩn đoán là bắt buộc' }
+    result.chan_doan = chan_doan.trim()
+  }
+  if (huong_dan_dieu_tri !== undefined) result.huong_dan_dieu_tri = huong_dan_dieu_tri?.trim() || null
+  if (ghi_chu !== undefined) result.ghi_chu = ghi_chu?.trim() || null
+  if (ngay_tai_kham !== undefined) {
+    if (ngay_tai_kham && !isNgayTaiKhamHopLe(ngay_tai_kham, appt.ngay_kham)) {
+      return { ok: false, status: 400, message: 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám' }
+    }
+    result.ngay_tai_kham = ngay_tai_kham ? new Date(ngay_tai_kham) : null
+  }
+
+  // Đơn thuốc: cập nhật đơn đã có, tạo mới nếu bác sĩ thêm, hoặc xóa hẳn khi gửi mảng rỗng
+  // (đơn thuốc không bắt buộc — không để đơn rỗng/mồ côi). thuoc=undefined → không đụng.
+  let prescription = await DonThuoc.findOne({ medical_record_id: result._id })
+  if (Array.isArray(thuoc) && thuoc.length) {
+    if (prescription) {
+      prescription.items = thuoc
+      await prescription.save()
+    } else {
+      prescription = await DonThuoc.create({
+        ket_qua_kham_id:   result._id,
+        medical_record_id: result._id,
+        member_id:         appt.member_id,
+        ten_khach:         appt.ten_khach ?? null,
+        doctor_id:         docId,
+        nguon:             'bac_si',
+        items:             thuoc,
+      })
+    }
+  } else if (Array.isArray(thuoc) && thuoc.length === 0 && prescription) {
+    await DonThuoc.deleteOne({ _id: prescription._id })
+    prescription = null
+  }
+
+  return { ok: true, prescription }
+}
+
 // ─── POST /api/doctor/appointments/:id/result ───────────────────────────────
 export async function createResult(req, res) {
   try {
@@ -290,6 +342,12 @@ export async function createResult(req, res) {
       thuoc: prescription?.items ?? [],
     }, 'Đã lưu kết quả khám')
   } catch (err) {
+    // 2 request tạo hồ sơ đồng thời cho cùng 1 appointment (race condition) đều qua được kiểm
+    // tra `exists()` ở trên trước khi request đầu ghi xong — request thứ 2 chỉ bị chặn ở tầng DB
+    // (index unique appointment_id, KetQuaKham.js:38-42), trả lỗi Mongo thô (11000) thay vì 409
+    // thân thiện — sửa cho nhất quán với case exists() thường phát hiện được (xem GAP-011).
+    if (err.code === 11000) return fail(res, 409, 'Kết quả khám đã tồn tại, hãy dùng PUT để cập nhật')
+    if (err.name === 'ValidationError') return fail(res, 400, err.message)
     return fail(res, 500, err.message)
   }
 }
@@ -303,18 +361,19 @@ export async function updateResult(req, res) {
 
     const result = await KetQuaKham.findOne({ appointment_id: a._id })
     if (!result) return fail(res, 404, 'Chưa có kết quả khám')
-    if (!result.co_the_sua) return fail(res, 403, 'Kết quả đã khóa sau 24 giờ, không thể sửa')
+    // Hồ sơ đã xác nhận là CHỐT — khóa ngay lập tức, không chờ mốc 24h nào cả (trước đây chỉ
+    // dựa vào co_the_sua, nhưng field này chưa từng được cron nào set false trong thực tế nên
+    // hồ sơ đã xác nhận vẫn sửa được vô thời hạn — xem docs/Bác sĩ/Audit tong the, GAP-001).
+    // Muốn sửa hồ sơ đã xác nhận phải qua luồng "yêu cầu chỉnh sửa" (nurse) đã có sẵn.
+    if (result.status === 'da_xac_nhan') return fail(res, 403, 'Hồ sơ đã xác nhận, không thể sửa trực tiếp')
+    if (!result.co_the_sua) return fail(res, 403, 'Kết quả đã khóa, không thể sửa')
 
-    const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc } = req.body
-    if (chan_doan)           result.chan_doan          = chan_doan.trim()
-    if (huong_dan_dieu_tri !== undefined) result.huong_dan_dieu_tri = huong_dan_dieu_tri?.trim() || null
-    if (ghi_chu    !== undefined) result.ghi_chu       = ghi_chu?.trim() || null
-    if (ngay_tai_kham !== undefined) {
-      if (ngay_tai_kham && !isNgayTaiKhamHopLe(ngay_tai_kham, a.ngay_kham)) {
-        return fail(res, 400, 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám')
-      }
-      result.ngay_tai_kham = ngay_tai_kham ? new Date(ngay_tai_kham) : null
-    }
+    // Áp dụng chỉnh sửa (dùng chung applyResultEdits với confirmResult) — validate ngày tái
+    // khám + upsert/xóa đơn thuốc. Trước đây updateResult() không đọc `thuoc` nên sửa đơn
+    // (kể cả so_ngay) bị bỏ qua — xem docs/Bác sĩ (2026-07-16).
+    const edit = await applyResultEdits(result, req.body, a, docId)
+    if (!edit.ok) return fail(res, edit.status, edit.message)
+
     // Sửa xong hồ sơ đang "cần chỉnh sửa" → tự động quay lại "chờ xác nhận" (trước đây không có
     // đường quay lại, hồ sơ bị kẹt vĩnh viễn ở yeu_cau_chinh_sua — xem audit trước, mục 12.1).
     if (result.status === 'yeu_cau_chinh_sua') {
@@ -323,33 +382,15 @@ export async function updateResult(req, res) {
     }
     await result.save()
 
-    // Đơn thuốc: trước đây updateResult() không đọc `thuoc` từ req.body nên mọi thay đổi đơn
-    // thuốc (kể cả so_ngay) trong lần cập nhật sau khi tạo hồ sơ bị bỏ qua hoàn toàn — xem
-    // docs/Bác sĩ (2026-07-16). Cập nhật đơn đã có hoặc tạo mới nếu bác sĩ thêm đơn lúc sửa.
-    let prescription = await DonThuoc.findOne({ medical_record_id: result._id })
-    if (Array.isArray(thuoc) && thuoc.length) {
-      if (prescription) {
-        prescription.items = thuoc
-        await prescription.save()
-      } else {
-        prescription = await DonThuoc.create({
-          ket_qua_kham_id:   result._id,
-          medical_record_id: result._id,
-          member_id:         a.member_id,
-          ten_khach:         a.ten_khach ?? null,
-          doctor_id:         docId,
-          nguon:             'bac_si',
-          items:             thuoc,
-        })
-      }
-    }
-
     return ok(res, {
       ...result.toObject(),
       id: result._id,
-      thuoc: prescription?.items ?? [],
+      thuoc: edit.prescription?.items ?? [],
     }, 'Đã cập nhật kết quả khám')
   } catch (err) {
+    // Đơn thuốc sai (so_ngay<1/>90, thiếu ten_thuoc, gio_uong sai HH:MM) ném ValidationError —
+    // trả 400 thay vì 500 thô để hội đồng gọi API trực tiếp không bắt được lỗi vặt (H1).
+    if (err.name === 'ValidationError') return fail(res, 400, err.message)
     return fail(res, 500, err.message)
   }
 }
@@ -369,15 +410,23 @@ export async function confirmResult(req, res) {
       return fail(res, 409, 'Chỉ xác nhận được hồ sơ đang chờ xác nhận')
     }
 
+    // "Lưu & Xác nhận" một thao tác: bác sĩ xem hồ sơ, sửa trực tiếp (nếu cần) rồi chốt luôn —
+    // thay cho luồng "yêu cầu chỉnh sửa" đẩy ngược về y tá (đã gỡ). Body chỉnh sửa là tùy chọn:
+    // gửi kèm thì áp dụng qua applyResultEdits (dùng chung logic với updateResult) trước khi
+    // set da_xac_nhan, tất cả trong cùng một save() — không để trạng thái nửa vời.
+    const edit = await applyResultEdits(result, req.body ?? {}, a, docId)
+    if (!edit.ok) return fail(res, edit.status, edit.message)
+
+    // Ghi rõ có sửa hay không để đối chiếu lịch sử sau này.
+    const coSua = ['chan_doan', 'huong_dan_dieu_tri', 'ghi_chu', 'ngay_tai_kham', 'thuoc']
+      .some((k) => req.body?.[k] !== undefined)
     result.status = 'da_xac_nhan'
     result.nguoi_xac_nhan_id = req.user.id
     result.thoi_diem_xac_nhan = new Date()
-    // Ghi lịch sử thay đổi để đối chiếu sau này (cùng cơ chế lich_su_sua đã dùng cho
-    // yêu cầu chỉnh sửa ở requestResultRevision() — nay bổ sung cho cả bước xác nhận).
     result.lich_su_sua.push({
       nguoi_sua_id: req.user.id,
       thoi_diem_sua: new Date(),
-      noi_dung: 'Bác sĩ xác nhận hồ sơ khám',
+      noi_dung: coSua ? 'Bác sĩ chỉnh sửa và xác nhận hồ sơ khám' : 'Bác sĩ xác nhận hồ sơ khám',
     })
     await result.save()
 
@@ -392,41 +441,14 @@ export async function confirmResult(req, res) {
 
     return ok(res, { id: result._id, status: result.status, appointment_status: a.status }, 'Đã xác nhận hồ sơ khám')
   } catch (err) {
+    if (err.name === 'ValidationError') return fail(res, 400, err.message)
     return fail(res, 500, err.message)
   }
 }
 
-// ─── PATCH /api/doctor/appointments/:id/result/request-revision ─────────────
-// Bác sĩ yêu cầu chỉnh sửa lại hồ sơ khám đang 'cho_xac_nhan' (vd hồ sơ do y tá nhập thiếu/sai).
-export async function requestResultRevision(req, res) {
-  try {
-    const docId = await getDocId(req.user.id)
-    const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId }).select('_id').lean()
-    if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
-
-    const { ly_do } = req.body
-    if (!ly_do?.trim()) return fail(res, 400, 'Bắt buộc nhập lý do yêu cầu chỉnh sửa')
-
-    const result = await KetQuaKham.findOne({ appointment_id: a._id })
-    if (!result) return fail(res, 404, 'Chưa có hồ sơ khám')
-    if (result.status !== 'cho_xac_nhan') {
-      return fail(res, 409, 'Chỉ yêu cầu chỉnh sửa hồ sơ đang chờ xác nhận')
-    }
-
-    result.status = 'yeu_cau_chinh_sua'
-    result.doctor_revision_note = ly_do.trim()
-    result.lich_su_sua.push({
-      nguoi_sua_id: req.user.id,
-      thoi_diem_sua: new Date(),
-      noi_dung: `Yêu cầu chỉnh sửa: ${ly_do.trim()}`,
-    })
-    await result.save()
-
-    return ok(res, { id: result._id, status: result.status }, 'Đã gửi yêu cầu chỉnh sửa hồ sơ')
-  } catch (err) {
-    return fail(res, 500, err.message)
-  }
-}
+// Luồng "yêu cầu chỉnh sửa" (đẩy hồ sơ ngược về y tá) ĐÃ GỠ 2026-07-16: bác sĩ sửa trực tiếp
+// khi xác nhận (xem confirmResult + applyResultEdits). Giá trị enum 'yeu_cau_chinh_sua' vẫn
+// giữ trong KetQuaKham schema cho dữ liệu cũ. Xem docs/Bác sĩ/Thiet ke - Gop sua va xac nhan...
 
 // ─── GET /api/doctor/appointments/pending-results?status= ───────────────────
 // Danh sách hồ sơ khám của chính bác sĩ đang đăng nhập — lọc qua bac_si_phu_trach_id
