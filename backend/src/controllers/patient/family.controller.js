@@ -117,7 +117,7 @@ export async function removeMember(req, res) {
 
     const member = await ThanhVien.findOne({ _id: req.params.id, family_id: family._id })
     if (!member) return fail(res, 404, 'Không tìm thấy thành viên')
-    if (member.la_chu_ho) return fail(res, 403, 'Không thể xóa chủ hộ')
+    if (member.la_chu_ho) return fail(res, 403, 'Không thể xóa chủ tài khoản')
 
     // Soft delete
     member.ngay_xoa = new Date()

@@ -1,7 +1,7 @@
 // Kiểu dữ liệu dùng chung toàn project.
 // Khớp với cấu trúc bảng trong VitaFamily_Database.sql.
 
-export type Role = "user" | "doctor" | "admin" | "nurse";
+export type Role = "user" | "doctor" | "admin" | "receptionist";
 export type UserStatus = "active" | "locked";
 export type DoctorApproval = "pending" | "approved" | "rejected" | "suspended";
 export type AppointmentStatus =

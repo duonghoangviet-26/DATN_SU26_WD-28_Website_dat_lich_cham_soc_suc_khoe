@@ -74,6 +74,7 @@ const appointmentSchema = new mongoose.Schema(
     nguoi_dat_sdt: { type: String, default: null, maxlength: 20 },
 
     ly_do_huy: { type: String, default: null },
+    ly_do_doi_lich: { type: String, default: null }, 
     huy_boi: { type: String, default: null },
     nguoi_huy_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     thoi_diem_huy: { type: Date, default: null },

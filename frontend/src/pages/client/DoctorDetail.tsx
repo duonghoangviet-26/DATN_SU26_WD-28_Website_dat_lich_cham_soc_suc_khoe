@@ -1,31 +1,81 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { mockDoctors } from '@/mock/doctors'
-import { mockReviews } from '@/mock/reviews'
 import Breadcrumb from '@/components/common/Breadcrumb'
 import Loading from '@/components/common/Loading'
-import type { DoctorProfile, ReviewItem } from '@/types'
+import { patientBookingService, type PatientBookingDoctor } from '@/services/patient-booking.service'
+import { useAuth } from '@/context/AuthContext'
 
 export default function DoctorDetail() {
   const { id } = useParams<{ id: string }>()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
-  const [doctor, setDoctor] = useState<DoctorProfile | null>(null)
-  const [reviews, setReviews] = useState<ReviewItem[]>([])
+  const [doctor, setDoctor] = useState<PatientBookingDoctor | null>(null)
+  const [reviews, setReviews] = useState<any[]>([])
+
+  // Rating form states
+  const [submittingReview, setSubmittingReview] = useState(false)
+  const [newReviewRating, setNewReviewRating] = useState(5)
+  const [newReviewComment, setNewReviewComment] = useState('')
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const [reviewSuccess, setReviewSuccess] = useState<string | null>(null)
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const docId = Number(id)
-      const foundDoctor = mockDoctors.find((d) => d.id === docId && d.loai === 'specialist')
-      if (foundDoctor) {
-        setDoctor(foundDoctor)
-        // Find reviews for this doctor
-        const docReviews = mockReviews.filter((r) => r.bac_si === foundDoctor.ho_ten && r.status === 'visible')
-        setReviews(docReviews)
-      }
-      setLoading(false)
-    }, 300)
-    return () => clearTimeout(timer)
+    if (!id) return
+    let ignore = false
+    setLoading(true)
+
+    Promise.all([
+      patientBookingService.getDoctorById(id),
+      patientBookingService.getDoctorReviews(id)
+    ])
+      .then(([docData, reviewsList]) => {
+        if (!ignore) {
+          setDoctor(docData)
+          setReviews(reviewsList)
+        }
+      })
+      .catch((err) => {
+        console.error('Không tải được thông tin bác sĩ hoặc đánh giá:', err)
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+
+    return () => {
+      ignore = true
+    }
   }, [id])
+
+  async function handleSubmitReview(event: React.FormEvent) {
+    event.preventDefault()
+    if (!id || !user) return
+
+    setSubmittingReview(true)
+    setReviewError(null)
+    setReviewSuccess(null)
+
+    try {
+      await patientBookingService.createDoctorReview(id, {
+        so_sao: newReviewRating,
+        noi_dung: newReviewComment.trim()
+      })
+      setReviewSuccess('Đã gửi đánh giá thành công!')
+      setNewReviewComment('')
+      setNewReviewRating(5)
+
+      // Reload reviews and doctor info
+      const [updatedDoctor, updatedReviews] = await Promise.all([
+        patientBookingService.getDoctorById(id),
+        patientBookingService.getDoctorReviews(id)
+      ])
+      setDoctor(updatedDoctor)
+      setReviews(updatedReviews)
+    } catch (error: any) {
+      setReviewError(error.response?.data?.message || error.message || 'Không gửi được đánh giá. Vui lòng kiểm tra lại lịch sử khám.')
+    } finally {
+      setSubmittingReview(false)
+    }
+  }
 
   if (loading) {
     return <Loading message="Đang tải thông tin bác sĩ chuyên khoa..." />
@@ -87,9 +137,6 @@ export default function DoctorDetail() {
             <Link to={`/booking?doctor_id=${doctor.id}`} className="btn-primary px-6 py-2.5 text-sm font-bold shadow-md shadow-brand-100">
               Đặt lịch khám ngay
             </Link>
-            <span className="text-xs text-slate-400">
-              * Hỗ trợ BHYT Nhà nước & Bảo lãnh bảo hiểm tư nhân
-            </span>
           </div>
         </div>
       </div>
@@ -119,24 +166,85 @@ export default function DoctorDetail() {
         <div className="space-y-6 text-left">
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
-              <h2 className="text-lg font-bold text-slate-800">Ý kiến bệnh nhân</h2>
+              <h2 className="text-lg font-bold text-slate-800">Đánh giá & Nhận xét</h2>
               <span className="text-xs font-semibold text-slate-400">({reviews.length} lượt)</span>
             </div>
 
+            {/* Form viết đánh giá */}
+            <div className="border-b border-slate-50 pb-4 space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Gửi đánh giá của bạn</h3>
+              
+              {!user ? (
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-center">
+                  <p className="text-xs text-slate-500">Đăng nhập để nhận xét cho bác sĩ chuyên khoa.</p>
+                  <Link to={`/login?redirect=/bac-si/${doctor.id}`} className="text-xs font-bold text-brand-600 hover:underline mt-1 inline-block">
+                    Đăng nhập ngay
+                  </Link>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmitReview} className="space-y-3">
+                  {/* Chọn số sao */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Số sao:</span>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setNewReviewRating(star)}
+                          className="text-lg transition-transform hover:scale-110 focus:outline-none"
+                        >
+                          {star <= newReviewRating ? '⭐' : '☆'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Nhập nội dung */}
+                  <div className="space-y-1">
+                    <textarea
+                      placeholder="Nhập nhận xét của bạn về bác sĩ sau khi khám..."
+                      value={newReviewComment}
+                      onChange={(e) => setNewReviewComment(e.target.value)}
+                      maxLength={500}
+                      className="w-full text-xs rounded-lg border border-slate-200 p-2.5 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition min-h-[70px] resize-none"
+                      required
+                    />
+                  </div>
+
+                  {reviewError && (
+                    <p className="text-[11px] font-semibold text-red-650">{reviewError}</p>
+                  )}
+                  {reviewSuccess && (
+                    <p className="text-[11px] font-semibold text-emerald-650">{reviewSuccess}</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={submittingReview}
+                    className="w-full btn-primary py-2 text-xs font-bold shadow-sm shadow-brand-100"
+                  >
+                    {submittingReview ? 'Đang gửi...' : 'Gửi đánh giá'}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* Danh sách nhận xét */}
             {reviews.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-6">Chưa có lượt đánh giá nào cho bác sĩ này.</p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
                 {reviews.map((r) => (
-                  <div key={r.id} className="space-y-2 border-b border-slate-50 pb-4 last:border-0 last:pb-0">
+                  <div key={r.id || r._id} className="space-y-1.5 border-b border-slate-50 pb-4 last:border-0 last:pb-0">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-800">{r.benh_nhan}</span>
                       <span className="text-xs font-bold text-amber-500">{'⭐'.repeat(r.so_sao)}</span>
                     </div>
-                    <p className="text-xs text-slate-500 leading-relaxed italic">
-                      "{r.noi_dung}"
+                    <p className="text-xs text-slate-550 leading-relaxed italic">
+                      "{r.noi_dung || 'Không có bình luận.'}"
                     </p>
-                    <p className="text-[10px] text-slate-400">
+                    <p className="text-[9px] text-slate-400">
                       {new Date(r.ngay_tao).toLocaleDateString('vi-VN')}
                     </p>
                   </div>
