@@ -60,6 +60,8 @@ export default function Profile() {
 
   const [toast, setToast] = useState<string | null>(null)
   const [cancelModalId, setCancelModalId] = useState<string | null>(null)
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false)
+  const [refundHelpAppId, setRefundHelpAppId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -136,6 +138,21 @@ export default function Profile() {
         })
     }
   }, [searchParams, justBooked])
+
+  function isAppointmentInPast(ngayKham: string, gioKham: string) {
+    try {
+      const appDate = new Date(ngayKham)
+      if (gioKham && gioKham.includes(':')) {
+        const [h, m] = gioKham.split(':').map(Number)
+        appDate.setHours(h, m, 0, 0)
+      } else {
+        appDate.setHours(23, 59, 59, 999)
+      }
+      return appDate.getTime() < Date.now()
+    } catch {
+      return false
+    }
+  }
 
   function handleCancelClick(id: string) {
     setCancelModalId(id)
@@ -314,7 +331,7 @@ export default function Profile() {
     return 'Chưa thanh toán'
   }
 
-  const completedAppointments = appointments.filter((item) => item.status === 'completed')
+  const completedAppointments = appointments.filter((item) => item.status === 'completed' || item.da_co_ket_qua)
 
   if (authLoading || !user) {
     return null
@@ -412,14 +429,33 @@ export default function Profile() {
                             >
                               {detailLoading ? 'Đang tải...' : 'Chi tiết'}
                             </button>
-                            {appointment.status === 'pending' && (
-                              <Button
-                                variant="secondary"
-                                onClick={() => handleCancelClick(appointment.id)}
-                                className="border-red-100 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
-                              >
-                                Hủy lịch
-                              </Button>
+                            {['pending', 'confirmed'].includes(appointment.status) && !isAppointmentInPast(appointment.ngay_kham, appointment.gio_kham) && (
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => setRescheduleModalOpen(true)}
+                                  className="border-blue-100 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                >
+                                  Rời lịch
+                                </Button>
+                                {appointment.payment_status === 'paid' ? (
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => setRefundHelpAppId(appointment.id)}
+                                    className="border-red-100 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
+                                  >
+                                    Hủy & Hoàn tiền
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => handleCancelClick(appointment.id)}
+                                    className="border-red-100 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
+                                  >
+                                    Hủy lịch
+                                  </Button>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -672,12 +708,7 @@ export default function Profile() {
                     <li key={index} className="text-slate-700">
                       {typeof thuoc === 'string'
                         ? thuoc
-                        : [
-                            thuoc.ten_thuoc,
-                            thuoc.lieu_luong,
-                            thuoc.tan_suat,
-                            thuoc.ghi_chu,
-                          ].filter(Boolean).join(' - ')}
+                        : `${thuoc.ten_thuoc}${thuoc.lieu_luong ? ` (Liều lượng: ${thuoc.lieu_luong})` : ''} - ${thuoc.tan_suat || ''}${thuoc.so_ngay ? ` (Uống trong ${thuoc.so_ngay} ngày)` : ''}${thuoc.ghi_chu ? ` [Lưu ý: ${thuoc.ghi_chu}]` : ''}`}
                     </li>
                   ))}
                 </ul>
@@ -812,7 +843,7 @@ export default function Profile() {
             <div className="space-y-3 text-sm">
               <div className="border-b border-slate-100 pb-2">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Địa điểm khám</p>
-                <p className="font-semibold text-slate-800 mt-1">🏠 {selectedAppointment.phong_kham || 'Phòng khám Tai Mũi Họng VitaFamily'}</p>
+                <p className="font-semibold text-slate-800 mt-1">🏠 {selectedAppointment.phong_kham || 'Phòng khám Tai Mũi Họng ViteFamily'}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{selectedAppointment.dia_chi_kham || 'Thành phố Hà Nội'}</p>
               </div>
 
@@ -851,23 +882,123 @@ export default function Profile() {
         </Modal>
       )}
 
-      {cancelModalId && (
+      {cancelModalId && (() => {
+        const selectedCancelApp = appointments.find((a) => a.id === cancelModalId)
+        let isWithin24h = false
+        let isPaid = false
+        if (selectedCancelApp) {
+          isPaid = selectedCancelApp.payment_status === 'paid'
+          try {
+            const appDate = new Date(selectedCancelApp.ngay_kham)
+            if (selectedCancelApp.gio_kham && selectedCancelApp.gio_kham.includes(':')) {
+              const [h, m] = selectedCancelApp.gio_kham.split(':').map(Number)
+              appDate.setHours(h, m, 0, 0)
+            }
+            isWithin24h = (appDate.getTime() - Date.now()) < 24 * 3600 * 1000
+          } catch {}
+        }
+        return (
+          <Modal
+            isOpen={!!cancelModalId}
+            onClose={() => setCancelModalId(null)}
+            title="XÁC NHẬN HỦY LỊCH HẸN"
+          >
+            <div className="space-y-4 text-center">
+              <p className="text-sm text-slate-600">
+                Bạn có chắc chắn muốn hủy lịch hẹn khám này không? Hành động này sẽ tác động trực tiếp lên dữ liệu thật của hệ thống.
+              </p>
+
+              {isPaid && selectedCancelApp && (
+                <div className="rounded-xl bg-orange-50 border border-orange-100 p-3.5 text-left text-xs space-y-1">
+                  <p className="font-bold text-orange-800 uppercase tracking-wider">Chính sách hoàn tiền:</p>
+                  {isWithin24h ? (
+                    <p className="text-orange-700">
+                      Lịch khám diễn ra trong vòng 24h tới. Nếu hủy lúc này, quý khách chỉ được <strong>hoàn tiền 50%</strong> ({((selectedCancelApp.gia_kham || 0) * 0.5).toLocaleString('vi-VN')}đ) theo quy định của phòng khám.
+                    </p>
+                  ) : (
+                    <p className="text-orange-700">
+                      Lịch khám diễn ra còn hơn 24h nữa. Quý khách sẽ được <strong>hoàn tiền 100%</strong> ({selectedCancelApp.gia_kham.toLocaleString('vi-VN')}đ).
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-center gap-4">
+                <Button variant="secondary" onClick={() => setCancelModalId(null)}>Đóng</Button>
+                <Button variant="primary" className="bg-red-600 text-white hover:bg-red-700" onClick={confirmCancel}>Xác nhận hủy</Button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
+
+      {rescheduleModalOpen && (
         <Modal
-          isOpen={!!cancelModalId}
-          onClose={() => setCancelModalId(null)}
-          title="XÁC NHẬN HỦY LỊCH HẸN"
+          isOpen={rescheduleModalOpen}
+          onClose={() => setRescheduleModalOpen(false)}
+          title="RỜI LỊCH KHÁM CHUYÊN KHOA"
         >
-          <div className="space-y-4 text-center">
-            <p className="text-sm text-slate-600">
-              Bạn có chắc chắn muốn hủy lịch hẹn khám này không? Hành động này sẽ tác động trực tiếp lên dữ liệu thật của hệ thống.
-            </p>
-            <div className="flex justify-center gap-4">
-              <Button variant="secondary" onClick={() => setCancelModalId(null)}>Đóng</Button>
-              <Button variant="primary" className="bg-red-600 text-white hover:bg-red-700" onClick={confirmCancel}>Xác nhận hủy</Button>
+          <div className="space-y-4">
+            <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 text-left text-xs space-y-2">
+              <p className="font-bold text-blue-800 uppercase tracking-wider text-sm">Hỗ trợ dời lịch khám:</p>
+              <p className="text-blue-700 leading-relaxed text-[13px]">
+                Để thực hiện dời lịch khám sang ngày hoặc khung giờ trực khác của bác sĩ, quý khách vui lòng liên hệ hotline chăm sóc khách hàng <strong>0365 747888</strong> hoặc trao đổi trực tiếp tại quầy lễ tân của phòng khám.
+              </p>
+              <p className="text-blue-600 leading-relaxed text-[12px] italic">
+                * Lưu ý: Chi phí khám đã thanh toán sẽ được hệ thống bảo lưu và chuyển sang lịch khám mới của quý khách hoàn toàn miễn phí.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <Button variant="primary" onClick={() => setRescheduleModalOpen(false)}>Đồng ý</Button>
             </div>
           </div>
         </Modal>
       )}
+
+      {refundHelpAppId && (() => {
+        const selectedApp = appointments.find((a) => a.id === refundHelpAppId)
+        let isWithin24h = false
+        if (selectedApp) {
+          try {
+            const appDate = new Date(selectedApp.ngay_kham)
+            if (selectedApp.gio_kham && selectedApp.gio_kham.includes(':')) {
+              const [h, m] = selectedApp.gio_kham.split(':').map(Number)
+              appDate.setHours(h, m, 0, 0)
+            }
+            isWithin24h = (appDate.getTime() - Date.now()) < 24 * 3600 * 1000
+          } catch {}
+        }
+        return (
+          <Modal
+            isOpen={!!refundHelpAppId}
+            onClose={() => setRefundHelpAppId(null)}
+            title="HỦY LỊCH & YÊU CẦU HOÀN TIỀN"
+          >
+            <div className="space-y-4">
+              <div className="rounded-xl bg-orange-50 border border-orange-100 p-4 text-left text-xs space-y-2">
+                <p className="font-bold text-orange-800 uppercase tracking-wider text-sm">Chính sách hoàn phí:</p>
+                {isWithin24h ? (
+                  <p className="text-orange-700 leading-relaxed text-[13px]">
+                    Lịch khám của quý khách sẽ diễn ra trong vòng 24h tới. Theo chính sách phòng khám, quý khách đủ điều kiện được **hoàn trả 50%** chi phí đã thanh toán ({((selectedApp?.gia_kham || 0) * 0.5).toLocaleString('vi-VN')}đ).
+                  </p>
+                ) : (
+                  <p className="text-orange-700 leading-relaxed text-[13px]">
+                    Lịch khám của quý khách còn hơn 24h mới diễn ra. Theo chính sách phòng khám, quý khách đủ điều kiện được **hoàn trả 100%** chi phí đã thanh toán ({selectedApp?.gia_kham.toLocaleString('vi-VN')}đ).
+                  </p>
+                )}
+                
+                <p className="font-bold text-slate-800 uppercase tracking-wider text-sm mt-3 pt-2 border-t border-orange-100">Liên hệ hoàn tiền:</p>
+                <p className="text-slate-600 leading-relaxed text-[13px]">
+                  Để thực hiện thủ tục hủy lịch và nhận lại số tiền hoàn trả trên, quý khách vui lòng liên hệ hotline chăm sóc khách hàng <strong>0365 747888</strong> hoặc trao đổi với nhân viên tại quầy lễ tân để được xử lý hoàn tiền thủ công.
+                </p>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="primary" onClick={() => setRefundHelpAppId(null)}>Đồng ý</Button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {toast && <Toast message={toast} type="success" onClose={() => setToast(null)} />}
     </div>

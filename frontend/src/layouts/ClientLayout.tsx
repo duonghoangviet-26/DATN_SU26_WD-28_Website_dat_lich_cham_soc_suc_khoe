@@ -69,7 +69,7 @@ export default function ClientLayout() {
               </svg>
             </div>
             <div>
-              <span className="block text-base font-extrabold leading-none text-slate-800 tracking-tight sm:text-lg">VITAFAMILY</span>
+              <span className="block text-base font-extrabold leading-none text-slate-800 tracking-tight sm:text-lg">VITEFAMILY</span>
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tai Mũi Họng Chuyên Khoa</span>
             </div>
           </Link>
@@ -263,7 +263,7 @@ export default function ClientLayout() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
                   </svg>
                 </div>
-                <span className="text-lg font-bold tracking-tight text-white">VITAFAMILY</span>
+                <span className="text-lg font-bold tracking-tight text-white">VITEFAMILY</span>
               </div>
               <p className="text-xs leading-relaxed">
                 Hệ thống chuyên khoa sâu Tai Mũi Họng uy tín hàng đầu, sở hữu trang thiết bị khám chữa bệnh nội soi NBI cao cấp nhất hiện nay.
@@ -271,7 +271,7 @@ export default function ClientLayout() {
               <div className="space-y-2 text-xs">
                 <p><span className="text-slate-200 font-bold">📍 Cơ sở chính:</span> 123 Nguyễn Trãi, Thanh Xuân, Hà Nội</p>
                 <p><span className="text-slate-200 font-bold">📞 Hotline:</span> 0365 747888 (Phục vụ 24/7)</p>
-                <p><span className="text-slate-200 font-bold">✉️ Email:</span> contact@vitafamily.vn</p>
+                <p><span className="text-slate-200 font-bold">✉️ Email:</span> contact@vitefamily.vn</p>
               </div>
             </div>
 
@@ -303,7 +303,7 @@ export default function ClientLayout() {
               <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">Bản đồ chỉ đường</h4>
               <div className="overflow-hidden rounded-lg bg-slate-800 p-1 border border-slate-700 shadow-inner">
                 <iframe
-                  title="Bản đồ chỉ đường phòng khám VitaFamily"
+                  title="Bản đồ chỉ đường phòng khám ViteFamily"
                   src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.8988636128035!2d105.8080353147627!3d21.001695994246838!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135ac9a2cf8b84d%3A0x7d3534d0b0b8e6ef!2zMTIzIE5ndXnhu4VuIFRyw6NpLCBUaGFuaCBYdcOibiwgSMOgIE7hu5lpLCBWaeG7h3QgTmFt!5e0!3m2!1svi!2s!4v1655788329431!5m2!1svi!2s"
                   width="100%"
                   height="110"
@@ -319,7 +319,7 @@ export default function ClientLayout() {
 
           {/* Copyright Bottom Bar */}
           <div className="mt-12 border-t border-slate-800 pt-6 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p>© 2026 VitaFamily - Phòng khám Tai Mũi Họng Chuyên Khoa. All rights reserved.</p>
+            <p>© 2026 ViteFamily - Phòng khám Tai Mũi Họng Chuyên Khoa. All rights reserved.</p>
             <p className="text-[10px]">Giấy phép hoạt động khám chữa bệnh số: 1245/SYT-GPHĐ.</p>
           </div>
         </div>

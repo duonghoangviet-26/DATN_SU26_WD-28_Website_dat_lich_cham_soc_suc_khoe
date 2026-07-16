@@ -18,6 +18,7 @@ export interface PatientRecordListItem {
     ho_ten: string
     anh_dai_dien?: string | null
   }
+  da_co_ket_qua?: boolean
 }
 
 export interface PatientRecordDetail extends PatientRecordListItem {
