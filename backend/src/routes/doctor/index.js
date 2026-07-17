@@ -5,6 +5,7 @@ import scheduleRoutes     from './schedule.routes.js'
 import appointmentRoutes  from './appointments.routes.js'
 import statsRoutes        from './stats.routes.js'
 import leavesRoutes       from './leaves.routes.js'
+import { examQueue }      from '../../controllers/doctor/appointments.controller.js'
 
 // ============================================================
 // Doctor routes — mount tại /api/doctor
@@ -14,6 +15,7 @@ import leavesRoutes       from './leaves.routes.js'
 const router = Router()
 router.use(verifyToken, requireRole('doctor'))
 
+router.get('/queue',         examQueue) // Hồ sơ chờ khám — GET /api/doctor/queue
 router.use('/profile',       profileRoutes)
 router.use('/schedule',      scheduleRoutes)
 router.use('/appointments',  appointmentRoutes)

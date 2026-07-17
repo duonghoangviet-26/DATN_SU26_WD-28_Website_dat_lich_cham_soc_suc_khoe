@@ -1,4 +1,4 @@
-import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc } from '../../models/index.js'
+import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
 
@@ -76,6 +76,69 @@ export async function list(req, res) {
   } catch (err) {
     return fail(res, 500, err.message)
   }
+}
+
+// ─── GET /api/doctor/queue?date= ────────────────────────────────────────────
+// "Hồ sơ chờ khám" — toàn bộ lượt khám (online + offline) đã check-in gán cho bác sĩ này.
+// Neo trên HangDoi; join KetQuaKham theo hang_doi_id (và appointment_id cho dữ liệu cũ).
+const HANGDOI_WEIGHT = { online_uu_tien: 0, online_thuong: 1, offline: 2 }
+
+function trangThaiTongHop(entry, kq) {
+  if (entry.trang_thai === 'cancelled') return 'da_huy'
+  if (entry.trang_thai === 'skipped') return 'bo_luot'
+  if (entry.trang_thai === 'dang_cho') return 'dang_cho'
+  if (entry.trang_thai === 'da_goi') return 'da_goi'
+  if (entry.trang_thai === 'trong_phong') return 'trong_phong'
+  // hoan_thanh: phân theo trạng thái hồ sơ
+  if (!kq || kq.status === 'ban_nhap') return 'cho_nhap_ho_so'
+  if (kq.status === 'cho_xac_nhan' || kq.status === 'yeu_cau_chinh_sua') return 'cho_xac_nhan'
+  if (kq.status === 'da_xac_nhan') return 'da_xong'
+  return 'cho_nhap_ho_so'
+}
+
+export async function examQueue(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+    const day = req.query.date ? new Date(req.query.date) : new Date()
+    const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
+
+    const entries = await HangDoi.find({ doctor_id: docId, checkin_time: { $gte: dayStart, $lt: dayEnd } }).lean()
+    if (entries.length === 0) return ok(res, [])
+
+    // Join hồ sơ: gom theo hang_doi_id (mới) + appointment_id (dữ liệu cũ).
+    const hangDoiIds = entries.map((e) => e._id)
+    const apptIds = entries.filter((e) => e.appointment_id).map((e) => e.appointment_id)
+    const results = await KetQuaKham.find({
+      $or: [{ hang_doi_id: { $in: hangDoiIds } }, { appointment_id: { $in: apptIds } }],
+    }).select('hang_doi_id appointment_id status').lean()
+    const kqByHangDoi = new Map(results.filter((r) => r.hang_doi_id).map((r) => [String(r.hang_doi_id), r]))
+    const kqByAppt = new Map(results.filter((r) => r.appointment_id).map((r) => [String(r.appointment_id), r]))
+
+    const rows = entries
+      .sort((a, b) => (HANGDOI_WEIGHT[a.muc_uu_tien] - HANGDOI_WEIGHT[b.muc_uu_tien]) || (new Date(a.checkin_time) - new Date(b.checkin_time)))
+      .map((e) => {
+        const kq = kqByHangDoi.get(String(e._id)) || (e.appointment_id ? kqByAppt.get(String(e.appointment_id)) : null)
+        return {
+          id: e._id,
+          appointment_id: e.appointment_id ?? null,
+          nguon: e.nguon,
+          ten_benh_nhan: e.ten_benh_nhan,
+          tuoi: e.tuoi ?? null,
+          gioi_tinh: e.gioi_tinh ?? null,
+          phong_kham: e.phong_kham ?? null,
+          muc_uu_tien: e.muc_uu_tien,
+          hang_doi_trang_thai: e.trang_thai,
+          checkin_time: e.checkin_time,
+          ket_qua_id: kq?._id ?? null,
+          ket_qua_status: kq?.status ?? null,
+          trang_thai_tong_hop: trangThaiTongHop(e, kq),
+        }
+      })
+    return ok(res, rows)
+  } catch (err) { return fail(res, 500, err.message) }
 }
 
 // ─── GET /api/doctor/appointments/:id ───────────────────────────────────────
