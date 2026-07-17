@@ -524,8 +524,16 @@ export async function confirmResultByRecord(req, res) {
     }
 
     // appt chỉ có với hồ sơ online — dùng để validate ngày tái khám + tự complete LichHen.
+    // Offline: KetQuaKham không có field member_id — lấy member_id/ten_khach/ngay_kham (checkin_time)
+    // từ chính HangDoi (đã join qua hang_doi_id) để applyResultEdits tạo đơn thuốc mới (nếu có) đúng
+    // chủ, tránh đơn thuốc mồ côi (member_id/ten_khach đều null) khi bác sĩ kê đơn lúc xác nhận offline.
     const appt = result.appointment_id ? await LichHen.findById(result.appointment_id) : null
-    const edit = await applyResultEdits(result, req.body ?? {}, appt ?? { ngay_kham: null, member_id: result.member_id, ten_khach: null }, docId)
+    let fallback = { ngay_kham: null, member_id: null, ten_khach: null }
+    if (!appt && result.hang_doi_id) {
+      const entry = await HangDoi.findById(result.hang_doi_id).lean()
+      fallback = { ngay_kham: entry?.checkin_time ?? null, member_id: entry?.member_id ?? null, ten_khach: entry?.ten_benh_nhan ?? null }
+    }
+    const edit = await applyResultEdits(result, req.body ?? {}, appt ?? fallback, docId)
     if (!edit.ok) return fail(res, edit.status, edit.message)
 
     const coSua = ['chan_doan', 'huong_dan_dieu_tri', 'ghi_chu', 'ngay_tai_kham', 'thuoc'].some((k) => req.body?.[k] !== undefined)
