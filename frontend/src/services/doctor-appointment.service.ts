@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance'
-import type { ApiResponse, DoctorAppointmentDetail, AppointmentStatus, PaymentStatus, KetQuaKhamStatus, DoctorPendingRecord, ExamResultEditPayload } from '@/types'
+import type { ApiResponse, DoctorAppointmentDetail, AppointmentStatus, PaymentStatus, KetQuaKhamStatus, DoctorPendingRecord, ExamResultEditPayload, DoctorExamQueueRow } from '@/types'
 
 interface Filters {
   status?: AppointmentStatus | ''
@@ -64,6 +64,18 @@ export const doctorAppointmentService = {
   async listPendingResults(status?: 'all' | KetQuaKhamStatus): Promise<DoctorPendingRecord[]> {
     const params = status ? { status } : undefined
     const res = await axiosInstance.get<ApiResponse<DoctorPendingRecord[]>>('/doctor/appointments/pending-results', { params })
+    return res.data.data
+  },
+
+  // Hàng đợi khám của bác sĩ (online + offline gộp chung, trang "Hồ sơ chờ khám").
+  async getExamQueue(date?: string): Promise<DoctorExamQueueRow[]> {
+    const res = await axiosInstance.get<ApiResponse<DoctorExamQueueRow[]>>('/doctor/queue', { params: date ? { date } : {} })
+    return Array.isArray(res.data.data) ? res.data.data : []
+  },
+
+  // Xác nhận nhanh hồ sơ vãng lai (offline) theo ket_qua_id — không cần appointment_id.
+  async confirmResultByRecord(ketQuaId: string, body: Record<string, unknown> = {}): Promise<unknown> {
+    const res = await axiosInstance.patch<ApiResponse<unknown>>(`/doctor/appointments/result/${ketQuaId}/confirm-by-record`, body)
     return res.data.data
   },
 }

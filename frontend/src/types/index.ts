@@ -790,6 +790,36 @@ export interface DoctorPendingRecord {
     status: KetQuaKhamStatus;
 }
 
+// Trạng thái tổng hợp 1 lượt trong hàng đợi khám (BE tính từ hang_doi + ket_qua_kham) —
+// dùng chung cho trang "Hồ sơ chờ khám" (DoctorExamQueue) hiển thị cả lượt online lẫn offline.
+export type ExamQueueStatus =
+    | "dang_cho"
+    | "da_goi"
+    | "trong_phong"
+    | "cho_nhap_ho_so"
+    | "cho_xac_nhan"
+    | "da_xong"
+    | "bo_luot"
+    | "da_huy";
+
+// 1 dòng trong hàng đợi khám của bác sĩ (GET /api/doctor/queue) — gộp cả bệnh nhân đặt online
+// (có appointment_id) và bệnh nhân vãng lai check-in tại quầy (appointment_id = null).
+export interface DoctorExamQueueRow {
+    id: string; // HangDoiKham._id
+    appointment_id: string | null; // null nếu là lượt vãng lai (offline)
+    nguon: "online" | "offline";
+    ten_benh_nhan: string;
+    tuoi: number | null;
+    gioi_tinh: string | null;
+    phong_kham: string | null;
+    muc_uu_tien: "online_uu_tien" | "online_thuong" | "offline";
+    hang_doi_trang_thai: string;
+    checkin_time: string;
+    ket_qua_id: string | null;
+    ket_qua_status: string | null;
+    trang_thai_tong_hop: ExamQueueStatus;
+}
+
 export interface DoctorAppointmentDetail {
     id: string; // Mongo ObjectId — backend trả về string, không phải number
     ma_lich_hen?: string | null;
