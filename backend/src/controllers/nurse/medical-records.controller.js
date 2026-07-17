@@ -96,10 +96,23 @@ export async function getById(req, res) {
 // ─── POST /api/nurse/medical-records ────────────────────────────────────────
 export async function createDraft(req, res) {
   try {
-    const { hang_doi_id, chan_doan, huong_dan_dieu_tri, ghi_chu, trieu_chung_ban_dau, ghi_chu_dieu_duong, ngay_tai_kham, sinh_hieu } = req.body
-    if (!hang_doi_id) return fail(res, 400, 'Thiếu hang_doi_id')
+    const { hang_doi_id, appointment_id, chan_doan, huong_dan_dieu_tri, ghi_chu, trieu_chung_ban_dau, ghi_chu_dieu_duong, ngay_tai_kham, sinh_hieu } = req.body
 
-    const { entry, error } = await findEntryInShift(hang_doi_id, req.user.id)
+    // Tương thích ngược: UI cũ gọi bằng appointment_id (lịch hẹn) thay vì hang_doi_id
+    // (lượt khám hàng đợi). Ưu tiên hang_doi_id nếu có; nếu không, tự resolve từ
+    // appointment_id sang lượt khám đã check-in tương ứng.
+    let resolvedHangDoiId = hang_doi_id
+    if (!resolvedHangDoiId) {
+      if (appointment_id) {
+        const enc = await HangDoi.findOne({ appointment_id }).select('_id').lean()
+        if (!enc) return fail(res, 409, 'Bệnh nhân chưa được check-in vào hàng đợi, chưa thể nhập hồ sơ')
+        resolvedHangDoiId = enc._id
+      } else {
+        return fail(res, 400, 'Thiếu hang_doi_id hoặc appointment_id')
+      }
+    }
+
+    const { entry, error } = await findEntryInShift(resolvedHangDoiId, req.user.id)
     if (error) return fail(res, ...error)
     if (['cancelled', 'skipped'].includes(entry.trang_thai)) {
       return fail(res, 409, 'Không thể nhập hồ sơ cho lượt khám đã hủy/bỏ lượt')
