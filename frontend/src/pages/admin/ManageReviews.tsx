@@ -44,6 +44,20 @@ export default function ManageReviews() {
   const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null)
   const [openDetail, setOpenDetail] = useState(false)
 
+  // Danh sách bác sĩ phục vụ bộ lọc dropdown
+  const [doctorsList, setDoctorsList] = useState<Array<{ id: string; ho_ten: string }>>([])
+
+  // Tải danh sách bác sĩ một lần duy nhất khi component mount
+  useEffect(() => {
+    reviewService.getDoctors()
+      .then((res) => {
+        setDoctorsList(res || [])
+      })
+      .catch((err) => {
+        console.error('Không tải được danh sách bác sĩ cho bộ lọc:', err)
+      })
+  }, [])
+
   // 1. Tự động cập nhật dữ liệu trang hiện tại khi người dùng quay lại tab (window focus)
   useEffect(() => {
     const handleFocus = () => {
@@ -113,6 +127,13 @@ export default function ManageReviews() {
 
   const handlePageChange = (newPage: number) => {
     fetchReviews(newPage)
+  }
+
+  const handleSelectDoctor = (doctorId: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      doctor: doctorId,
+    }))
   }
 
   const handleViewDetail = (review: ReviewItem) => {
@@ -227,6 +248,7 @@ export default function ManageReviews() {
       <ReviewFilter
         filters={filters}
         onChange={setFilters}
+        doctors={doctorsList}
       />
 
       {/* Thanh tác vụ hàng loạt */}
@@ -304,6 +326,7 @@ export default function ManageReviews() {
         onViewDetail={handleViewDetail}
         selectedIds={selectedIds}
         onSelectChange={setSelectedIds}
+        onSelectDoctor={handleSelectDoctor}
       />
 
       {/* Modal chi tiết và thao tác */}
