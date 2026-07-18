@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import Icon from '@/components/admin/icons'
+import AppointmentStatusChart from '@/components/admin/dashboard/AppointmentStatusChart'
+import DoctorRevenueChart from '@/components/admin/dashboard/DoctorRevenueChart'
+import NewPatientsChart from '@/components/admin/dashboard/NewPatientsChart'
+import RevenueTrendChart from '@/components/admin/dashboard/RevenueTrendChart'
+import TopServicesTable from '@/components/admin/dashboard/TopServicesTable'
 import PageHeader from '@/components/common/PageHeader'
 import { dashboardService } from '@/services/dashboard.service'
 import type { AdminDashboardSummary } from '@/types'
@@ -138,6 +143,28 @@ export default function Dashboard() {
             <p className="mt-4 text-xs text-slate-500">{item.helper}</p>
           </div>
         ))}
+      </div>
+
+      <div className="mt-6 grid min-w-0 gap-5 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          <RevenueTrendChart />
+        </div>
+        <div className="min-w-0">
+          <AppointmentStatusChart />
+        </div>
+      </div>
+
+      <div className="mt-5 grid min-w-0 gap-5 lg:grid-cols-2">
+        <div className="min-w-0">
+          <DoctorRevenueChart />
+        </div>
+        <div className="min-w-0">
+          <NewPatientsChart />
+        </div>
+      </div>
+
+      <div className="mt-5 min-w-0">
+        <TopServicesTable />
       </div>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-3">
