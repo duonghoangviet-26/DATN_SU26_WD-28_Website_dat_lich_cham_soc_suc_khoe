@@ -7,7 +7,11 @@ import {
 } from '../../services/bookingPaymentState.service.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { ok, fail } from '../../utils/response.js'
-import { emitAdminRealtime } from '../../realtime/socket.js'
+import {
+  emitAdminRealtime,
+  emitDashboardAppointmentChanged,
+  emitDashboardRevenueChanged,
+} from '../../realtime/socket.js'
 
 const PAYMENT_LIST_LIMIT_MAX = 100
 const CLINIC_TIME_OFFSET_MS = 7 * 60 * 60 * 1000
@@ -73,7 +77,7 @@ async function validateInvoiceOrThrow(hoaDonId) {
     throw new Error('hoa_don_id khong hop le')
   }
 
-  const invoice = await HoaDon.findById(hoaDonId).select('_id')
+  const invoice = await HoaDon.findById(hoaDonId).select('_id appointment_id')
   if (!invoice) {
     throw new Error('Khong tim thay hoa don')
   }
@@ -262,7 +266,10 @@ export async function create(req, res) {
       return fail(res, 400, 'Thieu truong bat buoc khi tao thanh toan')
     }
 
-    await validateInvoiceOrThrow(hoa_don_id)
+    const invoice = await validateInvoiceOrThrow(hoa_don_id)
+    const previousAppointmentStatus = invoice.appointment_id
+      ? (await LichHen.findById(invoice.appointment_id).select('status').lean())?.status ?? null
+      : null
 
     if (!isValidObjectId(nguoi_thu_id)) {
       return fail(res, 400, 'nguoi_thu_id khong hop le')
@@ -286,6 +293,17 @@ export async function create(req, res) {
 
     const invoiceState = await tinhTrangThaiHoaDon(hoa_don_id)
     await syncAppointmentPaymentStatusFromPayment(payment, invoiceState)
+    if (payment.status === 'paid') {
+      emitDashboardRevenueChanged({
+        ngay: payment.ngay_thanh_toan ?? payment.thoi_diem_thanh_toan,
+        so_tien: payment.so_tien,
+        loai: 'thanh_toan',
+      })
+    }
+    if (invoice.appointment_id && previousAppointmentStatus) {
+      const nextAppointmentStatus = (await LichHen.findById(invoice.appointment_id).select('status').lean())?.status ?? null
+      emitDashboardAppointmentChanged(previousAppointmentStatus, nextAppointmentStatus)
+    }
 
     return res.status(201).json({
       success: true,
@@ -337,6 +355,13 @@ export async function update(req, res) {
     if (!payment) return fail(res, 404, 'Khong tim thay giao dich')
     const previousHoaDonId = payment.hoa_don_id ? payment.hoa_don_id.toString() : null
     const previousStatus = payment.status
+    let relatedAppointmentId = payment.appointment_id ?? null
+    if (!relatedAppointmentId && payment.hoa_don_id) {
+      relatedAppointmentId = (await HoaDon.findById(payment.hoa_don_id).select('appointment_id').lean())?.appointment_id ?? null
+    }
+    const previousAppointmentStatus = relatedAppointmentId
+      ? (await LichHen.findById(relatedAppointmentId).select('status').lean())?.status ?? null
+      : null
     let shouldFinalizePayment = false
 
     const allowedFields = [
@@ -443,6 +468,17 @@ export async function update(req, res) {
         appointment_id: payment.appointment_id,
         source: 'admin_payment_update',
       })
+    }
+    if (previousStatus !== 'paid' && freshPayment?.status === 'paid') {
+      emitDashboardRevenueChanged({
+        ngay: freshPayment.ngay_thanh_toan ?? freshPayment.thoi_diem_thanh_toan,
+        so_tien: freshPayment.so_tien,
+        loai: 'thanh_toan',
+      })
+    }
+    if (relatedAppointmentId && previousAppointmentStatus) {
+      const nextAppointmentStatus = (await LichHen.findById(relatedAppointmentId).select('status').lean())?.status ?? null
+      emitDashboardAppointmentChanged(previousAppointmentStatus, nextAppointmentStatus)
     }
 
     return ok(res, {

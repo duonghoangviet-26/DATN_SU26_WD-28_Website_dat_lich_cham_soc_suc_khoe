@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes dashboard-update-pulse {
+  0% { outline-color: rgb(72 128 255 / 0); background-color: rgb(255 255 255); }
+  35% { outline-color: rgb(72 128 255 / 0.75); background-color: rgb(239 246 255); }
+  100% { outline-color: rgb(72 128 255 / 0); background-color: rgb(255 255 255); }
+}
+
+.dashboard-update-pulse {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  animation: dashboard-update-pulse 900ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-update-pulse {
+    animation: none;
+    outline-color: rgb(72 128 255 / 0.7);
+  }
+}
+
 html,
 body,
 #root {

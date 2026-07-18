@@ -6,7 +6,7 @@ import type { MonthlyNewPatientStatistic } from '@/types/thong-ke'
 import ChartCard from './ChartCard'
 import { clinicYear, getErrorMessage } from './chart-utils'
 
-export default function NewPatientsChart() {
+export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
   const [data, setData] = useState<MonthlyNewPatientStatistic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -18,7 +18,7 @@ export default function NewPatientsChart() {
       .catch((err) => { if (active) setError(getErrorMessage(err)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [refreshVersion])
 
   return (
     <ChartCard
@@ -30,6 +30,7 @@ export default function NewPatientsChart() {
       loading={loading}
       empty={!data.length}
       error={error}
+      pulseKey={refreshVersion}
     >
       <div className="h-80 w-full" aria-label="Biểu đồ bệnh nhân mới theo tháng">
         <ResponsiveContainer width="100%" height="100%">
@@ -55,7 +56,16 @@ export default function NewPatientsChart() {
               itemStyle={{ color: '#fff' }}
               cursor={{ fill: '#ecfdf5' }}
             />
-            <Bar dataKey="so_luong" name="Bệnh nhân mới" fill="#16a34a" radius={[5, 5, 0, 0]} maxBarSize={38} />
+            <Bar
+              dataKey="so_luong"
+              name="Bệnh nhân mới"
+              fill="#16a34a"
+              radius={[5, 5, 0, 0]}
+              maxBarSize={38}
+              isAnimationActive
+              animationDuration={500}
+              animationEasing="ease-out"
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>

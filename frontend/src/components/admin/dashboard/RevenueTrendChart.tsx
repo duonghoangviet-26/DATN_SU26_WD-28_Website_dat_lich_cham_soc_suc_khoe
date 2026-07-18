@@ -40,7 +40,7 @@ function RevenueTooltip({ active, payload, label }: any) {
   )
 }
 
-export default function RevenueTrendChart() {
+export default function RevenueTrendChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
   const [period, setPeriod] = useState<Period>(7)
   const [data, setData] = useState<RevenueDailyStatistic[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,7 +48,6 @@ export default function RevenueTrendChart() {
 
   useEffect(() => {
     let active = true
-    setLoading(true)
     setError('')
 
     thongKeService.getRevenueByDay(clinicDate(-(period - 1)), clinicDate())
@@ -63,7 +62,7 @@ export default function RevenueTrendChart() {
       })
 
     return () => { active = false }
-  }, [period])
+  }, [period, refreshVersion])
 
   return (
     <ChartCard
@@ -75,6 +74,7 @@ export default function RevenueTrendChart() {
       loading={loading}
       empty={!data.length}
       error={error}
+      pulseKey={refreshVersion}
       action={(
         <div className="inline-flex rounded-lg bg-slate-100 p-1" aria-label="Khoảng thời gian doanh thu">
           {([7, 30] as Period[]).map((value) => (
@@ -133,6 +133,9 @@ export default function RevenueTrendChart() {
               fill="url(#collectedRevenue)"
               dot={false}
               activeDot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+              isAnimationActive
+              animationDuration={500}
+              animationEasing="ease-out"
             />
             <Area
               type="monotone"
@@ -143,6 +146,9 @@ export default function RevenueTrendChart() {
               fill="url(#invoicedRevenue)"
               dot={false}
               activeDot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+              isAnimationActive
+              animationDuration={500}
+              animationEasing="ease-out"
             />
           </AreaChart>
         </ResponsiveContainer>

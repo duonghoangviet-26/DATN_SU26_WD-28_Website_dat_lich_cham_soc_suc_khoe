@@ -10,7 +10,7 @@ function shortDoctorName(value: string) {
   return value.length > 20 ? `${value.slice(0, 18)}…` : value
 }
 
-export default function DoctorRevenueChart() {
+export default function DoctorRevenueChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
   const [data, setData] = useState<DoctorRevenueStatistic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -22,7 +22,7 @@ export default function DoctorRevenueChart() {
       .catch((err) => { if (active) setError(getErrorMessage(err)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [refreshVersion])
 
   return (
     <ChartCard
@@ -34,6 +34,7 @@ export default function DoctorRevenueChart() {
       loading={loading}
       empty={!data.length}
       error={error}
+      pulseKey={refreshVersion}
     >
       <div className="h-80 w-full" aria-label="Biểu đồ doanh thu theo bác sĩ">
         <ResponsiveContainer width="100%" height="100%">
@@ -62,7 +63,16 @@ export default function DoctorRevenueChart() {
               itemStyle={{ color: '#fff' }}
               cursor={{ fill: '#eff6ff' }}
             />
-            <Bar dataKey="doanh_thu" name="Doanh thu" fill="#4880ff" radius={[0, 5, 5, 0]} maxBarSize={26} />
+            <Bar
+              dataKey="doanh_thu"
+              name="Doanh thu"
+              fill="#4880ff"
+              radius={[0, 5, 5, 0]}
+              maxBarSize={26}
+              isAnimationActive
+              animationDuration={500}
+              animationEasing="ease-out"
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>

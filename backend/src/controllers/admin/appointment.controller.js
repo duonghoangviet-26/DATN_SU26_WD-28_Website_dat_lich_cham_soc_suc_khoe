@@ -9,7 +9,7 @@ import ThanhToan from '../../models/ThanhToan.js'
 import HoanTien from '../../models/HoanTien.js'
 import CaiDatThanhToan from '../../models/CaiDatThanhToan.js'
 import { ok, fail } from '../../utils/response.js'
-import { emitAdminRealtime } from '../../realtime/socket.js'
+import { emitAdminRealtime, emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 const ADMIN_REFUND_SETTING_KEYS = ['hoan_tien_admin_huy', 'hoan_tien_admin_huy_khan_cap']
 const APPOINTMENT_LIST_LIMIT_MAX = 100
@@ -975,6 +975,7 @@ export async function cancelAppointment(req, res) {
       payment_status: appointment.payment_status,
       source: 'admin_cancel',
     })
+    emitDashboardAppointmentChanged(oldStatus, 'cancelled')
 
     const updated = await loadAppointmentForResponse(id)
     return ok(res, formatAppointmentItem(updated), 'Đã hủy lịch hẹn thành công')
@@ -1054,6 +1055,7 @@ export async function restoreAppointment(req, res) {
       payment_status: appointment.payment_status,
       source: 'admin_restore',
     })
+    emitDashboardAppointmentChanged('cancelled', appointment.status)
 
     return ok(res, null, 'Khoi phuc lich hen thanh cong')
   } catch (err) {

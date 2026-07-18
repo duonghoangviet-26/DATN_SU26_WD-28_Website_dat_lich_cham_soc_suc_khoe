@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import Icon from '@/components/admin/icons'
 import Skeleton from '@/components/common/Skeleton'
+import { useUpdatePulse } from '@/hooks/useUpdatePulse'
 
 interface ChartCardProps {
   title: string
@@ -15,6 +16,7 @@ interface ChartCardProps {
   action?: ReactNode
   children: ReactNode
   className?: string
+  pulseKey?: number
 }
 
 export default function ChartCard({
@@ -29,9 +31,12 @@ export default function ChartCard({
   action,
   children,
   className = '',
+  pulseKey = 0,
 }: ChartCardProps) {
+  const pulsing = useUpdatePulse(pulseKey)
+
   return (
-    <section className={`card min-w-0 p-5 sm:p-6 ${className}`}>
+    <section className={`card min-w-0 p-5 sm:p-6 ${pulsing ? 'dashboard-update-pulse' : ''} ${className}`}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBackgroundClassName}`}>

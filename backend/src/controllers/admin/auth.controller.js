@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { NguoiDung, ThongBao } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
+import { emitDashboardNewPatient } from '../../realtime/socket.js'
 
 const ADMIN_ID = "000000000000000000000099"
 
@@ -109,6 +110,7 @@ export async function register(req, res) {
       noi_dung: `Người dùng ${ho_ten} (${email}) vừa tạo tài khoản thành công.`,
       loai: 'system'
     })
+    emitDashboardNewPatient(user.ngay_tao)
 
     return created(
       res,

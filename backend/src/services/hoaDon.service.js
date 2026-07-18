@@ -38,6 +38,7 @@ export async function tinhTrangThaiHoaDon(hoaDonId) {
   }
 
   // Đồng bộ trạng thái thanh toán sang Lịch Hẹn tương ứng
+  let appointmentStatusChange = null
   if (hoaDon.appointment_id) {
     const appointmentPaymentStatus =
       trangThaiMoi === 'da_thanh_toan_du'
@@ -52,10 +53,13 @@ export async function tinhTrangThaiHoaDon(hoaDonId) {
       updateFields.thoi_diem_thanh_toan = new Date()
 
       // Chỉ tự động duyệt trạng thái khám nếu đang chờ xác nhận (pending)
-      await LichHen.updateOne(
+      const statusUpdate = await LichHen.updateOne(
         { _id: hoaDon.appointment_id, status: 'pending' },
         { $set: { status: 'confirmed' } }
       )
+      if (statusUpdate.modifiedCount > 0) {
+        appointmentStatusChange = { trang_thai_cu: 'pending', trang_thai_moi: 'confirmed' }
+      }
     }
 
     await LichHen.updateOne(
@@ -69,6 +73,7 @@ export async function tinhTrangThaiHoaDon(hoaDonId) {
     tongDaThu,
     tongCanThu,
     trang_thai_hoa_don: hoaDon.trang_thai_hoa_don,
+    appointment_status_change: appointmentStatusChange,
   }
 }
 

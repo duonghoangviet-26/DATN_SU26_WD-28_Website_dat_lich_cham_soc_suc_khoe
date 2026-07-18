@@ -13,7 +13,7 @@ const STATUS_META = {
   huy: { label: 'Đã hủy', color: '#ef4444' },
 }
 
-export default function AppointmentStatusChart() {
+export default function AppointmentStatusChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
   const [data, setData] = useState<AppointmentStatusStatistic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -25,7 +25,7 @@ export default function AppointmentStatusChart() {
       .catch((err) => { if (active) setError(getErrorMessage(err)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [refreshVersion])
 
   const chartData = useMemo(() => data.map((item) => ({
     ...item,
@@ -44,6 +44,7 @@ export default function AppointmentStatusChart() {
       loading={loading}
       empty={!data.length}
       error={error}
+      pulseKey={refreshVersion}
     >
       <div className="relative h-56 w-full" aria-label="Biểu đồ trạng thái lịch hẹn">
         <ResponsiveContainer width="100%" height="100%">
@@ -58,6 +59,9 @@ export default function AppointmentStatusChart() {
               outerRadius="82%"
               paddingAngle={2}
               stroke="none"
+              isAnimationActive
+              animationDuration={500}
+              animationEasing="ease-out"
             >
               {chartData.map((item) => <Cell key={item.trang_thai} fill={item.color} />)}
             </Pie>

@@ -5,7 +5,7 @@ import type { TopServiceStatistic } from '@/types/thong-ke'
 import ChartCard from './ChartCard'
 import { clinicDate, formatCurrency, getErrorMessage } from './chart-utils'
 
-export default function TopServicesTable() {
+export default function TopServicesTable({ refreshVersion = 0 }: { refreshVersion?: number }) {
   const [data, setData] = useState<TopServiceStatistic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -17,7 +17,7 @@ export default function TopServicesTable() {
       .catch((err) => { if (active) setError(getErrorMessage(err)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [refreshVersion])
 
   const maxUsage = useMemo(() => Math.max(...data.map((item) => item.so_luot_dung), 1), [data])
 
@@ -31,6 +31,7 @@ export default function TopServicesTable() {
       loading={loading}
       empty={!data.length}
       error={error}
+      pulseKey={refreshVersion}
     >
       <div className="overflow-hidden rounded-lg bg-slate-50/80">
         <div className="hidden grid-cols-[minmax(0,1fr)_120px_150px] gap-6 px-4 py-3 text-xs font-semibold text-slate-500 sm:grid">
@@ -54,7 +55,7 @@ export default function TopServicesTable() {
                     <span className="truncate text-sm font-medium text-slate-800">{item.ten_dich_vu}</span>
                   </div>
                   <div className="ml-10 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-orange-500" style={{ width: `${percentage}%` }} />
+                    <div className="h-full rounded-full bg-orange-500 transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${percentage}%` }} />
                   </div>
                 </div>
                 <div className="flex items-center justify-between pl-10 text-xs sm:block sm:pl-0 sm:text-right">

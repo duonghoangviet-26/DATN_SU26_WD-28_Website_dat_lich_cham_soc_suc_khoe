@@ -19,9 +19,8 @@ function getOnce<T>(key: string, request: () => Promise<T>): Promise<T> {
   const existing = pendingRequests.get(key) as Promise<T> | undefined
   if (existing) return existing
 
-  const pending = request().catch((error) => {
+  const pending = request().finally(() => {
     pendingRequests.delete(key)
-    throw error
   })
   pendingRequests.set(key, pending)
   return pending
