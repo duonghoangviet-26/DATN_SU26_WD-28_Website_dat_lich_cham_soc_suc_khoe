@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import Icon from '@/components/admin/icons'
 import Badge from '@/components/common/Badge'
@@ -153,6 +153,7 @@ export default function ManagePayments() {
   const [toDate, setToDate] = useState('')
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
+  const [summary, setSummary] = useState({ paidAmount: 0, pendingCount: 0, refundedAmount: 0 })
   const [confirm, setConfirm] = useState<PaymentItem | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -161,10 +162,20 @@ export default function ManagePayments() {
 
   useEffect(() => {
     let ignore = false
+    const controller = new AbortController()
 
     async function fetchPayments() {
       setLoading(true)
       setError('')
+
+      if (fromDate && toDate && fromDate > toDate) {
+        setPayments([])
+        setSummary({ paidAmount: 0, pendingCount: 0, refundedAmount: 0 })
+        setPagination({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
+        setError('Ngày kết thúc phải từ ngày bắt đầu trở đi.')
+        setLoading(false)
+        return
+      }
 
       try {
         const data = await paymentService.getAll({
@@ -174,15 +185,17 @@ export default function ManagePayments() {
           to: toDate || undefined,
           page,
           limit: itemsPerPage,
-        })
+        }, controller.signal)
 
         if (!ignore) {
           setPayments(data.data)
           setPagination(data.pagination)
+          setSummary(data.summary)
         }
       } catch (nextError: any) {
-        if (!ignore) {
+        if (!ignore && nextError?.code !== 'ERR_CANCELED') {
           setPayments([])
+          setSummary({ paidAmount: 0, pendingCount: 0, refundedAmount: 0 })
           setPagination({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
           setError(nextError?.response?.data?.message || nextError?.message || 'Không tải được danh sách giao dịch.')
         }
@@ -197,6 +210,7 @@ export default function ManagePayments() {
 
     return () => {
       ignore = true
+      controller.abort()
     }
   }, [keyword, status, fromDate, toDate, page, realtimeTick])
 
@@ -209,16 +223,6 @@ export default function ManagePayments() {
   useEffect(() => {
     setPage(1)
   }, [keyword, status, fromDate, toDate])
-
-  const summary = useMemo(() => ({
-    paidAmount: payments
-      .filter((payment) => payment.status === 'paid')
-      .reduce((sum, payment) => sum + payment.so_tien, 0),
-    pendingCount: payments.filter((payment) => payment.status === 'pending').length,
-    refundedAmount: payments
-      .filter((payment) => payment.status === 'refunded')
-      .reduce((sum, payment) => sum + payment.so_tien, 0),
-  }), [payments])
 
   useEffect(() => {
     if (page > pagination.totalPages) {
@@ -235,6 +239,7 @@ export default function ManagePayments() {
     try {
       const updated = await paymentService.refund(id)
       setPayments((prev) => prev.map((payment) => (payment.id === updated.id ? updated : payment)))
+      setRealtimeTick((tick) => tick + 1)
       if (detail?.id === updated.id) {
         const refreshed = await paymentService.getById(updated.id)
         setDetail(refreshed)
@@ -338,6 +343,7 @@ export default function ManagePayments() {
             type="date"
             className="input w-full"
             value={fromDate}
+            max={toDate || undefined}
             onChange={(event) => setFromDate(event.target.value)}
             title="Từ ngày"
           />
@@ -346,6 +352,7 @@ export default function ManagePayments() {
             type="date"
             className="input w-full"
             value={toDate}
+            min={fromDate || undefined}
             onChange={(event) => setToDate(event.target.value)}
             title="Đến ngày"
           />
@@ -353,8 +360,11 @@ export default function ManagePayments() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={() => setRealtimeTick((tick) => tick + 1)} className="min-h-10 rounded-lg border border-red-300 bg-white px-3 font-semibold text-red-800 hover:bg-red-100">
+            Thử lại
+          </button>
         </div>
       )}
 
@@ -379,10 +389,18 @@ export default function ManagePayments() {
                     Đang tải...
                   </td>
                 </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-red-700">
+                    Không thể tải dữ liệu giao dịch. Vui lòng thử lại.
+                  </td>
+                </tr>
               ) : payments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
-                    Không tìm thấy giao dịch.
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-600">
+                    {keyword || status || fromDate || toDate
+                      ? 'Không có giao dịch phù hợp với bộ lọc.'
+                      : 'Chưa có giao dịch thanh toán trong hệ thống.'}
                   </td>
                 </tr>
               ) : payments.map((payment) => (

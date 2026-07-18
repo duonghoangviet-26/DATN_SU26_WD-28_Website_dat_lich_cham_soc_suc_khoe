@@ -11,6 +11,8 @@ import { emitAdminRealtime } from '../../realtime/socket.js'
 
 const PAYMENT_LIST_LIMIT_MAX = 100
 const CLINIC_TIME_OFFSET_MS = 7 * 60 * 60 * 1000
+const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'refunded']
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
@@ -25,11 +27,22 @@ function clampPositiveInt(value, fallback, max) {
   return Math.min(parsed, max)
 }
 
-function toDateOnly(value) {
-  const date = new Date(value)
-  const shiftedDate = new Date(date.getTime() + CLINIC_TIME_OFFSET_MS)
-  shiftedDate.setUTCHours(0, 0, 0, 0)
-  return new Date(shiftedDate.getTime() - CLINIC_TIME_OFFSET_MS)
+function parseClinicDateOnly(value) {
+  if (typeof value !== 'string' || !DATE_ONLY_PATTERN.test(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  const normalized = new Date(Date.UTC(year, month - 1, day))
+  if (
+    normalized.getUTCFullYear() !== year
+    || normalized.getUTCMonth() !== month - 1
+    || normalized.getUTCDate() !== day
+  ) {
+    return null
+  }
+  return new Date(normalized.getTime() - CLINIC_TIME_OFFSET_MS)
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function getPopulatedObject(value) {
@@ -133,21 +146,30 @@ export async function list(req, res) {
     const limitNum = clampPositiveInt(req.query.limit, 20, PAYMENT_LIST_LIMIT_MAX)
     const skip = (pageNum - 1) * limitNum
     const filter = {}
+    if (status && !PAYMENT_STATUSES.includes(status)) {
+      return fail(res, 400, 'status khong hop le')
+    }
     if (status) filter.status = status
     if (from || to) {
+      const fromDate = from ? parseClinicDateOnly(from) : null
+      const toDate = to ? parseClinicDateOnly(to) : null
+      if ((from && !fromDate) || (to && !toDate)) {
+        return fail(res, 400, 'from va to phai co dinh dang YYYY-MM-DD hop le')
+      }
+      if (fromDate && toDate && fromDate > toDate) {
+        return fail(res, 400, 'Khoang ngay khong hop le')
+      }
       filter.ngay_tao = {}
-      if (from) filter.ngay_tao.$gte = new Date(from)
-      if (to) filter.ngay_tao.$lte = new Date(to)
-    } else if (!search?.trim()) {
-      filter.ngay_tao = { $gte: toDateOnly(new Date()) }
+      if (fromDate) filter.ngay_tao.$gte = fromDate
+      if (toDate) filter.ngay_tao.$lt = new Date(toDate.getTime() + 24 * 60 * 60 * 1000)
     }
-    if (search) {
+    if (search?.trim()) {
       filter.$or = [
-        { ma_giao_dich: { $regex: search, $options: 'i' } },
+        { ma_giao_dich: { $regex: escapeRegex(search.trim()), $options: 'i' } },
       ]
     }
 
-    const [total, payments] = await Promise.all([
+    const [total, payments, summaryRows] = await Promise.all([
       ThanhToan.countDocuments(filter),
       ThanhToan.find(filter)
         .populate('benh_nhan_id', 'ho_ten email so_dien_thoai')
@@ -164,6 +186,17 @@ export async function list(req, res) {
         .skip(skip)
         .limit(limitNum)
         .lean(),
+      ThanhToan.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+            paidAmount: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$so_tien', 0] } },
+            pendingCount: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+            refundedAmount: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, '$so_tien', 0] } },
+          },
+        },
+      ]),
     ])
 
     const result = payments.map((p) => {
@@ -195,6 +228,11 @@ export async function list(req, res) {
         page: pageNum,
         limit: limitNum,
         totalPages: total === 0 ? 1 : Math.ceil(total / limitNum),
+      },
+      summary: {
+        paidAmount: Number(summaryRows[0]?.paidAmount ?? 0),
+        pendingCount: Number(summaryRows[0]?.pendingCount ?? 0),
+        refundedAmount: Number(summaryRows[0]?.refundedAmount ?? 0),
       },
     })
   } catch (err) {

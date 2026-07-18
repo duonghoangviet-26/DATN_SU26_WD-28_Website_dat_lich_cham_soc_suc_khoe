@@ -41,13 +41,18 @@ describe('paymentService', () => {
 
     expect(mockedGet).toHaveBeenCalledWith('/admin/payments', {
       params: {
+        page: 1,
+        limit: 8,
         search: 'TXN',
         status: 'paid',
         from: '2026-07-01',
         to: '2026-07-31',
       },
+      signal: undefined,
     })
-    expect(list[0].phuong_thuc).toBe('chuyen_khoan')
+    expect(list.data[0].phuong_thuc).toBe('chuyen_khoan')
+    expect(list.pagination.total).toBe(1)
+    expect(list.summary.paidAmount).toBe(300000)
   })
 
   it('getById() reads a payment from real API', async () => {
