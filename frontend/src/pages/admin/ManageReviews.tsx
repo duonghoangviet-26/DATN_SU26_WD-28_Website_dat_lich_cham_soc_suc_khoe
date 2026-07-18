@@ -3,6 +3,7 @@ import { reviewService } from '@/services/review.service'
 import type { ReviewFilters, ReviewItem, ReviewStatistics, PaginationInfo } from '@/types/review.type'
 import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
+import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import ReviewFilter from '@/components/admin/reviews/ReviewFilter'
 import ReviewTable from '@/components/admin/reviews/ReviewTable'
 import ReviewDetailModal from '@/components/admin/reviews/ReviewDetailModal'
@@ -165,7 +166,7 @@ export default function ManageReviews() {
   }
 
   return (
-    <div className="space-y-6">
+    <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Đánh giá & phản hồi"
         description="Xem và kiểm duyệt các đánh giá từ bệnh nhân, ẩn nội dung không phù hợp hoặc khôi phục/xóa đánh giá."
@@ -315,6 +316,6 @@ export default function ManageReviews() {
         }}
         onActionSuccess={handleActionSuccess}
       />
-    </div>
+    </AdminAutoStagger>
   )
 }

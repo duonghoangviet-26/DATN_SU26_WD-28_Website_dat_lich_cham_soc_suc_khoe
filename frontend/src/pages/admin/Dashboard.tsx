@@ -8,6 +8,7 @@ import NewPatientsChart from '@/components/admin/dashboard/NewPatientsChart'
 import RevenueTrendChart from '@/components/admin/dashboard/RevenueTrendChart'
 import TopServicesTable from '@/components/admin/dashboard/TopServicesTable'
 import AnimatedNumber from '@/components/admin/dashboard/AnimatedNumber'
+import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import PageHeader from '@/components/common/PageHeader'
 import { useDashboardRealtime } from '@/hooks/useDashboardRealtime'
 import { useUpdatePulse } from '@/hooks/useUpdatePulse'
@@ -152,11 +153,13 @@ export default function Dashboard() {
   ]
 
   return (
-    <div>
-      <PageHeader
-        title="Dashboard"
-        description="Tổng quan nhanh từ dữ liệu thật của lịch hẹn, hóa đơn, thanh toán và bác sĩ."
-      />
+    <AdminMotionGroup>
+      <AdminMotionItem>
+        <PageHeader
+          title="Dashboard"
+          description="Tổng quan nhanh từ dữ liệu thật của lịch hẹn, hóa đơn, thanh toán và bác sĩ."
+        />
+      </AdminMotionItem>
 
       {connection !== 'connected' && (
         <div className={`mb-5 inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium ${
@@ -175,34 +178,45 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((item) => <DashboardStatCard key={item.label} item={item} loading={loading} pulseKey={versions.summary} />)}
-      </div>
+      <AdminMotionItem>
+        <AdminMotionGroup className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {stats.map((item) => (
+            <AdminMotionItem key={item.label}>
+              <DashboardStatCard item={item} loading={loading} pulseKey={versions.summary} />
+            </AdminMotionItem>
+          ))}
+        </AdminMotionGroup>
+      </AdminMotionItem>
 
-      <div className="mt-6 grid min-w-0 gap-5 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2">
+      <AdminMotionItem>
+        <AdminMotionGroup className="mt-6 grid min-w-0 gap-5 lg:grid-cols-3">
+        <AdminMotionItem className="min-w-0 lg:col-span-2">
           <RevenueTrendChart refreshVersion={versions.revenue} />
-        </div>
-        <div className="min-w-0">
+        </AdminMotionItem>
+        <AdminMotionItem className="min-w-0">
           <AppointmentStatusChart refreshVersion={versions.appointments} />
-        </div>
-      </div>
+        </AdminMotionItem>
+        </AdminMotionGroup>
+      </AdminMotionItem>
 
-      <div className="mt-5 grid min-w-0 gap-5 lg:grid-cols-2">
-        <div className="min-w-0">
+      <AdminMotionItem>
+        <AdminMotionGroup className="mt-5 grid min-w-0 gap-5 lg:grid-cols-2">
+        <AdminMotionItem className="min-w-0">
           <DoctorRevenueChart refreshVersion={versions.doctors} />
-        </div>
-        <div className="min-w-0">
+        </AdminMotionItem>
+        <AdminMotionItem className="min-w-0">
           <NewPatientsChart refreshVersion={versions.patients} />
-        </div>
-      </div>
+        </AdminMotionItem>
+        </AdminMotionGroup>
+      </AdminMotionItem>
 
-      <div className="mt-5 min-w-0">
+      <AdminMotionItem className="mt-5 min-w-0">
         <TopServicesTable refreshVersion={versions.services} />
-      </div>
+      </AdminMotionItem>
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-3">
-        <div className={`card p-5 ${revenuePanelPulsing ? 'dashboard-update-pulse' : ''}`}>
+      <AdminMotionItem>
+        <AdminMotionGroup className="mt-6 grid gap-5 lg:grid-cols-3">
+        <AdminMotionItem className={`card p-5 ${revenuePanelPulsing ? 'dashboard-update-pulse' : ''}`}>
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100">
               <Icon name="payment" className="h-3.5 w-3.5 text-blue-600" />
@@ -236,9 +250,9 @@ export default function Dashboard() {
           <p className="mt-4 text-xs text-slate-400">
             Cập nhật lúc: {formatDateTime(summary.generated_at)}
           </p>
-        </div>
+        </AdminMotionItem>
 
-        <div className="card p-5 lg:col-span-2">
+        <AdminMotionItem className="card p-5 lg:col-span-2">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-100">
               <Icon name="dashboard" className="h-3.5 w-3.5 text-brand-600" />
@@ -260,9 +274,10 @@ export default function Dashboard() {
               </Link>
             ))}
           </div>
-        </div>
-      </div>
-    </div>
+        </AdminMotionItem>
+        </AdminMotionGroup>
+      </AdminMotionItem>
+    </AdminMotionGroup>
   )
 }
 

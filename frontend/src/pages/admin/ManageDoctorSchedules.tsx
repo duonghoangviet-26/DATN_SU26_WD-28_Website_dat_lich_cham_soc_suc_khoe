@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import Icon from '@/components/admin/icons'
+import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import DoctorScheduleCalendar from '@/components/admin/DoctorScheduleCalendar'
 import Badge from '@/components/common/Badge'
 import PageHeader from '@/components/common/PageHeader'
@@ -615,7 +616,7 @@ export default function ManageDoctorSchedules() {
   }
 
   return (
-    <div className="space-y-6">
+    <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Lịch làm việc bác sĩ"
         description="Lịch làm việc được hệ thống tự động sinh và bù theo tuần. Admin theo dõi trạng thái xác nhận, chỉnh slot khi có thay đổi đặc biệt và xem lịch sử để truy vết."
@@ -751,6 +752,6 @@ export default function ManageDoctorSchedules() {
           onClose={() => setHistoryTarget(null)}
         />
       )}
-    </div>
+    </AdminAutoStagger>
   )
 }

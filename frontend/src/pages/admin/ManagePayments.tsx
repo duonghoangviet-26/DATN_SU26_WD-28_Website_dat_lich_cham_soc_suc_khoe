@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import Icon from '@/components/admin/icons'
+import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import PageHeader from '@/components/common/PageHeader'
@@ -266,14 +267,16 @@ export default function ManagePayments() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Quản lý thanh toán"
-        description="Theo dõi đầy đủ giao dịch, mốc thời gian thanh toán và xử lý hoàn tiền từ dữ liệu thật của hệ thống."
-      />
+    <AdminMotionGroup>
+      <AdminMotionItem>
+        <PageHeader
+          title="Quản lý thanh toán"
+          description="Theo dõi đầy đủ giao dịch, mốc thời gian thanh toán và xử lý hoàn tiền từ dữ liệu thật của hệ thống."
+        />
+      </AdminMotionItem>
 
-      <div className="mb-5 grid gap-4 lg:grid-cols-3">
-        <div className="card p-5">
+      <AdminMotionGroup className="mb-5 grid gap-4 lg:grid-cols-3">
+        <AdminMotionItem className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm font-medium text-slate-500">Đã thanh toán</p>
@@ -284,9 +287,9 @@ export default function ManagePayments() {
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">Tổng doanh thu từ các giao dịch trạng thái đã thanh toán.</p>
-        </div>
+        </AdminMotionItem>
 
-        <div className="card p-5">
+        <AdminMotionItem className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm font-medium text-slate-500">Chờ thanh toán</p>
@@ -297,9 +300,9 @@ export default function ManagePayments() {
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">Các giao dịch đang pending và cần tiếp tục đối soát.</p>
-        </div>
+        </AdminMotionItem>
 
-        <div className="card p-5">
+        <AdminMotionItem className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm font-medium text-slate-500">Đã hoàn tiền</p>
@@ -310,10 +313,10 @@ export default function ManagePayments() {
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">Tổng số tiền đã được admin xử lý hoàn trả.</p>
-        </div>
-      </div>
+        </AdminMotionItem>
+      </AdminMotionGroup>
 
-      <div className="card mb-4 p-4">
+      <AdminMotionItem className="card mb-4 p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">
@@ -357,7 +360,7 @@ export default function ManagePayments() {
             title="Đến ngày"
           />
         </div>
-      </div>
+      </AdminMotionItem>
 
       {error && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
@@ -368,7 +371,7 @@ export default function ManagePayments() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
+      <AdminMotionItem className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-slate-500">
@@ -488,7 +491,7 @@ export default function ManagePayments() {
             onPageChange={setPage}
           />
         )}
-      </div>
+      </AdminMotionItem>
 
       {detailOpen && (
         <PaymentDetailModal
@@ -511,6 +514,6 @@ export default function ManagePayments() {
         onConfirm={handleRefund}
         onCancel={() => setConfirm(null)}
       />
-    </div>
+    </AdminMotionGroup>
   )
 }

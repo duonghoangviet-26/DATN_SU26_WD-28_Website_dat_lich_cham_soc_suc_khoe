@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import Icon from '@/components/admin/icons'
+import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import PageHeader from '@/components/common/PageHeader'
 import { appointmentService } from '@/services/appointment.service'
 import { subscribeAdminRealtime } from '@/services/realtime.service'
@@ -187,19 +188,18 @@ export default function ManageAppointments() {
   ]
 
   return (
-    <div>
-      <PageHeader
-        title="Lịch hẹn hệ thống"
-        description="Admin chỉ rà soát, dời lịch, hủy và theo dõi đặt hộ. Việc tạo lịch mới thuộc về người dùng hoặc lễ tân do liên quan trực tiếp tới thanh toán."
-      />
+    <AdminMotionGroup>
+      <AdminMotionItem>
+        <PageHeader
+          title="Lịch hẹn hệ thống"
+          description="Admin chỉ rà soát, dời lịch, hủy và theo dõi đặt hộ. Việc tạo lịch mới thuộc về người dùng hoặc lễ tân do liên quan trực tiếp tới thanh toán."
+        />
+      </AdminMotionItem>
 
       {view === 'list' && (
-        <>
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Admin không được đặt lịch hay thêm lịch hẹn mới cho người dùng. Chỉ người dùng hoặc lễ tân được tạo lịch để tránh lệch luồng thanh toán và đối soát.
-          </div>
+        <AdminMotionGroup>
 
-          <div className="mb-4 flex flex-wrap gap-2">
+          <AdminMotionItem className="mb-4 flex flex-wrap gap-2">
             {[
               ['all', 'Tất cả'],
               ['today', 'Hôm nay'],
@@ -225,11 +225,11 @@ export default function ManageAppointments() {
                 {label}
               </button>
             ))}
-          </div>
+          </AdminMotionItem>
 
-          <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <AdminMotionGroup className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {summaryCards.map((item) => (
-              <div key={item.label} className="card p-5">
+              <AdminMotionItem key={item.label} className="card p-5">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-slate-500">{item.label}</p>
@@ -239,11 +239,11 @@ export default function ManageAppointments() {
                     <Icon name={item.icon} className={`h-6 w-6 ${item.iconColor}`} />
                   </div>
                 </div>
-              </div>
+              </AdminMotionItem>
             ))}
-          </div>
+          </AdminMotionGroup>
 
-          <div className="card mb-4 p-4">
+          <AdminMotionItem className="card mb-4 p-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">
@@ -331,7 +331,7 @@ export default function ManageAppointments() {
                 <option value="proxy">Đặt hộ</option>
               </select>
             </div>
-          </div>
+          </AdminMotionItem>
 
           {error && (
             <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -365,16 +365,18 @@ export default function ManageAppointments() {
             </div>
           )}
 
-          <AppointmentList
-            appointments={appointments}
-            loading={loading}
-            onView={handleView}
-            onHistory={handleHistory}
-            onCancel={handleCancel}
-            onReschedule={handleReschedule}
-            onRestore={handleRestore}
-            onHardDelete={handleHardDelete}
-          />
+          <AdminMotionItem>
+            <AppointmentList
+              appointments={appointments}
+              loading={loading}
+              onView={handleView}
+              onHistory={handleHistory}
+              onCancel={handleCancel}
+              onReschedule={handleReschedule}
+              onRestore={handleRestore}
+              onHardDelete={handleHardDelete}
+            />
+          </AdminMotionItem>
 
           {!loading && pagination.totalPages > 1 && (
             <div className="mt-6 flex items-center justify-between rounded-lg border-t border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-6">
@@ -408,7 +410,7 @@ export default function ManageAppointments() {
               </div>
             </div>
           )}
-        </>
+        </AdminMotionGroup>
       )}
 
       {view === 'reschedule' && rescheduleData && (
@@ -429,6 +431,6 @@ export default function ManageAppointments() {
       {historyItem && (
         <AppointmentHistoryModal appointment={historyItem} onClose={() => setHistoryItem(null)} />
       )}
-    </div>
+    </AdminMotionGroup>
   )
 }
