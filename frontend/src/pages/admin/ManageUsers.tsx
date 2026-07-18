@@ -14,6 +14,7 @@ import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
+import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 
 const LOG_CONFIG: Record<string, { label: string; color: 'green' | 'red' | 'blue' | 'yellow' | 'gray' }> = {
   CREATE_USER: {
@@ -256,7 +257,7 @@ export default function ManageUsers() {
   }
 
   return (
-    <div className="space-y-6">
+    <AdminAutoStagger className="space-y-6">
       <PageHeader title="Quản lý người dùng" description="Quản lý tài khoản, vai trò và trạng thái thành viên.">
         <button onClick={() => setShowAddModal(true)} className="btn btn-primary flex items-center gap-2">
           <Icon name="plus" className="h-4 w-4" /> Thêm người dùng
@@ -673,6 +674,6 @@ export default function ManageUsers() {
         document.body
       )}
 
-    </div>
+    </AdminAutoStagger>
   )
 }

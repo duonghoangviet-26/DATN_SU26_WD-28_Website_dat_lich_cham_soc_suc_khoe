@@ -6,6 +6,7 @@ import { formatPrice, formatDate } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
+import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import DoctorDetailDrawer from './DoctorDetailDrawer'
 import UpdateDoctor from './UpdateDoctor'
 import DoctorActionModal, { ActionType } from './DoctorActionModal'
@@ -86,14 +87,16 @@ export default function ManageDoctors() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Duyệt hồ sơ bác sĩ"
-        description="Xét duyệt, tạm ngưng và quản lý tài khoản bác sĩ trong hệ thống."
-      />
+    <AdminMotionGroup>
+      <AdminMotionItem>
+        <PageHeader
+          title="Duyệt hồ sơ bác sĩ"
+          description="Xét duyệt, tạm ngưng và quản lý tài khoản bác sĩ trong hệ thống."
+        />
+      </AdminMotionItem>
 
       {/* Tìm kiếm & Lọc */}
-      <div className="card mb-4 p-4 flex flex-col sm:flex-row gap-4 justify-between items-center bg-white shadow-sm rounded-xl">
+      <AdminMotionItem className="card mb-4 flex flex-col items-center justify-between gap-4 rounded-xl bg-white p-4 shadow-sm sm:flex-row">
         <div className="flex gap-2 overflow-x-auto w-full sm:w-auto">
           {STATUS_TABS.map((tab) => (
             <button
@@ -119,10 +122,10 @@ export default function ManageDoctors() {
             onChange={(e) => setKeyword(e.target.value)}
           />
         </div>
-      </div>
+      </AdminMotionItem>
 
       {/* Bảng bác sĩ */}
-      <div className="card overflow-hidden shadow-sm">
+      <AdminMotionItem className="card overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-slate-500 border-b border-slate-100">
@@ -239,7 +242,7 @@ export default function ManageDoctors() {
             </tbody>
           </table>
         </div>
-      </div>
+      </AdminMotionItem>
 
       {/* Phân trang */}
       {!loading && totalRecords > 0 && (
@@ -299,6 +302,6 @@ export default function ManageDoctors() {
           }} 
         />
       )}
-    </div>
+    </AdminMotionGroup>
   )
 }

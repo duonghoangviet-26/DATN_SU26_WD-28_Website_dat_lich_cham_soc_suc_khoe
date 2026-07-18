@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import Icon from '@/components/admin/icons'
+import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import PageHeader from '@/components/common/PageHeader'
@@ -153,6 +154,7 @@ export default function ManagePayments() {
   const [toDate, setToDate] = useState('')
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
+  const [summary, setSummary] = useState({ paidAmount: 0, pendingCount: 0, refundedAmount: 0 })
   const [confirm, setConfirm] = useState<PaymentItem | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -161,10 +163,20 @@ export default function ManagePayments() {
 
   useEffect(() => {
     let ignore = false
+    const controller = new AbortController()
 
     async function fetchPayments() {
       setLoading(true)
       setError('')
+
+      if (fromDate && toDate && fromDate > toDate) {
+        setPayments([])
+        setSummary({ paidAmount: 0, pendingCount: 0, refundedAmount: 0 })
+        setPagination({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
+        setError('Ngày kết thúc phải từ ngày bắt đầu trở đi.')
+        setLoading(false)
+        return
+      }
 
       try {
         const data = await paymentService.getAll({
@@ -174,15 +186,17 @@ export default function ManagePayments() {
           to: toDate || undefined,
           page,
           limit: itemsPerPage,
-        })
+        }, controller.signal)
 
         if (!ignore) {
           setPayments(data.data)
           setPagination(data.pagination)
+          setSummary(data.summary)
         }
       } catch (nextError: any) {
-        if (!ignore) {
+        if (!ignore && nextError?.code !== 'ERR_CANCELED') {
           setPayments([])
+          setSummary({ paidAmount: 0, pendingCount: 0, refundedAmount: 0 })
           setPagination({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
           setError(nextError?.response?.data?.message || nextError?.message || 'Không tải được danh sách giao dịch.')
         }
@@ -197,6 +211,7 @@ export default function ManagePayments() {
 
     return () => {
       ignore = true
+      controller.abort()
     }
   }, [keyword, status, fromDate, toDate, page, realtimeTick])
 
@@ -209,16 +224,6 @@ export default function ManagePayments() {
   useEffect(() => {
     setPage(1)
   }, [keyword, status, fromDate, toDate])
-
-  const summary = useMemo(() => ({
-    paidAmount: payments
-      .filter((payment) => payment.status === 'paid')
-      .reduce((sum, payment) => sum + payment.so_tien, 0),
-    pendingCount: payments.filter((payment) => payment.status === 'pending').length,
-    refundedAmount: payments
-      .filter((payment) => payment.status === 'refunded')
-      .reduce((sum, payment) => sum + payment.so_tien, 0),
-  }), [payments])
 
   useEffect(() => {
     if (page > pagination.totalPages) {
@@ -235,6 +240,7 @@ export default function ManagePayments() {
     try {
       const updated = await paymentService.refund(id)
       setPayments((prev) => prev.map((payment) => (payment.id === updated.id ? updated : payment)))
+      setRealtimeTick((tick) => tick + 1)
       if (detail?.id === updated.id) {
         const refreshed = await paymentService.getById(updated.id)
         setDetail(refreshed)
@@ -261,14 +267,16 @@ export default function ManagePayments() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Quản lý thanh toán"
-        description="Theo dõi đầy đủ giao dịch, mốc thời gian thanh toán và xử lý hoàn tiền từ dữ liệu thật của hệ thống."
-      />
+    <AdminMotionGroup>
+      <AdminMotionItem>
+        <PageHeader
+          title="Quản lý thanh toán"
+          description="Theo dõi đầy đủ giao dịch, mốc thời gian thanh toán và xử lý hoàn tiền từ dữ liệu thật của hệ thống."
+        />
+      </AdminMotionItem>
 
-      <div className="mb-5 grid gap-4 lg:grid-cols-3">
-        <div className="card p-5">
+      <AdminMotionGroup className="mb-5 grid gap-4 lg:grid-cols-3">
+        <AdminMotionItem className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm font-medium text-slate-500">Đã thanh toán</p>
@@ -279,9 +287,9 @@ export default function ManagePayments() {
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">Tổng doanh thu từ các giao dịch trạng thái đã thanh toán.</p>
-        </div>
+        </AdminMotionItem>
 
-        <div className="card p-5">
+        <AdminMotionItem className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm font-medium text-slate-500">Chờ thanh toán</p>
@@ -292,9 +300,9 @@ export default function ManagePayments() {
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">Các giao dịch đang pending và cần tiếp tục đối soát.</p>
-        </div>
+        </AdminMotionItem>
 
-        <div className="card p-5">
+        <AdminMotionItem className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-sm font-medium text-slate-500">Đã hoàn tiền</p>
@@ -305,10 +313,10 @@ export default function ManagePayments() {
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">Tổng số tiền đã được admin xử lý hoàn trả.</p>
-        </div>
-      </div>
+        </AdminMotionItem>
+      </AdminMotionGroup>
 
-      <div className="card mb-4 p-4">
+      <AdminMotionItem className="card mb-4 p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">
@@ -338,6 +346,7 @@ export default function ManagePayments() {
             type="date"
             className="input w-full"
             value={fromDate}
+            max={toDate || undefined}
             onChange={(event) => setFromDate(event.target.value)}
             title="Từ ngày"
           />
@@ -346,19 +355,23 @@ export default function ManagePayments() {
             type="date"
             className="input w-full"
             value={toDate}
+            min={fromDate || undefined}
             onChange={(event) => setToDate(event.target.value)}
             title="Đến ngày"
           />
         </div>
-      </div>
+      </AdminMotionItem>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={() => setRealtimeTick((tick) => tick + 1)} className="min-h-10 rounded-lg border border-red-300 bg-white px-3 font-semibold text-red-800 hover:bg-red-100">
+            Thử lại
+          </button>
         </div>
       )}
 
-      <div className="card overflow-hidden">
+      <AdminMotionItem className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-slate-500">
@@ -379,10 +392,18 @@ export default function ManagePayments() {
                     Đang tải...
                   </td>
                 </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-red-700">
+                    Không thể tải dữ liệu giao dịch. Vui lòng thử lại.
+                  </td>
+                </tr>
               ) : payments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
-                    Không tìm thấy giao dịch.
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-600">
+                    {keyword || status || fromDate || toDate
+                      ? 'Không có giao dịch phù hợp với bộ lọc.'
+                      : 'Chưa có giao dịch thanh toán trong hệ thống.'}
                   </td>
                 </tr>
               ) : payments.map((payment) => (
@@ -470,7 +491,7 @@ export default function ManagePayments() {
             onPageChange={setPage}
           />
         )}
-      </div>
+      </AdminMotionItem>
 
       {detailOpen && (
         <PaymentDetailModal
@@ -493,6 +514,6 @@ export default function ManagePayments() {
         onConfirm={handleRefund}
         onCancel={() => setConfirm(null)}
       />
-    </div>
+    </AdminMotionGroup>
   )
 }

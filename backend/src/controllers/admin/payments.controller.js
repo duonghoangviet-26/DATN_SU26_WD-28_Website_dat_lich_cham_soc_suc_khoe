@@ -7,10 +7,16 @@ import {
 } from '../../services/bookingPaymentState.service.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { ok, fail } from '../../utils/response.js'
-import { emitAdminRealtime } from '../../realtime/socket.js'
+import {
+  emitAdminRealtime,
+  emitDashboardAppointmentChanged,
+  emitDashboardRevenueChanged,
+} from '../../realtime/socket.js'
 
 const PAYMENT_LIST_LIMIT_MAX = 100
 const CLINIC_TIME_OFFSET_MS = 7 * 60 * 60 * 1000
+const PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'refunded']
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
@@ -25,11 +31,22 @@ function clampPositiveInt(value, fallback, max) {
   return Math.min(parsed, max)
 }
 
-function toDateOnly(value) {
-  const date = new Date(value)
-  const shiftedDate = new Date(date.getTime() + CLINIC_TIME_OFFSET_MS)
-  shiftedDate.setUTCHours(0, 0, 0, 0)
-  return new Date(shiftedDate.getTime() - CLINIC_TIME_OFFSET_MS)
+function parseClinicDateOnly(value) {
+  if (typeof value !== 'string' || !DATE_ONLY_PATTERN.test(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  const normalized = new Date(Date.UTC(year, month - 1, day))
+  if (
+    normalized.getUTCFullYear() !== year
+    || normalized.getUTCMonth() !== month - 1
+    || normalized.getUTCDate() !== day
+  ) {
+    return null
+  }
+  return new Date(normalized.getTime() - CLINIC_TIME_OFFSET_MS)
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function getPopulatedObject(value) {
@@ -60,7 +77,7 @@ async function validateInvoiceOrThrow(hoaDonId) {
     throw new Error('hoa_don_id khong hop le')
   }
 
-  const invoice = await HoaDon.findById(hoaDonId).select('_id')
+  const invoice = await HoaDon.findById(hoaDonId).select('_id appointment_id')
   if (!invoice) {
     throw new Error('Khong tim thay hoa don')
   }
@@ -133,21 +150,30 @@ export async function list(req, res) {
     const limitNum = clampPositiveInt(req.query.limit, 20, PAYMENT_LIST_LIMIT_MAX)
     const skip = (pageNum - 1) * limitNum
     const filter = {}
+    if (status && !PAYMENT_STATUSES.includes(status)) {
+      return fail(res, 400, 'status khong hop le')
+    }
     if (status) filter.status = status
     if (from || to) {
+      const fromDate = from ? parseClinicDateOnly(from) : null
+      const toDate = to ? parseClinicDateOnly(to) : null
+      if ((from && !fromDate) || (to && !toDate)) {
+        return fail(res, 400, 'from va to phai co dinh dang YYYY-MM-DD hop le')
+      }
+      if (fromDate && toDate && fromDate > toDate) {
+        return fail(res, 400, 'Khoang ngay khong hop le')
+      }
       filter.ngay_tao = {}
-      if (from) filter.ngay_tao.$gte = new Date(from)
-      if (to) filter.ngay_tao.$lte = new Date(to)
-    } else if (!search?.trim()) {
-      filter.ngay_tao = { $gte: toDateOnly(new Date()) }
+      if (fromDate) filter.ngay_tao.$gte = fromDate
+      if (toDate) filter.ngay_tao.$lt = new Date(toDate.getTime() + 24 * 60 * 60 * 1000)
     }
-    if (search) {
+    if (search?.trim()) {
       filter.$or = [
-        { ma_giao_dich: { $regex: search, $options: 'i' } },
+        { ma_giao_dich: { $regex: escapeRegex(search.trim()), $options: 'i' } },
       ]
     }
 
-    const [total, payments] = await Promise.all([
+    const [total, payments, summaryRows] = await Promise.all([
       ThanhToan.countDocuments(filter),
       ThanhToan.find(filter)
         .populate('benh_nhan_id', 'ho_ten email so_dien_thoai')
@@ -164,6 +190,17 @@ export async function list(req, res) {
         .skip(skip)
         .limit(limitNum)
         .lean(),
+      ThanhToan.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+            paidAmount: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$so_tien', 0] } },
+            pendingCount: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+            refundedAmount: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, '$so_tien', 0] } },
+          },
+        },
+      ]),
     ])
 
     const result = payments.map((p) => {
@@ -196,6 +233,11 @@ export async function list(req, res) {
         limit: limitNum,
         totalPages: total === 0 ? 1 : Math.ceil(total / limitNum),
       },
+      summary: {
+        paidAmount: Number(summaryRows[0]?.paidAmount ?? 0),
+        pendingCount: Number(summaryRows[0]?.pendingCount ?? 0),
+        refundedAmount: Number(summaryRows[0]?.refundedAmount ?? 0),
+      },
     })
   } catch (err) {
     return fail(res, 500, err.message)
@@ -224,7 +266,10 @@ export async function create(req, res) {
       return fail(res, 400, 'Thieu truong bat buoc khi tao thanh toan')
     }
 
-    await validateInvoiceOrThrow(hoa_don_id)
+    const invoice = await validateInvoiceOrThrow(hoa_don_id)
+    const previousAppointmentStatus = invoice.appointment_id
+      ? (await LichHen.findById(invoice.appointment_id).select('status').lean())?.status ?? null
+      : null
 
     if (!isValidObjectId(nguoi_thu_id)) {
       return fail(res, 400, 'nguoi_thu_id khong hop le')
@@ -248,6 +293,17 @@ export async function create(req, res) {
 
     const invoiceState = await tinhTrangThaiHoaDon(hoa_don_id)
     await syncAppointmentPaymentStatusFromPayment(payment, invoiceState)
+    if (payment.status === 'paid') {
+      emitDashboardRevenueChanged({
+        ngay: payment.ngay_thanh_toan ?? payment.thoi_diem_thanh_toan,
+        so_tien: payment.so_tien,
+        loai: 'thanh_toan',
+      })
+    }
+    if (invoice.appointment_id && previousAppointmentStatus) {
+      const nextAppointmentStatus = (await LichHen.findById(invoice.appointment_id).select('status').lean())?.status ?? null
+      emitDashboardAppointmentChanged(previousAppointmentStatus, nextAppointmentStatus)
+    }
 
     return res.status(201).json({
       success: true,
@@ -299,6 +355,13 @@ export async function update(req, res) {
     if (!payment) return fail(res, 404, 'Khong tim thay giao dich')
     const previousHoaDonId = payment.hoa_don_id ? payment.hoa_don_id.toString() : null
     const previousStatus = payment.status
+    let relatedAppointmentId = payment.appointment_id ?? null
+    if (!relatedAppointmentId && payment.hoa_don_id) {
+      relatedAppointmentId = (await HoaDon.findById(payment.hoa_don_id).select('appointment_id').lean())?.appointment_id ?? null
+    }
+    const previousAppointmentStatus = relatedAppointmentId
+      ? (await LichHen.findById(relatedAppointmentId).select('status').lean())?.status ?? null
+      : null
     let shouldFinalizePayment = false
 
     const allowedFields = [
@@ -405,6 +468,17 @@ export async function update(req, res) {
         appointment_id: payment.appointment_id,
         source: 'admin_payment_update',
       })
+    }
+    if (previousStatus !== 'paid' && freshPayment?.status === 'paid') {
+      emitDashboardRevenueChanged({
+        ngay: freshPayment.ngay_thanh_toan ?? freshPayment.thoi_diem_thanh_toan,
+        so_tien: freshPayment.so_tien,
+        loai: 'thanh_toan',
+      })
+    }
+    if (relatedAppointmentId && previousAppointmentStatus) {
+      const nextAppointmentStatus = (await LichHen.findById(relatedAppointmentId).select('status').lean())?.status ?? null
+      emitDashboardAppointmentChanged(previousAppointmentStatus, nextAppointmentStatus)
     }
 
     return ok(res, {

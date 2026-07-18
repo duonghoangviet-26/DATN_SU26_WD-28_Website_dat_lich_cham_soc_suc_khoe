@@ -3,6 +3,7 @@ import {
   expirePendingBookingPayment,
   withOptionalTransaction,
 } from './bookingPaymentState.service.js'
+import { emitDashboardAppointmentChanged } from '../realtime/socket.js'
 
 // Kept under the legacy function name because cron imports it directly.
 // It now covers the online booking flow: pending/confirmed unpaid
@@ -18,7 +19,7 @@ export async function autoCancelExpiredHomeAppointments() {
   for (const appointment of expired) {
     const reason = 'Qua han thanh toan - he thong tu dong huy'
 
-    await withOptionalTransaction((session) =>
+    const { appointment: cancelledAppointment } = await withOptionalTransaction((session) =>
       expirePendingBookingPayment({
         appointmentId: appointment._id,
         actorRole: 'system',
@@ -27,6 +28,7 @@ export async function autoCancelExpiredHomeAppointments() {
         session,
       })
     )
+    emitDashboardAppointmentChanged(appointment.status, cancelledAppointment.status)
 
     await NhatKyThaoTac.create({
       nguoi_thuc_hien_id: null,

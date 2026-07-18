@@ -1,6 +1,7 @@
 import { LichHen, KetQuaKham, SinhHieuKham, ThanhVien } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
+import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 // ============================================================
 // Hồ sơ khám do y tá nhập (Y tá)
@@ -239,8 +240,10 @@ async function submitForDoctorConfirm(req, res, allowedFromStatuses) {
 
     const a = await LichHen.findOne({ _id: result.appointment_id, nurse_id: req.user.id })
     if (a && !['completed', 'cancelled', 'no_show'].includes(a.status)) {
+      const oldStatus = a.status
       a.status = 'waiting_doctor_confirm'
       await a.save()
+      emitDashboardAppointmentChanged(oldStatus, a.status)
     }
 
     return ok(res, { id: result._id, status: result.status, appointment_status: a?.status ?? null }, 'Đã gửi hồ sơ cho bác sĩ xác nhận')

@@ -2,6 +2,25 @@ import { Server } from 'socket.io'
 import jwt from 'jsonwebtoken'
 
 let io = null
+const DASHBOARD_REVENUE_TYPES = new Set(['thanh_toan', 'hoa_don'])
+
+function clinicDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
+function clinicMonth(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value)
+  return Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    month: 'numeric',
+  }).format(date))
+}
 
 function parseAllowedOrigins() {
   const configured = process.env.SOCKET_CORS_ORIGINS || process.env.FRONTEND_URL || ''
@@ -59,6 +78,24 @@ export function emitAdminRealtime(event, payload = {}) {
     ...payload,
     emitted_at: new Date().toISOString(),
   })
+}
+
+export function emitDashboardRevenueChanged({ ngay = new Date(), so_tien = 0, loai }) {
+  if (!DASHBOARD_REVENUE_TYPES.has(loai)) return
+  emitAdminRealtime('thongke:doanh_thu_thay_doi', {
+    ngay: clinicDate(ngay),
+    so_tien: Number(so_tien) || 0,
+    loai,
+  })
+}
+
+export function emitDashboardAppointmentChanged(trang_thai_cu, trang_thai_moi) {
+  if (!trang_thai_cu || !trang_thai_moi || trang_thai_cu === trang_thai_moi) return
+  emitAdminRealtime('thongke:lich_hen_thay_doi', { trang_thai_cu, trang_thai_moi })
+}
+
+export function emitDashboardNewPatient(ngayTao = new Date()) {
+  emitAdminRealtime('thongke:benh_nhan_moi', { thang: clinicMonth(ngayTao) })
 }
 
 export function getRealtimeServer() {

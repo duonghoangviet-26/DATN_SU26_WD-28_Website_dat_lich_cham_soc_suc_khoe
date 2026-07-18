@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
+import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import SendNotificationTab from './SendNotificationTab'
 import ReceiveNotificationTab from './ReceiveNotificationTab'
 
@@ -10,7 +11,7 @@ export default function ManageNotifications() {
   const [activeTab, setActiveTab] = useState<TabType>('receive')
 
   return (
-    <div>
+    <AdminAutoStagger>
       <PageHeader
         title="Quản lý thông báo"
         description="Gửi thông báo đến người dùng và xem các thông báo được gửi đến."
@@ -47,6 +48,6 @@ export default function ManageNotifications() {
         {activeTab === 'receive' && <ReceiveNotificationTab />}
         {activeTab === 'send' && <SendNotificationTab />}
       </div>
-    </div>
+    </AdminAutoStagger>
   )
 }

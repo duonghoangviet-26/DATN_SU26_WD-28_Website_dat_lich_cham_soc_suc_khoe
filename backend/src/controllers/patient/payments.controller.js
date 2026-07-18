@@ -3,7 +3,11 @@ import mongoose from 'mongoose'
 import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen } from '../../models/index.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { ok, fail } from '../../utils/response.js'
-import { emitAdminRealtime } from '../../realtime/socket.js'
+import {
+  emitAdminRealtime,
+  emitDashboardAppointmentChanged,
+  emitDashboardRevenueChanged,
+} from '../../realtime/socket.js'
 
 const VNPAY_SESSION_MINUTES = Number(process.env.VNPAY_SESSION_MINUTES || process.env.PAYMENT_HOLD_MINUTES || 15)
 const DEFAULT_CLIENT_BASE_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
@@ -332,6 +336,7 @@ export async function completeMockVnpayPayment(req, res) {
       return fail(res, 409, 'Ma QR VNPAY da het han, vui long tao lai ma moi')
     }
 
+    const previousAppointmentStatus = appointment.status
     await finalizePendingPayment({
       payment,
       appointment,
@@ -366,6 +371,12 @@ export async function completeMockVnpayPayment(req, res) {
       payment_status: 'paid',
       source: 'patient_vnpay_mock_complete',
     })
+    emitDashboardRevenueChanged({
+      ngay: payment.ngay_thanh_toan,
+      so_tien: payment.so_tien,
+      loai: 'thanh_toan',
+    })
+    emitDashboardAppointmentChanged(previousAppointmentStatus, appointment.status)
 
     if (invoice?._id) {
       await tinhTrangThaiHoaDon(invoice._id)
@@ -401,6 +412,7 @@ export async function confirmPayment(req, res) {
 
     const { payment, appointment, invoice } = bundle
 
+    const previousAppointmentStatus = appointment.status
     await finalizePendingPayment({
       payment,
       appointment,
@@ -419,6 +431,12 @@ export async function confirmPayment(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    emitDashboardRevenueChanged({
+      ngay: payment.ngay_thanh_toan,
+      so_tien: payment.so_tien,
+      loai: 'thanh_toan',
+    })
+    emitDashboardAppointmentChanged(previousAppointmentStatus, appointment.status)
 
     if (invoice?._id) {
       await tinhTrangThaiHoaDon(invoice._id)
