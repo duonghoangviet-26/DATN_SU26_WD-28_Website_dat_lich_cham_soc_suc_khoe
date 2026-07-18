@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import Icon from '@/components/admin/icons'
+import DoctorScheduleCalendar from '@/components/admin/DoctorScheduleCalendar'
 import Badge from '@/components/common/Badge'
 import PageHeader from '@/components/common/PageHeader'
 import TablePaginationFooter from '@/components/common/TablePaginationFooter'
@@ -14,33 +15,9 @@ import type {
   AdminDoctorScheduleSlot,
   AdminDoctorWorkdayItem,
 } from '@/types'
-import { formatDateTime } from '@/utils/format'
+import { formatDateTime, toLocalDateStr } from '@/utils/format'
 
-const STATUS_LABEL: Record<AdminDoctorWorkdayItem['trang_thai_ngay'], string> = {
-  lam_viec: 'Đi làm',
-  nghi: 'Nghỉ',
-  nghi_phep: 'Nghỉ phép',
-  chua_tao: 'Chưa tạo lịch',
-}
-
-const STATUS_COLOR: Record<AdminDoctorWorkdayItem['trang_thai_ngay'], 'green' | 'gray' | 'yellow' | 'red'> = {
-  lam_viec: 'green',
-  nghi: 'gray',
-  nghi_phep: 'yellow',
-  chua_tao: 'red',
-}
-
-const CONFIRMATION_LABEL: Record<AdminDoctorWorkdayItem['trang_thai_xac_nhan'], string> = {
-  cho_xac_nhan: 'Chờ xác nhận',
-  da_xac_nhan: 'Đã xác nhận',
-  tu_choi: 'Từ chối',
-}
-
-const CONFIRMATION_COLOR: Record<AdminDoctorWorkdayItem['trang_thai_xac_nhan'], 'green' | 'gray' | 'yellow' | 'red'> = {
-  cho_xac_nhan: 'yellow',
-  da_xac_nhan: 'green',
-  tu_choi: 'red',
-}
+const MAX_CALENDAR_RANGE_DAYS = 42
 
 const SLOT_STATUS_OPTIONS: AdminDoctorScheduleSlot['status'][] = [
   'active',
@@ -94,9 +71,32 @@ function getDefaultRange() {
   const to = new Date()
   to.setDate(to.getDate() + 13)
   return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
+    from: toLocalDateStr(from),
+    to: toLocalDateStr(to),
   }
+}
+
+function validateDateRange(from: string, to: string) {
+  if (!from || !to) return 'Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.'
+
+  const start = new Date(`${from}T00:00:00`)
+  const end = new Date(`${to}T00:00:00`)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Khoảng ngày không hợp lệ.'
+  if (end < start) return 'Ngày kết thúc phải từ ngày bắt đầu trở đi.'
+
+  const dayCount = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1
+  if (dayCount > MAX_CALENDAR_RANGE_DAYS) {
+    return `Chỉ có thể xem tối đa ${MAX_CALENDAR_RANGE_DAYS} ngày mỗi lần.`
+  }
+
+  return null
+}
+
+function addDaysToDateString(value: string, amount: number) {
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return undefined
+  date.setDate(date.getDate() + amount)
+  return toLocalDateStr(date)
 }
 
 function valueToText(value: unknown): string {
@@ -202,7 +202,7 @@ function SlotEditorModal({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visibleSlots.map((slot) => {
-                  const immutableStatus = slot.status === 'booked' || slot.status === 'pending_payment'
+                  const immutableStatus = slot.status === 'booked' || slot.status === 'pending_payment' || slot.co_lich_hen === true
 
                   return (
                     <tr key={slot._id}>
@@ -212,6 +212,8 @@ function SlotEditorModal({
                           value={slot.gio_bat_dau}
                           onChange={(event) => updateSlotField(slot._id, 'gio_bat_dau', event.target.value)}
                           className="input w-full"
+                          disabled={immutableStatus}
+                          title={immutableStatus ? 'Không thể đổi giờ của slot đã có lịch hẹn' : undefined}
                         />
                       </td>
                       <td className="px-3 py-3">
@@ -220,6 +222,8 @@ function SlotEditorModal({
                           value={slot.gio_ket_thuc}
                           onChange={(event) => updateSlotField(slot._id, 'gio_ket_thuc', event.target.value)}
                           className="input w-full"
+                          disabled={immutableStatus}
+                          title={immutableStatus ? 'Không thể đổi giờ của slot đã có lịch hẹn' : undefined}
                         />
                       </td>
                       <td className="px-3 py-3">
@@ -229,6 +233,8 @@ function SlotEditorModal({
                           onChange={(event) => updateSlotField(slot._id, 'phong_kham', event.target.value)}
                           className="input w-full"
                           placeholder="Ví dụ: Phòng 101"
+                          disabled={immutableStatus}
+                          title={immutableStatus ? 'Không thể đổi phòng của slot đã có lịch hẹn' : undefined}
                         />
                       </td>
                       <td className="px-3 py-3">
@@ -257,8 +263,9 @@ function SlotEditorModal({
                         <button
                           type="button"
                           onClick={() => saveSlot(slot)}
-                          disabled={savingSlotId === slot._id}
+                          disabled={savingSlotId === slot._id || immutableStatus}
                           className="btn-primary disabled:opacity-50"
+                          title={immutableStatus ? 'Slot đã có lịch hẹn nên không thể chỉnh sửa' : undefined}
                         >
                           {savingSlotId === slot._id ? 'Đang lưu...' : 'Lưu slot'}
                         </button>
@@ -437,10 +444,28 @@ export default function ManageDoctorSchedules() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyPage, setHistoryPage] = useState(1)
   const [historyPagination, setHistoryPagination] = useState({ total: 0, totalPages: 1 })
+  const workdayRequestId = useRef(0)
 
-  async function loadWorkdays(currentDoctorId = doctorId, currentFrom = fromDate, currentTo = toDate) {
+  const loadWorkdays = useCallback(async (
+    currentDoctorId: string,
+    currentFrom: string,
+    currentTo: string,
+    signal?: AbortSignal,
+  ) => {
+    const requestId = ++workdayRequestId.current
+
     if (!currentDoctorId) {
       setItems([])
+      setError(null)
+      setLoading(false)
+      return
+    }
+
+    const validationError = validateDateRange(currentFrom, currentTo)
+    if (validationError) {
+      setError(validationError)
+      setItems([])
+      setLoading(false)
       return
     }
 
@@ -452,16 +477,18 @@ export default function ManageDoctorSchedules() {
         doctor_id: currentDoctorId,
         from: currentFrom,
         to: currentTo,
-      })
+      }, signal)
+      if (signal?.aborted || requestId !== workdayRequestId.current) return
       setItems(data.items)
       setDoctorName(data.doctor.ten)
     } catch (nextError: any) {
+      if (signal?.aborted || nextError?.code === 'ERR_CANCELED' || requestId !== workdayRequestId.current) return
       setError(nextError?.response?.data?.message || nextError.message || 'Không thể tải lịch làm việc bác sĩ.')
       setItems([])
     } finally {
-      setLoading(false)
+      if (!signal?.aborted && requestId === workdayRequestId.current) setLoading(false)
     }
-  }
+  }, [])
 
   async function loadHistory(target: AdminDoctorWorkdayItem, page = 1) {
     if (!target._id) return
@@ -509,15 +536,20 @@ export default function ManageDoctorSchedules() {
   }, [])
 
   useEffect(() => {
-    loadWorkdays()
-  }, [doctorId, fromDate, toDate])
+    const controller = new AbortController()
+    void loadWorkdays(doctorId, fromDate, toDate, controller.signal)
+    return () => controller.abort()
+  }, [doctorId, fromDate, loadWorkdays, toDate])
 
   async function updateWorkday(item: AdminDoctorWorkdayItem, nextStatus: 'lam_viec' | 'nghi' | 'nghi_phep') {
     if (!item._id) return
 
-    const note = nextStatus === 'lam_viec'
-      ? ''
-      : window.prompt('Nhập ghi chú cho ngày này (có thể để trống):', item.ghi_chu_ngay || '') ?? ''
+    let note = ''
+    if (nextStatus !== 'lam_viec') {
+      const promptedNote = window.prompt('Nhập ghi chú cho ngày này (có thể để trống):', item.ghi_chu_ngay || '')
+      if (promptedNote === null) return
+      note = promptedNote
+    }
 
     setSavingId(item._id)
     setError(null)
@@ -527,7 +559,7 @@ export default function ManageDoctorSchedules() {
         trang_thai_ngay: nextStatus,
         ghi_chu_ngay: note,
       })
-      await loadWorkdays()
+      await loadWorkdays(doctorId, fromDate, toDate)
       if (historyTarget?._id === item._id) await loadHistory(item, historyPage)
     } catch (nextError: any) {
       setError(nextError?.response?.data?.message || nextError.message || 'Không thể cập nhật trạng thái ngày làm việc.')
@@ -545,7 +577,7 @@ export default function ManageDoctorSchedules() {
         doctor_id: doctorId,
         ngay: item.ngay,
       })
-      await loadWorkdays()
+      await loadWorkdays(doctorId, fromDate, toDate)
     } catch (nextError: any) {
       setError(nextError?.response?.data?.message || nextError.message || 'Không thể sinh lịch tự động cho ngày trống.')
     } finally {
@@ -625,12 +657,25 @@ export default function ManageDoctorSchedules() {
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">Từ ngày</label>
-            <input type="date" className="input w-full" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+            <input
+              type="date"
+              className="input w-full"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(event) => setFromDate(event.target.value)}
+            />
           </div>
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-700">Đến ngày</label>
-            <input type="date" className="input w-full" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+            <input
+              type="date"
+              className="input w-full"
+              value={toDate}
+              min={fromDate || undefined}
+              max={fromDate ? addDaysToDateString(fromDate, MAX_CALENDAR_RANGE_DAYS - 1) : undefined}
+              onChange={(event) => setToDate(event.target.value)}
+            />
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -667,116 +712,29 @@ export default function ManageDoctorSchedules() {
         Lịch làm việc được tự động tạo khi backend khởi động và vào 00:00 Chủ nhật hằng tuần. Trạng thái `Chưa tạo lịch` chỉ còn là cảnh báo dữ liệu thiếu; nút chạy bù là phương án dự phòng khi cần xử lý ngay.
       </div>
 
-      <div className="grid gap-4">
-        {!doctorId ? (
-          <div className="card px-5 py-12 text-center text-sm text-slate-400">
-            Chọn bác sĩ để xem lịch làm việc.
-          </div>
-        ) : loading ? (
-          <div className="card px-5 py-12 text-center text-sm text-slate-400">
-            Đang tải lịch làm việc...
-          </div>
-        ) : items.length === 0 ? (
-          <div className="card px-5 py-12 text-center text-sm text-slate-400">
-            Không có dữ liệu lịch làm việc trong khoảng ngày đã chọn.
-          </div>
-        ) : (
-          items.map((item) => (
-            <div key={`${item.ngay}-${item._id ?? 'derived'}`} className="card p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-lg font-semibold text-slate-800">{item.ngay}</h3>
-                    <Badge color={STATUS_COLOR[item.trang_thai_ngay]}>{STATUS_LABEL[item.trang_thai_ngay]}</Badge>
-                    <Badge color={CONFIRMATION_COLOR[item.trang_thai_xac_nhan] || 'gray'}>
-                      {CONFIRMATION_LABEL[item.trang_thai_xac_nhan] || item.trang_thai_xac_nhan}
-                    </Badge>
-                    {item.nguon_lich === 'derived' && <Badge color="gray">Suy diễn</Badge>}
-                    {item.canh_bao_xung_dot_xac_nhan && <Badge color="red">Có lịch cần xử lý</Badge>}
-                  </div>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {item.gio_bat_dau && item.gio_ket_thuc
-                      ? `Khung giờ làm việc: ${item.gio_bat_dau} - ${item.gio_ket_thuc}`
-                      : 'Chưa có khung giờ làm việc'}
-                  </p>
-                  {item.ghi_chu_ngay && <p className="mt-1 text-sm text-slate-500">Ghi chú: {item.ghi_chu_ngay}</p>}
-                  {item.ly_do_tu_choi_xac_nhan && (
-                    <p className="mt-1 text-sm text-red-600">Lý do từ chối: {item.ly_do_tu_choi_xac_nhan}</p>
-                  )}
-                </div>
-
-                <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 lg:min-w-[380px]">
-                  <div>Tổng slot: <span className="font-semibold text-slate-800">{item.tong_slot}</span></div>
-                  <div>Slot trống: <span className="font-semibold text-green-700">{item.slot_trong}</span></div>
-                  <div>Đã đặt: <span className="font-semibold text-blue-700">{item.slot_da_dat}</span></div>
-                  <div>Bị khóa / hủy: <span className="font-semibold text-slate-700">{item.slot_bi_khoa + item.slot_da_huy}</span></div>
-                  <div>Lịch đang xử lý: <span className="font-semibold text-slate-800">{item.so_lich_hen_xung_dot}</span></div>
-                  <div>Xác nhận: <span className="font-semibold text-slate-800">{CONFIRMATION_LABEL[item.trang_thai_xac_nhan] || item.trang_thai_xac_nhan}</span></div>
-                </div>
-              </div>
-
-              {item.canh_bao_xung_dot_xac_nhan && (
-                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  Bác sĩ đã từ chối ngày làm việc này nhưng vẫn còn {item.so_lich_hen_xung_dot} lịch hẹn đang chờ xử lý. Admin cần liên hệ bệnh nhân để đổi lịch hoặc xử lý thủ công.
-                </div>
-              )}
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {!item._id ? (
-                  <button
-                    type="button"
-                    onClick={() => createScheduleForDay(item)}
-                    disabled={savingId === item.ngay || item.trang_thai_ngay === 'nghi'}
-                    className="btn-primary disabled:opacity-50"
-                  >
-                    {savingId === item.ngay ? 'Đang chạy bù...' : 'Chạy bù lịch'}
-                  </button>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => openScheduleEditor(item._id!)} className="btn-primary">
-                      Chỉnh slot
-                    </button>
-                    <button type="button" onClick={() => openHistory(item)} className="btn-secondary inline-flex items-center gap-2">
-                      <Icon name="clock" className="h-4 w-4" />
-                      Lịch sử
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateWorkday(item, 'lam_viec')}
-                      disabled={savingId === item._id}
-                      className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
-                    >
-                      Đánh dấu đi làm
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateWorkday(item, 'nghi')}
-                      disabled={savingId === item._id}
-                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                    >
-                      Đánh dấu nghỉ
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateWorkday(item, 'nghi_phep')}
-                      disabled={savingId === item._id}
-                      className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                    >
-                      Đánh dấu nghỉ phép
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+      <DoctorScheduleCalendar
+        items={items}
+        fromDate={fromDate}
+        toDate={toDate}
+        doctorSelected={Boolean(doctorId)}
+        loading={loading}
+        savingId={savingId}
+        error={error}
+        onRangeChange={(from, to) => {
+          setFromDate(from)
+          setToDate(to)
+        }}
+        onOpenScheduleEditor={openScheduleEditor}
+        onOpenHistory={openHistory}
+        onUpdateWorkday={updateWorkday}
+        onCreateScheduleForDay={createScheduleForDay}
+      />
 
       <SlotEditorModal
         schedule={editingSchedule}
         onClose={() => setEditingSchedule(null)}
         onSaved={async () => {
-          await loadWorkdays()
+          await loadWorkdays(doctorId, fromDate, toDate)
           if (historyTarget) await loadHistory(historyTarget, historyPage)
         }}
       />
