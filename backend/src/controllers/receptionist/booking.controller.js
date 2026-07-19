@@ -28,7 +28,8 @@ function buildSlotDateTime(dateOnly, hhmm) {
   const [hours, minutes] = String(hhmm || '').split(':').map(Number)
   if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
   const dateTime = new Date(dateOnly)
-  dateTime.setUTCHours(hours, minutes, 0, 0)
+  // Tính theo giờ Việt Nam (UTC+7) nên ta lấy hours - 7 để ra giờ UTC tương ứng
+  dateTime.setUTCHours(hours - 7, minutes, 0, 0)
   return dateTime
 }
 
