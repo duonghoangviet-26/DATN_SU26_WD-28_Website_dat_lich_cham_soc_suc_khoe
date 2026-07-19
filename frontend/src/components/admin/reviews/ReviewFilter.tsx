@@ -7,9 +7,10 @@ import type { ReviewFilters } from '@/types/review.type'
 interface Props {
   filters: ReviewFilters
   onChange: (filters: ReviewFilters) => void
+  doctors: Array<{ id: string; ho_ten: string }>
 }
 
-export default function ReviewFilter({ filters, onChange }: Props) {
+export default function ReviewFilter({ filters, onChange, doctors }: Props) {
   const [showDateFields, setShowDateFields] = useState(false)
 
   const handleFilterChange = (key: keyof ReviewFilters, value: any) => {
@@ -92,6 +93,22 @@ export default function ReviewFilter({ filters, onChange }: Props) {
               <option value="">Tất cả hiển thị</option>
               <option value="visible">Đang hiển thị</option>
               <option value="hidden">Đã ẩn</option>
+            </select>
+          </div>
+
+          {/* Lọc theo bác sĩ */}
+          <div className="w-full sm:w-44">
+            <select
+              className="input w-full bg-white text-sm"
+              value={filters.doctor}
+              onChange={(e) => handleFilterChange('doctor', e.target.value)}
+            >
+              <option value="">Tất cả bác sĩ</option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.ho_ten}
+                </option>
+              ))}
             </select>
           </div>
         </div>

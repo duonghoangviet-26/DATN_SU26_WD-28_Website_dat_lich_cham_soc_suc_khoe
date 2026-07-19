@@ -62,7 +62,7 @@ const appointmentHistorySchema = new mongoose.Schema(
     nguoi_thay_doi_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'NguoiDung',
-      required: true,
+      required: function() { return this.vai_tro !== 'system' },
     },
     thoi_diem_thay_doi: {
       type: Date,

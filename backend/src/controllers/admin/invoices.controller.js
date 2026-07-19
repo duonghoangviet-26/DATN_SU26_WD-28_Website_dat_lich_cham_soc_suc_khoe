@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 
 import HoaDon from '../../models/HoaDon.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
+import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { ok, fail } from '../../utils/response.js'
 
 function isValidObjectId(value) {
@@ -149,6 +150,12 @@ export async function recalculateInvoiceStatus(req, res) {
 
     const result = await tinhTrangThaiHoaDon(id)
     const invoice = await HoaDon.findById(id).lean()
+    if (result.appointment_status_change) {
+      emitDashboardAppointmentChanged(
+        result.appointment_status_change.trang_thai_cu,
+        result.appointment_status_change.trang_thai_moi,
+      )
+    }
 
     return ok(res, {
       ...formatInvoice(invoice),

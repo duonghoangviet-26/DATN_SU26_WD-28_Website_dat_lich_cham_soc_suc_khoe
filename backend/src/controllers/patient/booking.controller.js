@@ -8,6 +8,11 @@ import {
   withOptionalTransaction,
 } from '../../services/bookingPaymentState.service.js'
 import { ok, created, fail } from '../../utils/response.js'
+import {
+  emitAdminRealtime,
+  emitDashboardAppointmentChanged,
+  emitDashboardRevenueChanged,
+} from '../../realtime/socket.js'
 
 const PAYMENT_HOLD_MINUTES = Number(process.env.PAYMENT_HOLD_MINUTES || process.env.VNPAY_SESSION_MINUTES || 15)
 
@@ -466,6 +471,23 @@ export async function createBooking(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    emitDashboardRevenueChanged({
+      ngay: invoice.created_at ?? invoiceDate,
+      so_tien: invoice.tong_thanh_toan,
+      loai: 'hoa_don',
+    })
+    emitAdminRealtime('admin:appointment_created', {
+      appointment_id: appointment._id,
+      payment_id: payment._id,
+      invoice_id: invoice._id,
+      doctor_id: appointment.doctor_id,
+      schedule_id: appointment.schedule_id,
+      slot_id: appointment.slot_id,
+      ngay_kham: appointment.ngay_kham,
+      gio_kham: appointment.gio_kham,
+      status: appointment.status,
+      payment_status: appointment.payment_status,
+    })
 
     return created(res, {
       id:             appointment._id,
@@ -501,16 +523,29 @@ export async function cancelBooking(req, res) {
     if (['completed', 'cancelled'].includes(a.status)) {
       return fail(res, 409, 'Lịch hẹn không thể hủy ở trạng thái hiện tại')
     }
-    if (a.status === 'confirmed') {
-      const [h, m] = a.gio_kham.split(':').map(Number)
-      const gioKham = new Date(a.ngay_kham)
-      gioKham.setHours(h, m, 0, 0)
-      if (gioKham.getTime() - Date.now() < 24 * 3600 * 1000) {
-        return fail(res, 403, 'Lịch hẹn trong vòng 24 giờ tới không thể tự hủy, vui lòng liên hệ phòng khám')
-      }
+    const [h, m] = a.gio_kham.split(':').map(Number)
+    const gioKham = new Date(a.ngay_kham)
+    gioKham.setHours(h || 0, m || 0, 0, 0)
+
+    if (gioKham.getTime() < Date.now()) {
+      return fail(res, 400, 'Không thể hủy lịch hẹn đã qua thời gian khám')
     }
 
-    const reason = req.body.ly_do?.trim() || 'Benh nhan huy lich'
+    if (a.payment_status === 'paid') {
+      return fail(res, 400, 'Lịch hẹn đã thanh toán không thể tự hủy trên ứng dụng, vui lòng liên hệ hotline phòng khám để được hỗ trợ hoàn tiền')
+    }
+
+    const diffMs = gioKham.getTime() - Date.now()
+    const isWithin24h = diffMs < 24 * 3600 * 1000
+
+    let refundPolicyNote = ''
+    if (a.payment_status === 'paid') {
+      refundPolicyNote = isWithin24h 
+        ? ' (Hoàn tiền 50% theo chính sách hủy < 24h)' 
+        : ' (Hoàn tiền 100% theo chính sách hủy > 24h)'
+    }
+
+    const reason = (req.body.ly_do?.trim() || 'Bệnh nhân hủy lịch') + refundPolicyNote
     const { appointment } = await withOptionalTransaction((session) =>
       cancelAppointmentWithPaymentSync({
         appointmentId: a._id,
@@ -521,6 +556,7 @@ export async function cancelBooking(req, res) {
         session,
       })
     )
+    emitDashboardAppointmentChanged(a.status, appointment.status)
 
     return ok(res, { id: appointment._id, status: appointment.status, payment_status: appointment.payment_status }, 'Da huy lich hen')
 

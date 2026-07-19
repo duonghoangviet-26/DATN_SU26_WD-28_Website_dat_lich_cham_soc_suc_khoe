@@ -4,6 +4,7 @@ import {
   ChuyenKhoa, DichVu, HoaDon, ThanhToan,
 } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
+import { emitDashboardRevenueChanged } from '../../realtime/socket.js'
 
 function parseDateOnly(value) {
   if (!value) return null
@@ -237,6 +238,11 @@ export async function createBooking(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    emitDashboardRevenueChanged({
+      ngay: invoice.created_at ?? new Date(),
+      so_tien: invoice.tong_thanh_toan,
+      loai: 'hoa_don',
+    })
 
     return ok(res, {
       appointment_id: appointment._id,

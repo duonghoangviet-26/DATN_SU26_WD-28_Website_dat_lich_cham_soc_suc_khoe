@@ -300,6 +300,12 @@ export async function cancelAppointmentWithPaymentSync({
   const { invoice, payments } = await findInvoiceAndPaymentsForAppointment(appointment._id, session)
   const paidPayments = payments.filter((payment) => payment.status === 'paid')
 
+  const [h, m] = (appointment.gio_kham || '00:00').split(':').map(Number)
+  const gioKham = new Date(appointment.ngay_kham)
+  gioKham.setHours(h || 0, m || 0, 0, 0)
+  const diffMs = gioKham.getTime() - Date.now()
+  const isWithin24h = diffMs < 24 * 3600 * 1000
+
   for (const payment of payments) {
     if (payment.status === 'pending') {
       payment.status = 'failed'
@@ -307,6 +313,12 @@ export async function cancelAppointmentWithPaymentSync({
     } else if (payment.status === 'paid') {
       payment.status = 'refunded'
       payment.ngay_hoan_tien = new Date()
+      payment.gateway_response = {
+        ...(payment.gateway_response || {}),
+        refund_rate: isWithin24h ? 0.5 : 1.0,
+        refund_amount: isWithin24h ? (payment.so_tien * 0.5) : payment.so_tien,
+        policy_applied: isWithin24h ? 'Hoàn tiền 50% (<24h trước giờ khám)' : 'Hoàn tiền 100% (>24h trước giờ khám)'
+      }
       await payment.save({ session })
     }
   }

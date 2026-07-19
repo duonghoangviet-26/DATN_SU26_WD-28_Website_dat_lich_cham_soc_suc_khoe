@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import Icon from '@/components/admin/icons'
+import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import ServiceFormModal from '@/components/admin/services/ServiceFormModal'
 import ServiceViewModal from '@/components/admin/services/ServiceViewModal'
 import Badge from '@/components/common/Badge'
@@ -222,7 +223,7 @@ export default function ManageServiceSpecialtyDetail() {
   }
 
   return (
-    <>
+    <AdminAutoStagger>
       {toast && (
         <div
           className={`fixed right-6 top-6 z-[100] flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-lg ${
@@ -512,6 +513,6 @@ export default function ManageServiceSpecialtyDetail() {
           onCancel={() => setToggleTarget(null)}
         />
       </div>
-    </>
+    </AdminAutoStagger>
   )
 }

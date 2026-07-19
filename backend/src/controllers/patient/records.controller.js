@@ -30,6 +30,13 @@ export async function listRecords(req, res) {
       .lean()
     const docMap = Object.fromEntries(docList.map((d) => [d._id.toString(), d.user_id]))
 
+    // Lấy trạng thái đã có kết quả khám (KetQuaKham) của các lịch hẹn
+    const appointmentIds = appointments.map((a) => a._id)
+    const examResults = await KetQuaKham.find({ appointment_id: { $in: appointmentIds } })
+      .select('appointment_id')
+      .lean()
+    const resultAppIds = new Set(examResults.map((r) => r.appointment_id.toString()))
+
     const data = appointments.map((a) => ({
       id:             a._id,
       loai_kham:      a.loai_kham,
@@ -47,6 +54,7 @@ export async function listRecords(req, res) {
         ho_ten:       docMap[a.doctor_id.toString()]?.ho_ten       ?? 'Không rõ',
         anh_dai_dien: docMap[a.doctor_id.toString()]?.anh_dai_dien ?? null,
       },
+      da_co_ket_qua:  resultAppIds.has(a._id.toString()),
     }))
 
     return ok(res, { total, page: Number(page), limit: Number(limit), data })
@@ -68,7 +76,12 @@ export async function getRecord(req, res) {
 
     let prescription = null
     if (ketQua) {
-      prescription = await DonThuoc.findOne({ medical_record_id: ketQua._id }).lean()
+      prescription = await DonThuoc.findOne({
+        $or: [
+          { medical_record_id: ketQua._id },
+          { ket_qua_kham_id: ketQua._id }
+        ]
+      }).lean()
     }
 
     return ok(res, {

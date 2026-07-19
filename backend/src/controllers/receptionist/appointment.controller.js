@@ -1,5 +1,6 @@
 import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
+import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 export const getAppointments = async (req, res) => {
   try {
@@ -85,9 +86,11 @@ export const markAsArrived = async (req, res) => {
     if (!appointment) return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
     if (appointment.loai_kham !== 'clinic') return res.status(400).json({ success: false, message: 'Chỉ áp dụng cho lịch khám tại phòng khám' })
     
+    const oldStatus = appointment.status
     appointment.status = 'checked_in'
     appointment.gio_den_thuc_te = new Date()
     await appointment.save()
+    emitDashboardAppointmentChanged(oldStatus, appointment.status)
     
     res.status(200).json({ success: true, message: 'Đã check-in bệnh nhân thành công', data: appointment })
   } catch (error) {
@@ -126,6 +129,7 @@ export const cancelAppointment = async (req, res) => {
     const appointment = await LichHen.findById(id)
     if (!appointment) return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
     
+    const oldStatus = appointment.status
     appointment.status = 'cancelled'
     appointment.ly_do_huy = ly_do_huy || 'Lễ tân hủy lịch'
     appointment.huy_boi = 'admin'
@@ -134,6 +138,7 @@ export const cancelAppointment = async (req, res) => {
     }
     
     await appointment.save()
+    emitDashboardAppointmentChanged(oldStatus, appointment.status)
     
     res.status(200).json({ success: true, message: 'Đã hủy lịch hẹn', data: appointment })
   } catch (error) {

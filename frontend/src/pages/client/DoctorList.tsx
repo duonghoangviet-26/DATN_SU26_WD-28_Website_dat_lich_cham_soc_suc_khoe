@@ -68,7 +68,7 @@ export default function DoctorList() {
       <div className="text-left space-y-2">
         <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Đội Ngũ Bác Sĩ Chuyên Khoa</h1>
         <p className="text-sm text-slate-500 max-w-2xl">
-          Các phó giáo sư, tiến sĩ và thạc sĩ y học chuyên khoa Tai Mũi Họng trực tiếp chẩn đoán và điều trị tại VitaFamily.
+          Các phó giáo sư, tiến sĩ và thạc sĩ y học chuyên khoa Tai Mũi Họng trực tiếp chẩn đoán và điều trị tại ViteFamily.
         </p>
       </div>
 

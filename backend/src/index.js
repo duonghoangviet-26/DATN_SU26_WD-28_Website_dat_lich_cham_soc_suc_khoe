@@ -5,6 +5,7 @@ import mongoose from 'mongoose'
 import app from './app.js'
 import { connectDB } from './config/db.js'
 import { startCronJobs } from './cron/index.js'
+import { initRealtime } from './realtime/socket.js'
 
 const PORT = Number(process.env.PORT || 5000)
 
@@ -59,6 +60,8 @@ async function start() {
     server = app.listen(PORT, () => {
       console.log(`✅ Máy chủ chạy tại http://localhost:${PORT}`)
     })
+
+    initRealtime(server)
 
     server.on('error', async (error) => {
       if (error.code === 'EADDRINUSE') {

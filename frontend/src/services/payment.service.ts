@@ -6,6 +6,27 @@ interface PaymentFilters {
   status?: string
   from?: string
   to?: string
+  page?: number
+  limit?: number
+}
+
+interface PaymentPagination {
+  total: number
+  totalPages: number
+  page: number
+  limit: number
+}
+
+interface PaymentListResponse {
+  data: PaymentItem[]
+  pagination: PaymentPagination
+  summary: PaymentSummary
+}
+
+interface PaymentSummary {
+  paidAmount: number
+  pendingCount: number
+  refundedAmount: number
 }
 
 function mapPaymentItem(item: Partial<PaymentItem> & { id?: string | number; _id?: string | number }): PaymentItem {
@@ -32,15 +53,37 @@ function mapPaymentItem(item: Partial<PaymentItem> & { id?: string | number; _id
 }
 
 export const paymentService = {
-  async getAll({ keyword = '', status = '', from = '', to = '' }: PaymentFilters = {}): Promise<PaymentItem[]> {
-    const params: Record<string, string> = {}
+  async getAll(
+    { keyword = '', status = '', from = '', to = '', page = 1, limit = 8 }: PaymentFilters = {},
+    signal?: AbortSignal,
+  ): Promise<PaymentListResponse> {
+    const params: Record<string, string | number> = { page, limit }
     if (keyword) params.search = keyword
     if (status) params.status = status
     if (from) params.from = from
     if (to) params.to = to
 
-    const res = await axiosInstance.get<ApiResponse<PaymentItem[]>>('/admin/payments', { params })
-    return (Array.isArray(res.data.data) ? res.data.data : []).map(mapPaymentItem)
+    const res = await axiosInstance.get<ApiResponse<PaymentItem[]> & {
+      pagination?: PaymentPagination
+      summary?: Partial<PaymentSummary>
+    }>('/admin/payments', { params, signal })
+    const items = (Array.isArray(res.data.data) ? res.data.data : []).map(mapPaymentItem)
+    const pagination = res.data.pagination ?? {
+      total: items.length,
+      totalPages: 1,
+      page,
+      limit,
+    }
+
+    return {
+      data: items,
+      pagination,
+      summary: {
+        paidAmount: Number(res.data.summary?.paidAmount ?? items.filter((item) => item.status === 'paid').reduce((sum, item) => sum + item.so_tien, 0)),
+        pendingCount: Number(res.data.summary?.pendingCount ?? items.filter((item) => item.status === 'pending').length),
+        refundedAmount: Number(res.data.summary?.refundedAmount ?? items.filter((item) => item.status === 'refunded').reduce((sum, item) => sum + item.so_tien, 0)),
+      },
+    }
   },
 
   async getById(id: string | number): Promise<PaymentItem> {

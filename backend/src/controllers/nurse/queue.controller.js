@@ -3,6 +3,7 @@ import { tinhMucUuTien } from '../../models/HangDoi.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { getTodayRange, getMyDoctorIdsToday } from '../../utils/nurse-scope.js'
 import { findOrCreateRoomStatus } from './room-status.controller.js'
+import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 // ============================================================
 // Hàng đợi động (Y tá) — Routes: /api/nurse/queue
@@ -13,6 +14,15 @@ import { findOrCreateRoomStatus } from './room-status.controller.js'
 const UU_TIEN_WEIGHT = { online_uu_tien: 0, online_thuong: 1, offline: 2 }
 const CON_HIEN_DIEN = ['dang_cho', 'da_goi']
 const DANG_XU_LY = ['dang_cho', 'da_goi', 'trong_phong']
+
+async function updateAppointmentStatus(appointmentId, nextStatus) {
+  const appointment = await LichHen.findById(appointmentId).select('status')
+  if (!appointment) return
+  const oldStatus = appointment.status
+  appointment.status = nextStatus
+  await appointment.save()
+  emitDashboardAppointmentChanged(oldStatus, nextStatus)
+}
 
 function sapXepHangDoi(list) {
   return [...list].sort((a, b) => {
@@ -119,10 +129,12 @@ export async function checkin(req, res) {
         vai_tro_tiep_nhan: 'nurse',
       }
 
+      const oldStatus = appt.status
       appt.gio_den_thuc_te = now
       appt.trang_thai_den = 'da_den'
       if (appt.status === 'pending') appt.status = 'confirmed'
       await appt.save()
+      emitDashboardAppointmentChanged(oldStatus, appt.status)
     } else {
       // ── Offline: khách vãng lai / đến trực tiếp ────────────────────────
       if (!doctor_id || !doctorIds.includes(String(doctor_id))) {
@@ -281,7 +293,7 @@ export async function intoRoom(req, res) {
     await room.save()
 
     if (entry.appointment_id) {
-      await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'in_progress' } })
+      await updateAppointmentStatus(entry.appointment_id, 'in_progress')
     }
 
     await ghiAuditQueue(req.user.id, 'CALL_PATIENT', entry._id, { trang_thai: 'da_goi' }, { trang_thai: 'trong_phong' })
@@ -326,7 +338,7 @@ export async function finish(req, res) {
     await room.save()
 
     if (entry.appointment_id) {
-      await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'waiting_record' } })
+      await updateAppointmentStatus(entry.appointment_id, 'waiting_record')
     }
 
     await ghiAuditQueue(req.user.id, 'CALL_PATIENT', entry._id, { trang_thai: 'trong_phong' }, { trang_thai: 'hoan_thanh' })
@@ -356,7 +368,7 @@ export async function skip(req, res) {
     await entry.save()
 
     if (entry.appointment_id) {
-      await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'skipped' } })
+      await updateAppointmentStatus(entry.appointment_id, 'skipped')
     }
 
     await ghiAuditQueue(req.user.id, 'SKIP_PATIENT', entry._id, { trang_thai: tu }, { trang_thai: 'skipped' })
@@ -381,7 +393,7 @@ export async function cancel(req, res) {
     await entry.save()
 
     if (entry.appointment_id) {
-      await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'cancelled' } })
+      await updateAppointmentStatus(entry.appointment_id, 'cancelled')
     }
 
     await ghiAuditQueue(req.user.id, 'SKIP_PATIENT', entry._id, { trang_thai: tu }, { trang_thai: 'cancelled' })

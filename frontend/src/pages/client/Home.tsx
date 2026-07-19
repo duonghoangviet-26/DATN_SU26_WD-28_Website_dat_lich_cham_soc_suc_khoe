@@ -88,11 +88,11 @@ export default function Home() {
           <div className="space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-brand-600">Giới thiệu chung</span>
             <h2 className="text-2xl font-extrabold text-slate-800 sm:text-3xl leading-tight">
-              Phòng Khám Tai Mũi Họng VitaFamily
+              Phòng Khám Tai Mũi Họng ViteFamily
             </h2>
           </div>
           <p className="text-slate-600 text-sm leading-relaxed">
-            Được thành lập với sứ mệnh mang đến dịch vụ chăm sóc tai mũi họng tiêu chuẩn quốc tế, VitaFamily tự hào là đơn vị tiên phong ứng dụng công nghệ nội soi ống mềm không đau tại Hà Nội. Chúng tôi tập trung tối đa nguồn lực vào một chuyên khoa duy nhất để mang lại chất lượng chẩn đoán chính xác tuyệt đối.
+            Được thành lập với sứ mệnh mang đến dịch vụ chăm sóc tai mũi họng tiêu chuẩn quốc tế, ViteFamily tự hào là đơn vị tiên phong ứng dụng công nghệ nội soi ống mềm không đau tại Hà Nội. Chúng tôi tập trung tối đa nguồn lực vào một chuyên khoa duy nhất để mang lại chất lượng chẩn đoán chính xác tuyệt đối.
           </p>
           <div className="grid grid-cols-2 gap-4 pt-2">
             <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">

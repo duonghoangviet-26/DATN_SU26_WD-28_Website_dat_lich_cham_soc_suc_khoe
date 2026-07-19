@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs'
 import { NguoiDung, NhatKyThaoTac, BacSi, ThongBao } from '../../models/index.js'
 
 import { ok, fail } from '../../utils/response.js'
+import { emitDashboardNewPatient } from '../../realtime/socket.js'
 
 const ADMIN_ID = "000000000000000000000099"
 
@@ -131,6 +132,10 @@ export async function createUser(req, res) {
       so_dien_thoai,
       role: role || 'user'
     })
+
+    if (['user', 'patient'].includes(newUser.role)) {
+      emitDashboardNewPatient(newUser.ngay_tao)
+    }
 
     // NẾU LÀ BÁC SĨ -> TẠO NGAY HỒ SƠ BÁC SĨ (để xuất hiện bên Quản lý Bác sĩ)
     if (newUser.role === 'doctor') {

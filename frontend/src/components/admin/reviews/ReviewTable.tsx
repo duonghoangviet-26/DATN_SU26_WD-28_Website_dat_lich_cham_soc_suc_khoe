@@ -16,6 +16,7 @@ interface Props {
   onViewDetail: (review: ReviewItem) => void
   selectedIds: string[]
   onSelectChange: (ids: string[]) => void
+  onSelectDoctor?: (doctorId: string) => void
 }
 
 function StarDisplay({ count }: { count: number }) {
@@ -40,6 +41,7 @@ export default function ReviewTable({
   onViewDetail,
   selectedIds,
   onSelectChange,
+  onSelectDoctor,
 }: Props) {
   const { page, totalPages, total } = pagination
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
@@ -184,12 +186,23 @@ export default function ReviewTable({
 
                       {/* Bác sĩ */}
                       <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
-                        <div className="flex items-center gap-1.5">
-                          <Icon name="doctor" className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="text-slate-700">
-                            {r.doctor?.ho_ten || 'Không rõ bác sĩ'}
-                          </span>
-                        </div>
+                        {r.doctor ? (
+                          <button
+                            onClick={() => onSelectDoctor?.(r.doctor!.id)}
+                            className="flex items-center gap-1.5 hover:text-brand-600 transition-colors text-left group"
+                            title={`Lọc tất cả đánh giá của BS. ${r.doctor.ho_ten}`}
+                          >
+                            <Icon name="doctor" className="h-3.5 w-3.5 text-slate-400 group-hover:text-brand-500" />
+                            <span className="text-slate-700 font-semibold underline decoration-slate-300 hover:decoration-brand-500">
+                              {r.doctor.ho_ten || 'Không rõ bác sĩ'}
+                            </span>
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-slate-400">
+                            <Icon name="doctor" className="h-3.5 w-3.5" />
+                            <span>Không rõ bác sĩ</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Điểm số */}

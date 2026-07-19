@@ -7,6 +7,16 @@ import { buildDefaultScheduleSlots, generateRollingWindowForAllDoctors } from '.
 import { ok, fail } from '../../utils/response.js'
 
 const APPOINTMENT_CONFLICT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress']
+const APPOINTMENT_OCCUPIED_SLOT_STATUSES = [
+  'pending',
+  'confirmed',
+  'checked_in',
+  'in_progress',
+  'completed',
+  'no_show',
+]
+const MAX_CALENDAR_RANGE_DAYS = 42
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function isValidObjectId(value) {
   return value === null || value === undefined || mongoose.Types.ObjectId.isValid(value)
@@ -48,27 +58,39 @@ function toDateOnly(value) {
   return date
 }
 
+function isValidDateOnly(value) {
+  if (typeof value !== 'string' || !DATE_ONLY_PATTERN.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  return !Number.isNaN(parsed.getTime()) && formatDateOnly(parsed) === value
+}
+
 function formatDateOnly(value) {
   return new Date(value).toISOString().slice(0, 10)
 }
 
-function summarizeSlots(slots = []) {
+function summarizeSlots(slots = [], occupiedAppointmentCount = 0) {
   const firstSlot = slots[0] ?? null
   const lastSlot = slots[slots.length - 1] ?? null
+  const bookedBySlotStatus = slots.filter((slot) => ['booked', 'pending_payment'].includes(slot.status)).length
+  const occupiedSlots = Math.max(bookedBySlotStatus, occupiedAppointmentCount)
+  const lockedSlots = slots.filter((slot) => slot.status === 'locked').length
+  const unavailableSlots = slots.filter((slot) => ['cancelled', 'expired'].includes(slot.status)).length
 
   return {
     tong_slot: slots.length,
-    slot_trong: slots.filter((slot) => slot.status === 'active').length,
-    slot_da_dat: slots.filter((slot) => ['booked', 'pending_payment'].includes(slot.status)).length,
-    slot_bi_khoa: slots.filter((slot) => slot.status === 'locked').length,
-    slot_da_huy: slots.filter((slot) => ['cancelled', 'expired'].includes(slot.status)).length,
+    slot_trong: Math.max(0, slots.length - occupiedSlots - lockedSlots - unavailableSlots),
+    slot_da_dat: occupiedSlots,
+    slot_bi_khoa: lockedSlots,
+    slot_da_huy: unavailableSlots,
     gio_bat_dau: firstSlot?.gio_bat_dau ?? null,
     gio_ket_thuc: lastSlot?.gio_ket_thuc ?? null,
   }
 }
 
-function formatWorkday(schedule, appointmentCount = 0) {
-  const slotSummary = summarizeSlots(schedule.slots)
+function formatWorkday(schedule, appointmentStats = {}) {
+  const occupiedAppointmentCount = appointmentStats.occupied ?? 0
+  const processingAppointmentCount = appointmentStats.processing ?? 0
+  const slotSummary = summarizeSlots(schedule.slots, occupiedAppointmentCount)
   const confirmationStatus = schedule.trang_thai_xac_nhan ?? 'cho_xac_nhan'
 
   return {
@@ -82,10 +104,50 @@ function formatWorkday(schedule, appointmentCount = 0) {
     ly_do_tu_choi_xac_nhan: schedule.ly_do_tu_choi_xac_nhan ?? null,
     thoi_diem_xac_nhan: schedule.thoi_diem_xac_nhan ?? null,
     co_di_lam: (schedule.trang_thai_ngay ?? 'lam_viec') === 'lam_viec',
-    so_lich_hen_xung_dot: appointmentCount,
-    canh_bao_xung_dot_xac_nhan: confirmationStatus === 'tu_choi' && appointmentCount > 0,
+    so_lich_hen_xung_dot: processingAppointmentCount,
+    canh_bao_xung_dot_xac_nhan: confirmationStatus === 'tu_choi' && processingAppointmentCount > 0,
     ...slotSummary,
   }
+}
+
+function buildAppointmentStatsBySchedule(schedules, appointments) {
+  const scheduleById = new Map(schedules.map((schedule) => [String(schedule._id), schedule]))
+  const statsByScheduleId = new Map()
+
+  for (const schedule of schedules) {
+    statsByScheduleId.set(String(schedule._id), { occupied: 0, processing: 0 })
+  }
+
+  for (const appointment of appointments) {
+    let schedule = appointment.schedule_id
+      ? scheduleById.get(String(appointment.schedule_id))
+      : null
+
+    if (!schedule) {
+      const appointmentDate = formatDateOnly(appointment.ngay_kham)
+      schedule = schedules.find((candidate) => {
+        if (String(candidate.doctor_id) !== String(appointment.doctor_id)) return false
+        if (formatDateOnly(candidate.ngay) !== appointmentDate) return false
+        return candidate.slots?.some((slot) => slot.gio_bat_dau === appointment.gio_kham)
+      })
+    }
+
+    if (!schedule) continue
+
+    const key = String(schedule._id)
+    const current = statsByScheduleId.get(key) ?? { occupied: 0, processing: 0 }
+
+    if (APPOINTMENT_OCCUPIED_SLOT_STATUSES.includes(appointment.status)) {
+      current.occupied += 1
+    }
+    if (APPOINTMENT_CONFLICT_STATUSES.includes(appointment.status)) {
+      current.processing += 1
+    }
+
+    statsByScheduleId.set(key, current)
+  }
+
+  return statsByScheduleId
 }
 
 function buildDefaultSlots({ specialtyId = null, phongKham = null } = {}) {
@@ -221,6 +283,9 @@ export async function getDoctorWorkdays(req, res) {
     if (!doctor_id || !mongoose.Types.ObjectId.isValid(doctor_id)) {
       return fail(res, 400, 'doctor_id khong hop le')
     }
+    if ((from && !isValidDateOnly(from)) || (to && !isValidDateOnly(to))) {
+      return fail(res, 400, 'from va to phai co dinh dang YYYY-MM-DD hop le')
+    }
 
     const doctor = await BacSi.findById(doctor_id)
       .populate('user_id', 'ho_ten')
@@ -236,6 +301,10 @@ export async function getDoctorWorkdays(req, res) {
     if (end < start) {
       return fail(res, 400, 'Khoang ngay khong hop le')
     }
+    const rangeDays = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1
+    if (rangeDays > MAX_CALENDAR_RANGE_DAYS) {
+      return fail(res, 400, `Khoang ngay toi da la ${MAX_CALENDAR_RANGE_DAYS} ngay`)
+    }
 
     const schedules = await LichLamViec.find({
       doctor_id,
@@ -244,21 +313,14 @@ export async function getDoctorWorkdays(req, res) {
       .sort({ ngay: 1 })
       .lean()
 
-    const scheduleIds = schedules.map((schedule) => schedule._id)
-    const appointmentCounts = scheduleIds.length > 0
-      ? await LichHen.aggregate([
-          {
-            $match: {
-              schedule_id: { $in: scheduleIds },
-              status: { $in: APPOINTMENT_CONFLICT_STATUSES },
-            },
-          },
-          { $group: { _id: '$schedule_id', count: { $sum: 1 } } },
-        ])
-      : []
-    const appointmentCountByScheduleId = new Map(
-      appointmentCounts.map((item) => [String(item._id), item.count])
-    )
+    const appointments = await LichHen.find({
+      doctor_id,
+      ngay_kham: { $gte: start, $lte: end },
+      status: { $in: APPOINTMENT_OCCUPIED_SLOT_STATUSES },
+    })
+      .select('doctor_id schedule_id slot_id ngay_kham gio_kham status')
+      .lean()
+    const appointmentStatsByScheduleId = buildAppointmentStatsBySchedule(schedules, appointments)
     const byDate = new Map(schedules.map((schedule) => [formatDateOnly(schedule.ngay), schedule]))
     const items = []
     const cursor = new Date(start)
@@ -269,7 +331,7 @@ export async function getDoctorWorkdays(req, res) {
 
       if (existing) {
         items.push({
-          ...formatWorkday(existing, appointmentCountByScheduleId.get(String(existing._id)) ?? 0),
+          ...formatWorkday(existing, appointmentStatsByScheduleId.get(String(existing._id))),
           nguon_lich: 'stored',
         })
       } else {
@@ -325,6 +387,9 @@ export async function ensureDoctorWorkday(req, res) {
     }
     if (!ngay) {
       return fail(res, 400, 'ngay la bat buoc')
+    }
+    if (!isValidDateOnly(ngay)) {
+      return fail(res, 400, 'ngay phai co dinh dang YYYY-MM-DD hop le')
     }
     if (chi_nhanh_id && !mongoose.Types.ObjectId.isValid(chi_nhanh_id)) {
       return fail(res, 400, 'chi_nhanh_id khong hop le')
@@ -397,6 +462,21 @@ export async function getScheduleById(req, res) {
       return fail(res, 404, 'Khong tim thay lich lam viec')
     }
 
+    const appointments = await LichHen.find({
+      doctor_id: schedule.doctor_id,
+      status: { $in: APPOINTMENT_OCCUPIED_SLOT_STATUSES },
+      $or: [
+        { schedule_id: schedule._id },
+        { ngay_kham: schedule.ngay },
+      ],
+    }).select('slot_id gio_kham').lean()
+    const occupiedSlotIds = new Set(appointments.map((appointment) => String(appointment.slot_id)).filter(Boolean))
+    const occupiedTimes = new Set(appointments.map((appointment) => appointment.gio_kham).filter(Boolean))
+    schedule.slots = schedule.slots.map((slot) => ({
+      ...slot,
+      co_lich_hen: occupiedSlotIds.has(String(slot._id)) || occupiedTimes.has(slot.gio_bat_dau),
+    }))
+
     return ok(res, schedule, 'Lay lich lam viec thanh cong')
   } catch (err) {
     return fail(res, 500, err.message)
@@ -421,6 +501,23 @@ export async function updateSlot(req, res) {
     }
 
     const before = compactSlot(slot.toObject())
+
+    const changesProtectedField = ['gio_bat_dau', 'gio_ket_thuc', 'phong_kham', 'status'].some(
+      (field) => req.body[field] !== undefined && String(req.body[field] ?? '') !== String(slot[field] ?? '')
+    )
+    if (changesProtectedField) {
+      const hasAppointment = await LichHen.exists({
+        doctor_id: schedule.doctor_id,
+        status: { $in: APPOINTMENT_OCCUPIED_SLOT_STATUSES },
+        $or: [
+          { schedule_id: schedule._id, slot_id: slot._id },
+          { ngay_kham: schedule.ngay, gio_kham: slot.gio_bat_dau },
+        ],
+      })
+      if (hasAppointment) {
+        return fail(res, 409, 'Khong the chinh sua slot da co lich hen')
+      }
+    }
 
     // Slot đang bị khóa bởi nghỉ phép đã duyệt (bi_khoa_boi_nghi_phep=true) — không cho đổi
     // status ngầm mà không tường minh bỏ khóa trước, tránh admin vô tình "mở lại" slot đã khóa
@@ -497,7 +594,15 @@ export async function updateWorkday(req, res) {
     }
 
     const hasBookedSlots = schedule.slots.some((slot) => ['booked', 'pending_payment'].includes(slot.status))
-    if (trang_thai_ngay !== 'lam_viec' && hasBookedSlots) {
+    const hasAppointments = trang_thai_ngay === 'lam_viec' ? false : await LichHen.exists({
+      doctor_id: schedule.doctor_id,
+      status: { $in: APPOINTMENT_OCCUPIED_SLOT_STATUSES },
+      $or: [
+        { schedule_id: schedule._id },
+        { ngay_kham: schedule.ngay },
+      ],
+    })
+    if (trang_thai_ngay !== 'lam_viec' && (hasBookedSlots || hasAppointments)) {
       return fail(res, 409, 'Khong the danh dau nghi khi van con khung gio da co benh nhan hoac dang cho thanh toan')
     }
 

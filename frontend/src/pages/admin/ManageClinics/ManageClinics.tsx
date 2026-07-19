@@ -3,6 +3,7 @@ import type { ClinicItem, SpecialtyItem } from '@/types'
 import { clinicService } from '@/services/clinic.service'
 import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
+import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 
 import EditClinic from './EditClinic'
 import ClinicDetail from './ClinicDetail'
@@ -122,7 +123,7 @@ export default function ManageClinics() {
   const totalDoctorsInSpecialties = specialties.reduce((sum, item) => sum + (item.doctor_count || 0), 0)
 
   return (
-    <div className="space-y-6">
+    <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Phòng khám & Chuyên khoa"
         description="Quản lý cơ sở duy nhất của VitaFamily và danh sách chuyên khoa đang vận hành."
@@ -289,7 +290,7 @@ export default function ManageClinics() {
         logs={auditLogs}
         loading={auditLoading}
       />
-    </div>
+    </AdminAutoStagger>
   )
 }
 

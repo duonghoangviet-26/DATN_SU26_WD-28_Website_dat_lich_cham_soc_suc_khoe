@@ -3,6 +3,7 @@ import { reviewService } from '@/services/review.service'
 import type { ReviewFilters, ReviewItem, ReviewStatistics, PaginationInfo } from '@/types/review.type'
 import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
+import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import ReviewFilter from '@/components/admin/reviews/ReviewFilter'
 import ReviewTable from '@/components/admin/reviews/ReviewTable'
 import ReviewDetailModal from '@/components/admin/reviews/ReviewDetailModal'
@@ -42,6 +43,20 @@ export default function ManageReviews() {
   // Quản lý Modal chi tiết
   const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null)
   const [openDetail, setOpenDetail] = useState(false)
+
+  // Danh sách bác sĩ phục vụ bộ lọc dropdown
+  const [doctorsList, setDoctorsList] = useState<Array<{ id: string; ho_ten: string }>>([])
+
+  // Tải danh sách bác sĩ một lần duy nhất khi component mount
+  useEffect(() => {
+    reviewService.getDoctors()
+      .then((res) => {
+        setDoctorsList(res || [])
+      })
+      .catch((err) => {
+        console.error('Không tải được danh sách bác sĩ cho bộ lọc:', err)
+      })
+  }, [])
 
   // 1. Tự động cập nhật dữ liệu trang hiện tại khi người dùng quay lại tab (window focus)
   useEffect(() => {
@@ -114,6 +129,13 @@ export default function ManageReviews() {
     fetchReviews(newPage)
   }
 
+  const handleSelectDoctor = (doctorId: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      doctor: doctorId,
+    }))
+  }
+
   const handleViewDetail = (review: ReviewItem) => {
     setSelectedReview(review)
     setOpenDetail(true)
@@ -165,7 +187,7 @@ export default function ManageReviews() {
   }
 
   return (
-    <div className="space-y-6">
+    <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Đánh giá & phản hồi"
         description="Xem và kiểm duyệt các đánh giá từ bệnh nhân, ẩn nội dung không phù hợp hoặc khôi phục/xóa đánh giá."
@@ -226,6 +248,7 @@ export default function ManageReviews() {
       <ReviewFilter
         filters={filters}
         onChange={setFilters}
+        doctors={doctorsList}
       />
 
       {/* Thanh tác vụ hàng loạt */}
@@ -303,6 +326,7 @@ export default function ManageReviews() {
         onViewDetail={handleViewDetail}
         selectedIds={selectedIds}
         onSelectChange={setSelectedIds}
+        onSelectDoctor={handleSelectDoctor}
       />
 
       {/* Modal chi tiết và thao tác */}
@@ -315,6 +339,6 @@ export default function ManageReviews() {
         }}
         onActionSuccess={handleActionSuccess}
       />
-    </div>
+    </AdminAutoStagger>
   )
 }

@@ -13,8 +13,8 @@ export const adminDoctorScheduleService = {
     doctor_id: string
     from?: string
     to?: string
-  }): Promise<AdminDoctorWorkdayResponse> {
-    const res = await axiosInstance.get<ApiResponse<AdminDoctorWorkdayResponse>>('/admin/slots/calendar', { params })
+  }, signal?: AbortSignal): Promise<AdminDoctorWorkdayResponse> {
+    const res = await axiosInstance.get<ApiResponse<AdminDoctorWorkdayResponse>>('/admin/slots/calendar', { params, signal })
     return res.data.data
   },
 

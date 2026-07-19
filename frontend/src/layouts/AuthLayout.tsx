@@ -19,7 +19,7 @@ export default function AuthLayout() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
             </svg>
           </div>
-          <span className="text-xl font-bold text-white">VitaFamily</span>
+          <span className="text-xl font-bold text-white">ViteFamily</span>
         </div>
 
         {/* Tagline */}
@@ -46,7 +46,7 @@ export default function AuthLayout() {
         </div>
 
         {/* Footer */}
-        <p className="text-xs text-brand-200">© 2026 VitaFamily · DATN SU26 WD-28</p>
+        <p className="text-xs text-brand-200">© 2026 ViteFamily · DATN SU26 WD-28</p>
       </div>
 
       {/* Right form panel */}
@@ -58,7 +58,7 @@ export default function AuthLayout() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
             </svg>
           </div>
-          <span className="text-xl font-bold text-slate-800">VitaFamily</span>
+          <span className="text-xl font-bold text-slate-800">ViteFamily</span>
         </div>
 
         <div className="w-full max-w-sm">
