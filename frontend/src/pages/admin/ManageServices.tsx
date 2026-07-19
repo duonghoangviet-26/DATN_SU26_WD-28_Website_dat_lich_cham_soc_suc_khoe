@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import PageHeader from '@/components/common/PageHeader'
+import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import { serviceService } from '@/services/service.service'
 import { specialtyService } from '@/services/specialty.service'
 import type { SpecialtyBrowseItem } from '@/services/specialty.service'
@@ -93,7 +94,7 @@ export default function ManageServices() {
         : 'Đang hiển thị toàn bộ dịch vụ liên quan và gói dịch vụ theo từng chuyên khoa.'
 
   return (
-    <div className="space-y-6">
+    <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Quản lý dịch vụ"
         description="Admin quản lý dịch vụ liên quan theo từng chuyên khoa, đồng thời có tab riêng để rà soát gói dịch vụ."
@@ -208,6 +209,6 @@ export default function ManageServices() {
           </div>
         )}
       </div>
-    </div>
+    </AdminAutoStagger>
   )
 }

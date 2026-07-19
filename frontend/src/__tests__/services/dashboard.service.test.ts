@@ -34,7 +34,7 @@ describe('dashboardService', () => {
 
     const summary = await dashboardService.getSummary()
 
-    expect(mockedGet).toHaveBeenCalledWith('/admin/dashboard')
+    expect(mockedGet).toHaveBeenCalledWith('/admin/dashboard', { signal: undefined })
     expect(summary.appointments_today).toBe(12)
     expect(summary.revenue.collected_total).toBe(950000)
   })

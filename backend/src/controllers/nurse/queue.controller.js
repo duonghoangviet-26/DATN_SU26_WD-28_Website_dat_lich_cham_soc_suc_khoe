@@ -4,6 +4,7 @@ import { tinhMucUuTien } from '../../models/HangDoi.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { getTodayRange, getMyDoctorIdsToday } from '../../utils/nurse-scope.js'
 import { findOrCreateRoomStatus } from './room-status.controller.js'
+import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 // ============================================================
 // Hàng đợi động (Y tá) — Routes: /api/nurse/queue
@@ -14,6 +15,15 @@ import { findOrCreateRoomStatus } from './room-status.controller.js'
 const UU_TIEN_WEIGHT = { online_uu_tien: 0, online_thuong: 1, offline: 2 }
 const CON_HIEN_DIEN = ['dang_cho', 'da_goi']
 const DANG_XU_LY = ['dang_cho', 'da_goi', 'trong_phong']
+
+async function updateAppointmentStatus(appointmentId, nextStatus) {
+  const appointment = await LichHen.findById(appointmentId).select('status')
+  if (!appointment) return
+  const oldStatus = appointment.status
+  appointment.status = nextStatus
+  await appointment.save()
+  emitDashboardAppointmentChanged(oldStatus, nextStatus)
+}
 
 function sapXepHangDoi(list) {
   return [...list].sort((a, b) => {
@@ -82,6 +92,7 @@ export async function checkin(req, res) {
 
     let payload
     let appt = null
+    let apptOldStatus = null
 
     if (appointment_id) {
       // ── Online: bám theo LichHen đã đặt trước ──────────────────────────
@@ -121,10 +132,12 @@ export async function checkin(req, res) {
         vai_tro_tiep_nhan: 'nurse',
       }
 
+      apptOldStatus = appt.status
       appt.gio_den_thuc_te = now
       appt.trang_thai_den = 'da_den'
       if (appt.status === 'pending') appt.status = 'confirmed'
       // appt.save() dời xuống dưới — ghi cùng HangDoi.create trong 1 transaction (nguyên tử).
+      // Emit realtime cho dashboard admin đặt SAU khi transaction commit (xem dưới).
     } else {
       // ── Offline: khách vãng lai / đến trực tiếp ────────────────────────
       if (!doctor_id || !doctorIds.includes(String(doctor_id))) {
@@ -173,6 +186,9 @@ export async function checkin(req, res) {
     } else {
       entry = await HangDoi.create(payload)
     }
+
+    // Online: sau khi lịch + lượt đã ghi nguyên tử, mới báo realtime cho dashboard admin.
+    if (appt) emitDashboardAppointmentChanged(apptOldStatus, appt.status)
 
     // Cảnh báo quá tải (không chặn — quyết định đã chốt)
     const canhBao = await tinhCanhBaoQuaTai(payload.doctor_id, todayStart)
@@ -289,6 +305,7 @@ export async function intoRoom(req, res) {
     const tuRoom = room.trang_thai // chụp trước khi đổi — dùng cho nhật ký
     // HangDoi + phòng khám + LichHen.status NGUYÊN TỬ: nếu cập nhật LichHen lỗi sau khi đã đổi
     // hàng đợi/phòng thì rollback tất cả (tránh lịch kẹt 'confirmed' còn hàng đợi 'trong_phong').
+    let apptOldStatus = null
     const session = await mongoose.startSession()
     try {
       await session.withTransaction(async () => {
@@ -305,12 +322,19 @@ export async function intoRoom(req, res) {
         await room.save({ session })
 
         if (entry.appointment_id) {
-          await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'in_progress' } }, { session })
+          const appt = await LichHen.findById(entry.appointment_id).select('status').session(session)
+          if (appt) {
+            apptOldStatus = appt.status
+            appt.status = 'in_progress'
+            await appt.save({ session })
+          }
         }
       })
     } finally {
       await session.endSession()
     }
+    // Sau commit mới báo realtime (đặt ngoài transaction để tránh emit lặp nếu retry).
+    if (apptOldStatus) emitDashboardAppointmentChanged(apptOldStatus, 'in_progress')
 
     // Nhật ký best-effort — ngoài transaction, lỗi ghi log không làm rollback trạng thái nghiệp vụ.
     await ghiAuditQueue(req.user.id, 'CALL_PATIENT', entry._id, { trang_thai: 'da_goi' }, { trang_thai: 'trong_phong' })
@@ -343,6 +367,7 @@ export async function finish(req, res) {
     const tuRoom = room.trang_thai // chụp trước khi đổi — dùng cho nhật ký
     // HangDoi + phòng + LichHen.status NGUYÊN TỬ: nếu cập nhật LichHen lỗi sau khi đã đổi hàng đợi
     // thì rollback (tránh lượt 'hoan_thanh' mà lịch chưa 'waiting_record' → y tá không thấy cần nhập).
+    let apptOldStatus = null
     const session = await mongoose.startSession()
     try {
       await session.withTransaction(async () => {
@@ -360,12 +385,19 @@ export async function finish(req, res) {
         await room.save({ session })
 
         if (entry.appointment_id) {
-          await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'waiting_record' } }, { session })
+          const appt = await LichHen.findById(entry.appointment_id).select('status').session(session)
+          if (appt) {
+            apptOldStatus = appt.status
+            appt.status = 'waiting_record'
+            await appt.save({ session })
+          }
         }
       })
     } finally {
       await session.endSession()
     }
+    // Sau commit mới báo realtime (đặt ngoài transaction để tránh emit lặp nếu retry).
+    if (apptOldStatus) emitDashboardAppointmentChanged(apptOldStatus, 'waiting_record')
 
     // Nhật ký best-effort — ngoài transaction, lỗi ghi log không làm rollback trạng thái nghiệp vụ.
     await ghiAuditQueue(req.user.id, 'CALL_PATIENT', entry._id, { trang_thai: 'trong_phong' }, { trang_thai: 'hoan_thanh' })
@@ -395,7 +427,7 @@ export async function skip(req, res) {
     await entry.save()
 
     if (entry.appointment_id) {
-      await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'skipped' } })
+      await updateAppointmentStatus(entry.appointment_id, 'skipped')
     }
 
     await ghiAuditQueue(req.user.id, 'SKIP_PATIENT', entry._id, { trang_thai: tu }, { trang_thai: 'skipped' })
@@ -420,7 +452,7 @@ export async function cancel(req, res) {
     await entry.save()
 
     if (entry.appointment_id) {
-      await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'cancelled' } })
+      await updateAppointmentStatus(entry.appointment_id, 'cancelled')
     }
 
     await ghiAuditQueue(req.user.id, 'SKIP_PATIENT', entry._id, { trang_thai: tu }, { trang_thai: 'cancelled' })

@@ -15,6 +15,8 @@ const APPOINTMENT_OCCUPIED_SLOT_STATUSES = [
   'completed',
   'no_show',
 ]
+const MAX_CALENDAR_RANGE_DAYS = 42
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function isValidObjectId(value) {
   return value === null || value === undefined || mongoose.Types.ObjectId.isValid(value)
@@ -54,6 +56,12 @@ function toDateOnly(value) {
   const date = new Date(value)
   date.setUTCHours(0, 0, 0, 0)
   return date
+}
+
+function isValidDateOnly(value) {
+  if (typeof value !== 'string' || !DATE_ONLY_PATTERN.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  return !Number.isNaN(parsed.getTime()) && formatDateOnly(parsed) === value
 }
 
 function formatDateOnly(value) {
@@ -275,6 +283,9 @@ export async function getDoctorWorkdays(req, res) {
     if (!doctor_id || !mongoose.Types.ObjectId.isValid(doctor_id)) {
       return fail(res, 400, 'doctor_id khong hop le')
     }
+    if ((from && !isValidDateOnly(from)) || (to && !isValidDateOnly(to))) {
+      return fail(res, 400, 'from va to phai co dinh dang YYYY-MM-DD hop le')
+    }
 
     const doctor = await BacSi.findById(doctor_id)
       .populate('user_id', 'ho_ten')
@@ -289,6 +300,10 @@ export async function getDoctorWorkdays(req, res) {
 
     if (end < start) {
       return fail(res, 400, 'Khoang ngay khong hop le')
+    }
+    const rangeDays = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1
+    if (rangeDays > MAX_CALENDAR_RANGE_DAYS) {
+      return fail(res, 400, `Khoang ngay toi da la ${MAX_CALENDAR_RANGE_DAYS} ngay`)
     }
 
     const schedules = await LichLamViec.find({
@@ -373,6 +388,9 @@ export async function ensureDoctorWorkday(req, res) {
     if (!ngay) {
       return fail(res, 400, 'ngay la bat buoc')
     }
+    if (!isValidDateOnly(ngay)) {
+      return fail(res, 400, 'ngay phai co dinh dang YYYY-MM-DD hop le')
+    }
     if (chi_nhanh_id && !mongoose.Types.ObjectId.isValid(chi_nhanh_id)) {
       return fail(res, 400, 'chi_nhanh_id khong hop le')
     }
@@ -444,6 +462,21 @@ export async function getScheduleById(req, res) {
       return fail(res, 404, 'Khong tim thay lich lam viec')
     }
 
+    const appointments = await LichHen.find({
+      doctor_id: schedule.doctor_id,
+      status: { $in: APPOINTMENT_OCCUPIED_SLOT_STATUSES },
+      $or: [
+        { schedule_id: schedule._id },
+        { ngay_kham: schedule.ngay },
+      ],
+    }).select('slot_id gio_kham').lean()
+    const occupiedSlotIds = new Set(appointments.map((appointment) => String(appointment.slot_id)).filter(Boolean))
+    const occupiedTimes = new Set(appointments.map((appointment) => appointment.gio_kham).filter(Boolean))
+    schedule.slots = schedule.slots.map((slot) => ({
+      ...slot,
+      co_lich_hen: occupiedSlotIds.has(String(slot._id)) || occupiedTimes.has(slot.gio_bat_dau),
+    }))
+
     return ok(res, schedule, 'Lay lich lam viec thanh cong')
   } catch (err) {
     return fail(res, 500, err.message)
@@ -468,6 +501,23 @@ export async function updateSlot(req, res) {
     }
 
     const before = compactSlot(slot.toObject())
+
+    const changesProtectedField = ['gio_bat_dau', 'gio_ket_thuc', 'phong_kham', 'status'].some(
+      (field) => req.body[field] !== undefined && String(req.body[field] ?? '') !== String(slot[field] ?? '')
+    )
+    if (changesProtectedField) {
+      const hasAppointment = await LichHen.exists({
+        doctor_id: schedule.doctor_id,
+        status: { $in: APPOINTMENT_OCCUPIED_SLOT_STATUSES },
+        $or: [
+          { schedule_id: schedule._id, slot_id: slot._id },
+          { ngay_kham: schedule.ngay, gio_kham: slot.gio_bat_dau },
+        ],
+      })
+      if (hasAppointment) {
+        return fail(res, 409, 'Khong the chinh sua slot da co lich hen')
+      }
+    }
 
     // Slot đang bị khóa bởi nghỉ phép đã duyệt (bi_khoa_boi_nghi_phep=true) — không cho đổi
     // status ngầm mà không tường minh bỏ khóa trước, tránh admin vô tình "mở lại" slot đã khóa
@@ -544,7 +594,15 @@ export async function updateWorkday(req, res) {
     }
 
     const hasBookedSlots = schedule.slots.some((slot) => ['booked', 'pending_payment'].includes(slot.status))
-    if (trang_thai_ngay !== 'lam_viec' && hasBookedSlots) {
+    const hasAppointments = trang_thai_ngay === 'lam_viec' ? false : await LichHen.exists({
+      doctor_id: schedule.doctor_id,
+      status: { $in: APPOINTMENT_OCCUPIED_SLOT_STATUSES },
+      $or: [
+        { schedule_id: schedule._id },
+        { ngay_kham: schedule.ngay },
+      ],
+    })
+    if (trang_thai_ngay !== 'lam_viec' && (hasBookedSlots || hasAppointments)) {
       return fail(res, 409, 'Khong the danh dau nghi khi van con khung gio da co benh nhan hoac dang cho thanh toan')
     }
 

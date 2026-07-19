@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
+import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 // ============================================================
 // B3 + B4 — Lịch hẹn & Kết quả khám (Bác sĩ)
@@ -178,11 +179,13 @@ export async function confirm(req, res) {
       return fail(res, 409, 'Lịch hẹn đã quá ngày khám, không thể xác nhận')
     }
 
+    const oldStatus = a.status
     a.status = 'confirmed'
     if (a.payment_status === 'unpaid') {
       a.payment_deadline = new Date(Date.now() + PAYMENT_DEADLINE_HOURS * 3600 * 1000)
     }
     await a.save()
+    emitDashboardAppointmentChanged(oldStatus, a.status)
 
     return ok(res, { id: a._id, status: a.status, payment_deadline: a.payment_deadline }, 'Đã xác nhận lịch hẹn')
   } catch (err) {
@@ -214,6 +217,7 @@ export async function cancel(req, res) {
       return fail(res, 400, 'Hủy khẩn cấp bắt buộc phải nhập lý do')
     }
 
+    const oldStatus = a.status
     a.status    = 'cancelled'
     a.ly_do_huy = ly_do?.trim() || 'Bác sĩ hủy lịch'
     a.payment_deadline = null
@@ -229,6 +233,7 @@ export async function cancel(req, res) {
     }
 
     await a.save()
+    emitDashboardAppointmentChanged(oldStatus, a.status)
     return ok(res, { id: a._id, status: a.status, payment_status: a.payment_status }, 'Đã hủy lịch hẹn')
   } catch (err) {
     return fail(res, 500, err.message)
@@ -252,8 +257,10 @@ export async function complete(req, res) {
       return fail(res, 409, 'Chỉ đánh dấu hoàn thành cho lịch hẹn đã xác nhận, đang khám, hoặc đang chờ nhập hồ sơ')
     }
 
+    const oldStatus = a.status
     a.status = 'completed'
     await a.save()
+    emitDashboardAppointmentChanged(oldStatus, a.status)
 
     const hasDone = await KetQuaKham.exists({ appointment_id: a._id })
     return ok(res, { id: a._id, status: a.status, da_co_ket_qua: !!hasDone }, 'Đã đánh dấu hoàn thành')
@@ -396,8 +403,10 @@ export async function createResult(req, res) {
     // Không tự complete nếu hồ sơ có dịch vụ phát sinh — phải chờ thanh toán phần
     // phát sinh đó trước (xem nhánh tương ứng trong confirmResult()).
     if (a.status !== 'completed' && result.dich_vu_phat_sinh.length === 0) {
+      const oldStatus = a.status
       a.status = 'completed'
       await a.save()
+      emitDashboardAppointmentChanged(oldStatus, a.status)
     }
 
     return created(res, {
@@ -499,8 +508,10 @@ export async function confirmResult(req, res) {
     // Không tự complete nếu còn dịch vụ phát sinh chưa xử lý thanh toán — appointment
     // giữ nguyên trạng thái hiện tại cho tới khi lễ tân/thu ngân xác nhận xong phần phát sinh.
     if (a.status !== 'completed' && result.dich_vu_phat_sinh.length === 0) {
+      const oldStatus = a.status
       a.status = 'completed'
       await a.save()
+      emitDashboardAppointmentChanged(oldStatus, a.status)
     }
 
     return ok(res, { id: result._id, status: result.status, appointment_status: a.status }, 'Đã xác nhận hồ sơ khám')

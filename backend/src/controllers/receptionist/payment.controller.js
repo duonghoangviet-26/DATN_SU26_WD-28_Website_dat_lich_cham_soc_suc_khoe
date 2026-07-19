@@ -2,6 +2,10 @@ import mongoose from 'mongoose'
 import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen } from '../../models/index.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { ok, fail } from '../../utils/response.js'
+import {
+  emitDashboardAppointmentChanged,
+  emitDashboardRevenueChanged,
+} from '../../realtime/socket.js'
 
 const VNPAY_SESSION_MINUTES = Number(process.env.VNPAY_SESSION_MINUTES || process.env.PAYMENT_HOLD_MINUTES || 15)
 const DEFAULT_CLIENT_BASE_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
@@ -282,6 +286,7 @@ export const completeMockVnpayPayment = async (req, res) => {
       return fail(res, 409, 'Ma QR VNPAY da het han, vui long tao lai ma moi')
     }
 
+    const previousAppointmentStatus = appointment.status
     await finalizePendingPayment({
       payment, appointment,
       actorUserId: req.user?._id || appointment.user_id || null, // Fallback to null if guest
@@ -302,6 +307,12 @@ export const completeMockVnpayPayment = async (req, res) => {
 
     await session.commitTransaction()
     session.endSession()
+    emitDashboardRevenueChanged({
+      ngay: payment.ngay_thanh_toan,
+      so_tien: payment.so_tien,
+      loai: 'thanh_toan',
+    })
+    emitDashboardAppointmentChanged(previousAppointmentStatus, appointment.status)
 
     if (invoice?._id) {
       await tinhTrangThaiHoaDon(invoice._id)

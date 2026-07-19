@@ -1,6 +1,14 @@
 import { useState } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+
+const demoAccounts = [
+  { role: 'Admin', email: 'admin@vitafamily.vn' },
+  { role: 'Bác sĩ', email: 'doctor.khang@vitafamily.vn' },
+  { role: 'Bệnh nhân', email: 'patient01.demo@vitafamily.vn' },
+  { role: 'Y tá', email: 'nurse@vitafamily.vn' },
+  { role: 'Lễ tân', email: 'reception@vitafamily.vn' },
+]
 
 export default function Login() {
   const { login } = useAuth()
@@ -18,10 +26,12 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
+
     try {
       const user = await login({ email, password })
       const fromLocation = (location.state as { from?: { pathname?: string; search?: string } })?.from
       const from = fromLocation?.pathname ? `${fromLocation.pathname}${fromLocation.search || ''}` : undefined
+
       if (user.role === 'admin') {
         navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true })
       } else if (user.role === 'receptionist') {
@@ -34,11 +44,7 @@ export default function Login() {
         navigate(from || '/', { replace: true })
       }
     } catch (err: any) {
-      setError(
-        err.response?.data?.message ||
-        err.message ||
-        'Đăng nhập thất bại'
-      )
+      setError(err.response?.data?.message || err.message || 'Đăng nhập thất bại')
     } finally {
       setLoading(false)
     }
@@ -48,7 +54,7 @@ export default function Login() {
     <>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-800">Chào mừng trở lại</h1>
-        <p className="mt-1 text-sm text-slate-500">Đăng nhập để vào hệ thống ViteFamily.</p>
+        <p className="mt-1 text-sm text-slate-500">Đăng nhập để vào hệ thống VitaFamily.</p>
       </div>
 
       {registered && (
@@ -75,12 +81,13 @@ export default function Login() {
           <input
             type="email"
             className="input"
-            placeholder="admin@vitefamily.vn"
+            placeholder="admin@vitafamily.vn"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
         </div>
+
         <div>
           <div className="mb-1 flex items-center justify-between">
             <label className="text-sm font-medium text-slate-700">Mật khẩu</label>
@@ -95,6 +102,7 @@ export default function Login() {
             required
           />
         </div>
+
         <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={loading}>
           {loading ? (
             <span className="flex items-center justify-center gap-2">
@@ -112,17 +120,10 @@ export default function Login() {
         </Link>
       </p>
 
-      {/* Demo accounts */}
       <div className="mt-6 rounded-xl border border-brand-100 bg-brand-50 p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-700">Tài khoản demo</p>
         <div className="space-y-1.5 text-xs">
-          {[
-            { role: 'Admin', email: 'admin.demo@vitafamily.vn' },
-            { role: 'Bác sĩ', email: 'doctor.tai@vitafamily.vn' },
-            { role: 'Bệnh nhân', email: 'patient01.demo@vitafamily.vn' },
-            { role: 'nurse', email: 'nurse.demo@vitafamily.vn' },
-            { role: 'receptionist', email: ' reception.demo@vitafamily.vn' },
-          ].map(({ role, email }) => (
+          {demoAccounts.map(({ role, email }) => (
             <div key={role} className="flex items-center justify-between">
               <span className="font-medium text-brand-800">{role}</span>
               <span className="font-mono text-slate-500">{email} / 123456</span>

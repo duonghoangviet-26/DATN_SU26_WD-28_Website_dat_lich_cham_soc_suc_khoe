@@ -3,6 +3,7 @@ import { HangDoi, KetQuaKham, SinhHieuKham, LichHen } from '../../models/index.j
 import { ok, created, fail } from '../../utils/response.js'
 import { getMyDoctorIdsToday } from '../../utils/nurse-scope.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
+import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 // Lỗi nghiệp vụ có mã HTTP — để ném ra trong transaction rồi map sang fail() đúng mã.
 class HttpError extends Error {
@@ -197,6 +198,8 @@ async function submitForDoctorConfirm(req, res, allowedFromStatuses) {
   const session = await mongoose.startSession()
   try {
     let payload
+    let apptOldStatus = null
+    let apptNewStatus = null
     await session.withTransaction(async () => {
       const result = await KetQuaKham.findOne({ _id: req.params.id, nguoi_nhap_id: req.user.id }).session(session)
       if (!result) throw new HttpError(404, 'Không tìm thấy hồ sơ khám hoặc không thuộc bạn')
@@ -219,14 +222,18 @@ async function submitForDoctorConfirm(req, res, allowedFromStatuses) {
         const a = await LichHen.findById(result.appointment_id).session(session)
         if (a) {
           if (!['completed', 'cancelled', 'no_show'].includes(a.status)) {
+            apptOldStatus = a.status
             a.status = 'waiting_doctor_confirm'
             await a.save({ session })
+            apptNewStatus = a.status
           }
           appointment_status = a.status
         }
       }
       payload = { id: result._id, status: result.status, appointment_status }
     })
+    // Báo realtime cho dashboard admin SAU khi commit (ngoài transaction — tránh emit lặp nếu retry).
+    if (apptOldStatus && apptNewStatus) emitDashboardAppointmentChanged(apptOldStatus, apptNewStatus)
     return ok(res, payload, 'Đã gửi hồ sơ cho bác sĩ xác nhận')
   } catch (err) {
     if (err instanceof HttpError) return fail(res, err.status, err.message)

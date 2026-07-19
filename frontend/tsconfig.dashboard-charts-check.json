@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/vite-env.d.ts",
+    "src/types/thong-ke.ts",
+    "src/services/axiosInstance.ts",
+    "src/services/thong-ke.service.ts",
+    "src/components/admin/icons.tsx",
+    "src/components/common/Skeleton.tsx",
+    "src/components/admin/dashboard/*.ts",
+    "src/components/admin/dashboard/*.tsx"
+  ]
+}

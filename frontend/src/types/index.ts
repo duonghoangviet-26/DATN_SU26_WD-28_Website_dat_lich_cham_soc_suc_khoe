@@ -505,6 +505,7 @@ export interface AdminDoctorScheduleSlot {
     cancel_reason?: string | null;
     bi_khoa_boi_nghi_phep?: boolean;
     nghi_phep_id?: string | null;
+    co_lich_hen?: boolean;
 }
 
 export interface AdminDoctorScheduleDetail {
