@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'
 import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
@@ -556,9 +557,52 @@ export async function confirmResultByRecord(req, res) {
   }
 }
 
-// Luồng "yêu cầu chỉnh sửa" (đẩy hồ sơ ngược về y tá) ĐÃ GỠ 2026-07-16: bác sĩ sửa trực tiếp
-// khi xác nhận (xem confirmResult + applyResultEdits). Giá trị enum 'yeu_cau_chinh_sua' vẫn
-// giữ trong KetQuaKham schema cho dữ liệu cũ. Xem docs/Bác sĩ/Thiet ke - Gop sua va xac nhan...
+// ─── PATCH /api/doctor/appointments/:id/result/request-revision ──────────────
+// KHÔI PHỤC 2026-07-19 (QĐ-1/A, PROMPT 28): bác sĩ đẩy hồ sơ 'cho_xac_nhan' ngược về y tá để
+// chỉnh sửa, thay vì tự sửa trực tiếp. Đây là điểm tích hợp doctor–nurse bắt buộc cho luồng
+// revision (test #5/#6). "Lưu & Xác nhận" (confirmResult) VẪN giữ — bác sĩ chọn 1 trong 2.
+// KetQuaKham -> yeu_cau_chinh_sua kèm lý do; LichHen -> waiting_record (đối xứng với submit của
+// y tá -> waiting_doctor_confirm) để y tá thấy việc cần làm. Hai cập nhật NGUYÊN TỬ (transaction)
+// tránh lệch trạng thái giữa hồ sơ và lịch hẹn. Chỉ từ 'cho_xac_nhan'; chỉ bác sĩ phụ trách.
+export async function requestRevision(req, res) {
+  const ly_do = (req.body?.ly_do ?? '').trim()
+  if (!ly_do) return fail(res, 400, 'Cần nêu lý do yêu cầu chỉnh sửa')
+  const docId = await getDocId(req.user.id)
+  if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+  const session = await mongoose.startSession()
+  try {
+    let payload
+    await session.withTransaction(async () => {
+      const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId }).session(session)
+      if (!a) throw Object.assign(new Error('Không tìm thấy lịch hẹn'), { httpStatus: 404 })
+      const result = await KetQuaKham.findOne({ appointment_id: a._id }).session(session)
+      if (!result) throw Object.assign(new Error('Chưa có hồ sơ khám'), { httpStatus: 404 })
+      // Đọc trạng thái TƯƠI trong transaction — không tin trạng thái do FE gửi.
+      if (result.status !== 'cho_xac_nhan') {
+        throw Object.assign(new Error('Chỉ yêu cầu chỉnh sửa được hồ sơ đang chờ xác nhận'), { httpStatus: 409 })
+      }
+
+      result.status = 'yeu_cau_chinh_sua'
+      result.doctor_revision_note = ly_do
+      result.lich_su_sua.push({ nguoi_sua_id: req.user.id, thoi_diem_sua: new Date(),
+        noi_dung: `Bác sĩ yêu cầu chỉnh sửa: ${ly_do}` })
+      await result.save({ session })
+
+      if (!['completed', 'cancelled', 'no_show'].includes(a.status)) {
+        a.status = 'waiting_record'
+        await a.save({ session })
+      }
+      payload = { id: result._id, status: result.status, appointment_status: a.status }
+    })
+    return ok(res, payload, 'Đã gửi yêu cầu chỉnh sửa cho y tá')
+  } catch (err) {
+    if (err.httpStatus) return fail(res, err.httpStatus, err.message)
+    return fail(res, 500, err.message)
+  } finally {
+    await session.endSession()
+  }
+}
 
 // ─── GET /api/doctor/appointments/pending-results?status= ───────────────────
 // Danh sách hồ sơ khám của chính bác sĩ đang đăng nhập — lọc qua bac_si_phu_trach_id

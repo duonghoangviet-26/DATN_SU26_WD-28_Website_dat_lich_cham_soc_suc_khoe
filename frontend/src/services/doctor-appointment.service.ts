@@ -58,6 +58,19 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
+  // Yêu cầu y tá chỉnh sửa hồ sơ 'cho_xac_nhan' (khôi phục 2026-07-19, QĐ-1/A). Đẩy hồ sơ về
+  // yeu_cau_chinh_sua kèm lý do; backend revert LichHen về waiting_record (transaction).
+  async requestRevision(
+    id: string | number,
+    ly_do: string,
+  ): Promise<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }> {
+    const res = await axiosInstance.patch<ApiResponse<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }>>(
+      `/doctor/appointments/${id}/result/request-revision`,
+      { ly_do },
+    )
+    return res.data.data
+  },
+
   // Không truyền status: chỉ hồ sơ 'cho_xac_nhan' (dùng cho thẻ thống kê Dashboard — không đổi).
   // status='all': cả 3 trạng thái liên quan bác sĩ (chờ xác nhận/đã xác nhận/cần chỉnh sửa) —
   // dùng cho trang "Hồ sơ chờ xác nhận" để bác sĩ tra cứu lại hồ sơ đã xử lý.

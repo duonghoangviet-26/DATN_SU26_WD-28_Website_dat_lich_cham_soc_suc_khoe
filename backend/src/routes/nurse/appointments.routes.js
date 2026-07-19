@@ -3,7 +3,8 @@ import * as appointments from '../../controllers/nurse/appointments.controller.j
 
 const router = Router()
 
-router.get('/',    appointments.listQueue)
-router.get('/:id', appointments.getById)
+router.get('/',                appointments.listQueue)
+router.get('/pending-records', appointments.pendingRecords) // phải trước '/:id'
+router.get('/:id',             appointments.getById)
 
 export default router

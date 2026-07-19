@@ -1,7 +1,7 @@
 // Kiểu dữ liệu dùng chung toàn project.
 // Khớp với cấu trúc bảng trong VitaFamily_Database.sql.
 
-export type Role = "user" | "doctor" | "admin" | "receptionist";
+export type Role = "user" | "doctor" | "admin" | "receptionist" | "nurse";
 export type UserStatus = "active" | "locked";
 export type DoctorApproval = "pending" | "approved" | "rejected" | "suspended";
 export type AppointmentStatus =
@@ -1080,14 +1080,29 @@ export interface NurseDashboard {
     ten_y_ta: string | null;
     ngay_hien_tai: string;
     bac_si_ho_tro: NurseDashboardDoctorSupport[];
-    tong_check_in: number;
-    dang_cho_kham: number;
+    tong_lich_hom_nay: number;
+    can_tiep_nhan: number;
     dang_kham: number;
     cho_nhap_ho_so: number;
     ho_so_cho_xac_nhan: number;
     ho_so_can_sua: number;
     ho_so_da_xac_nhan: number;
     hang_doi_gan_nhat: NurseDashboardQueueItem[];
+}
+
+// 1 ca làm việc được phân công (GET /nurse/schedule)
+export interface NurseShift {
+    id: string;
+    ngay: string;
+    doctor_id: string | null;
+    bac_si: string | null;
+    chuyen_khoa: string | null;
+    phong_kham: string | null;
+    gio_bat_dau: string | null;
+    gio_ket_thuc: string | null;
+    trang_thai_ngay: string;
+    trang_thai_ngay_label: string;
+    so_lich_hen: number;
 }
 
 // 1 dòng trong hàng đợi bệnh nhân của y tá (/nurse/appointments)
@@ -1111,6 +1126,29 @@ export interface NurseQueueItem {
     ket_qua_status: KetQuaKhamStatus | null;
 }
 
+// 1 dòng "hồ sơ cần nhập" (GET /nurse/appointments/pending-records)
+export type NursePendingStage = "chua_tao" | "ban_nhap" | "cho_xac_nhan" | "yeu_cau_chinh_sua";
+export interface NursePendingRecord {
+    id: string;
+    ma_lich_hen: string | null;
+    benh_nhan: string;
+    tuoi?: number;
+    gioi_tinh?: string;
+    ngay_kham: string;
+    gio_kham: string;
+    bac_si: string | null;
+    status: AppointmentStatus;
+    giai_doan: NursePendingStage;
+}
+
+// Trang kết quả có phân trang cho danh sách lịch hẹn y tá.
+export interface NurseQueuePage {
+    items: NurseQueueItem[];
+    total: number;
+    page: number;
+    limit: number;
+}
+
 // Chi tiết lịch hẹn/bệnh nhân dành cho y tá (/nurse/appointments/:id)
 export interface NurseAppointmentDetail {
     id: string;
@@ -1132,6 +1170,9 @@ export interface NurseAppointmentDetail {
     ly_do_kham?: string | null;
     status: AppointmentStatus;
     payment_status: PaymentStatus;
+    trang_thai_den?: string | null;
+    da_check_in: boolean;
+    hang_doi_trang_thai?: HangDoiTrangThai | null;
     da_co_ket_qua: boolean;
     ket_qua: NurseMedicalRecord | null;
     sinh_hieu: NurseVitalSigns | null;
@@ -1161,6 +1202,9 @@ export interface NurseMedicalRecord {
     submitted_at?: string | null;
     ngay_tao?: string;
     lich_su_sua?: ExaminationHistoryEntry[];
+    // Thông tin xác nhận (chỉ đọc) — có khi status='da_xac_nhan'. nguoi_xac_nhan là ho_ten đã populate.
+    thoi_diem_xac_nhan?: string | null;
+    nguoi_xac_nhan?: string | null;
 }
 
 // 1 dòng trong danh sách hồ sơ cần chỉnh sửa (/nurse/medical-records/revisions)

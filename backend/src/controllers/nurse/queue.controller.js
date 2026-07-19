@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'
 import { HangDoi, LichHen, LichLamViec, TrangThaiPhongKham, ThanhVien, NhatKyThaoTac, ThongBao, NguoiDung } from '../../models/index.js'
 import { tinhMucUuTien } from '../../models/HangDoi.js'
 import { ok, created, fail } from '../../utils/response.js'
@@ -80,10 +81,11 @@ export async function checkin(req, res) {
     const now = new Date()
 
     let payload
+    let appt = null
 
     if (appointment_id) {
       // ── Online: bám theo LichHen đã đặt trước ──────────────────────────
-      const appt = await LichHen.findById(appointment_id)
+      appt = await LichHen.findById(appointment_id)
       if (!appt) return fail(res, 404, 'Không tìm thấy lịch hẹn')
       if (!doctorIds.includes(String(appt.doctor_id))) {
         return fail(res, 403, 'Lịch hẹn không thuộc bác sĩ bạn phụ trách hôm nay')
@@ -122,7 +124,7 @@ export async function checkin(req, res) {
       appt.gio_den_thuc_te = now
       appt.trang_thai_den = 'da_den'
       if (appt.status === 'pending') appt.status = 'confirmed'
-      await appt.save()
+      // appt.save() dời xuống dưới — ghi cùng HangDoi.create trong 1 transaction (nguyên tử).
     } else {
       // ── Offline: khách vãng lai / đến trực tiếp ────────────────────────
       if (!doctor_id || !doctorIds.includes(String(doctor_id))) {
@@ -153,7 +155,24 @@ export async function checkin(req, res) {
       }
     }
 
-    const entry = await HangDoi.create(payload)
+    // Online: LichHen (trang_thai_den/status) + HangDoi.create phải NGUYÊN TỬ — nếu tạo lượt lỗi
+    // sau khi đã đánh dấu "đã đến" thì rollback cả hai (tránh lịch 'da_den' mà không có lượt khám).
+    // Offline: chỉ 1 lượt ghi (HangDoi) — không cần transaction.
+    let entry
+    if (appt) {
+      const session = await mongoose.startSession()
+      try {
+        await session.withTransaction(async () => {
+          await appt.save({ session })
+          const [e] = await HangDoi.create([payload], { session })
+          entry = e
+        })
+      } finally {
+        await session.endSession()
+      }
+    } else {
+      entry = await HangDoi.create(payload)
+    }
 
     // Cảnh báo quá tải (không chặn — quyết định đã chốt)
     const canhBao = await tinhCanhBaoQuaTai(payload.doctor_id, todayStart)
@@ -267,23 +286,33 @@ export async function intoRoom(req, res) {
       return fail(res, 409, `Phòng chưa sẵn sàng (đang: ${room.trang_thai})`)
     }
 
-    entry.trang_thai = 'trong_phong'
-    entry.thoi_diem_vao_phong = new Date()
-    await entry.save()
+    const tuRoom = room.trang_thai // chụp trước khi đổi — dùng cho nhật ký
+    // HangDoi + phòng khám + LichHen.status NGUYÊN TỬ: nếu cập nhật LichHen lỗi sau khi đã đổi
+    // hàng đợi/phòng thì rollback tất cả (tránh lịch kẹt 'confirmed' còn hàng đợi 'trong_phong').
+    const session = await mongoose.startSession()
+    try {
+      await session.withTransaction(async () => {
+        entry.trang_thai = 'trong_phong'
+        entry.thoi_diem_vao_phong = new Date()
+        await entry.save({ session })
 
-    const tuRoom = room.trang_thai
-    room.trang_thai = 'dang_kham'
-    room.benh_nhan_hien_tai_id = entry._id
-    room.y_ta_co_mat = true
-    room.nguoi_dieu_khien_id = req.user.id
-    room.nguoi_dieu_khien_vai_tro = 'nurse'
-    room.thoi_diem_doi = new Date()
-    await room.save()
+        room.trang_thai = 'dang_kham'
+        room.benh_nhan_hien_tai_id = entry._id
+        room.y_ta_co_mat = true
+        room.nguoi_dieu_khien_id = req.user.id
+        room.nguoi_dieu_khien_vai_tro = 'nurse'
+        room.thoi_diem_doi = new Date()
+        await room.save({ session })
 
-    if (entry.appointment_id) {
-      await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'in_progress' } })
+        if (entry.appointment_id) {
+          await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'in_progress' } }, { session })
+        }
+      })
+    } finally {
+      await session.endSession()
     }
 
+    // Nhật ký best-effort — ngoài transaction, lỗi ghi log không làm rollback trạng thái nghiệp vụ.
     await ghiAuditQueue(req.user.id, 'CALL_PATIENT', entry._id, { trang_thai: 'da_goi' }, { trang_thai: 'trong_phong' })
     await NhatKyThaoTac.create({
       nguoi_thuc_hien_id: req.user.id, vai_tro: 'nurse', hanh_dong: 'CHANGE_DOCTOR_STATUS',
@@ -311,24 +340,34 @@ export async function finish(req, res) {
       return fail(res, 409, 'Bệnh nhân này không khớp với người đang trong phòng')
     }
 
-    entry.trang_thai = 'hoan_thanh'
-    entry.thoi_diem_ket_thuc = new Date()
-    await entry.save()
+    const tuRoom = room.trang_thai // chụp trước khi đổi — dùng cho nhật ký
+    // HangDoi + phòng + LichHen.status NGUYÊN TỬ: nếu cập nhật LichHen lỗi sau khi đã đổi hàng đợi
+    // thì rollback (tránh lượt 'hoan_thanh' mà lịch chưa 'waiting_record' → y tá không thấy cần nhập).
+    const session = await mongoose.startSession()
+    try {
+      await session.withTransaction(async () => {
+        entry.trang_thai = 'hoan_thanh'
+        entry.thoi_diem_ket_thuc = new Date()
+        await entry.save({ session })
 
-    const tuRoom = room.trang_thai
-    room.trang_thai = 'dang_don_phong'
-    room.benh_nhan_hien_tai_id = null
-    room.thoi_diem_doi = new Date()
-    if (entry.thoi_diem_vao_phong) {
-      const phutThucTe = Math.max(1, Math.round((entry.thoi_diem_ket_thuc - entry.thoi_diem_vao_phong) / 60000))
-      room.thoi_gian_kham_tb_phut = Math.round(0.7 * room.thoi_gian_kham_tb_phut + 0.3 * phutThucTe)
+        room.trang_thai = 'dang_don_phong'
+        room.benh_nhan_hien_tai_id = null
+        room.thoi_diem_doi = new Date()
+        if (entry.thoi_diem_vao_phong) {
+          const phutThucTe = Math.max(1, Math.round((entry.thoi_diem_ket_thuc - entry.thoi_diem_vao_phong) / 60000))
+          room.thoi_gian_kham_tb_phut = Math.round(0.7 * room.thoi_gian_kham_tb_phut + 0.3 * phutThucTe)
+        }
+        await room.save({ session })
+
+        if (entry.appointment_id) {
+          await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'waiting_record' } }, { session })
+        }
+      })
+    } finally {
+      await session.endSession()
     }
-    await room.save()
 
-    if (entry.appointment_id) {
-      await LichHen.updateOne({ _id: entry.appointment_id }, { $set: { status: 'waiting_record' } })
-    }
-
+    // Nhật ký best-effort — ngoài transaction, lỗi ghi log không làm rollback trạng thái nghiệp vụ.
     await ghiAuditQueue(req.user.id, 'CALL_PATIENT', entry._id, { trang_thai: 'trong_phong' }, { trang_thai: 'hoan_thanh' })
     await NhatKyThaoTac.create({
       nguoi_thuc_hien_id: req.user.id, vai_tro: 'nurse', hanh_dong: 'CHANGE_DOCTOR_STATUS',

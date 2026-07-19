@@ -1,7 +1,13 @@
+import mongoose from 'mongoose'
 import { HangDoi, KetQuaKham, SinhHieuKham, LichHen } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { getMyDoctorIdsToday } from '../../utils/nurse-scope.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
+
+// Lỗi nghiệp vụ có mã HTTP — để ném ra trong transaction rồi map sang fail() đúng mã.
+class HttpError extends Error {
+  constructor(status, message) { super(message); this.status = status }
+}
 
 // ============================================================
 // Hồ sơ khám do y tá nhập — neo theo LƯỢT KHÁM (HangDoi.hang_doi_id), chạy cho cả
@@ -154,7 +160,12 @@ export async function update(req, res) {
     const result = await KetQuaKham.findOne({ _id: req.params.id, nguoi_nhap_id: req.user.id })
     if (!result) return fail(res, 404, 'Không tìm thấy hồ sơ khám hoặc không thuộc bạn')
     if (!['ban_nhap', 'yeu_cau_chinh_sua'].includes(result.status)) {
-      return fail(res, 409, 'Chỉ sửa được hồ sơ đang nháp hoặc đang cần chỉnh sửa')
+      // Khóa cứng sau khi bác sĩ xác nhận: không cho y tá sửa qua endpoint chung.
+      // Trạng thái lấy TƯƠI từ DB ở trên — không tin trạng thái do FE gửi.
+      const msg = result.status === 'da_xac_nhan'
+        ? 'Hồ sơ đã được bác sĩ xác nhận — không thể chỉnh sửa'
+        : 'Chỉ sửa được hồ sơ đang nháp hoặc đang cần chỉnh sửa'
+      return fail(res, 409, msg)
     }
     const entry = await HangDoi.findById(result.hang_doi_id).lean()
     const { chan_doan, huong_dan_dieu_tri, ghi_chu, trieu_chung_ban_dau, ghi_chu_dieu_duong, ngay_tai_kham, sinh_hieu } = req.body
@@ -180,25 +191,49 @@ export async function update(req, res) {
 
 // Chuyển DRAFT/NEED_REVISION -> WAITING_DOCTOR_CONFIRM. Online: cập nhật LichHen.status.
 async function submitForDoctorConfirm(req, res, allowedFromStatuses) {
+  // Cập nhật KetQuaKham + LichHen phải NGUYÊN TỬ: nếu một trong hai lỗi thì rollback cả hai,
+  // tránh lệch (hồ sơ 'cho_xac_nhan' nhưng lịch vẫn 'waiting_record'). Dùng transaction (Atlas
+  // là replica set — luồng booking cũng dùng session). Lỗi nghiệp vụ ném HttpError để trả đúng mã.
+  const session = await mongoose.startSession()
   try {
-    const result = await KetQuaKham.findOne({ _id: req.params.id, nguoi_nhap_id: req.user.id })
-    if (!result) return fail(res, 404, 'Không tìm thấy hồ sơ khám hoặc không thuộc bạn')
-    if (!allowedFromStatuses.includes(result.status)) {
-      return fail(res, 409, `Chỉ gửi được hồ sơ đang ở trạng thái: ${allowedFromStatuses.join(', ')}`)
-    }
-    result.status = 'cho_xac_nhan'
-    result.submitted_at = new Date()
-    await result.save()
-    // Online: đồng bộ LichHen để bác sĩ thấy có hồ sơ chờ (offline không có LichHen — bỏ qua).
-    if (result.appointment_id) {
-      const a = await LichHen.findById(result.appointment_id)
-      if (a && !['completed', 'cancelled', 'no_show'].includes(a.status)) {
-        a.status = 'waiting_doctor_confirm'
-        await a.save()
+    let payload
+    await session.withTransaction(async () => {
+      const result = await KetQuaKham.findOne({ _id: req.params.id, nguoi_nhap_id: req.user.id }).session(session)
+      if (!result) throw new HttpError(404, 'Không tìm thấy hồ sơ khám hoặc không thuộc bạn')
+      if (!allowedFromStatuses.includes(result.status)) {
+        // Đã xác nhận thì không cho gửi lại — chặn từ chối gửi lại (PROMPT 27). Không tin FE.
+        const msg = result.status === 'da_xac_nhan'
+          ? 'Hồ sơ đã được bác sĩ xác nhận — không thể gửi lại'
+          : `Chỉ gửi được hồ sơ đang ở trạng thái: ${allowedFromStatuses.join(', ')}`
+        throw new HttpError(409, msg)
       }
-    }
-    return ok(res, { id: result._id, status: result.status }, 'Đã gửi hồ sơ cho bác sĩ xác nhận')
-  } catch (err) { return fail(res, 500, err.message) }
+      if (!result.chan_doan?.trim()) throw new HttpError(400, 'Chẩn đoán là bắt buộc trước khi gửi bác sĩ')
+
+      result.status = 'cho_xac_nhan'
+      result.submitted_at = new Date()
+      await result.save({ session })
+
+      // Online: đồng bộ LichHen để bác sĩ thấy hồ sơ chờ (offline không có LichHen — bỏ qua).
+      let appointment_status = null
+      if (result.appointment_id) {
+        const a = await LichHen.findById(result.appointment_id).session(session)
+        if (a) {
+          if (!['completed', 'cancelled', 'no_show'].includes(a.status)) {
+            a.status = 'waiting_doctor_confirm'
+            await a.save({ session })
+          }
+          appointment_status = a.status
+        }
+      }
+      payload = { id: result._id, status: result.status, appointment_status }
+    })
+    return ok(res, payload, 'Đã gửi hồ sơ cho bác sĩ xác nhận')
+  } catch (err) {
+    if (err instanceof HttpError) return fail(res, err.status, err.message)
+    return fail(res, 500, err.message)
+  } finally {
+    await session.endSession()
+  }
 }
 
 export async function submit(req, res) { return submitForDoctorConfirm(req, res, ['ban_nhap']) }

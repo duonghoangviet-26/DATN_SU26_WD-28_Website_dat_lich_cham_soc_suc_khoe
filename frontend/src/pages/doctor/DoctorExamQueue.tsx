@@ -139,7 +139,8 @@ export default function DoctorExamQueue() {
 
       {active && activeAppt && (
         <ExamResultModal appt={activeAppt} mode="confirm" onClose={closeModal}
-          onConfirmed={() => { closeModal(); load() }} onSaved={() => { closeModal(); load() }} />
+          onConfirmed={() => { closeModal(); load() }} onSaved={() => { closeModal(); load() }}
+          onRevisionRequested={() => { closeModal(); load() }} />
       )}
     </div>
   )

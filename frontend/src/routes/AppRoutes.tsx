@@ -45,7 +45,9 @@ import DoctorExamQueue from '@/pages/doctor/DoctorExamQueue'
 import DoctorLeaveRequests from '@/pages/doctor/DoctorLeaveRequests'
 
 import NurseDashboard from '@/pages/nurse/NurseDashboard'
+import NurseSchedule from '@/pages/nurse/NurseSchedule'
 import NurseQueue from '@/pages/nurse/NurseQueue'
+import NursePendingRecords from '@/pages/nurse/NursePendingRecords'
 import NurseAppointmentDetail from '@/pages/nurse/NurseAppointmentDetail'
 import NurseRevisions from '@/pages/nurse/NurseRevisions'
 
@@ -152,7 +154,9 @@ export default function AppRoutes() {
         }
       >
         <Route index element={<NurseDashboard />} />
+        <Route path="schedule" element={<NurseSchedule />} />
         <Route path="queue" element={<NurseQueue />} />
+        <Route path="pending-records" element={<NursePendingRecords />} />
         <Route path="appointments/:id" element={<NurseAppointmentDetail />} />
         <Route path="revisions" element={<NurseRevisions />} />
       </Route>
