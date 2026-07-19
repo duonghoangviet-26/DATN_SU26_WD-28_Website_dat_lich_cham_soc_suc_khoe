@@ -480,7 +480,8 @@ export default function ReceptionistBooking() {
               label="Số điện thoại liên hệ"
               placeholder="Nhập số di động..."
               value={patientPhone}
-              onChange={(event) => setPatientPhone(event.target.value)}
+              onChange={(event) => setPatientPhone(event.target.value.replace(/\D/g, ''))}
+              maxLength={10}
               required
             />
           </div>
