@@ -81,12 +81,38 @@ export async function listRevisions(req, res) {
   try {
     const results = await KetQuaKham.find({ nguoi_nhap_id: req.user.id, status: 'yeu_cau_chinh_sua' })
       .populate({ path: 'hang_doi_id', select: 'ten_benh_nhan doctor_id nguon checkin_time' })
+      .populate({ path: 'lich_su_sua.nguoi_sua_id', select: 'ho_ten' })
       .sort({ ngay_cap_nhat: -1 }).lean()
-    const data = results.map((r) => ({
-      id: r._id, hang_doi_id: r.hang_doi_id?._id ?? r.hang_doi_id ?? null,
-      benh_nhan: r.hang_doi_id?.ten_benh_nhan ?? 'Không rõ',
-      doctor_revision_note: r.doctor_revision_note, thoi_diem_yeu_cau: r.ngay_cap_nhat,
-    }))
+
+    // FE 'Hồ sơ cần chỉnh sửa' cần appointment_id (điều hướng '/nurse/appointments/:id' để
+    // sửa hồ sơ) + ngay_kham/ly_do_kham/tên bác sĩ yêu cầu. Trước đây thiếu appointment_id →
+    // nút "Chỉnh sửa hồ sơ" điều hướng '/nurse/appointments/undefined'. Lấy thêm từ LichHen.
+    const apptIds = results.map((r) => r.appointment_id).filter(Boolean)
+    const appts = apptIds.length
+      ? await LichHen.find({ _id: { $in: apptIds } })
+        .populate('member_id', 'ho_ten')
+        .select('ngay_kham ly_do_kham ten_khach member_id').lean()
+      : []
+    const apptById = new Map(appts.map((a) => [String(a._id), a]))
+
+    const data = results.map((r) => {
+      const appt = r.appointment_id ? apptById.get(String(r.appointment_id)) : null
+      // "Bác sĩ yêu cầu" = người thực hiện thao tác gần nhất trên hồ sơ (bản ghi cuối lich_su_sua —
+      // chính là lần bác sĩ bấm "Yêu cầu chỉnh sửa").
+      const lastEdit = Array.isArray(r.lich_su_sua) && r.lich_su_sua.length
+        ? r.lich_su_sua[r.lich_su_sua.length - 1] : null
+      return {
+        id: r._id,
+        appointment_id: r.appointment_id ?? null,
+        hang_doi_id: r.hang_doi_id?._id ?? r.hang_doi_id ?? null,
+        benh_nhan: r.hang_doi_id?.ten_benh_nhan ?? appt?.member_id?.ho_ten ?? appt?.ten_khach ?? 'Không rõ',
+        bac_si_yeu_cau: lastEdit?.nguoi_sua_id?.ho_ten ?? null,
+        ngay_kham: appt?.ngay_kham ?? r.hang_doi_id?.checkin_time ?? r.ngay_tao,
+        ly_do_kham: appt?.ly_do_kham ?? null,
+        doctor_revision_note: r.doctor_revision_note,
+        thoi_diem_yeu_cau: r.ngay_cap_nhat,
+      }
+    })
     return ok(res, data)
   } catch (err) { return fail(res, 500, err.message) }
 }
