@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 import {
-  BacSi, LichLamViec, LichHen,
+  BacSi, LichLamViec, LichHen, NguoiDung,
   ChuyenKhoa, DichVu, HoaDon, ThanhToan,
 } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
@@ -175,6 +175,18 @@ export async function createBooking(req, res) {
       return rollbackFail(400, 'Thiếu thông tin bắt buộc')
     }
 
+    let finalUserId = user_id
+    if (!finalUserId && so_dien_thoai_khach) {
+      const existingUser = await NguoiDung.findOne({ 
+        so_dien_thoai: so_dien_thoai_khach, 
+        status: 'active', 
+        role: { $in: ['user', 'patient'] } 
+      }).lean()
+      if (existingUser) {
+        finalUserId = existingUser._id
+      }
+    }
+
     const appointmentDate = parseDateOnly(ngay_kham)
     const doc = await BacSi.findOne({ _id: doctor_id }).populate('specialties', 'ten').session(session)
     if (!doc) return rollbackFail(404, 'Bác sĩ không tồn tại')
@@ -198,7 +210,7 @@ export async function createBooking(req, res) {
 
     const isPaid = payment_method === 'cash'
     const [appointment] = await LichHen.create([{
-      doctor_id: doc._id, schedule_id, slot_id, user_id: user_id || null,
+      doctor_id: doc._id, schedule_id, slot_id, user_id: finalUserId || null,
       chi_nhanh_id: doc.chi_nhanh_id ?? null,
       specialty_id: doc.specialties?.[0]?._id ?? null,
       ma_lich_hen: appointmentCode,
