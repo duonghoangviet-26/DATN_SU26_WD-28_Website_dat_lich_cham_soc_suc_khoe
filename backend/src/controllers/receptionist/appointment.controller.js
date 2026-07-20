@@ -216,6 +216,12 @@ export const cancelAppointment = async (req, res) => {
       session.endSession()
       return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
     }
+
+    if (appointment.status === 'checked_in') {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Không thể hủy lịch hẹn khi bệnh nhân đã check-in' })
+    }
     
     const oldStatus = appointment.status
     appointment.status = 'cancelled'

@@ -350,7 +350,7 @@ export default function Appointments() {
                                 Dời lịch
                               </button>
                             )}
-                            {apt.status !== 'cancelled' && (
+                            {apt.status !== 'cancelled' && apt.status !== 'checked_in' && (
                               <button
                                 onClick={() => handleCancel(apt._id)}
                                 className="px-2 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded text-xs font-medium"
