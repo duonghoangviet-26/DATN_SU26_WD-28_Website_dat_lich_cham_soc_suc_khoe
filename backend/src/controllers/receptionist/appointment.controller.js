@@ -203,12 +203,19 @@ export const rescheduleAppointment = async (req, res) => {
 }
 
 export const cancelAppointment = async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
   try {
     const { id } = req.params
     const { ly_do_huy } = req.body
     
-    const appointment = await LichHen.findById(id)
-    if (!appointment) return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
+    const appointment = await LichHen.findById(id).session(session)
+    if (!appointment) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
+    }
     
     const oldStatus = appointment.status
     appointment.status = 'cancelled'
@@ -218,11 +225,29 @@ export const cancelAppointment = async (req, res) => {
       appointment.nguoi_huy_id = req.user._id
     }
     
-    await appointment.save()
+    // Giải phóng slot trong LichLamViec
+    const { schedule_id, slot_id } = appointment
+    if (schedule_id && slot_id) {
+      const schedule = await LichLamViec.findById(schedule_id).session(session)
+      if (schedule) {
+        const slot = schedule.slots.id(slot_id)
+        if (slot) {
+          slot.status = 'active'
+          await schedule.save({ session })
+        }
+      }
+    }
+
+    await appointment.save({ session })
+    await session.commitTransaction()
+    session.endSession()
+
     emitDashboardAppointmentChanged(oldStatus, appointment.status)
     
     res.status(200).json({ success: true, message: 'Đã hủy lịch hẹn', data: appointment })
   } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
     res.status(500).json({ success: false, message: error.message })
   }
 }
