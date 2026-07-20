@@ -24,6 +24,13 @@ interface Appointment {
   so_lan_thay_doi?: number;
 }
 
+interface RescheduleHistory {
+  _id: string;
+  loai_thay_doi: string;
+  ly_do_thay_doi: string;
+  ngay_tao: string;
+}
+
 const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
   // Tách ngày từ chuỗi UTC (vd: "2026-07-20T00:00...")
   const dateString = ngay_kham.split('T')[0];
@@ -58,9 +65,13 @@ export default function Appointments() {
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
-  const [rescheduleReason, setRescheduleReason] = useState('');
-  const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [availableSlots, setAvailableSlots] = useState<ReceptionistBookingSlot[]>([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState('');
+  const [rescheduleReason, setRescheduleReason] = useState('');
+  
+  // States cho Modal Lịch sử quá hạn dời lịch
+  const [rescheduleLimitModalOpen, setRescheduleLimitModalOpen] = useState(false);
+  const [rescheduleHistory, setRescheduleHistory] = useState<RescheduleHistory[]>([]);
 
   // States cho Modal Chi tiết
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -143,8 +154,24 @@ export default function Appointments() {
     }
   };
 
-  const handleReschedule = (apt: Appointment) => {
+  const handleReschedule = async (apt: Appointment) => {
     setSelectedAppointmentId(apt._id);
+    
+    // Nếu đã dời lịch >= 3 lần, bật form Lịch sử
+    if ((apt.so_lan_thay_doi || 0) >= 3) {
+      try {
+        const res = await axiosInstance.get(`/receptionist/appointments/${apt._id}/reschedule-history`);
+        if (res.data.success) {
+          setRescheduleHistory(res.data.data);
+          setRescheduleLimitModalOpen(true);
+        }
+      } catch (err) {
+        alert('Lỗi khi tải lịch sử dời lịch');
+      }
+      return;
+    }
+
+    // Bình thường
     const docId = apt.doctor_id?._id || '';
     setSelectedDoctorId(docId);
     // Format date from DB string to YYYY-MM-DD for input type="date"
@@ -359,7 +386,7 @@ export default function Appointments() {
                                 Đã đến
                               </button>
                             )}
-                            {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (apt.so_lan_thay_doi || 0) < 3 && (
+                            {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                               <button
                                 onClick={() => handleReschedule(apt)}
                                 className="px-2 py-1 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded text-xs font-medium"
@@ -409,6 +436,43 @@ export default function Appointments() {
           />
         </div>
       </div>
+
+      {/* Modal Lịch sử Dời Lịch (Quá giới hạn 3 lần) */}
+      {rescheduleLimitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-bold text-red-600 mb-2">Đạt giới hạn dời lịch!</h3>
+            <p className="text-sm text-slate-600 mb-4">
+              Khách hàng này đã thay đổi lịch hẹn <strong className="text-red-500">3 lần</strong>. Hệ thống không cho phép dời lịch thêm nữa để tránh xáo trộn công việc của bác sĩ. Dưới đây là lịch sử dời lịch:
+            </p>
+            
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 max-h-60 overflow-y-auto space-y-4">
+              {rescheduleHistory.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">Không có dữ liệu lịch sử cũ.</p>
+              ) : (
+                rescheduleHistory.map((history, idx) => (
+                  <div key={history._id} className="border-b border-slate-200 pb-3 last:border-0 last:pb-0">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded">Lần {rescheduleHistory.length - idx}</span>
+                      <span className="text-xs text-slate-500">{new Date(history.ngay_tao).toLocaleString('vi-VN')}</span>
+                    </div>
+                    <p className="text-sm text-slate-700 mt-1">Lý do: {history.ly_do_thay_doi}</p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setRescheduleLimitModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 text-white hover:bg-slate-900 rounded-lg text-sm font-medium transition-colors"
+              >
+                Đóng thông báo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Hủy Lịch */}
       {cancelModalOpen && (

@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
+import LichSuLichHen from '../../models/LichSuLichHen.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 export const getAppointments = async (req, res) => {
@@ -205,6 +206,19 @@ export const rescheduleAppointment = async (req, res) => {
     appointment.so_lan_thay_doi = (appointment.so_lan_thay_doi || 0) + 1
 
     await appointment.save({ session })
+    
+    // Ghi lại lịch sử dời lịch
+    await LichSuLichHen.create([{
+      appointment_id: appointment._id,
+      tu_trang_thai: appointment.status,
+      den_trang_thai: appointment.status,
+      loai_thay_doi: 'reschedule',
+      ly_do_thay_doi: ly_do_doi_lich || 'Lễ tân dời lịch',
+      vai_tro: 'admin',
+      kenh_thay_doi: 'web',
+      nguoi_thay_doi_id: req.user?._id || appointment.user_id || new mongoose.Types.ObjectId()
+    }], { session })
+
     await session.commitTransaction()
     session.endSession()
 
@@ -272,9 +286,24 @@ export const cancelAppointment = async (req, res) => {
   }
 }
 
+export const getRescheduleHistory = async (req, res) => {
+  try {
+    const { id } = req.params
+    const history = await LichSuLichHen.find({
+      appointment_id: id,
+      loai_thay_doi: 'reschedule'
+    }).sort({ ngay_tao: -1 })
+    
+    res.status(200).json({ success: true, data: history })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
 export default {
   getAppointments,
   markAsArrived,
   rescheduleAppointment,
-  cancelAppointment
+  cancelAppointment,
+  getRescheduleHistory
 }
