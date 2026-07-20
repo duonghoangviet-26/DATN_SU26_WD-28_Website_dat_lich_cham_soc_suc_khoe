@@ -112,6 +112,22 @@ function diffFields(before?: Record<string, unknown> | null, after?: Record<stri
   return keys.filter((key) => valueToText(before?.[key]) !== valueToText(after?.[key]))
 }
 
+function translateLogNote(note: string | null | undefined): string | null | undefined {
+  if (!note) return note
+  const map: Record<string, string> = {
+    'Auto fill schedule window from startup': 'Tự động sinh lịch làm việc khi khởi động hệ thống',
+    'Sinh lich lam viec tu dong theo tuan': 'Sinh lịch làm việc tự động theo tuần',
+    'Tu dong sinh bu lich lam viec': 'Tự động sinh bù lịch làm việc',
+    'Sinh lich tu dong khi duyet bac si': 'Sinh lịch tự động khi duyệt bác sĩ',
+    'Sinh lich rolling window tu dong': 'Sinh lịch làm việc tự động định kỳ',
+  }
+  if (map[note]) return map[note]
+  if (note.startsWith('Auto fill schedule window from ')) {
+    return note.replace('Auto fill schedule window from ', 'Tự động sinh lịch làm việc từ ')
+  }
+  return note
+}
+
 // ============================================================
 // MODAL: CHỈNH SLOT LỊCH LÀM VIỆC
 // ============================================================
@@ -508,7 +524,7 @@ function ScheduleAuditModal({
                       </div>
 
                       <div>
-                        {log.ghi_chu && <p className="font-medium text-slate-800">{log.ghi_chu}</p>}
+                        {log.ghi_chu && <p className="font-medium text-slate-800">{translateLogNote(log.ghi_chu)}</p>}
 
                         {changedFields.length > 0 ? (
                           <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">

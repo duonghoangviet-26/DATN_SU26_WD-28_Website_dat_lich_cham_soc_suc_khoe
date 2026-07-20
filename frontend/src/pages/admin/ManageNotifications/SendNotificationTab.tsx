@@ -17,6 +17,24 @@ const TARGET_LABEL: Record<NotificationTargetAPI, string> = {
   bac_si: 'Bác sĩ'
 }
 
+function getTargetColor(target: unknown): 'gray' | 'blue' | 'green' {
+  return typeof target === 'string' && target in TARGET_COLOR
+    ? TARGET_COLOR[target as NotificationTargetAPI]
+    : 'gray'
+}
+
+function getTargetLabel(target: unknown) {
+  return typeof target === 'string' && target in TARGET_LABEL
+    ? TARGET_LABEL[target as NotificationTargetAPI]
+    : 'Không xác định'
+}
+
+function formatRecipientCount(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('vi-VN')
+    : '0'
+}
+
 export default function SendNotificationTab() {
   const [notifications, setNotifications] = useState<NotificationItemAPI[]>([])
   const [loading, setLoading] = useState(true)
@@ -283,14 +301,14 @@ export default function SendNotificationTab() {
                     <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{n.noi_dung}</p>
                   </td>
                   <td className="px-5 py-4 whitespace-nowrap">
-                    <Badge color={TARGET_COLOR[n.doi_tuong]}>
-                      {TARGET_LABEL[n.doi_tuong]}
+                    <Badge color={getTargetColor(n.doi_tuong)}>
+                      {getTargetLabel(n.doi_tuong)}
                     </Badge>
                   </td>
                   <td className="px-5 py-4 text-slate-600 font-medium whitespace-nowrap">
                     <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-md">
                       <Icon name="users" className="w-3.5 h-3.5 text-slate-400" />
-                      {n.so_nguoi_nhan.toLocaleString('vi-VN')}
+                      {formatRecipientCount(n.so_nguoi_nhan)}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-slate-600 whitespace-nowrap">
@@ -369,7 +387,7 @@ export default function SendNotificationTab() {
               <div className="flex flex-wrap gap-3 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đối tượng:</span>
-                  <Badge color={TARGET_COLOR[detail.doi_tuong]}>{TARGET_LABEL[detail.doi_tuong]}</Badge>
+                  <Badge color={getTargetColor(detail.doi_tuong)}>{getTargetLabel(detail.doi_tuong)}</Badge>
                 </div>
                 <div className="w-px h-4 bg-slate-300 self-center hidden sm:block"></div>
                 <div className="flex items-center gap-1.5 text-sm text-slate-600">
@@ -390,7 +408,7 @@ export default function SendNotificationTab() {
               <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
                 <p className="text-xs text-slate-500 flex items-center gap-1.5">
                   <Icon name="info" className="w-4 h-4 text-brand-500" />
-                  Đã tiếp cận <strong className="text-slate-800">{detail.so_nguoi_nhan.toLocaleString('vi-VN')}</strong> tài khoản
+                  Đã tiếp cận <strong className="text-slate-800">{formatRecipientCount(detail.so_nguoi_nhan)}</strong> tài khoản
                 </p>
                 <button onClick={() => setDetail(null)} className="btn-secondary px-6">Đóng</button>
               </div>

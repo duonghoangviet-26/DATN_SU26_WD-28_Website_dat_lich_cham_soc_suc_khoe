@@ -1,12 +1,23 @@
 import mongoose from 'mongoose'
 
 import ThongBao from '../models/ThongBao.js'
+import ThongBaoHeThong from '../models/ThongBaoHeThong.js'
+import NguoiDung from '../models/NguoiDung.js'
+import NhatKyThaoTac from '../models/NhatKyThaoTac.js'
+
+const TARGET_ROLES = {
+  tat_ca: ['user', 'patient', 'doctor'],
+  benh_nhan: ['user', 'patient'],
+  bac_si: ['doctor'],
+}
+
+const TARGETS = Object.keys(TARGET_ROLES)
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
 }
 
-function formatNotification(notification) {
+function formatUserNotification(notification) {
   return {
     _id: notification._id,
     user_id: notification.user_id?._id ?? notification.user_id ?? null,
@@ -26,30 +37,94 @@ function formatNotification(notification) {
   }
 }
 
+function formatSystemNotification(notification) {
+  return {
+    _id: notification._id,
+    tieu_de: notification.tieu_de,
+    noi_dung: notification.noi_dung,
+    url: notification.url ?? null,
+    doi_tuong: notification.doi_tuong,
+    tao_boi: notification.tao_boi
+      ? {
+          _id: notification.tao_boi._id ?? notification.tao_boi,
+          ho_ten: notification.tao_boi.ho_ten,
+          email: notification.tao_boi.email,
+        }
+      : null,
+    ngay_gui: notification.ngay_gui ?? notification.ngay_tao ?? null,
+    so_nguoi_nhan: Number(notification.so_nguoi_nhan) || 0,
+    status: notification.status ?? 'da_gui',
+    ngay_tao: notification.ngay_tao ?? null,
+  }
+}
+
+function pickSystemSnapshot(notification) {
+  return {
+    tieu_de: notification.tieu_de,
+    noi_dung: notification.noi_dung,
+    doi_tuong: notification.doi_tuong,
+    so_nguoi_nhan: Number(notification.so_nguoi_nhan) || 0,
+    ngay_gui: notification.ngay_gui ?? null,
+  }
+}
+
+async function writeNotificationAudit(actorId, action, targetId, oldData, newData) {
+  if (!isValidObjectId(actorId) || !isValidObjectId(targetId)) return
+
+  await NhatKyThaoTac.create({
+    nguoi_thuc_hien_id: actorId,
+    vai_tro: 'admin',
+    hanh_dong: action,
+    loai_doi_tuong: 'system_notification',
+    doi_tuong_id: targetId,
+    du_lieu_cu: oldData,
+    du_lieu_moi: newData,
+  })
+}
+
 export async function getNotifications({ page = 1, limit = 10, user_id = null }) {
   const pageNum = Math.max(1, Number(page) || 1)
   const limitNum = Math.max(1, Number(limit) || 10)
   const skip = (pageNum - 1) * limitNum
 
-  const filter = {}
   if (user_id) {
     if (!isValidObjectId(user_id)) {
       throw new Error('user_id khong hop le')
     }
-    filter.user_id = user_id
+
+    const filter = { user_id }
+    const [notifications, total] = await Promise.all([
+      ThongBao.find(filter)
+        .sort({ ngay_tao: -1, _id: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      ThongBao.countDocuments(filter),
+    ])
+
+    return {
+      data: notifications.map(formatUserNotification),
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: total === 0 ? 1 : Math.ceil(total / limitNum),
+      },
+    }
   }
 
   const [notifications, total] = await Promise.all([
-    ThongBao.find(filter)
-      .sort({ ngay_tao: -1, _id: -1 })
+    ThongBaoHeThong.find({})
+      .populate('tao_boi', 'ho_ten email')
+      .sort({ ngay_gui: -1, ngay_tao: -1, _id: -1 })
       .skip(skip)
       .limit(limitNum)
       .lean(),
-    ThongBao.countDocuments(filter),
+    ThongBaoHeThong.countDocuments({}),
   ])
 
   return {
-    data: notifications.map(formatNotification),
+    data: notifications.map(formatSystemNotification),
     pagination: {
       total,
       page: pageNum,
@@ -59,98 +134,120 @@ export async function getNotifications({ page = 1, limit = 10, user_id = null })
   }
 }
 
-export async function createNotification(payload) {
+export async function createNotification(payload, actorId) {
   const {
-    user_id,
     tieu_de,
     noi_dung,
-    loai,
-    related_id = null,
-    related_type = null,
-    du_lieu_dinh_kem = null,
-    kenh_gui = null,
-    da_gui = false,
-    thoi_diem_gui = null,
-    thoi_diem_doc = null,
-    ngay_gui_du_kien,
+    doi_tuong,
+    url = null,
   } = payload
 
-  if (!user_id || !tieu_de || !noi_dung || !loai || !ngay_gui_du_kien) {
+  if (!tieu_de || !noi_dung || !doi_tuong) {
     throw new Error('Thieu truong bat buoc khi tao thong bao')
   }
 
-  if (!isValidObjectId(user_id)) {
-    throw new Error('user_id khong hop le')
+  if (!TARGETS.includes(doi_tuong)) {
+    throw new Error('doi_tuong khong hop le')
   }
 
-  if (related_id && !isValidObjectId(related_id)) {
-    throw new Error('related_id khong hop le')
+  if (!isValidObjectId(actorId)) {
+    throw new Error('admin_id khong hop le')
   }
 
-  const notification = await ThongBao.create({
-    user_id,
-    tieu_de,
-    noi_dung,
-    loai,
-    related_id,
-    related_type,
-    du_lieu_dinh_kem,
-    kenh_gui,
-    da_gui,
-    thoi_diem_gui: thoi_diem_gui ? new Date(thoi_diem_gui) : null,
-    thoi_diem_doc: thoi_diem_doc ? new Date(thoi_diem_doc) : null,
-    ngay_gui_du_kien: new Date(ngay_gui_du_kien),
+  const sentAt = new Date()
+  const recipients = await NguoiDung.find({
+    role: { $in: TARGET_ROLES[doi_tuong] },
+    status: 'active',
+    ngay_xoa: null,
+  }).select('_id').lean()
+
+  const systemNotification = await ThongBaoHeThong.create({
+    tieu_de: tieu_de.trim(),
+    noi_dung: noi_dung.trim(),
+    url,
+    doi_tuong,
+    tao_boi: actorId,
+    ngay_gui: sentAt,
+    so_nguoi_nhan: recipients.length,
   })
 
-  return formatNotification(notification.toObject())
+  if (recipients.length > 0) {
+    await ThongBao.insertMany(
+      recipients.map((recipient) => ({
+        user_id: recipient._id,
+        tieu_de: systemNotification.tieu_de,
+        noi_dung: systemNotification.noi_dung,
+        loai: 'system',
+        related_id: systemNotification._id,
+        related_type: 'system_notification',
+        du_lieu_dinh_kem: { system_notification_id: systemNotification._id, url },
+        kenh_gui: 'in_app',
+        da_gui: true,
+        thoi_diem_gui: sentAt,
+        ngay_gui_du_kien: sentAt,
+      })),
+      { ordered: false },
+    )
+  }
+
+  await writeNotificationAudit(
+    actorId,
+    'CREATE_SYSTEM_NOTIFICATION',
+    systemNotification._id,
+    null,
+    pickSystemSnapshot(systemNotification),
+  )
+
+  const populated = await ThongBaoHeThong.findById(systemNotification._id)
+    .populate('tao_boi', 'ho_ten email')
+    .lean()
+  return formatSystemNotification(populated ?? systemNotification.toObject())
 }
 
-export async function updateNotification(id, payload) {
+export async function updateNotification(id, payload, actorId = null) {
   if (!isValidObjectId(id)) {
     throw new Error('ID thong bao khong hop le')
   }
 
-  const notification = await ThongBao.findById(id)
+  const notification = await ThongBaoHeThong.findById(id)
   if (!notification) {
     throw new Error('Khong tim thay thong bao')
   }
 
-  const allowedFields = [
-    'tieu_de',
-    'noi_dung',
-    'loai',
-    'related_type',
-    'du_lieu_dinh_kem',
-    'kenh_gui',
-    'da_gui',
-    'thoi_diem_gui',
-    'thoi_diem_doc',
-    'ngay_gui_du_kien',
-  ]
+  const oldData = pickSystemSnapshot(notification)
 
-  for (const field of allowedFields) {
-    if (!Object.prototype.hasOwnProperty.call(payload, field)) continue
+  if (Object.prototype.hasOwnProperty.call(payload, 'tieu_de')) {
+    if (!payload.tieu_de?.trim()) throw new Error('tieu_de bat buoc')
+    notification.tieu_de = payload.tieu_de.trim()
+  }
 
-    if (['thoi_diem_gui', 'thoi_diem_doc', 'ngay_gui_du_kien'].includes(field) && payload[field]) {
-      notification[field] = new Date(payload[field])
-    } else {
-      notification[field] = payload[field]
-    }
+  if (Object.prototype.hasOwnProperty.call(payload, 'noi_dung')) {
+    if (!payload.noi_dung?.trim()) throw new Error('noi_dung bat buoc')
+    notification.noi_dung = payload.noi_dung.trim()
   }
 
   await notification.save()
-  return formatNotification(notification.toObject())
+  const newData = pickSystemSnapshot(notification)
+
+  await writeNotificationAudit(actorId, 'UPDATE_SYSTEM_NOTIFICATION', notification._id, oldData, newData)
+
+  const populated = await ThongBaoHeThong.findById(notification._id)
+    .populate('tao_boi', 'ho_ten email')
+    .lean()
+  return formatSystemNotification(populated ?? notification.toObject())
 }
 
-export async function deleteNotification(id) {
+export async function deleteNotification(id, actorId = null) {
   if (!isValidObjectId(id)) {
     throw new Error('ID thong bao khong hop le')
   }
 
-  const notification = await ThongBao.findByIdAndDelete(id).lean()
+  const notification = await ThongBaoHeThong.findByIdAndDelete(id).lean()
   if (!notification) {
     throw new Error('Khong tim thay thong bao')
   }
+
+  await writeNotificationAudit(actorId, 'DELETE_SYSTEM_NOTIFICATION', id, pickSystemSnapshot(notification), null)
 
   return true
 }
@@ -169,9 +266,19 @@ export async function markNotificationAsRead(id) {
   notification.thoi_diem_doc = notification.thoi_diem_doc || new Date()
   await notification.save()
 
-  return formatNotification(notification.toObject())
+  return formatUserNotification(notification.toObject())
 }
 
-export async function getNotificationLogs() {
-  return []
+export async function getNotificationLogs(id) {
+  if (!isValidObjectId(id)) {
+    throw new Error('ID thong bao khong hop le')
+  }
+
+  return NhatKyThaoTac.find({
+    loai_doi_tuong: 'system_notification',
+    doi_tuong_id: id,
+  })
+    .populate('nguoi_thuc_hien_id', 'ho_ten email')
+    .sort({ ngay_tao: -1, _id: -1 })
+    .lean()
 }
