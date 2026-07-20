@@ -55,7 +55,7 @@ export default function ReceptionistBooking() {
   const [symptoms, setSymptoms] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash')
 
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'warning'} | null>(null)
   const [submittingBooking, setSubmittingBooking] = useState(false)
 
   const [foundUser, setFoundUser] = useState<any | null>(null)
@@ -106,7 +106,7 @@ export default function ReceptionistBooking() {
       })
       .catch((error: any) => {
         if (!ignore) {
-          setToast(error.response?.data?.message || error.message || 'Không tải được danh sách bác sĩ')
+          setToast({ message: error.response?.data?.message || error.message || 'Không tải được danh sách bác sĩ', type: 'error' })
         }
       })
       .finally(() => {
@@ -129,7 +129,7 @@ export default function ReceptionistBooking() {
           if (data.found && data.user) {
             setFoundUser(data.user)
             setPatientName(data.user.ho_ten)
-            setToast('Đã tìm thấy thông tin khách hàng cũ!')
+            setToast({ message: 'Đã tìm thấy thông tin khách hàng cũ!', type: 'success' })
           } else {
             setFoundUser(null)
           }
@@ -160,7 +160,7 @@ export default function ReceptionistBooking() {
       .catch((error: any) => {
         if (!ignore) {
           setSlots([])
-          setToast(error.response?.data?.message || error.message || 'Không tải được slot khám')
+          setToast({ message: error.response?.data?.message || error.message || 'Không tải được slot khám', type: 'error' })
         }
       })
       .finally(() => {
@@ -179,7 +179,7 @@ export default function ReceptionistBooking() {
         if (!cancelled) setPaymentSnapshot(data)
       })
       .catch((error: any) => {
-        if (!cancelled) setToast(error.response?.data?.message || 'Không tạo được session VNPAY mock')
+        if (!cancelled) setToast({ message: error.response?.data?.message || 'Không tạo được session VNPAY mock', type: 'error' })
       })
       .finally(() => {
         if (!cancelled) setCreatingPaymentSession(false)
@@ -208,7 +208,7 @@ export default function ReceptionistBooking() {
       .catch(() => {
         if (!cancelled) {
           setQrCodeDataUrl('')
-          setToast('Không render được mã QR VNPAY')
+          setToast({ message: 'Không render được mã QR VNPAY', type: 'error' })
         }
       })
 
@@ -254,7 +254,7 @@ export default function ReceptionistBooking() {
   function handleNextStep() {
     if (step === 1) {
       if (!selectedDoctorId) {
-        setToast('Vui lòng chọn bác sĩ khám chuyên khoa.')
+        setToast({ message: 'Vui lòng chọn bác sĩ khám chuyên khoa.', type: 'warning' })
         return
       }
       setStep(2)
@@ -262,7 +262,7 @@ export default function ReceptionistBooking() {
     }
     if (step === 2) {
       if (!selectedDate || !selectedSlotId) {
-        setToast('Vui lòng chọn ngày khám và khung giờ còn trống.')
+        setToast({ message: 'Vui lòng chọn ngày khám và khung giờ còn trống.', type: 'warning' })
         return
       }
       setStep(3)
@@ -270,11 +270,11 @@ export default function ReceptionistBooking() {
     }
     if (step === 3) {
       if (!patientName.trim() || !patientPhone.trim()) {
-        setToast('Họ tên và số điện thoại liên hệ là bắt buộc.')
+        setToast({ message: 'Họ tên và số điện thoại liên hệ là bắt buộc.', type: 'error' })
         return
       }
       if (!/^\d{10}$/.test(patientPhone.trim())) {
-        setToast('Số điện thoại phải bao gồm đúng 10 chữ số.')
+        setToast({ message: 'Số điện thoại phải bao gồm đúng 10 chữ số.', type: 'error' })
         return
       }
       setStep(4)
@@ -290,7 +290,7 @@ export default function ReceptionistBooking() {
 
   async function handleCreateBooking() {
     if (!selectedDoctor || !selectedSlot) {
-      setToast('Thiếu thông tin bác sĩ hoặc khung giờ khám.')
+      setToast({ message: 'Thiếu thông tin bác sĩ hoặc khung giờ khám.', type: 'error' })
       return
     }
 
@@ -310,9 +310,9 @@ export default function ReceptionistBooking() {
       const created = await receptionistBookingService.createBooking(payload)
       setCreatedBooking(created)
       setStep(5)
-      setToast('Tạo lịch hẹn thành công.')
+      setToast({ message: 'Tạo lịch hẹn thành công.', type: 'success' })
     } catch (error: any) {
-      setToast(error.response?.data?.message || error.message || 'Tạo lịch hẹn thất bại')
+      setToast({ message: error.response?.data?.message || error.message || 'Tạo lịch hẹn thất bại', type: 'error' })
     } finally {
       setSubmittingBooking(false)
     }
@@ -338,9 +338,9 @@ export default function ReceptionistBooking() {
     try {
       const data = await receptionistBookingService.createVnpaySession(createdBooking.payment_id)
       setPaymentSnapshot(data)
-      setToast('Đã tạo lại session VNPAY mock')
+      setToast({ message: 'Đã tạo lại session VNPAY mock', type: 'success' })
     } catch (error: any) {
-      setToast(error.response?.data?.message || error.message || 'Lỗi khi tạo lại session')
+      setToast({ message: error.response?.data?.message || error.message || 'Lỗi khi tạo lại session', type: 'error' })
     } finally {
       setCreatingPaymentSession(false)
     }
@@ -358,9 +358,9 @@ export default function ReceptionistBooking() {
     try {
       const data = await receptionistBookingService.completeMockVnpayPayment(createdBooking.payment_id)
       setPaymentSnapshot(data)
-      setToast('Đã mô phỏng thanh toán thành công!')
+      setToast({ message: 'Đã mô phỏng thanh toán thành công!', type: 'success' })
     } catch (error: any) {
-      setToast(error.response?.data?.message || error.message || 'Lỗi khi mô phỏng thanh toán')
+      setToast({ message: error.response?.data?.message || error.message || 'Lỗi khi mô phỏng thanh toán', type: 'error' })
     } finally {
       setCompletingMockPayment(false)
     }
@@ -739,7 +739,7 @@ export default function ReceptionistBooking() {
         ) : null}
       </div>
 
-      {toast && <Toast message={toast} type="success" onClose={() => setToast(null)} />}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   )
 }
