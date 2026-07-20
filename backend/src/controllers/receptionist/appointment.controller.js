@@ -28,34 +28,26 @@ export const getAppointments = async (req, res) => {
     }
     
     if (date) {
-      const startDate = new Date(date)
-      startDate.setHours(0, 0, 0, 0)
-      const endDate = new Date(date)
-      endDate.setHours(23, 59, 59, 999)
-      query.ngay_kham = { $gte: startDate, $lte: endDate }
+      query.ngay_kham = new Date(`${date}T00:00:00.000Z`)
     } else {
-      const todayStart = new Date()
-      todayStart.setHours(0, 0, 0, 0)
+      const now = new Date()
+      // Ép chuẩn về múi giờ Việt Nam (UTC+7) để Server không bị lạc ngày
+      const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000)
+      const todayString = vnTime.toISOString().split('T')[0]
+      const todayUTC = new Date(`${todayString}T00:00:00.000Z`)
       
-      const todayEnd = new Date()
-      todayEnd.setHours(23, 59, 59, 999)
-
-      const tomorrowStart = new Date()
-      tomorrowStart.setDate(tomorrowStart.getDate() + 1)
-      tomorrowStart.setHours(0, 0, 0, 0)
-
-      const tomorrowEnd = new Date()
-      tomorrowEnd.setDate(tomorrowEnd.getDate() + 1)
-      tomorrowEnd.setHours(23, 59, 59, 999)
+      const tomorrowVn = new Date(vnTime.getTime() + 24 * 60 * 60 * 1000)
+      const tomorrowString = tomorrowVn.toISOString().split('T')[0]
+      const tomorrowUTC = new Date(`${tomorrowString}T00:00:00.000Z`)
 
       if (timeframe === 'today') {
-        query.ngay_kham = { $gte: todayStart, $lte: todayEnd }
+        query.ngay_kham = todayUTC
       } else if (timeframe === 'tomorrow') {
-        query.ngay_kham = { $gte: tomorrowStart, $lte: tomorrowEnd }
+        query.ngay_kham = tomorrowUTC
       } else if (timeframe === 'upcoming') {
-        query.ngay_kham = { $gt: todayEnd }
+        query.ngay_kham = { $gt: todayUTC }
       } else if (timeframe === 'past') {
-        query.ngay_kham = { $lt: todayStart }
+        query.ngay_kham = { $lt: todayUTC }
       }
     }
     
