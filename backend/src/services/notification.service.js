@@ -4,6 +4,7 @@ import ThongBao from '../models/ThongBao.js'
 import ThongBaoHeThong from '../models/ThongBaoHeThong.js'
 import NguoiDung from '../models/NguoiDung.js'
 import NhatKyThaoTac from '../models/NhatKyThaoTac.js'
+import { isMailConfigured, sendNotificationEmail } from './mail.service.js'
 
 const TARGET_ROLES = {
   tat_ca: ['user', 'patient', 'doctor', 'receptionist', 'nurse'],
@@ -84,6 +85,50 @@ async function writeNotificationAudit(actorId, action, targetId, oldData, newDat
   })
 }
 
+async function sendNotificationEmailsInBackground(recipients, notification, url) {
+  if (!isMailConfigured()) {
+    console.warn('[notification-email] EMAIL_USER/EMAIL_PASS chua duoc cau hinh, bo qua gui email')
+    return
+  }
+
+  const emailRecipients = recipients.filter((recipient) => recipient.email)
+  if (emailRecipients.length === 0) return
+
+  const results = await Promise.allSettled(
+    emailRecipients.map((recipient) =>
+      sendNotificationEmail({
+        to: recipient.email,
+        title: notification.tieu_de,
+        content: notification.noi_dung,
+        url,
+      }),
+    ),
+  )
+
+  const failed = results
+    .map((result, index) => ({ result, recipient: emailRecipients[index] }))
+    .filter(({ result }) => result.status === 'rejected')
+
+  if (failed.length > 0) {
+    console.error('[notification-email] Gui email thong bao that bai', {
+      notification_id: notification._id?.toString?.() ?? notification._id,
+      failed: failed.map(({ result, recipient }) => ({
+        email: recipient.email,
+        reason: result.reason?.message ?? String(result.reason),
+      })),
+    })
+  }
+
+  const sentCount = results.length - failed.length
+  if (sentCount > 0) {
+    console.info('[notification-email] Da gui email thong bao', {
+      notification_id: notification._id?.toString?.() ?? notification._id,
+      sent: sentCount,
+      failed: failed.length,
+    })
+  }
+}
+
 export async function getNotifications({ page = 1, limit = 10, user_id = null }) {
   const pageNum = Math.max(1, Number(page) || 1)
   const limitNum = Math.max(1, Number(limit) || 10)
@@ -142,6 +187,8 @@ export async function createNotification(payload, actorId) {
     noi_dung,
     doi_tuong,
     url = null,
+    kenh_gui = 'in_app',
+    recipient_ids = [],
   } = payload
 
   if (!tieu_de || !noi_dung || !doi_tuong) {
@@ -152,16 +199,39 @@ export async function createNotification(payload, actorId) {
     throw new Error('doi_tuong khong hop le')
   }
 
+  if (!['in_app', 'email'].includes(kenh_gui)) {
+    throw new Error('kenh_gui khong hop le')
+  }
+
   if (!isValidObjectId(actorId)) {
     throw new Error('admin_id khong hop le')
   }
 
+  if (!Array.isArray(recipient_ids)) {
+    throw new Error('recipient_ids khong hop le')
+  }
+
+  const invalidRecipientIds = recipient_ids.filter((id) => !isValidObjectId(id))
+  if (invalidRecipientIds.length > 0) {
+    throw new Error('recipient_ids khong hop le')
+  }
+
   const sentAt = new Date()
-  const recipients = await NguoiDung.find({
+  const recipientFilter = {
     role: { $in: TARGET_ROLES[doi_tuong] },
     status: 'active',
     ngay_xoa: null,
-  }).select('_id').lean()
+  }
+
+  if (recipient_ids.length > 0) {
+    recipientFilter._id = { $in: recipient_ids }
+  }
+
+  const recipients = await NguoiDung.find(recipientFilter).select('_id email').lean()
+
+  if (recipient_ids.length > 0 && recipients.length !== recipient_ids.length) {
+    throw new Error('Mot so nguoi nhan khong hop le hoac khong thuoc doi tuong da chon')
+  }
 
   const systemNotification = await ThongBaoHeThong.create({
     tieu_de: tieu_de.trim(),
@@ -182,8 +252,8 @@ export async function createNotification(payload, actorId) {
         loai: 'system',
         related_id: systemNotification._id,
         related_type: 'system_notification',
-        du_lieu_dinh_kem: { system_notification_id: systemNotification._id, url },
-        kenh_gui: 'in_app',
+        du_lieu_dinh_kem: { system_notification_id: systemNotification._id, url, kenh_gui },
+        kenh_gui,
         da_gui: true,
         thoi_diem_gui: sentAt,
         ngay_gui_du_kien: sentAt,
@@ -199,6 +269,15 @@ export async function createNotification(payload, actorId) {
     null,
     pickSystemSnapshot(systemNotification),
   )
+
+  if (kenh_gui === 'email') {
+    void sendNotificationEmailsInBackground(recipients, systemNotification, url).catch((error) => {
+      console.error('[notification-email] Loi khong mong doi khi gui email thong bao', {
+        notification_id: systemNotification._id?.toString?.() ?? systemNotification._id,
+        message: error.message,
+      })
+    })
+  }
 
   const populated = await ThongBaoHeThong.findById(systemNotification._id)
     .populate('tao_boi', 'ho_ten email')
