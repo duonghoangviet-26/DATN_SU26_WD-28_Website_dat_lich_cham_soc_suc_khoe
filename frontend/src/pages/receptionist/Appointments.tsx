@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axiosInstance from '../../services/axiosInstance';
 import { format } from 'date-fns';
 import { receptionistBookingService, ReceptionistBookingSlot } from '../../services/receptionist-booking.service';
@@ -37,6 +37,8 @@ export default function Appointments() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  
+  const isFirstSearchRender = useRef(true);
   
   // States cho Modal Hủy lịch
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -85,6 +87,10 @@ export default function Appointments() {
 
   // Thêm một useEffect để fetch với debounce cho search
   useEffect(() => {
+    if (isFirstSearchRender.current) {
+      isFirstSearchRender.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       fetchAppointments();
     }, 500); // 500ms delay for typing
