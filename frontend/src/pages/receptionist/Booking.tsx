@@ -58,6 +58,9 @@ export default function ReceptionistBooking() {
   const [toast, setToast] = useState<string | null>(null)
   const [submittingBooking, setSubmittingBooking] = useState(false)
 
+  const [foundUser, setFoundUser] = useState<any | null>(null)
+  const [isLookingUp, setIsLookingUp] = useState(false)
+
   const [dates, setDates] = useState<{ value: string; label: string }[]>([])
   const [doctors, setDoctors] = useState<ReceptionistBookingDoctor[]>([])
   const [slots, setSlots] = useState<ReceptionistBookingSlot[]>([])
@@ -111,6 +114,36 @@ export default function ReceptionistBooking() {
       })
     return () => { ignore = true }
   }, [])
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (patientPhone.length === 10) {
+      const timer = setTimeout(async () => {
+        setIsLookingUp(true)
+        try {
+          const data = await receptionistBookingService.lookupUserByPhone(patientPhone)
+          if (data.found && data.user) {
+            setFoundUser(data.user)
+            setPatientName(data.user.ho_ten)
+            setToast('Đã tìm thấy thông tin khách hàng cũ!')
+          } else {
+            setFoundUser(null)
+          }
+        } catch (error) {
+          console.error('Lỗi tra cứu user:', error)
+        } finally {
+          setIsLookingUp(false)
+        }
+      }, 500)
+      return () => clearTimeout(timer)
+    } else {
+      setFoundUser(null)
+    }
+  }, [patientPhone])
 
   useEffect(() => {
     if (!selectedDoctorId || !selectedDate) {
@@ -263,16 +296,18 @@ export default function ReceptionistBooking() {
 
     setSubmittingBooking(true)
     try {
-      const created = await receptionistBookingService.createBooking({
+      const payload = {
         doctor_id: selectedDoctor.id,
         schedule_id: selectedSlot.schedule_id,
         slot_id: selectedSlot.id,
         ngay_kham: selectedDate,
         ten_khach: patientName.trim(),
         so_dien_thoai_khach: patientPhone.trim(),
-        ly_do_kham: symptoms.trim() || undefined,
+        ly_do_kham: symptoms.trim(),
         payment_method: paymentMethod,
-      })
+        user_id: foundUser?._id,
+      }
+      const created = await receptionistBookingService.createBooking(payload)
       setCreatedBooking(created)
       setStep(5)
       setToast('Tạo lịch hẹn thành công.')
@@ -474,16 +509,26 @@ export default function ReceptionistBooking() {
               placeholder="Nhập họ tên đầy đủ..."
               value={patientName}
               onChange={(event) => setPatientName(event.target.value)}
+              disabled={!!foundUser}
               required
             />
-            <Input
-              label="Số điện thoại liên hệ"
-              placeholder="Nhập số di động..."
-              value={patientPhone}
-              onChange={(event) => setPatientPhone(event.target.value.replace(/\D/g, ''))}
-              maxLength={10}
-              required
-            />
+            <div className="space-y-1">
+              <Input
+                label="Số điện thoại liên hệ"
+                placeholder="Nhập số di động..."
+                value={patientPhone}
+                onChange={(event) => setPatientPhone(event.target.value.replace(/\D/g, ''))}
+                maxLength={10}
+                required
+              />
+              {isLookingUp && <p className="text-xs text-brand-600 animate-pulse">Đang tra cứu số điện thoại...</p>}
+              {foundUser && (
+                <p className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  Khách hàng đã đăng ký (Đã từng đặt {foundUser.so_lan_dat_lich} lịch)
+                </p>
+              )}
+            </div>
           </div>
 
           <Textarea

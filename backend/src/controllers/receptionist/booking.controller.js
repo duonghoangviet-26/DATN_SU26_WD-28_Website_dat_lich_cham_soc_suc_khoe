@@ -170,7 +170,7 @@ export async function createBooking(req, res) {
       return fail(res, statusCode, message)
     }
 
-    const { doctor_id, schedule_id, slot_id, ngay_kham, ten_khach, so_dien_thoai_khach, ly_do_kham, payment_method } = req.body
+    const { doctor_id, schedule_id, slot_id, ngay_kham, ten_khach, so_dien_thoai_khach, ly_do_kham, payment_method, user_id } = req.body
     if (!doctor_id || !schedule_id || !slot_id || !ngay_kham || !ten_khach || !so_dien_thoai_khach || !payment_method) {
       return rollbackFail(400, 'Thiếu thông tin bắt buộc')
     }
@@ -198,7 +198,7 @@ export async function createBooking(req, res) {
 
     const isPaid = payment_method === 'cash'
     const [appointment] = await LichHen.create([{
-      doctor_id: doc._id, schedule_id, slot_id,
+      doctor_id: doc._id, schedule_id, slot_id, user_id: user_id || null,
       chi_nhanh_id: doc.chi_nhanh_id ?? null,
       specialty_id: doc.specialties?.[0]?._id ?? null,
       ma_lich_hen: appointmentCode,
