@@ -130,7 +130,13 @@ export const rescheduleAppointment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
     }
 
-    const { doctor_id, schedule_id: old_schedule_id, slot_id: old_slot_id } = appointment
+    const { doctor_id, schedule_id: old_schedule_id, slot_id: old_slot_id, so_lan_thay_doi = 0 } = appointment
+
+    if (so_lan_thay_doi >= 3) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Lịch hẹn này đã đạt giới hạn tối đa 3 lần dời lịch.' })
+    }
 
     // 2. Tra cứu slot mới trong LichLamViec
     // Parse ngay_kham (new) to UTC midnight Date

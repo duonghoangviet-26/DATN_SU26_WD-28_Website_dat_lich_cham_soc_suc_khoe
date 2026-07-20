@@ -21,6 +21,7 @@ interface Appointment {
   ten_dich_vu?: string;
   nguoi_dat_ho_ten?: string;
   dat_ho?: boolean;
+  so_lan_thay_doi?: number;
 }
 
 const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
@@ -358,7 +359,7 @@ export default function Appointments() {
                                 Đã đến
                               </button>
                             )}
-                            {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
+                            {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (apt.so_lan_thay_doi || 0) < 3 && (
                               <button
                                 onClick={() => handleReschedule(apt)}
                                 className="px-2 py-1 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded text-xs font-medium"
