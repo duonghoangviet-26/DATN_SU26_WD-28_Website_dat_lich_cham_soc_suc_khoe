@@ -207,6 +207,10 @@ export async function createBooking(req, res) {
 
     const appointmentCode = await nextAppointmentCode(session, appointmentDate)
     const gia_kham = doc.phi_kham ?? doc.gia_kham ?? 0
+    
+    if (gia_kham === undefined || gia_kham === null || gia_kham <= 0) {
+      return rollbackFail(400, 'Bác sĩ chưa được cấu hình giá khám hợp lệ. Vui lòng kiểm tra lại cấu hình Bác sĩ.')
+    }
 
     const isPaid = payment_method === 'cash'
     const [appointment] = await LichHen.create([{
