@@ -23,10 +23,15 @@ interface Appointment {
 }
 
 const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
-  const appointmentDate = new Date(ngay_kham);
+  // Tách ngày từ chuỗi UTC (vd: "2026-07-20T00:00...")
+  const dateString = ngay_kham.split('T')[0];
+  const [year, month, day] = dateString.split('-').map(Number);
   const [hours, minutes] = gio_kham.split(':').map(Number);
-  appointmentDate.setHours(hours, minutes, 0, 0);
+  
+  // Tạo Local Date cố định theo đúng các thông số trên
+  const appointmentDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
   const now = new Date();
+  
   return appointmentDate < now;
 };
 
