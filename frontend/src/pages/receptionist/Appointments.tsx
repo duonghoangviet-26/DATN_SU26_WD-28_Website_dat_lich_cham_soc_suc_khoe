@@ -28,7 +28,7 @@ interface RescheduleHistory {
   _id: string;
   loai_thay_doi: string;
   ly_do_thay_doi: string;
-  ngay_tao: string;
+  thoi_diem: string;
 }
 
 const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
@@ -453,8 +453,8 @@ export default function Appointments() {
                 rescheduleHistory.map((history, idx) => (
                   <div key={history._id} className="border-b border-slate-200 pb-3 last:border-0 last:pb-0">
                     <div className="flex justify-between items-start mb-1">
-                      <span className="text-xs font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded">Lần {rescheduleHistory.length - idx}</span>
-                      <span className="text-xs text-slate-500">{new Date(history.ngay_tao).toLocaleString('vi-VN')}</span>
+                      <span className="text-xs font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded">Lần {idx + 1}</span>
+                      <span className="text-xs text-slate-500">{new Date(history.thoi_diem).toLocaleString('vi-VN')}</span>
                     </div>
                     <p className="text-sm text-slate-700 mt-1">Lý do: {history.ly_do_thay_doi}</p>
                   </div>

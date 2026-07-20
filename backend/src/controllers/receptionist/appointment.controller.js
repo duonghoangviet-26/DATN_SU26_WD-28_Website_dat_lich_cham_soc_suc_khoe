@@ -292,7 +292,7 @@ export const getRescheduleHistory = async (req, res) => {
     const history = await LichSuLichHen.find({
       appointment_id: id,
       loai_thay_doi: 'reschedule'
-    }).sort({ ngay_tao: -1 })
+    }).sort({ thoi_diem: 1 })
     
     res.status(200).json({ success: true, data: history })
   } catch (error) {
