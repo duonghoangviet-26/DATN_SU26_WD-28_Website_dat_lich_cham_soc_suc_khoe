@@ -1,5 +1,7 @@
+import mongoose from 'mongoose'
 import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
+import LichLamViec from '../../models/LichLamViec.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 export const getAppointments = async (req, res) => {
@@ -99,24 +101,103 @@ export const markAsArrived = async (req, res) => {
 }
 
 export const rescheduleAppointment = async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
   try {
     const { id } = req.params
     const { ngay_kham, gio_kham, ly_do_doi_lich } = req.body
     
     if (!ngay_kham || !gio_kham) {
+      await session.abortTransaction()
+      session.endSession()
       return res.status(400).json({ success: false, message: 'Vui lòng cung cấp ngày và giờ khám mới' })
     }
 
-    const appointment = await LichHen.findByIdAndUpdate(
-      id,
-      { ngay_kham, gio_kham, ly_do_doi_lich, $inc: { so_lan_thay_doi: 1 } },
-      { new: true }
-    )
+    // 1. Lấy lịch hẹn cũ
+    const appointment = await LichHen.findById(id).session(session)
+    if (!appointment) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
+    }
+
+    const { doctor_id, schedule_id: old_schedule_id, slot_id: old_slot_id } = appointment
+
+    // 2. Tra cứu slot mới trong LichLamViec
+    // Parse ngay_kham (new) to UTC midnight Date
+    const parsedDate = new Date(ngay_kham)
+    parsedDate.setUTCHours(0, 0, 0, 0)
+
+    const newSchedule = await LichLamViec.findOne({
+      doctor_id,
+      ngay: { $gte: parsedDate, $lt: new Date(parsedDate.getTime() + 86400000) },
+      trang_thai_ngay: 'lam_viec',
+      trang_thai_xac_nhan: { $ne: 'tu_choi' },
+      'slots.gio_bat_dau': gio_kham
+    }).session(session)
+
+    if (!newSchedule) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Lịch làm việc của Bác sĩ vào ngày giờ này không tồn tại' })
+    }
+
+    const newSlot = newSchedule.slots.find(s => s.gio_bat_dau === gio_kham)
     
-    if (!appointment) return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
-    
-    res.status(200).json({ success: true, message: 'Đã dời lịch hẹn', data: appointment })
+    // Kiểm tra nếu Lễ tân chọn lại đúng slot của chính lịch hẹn này
+    if (old_schedule_id && old_slot_id && 
+        newSchedule._id.toString() === old_schedule_id.toString() && 
+        newSlot && newSlot._id.toString() === old_slot_id.toString()) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn ngày và giờ khác với lịch hẹn hiện tại' })
+    }
+
+    if (!newSlot || newSlot.status === 'booked') {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Khung giờ này của bác sĩ đã kín' })
+    }
+
+    if (newSlot.status !== 'active') {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Khung giờ này không khả dụng' })
+    }
+
+    // 3. Đánh dấu slot MỚI thành booked
+    newSlot.status = 'booked'
+    await newSchedule.save({ session })
+
+    // 4. Giải phóng slot CŨ thành active
+    if (old_schedule_id && old_slot_id) {
+      const oldSchedule = await LichLamViec.findById(old_schedule_id).session(session)
+      if (oldSchedule) {
+        const oldSlotToFree = oldSchedule.slots.id(old_slot_id)
+        if (oldSlotToFree) {
+          oldSlotToFree.status = 'active'
+          await oldSchedule.save({ session })
+        }
+      }
+    }
+
+    // 5. Cập nhật LichHen với dữ liệu mới
+    appointment.ngay_kham = parsedDate
+    appointment.gio_kham = gio_kham
+    appointment.schedule_id = newSchedule._id
+    appointment.slot_id = newSlot._id
+    appointment.ly_do_doi_lich = ly_do_doi_lich || 'Lễ tân dời lịch'
+    appointment.so_lan_thay_doi = (appointment.so_lan_thay_doi || 0) + 1
+
+    await appointment.save({ session })
+    await session.commitTransaction()
+    session.endSession()
+
+    res.status(200).json({ success: true, message: 'Đã dời lịch hẹn thành công', data: appointment })
   } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
     res.status(500).json({ success: false, message: error.message })
   }
 }
