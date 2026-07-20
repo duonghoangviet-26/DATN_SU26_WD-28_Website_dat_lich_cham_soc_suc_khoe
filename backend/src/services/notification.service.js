@@ -6,9 +6,11 @@ import NguoiDung from '../models/NguoiDung.js'
 import NhatKyThaoTac from '../models/NhatKyThaoTac.js'
 
 const TARGET_ROLES = {
-  tat_ca: ['user', 'patient', 'doctor'],
+  tat_ca: ['user', 'patient', 'doctor', 'receptionist', 'nurse'],
   benh_nhan: ['user', 'patient'],
   bac_si: ['doctor'],
+  le_tan: ['receptionist'],
+  y_ta: ['nurse'],
 }
 
 const TARGETS = Object.keys(TARGET_ROLES)

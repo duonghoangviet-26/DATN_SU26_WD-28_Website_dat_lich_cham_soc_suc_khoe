@@ -7,17 +7,23 @@ import Icon from '@/components/admin/icons'
 import UpdateNotification from './UpdateNotification'
 import Pagination from '@/components/common/Pagination'
 
-const TARGET_COLOR: Record<NotificationTargetAPI, 'gray' | 'blue' | 'green'> = {
-  tat_ca: 'gray', benh_nhan: 'blue', bac_si: 'green',
+const TARGET_COLOR: Record<NotificationTargetAPI, 'gray' | 'blue' | 'green' | 'yellow'> = {
+  tat_ca: 'gray',
+  benh_nhan: 'blue',
+  bac_si: 'green',
+  le_tan: 'yellow',
+  y_ta: 'green',
 }
 
 const TARGET_LABEL: Record<NotificationTargetAPI, string> = {
   tat_ca: 'Tất cả',
   benh_nhan: 'Bệnh nhân',
-  bac_si: 'Bác sĩ'
+  bac_si: 'Bác sĩ',
+  le_tan: 'Lễ tân',
+  y_ta: 'Y tá',
 }
 
-function getTargetColor(target: unknown): 'gray' | 'blue' | 'green' {
+function getTargetColor(target: unknown): 'gray' | 'blue' | 'green' | 'yellow' {
   return typeof target === 'string' && target in TARGET_COLOR
     ? TARGET_COLOR[target as NotificationTargetAPI]
     : 'gray'
@@ -206,9 +212,11 @@ export default function SendNotificationTab() {
                 value={doi_tuong} 
                 onChange={(e) => setDoiTuong(e.target.value as NotificationTargetAPI)}
               >
-                <option value="tat_ca">Tất cả (Bệnh nhân & Bác sĩ)</option>
+                <option value="tat_ca">Tất cả (Bệnh nhân, Bác sĩ, Lễ tân & Y tá)</option>
                 <option value="benh_nhan">Chỉ Bệnh nhân</option>
                 <option value="bac_si">Chỉ Bác sĩ</option>
+                <option value="le_tan">Chỉ Lễ tân</option>
+                <option value="y_ta">Chỉ Y tá</option>
               </select>
             </div>
           </div>
