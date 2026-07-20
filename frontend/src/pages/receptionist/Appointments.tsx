@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axiosInstance from '../../services/axiosInstance';
 import { format } from 'date-fns';
+import { receptionistBookingService, ReceptionistBookingSlot } from '../../services/receptionist-booking.service';
 
 interface Appointment {
   _id: string;
@@ -10,7 +11,7 @@ interface Appointment {
   loai_kham: string;
   payment_status: string;
   user_id: { ho_ten: string; so_dien_thoai: string } | null;
-  doctor_id: { user_id?: { ho_ten: string } } | null;
+  doctor_id: { _id?: string; user_id?: { ho_ten: string } } | null;
   ten_khach?: string;
   so_dien_thoai_khach?: string;
   ma_lich_hen?: string;
@@ -47,6 +48,8 @@ export default function Appointments() {
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
   const [rescheduleReason, setRescheduleReason] = useState('');
+  const [selectedDoctorId, setSelectedDoctorId] = useState('');
+  const [availableSlots, setAvailableSlots] = useState<ReceptionistBookingSlot[]>([]);
 
   // States cho Modal Chi tiết
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -117,15 +120,27 @@ export default function Appointments() {
     }
   };
 
-  const handleReschedule = (id: string, oldDate: string, oldTime: string) => {
-    setSelectedAppointmentId(id);
+  const handleReschedule = (apt: Appointment) => {
+    setSelectedAppointmentId(apt._id);
+    const docId = apt.doctor_id?._id || '';
+    setSelectedDoctorId(docId);
     // Format date from DB string to YYYY-MM-DD for input type="date"
-    const dateObj = new Date(oldDate);
+    const dateObj = new Date(apt.ngay_kham);
     setNewDate(format(dateObj, 'yyyy-MM-dd'));
-    setNewTime(oldTime);
+    setNewTime(''); // Reset giờ vì list giờ sẽ fetch lại
     setRescheduleReason('');
     setRescheduleModalOpen(true);
   };
+
+  useEffect(() => {
+    if (selectedDoctorId && newDate && rescheduleModalOpen) {
+      receptionistBookingService.getSlots(selectedDoctorId, newDate).then(slots => {
+        setAvailableSlots(slots);
+      }).catch(() => {
+        setAvailableSlots([]);
+      });
+    }
+  }, [selectedDoctorId, newDate, rescheduleModalOpen]);
 
   const confirmReschedule = async () => {
     if (!selectedAppointmentId || !newDate || !newTime || !rescheduleReason.trim()) {
@@ -323,7 +338,7 @@ export default function Appointments() {
                             )}
                             {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                               <button
-                                onClick={() => handleReschedule(apt._id, apt.ngay_kham, apt.gio_kham)}
+                                onClick={() => handleReschedule(apt)}
                                 className="px-2 py-1 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded text-xs font-medium"
                               >
                                 Dời lịch
@@ -413,12 +428,20 @@ export default function Appointments() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Giờ khám mới</label>
-                <input
-                  type="time"
+                <select
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
-                />
+                >
+                  <option value="">-- Chọn giờ khám --</option>
+                  {availableSlots.length > 0 ? availableSlots.map((slot) => (
+                    <option key={slot.id} value={slot.gio_bat_dau}>
+                      {slot.gio_bat_dau} - {slot.gio_ket_thuc}
+                    </option>
+                  )) : (
+                    <option value="" disabled>Không có khung giờ rảnh</option>
+                  )}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Lý do dời lịch</label>
