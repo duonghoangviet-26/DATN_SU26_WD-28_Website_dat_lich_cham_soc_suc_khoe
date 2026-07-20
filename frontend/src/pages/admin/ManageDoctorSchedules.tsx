@@ -51,10 +51,10 @@ const ACTION_LABEL: Record<AdminDoctorScheduleAuditLog['hanh_dong'], string> = {
   auto_generate: 'Tự động sinh lịch',
   manual_create: 'Tạo lịch thủ công',
   update_workday: 'Cập nhật ngày',
-  update_slot: 'Cập nhật slot',
+  update_slot: 'Cập nhật khung giờ',
   doctor_confirm: 'Bác sĩ xác nhận',
   doctor_reject: 'Bác sĩ từ chối',
-  doctor_request_cancel_slot: 'Bác sĩ xin hủy slot',
+  doctor_request_cancel_slot: 'Bác sĩ xin hủy khung giờ',
 }
 
 const ACTION_COLOR: Record<AdminDoctorScheduleAuditLog['hanh_dong'], 'green' | 'gray' | 'yellow' | 'red' | 'blue'> = {
@@ -157,7 +157,7 @@ function SlotEditorModal({
       setWorkingCopy(updated)
       await onSaved()
     } catch (nextError: any) {
-      setError(nextError?.response?.data?.message || nextError.message || 'Không thể lưu slot.')
+      setError(nextError?.response?.data?.message || nextError.message || 'Không thể lưu khung giờ.')
     } finally {
       setSavingSlotId(null)
     }
@@ -180,7 +180,7 @@ function SlotEditorModal({
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Chỉnh lịch làm việc bác sĩ</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Ngày {workingCopy.ngay} • {workingCopy.slots.length} slot
+              Ngày {workingCopy.ngay} • {workingCopy.slots.length} khung giờ
             </p>
           </div>
           <button onClick={onClose} className="btn-secondary">Đóng</button>
@@ -218,7 +218,7 @@ function SlotEditorModal({
                           onChange={(event) => updateSlotField(slot._id, 'gio_bat_dau', event.target.value)}
                           className="input w-full"
                           disabled={immutableStatus}
-                          title={immutableStatus ? 'Không thể đổi giờ của slot đã có lịch hẹn' : undefined}
+                          title={immutableStatus ? 'Không thể đổi giờ của khung giờ đã có lịch hẹn' : undefined}
                         />
                       </td>
                       <td className="px-3 py-3">
@@ -228,7 +228,7 @@ function SlotEditorModal({
                           onChange={(event) => updateSlotField(slot._id, 'gio_ket_thuc', event.target.value)}
                           className="input w-full"
                           disabled={immutableStatus}
-                          title={immutableStatus ? 'Không thể đổi giờ của slot đã có lịch hẹn' : undefined}
+                          title={immutableStatus ? 'Không thể đổi giờ của khung giờ đã có lịch hẹn' : undefined}
                         />
                       </td>
                       <td className="px-3 py-3">
@@ -239,7 +239,7 @@ function SlotEditorModal({
                           className="input w-full"
                           placeholder="Ví dụ: Phòng 101"
                           disabled={immutableStatus}
-                          title={immutableStatus ? 'Không thể đổi phòng của slot đã có lịch hẹn' : undefined}
+                          title={immutableStatus ? 'Không thể đổi phòng của khung giờ đã có lịch hẹn' : undefined}
                         />
                       </td>
                       <td className="px-3 py-3">
@@ -248,7 +248,7 @@ function SlotEditorModal({
                           onChange={(event) => updateSlotField(slot._id, 'status', event.target.value)}
                           className={`h-10 w-full rounded-xl border px-3 text-sm font-semibold shadow-sm outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none ${SLOT_STATUS_SELECT_CLASS[slot.status]}`}
                           disabled={immutableStatus}
-                          title={immutableStatus ? 'Slot đã có lịch hoặc đang chờ thanh toán nên không thể đổi trạng thái tại đây' : 'Chọn trạng thái slot'}
+                          title={immutableStatus ? 'Khung giờ đã có lịch hoặc đang chờ thanh toán nên không thể đổi trạng thái tại đây' : 'Chọn trạng thái khung giờ'}
                         >
                           {SLOT_STATUS_OPTIONS.map((status) => (
                             <option key={status} value={status}>
@@ -270,9 +270,9 @@ function SlotEditorModal({
                           onClick={() => saveSlot(slot)}
                           disabled={savingSlotId === slot._id || immutableStatus}
                           className="btn-primary disabled:opacity-50"
-                          title={immutableStatus ? 'Slot đã có lịch hẹn nên không thể chỉnh sửa' : undefined}
+                          title={immutableStatus ? 'Khung giờ đã có lịch hẹn nên không thể chỉnh sửa' : undefined}
                         >
-                          {savingSlotId === slot._id ? 'Đang lưu...' : 'Lưu slot'}
+                          {savingSlotId === slot._id ? 'Đang lưu...' : 'Lưu khung giờ'}
                         </button>
                       </td>
                     </tr>
@@ -288,7 +288,7 @@ function SlotEditorModal({
               totalPages={totalPages}
               totalItems={workingCopy.slots.length}
               currentItemCount={visibleSlots.length}
-              itemLabel="slot"
+              itemLabel="khung giờ"
               pageSize={itemsPerPage}
               onPageChange={setPage}
             />
@@ -553,7 +553,7 @@ function ScheduleAuditModal({
               totalPages={totalPages}
               totalItems={totalItems}
               currentItemCount={logs.length}
-              itemLabel="log"
+              itemLabel="bản ghi"
               pageSize={10}
               onPageChange={onPageChange}
             />
@@ -787,7 +787,7 @@ export default function ManageDoctorSchedules() {
     <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Lịch làm việc bác sĩ"
-        description="Lịch làm việc được hệ thống tự động sinh và bù theo tuần. Admin theo dõi trạng thái xác nhận, chỉnh slot khi có thay đổi đặc biệt và xem lịch sử để truy vết."
+        description="Lịch làm việc được hệ thống tự động sinh và bù theo tuần. Admin theo dõi trạng thái xác nhận, chỉnh khung giờ khi có thay đổi đặc biệt và xem lịch sử để truy vết."
       />
 
       <div className="card p-4">
