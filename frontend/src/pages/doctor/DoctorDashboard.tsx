@@ -140,7 +140,7 @@ export default function DoctorDashboard() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Y tá hỗ trợ</p>
                 <p className="mt-0.5 text-sm font-medium text-slate-700">
-                  {overview!.y_ta_ho_tro ?? 'Chưa phân công y tá'}
+                  {overview!.y_ta_ho_tro?.ho_ten ?? 'Chưa phân công y tá'}
                 </p>
               </div>
             </div>

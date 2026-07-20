@@ -923,13 +923,14 @@ export interface DoctorTodayAppointment {
 }
 
 // Tổng quan công việc "hôm nay" cho Dashboard bác sĩ — khác DoctorStats (tích lũy/tháng).
-// y_ta_ho_tro luôn null ở giai đoạn hiện tại — hệ thống chưa có module gán y tá cho ca làm việc.
+// y_ta_ho_tro: object { id, ho_ten } khi ca hôm nay đã được gán y tá (LichLamViec.nurse_id),
+// null khi chưa phân công. Backend trả object (không phải chuỗi tên) — xem stats.controller.js.
 export interface DoctorTodayOverview {
     ho_ten: string;
     chuyen_khoa: string;
     ca_lam_viec: { gio_bat_dau: string; gio_ket_thuc: string } | null;
     phong_kham: string | null;
-    y_ta_ho_tro: string | null;
+    y_ta_ho_tro: { id: string; ho_ten: string } | null;
     tong_lich_hen: number;
     cho_kham: number;
     dang_kham: number;
