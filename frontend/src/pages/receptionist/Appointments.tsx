@@ -376,7 +376,7 @@ export default function Appointments() {
                       </td>
                       <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {activeTab !== 'past' && (
+                        {activeTab !== 'past' && !isPendingAndOverdue && (
                           <>
                             {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                               <button
