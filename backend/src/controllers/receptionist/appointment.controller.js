@@ -6,7 +6,9 @@ import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 export const getAppointments = async (req, res) => {
   try {
-    const { date, status, timeframe, search } = req.query
+    const { date, status, timeframe, search, page = 1, limit = 10 } = req.query
+    const pageNum = parseInt(page) || 1
+    const limitNum = parseInt(limit) || 10
     const query = { loai_kham: 'clinic' }
     
     if (search) {
@@ -58,6 +60,9 @@ export const getAppointments = async (req, res) => {
       sortOption = { ngay_kham: -1, gio_kham: -1 }
     }
 
+    const totalDocs = await LichHen.countDocuments(query)
+    const totalPages = Math.ceil(totalDocs / limitNum)
+
     const appointments = await LichHen.find(query)
       .populate('user_id', 'ho_ten so_dien_thoai email anh_dai_dien')
       .populate({
@@ -65,8 +70,19 @@ export const getAppointments = async (req, res) => {
         populate: { path: 'user_id', select: 'ho_ten' }
       })
       .sort(sortOption)
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
       
-    res.status(200).json({ success: true, data: appointments })
+    res.status(200).json({ 
+      success: true, 
+      data: appointments,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        totalDocs,
+        totalPages
+      }
+    })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }

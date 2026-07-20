@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axiosInstance from '../../services/axiosInstance';
 import { format } from 'date-fns';
+import Pagination from '../../components/common/Pagination';
 import { receptionistBookingService, ReceptionistBookingSlot } from '../../services/receptionist-booking.service';
 
 interface Appointment {
@@ -42,6 +43,8 @@ export default function Appointments() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   
   const isFirstSearchRender = useRef(true);
   
@@ -62,12 +65,12 @@ export default function Appointments() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedDetailAppointment, setSelectedDetailAppointment] = useState<Appointment | null>(null);
 
-  const fetchAppointments = async () => {
+  const fetchAppointments = async (page = currentPage) => {
     try {
       setLoading(true);
       setError('');
       
-      let url = `/receptionist/appointments?timeframe=${activeTab}`;
+      let url = `/receptionist/appointments?timeframe=${activeTab}&page=${page}&limit=10`;
       if (filterDate) {
         url += `&date=${filterDate}`;
       }
@@ -78,6 +81,10 @@ export default function Appointments() {
       const res = await axiosInstance.get(url);
       if (res.data.success) {
         setAppointments(res.data.data);
+        if (res.data.pagination) {
+          setCurrentPage(res.data.pagination.page);
+          setTotalPages(res.data.pagination.totalPages);
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Lỗi khi tải danh sách lịch hẹn');
@@ -87,7 +94,7 @@ export default function Appointments() {
   };
 
   useEffect(() => {
-    fetchAppointments();
+    fetchAppointments(1);
   }, [activeTab, filterDate]); // Re-fetch when tab or date changes
 
   // Thêm một useEffect để fetch với debounce cho search
@@ -97,10 +104,14 @@ export default function Appointments() {
       return;
     }
     const timer = setTimeout(() => {
-      fetchAppointments();
+      fetchAppointments(1);
     }, 500); // 500ms delay for typing
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const handlePageChange = (newPage: number) => {
+    fetchAppointments(newPage);
+  };
 
   const handleArrived = async (id: string) => {
     try {
@@ -386,6 +397,15 @@ export default function Appointments() {
               )}
             </tbody>
           </table>
+        </div>
+        
+        {/* Component Phân trang */}
+        <div className="p-4 border-t border-slate-200">
+          <Pagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
         </div>
       </div>
 
