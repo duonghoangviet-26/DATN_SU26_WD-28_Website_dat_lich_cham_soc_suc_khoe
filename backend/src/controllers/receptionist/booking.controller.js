@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 import {
-  BacSi, LichLamViec, LichHen,
+  BacSi, LichLamViec, LichHen, NguoiDung,
   ChuyenKhoa, DichVu, HoaDon, ThanhToan,
 } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
@@ -28,7 +28,8 @@ function buildSlotDateTime(dateOnly, hhmm) {
   const [hours, minutes] = String(hhmm || '').split(':').map(Number)
   if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
   const dateTime = new Date(dateOnly)
-  dateTime.setUTCHours(hours, minutes, 0, 0)
+  // Tính theo giờ Việt Nam (UTC+7) nên ta lấy hours - 7 để ra giờ UTC tương ứng
+  dateTime.setUTCHours(hours - 7, minutes, 0, 0)
   return dateTime
 }
 
@@ -169,9 +170,21 @@ export async function createBooking(req, res) {
       return fail(res, statusCode, message)
     }
 
-    const { doctor_id, schedule_id, slot_id, ngay_kham, ten_khach, so_dien_thoai_khach, ly_do_kham, payment_method } = req.body
+    const { doctor_id, schedule_id, slot_id, ngay_kham, ten_khach, so_dien_thoai_khach, ly_do_kham, payment_method, user_id } = req.body
     if (!doctor_id || !schedule_id || !slot_id || !ngay_kham || !ten_khach || !so_dien_thoai_khach || !payment_method) {
       return rollbackFail(400, 'Thiếu thông tin bắt buộc')
+    }
+
+    let finalUserId = user_id
+    if (!finalUserId && so_dien_thoai_khach) {
+      const existingUser = await NguoiDung.findOne({ 
+        so_dien_thoai: so_dien_thoai_khach, 
+        status: 'active', 
+        role: { $in: ['user', 'patient'] } 
+      }).lean()
+      if (existingUser) {
+        finalUserId = existingUser._id
+      }
     }
 
     const appointmentDate = parseDateOnly(ngay_kham)
@@ -194,10 +207,14 @@ export async function createBooking(req, res) {
 
     const appointmentCode = await nextAppointmentCode(session, appointmentDate)
     const gia_kham = doc.phi_kham ?? doc.gia_kham ?? 0
+    
+    if (gia_kham === undefined || gia_kham === null || gia_kham <= 0) {
+      return rollbackFail(400, 'Bác sĩ chưa được cấu hình giá khám hợp lệ. Vui lòng kiểm tra lại cấu hình Bác sĩ.')
+    }
 
     const isPaid = payment_method === 'cash'
     const [appointment] = await LichHen.create([{
-      doctor_id: doc._id, schedule_id, slot_id,
+      doctor_id: doc._id, schedule_id, slot_id, user_id: finalUserId || null,
       chi_nhanh_id: doc.chi_nhanh_id ?? null,
       specialty_id: doc.specialties?.[0]?._id ?? null,
       ma_lich_hen: appointmentCode,
