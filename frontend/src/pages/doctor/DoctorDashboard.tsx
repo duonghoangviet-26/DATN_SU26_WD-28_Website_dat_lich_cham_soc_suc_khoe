@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
@@ -223,23 +224,57 @@ export default function DoctorDashboard() {
             </span>
             Tỉ lệ hoạt động
           </h2>
-          <div className="space-y-3">
-            {[
-              { label: 'Hoàn thành', value: stats?.ty_le_hoan_thanh ?? 0, color: 'bg-green-500' },
-              { label: 'Bị hủy', value: stats?.ty_le_huy ?? 0, color: 'bg-red-400' },
-              { label: 'Khác', value: 100 - (stats?.ty_le_hoan_thanh ?? 0) - (stats?.ty_le_huy ?? 0), color: 'bg-slate-200' },
-            ].map((item) => (
-              <div key={item.label}>
-                <div className="mb-1 flex justify-between text-xs">
-                  <span className="text-slate-600">{item.label}</span>
-                  <span className="font-semibold text-slate-700">{item.value.toFixed(1)}%</span>
+          {(() => {
+            const hoanThanh = stats?.ty_le_hoan_thanh ?? 0
+            const huy = stats?.ty_le_huy ?? 0
+            const khac = Math.max(0, 100 - hoanThanh - huy)
+            const pieData = [
+              { label: 'Hoàn thành', value: hoanThanh, color: '#22c55e' },
+              { label: 'Bị hủy', value: huy, color: '#f87171' },
+              { label: 'Khác', value: khac, color: '#e2e8f0' },
+            ]
+            const isEmpty = hoanThanh === 0 && huy === 0 && khac === 0
+            return (
+              <>
+                <div className="h-44 w-full" aria-label="Biểu đồ tỉ lệ hoạt động">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={isEmpty ? [{ label: 'Chưa có dữ liệu', value: 1, color: '#e2e8f0' }] : pieData}
+                        dataKey="value"
+                        nameKey="label"
+                        innerRadius={48}
+                        outerRadius={70}
+                        paddingAngle={2}
+                        isAnimationActive
+                        animationDuration={500}
+                      >
+                        {(isEmpty ? [{ label: 'Chưa có dữ liệu', value: 1, color: '#e2e8f0' }] : pieData).map((d) => (
+                          <Cell key={d.label} fill={d.color} stroke="none" />
+                        ))}
+                      </Pie>
+                      {!isEmpty && (
+                        <Tooltip
+                          formatter={(value: number | string | undefined, name: string | undefined) => [`${Number(value ?? 0).toFixed(1)}%`, name]}
+                          contentStyle={{ border: 0, borderRadius: 8, background: '#0f172a', color: '#fff', fontSize: 12 }}
+                          itemStyle={{ color: '#fff' }}
+                        />
+                      )}
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.value}%` }} />
+                <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                  {pieData.map((d) => (
+                    <div key={d.label} className="flex items-center gap-1.5 text-xs">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
+                      <span className="text-slate-600">{d.label}</span>
+                      <span className="font-semibold text-slate-700">{d.value.toFixed(1)}%</span>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
-          </div>
+              </>
+            )
+          })()}
         </div>
 
         {/* Đánh giá gần đây */}
