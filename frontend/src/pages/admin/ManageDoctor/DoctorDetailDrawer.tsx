@@ -22,6 +22,42 @@ const ACTION_LABEL_MAP: Record<string, string> = {
   UPDATE_INFO: 'Cập nhật thông tin',
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  anh_dai_dien: 'Ảnh đại diện',
+  tieu_su: 'Tiểu sử',
+  bang_cap: 'Bằng cấp',
+  kinh_nghiem: 'Kinh nghiệm',
+  so_nam_kinh_nghiem: 'Số năm kinh nghiệm',
+  phi_tu_van: 'Phí tư vấn',
+  phi_kham: 'Phí khám',
+  la_hien: 'Hiển thị công khai',
+  phong_kham_mac_dinh: 'Phòng khám mặc định',
+  chi_nhanh_id: 'Chi nhánh',
+  trang_thai: 'Trạng thái làm việc',
+  trang_thai_duyet: 'Trạng thái duyệt',
+  ly_do_tu_choi: 'Lý do từ chối',
+  specialties: 'Chuyên khoa',
+  services: 'Dịch vụ',
+}
+
+const formatLogValue = (field: string, value: unknown) => {
+  if (value === null || value === undefined || value === '') return 'Trống'
+  if (field === 'anh_dai_dien') return value ? 'Có ảnh' : 'Không có ảnh'
+  if (field === 'phi_kham' || field === 'phi_tu_van') return formatPrice(Number(value))
+  if (field === 'trang_thai_duyet') return DOCTOR_APPROVAL_LABEL[value as DoctorApproval] || String(value)
+  if (field === 'la_hien' || typeof value === 'boolean') return value ? 'Có' : 'Không'
+  if (Array.isArray(value)) return value.length ? value.map((item) => typeof item === 'object' ? JSON.stringify(item) : String(item)).join(', ') : 'Trống'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+const getChangedFields = (log: DoctorAuditLog) => {
+  const oldData = log.du_lieu_cu || {}
+  const newData = log.du_lieu_moi || {}
+  const keys = Array.from(new Set([...Object.keys(oldData), ...Object.keys(newData)]))
+  return keys.filter((key) => JSON.stringify(oldData[key] ?? null) !== JSON.stringify(newData[key] ?? null))
+}
+
 interface Props {
   doctorId: string | null
   onClose: () => void
@@ -269,6 +305,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                         const isApprove = log.hanh_dong === 'APPROVE_DOCTOR' || log.hanh_dong === 'RESTORE_DOCTOR'
                         const isReject = log.hanh_dong === 'REJECT_DOCTOR'
                         const isSuspend = log.hanh_dong === 'SUSPEND_DOCTOR'
+                        const changedFields = getChangedFields(log)
                         
                         let icon = 'check'
                         let bg = 'bg-green-100 text-green-600'
@@ -293,6 +330,28 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                               {log.ly_do && (
                                 <div className="mt-2 text-sm bg-slate-50 p-2.5 rounded text-slate-700 border border-slate-100">
                                   <strong>Lý do:</strong> {log.ly_do}
+                                </div>
+                              )}
+                              {changedFields.length > 0 && (
+                                <div className="mt-3 overflow-hidden rounded-lg border border-slate-100">
+                                  <table className="w-full text-xs">
+                                    <thead className="bg-slate-50 text-slate-500">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left font-semibold">Trường</th>
+                                        <th className="px-3 py-2 text-left font-semibold">Trước</th>
+                                        <th className="px-3 py-2 text-left font-semibold">Sau</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 bg-white">
+                                      {changedFields.map((field) => (
+                                        <tr key={field}>
+                                          <td className="px-3 py-2 font-semibold text-slate-600">{FIELD_LABELS[field] || field}</td>
+                                          <td className="max-w-[180px] break-words px-3 py-2 text-red-500 line-through">{formatLogValue(field, log.du_lieu_cu?.[field])}</td>
+                                          <td className="max-w-[180px] break-words px-3 py-2 font-semibold text-emerald-600">{formatLogValue(field, log.du_lieu_moi?.[field])}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
                                 </div>
                               )}
                             </div>

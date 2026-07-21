@@ -945,14 +945,8 @@ export interface DoctorAuditLog {
     };
     hanh_dong: string;
     ly_do?: string | null;
-    du_lieu_cu?: {
-        trang_thai_duyet?: string;
-        ly_do_tu_choi?: string | null;
-    } | null;
-    du_lieu_moi?: {
-        trang_thai_duyet?: string;
-        ly_do_tu_choi?: string | null;
-    } | null;
+    du_lieu_cu?: Record<string, unknown> | null;
+    du_lieu_moi?: Record<string, unknown> | null;
     ngay_tao: string;
 }
 
@@ -975,6 +969,7 @@ export interface DoctorUpdatePayload {
     so_nam_kinh_nghiem?: number;
     phi_kham?: number;
     la_hien?: boolean;
+    anh_dai_dien?: string | null;
     admin_id: string;
 }
 

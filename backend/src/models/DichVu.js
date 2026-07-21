@@ -89,6 +89,31 @@ const serviceSchema = new mongoose.Schema(
         message: 'Doi tuong ap dung khong hop le',
       },
     },
+    loai_goi: {
+      type: String,
+      default: null,
+      validate: {
+        validator: (value) => value == null || ['goi_don', 'goi_gia_dinh'].includes(value),
+        message: 'Loai goi khong hop le',
+      },
+    },
+    so_nguoi_ap_dung: {
+      type: Number,
+      default: null,
+      min: [1, 'So nguoi ap dung toi thieu la 1'],
+      max: [12, 'So nguoi ap dung toi da la 12'],
+      validate: {
+        validator: (value) => value == null || Number.isInteger(value),
+        message: 'So nguoi ap dung phai la so nguyen',
+      },
+    },
+    dich_vu_con: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DichVu' }],
+    phan_tram_giam_gia: {
+      type: Number,
+      default: null,
+      min: [0, 'Phan tram giam gia khong duoc am'],
+      max: [90, 'Phan tram giam gia khong vuot qua 90'],
+    },
     khu_vuc:      { type: [String], default: [] }, // home only
     nguoi_tao_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     // inactive mặc định — Admin review nội dung trước khi công khai (tránh BN thấy giá/mô tả sai)
@@ -117,6 +142,9 @@ serviceSchema.pre('validate', async function () {
     const seq = await Counter.nextSeq('dich_vu')
     this.ma_dich_vu = 'DV' + String(seq).padStart(3, '0')
   }
+  if (this.loai === 'home' && (this.isNew || this.isModified('loai'))) {
+    throw new Error('Dich vu tai nha da ngung ho tro tao moi')
+  }
   if (this.loai === 'home') {
     // Đặt lịch cố định T2–T7 08:00–17:00 — có ý nghĩa vì home đặt lịch riêng (chọn BS + slot)
     if (!this.ngay_ap_dung) this.ngay_ap_dung = 'T2–T7'
@@ -134,6 +162,21 @@ serviceSchema.pre('validate', async function () {
     this.gio_ket_thuc    = null
     this.khu_vuc         = []
     // specialty_id required for related — validated in controller trả 400, không throw ở đây
+  }
+
+  if (!this.la_goi) {
+    this.loai_goi = null
+    this.so_nguoi_ap_dung = null
+    this.dich_vu_con = []
+    this.phan_tram_giam_gia = null
+  } else {
+    if (!this.loai_goi) this.loai_goi = 'goi_don'
+    if (!this.so_nguoi_ap_dung) this.so_nguoi_ap_dung = this.loai_goi === 'goi_gia_dinh' ? 4 : 1
+    if (this.loai_goi === 'goi_don') {
+      this.so_nguoi_ap_dung = 1
+    }
+    if (!Array.isArray(this.dich_vu_con)) this.dich_vu_con = []
+    if (this.phan_tram_giam_gia == null) this.phan_tram_giam_gia = this.loai_goi === 'goi_gia_dinh' ? 15 : 0
   }
 })
 

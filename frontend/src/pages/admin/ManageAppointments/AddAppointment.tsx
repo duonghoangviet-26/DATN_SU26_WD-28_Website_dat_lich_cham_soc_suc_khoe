@@ -130,8 +130,8 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
       )}
 
       <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Tùy chọn khám tại nhà đã được tạm ẩn khỏi UI admin. Nếu hệ thống còn dữ liệu lịch cũ kiểu
-        này, chúng vẫn được giữ nguyên để xem lịch sử, nhưng form mới chỉ tạo lịch khám tại phòng khám.
+        Dịch vụ đặt lịch tại nhà đã ngừng hỗ trợ tạo mới. Nếu hệ thống còn dữ liệu lịch cũ kiểu này,
+        admin vẫn có thể xem để đối soát nhưng form mới chỉ tạo lịch khám tại phòng khám.
       </div>
 
       <form onSubmit={handleSubmit} className="grid gap-6 sm:grid-cols-2">

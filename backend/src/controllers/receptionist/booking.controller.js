@@ -84,11 +84,7 @@ export async function getSpecialties(req, res) {
 
 export async function getServices(req, res) {
   try {
-    const services = await DichVu.find({ loai: 'home', status: 'active' }).populate('specialty_id', 'ten').sort({ ten: 1 }).lean()
-    return ok(res, services.map((s) => ({
-      id: s._id, ten: s.ten, gia: s.gia, mo_ta: s.mo_ta, mo_ta_ngan: s.mo_ta_ngan,
-      thoi_gian_phut: s.thoi_gian_phut, khu_vuc: s.khu_vuc, chuyen_khoa: s.specialty_id?.ten ?? null,
-    })))
+    return ok(res, [])
   } catch (err) {
     return fail(res, 500, err.message)
   }
