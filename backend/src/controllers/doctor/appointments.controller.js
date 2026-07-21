@@ -1,4 +1,5 @@
-import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc } from '../../models/index.js'
+import mongoose from 'mongoose'
+import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
@@ -77,6 +78,69 @@ export async function list(req, res) {
   } catch (err) {
     return fail(res, 500, err.message)
   }
+}
+
+// ─── GET /api/doctor/queue?date= ────────────────────────────────────────────
+// "Hồ sơ chờ khám" — toàn bộ lượt khám (online + offline) đã check-in gán cho bác sĩ này.
+// Neo trên HangDoi; join KetQuaKham theo hang_doi_id (và appointment_id cho dữ liệu cũ).
+const HANGDOI_WEIGHT = { online_uu_tien: 0, online_thuong: 1, offline: 2 }
+
+function trangThaiTongHop(entry, kq) {
+  if (entry.trang_thai === 'cancelled') return 'da_huy'
+  if (entry.trang_thai === 'skipped') return 'bo_luot'
+  if (entry.trang_thai === 'dang_cho') return 'dang_cho'
+  if (entry.trang_thai === 'da_goi') return 'da_goi'
+  if (entry.trang_thai === 'trong_phong') return 'trong_phong'
+  // hoan_thanh: phân theo trạng thái hồ sơ
+  if (!kq || kq.status === 'ban_nhap') return 'cho_nhap_ho_so'
+  if (kq.status === 'cho_xac_nhan' || kq.status === 'yeu_cau_chinh_sua') return 'cho_xac_nhan'
+  if (kq.status === 'da_xac_nhan') return 'da_xong'
+  return 'cho_nhap_ho_so'
+}
+
+export async function examQueue(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+    const day = req.query.date ? new Date(req.query.date) : new Date()
+    const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
+
+    const entries = await HangDoi.find({ doctor_id: docId, checkin_time: { $gte: dayStart, $lt: dayEnd } }).lean()
+    if (entries.length === 0) return ok(res, [])
+
+    // Join hồ sơ: gom theo hang_doi_id (mới) + appointment_id (dữ liệu cũ).
+    const hangDoiIds = entries.map((e) => e._id)
+    const apptIds = entries.filter((e) => e.appointment_id).map((e) => e.appointment_id)
+    const results = await KetQuaKham.find({
+      $or: [{ hang_doi_id: { $in: hangDoiIds } }, { appointment_id: { $in: apptIds } }],
+    }).select('hang_doi_id appointment_id status').lean()
+    const kqByHangDoi = new Map(results.filter((r) => r.hang_doi_id).map((r) => [String(r.hang_doi_id), r]))
+    const kqByAppt = new Map(results.filter((r) => r.appointment_id).map((r) => [String(r.appointment_id), r]))
+
+    const rows = entries
+      .sort((a, b) => (HANGDOI_WEIGHT[a.muc_uu_tien] - HANGDOI_WEIGHT[b.muc_uu_tien]) || (new Date(a.checkin_time) - new Date(b.checkin_time)))
+      .map((e) => {
+        const kq = kqByHangDoi.get(String(e._id)) || (e.appointment_id ? kqByAppt.get(String(e.appointment_id)) : null)
+        return {
+          id: e._id,
+          appointment_id: e.appointment_id ?? null,
+          nguon: e.nguon,
+          ten_benh_nhan: e.ten_benh_nhan,
+          tuoi: e.tuoi ?? null,
+          gioi_tinh: e.gioi_tinh ?? null,
+          phong_kham: e.phong_kham ?? null,
+          muc_uu_tien: e.muc_uu_tien,
+          hang_doi_trang_thai: e.trang_thai,
+          checkin_time: e.checkin_time,
+          ket_qua_id: kq?._id ?? null,
+          ket_qua_status: kq?.status ?? null,
+          trang_thai_tong_hop: trangThaiTongHop(e, kq),
+        }
+      })
+    return ok(res, rows)
+  } catch (err) { return fail(res, 500, err.message) }
 }
 
 // ─── GET /api/doctor/appointments/:id ───────────────────────────────────────
@@ -457,9 +521,99 @@ export async function confirmResult(req, res) {
   }
 }
 
-// Luồng "yêu cầu chỉnh sửa" (đẩy hồ sơ ngược về y tá) ĐÃ GỠ 2026-07-16: bác sĩ sửa trực tiếp
-// khi xác nhận (xem confirmResult + applyResultEdits). Giá trị enum 'yeu_cau_chinh_sua' vẫn
-// giữ trong KetQuaKham schema cho dữ liệu cũ. Xem docs/Bác sĩ/Thiet ke - Gop sua va xac nhan...
+// ─── PATCH /api/doctor/appointments/result/:ketQuaId/confirm-by-record ───────
+// Xác nhận hồ sơ theo ket_qua_id — dùng cho lượt khám offline (không có LichHen).
+// Online vẫn dùng endpoint cũ theo appointment_id. Chỉ bác sĩ phụ trách hồ sơ mới xác nhận.
+export async function confirmResultByRecord(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+    const result = await KetQuaKham.findOne({ _id: req.params.ketQuaId, bac_si_phu_trach_id: docId })
+    if (!result) return fail(res, 404, 'Không tìm thấy hồ sơ khám')
+    if (result.status !== 'cho_xac_nhan') {
+      return fail(res, 409, 'Chỉ xác nhận được hồ sơ đang chờ xác nhận')
+    }
+
+    // appt chỉ có với hồ sơ online — dùng để validate ngày tái khám + tự complete LichHen.
+    // Offline: KetQuaKham không có field member_id — lấy member_id/ten_khach/ngay_kham (checkin_time)
+    // từ chính HangDoi (đã join qua hang_doi_id) để applyResultEdits tạo đơn thuốc mới (nếu có) đúng
+    // chủ, tránh đơn thuốc mồ côi (member_id/ten_khach đều null) khi bác sĩ kê đơn lúc xác nhận offline.
+    const appt = result.appointment_id ? await LichHen.findById(result.appointment_id) : null
+    let fallback = { ngay_kham: null, member_id: null, ten_khach: null }
+    if (!appt && result.hang_doi_id) {
+      const entry = await HangDoi.findById(result.hang_doi_id).lean()
+      fallback = { ngay_kham: entry?.checkin_time ?? null, member_id: entry?.member_id ?? null, ten_khach: entry?.ten_benh_nhan ?? null }
+    }
+    const edit = await applyResultEdits(result, req.body ?? {}, appt ?? fallback, docId)
+    if (!edit.ok) return fail(res, edit.status, edit.message)
+
+    const coSua = ['chan_doan', 'huong_dan_dieu_tri', 'ghi_chu', 'ngay_tai_kham', 'thuoc'].some((k) => req.body?.[k] !== undefined)
+    result.status = 'da_xac_nhan'
+    result.nguoi_xac_nhan_id = req.user.id
+    result.thoi_diem_xac_nhan = new Date()
+    result.lich_su_sua.push({ nguoi_sua_id: req.user.id, thoi_diem_sua: new Date(),
+      noi_dung: coSua ? 'Bác sĩ chỉnh sửa và xác nhận hồ sơ khám' : 'Bác sĩ xác nhận hồ sơ khám' })
+    await result.save()
+
+    // Online: đánh dấu LichHen completed (offline: không có LichHen — lượt khám đã hoan_thanh ở HangDoi).
+    if (appt && appt.status !== 'completed' && result.dich_vu_phat_sinh.length === 0) {
+      appt.status = 'completed'
+      await appt.save()
+    }
+    return ok(res, { id: result._id, status: result.status }, 'Đã xác nhận hồ sơ khám')
+  } catch (err) {
+    if (err.name === 'ValidationError') return fail(res, 400, err.message)
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── PATCH /api/doctor/appointments/:id/result/request-revision ──────────────
+// KHÔI PHỤC 2026-07-19 (QĐ-1/A, PROMPT 28): bác sĩ đẩy hồ sơ 'cho_xac_nhan' ngược về y tá để
+// chỉnh sửa, thay vì tự sửa trực tiếp. Đây là điểm tích hợp doctor–nurse bắt buộc cho luồng
+// revision (test #5/#6). "Lưu & Xác nhận" (confirmResult) VẪN giữ — bác sĩ chọn 1 trong 2.
+// KetQuaKham -> yeu_cau_chinh_sua kèm lý do; LichHen -> waiting_record (đối xứng với submit của
+// y tá -> waiting_doctor_confirm) để y tá thấy việc cần làm. Hai cập nhật NGUYÊN TỬ (transaction)
+// tránh lệch trạng thái giữa hồ sơ và lịch hẹn. Chỉ từ 'cho_xac_nhan'; chỉ bác sĩ phụ trách.
+export async function requestRevision(req, res) {
+  const ly_do = (req.body?.ly_do ?? '').trim()
+  if (!ly_do) return fail(res, 400, 'Cần nêu lý do yêu cầu chỉnh sửa')
+  const docId = await getDocId(req.user.id)
+  if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+  const session = await mongoose.startSession()
+  try {
+    let payload
+    await session.withTransaction(async () => {
+      const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId }).session(session)
+      if (!a) throw Object.assign(new Error('Không tìm thấy lịch hẹn'), { httpStatus: 404 })
+      const result = await KetQuaKham.findOne({ appointment_id: a._id }).session(session)
+      if (!result) throw Object.assign(new Error('Chưa có hồ sơ khám'), { httpStatus: 404 })
+      // Đọc trạng thái TƯƠI trong transaction — không tin trạng thái do FE gửi.
+      if (result.status !== 'cho_xac_nhan') {
+        throw Object.assign(new Error('Chỉ yêu cầu chỉnh sửa được hồ sơ đang chờ xác nhận'), { httpStatus: 409 })
+      }
+
+      result.status = 'yeu_cau_chinh_sua'
+      result.doctor_revision_note = ly_do
+      result.lich_su_sua.push({ nguoi_sua_id: req.user.id, thoi_diem_sua: new Date(),
+        noi_dung: `Bác sĩ yêu cầu chỉnh sửa: ${ly_do}` })
+      await result.save({ session })
+
+      if (!['completed', 'cancelled', 'no_show'].includes(a.status)) {
+        a.status = 'waiting_record'
+        await a.save({ session })
+      }
+      payload = { id: result._id, status: result.status, appointment_status: a.status }
+    })
+    return ok(res, payload, 'Đã gửi yêu cầu chỉnh sửa cho y tá')
+  } catch (err) {
+    if (err.httpStatus) return fail(res, err.httpStatus, err.message)
+    return fail(res, 500, err.message)
+  } finally {
+    await session.endSession()
+  }
+}
 
 // ─── GET /api/doctor/appointments/pending-results?status= ───────────────────
 // Danh sách hồ sơ khám của chính bác sĩ đang đăng nhập — lọc qua bac_si_phu_trach_id
@@ -494,32 +648,27 @@ export async function listPendingResults(req, res) {
 
     const results = await KetQuaKham.find(filter)
       .populate('nguoi_nhap_id', 'ho_ten')
-      .populate({
-        path: 'appointment_id',
-        select: 'ngay_kham ten_dich_vu user_id member_id ten_khach',
-        populate: [
-          { path: 'user_id', select: 'ho_ten' },
-          { path: 'member_id', select: 'ho_ten' },
-        ],
-      })
+      .populate({ path: 'appointment_id', select: 'ngay_kham ten_dich_vu user_id member_id ten_khach',
+        populate: [{ path: 'user_id', select: 'ho_ten' }, { path: 'member_id', select: 'ho_ten' }] })
+      .populate({ path: 'hang_doi_id', select: 'ten_benh_nhan checkin_time nguon' })
       .sort({ ngay_tao: sortOrder })
       .lean()
 
-    const data = results
-      .filter((r) => r.appointment_id) // phòng vệ nếu lịch hẹn gốc bị xóa (không nên xảy ra)
-      .map((r) => {
-        const a = r.appointment_id
-        return {
-          id:             r._id,
-          appointment_id: a._id,
-          ngay_kham:      a.ngay_kham,
-          benh_nhan:      a.member_id?.ho_ten ?? a.ten_khach ?? a.user_id?.ho_ten ?? 'Không rõ',
-          ten_dich_vu:    a.ten_dich_vu ?? null,
-          nguoi_nhap:     r.nguoi_nhap_id?.ho_ten ?? null,
-          status:         r.status,
-        }
-      })
-
+    const data = results.map((r) => {
+      const a = r.appointment_id
+      const hd = r.hang_doi_id
+      return {
+        id: r._id,
+        appointment_id: a?._id ?? null,
+        hang_doi_id: hd?._id ?? null,
+        ngay_kham: a?.ngay_kham ?? hd?.checkin_time ?? r.ngay_tao,
+        benh_nhan: a?.member_id?.ho_ten ?? a?.ten_khach ?? a?.user_id?.ho_ten ?? hd?.ten_benh_nhan ?? 'Không rõ',
+        ten_dich_vu: a?.ten_dich_vu ?? null,
+        nguon: hd?.nguon ?? (a ? 'online' : null),
+        nguoi_nhap: r.nguoi_nhap_id?.ho_ten ?? null,
+        status: r.status,
+      }
+    })
     return ok(res, data)
   } catch (err) {
     return fail(res, 500, err.message)

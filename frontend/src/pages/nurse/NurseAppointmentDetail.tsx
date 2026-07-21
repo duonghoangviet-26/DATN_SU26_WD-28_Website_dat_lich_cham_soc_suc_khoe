@@ -4,6 +4,7 @@ import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
 import { nurseService } from '@/services/nurse.service'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 import type { NurseAppointmentDetail as NurseAppointmentDetailType } from '@/types'
 import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
 import { formatDate, formatDateTime } from '@/utils/format'
@@ -29,6 +30,8 @@ export default function NurseAppointmentDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [checkingIn, setCheckingIn] = useState(false)
+  const [showCheckinConfirm, setShowCheckinConfirm] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   const [chanDoan, setChanDoan] = useState('')
@@ -42,6 +45,8 @@ export default function NurseAppointmentDetail() {
   const [huyetAp, setHuyetAp] = useState('')
   const [nhietDo, setNhietDo] = useState('')
   const [nhipTim, setNhipTim] = useState('')
+  const [snapshot, setSnapshot] = useState('')      // ảnh chụp form lúc nạp/lưu — để phát hiện "chưa lưu"
+  const [chanDoanError, setChanDoanError] = useState('')
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
@@ -55,27 +60,45 @@ export default function NurseAppointmentDetail() {
     nurseService.getAppointmentById(id)
       .then((a) => {
         setAppt(a)
-        if (a.ket_qua) {
-          setChanDoan(a.ket_qua.chan_doan)
-          setHuongDan(a.ket_qua.huong_dan_dieu_tri ?? '')
-          setGhiChu(a.ket_qua.ghi_chu ?? '')
-          setTrieuChung(a.ket_qua.trieu_chung_ban_dau ?? '')
-          setGhiChuDieuDuong(a.ket_qua.ghi_chu_dieu_duong ?? '')
-          setNgayTaiKham(a.ket_qua.ngay_tai_kham ? a.ket_qua.ngay_tai_kham.slice(0, 10) : '')
-        }
-        if (a.sinh_hieu) {
-          setCanNang(a.sinh_hieu.can_nang != null ? String(a.sinh_hieu.can_nang) : '')
-          setChieuCao(a.sinh_hieu.chieu_cao != null ? String(a.sinh_hieu.chieu_cao) : '')
-          setHuyetAp(a.sinh_hieu.huyet_ap ?? '')
-          setNhietDo(a.sinh_hieu.nhiet_do != null ? String(a.sinh_hieu.nhiet_do) : '')
-          setNhipTim(a.sinh_hieu.nhip_tim != null ? String(a.sinh_hieu.nhip_tim) : '')
-        }
+        // Nạp từ giá trị đã có (hoặc rỗng) — LUÔN set mọi field để không giữ lại dữ liệu cũ khi reload.
+        const cd = a.ket_qua?.chan_doan ?? ''
+        const hd = a.ket_qua?.huong_dan_dieu_tri ?? ''
+        const gc = a.ket_qua?.ghi_chu ?? ''
+        const tc = a.ket_qua?.trieu_chung_ban_dau ?? ''
+        const gcdd = a.ket_qua?.ghi_chu_dieu_duong ?? ''
+        const ntk = a.ket_qua?.ngay_tai_kham ? a.ket_qua.ngay_tai_kham.slice(0, 10) : ''
+        const cn = a.sinh_hieu?.can_nang != null ? String(a.sinh_hieu.can_nang) : ''
+        const cc = a.sinh_hieu?.chieu_cao != null ? String(a.sinh_hieu.chieu_cao) : ''
+        const ha = a.sinh_hieu?.huyet_ap ?? ''
+        const nd = a.sinh_hieu?.nhiet_do != null ? String(a.sinh_hieu.nhiet_do) : ''
+        const nt = a.sinh_hieu?.nhip_tim != null ? String(a.sinh_hieu.nhip_tim) : ''
+        setChanDoan(cd); setHuongDan(hd); setGhiChu(gc); setTrieuChung(tc); setGhiChuDieuDuong(gcdd); setNgayTaiKham(ntk)
+        setCanNang(cn); setChieuCao(cc); setHuyetAp(ha); setNhietDo(nd); setNhipTim(nt)
+        setChanDoanError('')
+        setSnapshot(JSON.stringify([cd, hd, gc, tc, gcdd, ntk, cn, cc, ha, nd, nt]))
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }
 
   useEffect(load, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Chưa lưu" = form khác ảnh chụp lúc nạp/lưu gần nhất.
+  const currentSnap = JSON.stringify([chanDoan, huongDan, ghiChu, trieuChung, ghiChuDieuDuong, ngayTaiKham, canNang, chieuCao, huyetAp, nhietDo, nhipTim])
+  const dirty = snapshot !== '' && currentSnap !== snapshot
+
+  // Cảnh báo khi rời trang (đóng tab/reload) lúc còn thay đổi chưa lưu.
+  useEffect(() => {
+    if (!dirty) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty])
+
+  function handleBack() {
+    if (dirty && !window.confirm('Bạn có thay đổi chưa lưu. Rời trang mà không lưu?')) return
+    navigate('/nurse/queue')
+  }
 
   if (loading) return <div className="flex h-48 items-center justify-center text-slate-400">Đang tải...</div>
   if (error || !appt) {
@@ -97,6 +120,14 @@ export default function NurseAppointmentDetail() {
   const isEditable = !ketQuaStatus || ketQuaStatus === 'ban_nhap' || ketQuaStatus === 'yeu_cau_chinh_sua'
   const canFillForm = !appt.da_co_ket_qua && !['cancelled', 'no_show'].includes(appt.status)
 
+  // Tiếp nhận (check-in) chỉ áp dụng cho lịch HÔM NAY, chưa tiếp nhận, còn ở pending/confirmed.
+  // Backend là nơi quyết định cuối cùng (phạm vi ca + ngày + trạng thái + chống trùng).
+  const isToday = (() => {
+    const d = new Date(appt.ngay_kham); const t = new Date()
+    return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate()
+  })()
+  const canCheckin = !appt.da_check_in && ['pending', 'confirmed'].includes(appt.status) && isToday
+
   function sinhHieuPayload() {
     if (!canNang && !chieuCao && !huyetAp && !nhietDo && !nhipTim) return undefined
     return {
@@ -109,8 +140,12 @@ export default function NurseAppointmentDetail() {
   }
 
   async function handleSaveDraft() {
-    if (!id || !appt) return
-    if (!chanDoan.trim()) return showToast('Chẩn đoán là bắt buộc', 'error')
+    if (!id || !appt || saving) return // chống bấm lưu nhiều lần
+    if (!chanDoan.trim()) {
+      setChanDoanError('Chẩn đoán là bắt buộc (ghi theo kết luận của bác sĩ).')
+      return
+    }
+    setChanDoanError('')
     setSaving(true)
     try {
       if (!appt.ket_qua) {
@@ -145,7 +180,8 @@ export default function NurseAppointmentDetail() {
   }
 
   async function handleSubmit() {
-    if (!appt?.ket_qua) return
+    if (!appt?.ket_qua || saving) return // chống gửi hai lần
+    if (dirty) { showToast('Bạn có thay đổi chưa lưu — hãy Lưu nháp trước khi gửi bác sĩ.', 'error'); return }
     setSaving(true)
     try {
       const isResubmit = appt.ket_qua.status === 'yeu_cau_chinh_sua'
@@ -159,6 +195,23 @@ export default function NurseAppointmentDetail() {
     }
   }
 
+  async function handleCheckin() {
+    if (!id || checkingIn) return // chống bấm lặp
+    setCheckingIn(true)
+    try {
+      await nurseService.checkinQueue({ appointment_id: id })
+      showToast('Đã tiếp nhận bệnh nhân — đưa vào hàng đợi khám')
+    } catch (err: any) {
+      // Trạng thái có thể đã đổi từ nơi khác (đã tiếp nhận / đã hủy / khác ngày / ngoài ca)
+      // -> hiển thị lý do từ backend + nạp lại để đồng bộ trạng thái mới nhất.
+      showToast(err.response?.data?.message || 'Không thể tiếp nhận bệnh nhân', 'error')
+    } finally {
+      setShowCheckinConfirm(false)
+      setCheckingIn(false)
+      load() // refetch đồng bộ dù thành công hay lỗi conflict
+    }
+  }
+
   return (
     <div>
       {toast && (
@@ -167,7 +220,17 @@ export default function NurseAppointmentDetail() {
         </div>
       )}
 
-      <button onClick={() => navigate('/nurse/queue')} className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+      <ConfirmDialog
+        open={showCheckinConfirm}
+        title="Tiếp nhận bệnh nhân"
+        message={`Xác nhận bệnh nhân "${appt.benh_nhan}" đã đến và đưa vào hàng đợi khám?`}
+        confirmText={checkingIn ? 'Đang xử lý...' : 'Tiếp nhận'}
+        confirmDisabled={checkingIn}
+        onConfirm={handleCheckin}
+        onCancel={() => setShowCheckinConfirm(false)}
+      />
+
+      <button onClick={handleBack} className="mb-3 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <Icon name="chevron-down" className="h-3.5 w-3.5 rotate-90" /> Quay lại hàng đợi
       </button>
 
@@ -175,6 +238,34 @@ export default function NurseAppointmentDetail() {
         title={appt.benh_nhan}
         description={`${appt.ma_lich_hen ?? appt.id} · ${formatDate(appt.ngay_kham)} ${appt.gio_kham}`}
       />
+
+      {/* Tiếp nhận bệnh nhân (check-in) — chỉ hiện khi trạng thái/ngày cho phép; backend là chốt chặn cuối */}
+      {(canCheckin || appt.da_check_in) && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 text-sm">
+            {appt.da_check_in ? (
+              <>
+                <Icon name="check" className="h-4 w-4 text-green-500" />
+                <span className="font-medium text-green-700">Bệnh nhân đã được tiếp nhận</span>
+              </>
+            ) : (
+              <>
+                <Icon name="clock" className="h-4 w-4 text-amber-500" />
+                <span className="text-slate-600">Bệnh nhân chưa được tiếp nhận</span>
+              </>
+            )}
+          </div>
+          {canCheckin && (
+            <button
+              onClick={() => setShowCheckinConfirm(true)}
+              disabled={checkingIn}
+              className="btn-primary disabled:opacity-50"
+            >
+              {checkingIn ? 'Đang tiếp nhận...' : 'Tiếp nhận bệnh nhân'}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Cột trái: thông tin bệnh nhân + lịch hẹn (chỉ xem) */}
@@ -250,8 +341,18 @@ export default function NurseAppointmentDetail() {
             </div>
           )}
           {ketQuaStatus === 'da_xac_nhan' && (
-            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-              <Icon name="check" className="h-4 w-4 shrink-0" /> Hồ sơ đã được bác sĩ xác nhận — chỉ xem.
+            <div className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+              <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">Hồ sơ đã được bác sĩ xác nhận — chỉ xem, không thể chỉnh sửa.</p>
+                {(appt.ket_qua?.nguoi_xac_nhan || appt.ket_qua?.thoi_diem_xac_nhan) && (
+                  <p className="mt-0.5 text-green-600">
+                    {appt.ket_qua?.nguoi_xac_nhan && `Người xác nhận: ${appt.ket_qua.nguoi_xac_nhan}`}
+                    {appt.ket_qua?.nguoi_xac_nhan && appt.ket_qua?.thoi_diem_xac_nhan && ' · '}
+                    {appt.ket_qua?.thoi_diem_xac_nhan && `Lúc ${formatDateTime(appt.ket_qua.thoi_diem_xac_nhan)}`}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -302,14 +403,28 @@ export default function NurseAppointmentDetail() {
 
           {(canFillForm || appt.ket_qua) && (
             <div className="card p-4">
-              <div className="mb-3 flex items-center gap-2">
+              <div className="mb-2 flex items-center gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Hồ sơ khám</p>
                 {ketQuaStatus && <Badge color={KET_QUA_STATUS_COLOR[ketQuaStatus]}>{KET_QUA_STATUS_LABEL[ketQuaStatus]}</Badge>}
               </div>
+              {isEditable && (
+                <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                  <Icon name="alert-circle" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Nội dung chuyên môn dưới đây là <span className="font-semibold">ghi nhận theo kết luận của bác sĩ</span> — y tá nhập hộ, không phải chẩn đoán do y tá tự đưa ra.
+                </p>
+              )}
 
               <div>
-                <label className="input-label">Chẩn đoán <span className="text-red-500">*</span></label>
-                <textarea className="input resize-none" rows={2} readOnly={!isEditable} value={chanDoan} onChange={(e) => setChanDoan(e.target.value)} placeholder="Theo kết luận của bác sĩ..." />
+                <label className="input-label">Chẩn đoán (theo bác sĩ) <span className="text-red-500">*</span></label>
+                <textarea
+                  className={`input resize-none ${chanDoanError ? 'border-red-400' : ''}`}
+                  rows={2}
+                  readOnly={!isEditable}
+                  value={chanDoan}
+                  onChange={(e) => { setChanDoan(e.target.value); if (chanDoanError) setChanDoanError('') }}
+                  placeholder="Ghi lại kết luận chẩn đoán của bác sĩ..."
+                />
+                {chanDoanError && <p className="mt-1 text-xs font-medium text-red-500">{chanDoanError}</p>}
               </div>
               <div className="mt-3">
                 <label className="input-label">Hướng dẫn điều trị</label>

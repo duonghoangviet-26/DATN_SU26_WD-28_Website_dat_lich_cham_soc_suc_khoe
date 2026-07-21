@@ -19,3 +19,15 @@ export async function getMyDoctorIdsToday(nurseId) {
   const ids = await LichLamViec.find({ nurse_id: nurseId, ngay: { $gte: start, $lt: end } }).distinct('doctor_id')
   return ids.map(String)
 }
+
+// Tổng quát cho một NGÀY bất kỳ (dùng cho danh sách/chi tiết lịch hẹn có bộ lọc ngày).
+// Phạm vi y tá = các bác sĩ y tá được phân công trực trong ngày đó (LichLamViec.nurse_id),
+// KHÔNG dựa LichHen.nurse_id (field này không được gán lúc đặt online — xem spec M6).
+export async function getMyDoctorIdsOnDate(nurseId, dateInput) {
+  const start = new Date(dateInput)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  const ids = await LichLamViec.find({ nurse_id: nurseId, ngay: { $gte: start, $lt: end } }).distinct('doctor_id')
+  return ids.map(String)
+}
