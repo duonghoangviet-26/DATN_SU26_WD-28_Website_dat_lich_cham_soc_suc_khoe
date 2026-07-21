@@ -51,12 +51,14 @@ export default function ReceiveNotificationTab() {
         setTotalPages(pagination.totalPages)
         setTotalRecords(pagination.total)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       if (!ignore) setLoading(false)
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let ignore = false
     loadData(ignore)
@@ -136,7 +138,8 @@ export default function ReceiveNotificationTab() {
                             await notificationService.markAsRead(n._id)
                             setNotifications(prev => prev.map(item => item._id === n._id ? { ...item, da_doc: true } : item))
                             window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
-                          } catch {
+                          } catch (err) {
+                            console.error(err)
                           }
                         }
                       }}
