@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { notificationService } from '@/services/notification.service'
+import { userService } from '@/services/user.service'
 import type { NotificationItemAPI, NotificationTargetAPI } from '@/types'
 import { formatDateTime } from '@/utils/format'
 import Badge from '@/components/common/Badge'
@@ -7,14 +8,53 @@ import Icon from '@/components/admin/icons'
 import UpdateNotification from './UpdateNotification'
 import Pagination from '@/components/common/Pagination'
 
-const TARGET_COLOR: Record<NotificationTargetAPI, 'gray' | 'blue' | 'green'> = {
-  tat_ca: 'gray', benh_nhan: 'blue', bac_si: 'green',
+const TARGET_COLOR: Record<NotificationTargetAPI, 'gray' | 'blue' | 'green' | 'yellow'> = {
+  tat_ca: 'gray',
+  benh_nhan: 'blue',
+  bac_si: 'green',
+  le_tan: 'yellow',
+  y_ta: 'green',
 }
 
 const TARGET_LABEL: Record<NotificationTargetAPI, string> = {
   tat_ca: 'Tất cả',
   benh_nhan: 'Bệnh nhân',
-  bac_si: 'Bác sĩ'
+  bac_si: 'Bác sĩ',
+  le_tan: 'Lễ tân',
+  y_ta: 'Y tá',
+}
+
+const TARGET_ROLE: Partial<Record<NotificationTargetAPI, string>> = {
+  benh_nhan: 'user',
+  bac_si: 'doctor',
+  le_tan: 'receptionist',
+  y_ta: 'nurse',
+}
+
+interface RecipientOption {
+  id: string
+  email: string
+  ho_ten: string
+  role: string
+  status: string
+}
+
+function getTargetColor(target: unknown): 'gray' | 'blue' | 'green' | 'yellow' {
+  return typeof target === 'string' && target in TARGET_COLOR
+    ? TARGET_COLOR[target as NotificationTargetAPI]
+    : 'gray'
+}
+
+function getTargetLabel(target: unknown) {
+  return typeof target === 'string' && target in TARGET_LABEL
+    ? TARGET_LABEL[target as NotificationTargetAPI]
+    : 'Không xác định'
+}
+
+function formatRecipientCount(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('vi-VN')
+    : '0'
 }
 
 export default function SendNotificationTab() {
@@ -34,6 +74,10 @@ export default function SendNotificationTab() {
   const [sendMethod, setSendMethod] = useState<'web' | 'email'>('web')
   const [sendError, setSendError] = useState('')
   const [sendSuccess, setSendSuccess] = useState(false)
+  const [recipientMode, setRecipientMode] = useState<'all' | 'selected'>('all')
+  const [recipientOptions, setRecipientOptions] = useState<RecipientOption[]>([])
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([])
+  const [loadingRecipients, setLoadingRecipients] = useState(false)
 
   const [detail, setDetail] = useState<NotificationItemAPI | null>(null)
   const [targetEdit, setTargetEdit] = useState<NotificationItemAPI | null>(null)
@@ -82,6 +126,37 @@ export default function SendNotificationTab() {
     }
   }, [targetLogs])
 
+  useEffect(() => {
+    setRecipientMode('all')
+    setSelectedRecipientIds([])
+    setRecipientOptions([])
+
+    const role = TARGET_ROLE[doi_tuong]
+    if (!role) return
+
+    let ignore = false
+    setLoadingRecipients(true)
+    userService.getAll({ role, status: 'active', limit: 100 })
+      .then((res) => {
+        if (ignore) return
+        setRecipientOptions(res.data.map((user: any) => ({
+          id: user._id || user.id,
+          email: user.email,
+          ho_ten: user.ho_ten,
+          role: user.role,
+          status: user.status,
+        })).filter((user) => user.id))
+      })
+      .catch(() => {
+        if (!ignore) setRecipientOptions([])
+      })
+      .finally(() => {
+        if (!ignore) setLoadingRecipients(false)
+      })
+
+    return () => { ignore = true }
+  }, [doi_tuong])
+
   const handlePageChange = (newPage: number) => {
     if (newPage > 0 && newPage <= totalPages) {
       setPage(newPage)
@@ -91,15 +166,14 @@ export default function SendNotificationTab() {
   async function handleSend(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
-    if (doi_tuong === 'bac_si' && sendMethod === 'email') {
-      alert('Giao diện Form Email đã sẵn sàng! Chờ kết nối Backend.')
-      return
-    }
-
     setSendError('')
     setSendSuccess(false)
     if (!tieu_de.trim() || !noi_dung.trim()) {
       setSendError('Vui lòng điền đầy đủ tiêu đề và nội dung.')
+      return
+    }
+    if (recipientMode === 'selected' && selectedRecipientIds.length === 0) {
+      setSendError('Vui lòng chọn ít nhất một người nhận.')
       return
     }
     setSending(true)
@@ -108,11 +182,16 @@ export default function SendNotificationTab() {
         tieu_de, 
         noi_dung, 
         doi_tuong,
+        kenh_gui: sendMethod === 'email' ? 'email' : 'in_app',
+        recipient_ids: recipientMode === 'selected' ? selectedRecipientIds : undefined,
       })
       
       setTieuDe('')
       setNoiDung('')
       setDoiTuong('tat_ca')
+      setSendMethod('web')
+      setRecipientMode('all')
+      setSelectedRecipientIds([])
       setSendSuccess(true)
       
       // Reload danh sách từ đầu
@@ -172,11 +251,11 @@ export default function SendNotificationTab() {
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-                {doi_tuong === 'bac_si' && sendMethod === 'email' ? 'Tiêu đề Email (Subject)' : 'Tiêu đề thông báo'}
+                {sendMethod === 'email' ? 'Tiêu đề Email (Subject)' : 'Tiêu đề thông báo'}
               </label>
               <input
                 className="input bg-slate-50 border-slate-200 focus:bg-white transition-colors"
-                placeholder={doi_tuong === 'bac_si' && sendMethod === 'email' ? "Nhập tiêu đề Email..." : "Nhập tiêu đề ngắn gọn..."}
+                placeholder={sendMethod === 'email' ? "Nhập tiêu đề Email..." : "Nhập tiêu đề ngắn gọn..."}
                 value={tieu_de}
                 onChange={(e) => setTieuDe(e.target.value)}
               />
@@ -188,59 +267,120 @@ export default function SendNotificationTab() {
                 value={doi_tuong} 
                 onChange={(e) => setDoiTuong(e.target.value as NotificationTargetAPI)}
               >
-                <option value="tat_ca">Tất cả (Bệnh nhân & Bác sĩ)</option>
+                <option value="tat_ca">Tất cả (Bệnh nhân, Bác sĩ, Lễ tân & Y tá)</option>
                 <option value="benh_nhan">Chỉ Bệnh nhân</option>
                 <option value="bac_si">Chỉ Bác sĩ</option>
+                <option value="le_tan">Chỉ Lễ tân</option>
+                <option value="y_ta">Chỉ Y tá</option>
               </select>
             </div>
           </div>
 
-          {doi_tuong === 'bac_si' && (
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-slate-700">Hình thức gửi</label>
-              <div className="flex gap-2 p-1 bg-slate-100/80 rounded-lg w-fit border border-slate-200/50">
-                <button
-                  type="button"
-                  onClick={() => setSendMethod('web')}
-                  className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-all ${sendMethod === 'web' ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
-                >
-                  <Icon name="bell" className="w-4 h-4" /> Gửi qua Website (Mặc định)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSendMethod('email')}
-                  className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-all ${sendMethod === 'email' ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
-                >
-                  <Icon name="mail" className="w-4 h-4" /> Gửi qua Email
-                </button>
+          {doi_tuong !== 'tat_ca' && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <label className="text-sm font-semibold text-slate-700">Người nhận cụ thể</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecipientMode('all')
+                      setSelectedRecipientIds([])
+                    }}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${recipientMode === 'all' ? 'bg-white text-brand-600 shadow-sm ring-1 ring-brand-100' : 'text-slate-500 hover:bg-white'}`}
+                  >
+                    Tất cả {getTargetLabel(doi_tuong)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecipientMode('selected')}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${recipientMode === 'selected' ? 'bg-white text-brand-600 shadow-sm ring-1 ring-brand-100' : 'text-slate-500 hover:bg-white'}`}
+                  >
+                    Chọn từng người
+                  </button>
+                </div>
               </div>
+
+              {recipientMode === 'selected' && (
+                <div className="space-y-2">
+                  {loadingRecipients ? (
+                    <p className="text-sm text-slate-500">Đang tải danh sách người nhận...</p>
+                  ) : recipientOptions.length === 0 ? (
+                    <p className="text-sm text-slate-500">Không có người nhận active cho nhóm này.</p>
+                  ) : (
+                    <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                      {recipientOptions.map((recipient) => {
+                        const checked = selectedRecipientIds.includes(recipient.id)
+                        return (
+                          <label key={recipient.id} className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2 last:border-b-0 hover:bg-slate-50">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300 text-brand-600"
+                              checked={checked}
+                              onChange={(event) => {
+                                setSelectedRecipientIds((current) => event.target.checked
+                                  ? [...current, recipient.id]
+                                  : current.filter((id) => id !== recipient.id))
+                              }}
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-slate-700">{recipient.ho_ten || recipient.email}</span>
+                              <span className="block truncate text-xs text-slate-500">{recipient.email}</span>
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {doi_tuong === 'bac_si' && sendMethod === 'email' && (
-            <div className="flex items-start gap-3 rounded-lg bg-yellow-50 border border-yellow-200 p-4 text-sm text-yellow-800">
-              <Icon name="alert-triangle" className="w-5 h-5 shrink-0 mt-0.5" />
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">Hình thức gửi</label>
+            <div className="flex flex-wrap gap-2 p-1 bg-slate-100/80 rounded-lg w-fit border border-slate-200/50">
+              <button
+                type="button"
+                onClick={() => setSendMethod('web')}
+                className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-all ${sendMethod === 'web' ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <Icon name="bell" className="w-4 h-4" /> Gửi qua Website
+              </button>
+              <button
+                type="button"
+                onClick={() => setSendMethod('email')}
+                className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-all ${sendMethod === 'email' ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <Icon name="mail" className="w-4 h-4" /> Gửi qua Email
+              </button>
+            </div>
+          </div>
+
+          {sendMethod === 'email' && (
+            <div className="flex items-start gap-3 rounded-lg bg-green-50 border border-green-200 p-4 text-sm text-green-800">
+              <Icon name="mail" className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold">Lưu ý: Tính năng kết nối máy chủ gửi Mail thực tế đang trong quá trình phát triển.</p>
+                <p className="font-semibold">Email sẽ được gửi thật qua Gmail đã cấu hình trong máy chủ.</p>
               </div>
             </div>
           )}
 
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-              {doi_tuong === 'bac_si' && sendMethod === 'email' ? 'Nội dung Email (Body)' : 'Nội dung chi tiết'}
+              {sendMethod === 'email' ? 'Nội dung Email (Body)' : 'Nội dung chi tiết'}
             </label>
             <textarea
               className="input resize-none bg-slate-50 border-slate-200 focus:bg-white transition-colors"
               rows={4}
-              placeholder={doi_tuong === 'bac_si' && sendMethod === 'email' ? "Nhập nội dung đầy đủ của Email..." : "Nhập nội dung đầy đủ của thông báo..."}
+              placeholder={sendMethod === 'email' ? "Nhập nội dung đầy đủ của Email..." : "Nhập nội dung đầy đủ của thông báo..."}
               value={noi_dung}
               onChange={(e) => setNoiDung(e.target.value)}
             />
           </div>
           <div className="flex justify-end pt-2 border-t border-slate-100">
             <button type="submit" className="btn-primary py-2.5 px-6" disabled={sending}>
-              {doi_tuong === 'bac_si' && sendMethod === 'email' ? (
+              {sendMethod === 'email' ? (
                 <>
                   <Icon name="mail" className="h-4 w-4 mr-2" />
                   Gửi Email
@@ -283,14 +423,14 @@ export default function SendNotificationTab() {
                     <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{n.noi_dung}</p>
                   </td>
                   <td className="px-5 py-4 whitespace-nowrap">
-                    <Badge color={TARGET_COLOR[n.doi_tuong]}>
-                      {TARGET_LABEL[n.doi_tuong]}
+                    <Badge color={getTargetColor(n.doi_tuong)}>
+                      {getTargetLabel(n.doi_tuong)}
                     </Badge>
                   </td>
                   <td className="px-5 py-4 text-slate-600 font-medium whitespace-nowrap">
                     <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-md">
                       <Icon name="users" className="w-3.5 h-3.5 text-slate-400" />
-                      {n.so_nguoi_nhan.toLocaleString('vi-VN')}
+                      {formatRecipientCount(n.so_nguoi_nhan)}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-slate-600 whitespace-nowrap">
@@ -369,7 +509,7 @@ export default function SendNotificationTab() {
               <div className="flex flex-wrap gap-3 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đối tượng:</span>
-                  <Badge color={TARGET_COLOR[detail.doi_tuong]}>{TARGET_LABEL[detail.doi_tuong]}</Badge>
+                  <Badge color={getTargetColor(detail.doi_tuong)}>{getTargetLabel(detail.doi_tuong)}</Badge>
                 </div>
                 <div className="w-px h-4 bg-slate-300 self-center hidden sm:block"></div>
                 <div className="flex items-center gap-1.5 text-sm text-slate-600">
@@ -390,7 +530,7 @@ export default function SendNotificationTab() {
               <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
                 <p className="text-xs text-slate-500 flex items-center gap-1.5">
                   <Icon name="info" className="w-4 h-4 text-brand-500" />
-                  Đã tiếp cận <strong className="text-slate-800">{detail.so_nguoi_nhan.toLocaleString('vi-VN')}</strong> tài khoản
+                  Đã tiếp cận <strong className="text-slate-800">{formatRecipientCount(detail.so_nguoi_nhan)}</strong> tài khoản
                 </p>
                 <button onClick={() => setDetail(null)} className="btn-secondary px-6">Đóng</button>
               </div>

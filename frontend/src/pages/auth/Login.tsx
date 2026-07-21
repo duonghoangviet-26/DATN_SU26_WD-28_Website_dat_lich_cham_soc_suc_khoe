@@ -5,11 +5,11 @@ import { useAuth } from '@/context/AuthContext'
 // Đối chiếu trực tiếp với DB + xác minh đăng nhập thật (2026-07-21) — danh sách cũ có 4/5
 // tài khoản đã lỗi thời (không còn tồn tại), có thể khiến người xem demo đăng nhập thất bại.
 const demoAccounts = [
-  { role: 'Admin', email: 'admin@vitafamily.vn', password: '123456' },
-  { role: 'Bác sĩ', email: 'doctor.test@vitafamily.local', password: 'Test123456' },
-  { role: 'Bệnh nhân', email: 'patient02.demo@vitafamily.vn', password: '123456' },
-  { role: 'Y tá', email: 'ducluong140606@gmail.com', password: '123456' },
-  { role: 'Lễ tân', email: 'luongtran140606@gmail.com', password: '123456' },
+  { role: 'Admin', email: 'admin@vitafamily.vn' },
+  { role: 'Bác sĩ', email: 'haiv5634@gmail.com' },
+  { role: 'Bệnh nhân', email: 'lt14062006meitu@gmail.com' },
+  { role: 'Y tá', email: 'ducluong140606@gmail.com' },
+  { role: 'Lễ tân', email: 'luongtran140606@gmail.com' },
 ]
 
 export default function Login() {

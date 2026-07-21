@@ -567,7 +567,7 @@ export interface ReviewItem {
 }
 
 // Khớp backend ThongBaoHeThong.doi_tuong — dùng tên tiếng Việt để nhất quán (GAP-20)
-export type NotificationTarget = "tat_ca" | "benh_nhan" | "bac_si";
+export type NotificationTarget = "tat_ca" | "benh_nhan" | "bac_si" | "le_tan" | "y_ta";
 
 export interface NotificationItem {
     id: number;
@@ -1008,7 +1008,7 @@ export interface DoctorAuditLog {
     ngay_tao: string;
 }
 
-export type NotificationTargetAPI = "tat_ca" | "benh_nhan" | "bac_si";
+export type NotificationTargetAPI = "tat_ca" | "benh_nhan" | "bac_si" | "le_tan" | "y_ta";
 
 export interface NotificationItemAPI {
     _id: string;

@@ -15,7 +15,7 @@ export function startCronJobs() {
       const result = await generateAutoScheduleWindowForAllDoctors({
         weeksAhead: 2,
         action: 'auto_generate',
-        note: `Auto fill schedule window from ${source}`,
+        note: source === 'startup' ? 'Tự động sinh lịch làm việc khi khởi động hệ thống' : `Tự động sinh lịch làm việc từ ${source}`,
       })
       console.log(`[cron] Auto fill lich lam viec (${source}):`, result)
     } catch (err) {
