@@ -1,5 +1,6 @@
 import type { ServiceItem, ServiceChangeLog } from '@/types'
 import { SERVICE_TYPE_LABEL } from '@/utils/constants'
+import { formatAdminValue } from '@/utils/adminDisplay'
 import { formatPrice, formatDateTime } from '@/utils/format'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
@@ -63,7 +64,7 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
             <div className="mb-3 flex flex-wrap items-start gap-2">
               <h3 className="text-base font-semibold text-slate-800">{service.ten}</h3>
               <Badge color="blue">
-                {SERVICE_TYPE_LABEL[service.loai]}
+                {SERVICE_TYPE_LABEL[service.loai] || formatAdminValue('loai', service.loai)}
               </Badge>
               <Badge color={service.status === 'active' ? 'green' : 'gray'}>
                 {service.status === 'active' ? 'Hoạt động' : 'Đã ẩn'}
@@ -81,7 +82,7 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
               <div className="mt-3 grid gap-2 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-700 sm:grid-cols-3">
                 <InfoCell
                   label="Loại gói"
-                  value={service.loai_goi ? PACKAGE_TYPE_LABEL[service.loai_goi] : '—'}
+                  value={service.loai_goi ? PACKAGE_TYPE_LABEL[service.loai_goi] || formatAdminValue('loai_goi', service.loai_goi) : '—'}
                 />
                 <InfoCell
                   label="Số người"

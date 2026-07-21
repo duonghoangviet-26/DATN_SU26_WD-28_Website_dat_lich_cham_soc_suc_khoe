@@ -23,14 +23,13 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
   return (
     <ChartCard
       title="Bệnh nhân mới"
-      subtitle="Đếm tài khoản bệnh nhân theo NguoiDung.ngay_tao trong năm hiện tại."
+      subtitle="Số tài khoản bệnh nhân mới được tạo theo từng tháng trong năm hiện tại."
       icon="users"
       iconBackgroundClassName="bg-emerald-100"
       iconClassName="text-emerald-600"
       loading={loading}
       empty={!data.length}
       error={error}
-      pulseKey={refreshVersion}
     >
       <div className="h-80 w-full" aria-label="Biểu đồ bệnh nhân mới theo tháng">
         <ResponsiveContainer width="100%" height="100%">

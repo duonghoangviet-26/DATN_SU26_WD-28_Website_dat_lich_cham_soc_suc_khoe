@@ -15,6 +15,7 @@ import { serviceService } from '@/services/service.service'
 import { specialtyService } from '@/services/specialty.service'
 import type { SpecialtyBrowseItem } from '@/services/specialty.service'
 import type { ServiceFormData, ServiceItem, ServicePackageType } from '@/types'
+import { formatAdminValue } from '@/utils/adminDisplay'
 import { formatPrice } from '@/utils/format'
 
 interface SpecialtyDoctorItem {
@@ -495,12 +496,12 @@ export default function ManageServiceSpecialtyDetail() {
                           <div className="font-medium text-slate-800">{service.ten}</div>
                           {service.la_goi && service.loai_goi && (
                             <Badge color={PACKAGE_TYPE_BADGE[service.loai_goi] ?? 'blue'}>
-                              {PACKAGE_TYPE_LABEL[service.loai_goi] ?? 'Gói'}
+                              {PACKAGE_TYPE_LABEL[service.loai_goi] ?? formatAdminValue('loai_goi', service.loai_goi)}
                             </Badge>
                           )}
                           {service.la_goi && service.doi_tuong_ap_dung && (
                             <Badge color="yellow">
-                              {DOI_TUONG_LABEL[service.doi_tuong_ap_dung] ?? service.doi_tuong_ap_dung}
+                              {DOI_TUONG_LABEL[service.doi_tuong_ap_dung] ?? formatAdminValue('doi_tuong_ap_dung', service.doi_tuong_ap_dung)}
                             </Badge>
                           )}
                           {service.la_goi && service.so_nguoi_ap_dung && (

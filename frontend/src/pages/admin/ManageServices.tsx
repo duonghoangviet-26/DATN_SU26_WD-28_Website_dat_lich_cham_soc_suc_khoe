@@ -115,7 +115,7 @@ export default function ManageServices() {
     <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Quản lý dịch vụ"
-        description="Admin quản lý dịch vụ liên quan theo từng chuyên khoa, đồng thời có tab riêng để rà soát gói dịch vụ."
+        description="Quản trị viên quản lý dịch vụ liên quan theo từng chuyên khoa, đồng thời có tab riêng để rà soát gói dịch vụ."
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">

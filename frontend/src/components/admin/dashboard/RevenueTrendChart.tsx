@@ -67,14 +67,13 @@ export default function RevenueTrendChart({ refreshVersion = 0 }: { refreshVersi
   return (
     <ChartCard
       title="Xu hướng doanh thu"
-      subtitle="Đối chiếu khoản ThanhToan đã thu và tổng giá trị HoaDon theo từng ngày."
+      subtitle="So sánh số tiền đã thu và tổng giá trị hóa đơn theo từng ngày."
       icon="trending"
       iconBackgroundClassName="bg-blue-100"
       iconClassName="text-blue-600"
       loading={loading}
       empty={!data.length}
       error={error}
-      pulseKey={refreshVersion}
       action={(
         <div className="inline-flex rounded-lg bg-slate-100 p-1" aria-label="Khoảng thời gian doanh thu">
           {([7, 30] as Period[]).map((value) => (

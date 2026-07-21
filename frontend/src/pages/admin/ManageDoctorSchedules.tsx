@@ -16,6 +16,7 @@ import type {
   AdminDoctorScheduleSlot,
   AdminDoctorWorkdayItem,
 } from '@/types'
+import { formatAdminActionLabel, formatAdminFieldLabel, formatAdminValue } from '@/utils/adminDisplay'
 import { formatDateTime, toLocalDateStr } from '@/utils/format'
 
 const MAX_CALENDAR_RANGE_DAYS = 42
@@ -100,16 +101,9 @@ function addDaysToDateString(value: string, amount: number) {
   return toLocalDateStr(date)
 }
 
-function valueToText(value: unknown): string {
-  if (value === null || value === undefined || value === '') return 'Không có'
-  if (Array.isArray(value)) return `${value.length} mục`
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
-}
-
 function diffFields(before?: Record<string, unknown> | null, after?: Record<string, unknown> | null) {
   const keys = Array.from(new Set([...Object.keys(before || {}), ...Object.keys(after || {})]))
-  return keys.filter((key) => valueToText(before?.[key]) !== valueToText(after?.[key]))
+  return keys.filter((key) => JSON.stringify(before?.[key] ?? null) !== JSON.stringify(after?.[key] ?? null))
 }
 
 function translateLogNote(note: string | null | undefined): string | null | undefined {
@@ -363,7 +357,7 @@ function MarkDayOffModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" style={{ animation: 'fadeInScale 0.18s ease-out' }}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-start gap-4 border-b border-slate-100 px-6 pb-4 pt-6">
           <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl text-2xl ${cfg.iconBg}`}>
@@ -507,12 +501,12 @@ function ScheduleAuditModal({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge color={ACTION_COLOR[log.hanh_dong] || 'gray'}>
-                          {ACTION_LABEL[log.hanh_dong] || log.hanh_dong}
+                          {ACTION_LABEL[log.hanh_dong] || formatAdminActionLabel(log.hanh_dong)}
                         </Badge>
                         <span className="text-xs font-medium text-slate-500">{formatDateTime(log.thoi_diem)}</span>
                       </div>
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                        {log.vai_tro === 'system' ? 'Hệ thống' : log.vai_tro}
+                        {formatAdminValue('role', log.vai_tro)}
                       </span>
                     </div>
 
@@ -539,9 +533,9 @@ function ScheduleAuditModal({
                               <tbody className="divide-y divide-slate-100">
                                 {changedFields.slice(0, 8).map((field) => (
                                   <tr key={field}>
-                                    <td className="px-3 py-2 font-medium text-slate-700">{field}</td>
-                                    <td className="max-w-[220px] truncate px-3 py-2 text-slate-500">{valueToText(log.du_lieu_cu?.[field])}</td>
-                                    <td className="max-w-[220px] truncate px-3 py-2 text-slate-800">{valueToText(log.du_lieu_moi?.[field])}</td>
+                                    <td className="px-3 py-2 font-medium text-slate-700">{formatAdminFieldLabel(field)}</td>
+                                    <td className="max-w-[220px] truncate px-3 py-2 text-slate-500">{formatAdminValue(field, log.du_lieu_cu?.[field])}</td>
+                                    <td className="max-w-[220px] truncate px-3 py-2 text-slate-800">{formatAdminValue(field, log.du_lieu_moi?.[field])}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -803,7 +797,7 @@ export default function ManageDoctorSchedules() {
     <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Lịch làm việc bác sĩ"
-        description="Lịch làm việc được hệ thống tự động sinh và bù theo tuần. Admin theo dõi trạng thái xác nhận, chỉnh khung giờ khi có thay đổi đặc biệt và xem lịch sử để truy vết."
+        description="Lịch làm việc được hệ thống tự động sinh và bù theo tuần. Quản trị viên theo dõi trạng thái xác nhận, chỉnh khung giờ khi có thay đổi đặc biệt và xem lịch sử để truy vết."
       />
 
       <div className="card p-4">

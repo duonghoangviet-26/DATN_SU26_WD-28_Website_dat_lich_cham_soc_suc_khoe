@@ -31,7 +31,7 @@ export default function Sidebar({ open, onClose }: Props) {
           </div>
           <div>
             <p className="text-sm font-bold leading-tight text-slate-800">VitaFamily</p>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Admin Panel</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Khu vực quản trị</p>
           </div>
         </div>
 

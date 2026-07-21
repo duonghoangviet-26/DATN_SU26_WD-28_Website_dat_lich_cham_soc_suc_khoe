@@ -5,6 +5,7 @@ import Badge from '@/components/common/Badge'
 import { appointmentService } from '@/services/appointment.service'
 import type { AppointmentHistoryItem, AppointmentItem, AppointmentStatus } from '@/types'
 import { APPOINTMENT_STATUS_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
+import { formatAdminValue } from '@/utils/adminDisplay'
 
 interface Props {
   appointment: AppointmentItem
@@ -19,7 +20,7 @@ const ROLE_COLORS: Record<string, string> = {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin',
+  admin: 'Quản trị viên',
   doctor: 'Bác sĩ',
   user: 'Bệnh nhân',
   system: 'Hệ thống',
@@ -84,7 +85,7 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-800">{item.nguoi_thuc_hien}</span>
                       <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${ROLE_COLORS[item.vai_tro]}`}>
-                        {ROLE_LABELS[item.vai_tro] || item.vai_tro}
+                        {ROLE_LABELS[item.vai_tro] || formatAdminValue('role', item.vai_tro)}
                       </span>
                     </div>
                     <time className="text-xs text-slate-500">
@@ -102,14 +103,14 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
                         <span className="text-slate-600">Trạng thái khám:</span>
                         {item.tu_trang_thai ? (
                           <Badge color={STATUS_COLOR[item.tu_trang_thai] || 'gray'}>
-                            {APPOINTMENT_STATUS_LABEL[item.tu_trang_thai as AppointmentStatus] || item.tu_trang_thai}
+                            {APPOINTMENT_STATUS_LABEL[item.tu_trang_thai as AppointmentStatus] || formatAdminValue('status', item.tu_trang_thai)}
                           </Badge>
                         ) : (
                           <span className="italic text-slate-400">Mới tạo</span>
                         )}
                         <Icon name="arrow-right" className="h-3 w-3 text-slate-400" />
                         <Badge color={STATUS_COLOR[item.den_trang_thai] || 'gray'}>
-                          {APPOINTMENT_STATUS_LABEL[item.den_trang_thai as AppointmentStatus] || item.den_trang_thai}
+                          {APPOINTMENT_STATUS_LABEL[item.den_trang_thai as AppointmentStatus] || formatAdminValue('status', item.den_trang_thai)}
                         </Badge>
                       </div>
                     )}
@@ -119,14 +120,14 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
                         <span className="text-slate-600">Thanh toán:</span>
                         {item.tu_payment_status ? (
                           <Badge color={STATUS_COLOR[item.tu_payment_status] || 'gray'}>
-                            {PAYMENT_STATUS_LABEL[item.tu_payment_status] || item.tu_payment_status}
+                            {PAYMENT_STATUS_LABEL[item.tu_payment_status] || formatAdminValue('payment_status', item.tu_payment_status)}
                           </Badge>
                         ) : (
                           <span className="italic text-slate-400">Mới tạo</span>
                         )}
                         <Icon name="arrow-right" className="h-3 w-3 text-slate-400" />
                         <Badge color={STATUS_COLOR[item.den_payment_status] || 'gray'}>
-                          {PAYMENT_STATUS_LABEL[item.den_payment_status] || item.den_payment_status}
+                          {PAYMENT_STATUS_LABEL[item.den_payment_status] || formatAdminValue('payment_status', item.den_payment_status)}
                         </Badge>
                       </div>
                     )}
@@ -140,7 +141,7 @@ export default function AppointmentHistoryModal({ appointment, onClose }: Props)
 
                     {item.loai_thay_doi && (
                       <div className="mb-2 text-slate-600">
-                        <span className="font-medium text-slate-700">Loại thay đổi:</span> {item.loai_thay_doi}
+                        <span className="font-medium text-slate-700">Loại thay đổi:</span> {formatAdminValue('loai_thay_doi', item.loai_thay_doi)}
                       </div>
                     )}
 

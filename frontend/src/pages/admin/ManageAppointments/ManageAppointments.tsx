@@ -192,7 +192,7 @@ export default function ManageAppointments() {
       <AdminMotionItem>
         <PageHeader
           title="Lịch hẹn hệ thống"
-          description="Admin chỉ rà soát, dời lịch, hủy và theo dõi đặt hộ. Việc tạo lịch mới thuộc về người dùng hoặc lễ tân do liên quan trực tiếp tới thanh toán."
+          description="Quản trị viên chỉ rà soát, dời lịch, hủy và theo dõi đặt hộ. Việc tạo lịch mới thuộc về người dùng hoặc lễ tân do liên quan trực tiếp tới thanh toán."
         />
       </AdminMotionItem>
 

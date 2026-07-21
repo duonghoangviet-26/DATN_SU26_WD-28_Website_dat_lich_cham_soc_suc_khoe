@@ -10,6 +10,7 @@ import { paymentService } from '@/services/payment.service'
 import { subscribeAdminRealtime } from '@/services/realtime.service'
 import type { PaymentItem, TransactionStatus } from '@/types'
 import { PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
+import { formatAdminValue } from '@/utils/adminDisplay'
 import { formatDateTime, formatPrice } from '@/utils/format'
 
 const STATUS_COLOR: Record<TransactionStatus, 'green' | 'yellow' | 'gray'> = {
@@ -100,8 +101,8 @@ function PaymentDetailModal({ detail, loading, onClose }: PaymentDetailModalProp
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge color={STATUS_COLOR[detail.status]}>{PAYMENT_STATUS_LABEL[detail.status]}</Badge>
-                    <Badge color="blue">{PAYMENT_METHOD_LABEL[detail.phuong_thuc] || detail.phuong_thuc}</Badge>
+                    <Badge color={STATUS_COLOR[detail.status]}>{PAYMENT_STATUS_LABEL[detail.status] || formatAdminValue('status', detail.status)}</Badge>
+                    <Badge color="blue">{PAYMENT_METHOD_LABEL[detail.phuong_thuc] || formatAdminValue('phuong_thuc', detail.phuong_thuc)}</Badge>
                   </div>
                 </div>
 
@@ -111,13 +112,13 @@ function PaymentDetailModal({ detail, loading, onClose }: PaymentDetailModalProp
                   <DetailField label="Số điện thoại" value={detail.so_dien_thoai || 'Không có'} />
                   <DetailField label="Bác sĩ" value={detail.bac_si || 'Không rõ'} />
                   <DetailField label="Số tiền" value={formatPrice(detail.so_tien)} />
-                  <DetailField label="Loại thanh toán" value={detail.loai_thanh_toan || 'Chưa có dữ liệu'} />
+                  <DetailField label="Loại thanh toán" value={formatAdminValue('loai_thanh_toan', detail.loai_thanh_toan)} />
                   <DetailField label="Thời điểm tạo" value={formatDateTime(detail.ngay_tao)} />
                   <DetailField label="Thời điểm thanh toán" value={getPaymentTimeLabel(detail)} />
                   <DetailField label="Mã lịch hẹn" value={detail.appointment_id ? String(detail.appointment_id) : 'Chưa liên kết'} />
                   <DetailField label="Mã hóa đơn" value={detail.hoa_don_id ? String(detail.hoa_don_id) : 'Chưa liên kết'} />
                   <DetailField label="Số hóa đơn" value={detail.so_hoa_don || 'Chưa có'} />
-                  <DetailField label="Trạng thái hóa đơn" value={detail.trang_thai_hoa_don || 'Chưa có'} />
+                  <DetailField label="Trạng thái hóa đơn" value={formatAdminValue('trang_thai_hoa_don', detail.trang_thai_hoa_don)} />
                 </dl>
               </div>
 
@@ -299,7 +300,7 @@ export default function ManagePayments() {
               <Icon name="clock" className="h-6 w-6 text-yellow-600" />
             </div>
           </div>
-          <p className="mt-3 text-xs text-slate-500">Các giao dịch đang pending và cần tiếp tục đối soát.</p>
+          <p className="mt-3 text-xs text-slate-500">Các giao dịch đang chờ thanh toán và cần tiếp tục đối soát.</p>
         </AdminMotionItem>
 
         <AdminMotionItem className="card p-5">
@@ -442,14 +443,14 @@ export default function ManagePayments() {
 
                   <td className="px-4 py-3">
                     <p className="font-semibold text-slate-900">{formatPrice(payment.so_tien)}</p>
-                    <p className="mt-1 text-xs text-slate-500">{payment.loai_thanh_toan || 'Chưa phân loại'}</p>
+                    <p className="mt-1 text-xs text-slate-500">{formatAdminValue('loai_thanh_toan', payment.loai_thanh_toan)}</p>
                   </td>
 
                   <td className="px-4 py-3">
                     <div className="space-y-2">
-                      <Badge color="blue">{PAYMENT_METHOD_LABEL[payment.phuong_thuc] || payment.phuong_thuc}</Badge>
+                      <Badge color="blue">{PAYMENT_METHOD_LABEL[payment.phuong_thuc] || formatAdminValue('phuong_thuc', payment.phuong_thuc)}</Badge>
                       <div>
-                        <Badge color={STATUS_COLOR[payment.status]}>{PAYMENT_STATUS_LABEL[payment.status]}</Badge>
+                        <Badge color={STATUS_COLOR[payment.status]}>{PAYMENT_STATUS_LABEL[payment.status] || formatAdminValue('status', payment.status)}</Badge>
                       </div>
                     </div>
                   </td>
