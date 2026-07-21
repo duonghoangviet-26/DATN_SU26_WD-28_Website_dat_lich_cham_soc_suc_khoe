@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import Icon from '@/components/admin/icons'
 import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
@@ -579,6 +579,7 @@ function ScheduleAuditModal({
 // ============================================================
 
 export default function ManageDoctorSchedules() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const defaultRange = getDefaultRange()
 
@@ -783,6 +784,18 @@ export default function ManageDoctorSchedules() {
     await loadHistory(item, 1)
   }
 
+  function viewBookedAppointments(item: AdminDoctorWorkdayItem) {
+    if (!doctorId || item.slot_da_dat <= 0) return
+
+    const params = new URLSearchParams()
+    params.set('doctor_id', doctorId)
+    if (doctorName) params.set('doctor_name', doctorName)
+    params.set('startDate', item.ngay)
+    params.set('endDate', item.ngay)
+
+    navigate(`/admin/appointments?${params.toString()}`)
+  }
+
   const summary = {
     total: items.length,
     working: items.filter((item) => item.trang_thai_ngay === 'lam_viec').length,
@@ -907,6 +920,7 @@ export default function ManageDoctorSchedules() {
         onOpenHistory={openHistory}
         onUpdateWorkday={updateWorkday}
         onCreateScheduleForDay={createScheduleForDay}
+        onViewBookedAppointments={viewBookedAppointments}
       />
 
       <SlotEditorModal
