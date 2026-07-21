@@ -51,10 +51,10 @@ const ACTION_LABEL: Record<AdminDoctorScheduleAuditLog['hanh_dong'], string> = {
   auto_generate: 'Tự động sinh lịch',
   manual_create: 'Tạo lịch thủ công',
   update_workday: 'Cập nhật ngày',
-  update_slot: 'Cập nhật slot',
+  update_slot: 'Cập nhật khung giờ',
   doctor_confirm: 'Bác sĩ xác nhận',
   doctor_reject: 'Bác sĩ từ chối',
-  doctor_request_cancel_slot: 'Bác sĩ xin hủy slot',
+  doctor_request_cancel_slot: 'Bác sĩ xin hủy khung giờ',
 }
 
 const ACTION_COLOR: Record<AdminDoctorScheduleAuditLog['hanh_dong'], 'green' | 'gray' | 'yellow' | 'red' | 'blue'> = {
@@ -112,6 +112,26 @@ function diffFields(before?: Record<string, unknown> | null, after?: Record<stri
   return keys.filter((key) => valueToText(before?.[key]) !== valueToText(after?.[key]))
 }
 
+function translateLogNote(note: string | null | undefined): string | null | undefined {
+  if (!note) return note
+  const map: Record<string, string> = {
+    'Auto fill schedule window from startup': 'Tự động sinh lịch làm việc khi khởi động hệ thống',
+    'Sinh lich lam viec tu dong theo tuan': 'Sinh lịch làm việc tự động theo tuần',
+    'Tu dong sinh bu lich lam viec': 'Tự động sinh bù lịch làm việc',
+    'Sinh lich tu dong khi duyet bac si': 'Sinh lịch tự động khi duyệt bác sĩ',
+    'Sinh lich rolling window tu dong': 'Sinh lịch làm việc tự động định kỳ',
+  }
+  if (map[note]) return map[note]
+  if (note.startsWith('Auto fill schedule window from ')) {
+    return note.replace('Auto fill schedule window from ', 'Tự động sinh lịch làm việc từ ')
+  }
+  return note
+}
+
+// ============================================================
+// MODAL: CHỈNH SLOT LỊCH LÀM VIỆC
+// ============================================================
+
 function SlotEditorModal({
   schedule,
   onClose,
@@ -153,7 +173,7 @@ function SlotEditorModal({
       setWorkingCopy(updated)
       await onSaved()
     } catch (nextError: any) {
-      setError(nextError?.response?.data?.message || nextError.message || 'Không thể lưu slot.')
+      setError(nextError?.response?.data?.message || nextError.message || 'Không thể lưu khung giờ.')
     } finally {
       setSavingSlotId(null)
     }
@@ -176,7 +196,7 @@ function SlotEditorModal({
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Chỉnh lịch làm việc bác sĩ</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Ngày {workingCopy.ngay} • {workingCopy.slots.length} slot
+              Ngày {workingCopy.ngay} • {workingCopy.slots.length} khung giờ
             </p>
           </div>
           <button onClick={onClose} className="btn-secondary">Đóng</button>
@@ -214,7 +234,7 @@ function SlotEditorModal({
                           onChange={(event) => updateSlotField(slot._id, 'gio_bat_dau', event.target.value)}
                           className="input w-full"
                           disabled={immutableStatus}
-                          title={immutableStatus ? 'Không thể đổi giờ của slot đã có lịch hẹn' : undefined}
+                          title={immutableStatus ? 'Không thể đổi giờ của khung giờ đã có lịch hẹn' : undefined}
                         />
                       </td>
                       <td className="px-3 py-3">
@@ -224,7 +244,7 @@ function SlotEditorModal({
                           onChange={(event) => updateSlotField(slot._id, 'gio_ket_thuc', event.target.value)}
                           className="input w-full"
                           disabled={immutableStatus}
-                          title={immutableStatus ? 'Không thể đổi giờ của slot đã có lịch hẹn' : undefined}
+                          title={immutableStatus ? 'Không thể đổi giờ của khung giờ đã có lịch hẹn' : undefined}
                         />
                       </td>
                       <td className="px-3 py-3">
@@ -235,7 +255,7 @@ function SlotEditorModal({
                           className="input w-full"
                           placeholder="Ví dụ: Phòng 101"
                           disabled={immutableStatus}
-                          title={immutableStatus ? 'Không thể đổi phòng của slot đã có lịch hẹn' : undefined}
+                          title={immutableStatus ? 'Không thể đổi phòng của khung giờ đã có lịch hẹn' : undefined}
                         />
                       </td>
                       <td className="px-3 py-3">
@@ -244,7 +264,7 @@ function SlotEditorModal({
                           onChange={(event) => updateSlotField(slot._id, 'status', event.target.value)}
                           className={`h-10 w-full rounded-xl border px-3 text-sm font-semibold shadow-sm outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none ${SLOT_STATUS_SELECT_CLASS[slot.status]}`}
                           disabled={immutableStatus}
-                          title={immutableStatus ? 'Slot đã có lịch hoặc đang chờ thanh toán nên không thể đổi trạng thái tại đây' : 'Chọn trạng thái slot'}
+                          title={immutableStatus ? 'Khung giờ đã có lịch hoặc đang chờ thanh toán nên không thể đổi trạng thái tại đây' : 'Chọn trạng thái khung giờ'}
                         >
                           {SLOT_STATUS_OPTIONS.map((status) => (
                             <option key={status} value={status}>
@@ -266,9 +286,9 @@ function SlotEditorModal({
                           onClick={() => saveSlot(slot)}
                           disabled={savingSlotId === slot._id || immutableStatus}
                           className="btn-primary disabled:opacity-50"
-                          title={immutableStatus ? 'Slot đã có lịch hẹn nên không thể chỉnh sửa' : undefined}
+                          title={immutableStatus ? 'Khung giờ đã có lịch hẹn nên không thể chỉnh sửa' : undefined}
                         >
-                          {savingSlotId === slot._id ? 'Đang lưu...' : 'Lưu slot'}
+                          {savingSlotId === slot._id ? 'Đang lưu...' : 'Lưu khung giờ'}
                         </button>
                       </td>
                     </tr>
@@ -284,7 +304,7 @@ function SlotEditorModal({
               totalPages={totalPages}
               totalItems={workingCopy.slots.length}
               currentItemCount={visibleSlots.length}
-              itemLabel="slot"
+              itemLabel="khung giờ"
               pageSize={itemsPerPage}
               onPageChange={setPage}
             />
@@ -294,6 +314,141 @@ function SlotEditorModal({
     </div>
   )
 }
+
+// ============================================================
+// MODAL: ĐÁNH DẤU NGHỈ / NGHỈ PHÉP (thay thế window.prompt)
+// ============================================================
+
+const DAY_OFF_TYPE_CONFIG = {
+  nghi: {
+    label: 'Đánh dấu nghỉ',
+    description: 'Bác sĩ nghỉ không có lý do hoặc nghỉ đột xuất.',
+    icon: '🚫',
+    iconBg: 'bg-slate-100',
+    badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200',
+    confirmClass: 'bg-slate-800 hover:bg-slate-900 text-white',
+    notePlaceholder: 'VD: Nghỉ đột xuất do lý do cá nhân...',
+  },
+  nghi_phep: {
+    label: 'Đánh dấu nghỉ phép',
+    description: 'Bác sĩ có phép nghỉ được duyệt trước.',
+    icon: '🌴',
+    iconBg: 'bg-amber-50',
+    badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+    confirmClass: 'bg-amber-500 hover:bg-amber-600 text-white',
+    notePlaceholder: 'VD: Nghỉ phép năm theo đơn đã duyệt...',
+  },
+} as const
+
+function MarkDayOffModal({
+  item,
+  type,
+  onConfirm,
+  onCancel,
+  saving,
+}: {
+  item: AdminDoctorWorkdayItem
+  type: 'nghi' | 'nghi_phep'
+  onConfirm: (note: string) => void
+  onCancel: () => void
+  saving: boolean
+}) {
+  const [note, setNote] = useState(item.ghi_chu_ngay || '')
+  const cfg = DAY_OFF_TYPE_CONFIG[type]
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    onConfirm(note)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" style={{ animation: 'fadeInScale 0.18s ease-out' }}>
+        {/* Header */}
+        <div className="flex items-start gap-4 border-b border-slate-100 px-6 pb-4 pt-6">
+          <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl text-2xl ${cfg.iconBg}`}>
+            {cfg.icon}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-bold text-slate-900">{cfg.label}</h3>
+            <p className="mt-0.5 text-sm text-slate-500">{cfg.description}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+            className="flex-shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+          >
+            <Icon name="x" className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
+          {/* Thông tin ngày */}
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <Icon name="clock" className="h-4 w-4 flex-shrink-0 text-slate-400" />
+            <div className="text-sm">
+              <span className="text-slate-500">Ngày áp dụng: </span>
+              <span className="font-bold text-slate-800">{item.ngay}</span>
+            </div>
+            <span className={`ml-auto inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cfg.badgeClass}`}>
+              {cfg.label}
+            </span>
+          </div>
+
+          {/* Ô ghi chú */}
+          <div>
+            <label htmlFor="day-off-note" className="mb-1.5 block text-sm font-semibold text-slate-700">
+              Ghi chú{' '}
+              <span className="font-normal text-slate-400">(không bắt buộc)</span>
+            </label>
+            <textarea
+              id="day-off-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              placeholder={cfg.notePlaceholder}
+              className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-400"
+              disabled={saving}
+              autoFocus
+            />
+          </div>
+
+          {/* Buttons */}
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60 ${cfg.confirmClass}`}
+            >
+              {saving ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Icon name="refresh-cw" className="h-4 w-4 animate-spin" />
+                  Đang lưu...
+                </span>
+              ) : (
+                cfg.label
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// MODAL: LỊCH SỬ CHỈNH SỬA
+// ============================================================
 
 function ScheduleAuditModal({
   title,
@@ -369,7 +524,7 @@ function ScheduleAuditModal({
                       </div>
 
                       <div>
-                        {log.ghi_chu && <p className="font-medium text-slate-800">{log.ghi_chu}</p>}
+                        {log.ghi_chu && <p className="font-medium text-slate-800">{translateLogNote(log.ghi_chu)}</p>}
 
                         {changedFields.length > 0 ? (
                           <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -414,7 +569,7 @@ function ScheduleAuditModal({
               totalPages={totalPages}
               totalItems={totalItems}
               currentItemCount={logs.length}
-              itemLabel="log"
+              itemLabel="bản ghi"
               pageSize={10}
               onPageChange={onPageChange}
             />
@@ -424,6 +579,10 @@ function ScheduleAuditModal({
     </div>
   )
 }
+
+// ============================================================
+// TRANG CHÍNH: QUẢN LÝ LỊCH LÀM VIỆC BÁC SĨ
+// ============================================================
 
 export default function ManageDoctorSchedules() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -446,6 +605,12 @@ export default function ManageDoctorSchedules() {
   const [historyPage, setHistoryPage] = useState(1)
   const [historyPagination, setHistoryPagination] = useState({ total: 0, totalPages: 1 })
   const workdayRequestId = useRef(0)
+
+  // State cho modal đánh dấu nghỉ — thay thế window.prompt
+  const [markDayOff, setMarkDayOff] = useState<{
+    item: AdminDoctorWorkdayItem
+    type: 'nghi' | 'nghi_phep'
+  } | null>(null)
 
   const loadWorkdays = useCallback(async (
     currentDoctorId: string,
@@ -542,15 +707,13 @@ export default function ManageDoctorSchedules() {
     return () => controller.abort()
   }, [doctorId, fromDate, loadWorkdays, toDate])
 
-  async function updateWorkday(item: AdminDoctorWorkdayItem, nextStatus: 'lam_viec' | 'nghi' | 'nghi_phep') {
+  // Hàm thực sự gọi API sau khi người dùng xác nhận trong modal
+  async function executeUpdateWorkday(
+    item: AdminDoctorWorkdayItem,
+    nextStatus: 'lam_viec' | 'nghi' | 'nghi_phep',
+    note: string,
+  ) {
     if (!item._id) return
-
-    let note = ''
-    if (nextStatus !== 'lam_viec') {
-      const promptedNote = window.prompt('Nhập ghi chú cho ngày này (có thể để trống):', item.ghi_chu_ngay || '')
-      if (promptedNote === null) return
-      note = promptedNote
-    }
 
     setSavingId(item._id)
     setError(null)
@@ -567,6 +730,27 @@ export default function ManageDoctorSchedules() {
     } finally {
       setSavingId(null)
     }
+  }
+
+  // Hàm được gọi từ DoctorScheduleCalendar — mở modal thay vì window.prompt
+  async function updateWorkday(item: AdminDoctorWorkdayItem, nextStatus: 'lam_viec' | 'nghi' | 'nghi_phep') {
+    if (!item._id) return
+
+    if (nextStatus === 'lam_viec') {
+      // Đánh dấu đi làm không cần ghi chú → thực hiện ngay
+      await executeUpdateWorkday(item, nextStatus, '')
+    } else {
+      // Đánh dấu nghỉ / nghỉ phép → mở modal form
+      setMarkDayOff({ item, type: nextStatus as 'nghi' | 'nghi_phep' })
+    }
+  }
+
+  // Callback khi người dùng xác nhận trong MarkDayOffModal
+  async function handleMarkDayOffConfirm(note: string) {
+    if (!markDayOff) return
+    const { item, type } = markDayOff
+    setMarkDayOff(null)
+    await executeUpdateWorkday(item, type, note)
   }
 
   async function createScheduleForDay(item: AdminDoctorWorkdayItem) {
@@ -619,7 +803,7 @@ export default function ManageDoctorSchedules() {
     <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Lịch làm việc bác sĩ"
-        description="Lịch làm việc được hệ thống tự động sinh và bù theo tuần. Admin theo dõi trạng thái xác nhận, chỉnh slot khi có thay đổi đặc biệt và xem lịch sử để truy vết."
+        description="Lịch làm việc được hệ thống tự động sinh và bù theo tuần. Admin theo dõi trạng thái xác nhận, chỉnh khung giờ khi có thay đổi đặc biệt và xem lịch sử để truy vết."
       />
 
       <div className="card p-4">
@@ -752,6 +936,18 @@ export default function ManageDoctorSchedules() {
           onClose={() => setHistoryTarget(null)}
         />
       )}
+
+      {/* Modal đánh dấu nghỉ — thay thế window.prompt */}
+      {markDayOff && (
+        <MarkDayOffModal
+          item={markDayOff.item}
+          type={markDayOff.type}
+          saving={savingId === markDayOff.item._id}
+          onConfirm={handleMarkDayOffConfirm}
+          onCancel={() => setMarkDayOff(null)}
+        />
+      )}
+
     </AdminAutoStagger>
   )
 }

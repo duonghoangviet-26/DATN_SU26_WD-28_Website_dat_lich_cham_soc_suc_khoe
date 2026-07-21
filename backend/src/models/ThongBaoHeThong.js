@@ -13,7 +13,7 @@ const systemNotificationSchema = new mongoose.Schema(
     url:      { type: String, default: null, maxlength: 500 },
     doi_tuong: {
       type: String,
-      enum: ['tat_ca', 'benh_nhan', 'bac_si'],
+      enum: ['tat_ca', 'benh_nhan', 'bac_si', 'le_tan', 'y_ta'],
       required: true,
     },
     tao_boi: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', required: true }, // Admin
