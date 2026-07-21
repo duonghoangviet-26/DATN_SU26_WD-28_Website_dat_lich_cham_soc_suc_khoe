@@ -45,7 +45,7 @@ describe('serviceService', () => {
     mockedGet.mockResolvedValue({
       data: {
         data: {
-          items: [{ id: 'svc-1', ma_dich_vu: 'DV001', ten: 'Xet nghiem A', loai: 'home', gia: 200000, status: 'active' }],
+          items: [{ id: 'svc-1', ma_dich_vu: 'DV001', ten: 'Xet nghiem A', loai: 'related', gia: 200000, status: 'active' }],
           total: 1,
           page: 1,
           totalPages: 1,
@@ -53,10 +53,10 @@ describe('serviceService', () => {
       },
     } as never)
 
-    const result = await serviceService.getAll('home', 'xet', 'active', 1, 10)
+    const result = await serviceService.getAll('related', 'xet', 'active', 1, 10)
 
     expect(mockedGet).toHaveBeenCalledWith('/admin/services', {
-      params: { page: 1, limit: 10, loai: 'home', status: 'active', search: 'xet' },
+      params: { page: 1, limit: 10, loai: 'related', status: 'active', search: 'xet' },
     })
     expect(result.items[0].id).toBe('svc-1')
     expect(result.total).toBe(1)
@@ -67,17 +67,17 @@ describe('serviceService', () => {
     mockedGet.mockResolvedValue({
       data: {
         data: [
-          { id: 'svc-home-1', ten: 'Lay mau tai nha', gia: 500000, mo_ta_ngan: 'Mo ta', khu_vuc: ['Cau Giay'] },
+          { id: 'svc-related-1', ten: 'Xet nghiem A', loai: 'related', gia: 500000, mo_ta_ngan: 'Mo ta' },
         ],
       },
     } as never)
 
-    const result = await serviceService.getAll('home', '', 'active', 1, 10)
+    const result = await serviceService.getAll('related', '', 'active', 1, 10)
 
     expect(mockedGet).toHaveBeenCalledWith('/patient/booking/services')
     expect(result.items).toHaveLength(1)
     expect(result.items[0].status).toBe('active')
-    expect(result.items[0].loai).toBe('home')
+    expect(result.items[0].loai).toBe('related')
   })
 
   it('getById() uses admin detail API in admin context', async () => {
@@ -95,39 +95,39 @@ describe('serviceService', () => {
     expect(item.status).toBe('inactive')
   })
 
-  it('getById() finds public home service outside admin context', async () => {
+  it('getById() finds public related service outside admin context', async () => {
     mockLocalStorage('user')
     mockedGet.mockResolvedValue({
       data: {
         data: [
-          { id: 'svc-home-2', ten: 'Lay mau B', gia: 250000, mo_ta: 'Chi tiet' },
+          { id: 'svc-related-2', ten: 'Sieu am B', loai: 'related', gia: 250000, mo_ta: 'Chi tiet' },
         ],
       },
     } as never)
 
-    const item = await serviceService.getById('svc-home-2')
+    const item = await serviceService.getById('svc-related-2')
 
     expect(mockedGet).toHaveBeenCalledWith('/patient/booking/services')
-    expect(item.id).toBe('svc-home-2')
-    expect(item.loai).toBe('home')
+    expect(item.id).toBe('svc-related-2')
+    expect(item.loai).toBe('related')
   })
 
   it('create/update/toggle() call real admin CRUD endpoints', async () => {
     mockLocalStorage('admin')
-    mockedPost.mockResolvedValue({ data: { data: { id: 'svc-3', ten: 'Moi', loai: 'home', gia: 100000, status: 'inactive' } } } as never)
-    mockedPut.mockResolvedValue({ data: { data: { id: 'svc-3', ten: 'Moi cap nhat', loai: 'home', gia: 120000, status: 'inactive' } } } as never)
-    mockedPatch.mockResolvedValue({ data: { data: { id: 'svc-3', ten: 'Moi cap nhat', loai: 'home', gia: 120000, status: 'active' } } } as never)
+    mockedPost.mockResolvedValue({ data: { data: { id: 'svc-3', ten: 'Moi', loai: 'related', gia: 100000, status: 'inactive' } } } as never)
+    mockedPut.mockResolvedValue({ data: { data: { id: 'svc-3', ten: 'Moi cap nhat', loai: 'related', gia: 120000, status: 'inactive' } } } as never)
+    mockedPatch.mockResolvedValue({ data: { data: { id: 'svc-3', ten: 'Moi cap nhat', loai: 'related', gia: 120000, status: 'active' } } } as never)
 
-    await serviceService.create({ ten: 'Moi', loai: 'home', gia: 100000, khu_vuc: ['Cau Giay'] })
-    await serviceService.update('svc-3', { ten: 'Moi cap nhat', loai: 'home', gia: 120000, khu_vuc: ['Cau Giay'] }, 'Cap nhat')
+    await serviceService.create({ ten: 'Moi', loai: 'related', gia: 100000, specialty_id: 'spec-1' })
+    await serviceService.update('svc-3', { ten: 'Moi cap nhat', loai: 'related', gia: 120000, specialty_id: 'spec-1' }, 'Cap nhat')
     const toggled = await serviceService.toggle('svc-3')
 
-    expect(mockedPost).toHaveBeenCalledWith('/admin/services', { ten: 'Moi', loai: 'home', gia: 100000, khu_vuc: ['Cau Giay'] })
+    expect(mockedPost).toHaveBeenCalledWith('/admin/services', { ten: 'Moi', loai: 'related', gia: 100000, specialty_id: 'spec-1' })
     expect(mockedPut).toHaveBeenCalledWith('/admin/services/svc-3', {
       ten: 'Moi cap nhat',
-      loai: 'home',
+      loai: 'related',
       gia: 120000,
-      khu_vuc: ['Cau Giay'],
+      specialty_id: 'spec-1',
       mo_ta_thay_doi: 'Cap nhat',
     })
     expect(mockedPatch).toHaveBeenCalledWith('/admin/services/svc-3/toggle')

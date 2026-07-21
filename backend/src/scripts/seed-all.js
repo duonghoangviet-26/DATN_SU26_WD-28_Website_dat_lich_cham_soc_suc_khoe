@@ -378,7 +378,7 @@ async function seedAll() {
         doi_tuong_ap_dung: 'khong_gioi_han',
         status: 'active',
       },
-    ])
+    ].filter((item) => item.loai !== 'home'))
 
     const doctors = await BacSi.create([
       {
@@ -454,19 +454,19 @@ async function seedAll() {
 
     await HoSoChiTietBacSi.create([
       {
-        chuc_vu: 'B??c s?? Da li???u',
+        doctor_id: doctors[0]._id,
         chuc_danh: 'BSCKI',
-        chuc_vu: 'Bác sĩ Nội khoa',
-        benh_ly_dieu_tri: ['Tăng huyết áp', 'Rối loạn tiêu hóa', 'Tiểu đường'],
-          { noi_cong_tac: 'VitaFamily', chuc_vu: 'B??c s?? Da li???u', tu_nam: 2020, den_nam: null },
-          { noi_cong_tac: 'Bệnh viện Đa khoa Tỉnh A', chuc_vu: 'Bác sĩ điều trị', tu_nam: 2014, den_nam: 2019 },
-          { noi_cong_tac: 'VitaFamily', chuc_vu: 'Bác sĩ Nội khoa', tu_nam: 2020, den_nam: null },
+        chuc_vu: 'Bac si Noi khoa',
+        benh_ly_dieu_tri: ['Tang huyet ap', 'Roi loan tieu hoa', 'Tieu duong'],
+        qua_trinh_cong_tac: [
+          { noi_cong_tac: 'Benh vien Da khoa Tinh A', chuc_vu: 'Bac si dieu tri', tu_nam: 2014, den_nam: 2019 },
+          { noi_cong_tac: 'VitaFamily', chuc_vu: 'Bac si Noi khoa', tu_nam: 2020, den_nam: null },
         ],
         qua_trinh_dao_tao: [
-        thanh_vien_hoi: ['H???i Da li???u Vi???t Nam'],
+          { ten_bang: 'BSCKI Noi khoa', truong: 'DH Y Ha Noi', tu_nam: 2012, den_nam: 2014 },
         ],
-        thanh_vien_hoi: ['Hội Nội khoa Việt Nam'],
-        giai_thuong: [{ ten: 'Bác sĩ tận tâm', nam: 2022 }],
+        thanh_vien_hoi: ['Hoi Noi khoa Viet Nam'],
+        giai_thuong: [{ ten: 'Bac si tan tam', nam: 2022 }],
       },
       {
         doctor_id: doctors[1]._id,
@@ -789,23 +789,23 @@ async function seedAll() {
         doctor_id: doctors[0]._id,
         schedule_id: schedules[3]._id,
         slot_id: schedules[3].slots[0]._id,
-        service_id: services[0]._id,
         chi_nhanh_id: clinic._id,
         specialty_id: specialties[0]._id,
         loai_benh_nhan: 'member',
         nguoi_tao_id: receptionist._id,
         hinh_thuc_dat_lich: 'receptionist',
         ma_lich_hen: 'LH-DEMO-004',
-        loai_kham: 'home',
+        loai_kham: 'clinic',
         ngay_kham: tomorrow,
         gio_kham: '13:30',
         gio_ket_thuc: '14:00',
+        phong_kham: roomFullName(rooms[1]),
         ly_do_kham: 'Cần lấy mẫu máu tại nhà.',
         dia_chi_kham: '25 Phan Văn Trị, Gò Vấp, TP.HCM',
         status: 'confirmed',
         payment_status: 'partial',
         gia_kham: 180000,
-        ten_dich_vu: services[0].ten,
+        ten_dich_vu: specialties[0].ten,
         payment_deadline: addDays(today, 1),
         ten_khach: members[4].ho_ten,
         gioi_tinh_khach: 'male',

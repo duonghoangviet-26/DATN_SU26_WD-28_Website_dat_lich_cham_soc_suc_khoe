@@ -1262,8 +1262,8 @@ export async function getActiveDoctors(req, res) {
 export async function getActiveServices(req, res) {
   try {
     const { loai } = req.query
-    const filter = { status: 'active' }
-    if (loai) filter.loai = loai
+    if (loai === 'home') return ok(res, [])
+    const filter = { status: 'active', loai: 'related' }
 
     const services = await DichVu.find(filter)
       .sort({ ten: 1 })

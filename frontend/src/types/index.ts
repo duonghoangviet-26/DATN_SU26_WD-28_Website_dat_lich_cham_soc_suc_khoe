@@ -234,12 +234,12 @@ export interface SpecialtyItem {
 // 'related' → dịch vụ liên quan theo chuyên khoa (X-quang, MRI...), chỉ hiển thị thông tin
 export type ServiceType = "home" | "related";
 export type ServiceStatus = "active" | "inactive";
-export type ServiceTargetAudience = "tre_em" | "nguoi_lon" | "gia_dinh" | "khong_gioi_han";
 export type ServiceTargetAudience =
     | "tre_em"
     | "nguoi_lon"
     | "gia_dinh"
     | "khong_gioi_han";
+export type ServicePackageType = "goi_don" | "goi_gia_dinh";
 
 export interface ServiceChangeLog {
     id: string;
@@ -271,8 +271,10 @@ export interface ServiceItem {
     specialty_ten?: string | null; // joined — chỉ dùng để hiển thị
     la_goi?: boolean;
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
-    la_goi?: boolean;
-    doi_tuong_ap_dung?: ServiceTargetAudience | null;
+    loai_goi?: ServicePackageType | null;
+    so_nguoi_ap_dung?: number | null;
+    dich_vu_con?: string[];
+    phan_tram_giam_gia?: number | null;
     khu_vuc?: string[]; // home only
     so_bac_si?: number; // computed từ BacSi.services[]
     so_luot_dat?: number; // computed từ LichHen (home only)
@@ -296,8 +298,10 @@ export interface ServiceFormData {
     specialty_id?: string | null;
     la_goi?: boolean;
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
-    la_goi?: boolean;
-    doi_tuong_ap_dung?: ServiceTargetAudience | null;
+    loai_goi?: ServicePackageType | null;
+    so_nguoi_ap_dung?: number | null;
+    dich_vu_con?: string[];
+    phan_tram_giam_gia?: number | null;
     khu_vuc?: string[]; // home only
 }
 
@@ -966,14 +970,8 @@ export interface DoctorAuditLog {
     };
     hanh_dong: string;
     ly_do?: string | null;
-    du_lieu_cu?: {
-        trang_thai_duyet?: string;
-        ly_do_tu_choi?: string | null;
-    } | null;
-    du_lieu_moi?: {
-        trang_thai_duyet?: string;
-        ly_do_tu_choi?: string | null;
-    } | null;
+    du_lieu_cu?: Record<string, unknown> | null;
+    du_lieu_moi?: Record<string, unknown> | null;
     ngay_tao: string;
 }
 
@@ -996,6 +994,7 @@ export interface DoctorUpdatePayload {
     so_nam_kinh_nghiem?: number;
     phi_kham?: number;
     la_hien?: boolean;
+    anh_dai_dien?: string | null;
     admin_id: string;
 }
 
