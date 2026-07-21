@@ -235,11 +235,6 @@ export interface SpecialtyItem {
 export type ServiceType = "home" | "related";
 export type ServiceStatus = "active" | "inactive";
 export type ServiceTargetAudience = "tre_em" | "nguoi_lon" | "gia_dinh" | "khong_gioi_han";
-export type ServiceTargetAudience =
-    | "tre_em"
-    | "nguoi_lon"
-    | "gia_dinh"
-    | "khong_gioi_han";
 
 export interface ServiceChangeLog {
     id: string;
@@ -271,8 +266,6 @@ export interface ServiceItem {
     specialty_ten?: string | null; // joined — chỉ dùng để hiển thị
     la_goi?: boolean;
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
-    la_goi?: boolean;
-    doi_tuong_ap_dung?: ServiceTargetAudience | null;
     khu_vuc?: string[]; // home only
     so_bac_si?: number; // computed từ BacSi.services[]
     so_luot_dat?: number; // computed từ LichHen (home only)
@@ -296,8 +289,6 @@ export interface ServiceFormData {
     specialty_id?: string | null;
     la_goi?: boolean;
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
-    la_goi?: boolean;
-    doi_tuong_ap_dung?: ServiceTargetAudience | null;
     khu_vuc?: string[]; // home only
 }
 
@@ -305,20 +296,10 @@ export interface ServiceFormData {
 export interface AppointmentItem {
     _id: string;
     ma_lich_hen?: string | null;
-    ma_lich_hen?: string | null;
     user_id?: string | null;
     member_id?: string | null;
     user_email?: string | null;
-    member_id?: string | null;
-    user_email?: string | null;
     service_id?: string | null;
-    specialty_id?: string | null;
-    dat_ho?: boolean;
-    loai_dat_lich?: "self" | "proxy";
-    hinh_thuc_dat_lich?: string | null;
-    nguoi_dat_ho_id?: string | null;
-    nguoi_dat_ho_ten?: string | null;
-    nguoi_dat_sdt?: string | null;
     specialty_id?: string | null;
     dat_ho?: boolean;
     loai_dat_lich?: "self" | "proxy";
@@ -357,24 +338,6 @@ export interface AppointmentItem {
         trang_thai_hoa_don?: string | null;
         tong_thanh_toan?: number | null;
     } | null;
-    ly_do_huy?: string | null;
-    huy_boi?: string | null;
-    thoi_diem_huy?: string | null;
-    ghi_chu_le_tan?: string | null;
-    ghi_chu_tiep_nhan?: string | null;
-    so_lan_thay_doi?: number;
-    canh_bao?: {
-        unpaid: boolean;
-        rescheduled_multiple_times: boolean;
-        missing_linkage: boolean;
-        cancelled: boolean;
-    };
-    invoice?: {
-        _id: string;
-        so_hoa_don?: string | null;
-        trang_thai_hoa_don?: string | null;
-        tong_thanh_toan?: number | null;
-    } | null;
     ngay_cap_nhat?: string;
 }
 
@@ -383,12 +346,7 @@ export interface AppointmentSummary {
     pending: number;
     confirmed: number;
     in_progress?: number;
-    in_progress?: number;
     completed: number;
-    cancelled?: number;
-    unpaid?: number;
-    need_attention?: number;
-    proxy_booking?: number;
     cancelled?: number;
     unpaid?: number;
     need_attention?: number;
@@ -601,16 +559,6 @@ export interface PaymentItem {
     phuong_thuc: PaymentMethod;
     status: TransactionStatus;
     ngay_tao: string;
-    hoa_don_id?: string | null;
-    appointment_id?: string | null;
-    so_hoa_don?: string | null;
-    loai_thanh_toan?: string | null;
-    email?: string | null;
-    so_dien_thoai?: string | null;
-    nguoi_thu_id?: string | null;
-    thoi_diem_thanh_toan?: string | null;
-    ngay_thanh_toan?: string | null;
-    trang_thai_hoa_don?: string | null;
     hoa_don_id?: string | null;
     appointment_id?: string | null;
     so_hoa_don?: string | null;
