@@ -1,7 +1,7 @@
 // Kiểu dữ liệu dùng chung toàn project.
 // Khớp với cấu trúc bảng trong VitaFamily_Database.sql.
 
-export type Role = "user" | "doctor" | "admin" | "receptionist";
+export type Role = "user" | "doctor" | "admin" | "receptionist" | "nurse";
 export type UserStatus = "active" | "locked";
 export type DoctorApproval = "pending" | "approved" | "rejected" | "suspended";
 export type AppointmentStatus =
@@ -567,7 +567,7 @@ export interface ReviewItem {
 }
 
 // Khớp backend ThongBaoHeThong.doi_tuong — dùng tên tiếng Việt để nhất quán (GAP-20)
-export type NotificationTarget = "tat_ca" | "benh_nhan" | "bac_si";
+export type NotificationTarget = "tat_ca" | "benh_nhan" | "bac_si" | "le_tan" | "y_ta";
 
 export interface NotificationItem {
     id: number;
@@ -977,7 +977,7 @@ export interface DoctorAuditLog {
     ngay_tao: string;
 }
 
-export type NotificationTargetAPI = "tat_ca" | "benh_nhan" | "bac_si";
+export type NotificationTargetAPI = "tat_ca" | "benh_nhan" | "bac_si" | "le_tan" | "y_ta";
 
 export interface NotificationItemAPI {
     _id: string;

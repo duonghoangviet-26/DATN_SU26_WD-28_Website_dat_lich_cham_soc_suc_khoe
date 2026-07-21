@@ -295,7 +295,7 @@ export default function DoctorScheduleCalendar({
                   status?.cell || 'border-slate-100 bg-white'
                 } ${isToday ? 'ring-2 ring-inset ring-brand-600' : ''} ${outsideMonth || outsideFilter ? 'opacity-40' : ''} disabled:cursor-default`}
                 aria-selected={selectedDay?.ngay === dateKey}
-                aria-label={item ? `${formatFullDate(dateKey)}, ${status?.label}, ${item.slot_da_dat}/${item.tong_slot} slot đã đặt` : formatFullDate(dateKey)}
+                aria-label={item ? `${formatFullDate(dateKey)}, ${status?.label}, ${item.slot_da_dat}/${item.tong_slot} lượt khám đã đặt` : formatFullDate(dateKey)}
               >
                 <div className="flex items-start justify-between gap-2">
                   <span className={`flex h-8 min-w-8 items-center justify-center rounded-md px-1 text-sm font-bold ${isToday ? 'bg-brand-700 text-white' : 'text-slate-900'}`}>{date.getDate()}</span>
@@ -310,7 +310,7 @@ export default function DoctorScheduleCalendar({
                       <span className="truncate text-xs font-semibold text-slate-800">{status.label}</span>
                     </div>
                     <div className="mt-3 text-lg font-bold text-slate-950">{item.slot_da_dat}<span className="text-sm font-medium text-slate-700">/{item.tong_slot}</span></div>
-                    <div className="text-xs text-slate-700">slot đã đặt</div>
+                    <div className="text-xs text-slate-700">lượt khám đã đặt</div>
                   </div>
                 )}
               </button>
@@ -376,7 +376,7 @@ export default function DoctorScheduleCalendar({
 
               <dl className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-slate-200">
                 {[
-                  ['Tổng slot', selectedDay.tong_slot], ['Slot trống', selectedDay.slot_trong],
+                  ['Tổng khung giờ', selectedDay.tong_slot], ['Khung giờ trống', selectedDay.slot_trong],
                   ['Đã đặt', selectedDay.slot_da_dat], ['Bị khóa / hủy', selectedDay.slot_bi_khoa + selectedDay.slot_da_huy],
                   ['Lịch đang xử lý', selectedDay.so_lich_hen_xung_dot], ['Xác nhận', CONFIRMATION_META[selectedDay.trang_thai_xac_nhan].label],
                 ].map(([label, value]) => (
@@ -394,7 +394,7 @@ export default function DoctorScheduleCalendar({
                 <button type="button" onClick={() => onCreateScheduleForDay(selectedDay)} disabled={savingId === selectedDay.ngay || selectedDay.trang_thai_ngay === 'nghi'} className="btn-primary min-h-11 w-full disabled:opacity-50">{savingId === selectedDay.ngay ? 'Đang chạy bù...' : 'Chạy bù lịch cho ngày này'}</button>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <button type="button" onClick={() => onOpenScheduleEditor(selectedDay._id!)} className="btn-primary min-h-11">Chỉnh slot</button>
+                  <button type="button" onClick={() => onOpenScheduleEditor(selectedDay._id!)} className="btn-primary min-h-11">Chỉnh khung giờ</button>
                   <button type="button" onClick={() => onOpenHistory(selectedDay)} className="btn-secondary min-h-11"><Icon name="clock" className="h-4 w-4" /> Lịch sử</button>
                   <button type="button" onClick={() => onUpdateWorkday(selectedDay, 'lam_viec')} disabled={savingId === selectedDay._id || selectedDay.trang_thai_ngay === 'lam_viec'} className="min-h-11 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm font-medium text-green-800 hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50">Đánh dấu đi làm</button>
                   <button type="button" onClick={() => onUpdateWorkday(selectedDay, 'nghi')} disabled={savingId === selectedDay._id || selectedDay.trang_thai_ngay === 'nghi' || selectedDay.slot_da_dat > 0} title={selectedDay.slot_da_dat > 0 ? 'Không thể đánh dấu nghỉ khi còn lịch hẹn' : undefined} className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Đánh dấu nghỉ</button>
