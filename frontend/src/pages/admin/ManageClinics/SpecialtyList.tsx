@@ -101,9 +101,8 @@ export default function SpecialtyList({
           <thead className="bg-slate-50 text-left text-slate-500">
             <tr>
               <th className="w-16 px-5 py-3 text-center font-medium">STT</th>
-              <th className="px-5 py-3 font-medium">Icon</th>
+              <th className="px-5 py-3 font-medium">Hình ảnh</th>
                <th className="px-5 py-3 font-medium">Tên chuyên khoa</th>
-              <th className="hidden px-5 py-3 font-medium md:table-cell">Slug</th>
                <th className="hidden px-5 py-3 font-medium md:table-cell">Mô tả</th>
                <th className="hidden px-5 py-3 text-center font-medium md:table-cell">Số bác sĩ</th>
                <th className="px-5 py-3 font-medium">Trạng thái</th>
@@ -113,13 +112,13 @@ export default function SpecialtyList({
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
+                <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                   Đang tải...
                 </td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
+                <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                   {activeTab === 'active'
                     ? 'Chưa có chuyên khoa nào đang hoạt động'
                     : 'Chưa có chuyên khoa nào bị ẩn'}
@@ -143,11 +142,6 @@ export default function SpecialtyList({
                     )}
                   </td>
                   <td className="px-5 py-3 font-medium text-slate-800">{specialty.ten}</td>
-                  <td className="hidden px-5 py-3 md:table-cell">
-                    <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
-                      {specialty.slug}
-                    </span>
-                  </td>
                   <td className="hidden max-w-[200px] px-5 py-3 text-slate-500 md:table-cell">
                     <span className="line-clamp-2">
                        {specialty.mo_ta || <em className="text-slate-400">Chưa có</em>}
