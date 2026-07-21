@@ -180,8 +180,8 @@ export default function Appointments() {
   const handleReschedule = async (apt: Appointment) => {
     setSelectedAppointmentId(apt._id);
     
-    // Nếu đã dời lịch >= 3 lần, bật form Lịch sử
-    if ((apt.so_lan_thay_doi || 0) >= 3) {
+    // Nếu đã dời lịch >= 1 lần, bật form Lịch sử
+    if ((apt.so_lan_thay_doi || 0) >= 1) {
       try {
         const res = await axiosInstance.get(`/receptionist/appointments/${apt._id}/reschedule-history`);
         if (res.data.success) {
