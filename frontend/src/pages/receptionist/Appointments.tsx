@@ -456,13 +456,13 @@ export default function Appointments() {
         </div>
       </div>
 
-      {/* Modal Lịch sử Dời Lịch (Quá giới hạn 3 lần) */}
+      {/* Modal Lịch sử Dời Lịch (Quá giới hạn 1 lần) */}
       {rescheduleLimitModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-red-600 mb-2">Đạt giới hạn dời lịch!</h3>
             <p className="text-sm text-slate-600 mb-4">
-              Khách hàng này đã thay đổi lịch hẹn <strong className="text-red-500">3 lần</strong>. Hệ thống không cho phép dời lịch thêm nữa để tránh xáo trộn công việc của bác sĩ. Dưới đây là lịch sử dời lịch:
+              Khách hàng này đã thay đổi lịch hẹn <strong className="text-red-500">1 lần</strong>. Hệ thống không cho phép dời lịch thêm nữa để tránh xáo trộn công việc của bác sĩ. Dưới đây là lịch sử dời lịch:
             </p>
             
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 max-h-60 overflow-y-auto space-y-4">
