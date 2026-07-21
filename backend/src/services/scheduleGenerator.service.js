@@ -139,7 +139,7 @@ export async function generateWeeklySchedule({
   actorRole = 'system',
   actorUserId = null,
   action = 'auto_generate',
-  note = 'Sinh lich lam viec tu dong theo tuan',
+  note = 'Sinh lịch làm việc tự động theo tuần',
 } = {}) {
   const weekDates = getWeekDates(weekStart)
   const activeDoctors = doctors ?? await BacSi.find({
@@ -192,7 +192,7 @@ export async function generateAutoScheduleWindowForAllDoctors({
   fromDate = new Date(),
   weeksAhead = 2,
   action = 'auto_generate',
-  note = 'Tu dong sinh bu lich lam viec',
+  note = 'Tự động sinh bù lịch làm việc',
 } = {}) {
   const start = getWeekStart(fromDate)
   const weeks = Array.from({ length: weeksAhead + 1 }, (_, index) => {
@@ -243,7 +243,7 @@ export async function generateInitialWindowForDoctor(doctorId, phongMacDinh) {
     weekStart: new Date(),
     doctors: [{ _id: doctorId, phong_kham_mac_dinh: phongMacDinh }],
     action: 'auto_generate',
-    note: 'Sinh lich tu dong khi duyet bac si',
+    note: 'Sinh lịch tự động khi duyệt bác sĩ',
   })
 }
 
@@ -252,6 +252,6 @@ export async function generateRollingWindowForAllDoctors() {
     fromDate: new Date(),
     weeksAhead: 2,
     action: 'auto_generate',
-    note: 'Sinh lich rolling window tu dong',
+    note: 'Sinh lịch làm việc tự động định kỳ',
   })
 }

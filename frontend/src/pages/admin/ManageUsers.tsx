@@ -69,7 +69,7 @@ export default function ManageUsers() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'delete' | 'restore' | 'hard-delete', user: User } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'delete' | 'restore' | 'hard-delete' | 'hard-delete-locked', user: User } | null>(null)
   const [detailLogs, setDetailLogs] = useState<any[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -176,7 +176,7 @@ export default function ManageUsers() {
         await userService.softDelete(user.id)
       } else if (type === 'restore') {
         await userService.restore(user.id)
-      } else if (type === 'hard-delete') {
+      } else if (type === 'hard-delete' || type === 'hard-delete-locked') {
         await userService.hardDelete(user.id)
       }
       loadUsers()
@@ -506,14 +506,44 @@ export default function ManageUsers() {
                             <button onClick={() => setEditingUser(u)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Chỉnh sửa"><Icon name="edit" className="h-4 w-4" /></button>
                             {u.id !== currentUser?.id && (
                               <>
-                                <button onClick={() => setConfirmAction({ type: 'lock', user: u })} className={`p-2 rounded-lg transition-colors ${u.status === 'active' ? 'text-slate-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 bg-orange-50'}`} title={u.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}><Icon name="ban" className="h-4 w-4" /></button>
-                                <button onClick={() => setConfirmAction({ type: 'delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa mềm"><Icon name="trash" className="h-4 w-4" /></button>
+                                {/* active → nút khóa + xóa mềm | locked → nút mở khóa + xóa cứng */}
+                                {u.status === 'active' ? (
+                                  <>
+                                    <button
+                                      onClick={() => setConfirmAction({ type: 'lock', user: u })}
+                                      className="p-2 rounded-lg transition-colors text-slate-400 hover:text-orange-600 hover:bg-orange-50"
+                                      title="Khóa tài khoản"
+                                    >
+                                      <Icon name="ban" className="h-4 w-4" />
+                                    </button>
+                                    <button onClick={() => setConfirmAction({ type: 'delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa mềm"><Icon name="trash" className="h-4 w-4" /></button>
+                                  </>
+                                ) : (
+                                  /* Tài khoản đã khóa: mở khóa + xóa cứng */
+                                  <>
+                                    <button
+                                      onClick={() => setConfirmAction({ type: 'lock', user: u })}
+                                      className="p-2 rounded-lg transition-colors text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50"
+                                      title="Mở khóa tài khoản"
+                                    >
+                                      <Icon name="refresh-cw" className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmAction({ type: 'hard-delete-locked', user: u })}
+                                      className="p-2 rounded-lg transition-colors text-slate-400 hover:text-red-600 hover:bg-red-50"
+                                      title="Xóa vĩnh viễn tài khoản đã khóa"
+                                    >
+                                      <Icon name="trash" className="h-4 w-4" />
+                                    </button>
+                                  </>
+                                )}
                               </>
                             )}
                           </>
                         ) : (
                           <div className="flex justify-end gap-1">
-                            <button onClick={() => setConfirmAction({ type: 'restore', user: u })} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Khôi phục tài khoản"><Icon name="check" className="h-4 w-4" /></button>
+                            {/* Icon khôi phục: dùng refresh-cw (↺) thay vì check (✓) */}
+                            <button onClick={() => setConfirmAction({ type: 'restore', user: u })} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Khôi phục tài khoản"><Icon name="refresh-cw" className="h-4 w-4" /></button>
                             <button onClick={() => setConfirmAction({ type: 'hard-delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa vĩnh viễn"><Icon name="trash" className="h-4 w-4" /></button>
                           </div>
                         )}
@@ -664,9 +694,42 @@ export default function ManageUsers() {
       {confirmAction && createPortal(
         <ConfirmDialog
           open={!!confirmAction}
-          danger={confirmAction?.type === 'delete' || confirmAction?.type === 'hard-delete' || (confirmAction?.type === 'lock' && confirmAction.user.status === 'active')}
-          title={confirmAction?.type === 'hard-delete' ? 'XÓA VĨNH VIỄN' : confirmAction?.type === 'delete' ? 'Xóa người dùng' : confirmAction?.type === 'restore' ? 'Khôi phục' : confirmAction?.user.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-          message={confirmAction ? `Bạn có chắc muốn ${confirmAction.type === 'hard-delete' ? 'XÓA VĨNH VIỄN (không thể khôi phục)' : confirmAction.type === 'delete' ? 'xóa' : confirmAction.type === 'restore' ? 'khôi phục' : confirmAction.user.status === 'active' ? 'khóa' : 'mở khóa'} người dùng "${confirmAction.user.ho_ten}"?` : ''}
+          danger={
+            confirmAction?.type === 'delete' ||
+            confirmAction?.type === 'hard-delete' ||
+            confirmAction?.type === 'hard-delete-locked' ||
+            (confirmAction?.type === 'lock' && confirmAction.user.status === 'active')
+          }
+          title={
+            confirmAction?.type === 'hard-delete' || confirmAction?.type === 'hard-delete-locked'
+              ? 'XÓA VĨNH VIỄN'
+              : confirmAction?.type === 'delete'
+              ? 'Xóa người dùng'
+              : confirmAction?.type === 'restore'
+              ? 'Khôi phục'
+              : confirmAction?.user.status === 'active'
+              ? 'Khóa tài khoản'
+              : 'Mở khóa tài khoản'
+          }
+          message={
+            confirmAction
+              ? `Bạn có chắc muốn ${
+                  confirmAction.type === 'hard-delete' || confirmAction.type === 'hard-delete-locked'
+                    ? 'XÓA VĨNH VIỄN (không thể khôi phục)'
+                    : confirmAction.type === 'delete'
+                    ? 'xóa'
+                    : confirmAction.type === 'restore'
+                    ? 'khôi phục'
+                    : confirmAction.user.status === 'active'
+                    ? 'khóa'
+                    : 'mở khóa'
+                } người dùng "${confirmAction.user.ho_ten}"?${
+                  confirmAction.type === 'hard-delete-locked'
+                    ? ' Tài khoản này đang bị khóa và sẽ bị xóa hoàn toàn khỏi hệ thống.'
+                    : ''
+                }`
+              : ''
+          }
           confirmText="Xác nhận"
           onConfirm={onConfirmAction}
           onCancel={() => setConfirmAction(null)}

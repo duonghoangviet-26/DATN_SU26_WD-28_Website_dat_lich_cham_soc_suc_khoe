@@ -4,10 +4,10 @@ import { useAuth } from '@/context/AuthContext'
 
 const demoAccounts = [
   { role: 'Admin', email: 'admin@vitafamily.vn' },
-  { role: 'Bác sĩ', email: 'doctor.khang@vitafamily.vn' },
-  { role: 'Bệnh nhân', email: 'patient01.demo@vitafamily.vn' },
-  { role: 'Y tá', email: 'nurse@vitafamily.vn' },
-  { role: 'Lễ tân', email: 'reception@vitafamily.vn' },
+  { role: 'Bác sĩ', email: 'haiv5634@gmail.com' },
+  { role: 'Bệnh nhân', email: 'lt14062006meitu@gmail.com' },
+  { role: 'Y tá', email: 'ducluong140606@gmail.com' },
+  { role: 'Lễ tân', email: 'luongtran140606@gmail.com' },
 ]
 
 export default function Login() {

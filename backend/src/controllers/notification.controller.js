@@ -49,7 +49,7 @@ export async function getReceivedNotifications(req, res) {
 
 export async function sendNotification(req, res) {
   try {
-    const notification = await notificationService.createNotification(req.body)
+    const notification = await notificationService.createNotification(req.body, req.user.id)
     return created(res, notification, 'Tao thong bao thanh cong')
   } catch (err) {
     if (err.message.includes('Thieu truong') || err.message.includes('khong hop le') || err.message.includes('bat buoc')) {
@@ -61,7 +61,7 @@ export async function sendNotification(req, res) {
 
 export async function updateNotification(req, res) {
   try {
-    const updatedNotif = await notificationService.updateNotification(req.params.id, req.body)
+    const updatedNotif = await notificationService.updateNotification(req.params.id, req.body, req.user.id)
     return ok(res, updatedNotif, 'Cap nhat thong bao thanh cong')
   } catch (err) {
     if (err.message === 'Khong tim thay thong bao') return fail(res, 404, err.message)
@@ -74,7 +74,7 @@ export async function updateNotification(req, res) {
 
 export async function deleteNotification(req, res) {
   try {
-    await notificationService.deleteNotification(req.params.id)
+    await notificationService.deleteNotification(req.params.id, req.user.id)
     return ok(res, null, 'Xoa thong bao thanh cong')
   } catch (err) {
     if (err.message === 'Khong tim thay thong bao') return fail(res, 404, err.message)
