@@ -22,16 +22,12 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await axiosInstance.get('/receptionist/appointments?timeframe=today');
+        const res = await axiosInstance.get('/receptionist/appointments?timeframe=today&limit=1000');
         if (res.data.success) {
           const appointments: Appointment[] = res.data.data;
           setTotalToday(appointments.length);
           setWaiting(
-            appointments.filter(
-              (a) =>
-                (a.status === 'pending' || a.status === 'confirmed') &&
-                !isAppointmentOverdue(a.ngay_kham, a.gio_kham)
-            ).length
+            appointments.filter((a) => a.status === 'checked_in').length
           );
         }
       } catch (err) {

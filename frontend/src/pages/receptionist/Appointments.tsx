@@ -45,6 +45,28 @@ const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
   return appointmentDate < now;
 };
 
+const getStatusBadge = (status: string, isOverdue: boolean = false) => {
+  switch (status) {
+    case 'checked_in':
+      return { label: 'Đã đến', className: 'bg-emerald-100 text-emerald-700' };
+    case 'in_progress':
+    case 'waiting_record':
+    case 'waiting_doctor_confirm':
+      return { label: 'Đang khám', className: 'bg-indigo-100 text-indigo-700' };
+    case 'completed':
+      return { label: 'Hoàn thành', className: 'bg-blue-100 text-blue-700' };
+    case 'cancelled':
+      return { label: 'Đã hủy', className: 'bg-red-100 text-red-700' };
+    case 'pending':
+    case 'confirmed':
+    default:
+      return { 
+        label: 'Chưa đến', 
+        className: isOverdue ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700' 
+      };
+  }
+};
+
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [activeTab, setActiveTab] = useState<'today' | 'tomorrow' | 'upcoming' | 'past'>('today');
@@ -361,12 +383,8 @@ export default function Appointments() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col items-start gap-1">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            apt.status === 'checked_in' ? 'bg-blue-100 text-blue-700' : 
-                            apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 
-                            isPendingAndOverdue ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {apt.status === 'checked_in' ? 'Đã đến' : apt.status === 'cancelled' ? 'Đã hủy' : 'Chờ khám'}
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(apt.status, isPendingAndOverdue).className}`}>
+                            {getStatusBadge(apt.status, isPendingAndOverdue).label}
                           </span>
                           {isPendingAndOverdue && (
                             <span className="text-[10px] font-bold text-red-500 uppercase tracking-wide">
@@ -678,11 +696,8 @@ export default function Appointments() {
                       
                       <div className="flex justify-between items-center pt-1">
                         <p className="text-sm text-slate-600">Trạng thái khám:</p>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          selectedDetailAppointment.status === 'checked_in' ? 'bg-blue-100 text-blue-700' : 
-                          selectedDetailAppointment.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {selectedDetailAppointment.status === 'checked_in' ? 'Đã đến' : selectedDetailAppointment.status === 'cancelled' ? 'Đã hủy' : 'Chờ khám'}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(selectedDetailAppointment.status, isAppointmentOverdue(selectedDetailAppointment.ngay_kham, selectedDetailAppointment.gio_kham)).className}`}>
+                          {getStatusBadge(selectedDetailAppointment.status, isAppointmentOverdue(selectedDetailAppointment.ngay_kham, selectedDetailAppointment.gio_kham)).label}
                         </span>
                       </div>
                       
