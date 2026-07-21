@@ -99,12 +99,14 @@ export default function SendNotificationTab() {
         setTotalPages(pagination.totalPages)
         setTotalRecords(pagination.total)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       if (!ignore) setLoading(false)
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let ignore = false
     loadData(ignore)

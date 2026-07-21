@@ -15,6 +15,9 @@ import type {
   NurseQueueCheckinPayload,
   NurseQueueCheckinResult,
   NurseQueueActionResult,
+  NurseShift,
+  NurseQueuePage,
+  NursePendingRecord,
 } from '@/types'
 
 export const nurseService = {
@@ -23,11 +26,31 @@ export const nurseService = {
     return res.data.data
   },
 
-  async getQueue(params: { date?: string; status?: AppointmentStatus | '' } = {}): Promise<NurseQueueItem[]> {
+  async getQueue(
+    params: { date?: string; status?: AppointmentStatus | ''; q?: string; page?: number; limit?: number } = {},
+  ): Promise<NurseQueuePage> {
     const query: Record<string, string> = {}
     if (params.date) query.date = params.date
     if (params.status) query.status = params.status
-    const res = await axiosInstance.get<ApiResponse<NurseQueueItem[]>>('/nurse/appointments', { params: query })
+    if (params.q) query.q = params.q
+    if (params.page) query.page = String(params.page)
+    if (params.limit) query.limit = String(params.limit)
+    const res = await axiosInstance.get<ApiResponse<NurseQueuePage>>('/nurse/appointments', { params: query })
+    return res.data.data
+  },
+
+  async getPendingRecords(params: { date?: string } = {}): Promise<NursePendingRecord[]> {
+    const query: Record<string, string> = {}
+    if (params.date) query.date = params.date
+    const res = await axiosInstance.get<ApiResponse<NursePendingRecord[]>>('/nurse/appointments/pending-records', { params: query })
+    return res.data.data
+  },
+
+  async getSchedule(params: { from?: string; to?: string } = {}): Promise<NurseShift[]> {
+    const query: Record<string, string> = {}
+    if (params.from) query.from = params.from
+    if (params.to) query.to = params.to
+    const res = await axiosInstance.get<ApiResponse<NurseShift[]>>('/nurse/schedule', { params: query })
     return res.data.data
   },
 

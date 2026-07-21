@@ -7,14 +7,16 @@ import { nurseService } from '@/services/nurse.service'
 import type { NurseDashboard as NurseDashboardData } from '@/types'
 import { APPOINTMENT_STATUS_LABEL } from '@/utils/constants'
 
-const STAT_CARDS: { key: keyof NurseDashboardData; label: string; icon: string }[] = [
-  { key: 'tong_check_in', label: 'Đã check-in hôm nay', icon: 'calendar' },
-  { key: 'dang_cho_kham', label: 'Đang chờ khám', icon: 'clock' },
-  { key: 'dang_kham', label: 'Đang khám', icon: 'refresh-cw' },
-  { key: 'cho_nhap_ho_so', label: 'Chờ nhập hồ sơ', icon: 'file-text' },
-  { key: 'ho_so_cho_xac_nhan', label: 'Hồ sơ chờ bác sĩ xác nhận', icon: 'file-text' },
-  { key: 'ho_so_can_sua', label: 'Hồ sơ cần chỉnh sửa', icon: 'edit' },
-  { key: 'ho_so_da_xac_nhan', label: 'Hồ sơ đã xác nhận', icon: 'check' },
+// Mỗi thẻ dẫn tới danh sách đã lọc tương ứng. Thẻ hồ sơ cần sửa -> trang Revisions.
+// (NurseQueue đọc bộ lọc status từ URL sẽ hoàn thiện ở bước Danh sách lịch hẹn.)
+const STAT_CARDS: { key: keyof NurseDashboardData; label: string; icon: string; to: string }[] = [
+  { key: 'tong_lich_hom_nay', label: 'Lịch hẹn hôm nay', icon: 'calendar', to: '/nurse/queue' },
+  { key: 'can_tiep_nhan', label: 'Cần tiếp nhận', icon: 'clock', to: '/nurse/queue?status=confirmed' },
+  { key: 'dang_kham', label: 'Đang khám', icon: 'refresh-cw', to: '/nurse/queue?status=in_progress' },
+  { key: 'cho_nhap_ho_so', label: 'Chờ nhập hồ sơ', icon: 'file-text', to: '/nurse/pending-records' },
+  { key: 'ho_so_cho_xac_nhan', label: 'Hồ sơ chờ bác sĩ xác nhận', icon: 'file-text', to: '/nurse/queue?status=waiting_doctor_confirm' },
+  { key: 'ho_so_can_sua', label: 'Hồ sơ cần chỉnh sửa', icon: 'edit', to: '/nurse/revisions' },
+  { key: 'ho_so_da_xac_nhan', label: 'Hồ sơ đã xác nhận', icon: 'check', to: '/nurse/queue?status=completed' },
 ]
 
 export default function NurseDashboard() {
@@ -68,7 +70,11 @@ export default function NurseDashboard() {
           {/* Số liệu */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {STAT_CARDS.map((s) => (
-              <div key={s.key} className="card flex items-center gap-3 p-4">
+              <Link
+                key={s.key}
+                to={s.to}
+                className="card flex items-center gap-3 p-4 transition-colors hover:bg-slate-50"
+              >
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
                   <Icon name={s.icon} className="h-5 w-5" />
                 </div>
@@ -76,7 +82,7 @@ export default function NurseDashboard() {
                   <p className="text-xl font-bold text-slate-800">{data[s.key] as number}</p>
                   <p className="text-xs text-slate-400">{s.label}</p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
 

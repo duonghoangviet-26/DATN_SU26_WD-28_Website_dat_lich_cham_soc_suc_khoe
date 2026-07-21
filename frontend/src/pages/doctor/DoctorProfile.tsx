@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
+import Toast from '@/components/common/Toast'
 import Icon from '@/components/admin/icons'
 import { doctorProfileService } from '@/services/doctor-profile.service'
 import type { DoctorSelfProfile } from '@/types'
@@ -13,6 +14,7 @@ export default function DoctorProfile() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   // Form state — chỉ các field bác sĩ tự sửa được (chuyên khoa do Admin gán, không sửa ở đây)
   const [form, setForm] = useState({
@@ -42,6 +44,8 @@ export default function DoctorProfile() {
       setEditing(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+    } catch (err: any) {
+      setSaveError(err.response?.data?.message || 'Không thể lưu thông tin. Vui lòng thử lại.')
     } finally {
       setSaving(false)
     }
@@ -56,6 +60,10 @@ export default function DoctorProfile() {
 
   return (
     <div>
+      {saveError && (
+        <Toast key={saveError} message={saveError} type="error" onClose={() => setSaveError('')} />
+      )}
+
       <PageHeader
         title="Hồ sơ bác sĩ"
         description="Quản lý thông tin hành nghề và trạng thái phê duyệt của bạn."
