@@ -1,4 +1,4 @@
-import type { ClinicItem, SpecialtyItem } from '@/types'
+import type { ClinicItem, ClinicRoomItem, ClinicRoomOptions, ClinicRoomPayload, SpecialtyItem } from '@/types'
 import axiosInstance from './axiosInstance'
 
 export const clinicService = {
@@ -14,6 +14,31 @@ export const clinicService = {
 
   async getCurrentClinicLogs(): Promise<any[]> {
     const res = await axiosInstance.get('/admin/clinics/current/logs')
+    return res.data.data
+  },
+
+  async getRooms(params?: { status?: 'active' | 'inactive' | ''; keyword?: string }): Promise<ClinicRoomItem[]> {
+    const res = await axiosInstance.get('/admin/clinics/rooms', { params })
+    return res.data.data
+  },
+
+  async getRoomOptions(): Promise<ClinicRoomOptions> {
+    const res = await axiosInstance.get('/admin/clinics/rooms/options')
+    return res.data.data
+  },
+
+  async createRoom(payload: ClinicRoomPayload): Promise<ClinicRoomItem> {
+    const res = await axiosInstance.post('/admin/clinics/rooms', payload)
+    return res.data.data
+  },
+
+  async updateRoom(id: string, payload: ClinicRoomPayload): Promise<ClinicRoomItem> {
+    const res = await axiosInstance.put(`/admin/clinics/rooms/${id}`, payload)
+    return res.data.data
+  },
+
+  async deleteRoom(id: string): Promise<{ _id: string }> {
+    const res = await axiosInstance.delete(`/admin/clinics/rooms/${id}`)
     return res.data.data
   },
 

@@ -144,7 +144,7 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
                     value={form.ten}
                     onChange={handleChange}
                     className="input w-full"
-                    placeholder="VD: VitaFamily Clinic"
+                    placeholder="VD: ViteFamily Clinic"
                   />
                 </Field>
 
@@ -187,7 +187,7 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
                     value={form.email}
                     onChange={handleChange}
                     className="input w-full"
-                    placeholder="contact@vitafamily.vn"
+                    placeholder="contact@ViteFamily.vn"
                   />
                 </Field>
 

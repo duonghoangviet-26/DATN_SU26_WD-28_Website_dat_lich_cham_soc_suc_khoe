@@ -232,6 +232,57 @@ export interface SpecialtyItem {
 // ─── Dịch vụ ─────────────────────────────────────────────────────────────────
 // 'home'    → nhân viên lấy mẫu xét nghiệm đến nhà, đặt được, có thoi_gian_phut
 // 'related' → dịch vụ liên quan theo chuyên khoa (X-quang, MRI...), chỉ hiển thị thông tin
+export interface ClinicRoomDoctor {
+    _id: string;
+    ho_ten: string;
+    email?: string | null;
+    trang_thai_duyet?: DoctorApproval;
+    trang_thai?: "active" | "nghi_phep" | "nghi_viec";
+    phong_kham_mac_dinh?: string | null;
+    specialties?: { _id: string; ten: string }[];
+}
+
+export interface ClinicRoomNurse {
+    _id: string;
+    ho_ten: string;
+    email?: string | null;
+    so_dien_thoai?: string | null;
+    status?: UserStatus;
+}
+
+export interface ClinicRoomItem {
+    _id: string;
+    ten: string;
+    tang: number;
+    toa: string;
+    loai: string;
+    trang_thai: "active" | "inactive";
+    full_name: string;
+    doctor_ids: ClinicRoomDoctor[];
+    nurse_ids: ClinicRoomNurse[];
+    doctor_count: number;
+    nurse_count: number;
+    future_schedule_count: number;
+    active_appointment_count: number;
+    ngay_tao?: string | null;
+    ngay_cap_nhat?: string | null;
+}
+
+export interface ClinicRoomPayload {
+    ten: string;
+    tang: number;
+    toa: string;
+    loai: string;
+    trang_thai: "active" | "inactive";
+    doctor_ids: string[];
+    nurse_ids: string[];
+}
+
+export interface ClinicRoomOptions {
+    doctors: ClinicRoomDoctor[];
+    nurses: ClinicRoomNurse[];
+}
+
 export type ServiceType = "home" | "related";
 export type ServiceStatus = "active" | "inactive";
 export type ServiceTargetAudience = "tre_em" | "nguoi_lon" | "gia_dinh" | "khong_gioi_han";
