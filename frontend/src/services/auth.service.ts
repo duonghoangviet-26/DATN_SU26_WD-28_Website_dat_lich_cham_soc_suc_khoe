@@ -55,4 +55,15 @@ export const authService = {
     })
     return res.data
   },
+
+  /**
+   * Đặt lại mật khẩu mới với token
+   */
+  async resetPassword(token: string, matKhauMoi: string): Promise<any> {
+    const res = await axiosInstance.post<ApiResponse<any>>('/auth/reset-password', {
+      token,
+      mat_khau_moi: matKhauMoi,
+    })
+    return res.data
+  },
 }
