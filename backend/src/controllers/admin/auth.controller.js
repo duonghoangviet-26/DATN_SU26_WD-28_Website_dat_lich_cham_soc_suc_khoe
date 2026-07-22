@@ -241,3 +241,54 @@ export async function forgotPassword(req, res) {
     return fail(res, 500, 'Đã xảy ra lỗi hệ thống: ' + err.message)
   }
 }
+
+/**
+ * Đặt lại mật khẩu mới (A1 - Bước 4)
+ */
+export async function resetPassword(req, res) {
+  try {
+    const { token, mat_khau_moi } = req.body
+    if (!token || !mat_khau_moi) {
+      return fail(res, 400, 'Vui lòng cung cấp mã token và mật khẩu mới')
+    }
+
+    // Validate định dạng mật khẩu mới
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
+    if (!passwordRegex.test(mat_khau_moi)) {
+      return fail(
+        res,
+        400,
+        'Mật khẩu mới phải tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và số',
+      )
+    }
+
+    // Băm token đầu vào bằng SHA-256 để tìm bản lưu khớp trong DB
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex')
+
+    // Tìm người dùng chưa bị xóa mềm, khớp token và còn hạn sử dụng
+    const user = await NguoiDung.findOne({
+      reset_password_token: hashedToken,
+      reset_password_expire: { $gt: Date.now() },
+      ngay_xoa: null
+    })
+
+    if (!user) {
+      return fail(res, 400, 'Đường dẫn đặt lại mật khẩu không hợp lệ hoặc đã hết hạn')
+    }
+
+    // Mã hóa mật khẩu mới bằng bcrypt
+    const hash = await bcrypt.hash(mat_khau_moi, 10)
+
+    // Cập nhật mật khẩu và xóa các trường token
+    user.mat_khau = hash
+    user.reset_password_token = null
+    user.reset_password_expire = null
+    await user.save()
+
+    return ok(res, null, 'Đặt lại mật khẩu mới thành công')
+
+  } catch (err) {
+    console.error(err)
+    return fail(res, 500, 'Đã xảy ra lỗi hệ thống: ' + err.message)
+  }
+}
