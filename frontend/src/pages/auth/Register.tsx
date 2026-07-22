@@ -29,8 +29,18 @@ export default function Register() {
   ) {
     const errs: { [key: string]: string } = {}
 
-    if (!ht.trim()) {
+    const trimmedHoTen = ht.trim()
+    const nameRegex = /^[\p{L}\s-]+$/u
+    const repeatingRegex = /(.)\1{2,}/i
+
+    if (!trimmedHoTen) {
       errs.hoTen = 'Vui lòng nhập họ và tên'
+    } else if (trimmedHoTen.length < 5 || trimmedHoTen.length > 100) {
+      errs.hoTen = 'Họ và tên phải từ 5 đến 100 ký tự'
+    } else if (!nameRegex.test(trimmedHoTen)) {
+      errs.hoTen = 'Họ và tên chỉ được chứa chữ cái, khoảng trắng và dấu gạch nối (-)'
+    } else if (repeatingRegex.test(trimmedHoTen)) {
+      errs.hoTen = 'Họ và tên không được chứa từ 3 ký tự giống nhau liên tiếp'
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

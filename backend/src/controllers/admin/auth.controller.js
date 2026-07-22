@@ -38,6 +38,23 @@ export async function register(req, res) {
     ho_ten = ho_ten.trim()
     so_dien_thoai = so_dien_thoai?.trim()
 
+    // Validate họ tên
+    const nameRegex = /^[\p{L}\s-]+$/u
+    const repeatingRegex = /(.)\1{2,}/i
+
+    if (
+      ho_ten.length < 5 ||
+      ho_ten.length > 100 ||
+      !nameRegex.test(ho_ten) ||
+      repeatingRegex.test(ho_ten)
+    ) {
+      return fail(
+        res,
+        400,
+        'Họ và tên không hợp lệ (phải từ 5-100 ký tự, không chứa số, ký tự đặc biệt hoặc ký tự lặp lại quá 2 lần)',
+      )
+    }
+
     // Validate email
     const emailRegex =
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/
