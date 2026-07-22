@@ -31,6 +31,7 @@ export default function ManageClinics() {
   const [rooms, setRooms] = useState<ClinicRoomItem[]>([])
   const [roomOptions, setRoomOptions] = useState<ClinicRoomOptions>({ doctors: [], nurses: [] })
   const [roomLoading, setRoomLoading] = useState(true)
+  const [roomError, setRoomError] = useState<string | null>(null)
 
   const [auditModalOpen, setAuditModalOpen] = useState(false)
   const [auditTitle, setAuditTitle] = useState('')
@@ -61,10 +62,13 @@ export default function ManageClinics() {
 
   async function fetchRooms() {
     setRoomLoading(true)
+    setRoomError(null)
     try {
       const data = await clinicService.getRooms()
       setRooms(data)
-    } catch {
+    } catch (error: any) {
+      setRooms([])
+      setRoomError(getRequestErrorMessage(error, 'Không thể tải danh sách phòng khám nhỏ.'))
     } finally {
       setRoomLoading(false)
     }
@@ -370,6 +374,8 @@ export default function ManageClinics() {
               rooms={rooms}
               options={roomOptions}
               loading={roomLoading}
+              loadError={roomError}
+              onRetry={fetchRooms}
               onChanged={async () => {
                 await fetchRooms()
                 await fetchRoomOptions()
@@ -424,4 +430,11 @@ function QuickItem({ label, value }: { label: string; value: string }) {
       <span className="font-semibold text-slate-800">{value}</span>
     </div>
   )
+}
+
+function getRequestErrorMessage(error: any, fallback: string) {
+  const status = error?.response?.status
+  const message = error?.response?.data?.message || error?.message
+  if (status) return `${fallback} HTTP ${status}${message ? `: ${message}` : ''}`
+  return message ? `${fallback} ${message}` : fallback
 }

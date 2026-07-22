@@ -16,6 +16,8 @@ interface Props {
   rooms: ClinicRoomItem[]
   options: ClinicRoomOptions
   loading: boolean
+  loadError?: string | null
+  onRetry?: () => Promise<void>
   onChanged: () => Promise<void>
 }
 
@@ -32,7 +34,7 @@ const emptyForm: ClinicRoomPayload = {
   nurse_ids: [],
 }
 
-export default function ClinicRoomsTab({ rooms, options, loading, onChanged }: Props) {
+export default function ClinicRoomsTab({ rooms, options, loading, loadError, onRetry, onChanged }: Props) {
   const [statusFilter, setStatusFilter] = useState<RoomStatusFilter>('active')
   const [keyword, setKeyword] = useState('')
   const [editingRoom, setEditingRoom] = useState<ClinicRoomItem | null | undefined>(undefined)
@@ -90,6 +92,21 @@ export default function ClinicRoomsTab({ rooms, options, loading, onChanged }: P
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {loadError && (
+        <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
+          <span>{loadError}</span>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={() => void onRetry()}
+              className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-1.5 font-semibold text-red-700 transition-colors hover:bg-red-100"
+            >
+              Tải lại
+            </button>
+          )}
         </div>
       )}
 
@@ -158,6 +175,12 @@ export default function ClinicRoomsTab({ rooms, options, loading, onChanged }: P
                 <tr>
                   <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
                     Đang tải dữ liệu phòng...
+                  </td>
+                </tr>
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-12 text-center text-red-500">
+                    Không tải được danh sách phòng khám nhỏ.
                   </td>
                 </tr>
               ) : visibleRooms.length === 0 ? (
