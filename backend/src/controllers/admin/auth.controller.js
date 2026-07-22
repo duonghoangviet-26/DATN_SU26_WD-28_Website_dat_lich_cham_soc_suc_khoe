@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { NguoiDung, ThongBao } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { emitDashboardNewPatient } from '../../realtime/socket.js'
+import { sendResetPasswordEmail } from '../../services/mail.service.js'
 
 const ADMIN_ID = "000000000000000000000099"
 
@@ -220,18 +221,20 @@ export async function forgotPassword(req, res) {
     user.reset_password_expire = new Date(Date.now() + 15 * 60 * 1000)
     await user.save()
 
-    // Log ra console phục vụ test
-    console.log(`[TESTING] Reset Password Token cho email ${email}:`)
-    console.log(`- Raw Token (gửi cho client): ${rawToken}`)
-    console.log(`- Hashed Token (lưu trong DB): ${hashedToken}`)
-    console.log(`- Hết hạn lúc: ${user.reset_password_expire.toISOString()}`)
+    // Gửi email chứa link reset password thực tế
+    try {
+      await sendResetPasswordEmail({ to: user.email, token: rawToken })
+      console.log(`- Email reset password đã gửi thành công tới: ${user.email}`)
+    } catch (emailErr) {
+      console.error(`- Lỗi khi gửi email reset tới ${user.email}:`, emailErr.message)
+    }
 
-    // Trả cả token về client để dễ kiểm thử ở Bước 2
+    // Trả cả token về client để dễ kiểm thử ở Bước 2 & 3
     return ok(res, {
       rawToken,
       hashedToken,
       expiresAt: user.reset_password_expire
-    }, 'Mã đặt lại mật khẩu đã được tạo (Phục vụ Test)')
+    }, 'Mã đặt lại mật khẩu đã được tạo và gửi qua Email')
 
   } catch (err) {
     console.error(err)
