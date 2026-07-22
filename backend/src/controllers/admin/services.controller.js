@@ -213,7 +213,7 @@ export async function getById(req, res) {
 export async function create(req, res) {
   try {
     const {
-      ten, loai, gia, mo_ta_ngan, mo_ta,
+      ten, loai, gia, mo_ta_ngan, mo_ta, hinh_anh,
       gio_dat_truoc_toi_thieu, specialty_id, khu_vuc, chuan_bi_truoc, la_goi, doi_tuong_ap_dung,
       loai_goi, so_nguoi_ap_dung, dich_vu_con, phan_tram_giam_gia,
     } = req.body
@@ -250,6 +250,7 @@ export async function create(req, res) {
       gia:            parseInt(gia, 10),
       mo_ta_ngan:     mo_ta_ngan?.trim() || null,
       mo_ta:          mo_ta?.trim()      || null,
+      hinh_anh:       hinh_anh?.trim()   || null,
       thoi_gian_phut: null,
       gio_dat_truoc_toi_thieu: undefined,
       ngay_ap_dung:   null,
@@ -334,8 +335,8 @@ export async function update(req, res) {
     }
 
     // ── Cập nhật các trường còn lại ──────────────────────────────────────────
-    const STR_OR_NULL = new Set(['mo_ta_ngan', 'mo_ta'])
-    const EDITABLE    = ['mo_ta_ngan', 'mo_ta']
+    const STR_OR_NULL = new Set(['mo_ta_ngan', 'mo_ta', 'hinh_anh'])
+    const EDITABLE    = ['mo_ta_ngan', 'mo_ta', 'hinh_anh']
     for (const f of EDITABLE) {
       if (req.body[f] === undefined) continue
       service[f] = STR_OR_NULL.has(f) ? (req.body[f]?.trim() || null) : req.body[f]

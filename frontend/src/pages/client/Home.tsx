@@ -60,7 +60,7 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-gradient-to-br from-brand-950/90 via-brand-900/85 to-slate-950/80" />
         </div>
-        
+
         <div className="relative z-10 mx-auto max-w-4xl px-6 text-center space-y-6">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/25 px-4 py-1 text-sm font-semibold text-brand-300 ring-1 ring-brand-500/30">
             🏥 Phòng khám chuyên khoa Tai Mũi Họng

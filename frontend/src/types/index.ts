@@ -304,6 +304,7 @@ export interface ServiceItem {
     gia: number; // home: BN trả | related: giá tham khảo
     mo_ta_ngan?: string | null;
     mo_ta?: string | null;
+    hinh_anh?: string | null;
     // home: cố định 60ph, có lịch áp dụng (đặt lịch riêng, chọn BS+slot)
     // related: null — không đặt lịch riêng (đi kèm khám clinic, BS chỉ định), thời lượng/lịch áp dụng vô nghĩa
     thoi_gian_phut?: number | null;
