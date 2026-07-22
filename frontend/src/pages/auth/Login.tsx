@@ -93,7 +93,7 @@ export default function Login() {
         <div>
           <div className="mb-1 flex items-center justify-between">
             <label className="text-sm font-medium text-slate-700">Mật khẩu</label>
-            <a href="#" className="text-xs text-brand-600 hover:underline">Quên mật khẩu?</a>
+            <Link to="/forgot-password" className="text-xs text-brand-600 hover:underline">Quên mật khẩu?</Link>
           </div>
           <input
             type="password"
