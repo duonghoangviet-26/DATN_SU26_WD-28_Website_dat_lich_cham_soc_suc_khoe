@@ -50,6 +50,8 @@ export default function ManageAppointments() {
   const [searchParams, setSearchParams] = useSearchParams()
   const filterDoctorId = searchParams.get('doctor_id')
   const filterDoctorName = searchParams.get('doctor_name')
+  const filterStartDate = searchParams.get('startDate') || ''
+  const filterEndDate = searchParams.get('endDate') || ''
 
   const [keyword, setKeyword] = useState('')
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
@@ -57,8 +59,8 @@ export default function ManageAppointments() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | ''>('')
   const [loaiKham, setLoaiKham] = useState<'clinic' | ''>('')
   const [bookingScope, setBookingScope] = useState<BookingScope>('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [startDate, setStartDate] = useState(filterStartDate)
+  const [endDate, setEndDate] = useState(filterEndDate)
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
 
   const [page, setPage] = useState(1)
@@ -117,6 +119,12 @@ export default function ManageAppointments() {
   useEffect(() => {
     fetchAppointments()
   }, [fetchAppointments])
+
+  useEffect(() => {
+    setStartDate(filterStartDate)
+    setEndDate(filterEndDate)
+    setPage(1)
+  }, [filterStartDate, filterEndDate])
 
   useEffect(() => subscribeAdminRealtime({
     'admin:appointment_created': () => fetchAppointments(page),
@@ -192,7 +200,7 @@ export default function ManageAppointments() {
       <AdminMotionItem>
         <PageHeader
           title="Lịch hẹn hệ thống"
-          description="Admin chỉ rà soát, dời lịch, hủy và theo dõi đặt hộ. Việc tạo lịch mới thuộc về người dùng hoặc lễ tân do liên quan trực tiếp tới thanh toán."
+          description="Quản trị viên chỉ rà soát, dời lịch, hủy và theo dõi đặt hộ. Việc tạo lịch mới thuộc về người dùng hoặc lễ tân do liên quan trực tiếp tới thanh toán."
         />
       </AdminMotionItem>
 
@@ -354,6 +362,10 @@ export default function ManageAppointments() {
                 onClick={() => {
                   searchParams.delete('doctor_id')
                   searchParams.delete('doctor_name')
+                  searchParams.delete('startDate')
+                  searchParams.delete('endDate')
+                  setStartDate('')
+                  setEndDate('')
                   setSearchParams(searchParams)
                   setPage(1)
                 }}

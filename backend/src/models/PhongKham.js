@@ -1,19 +1,14 @@
 import mongoose from 'mongoose'
 
 // ============================================================
-// PHONG KHAM — Danh sách phòng khám (quản lý qua C3)
-// Không có trong SQL gốc (SQL chỉ track bệnh viện/cơ sở).
-// Team thêm để quản lý phòng vật lý trong phòng khám tư 1 cơ sở.
+// PHONG KHAM - Danh sách phòng khám nhỏ do Admin quản lý.
 // ============================================================
 // Vai trò:
-//   - Admin tạo/sửa/ẩn phòng qua C3 (bước "Bệnh viện & Chuyên khoa").
-//   - Khi Admin duyệt bác sĩ (C2), gán BacSi.phong_kham_mac_dinh = PhongKham.full_name.
-//   - Cron sinh slot: copy phong_kham_mac_dinh vào slot.phong_kham (String snapshot).
-//   - LichLamViec.slots[].phong_kham và LichHen.phong_kham lưu full_name dạng String snapshot
-//     → không ref ObjectId để tránh lịch cũ bị ảnh hưởng khi phòng bị đổi tên/xóa.
+//   - Admin tạo/sửa/ẩn phòng nhỏ.
+//   - Gán bác sĩ/y tá phụ trách phòng.
+//   - Lưu snapshot full_name vào lịch làm việc/lịch hẹn để không vỡ lịch cũ khi đổi tên phòng.
 //
-// full_name (virtual): "{ten}, Tầng {tang}, Tòa {toa}" — khớp với DoctorSlot.phong_kham frontend.
-// Seed 8 phòng ban đầu qua script backend/src/seeds/phong-kham.seed.js.
+// full_name (virtual): "{ten}, Tầng {tang}, Tòa {toa}".
 
 const phongKhamSchema = new mongoose.Schema(
   {
@@ -31,9 +26,9 @@ const phongKhamSchema = new mongoose.Schema(
     toa: {
       type: String,
       required: [true, 'Tòa là bắt buộc'],
+      default: 'ViteFamily',
       trim: true,
-      uppercase: true,
-      maxlength: 5,
+      maxlength: 50,
     },
     loai: {
       type: String,
@@ -46,22 +41,32 @@ const phongKhamSchema = new mongoose.Schema(
       enum: ['active', 'inactive'],
       default: 'active',
     },
+    doctor_ids: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'BacSi',
+      default: [],
+    }],
+    nurse_ids: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'NguoiDung',
+      default: [],
+    }],
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
     collection: 'phong_kham',
-    toJSON:   { virtuals: true },
+    toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
 )
 
-// Virtual: khớp với DoctorSlot.phong_kham và LichHen.phong_kham trong frontend
+// Virtual: khớp với snapshot phòng khám trong lịch làm việc và lịch hẹn.
 phongKhamSchema.virtual('full_name').get(function () {
   return `${this.ten}, Tầng ${this.tang}, Tòa ${this.toa}`
 })
 
-// Unique: mỗi tòa+tầng không có 2 phòng trùng tên
-phongKhamSchema.index({ ten: 1, toa: 1 }, { unique: true })
+// Unique: mỗi tòa+tầng không có 2 phòng trùng tên.
+phongKhamSchema.index({ ten: 1, tang: 1, toa: 1 }, { unique: true })
 phongKhamSchema.index({ trang_thai: 1 })
 phongKhamSchema.index({ tang: 1, toa: 1 })
 

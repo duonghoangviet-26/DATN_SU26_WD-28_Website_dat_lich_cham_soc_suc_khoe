@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ClinicItem, SpecialtyItem } from '@/types'
+import type { ClinicItem, ClinicRoomItem, ClinicRoomOptions, SpecialtyItem } from '@/types'
 import { clinicService } from '@/services/clinic.service'
 import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
@@ -11,9 +11,11 @@ import SpecialtyList from './SpecialtyList'
 import AddSpecialty from './AddSpecialty'
 import EditSpecialty from './EditSpecialty'
 import ClinicAuditLogModal from './ClinicAuditLogModal'
+import ClinicRoomsTab from './ClinicRoomsTab'
 
 type SpecialtyView = 'list' | 'add' | 'edit'
 type ClinicMode = 'view' | 'edit'
+type SectionTab = 'specialties' | 'rooms'
 
 export default function ManageClinics() {
   const [clinic, setClinic] = useState<ClinicItem | null>(null)
@@ -24,6 +26,12 @@ export default function ManageClinics() {
   const [specialtyLoading, setSpecialtyLoading] = useState(true)
   const [specialtyView, setSpecialtyView] = useState<SpecialtyView>('list')
   const [editingSpecialty, setEditingSpecialty] = useState<SpecialtyItem | null>(null)
+  const [sectionTab, setSectionTab] = useState<SectionTab>('specialties')
+
+  const [rooms, setRooms] = useState<ClinicRoomItem[]>([])
+  const [roomOptions, setRoomOptions] = useState<ClinicRoomOptions>({ doctors: [], nurses: [] })
+  const [roomLoading, setRoomLoading] = useState(true)
+  const [roomError, setRoomError] = useState<string | null>(null)
 
   const [auditModalOpen, setAuditModalOpen] = useState(false)
   const [auditTitle, setAuditTitle] = useState('')
@@ -52,9 +60,34 @@ export default function ManageClinics() {
     }
   }
 
+  async function fetchRooms() {
+    setRoomLoading(true)
+    setRoomError(null)
+    try {
+      const data = await clinicService.getRooms()
+      setRooms(data)
+    } catch (error: any) {
+      setRooms([])
+      setRoomError(getRequestErrorMessage(error, 'Không thể tải danh sách phòng khám nhỏ.'))
+    } finally {
+      setRoomLoading(false)
+    }
+  }
+
+  async function fetchRoomOptions() {
+    try {
+      const data = await clinicService.getRoomOptions()
+      setRoomOptions(data)
+    } catch {
+      setRoomOptions({ doctors: [], nurses: [] })
+    }
+  }
+
   useEffect(() => {
     fetchClinic()
     fetchSpecialties()
+    fetchRooms()
+    fetchRoomOptions()
   }, [])
 
   useEffect(() => {
@@ -121,20 +154,29 @@ export default function ManageClinics() {
   const activeSpecialties = specialties.filter((item) => item.status === 'active').length
   const hiddenSpecialties = specialties.filter((item) => item.status === 'hidden').length
   const totalDoctorsInSpecialties = specialties.reduce((sum, item) => sum + (item.doctor_count || 0), 0)
+  const activeRooms = rooms.filter((item) => item.trang_thai === 'active').length
+  const totalRoomDoctors = rooms.reduce((sum, item) => sum + item.doctor_count, 0)
+  const totalRoomNurses = rooms.reduce((sum, item) => sum + item.nurse_count, 0)
 
   return (
     <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Phòng khám & Chuyên khoa"
-        description="Quản lý cơ sở duy nhất của VitaFamily và danh sách chuyên khoa đang vận hành."
+        description="Quản lý cơ sở duy nhất của ViteFamily và danh sách chuyên khoa đang vận hành."
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <SummaryCard
           title="Cơ sở"
           value={clinic ? 1 : 0}
           note={clinic ? 'Đã khởi tạo phòng khám chính' : 'Chưa có dữ liệu phòng khám'}
           icon="hospital"
+        />
+        <SummaryCard
+          title="Phòng khám nhỏ"
+          value={activeRooms}
+          note="Phòng vật lý đang sử dụng"
+          icon="map-pin"
         />
         <SummaryCard
           title="Chuyên khoa hiển thị"
@@ -153,6 +195,12 @@ export default function ManageClinics() {
           value={totalDoctorsInSpecialties}
           note="Đếm theo từng chuyên khoa"
           icon="users"
+        />
+        <SummaryCard
+          title="Nhân sự phòng"
+          value={totalRoomDoctors + totalRoomNurses}
+          note={`${totalRoomDoctors} bác sĩ, ${totalRoomNurses} y tá`}
+          icon="user"
         />
       </div>
 
@@ -210,15 +258,53 @@ export default function ManageClinics() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-slate-800">Chuyên khoa vận hành</h3>
+          <div className="rounded-2xl border border-slate-200 bg-white">
+            <div className="px-5 py-4">
+              <h3 className="text-lg font-bold text-slate-800">Dữ liệu vận hành</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Gom danh sách và thao tác quản lý chuyên khoa vào một khu vực gọn hơn, để theo dõi và cập nhật nhanh.
+                Quản lý chuyên khoa và phòng khám nhỏ trong cùng một khu vực để dễ phân công nhân sự.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 border-t border-slate-100 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setSectionTab('specialties')}
+                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  sectionTab === 'specialties'
+                    ? 'bg-slate-900 text-white'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Icon name="file-text" className="h-4 w-4" />
+                Chuyên khoa
+              </button>
+              <button
+                type="button"
+                onClick={() => setSectionTab('rooms')}
+                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  sectionTab === 'rooms'
+                    ? 'bg-slate-900 text-white'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Icon name="map-pin" className="h-4 w-4" />
+                Phòng khám nhỏ
+              </button>
+            </div>
+          </div>
+
+          {sectionTab === 'specialties' && (
+            <>
+              <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Chuyên khoa vận hành</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Gom danh sách và thao tác quản lý chuyên khoa vào một khu vực gọn hơn, để theo dõi và cập nhật nhanh.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -249,10 +335,10 @@ export default function ManageClinics() {
                 <Icon name="plus" className="h-4 w-4" />
                 Thêm khoa
               </button>
+                </div>
             </div>
-          </div>
 
-          {specialtyView === 'list' && (
+              {specialtyView === 'list' && (
             <SpecialtyList
               specialties={specialties}
               loading={specialtyLoading}
@@ -261,22 +347,38 @@ export default function ManageClinics() {
               onChange={handleSpecialtyToggled}
               onViewLogs={handleViewSpecialtyLogs}
             />
-          )}
+              )}
 
-          {specialtyView === 'add' && (
+              {specialtyView === 'add' && (
             <AddSpecialty
               onSaved={handleSpecialtySaved}
               onCancel={() => setSpecialtyView('list')}
             />
-          )}
+              )}
 
-          {specialtyView === 'edit' && editingSpecialty && (
+              {specialtyView === 'edit' && editingSpecialty && (
             <EditSpecialty
               specialty={editingSpecialty}
               onSaved={handleSpecialtySaved}
               onCancel={() => {
                 setSpecialtyView('list')
                 setEditingSpecialty(null)
+              }}
+            />
+              )}
+            </>
+          )}
+
+          {sectionTab === 'rooms' && (
+            <ClinicRoomsTab
+              rooms={rooms}
+              options={roomOptions}
+              loading={roomLoading}
+              loadError={roomError}
+              onRetry={fetchRooms}
+              onChanged={async () => {
+                await fetchRooms()
+                await fetchRoomOptions()
               }}
             />
           )}
@@ -328,4 +430,11 @@ function QuickItem({ label, value }: { label: string; value: string }) {
       <span className="font-semibold text-slate-800">{value}</span>
     </div>
   )
+}
+
+function getRequestErrorMessage(error: any, fallback: string) {
+  const status = error?.response?.status
+  const message = error?.response?.data?.message || error?.message
+  if (status) return `${fallback} HTTP ${status}${message ? `: ${message}` : ''}`
+  return message ? `${fallback} ${message}` : fallback
 }

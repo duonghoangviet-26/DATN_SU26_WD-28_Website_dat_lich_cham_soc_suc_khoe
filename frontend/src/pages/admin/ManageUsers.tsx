@@ -11,6 +11,7 @@ import {
   USER_STATUS,
 } from '@/utils/constants'
 import { formatDate } from '@/utils/format'
+import { formatAdminActionLabel, formatAdminFieldLabel, formatAdminValue } from '@/utils/adminDisplay'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
@@ -290,12 +291,10 @@ export default function ManageUsers() {
 
   const formatLogValue = (field: string, value: unknown) => {
     if (value === null || value === undefined || value === '') return 'Trống'
-    if (field === 'role') return ROLE_LABEL[value as Role] || String(value)
-    if (field === 'status') return USER_STATUS_LABEL[value as keyof typeof USER_STATUS_LABEL] || String(value)
+    if (field === 'role') return ROLE_LABEL[value as Role] || formatAdminValue(field, value)
+    if (field === 'status') return USER_STATUS_LABEL[value as keyof typeof USER_STATUS_LABEL] || formatAdminValue(field, value)
     if (field === 'anh_dai_dien') return value ? 'Có ảnh' : 'Không có ảnh'
-    if (typeof value === 'boolean') return value ? 'Có' : 'Không'
-    if (typeof value === 'object') return JSON.stringify(value)
-    return String(value)
+    return formatAdminValue(field, value)
   }
 
   const getChangedFields = (log: any) => {
@@ -412,7 +411,7 @@ export default function ManageUsers() {
 
       {/* Thanh tác vụ hàng loạt */}
       {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl animate-in fade-in slide-in-from-top-4 duration-200">
+        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-700">
               Đã chọn <strong className="text-brand-600">{selectedIds.length}</strong> người dùng
@@ -625,7 +624,7 @@ export default function ManageUsers() {
       {/* Modal Xem chi tiết */}
       {selectedUser && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedUser(null)}>
-          <div className="bg-white w-full max-w-xl rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-xl rounded-2xl p-6 shadow-xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 pb-2 border-b">
               <h3 className="text-xl font-bold flex items-center gap-2">
                 <Icon name="user" className="h-5 w-5 text-brand-600" /> Thông tin chi tiết
@@ -669,7 +668,7 @@ export default function ManageUsers() {
                 ) : (
                   <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
                     {detailLogs.map((log: any) => {
-                      const cfg = LOG_CONFIG[log.hanh_dong as keyof typeof LOG_CONFIG] || { label: log.hanh_dong, color: 'gray' }
+                      const cfg = LOG_CONFIG[log.hanh_dong as keyof typeof LOG_CONFIG] || { label: formatAdminActionLabel(log.hanh_dong), color: 'gray' }
                       const changedFields = getChangedFields(log)
                       return (
                         <div key={log._id} className="flex gap-3 text-sm bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
@@ -685,7 +684,7 @@ export default function ManageUsers() {
                               <div className="mt-2 space-y-1 rounded-lg border border-slate-100 bg-white p-2">
                                 {changedFields.map((field) => (
                                   <div key={field} className="grid grid-cols-[92px_1fr] gap-2 text-xs">
-                                    <span className="font-semibold text-slate-500">{FIELD_LABELS[field] || field}</span>
+                                    <span className="font-semibold text-slate-500">{FIELD_LABELS[field] || formatAdminFieldLabel(field)}</span>
                                     <span className="min-w-0 text-slate-600">
                                       <span className="break-words text-red-500 line-through">{formatLogValue(field, log.du_lieu_cu?.[field])}</span>
                                       <span className="mx-1 text-slate-300">→</span>
@@ -718,7 +717,7 @@ export default function ManageUsers() {
       {/* Modal Thêm */}
       {showAddModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <form onSubmit={handleAddSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl animate-in slide-in-from-bottom-4 duration-300">
+          <form onSubmit={handleAddSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl">
             <h3 className="text-xl font-bold mb-4">Thêm thành viên mới</h3>
             {formError && <div className="mb-4 p-2 bg-red-50 text-red-600 text-xs rounded border border-red-100">{formError}</div>}
             <div className="space-y-3">
@@ -760,7 +759,7 @@ export default function ManageUsers() {
               <div><label className="text-xs font-bold mb-1 block">Mật khẩu *</label><input required type="password" className="input" value={formData.mat_khau} onChange={e => setFormData({ ...formData, mat_khau: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={formData.so_dien_thoai} onChange={e => setFormData({ ...formData, so_dien_thoai: e.target.value })} /></div>
-                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as Role })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
+              <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as Role })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Quản trị viên</option></select></div>
               </div>
             </div>
             <div className="flex gap-3 mt-8">
@@ -775,7 +774,7 @@ export default function ManageUsers() {
       {/* Modal Sửa */}
       {editingUser && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <form onSubmit={handleEditSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl animate-in slide-in-from-bottom-4 duration-300">
+          <form onSubmit={handleEditSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl">
             <h3 className="text-xl font-bold mb-4">Cập nhật thông tin</h3>
             {formError && <div className="mb-4 p-2 bg-red-50 text-red-600 text-xs rounded border border-red-100">{formError}</div>}
             <div className="space-y-3">
@@ -816,7 +815,7 @@ export default function ManageUsers() {
               <div><label className="text-xs font-bold mb-1 block">Họ tên *</label><input required className="input" value={editingUser.ho_ten} onChange={e => setEditingUser({ ...editingUser, ho_ten: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={editingUser.so_dien_thoai || ''} onChange={e => setEditingUser({ ...editingUser, so_dien_thoai: e.target.value })} /></div>
-                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
+                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Quản trị viên</option></select></div>
               </div>
               <div><label className="text-xs font-bold mb-1 block">Trạng thái</label><select className="input" value={editingUser.status} onChange={e => setEditingUser({ ...editingUser, status: e.target.value as any })}><option value="active">Hoạt động</option><option value="locked">Đang khóa</option></select></div>
             </div>

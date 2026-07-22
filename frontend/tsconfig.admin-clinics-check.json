@@ -11,6 +11,7 @@
     "src/pages/admin/ManageClinics/EditSpecialty.tsx",
     "src/pages/admin/ManageClinics/SpecialtyDoctorsModal.tsx",
     "src/pages/admin/ManageClinics/ClinicAuditLogModal.tsx",
+    "src/pages/admin/ManageClinics/ClinicRoomsTab.tsx",
     "src/routes/adminMenu.ts"
   ]
 }

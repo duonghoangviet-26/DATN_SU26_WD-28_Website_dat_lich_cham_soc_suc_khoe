@@ -81,7 +81,7 @@ export default function ReceiveNotificationTab() {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-800">Hộp thư đến</h2>
-              <p className="text-sm text-slate-500">Các thông báo từ hệ thống và người dùng gửi đến Admin</p>
+              <p className="text-sm text-slate-500">Các thông báo từ hệ thống và người dùng gửi đến quản trị viên</p>
             </div>
           </div>
           <button onClick={() => loadData()} className="btn-secondary px-3 py-2 text-sm">
