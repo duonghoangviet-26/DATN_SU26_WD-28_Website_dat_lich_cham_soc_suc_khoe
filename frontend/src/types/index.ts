@@ -286,6 +286,7 @@ export interface ClinicRoomOptions {
 export type ServiceType = "home" | "related";
 export type ServiceStatus = "active" | "inactive";
 export type ServiceTargetAudience = "tre_em" | "nguoi_lon" | "gia_dinh" | "khong_gioi_han";
+export type ServicePackageType = "goi_don" | "goi_gia_dinh";
 
 export interface ServiceChangeLog {
     id: string;
@@ -316,6 +317,7 @@ export interface ServiceItem {
     specialty_id?: string | null;
     specialty_ten?: string | null; // joined — chỉ dùng để hiển thị
     la_goi?: boolean;
+    loai_goi?: ServicePackageType | null; // chỉ có khi la_goi=true
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
     khu_vuc?: string[]; // home only
     so_bac_si?: number; // computed từ BacSi.services[]
