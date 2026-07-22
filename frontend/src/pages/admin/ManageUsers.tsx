@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { userService } from '@/services/user.service'
+import { clinicService } from '@/services/clinic.service'
 import { useAuth } from '@/context/AuthContext'
 import type { User, Role } from '@/types'
 import {
@@ -10,6 +11,7 @@ import {
   USER_STATUS,
 } from '@/utils/constants'
 import { formatDate } from '@/utils/format'
+import { formatAdminActionLabel, formatAdminFieldLabel, formatAdminValue } from '@/utils/adminDisplay'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
@@ -69,7 +71,7 @@ export default function ManageUsers() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'delete' | 'restore' | 'hard-delete', user: User } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'delete' | 'restore' | 'hard-delete' | 'hard-delete-locked', user: User } | null>(null)
   const [detailLogs, setDetailLogs] = useState<any[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -88,10 +90,12 @@ export default function ManageUsers() {
     email: string
     mat_khau: string
     so_dien_thoai: string
+    anh_dai_dien: string
     role: Role
-  }>({ ho_ten: '', email: '', mat_khau: '', so_dien_thoai: '', role: 'user' })
+  }>({ ho_ten: '', email: '', mat_khau: '', so_dien_thoai: '', anh_dai_dien: '', role: 'user' })
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   const loadUsers = async () => {
     setLoading(true)
@@ -143,12 +147,31 @@ export default function ManageUsers() {
     try {
       await userService.create(formData)
       setShowAddModal(false)
-      setFormData({ ho_ten: '', email: '', mat_khau: '', so_dien_thoai: '', role: 'user' })
+      setFormData({ ho_ten: '', email: '', mat_khau: '', so_dien_thoai: '', anh_dai_dien: '', role: 'user' })
       loadUsers()
       window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
     } catch (err: any) {
       setFormError(err.response?.data?.message || 'Lỗi khi tạo')
     } finally { setSubmitting(false) }
+  }
+
+  const handleAvatarUpload = async (file: File | undefined, mode: 'add' | 'edit') => {
+    if (!file) return
+
+    setUploadingAvatar(true)
+    setFormError('')
+    try {
+      const url = await clinicService.uploadImage(file)
+      if (mode === 'add') {
+        setFormData(prev => ({ ...prev, anh_dai_dien: url }))
+      } else {
+        setEditingUser(prev => prev ? { ...prev, anh_dai_dien: url } : prev)
+      }
+    } catch (err: any) {
+      setFormError(err?.response?.data?.message || err.message || 'Tải ảnh đại diện thất bại')
+    } finally {
+      setUploadingAvatar(false)
+    }
   }
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -176,7 +199,7 @@ export default function ManageUsers() {
         await userService.softDelete(user.id)
       } else if (type === 'restore') {
         await userService.restore(user.id)
-      } else if (type === 'hard-delete') {
+      } else if (type === 'hard-delete' || type === 'hard-delete-locked') {
         await userService.hardDelete(user.id)
       }
       loadUsers()
@@ -254,6 +277,31 @@ export default function ManageUsers() {
       default:
         return 'Thực hiện thao tác'
     }
+  }
+
+  const FIELD_LABELS: Record<string, string> = {
+    ho_ten: 'Họ tên',
+    email: 'Email',
+    so_dien_thoai: 'Điện thoại',
+    anh_dai_dien: 'Ảnh đại diện',
+    role: 'Vai trò',
+    status: 'Trạng thái',
+    ngay_xoa: 'Trạng thái xóa',
+  }
+
+  const formatLogValue = (field: string, value: unknown) => {
+    if (value === null || value === undefined || value === '') return 'Trống'
+    if (field === 'role') return ROLE_LABEL[value as Role] || formatAdminValue(field, value)
+    if (field === 'status') return USER_STATUS_LABEL[value as keyof typeof USER_STATUS_LABEL] || formatAdminValue(field, value)
+    if (field === 'anh_dai_dien') return value ? 'Có ảnh' : 'Không có ảnh'
+    return formatAdminValue(field, value)
+  }
+
+  const getChangedFields = (log: any) => {
+    const oldData = log.du_lieu_cu || {}
+    const newData = log.du_lieu_moi || {}
+    const keys = Array.from(new Set([...Object.keys(oldData), ...Object.keys(newData)]))
+    return keys.filter((key) => JSON.stringify(oldData[key] ?? null) !== JSON.stringify(newData[key] ?? null))
   }
 
   return (
@@ -363,7 +411,7 @@ export default function ManageUsers() {
 
       {/* Thanh tác vụ hàng loạt */}
       {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl animate-in fade-in slide-in-from-top-4 duration-200">
+        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-700">
               Đã chọn <strong className="text-brand-600">{selectedIds.length}</strong> người dùng
@@ -480,8 +528,12 @@ export default function ManageUsers() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 flex-shrink-0 bg-brand-100 text-brand-700 rounded-full flex items-center justify-center font-bold text-lg">
-                          {(u.ho_ten || 'U').charAt(0).toUpperCase()}
+                        <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-lg">
+                          {u.anh_dai_dien ? (
+                            <img src={u.anh_dai_dien} alt={u.ho_ten} className="h-full w-full object-cover" />
+                          ) : (
+                            (u.ho_ten || 'U').charAt(0).toUpperCase()
+                          )}
                         </div>
                         <div>
                           <p className="font-bold text-slate-900">{u.ho_ten}</p>
@@ -506,14 +558,44 @@ export default function ManageUsers() {
                             <button onClick={() => setEditingUser(u)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Chỉnh sửa"><Icon name="edit" className="h-4 w-4" /></button>
                             {u.id !== currentUser?.id && (
                               <>
-                                <button onClick={() => setConfirmAction({ type: 'lock', user: u })} className={`p-2 rounded-lg transition-colors ${u.status === 'active' ? 'text-slate-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 bg-orange-50'}`} title={u.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}><Icon name="ban" className="h-4 w-4" /></button>
-                                <button onClick={() => setConfirmAction({ type: 'delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa mềm"><Icon name="trash" className="h-4 w-4" /></button>
+                                {/* active → nút khóa + xóa mềm | locked → nút mở khóa + xóa cứng */}
+                                {u.status === 'active' ? (
+                                  <>
+                                    <button
+                                      onClick={() => setConfirmAction({ type: 'lock', user: u })}
+                                      className="p-2 rounded-lg transition-colors text-slate-400 hover:text-orange-600 hover:bg-orange-50"
+                                      title="Khóa tài khoản"
+                                    >
+                                      <Icon name="ban" className="h-4 w-4" />
+                                    </button>
+                                    <button onClick={() => setConfirmAction({ type: 'delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa mềm"><Icon name="trash" className="h-4 w-4" /></button>
+                                  </>
+                                ) : (
+                                  /* Tài khoản đã khóa: mở khóa + xóa cứng */
+                                  <>
+                                    <button
+                                      onClick={() => setConfirmAction({ type: 'lock', user: u })}
+                                      className="p-2 rounded-lg transition-colors text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50"
+                                      title="Mở khóa tài khoản"
+                                    >
+                                      <Icon name="refresh-cw" className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmAction({ type: 'hard-delete-locked', user: u })}
+                                      className="p-2 rounded-lg transition-colors text-slate-400 hover:text-red-600 hover:bg-red-50"
+                                      title="Xóa vĩnh viễn tài khoản đã khóa"
+                                    >
+                                      <Icon name="trash" className="h-4 w-4" />
+                                    </button>
+                                  </>
+                                )}
                               </>
                             )}
                           </>
                         ) : (
                           <div className="flex justify-end gap-1">
-                            <button onClick={() => setConfirmAction({ type: 'restore', user: u })} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Khôi phục tài khoản"><Icon name="check" className="h-4 w-4" /></button>
+                            {/* Icon khôi phục: dùng refresh-cw (↺) thay vì check (✓) */}
+                            <button onClick={() => setConfirmAction({ type: 'restore', user: u })} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Khôi phục tài khoản"><Icon name="refresh-cw" className="h-4 w-4" /></button>
                             <button onClick={() => setConfirmAction({ type: 'hard-delete', user: u })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Xóa vĩnh viễn"><Icon name="trash" className="h-4 w-4" /></button>
                           </div>
                         )}
@@ -542,7 +624,7 @@ export default function ManageUsers() {
       {/* Modal Xem chi tiết */}
       {selectedUser && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedUser(null)}>
-          <div className="bg-white w-full max-w-xl rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-xl rounded-2xl p-6 shadow-xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 pb-2 border-b">
               <h3 className="text-xl font-bold flex items-center gap-2">
                 <Icon name="user" className="h-5 w-5 text-brand-600" /> Thông tin chi tiết
@@ -554,8 +636,12 @@ export default function ManageUsers() {
             
             <div className="overflow-y-auto pr-1 space-y-6 flex-1">
               <div className="flex items-center gap-4">
-                <div className="h-16 w-16 bg-brand-100 text-brand-700 rounded-full flex items-center justify-center font-bold text-2xl">
-                  {selectedUser.ho_ten?.charAt(0).toUpperCase()}
+                <div className="h-16 w-16 overflow-hidden rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-2xl">
+                  {selectedUser.anh_dai_dien ? (
+                    <img src={selectedUser.anh_dai_dien} alt={selectedUser.ho_ten} className="h-full w-full object-cover" />
+                  ) : (
+                    selectedUser.ho_ten?.charAt(0).toUpperCase()
+                  )}
                 </div>
                 <div>
                   <h4 className="text-lg font-bold text-slate-900">{selectedUser.ho_ten}</h4>
@@ -582,7 +668,8 @@ export default function ManageUsers() {
                 ) : (
                   <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
                     {detailLogs.map((log: any) => {
-                      const cfg = LOG_CONFIG[log.hanh_dong as keyof typeof LOG_CONFIG] || { label: log.hanh_dong, color: 'gray' }
+                      const cfg = LOG_CONFIG[log.hanh_dong as keyof typeof LOG_CONFIG] || { label: formatAdminActionLabel(log.hanh_dong), color: 'gray' }
+                      const changedFields = getChangedFields(log)
                       return (
                         <div key={log._id} className="flex gap-3 text-sm bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
                           <div className="shrink-0"><Badge color={cfg.color}>{cfg.label}</Badge></div>
@@ -593,6 +680,20 @@ export default function ManageUsers() {
                               <span>•</span>
                               <span>{new Date(log.ngay_tao).toLocaleString('vi-VN')}</span>
                             </div>
+                            {changedFields.length > 0 && (
+                              <div className="mt-2 space-y-1 rounded-lg border border-slate-100 bg-white p-2">
+                                {changedFields.map((field) => (
+                                  <div key={field} className="grid grid-cols-[92px_1fr] gap-2 text-xs">
+                                    <span className="font-semibold text-slate-500">{FIELD_LABELS[field] || formatAdminFieldLabel(field)}</span>
+                                    <span className="min-w-0 text-slate-600">
+                                      <span className="break-words text-red-500 line-through">{formatLogValue(field, log.du_lieu_cu?.[field])}</span>
+                                      <span className="mx-1 text-slate-300">→</span>
+                                      <span className="break-words font-semibold text-emerald-600">{formatLogValue(field, log.du_lieu_moi?.[field])}</span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )
@@ -616,16 +717,49 @@ export default function ManageUsers() {
       {/* Modal Thêm */}
       {showAddModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <form onSubmit={handleAddSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl animate-in slide-in-from-bottom-4 duration-300">
+          <form onSubmit={handleAddSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl">
             <h3 className="text-xl font-bold mb-4">Thêm thành viên mới</h3>
             {formError && <div className="mb-4 p-2 bg-red-50 text-red-600 text-xs rounded border border-red-100">{formError}</div>}
             <div className="space-y-3">
+              <div className="flex items-center gap-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xl font-bold">
+                  {formData.anh_dai_dien ? (
+                    <img src={formData.anh_dai_dien} alt={formData.ho_ten || 'Avatar'} className="h-full w-full object-cover" />
+                  ) : (
+                    (formData.ho_ten || 'U').charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <label className="mb-2 block text-xs font-bold">Ảnh đại diện</label>
+                  <div className="flex flex-wrap gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-bold text-white hover:bg-brand-700">
+                      <Icon name="image" className="h-3.5 w-3.5" />
+                      {uploadingAvatar ? 'Đang tải...' : 'Chọn ảnh'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={uploadingAvatar}
+                        onChange={(e) => {
+                          handleAvatarUpload(e.target.files?.[0], 'add')
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                    {formData.anh_dai_dien && (
+                      <button type="button" onClick={() => setFormData({ ...formData, anh_dai_dien: '' })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-white">
+                        Xóa ảnh
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div><label className="text-xs font-bold mb-1 block">Họ tên *</label><input required className="input" value={formData.ho_ten} onChange={e => setFormData({ ...formData, ho_ten: e.target.value })} /></div>
               <div><label className="text-xs font-bold mb-1 block">Email *</label><input required type="email" className="input" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} /></div>
               <div><label className="text-xs font-bold mb-1 block">Mật khẩu *</label><input required type="password" className="input" value={formData.mat_khau} onChange={e => setFormData({ ...formData, mat_khau: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={formData.so_dien_thoai} onChange={e => setFormData({ ...formData, so_dien_thoai: e.target.value })} /></div>
-                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as Role })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
+              <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as Role })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Quản trị viên</option></select></div>
               </div>
             </div>
             <div className="flex gap-3 mt-8">
@@ -640,14 +774,48 @@ export default function ManageUsers() {
       {/* Modal Sửa */}
       {editingUser && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <form onSubmit={handleEditSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl animate-in slide-in-from-bottom-4 duration-300">
+          <form onSubmit={handleEditSubmit} className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl">
             <h3 className="text-xl font-bold mb-4">Cập nhật thông tin</h3>
+            {formError && <div className="mb-4 p-2 bg-red-50 text-red-600 text-xs rounded border border-red-100">{formError}</div>}
             <div className="space-y-3">
+              <div className="flex items-center gap-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xl font-bold">
+                  {editingUser.anh_dai_dien ? (
+                    <img src={editingUser.anh_dai_dien} alt={editingUser.ho_ten} className="h-full w-full object-cover" />
+                  ) : (
+                    (editingUser.ho_ten || 'U').charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <label className="mb-2 block text-xs font-bold">Ảnh đại diện</label>
+                  <div className="flex flex-wrap gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-bold text-white hover:bg-brand-700">
+                      <Icon name="image" className="h-3.5 w-3.5" />
+                      {uploadingAvatar ? 'Đang tải...' : 'Chọn ảnh'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={uploadingAvatar}
+                        onChange={(e) => {
+                          handleAvatarUpload(e.target.files?.[0], 'edit')
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                    {editingUser.anh_dai_dien && (
+                      <button type="button" onClick={() => setEditingUser({ ...editingUser, anh_dai_dien: null })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-white">
+                        Xóa ảnh
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div><label className="text-xs font-bold mb-1 block text-slate-400">Email (Không thể sửa)</label><input disabled className="input bg-slate-50" value={editingUser.email} /></div>
               <div><label className="text-xs font-bold mb-1 block">Họ tên *</label><input required className="input" value={editingUser.ho_ten} onChange={e => setEditingUser({ ...editingUser, ho_ten: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={editingUser.so_dien_thoai || ''} onChange={e => setEditingUser({ ...editingUser, so_dien_thoai: e.target.value })} /></div>
-                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Admin</option></select></div>
+                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Quản trị viên</option></select></div>
               </div>
               <div><label className="text-xs font-bold mb-1 block">Trạng thái</label><select className="input" value={editingUser.status} onChange={e => setEditingUser({ ...editingUser, status: e.target.value as any })}><option value="active">Hoạt động</option><option value="locked">Đang khóa</option></select></div>
             </div>
@@ -664,9 +832,42 @@ export default function ManageUsers() {
       {confirmAction && createPortal(
         <ConfirmDialog
           open={!!confirmAction}
-          danger={confirmAction?.type === 'delete' || confirmAction?.type === 'hard-delete' || (confirmAction?.type === 'lock' && confirmAction.user.status === 'active')}
-          title={confirmAction?.type === 'hard-delete' ? 'XÓA VĨNH VIỄN' : confirmAction?.type === 'delete' ? 'Xóa người dùng' : confirmAction?.type === 'restore' ? 'Khôi phục' : confirmAction?.user.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-          message={confirmAction ? `Bạn có chắc muốn ${confirmAction.type === 'hard-delete' ? 'XÓA VĨNH VIỄN (không thể khôi phục)' : confirmAction.type === 'delete' ? 'xóa' : confirmAction.type === 'restore' ? 'khôi phục' : confirmAction.user.status === 'active' ? 'khóa' : 'mở khóa'} người dùng "${confirmAction.user.ho_ten}"?` : ''}
+          danger={
+            confirmAction?.type === 'delete' ||
+            confirmAction?.type === 'hard-delete' ||
+            confirmAction?.type === 'hard-delete-locked' ||
+            (confirmAction?.type === 'lock' && confirmAction.user.status === 'active')
+          }
+          title={
+            confirmAction?.type === 'hard-delete' || confirmAction?.type === 'hard-delete-locked'
+              ? 'XÓA VĨNH VIỄN'
+              : confirmAction?.type === 'delete'
+              ? 'Xóa người dùng'
+              : confirmAction?.type === 'restore'
+              ? 'Khôi phục'
+              : confirmAction?.user.status === 'active'
+              ? 'Khóa tài khoản'
+              : 'Mở khóa tài khoản'
+          }
+          message={
+            confirmAction
+              ? `Bạn có chắc muốn ${
+                  confirmAction.type === 'hard-delete' || confirmAction.type === 'hard-delete-locked'
+                    ? 'XÓA VĨNH VIỄN (không thể khôi phục)'
+                    : confirmAction.type === 'delete'
+                    ? 'xóa'
+                    : confirmAction.type === 'restore'
+                    ? 'khôi phục'
+                    : confirmAction.user.status === 'active'
+                    ? 'khóa'
+                    : 'mở khóa'
+                } người dùng "${confirmAction.user.ho_ten}"?${
+                  confirmAction.type === 'hard-delete-locked'
+                    ? ' Tài khoản này đang bị khóa và sẽ bị xóa hoàn toàn khỏi hệ thống.'
+                    : ''
+                }`
+              : ''
+          }
           confirmText="Xác nhận"
           onConfirm={onConfirmAction}
           onCancel={() => setConfirmAction(null)}

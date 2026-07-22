@@ -119,7 +119,7 @@ export async function getSpecialties(req, res) {
 // ─── GET /api/patient/booking/services ──────────────────────────────────────
 export async function getServices(req, res) {
   try {
-    const services = await DichVu.find({ status: 'active' })
+    const services = await DichVu.find({ status: 'active', loai: 'related' })
       .populate('specialty_id', 'ten')
       .sort({ ten: 1 })
       .lean()
@@ -205,7 +205,7 @@ export async function getDoctorById(req, res) {
       kinh_nghiem:         doc.kinh_nghiem,
       phong_kham_mac_dinh: doc.phong_kham_mac_dinh,
       specialties: (doc.specialties ?? []).map((s) => ({ id: s._id, ten: s.ten, slug: s.slug })),
-      services:    (doc.services    ?? []).map((s) => ({ id: s._id, ten: s.ten, gia: s.gia, khu_vuc: s.khu_vuc })),
+      services:    [],
     })
   } catch (err) {
     return fail(res, 500, err.message)
@@ -280,19 +280,15 @@ export async function createBooking(req, res) {
     const {
       loai_kham, doctor_id,
       schedule_id, slot_id,
-      service_id, khu_vuc, dia_chi_kham, gio_kham,
       ngay_kham, ly_do_kham,
       member_id, ten_khach, so_dien_thoai_khach, nam_sinh_khach,
     } = req.body
 
     if (!loai_kham)  return rollbackFail(400, 'Loại khám là bắt buộc')
-    if (!['clinic', 'home'].includes(loai_kham)) return rollbackFail(400, 'loai_kham phải là clinic hoặc home')
+    if (loai_kham !== 'clinic') return rollbackFail(400, 'Dich vu tai nha da ngung ho tro dat lich moi')
     if (!ngay_kham)  return rollbackFail(400, 'Ngày khám là bắt buộc')
     if (!member_id && !ten_khach) return rollbackFail(400, 'Phải có member_id hoặc ten_khach')
 
-    // clinic: bắt buộc chọn bác sĩ cụ thể. home: KHÔNG chọn bác sĩ lúc đặt —
-    // đây là dịch vụ lấy mẫu xét nghiệm tại nhà, CSKH gán nhân viên sau khi thanh toán
-    // (xem docs/superpowers/specs/2026-07-02-home-service-redesign.md mục 2.5).
     const appointmentDate = parseDateOnly(ngay_kham)
     if (!appointmentDate) return rollbackFail(400, 'Ngay kham khong hop le')
 
@@ -317,7 +313,6 @@ export async function createBooking(req, res) {
     let gia_kham, ten_dich_vu, phong_kham = null, gio_dat
     let chi_nhanh_id = null
     let specialty_id = null
-    let paymentLineType = 'phi_kham'
 
     if (loai_kham === 'clinic') {
       if (!schedule_id || !slot_id) {
@@ -379,25 +374,6 @@ export async function createBooking(req, res) {
       chi_nhanh_id = updated.chi_nhanh_id ?? doc.chi_nhanh_id ?? null
       specialty_id = claimedSlot.specialty_id ?? doc.specialties?.[0]?._id ?? null
 
-    } else {
-      // home — dịch vụ lấy mẫu xét nghiệm tại nhà, không chọn bác sĩ, chọn khu vực + giờ tự do
-      if (!service_id)          return rollbackFail(400, 'Khám tại nhà yêu cầu service_id')
-      if (!khu_vuc?.trim())     return rollbackFail(400, 'Khu vực là bắt buộc')
-      if (!dia_chi_kham?.trim()) return rollbackFail(400, 'Địa chỉ khám là bắt buộc')
-      if (!gio_kham)             return rollbackFail(400, 'Giờ khám là bắt buộc')
-
-      const service = await DichVu.findOne({ _id: service_id, loai: 'home', status: 'active' }).session(session).lean()
-      if (!service) return rollbackFail(404, 'Dịch vụ không tồn tại')
-
-      if (service.khu_vuc?.length && !service.khu_vuc.includes(khu_vuc.trim())) {
-        return rollbackFail(400, 'Dịch vụ này không hỗ trợ khu vực đã chọn')
-      }
-
-      gia_kham    = service.gia
-      ten_dich_vu = service.ten
-      gio_dat     = gio_kham
-      specialty_id = service.specialty_id ?? null
-      paymentLineType = 'dich_vu'
     }
 
     const appointmentCode = await nextAppointmentCode(session, new Date(ngay_kham))
@@ -408,7 +384,7 @@ export async function createBooking(req, res) {
       doctor_id:    loai_kham === 'clinic' ? doc._id : null,
       schedule_id:  loai_kham === 'clinic' ? schedule_id  : null,
       slot_id:      loai_kham === 'clinic' ? slot_id      : null,
-      service_id:   loai_kham === 'home'   ? service_id   : null,
+      service_id:   null,
       chi_nhanh_id,
       specialty_id,
       ma_lich_hen:  appointmentCode,
@@ -417,7 +393,7 @@ export async function createBooking(req, res) {
       gio_kham:     gio_dat,
       ly_do_kham:   ly_do_kham?.trim() || null,
       phong_kham:   loai_kham === 'clinic' ? phong_kham   : null,
-      dia_chi_kham: loai_kham === 'home'   ? dia_chi_kham.trim() : null,
+      dia_chi_kham: null,
       status:         'pending',
       payment_status: 'unpaid',
       payment_deadline: paymentDeadline,
@@ -439,12 +415,12 @@ export async function createBooking(req, res) {
       tong_tien_kham: gia_kham,
       chi_tiet_thu_phi: [
         {
-          loai: paymentLineType,
+          loai: 'phi_kham',
           ten: ten_dich_vu,
           so_tien: gia_kham,
           so_luong: 1,
           thanh_tien: gia_kham,
-          ghi_chu: loai_kham === 'clinic' ? 'Phi dat lich online cho kham tai phong kham' : 'Phi dat lich online cho dich vu tai nha',
+          ghi_chu: 'Phi dat lich online cho kham tai phong kham',
           created_at: new Date(),
         },
       ],

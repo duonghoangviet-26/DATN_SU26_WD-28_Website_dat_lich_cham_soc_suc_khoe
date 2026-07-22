@@ -19,6 +19,7 @@ interface ExamResultModalProps {
   onClose: () => void
   onSaved?: (result: ExaminationResult) => void          // sau khi Lưu (mode edit)
   onConfirmed?: (appointmentStatus: AppointmentStatus) => void // sau khi Lưu & Xác nhận (mode confirm)
+  onRevisionRequested?: () => void // sau khi "Yêu cầu chỉnh sửa" đẩy hồ sơ về y tá (mode confirm)
 }
 
 // Khối thông tin bệnh nhân — bác sĩ cần đủ dữ liệu lâm sàng (nhất là dị ứng/bệnh nền) để chẩn
@@ -63,9 +64,10 @@ function PatientInfoBlock({ appt, result }: { appt: DoctorAppointmentDetail; res
   )
 }
 
-export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved, onConfirmed }: ExamResultModalProps) {
+export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved, onConfirmed, onRevisionRequested }: ExamResultModalProps) {
   const [loading, setLoading] = useState(true)
   const [existing, setExisting] = useState<ExaminationResult | null>(null)
+  const [revisionReason, setRevisionReason] = useState('') // lý do "Yêu cầu chỉnh sửa" (đẩy về y tá)
   const [chan_doan, setChanDoan] = useState('')
   const [huong_dan, setHuongDan] = useState('')
   const [ghi_chu, setGhiChu] = useState('')
@@ -137,6 +139,24 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
       onConfirmed?.(updated.appointment_status)
     } catch {
       setError('Không thể lưu & xác nhận. Kiểm tra chẩn đoán/đơn thuốc (số ngày 1–90, giờ uống HH:MM) rồi thử lại.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // "Yêu cầu chỉnh sửa" — đẩy hồ sơ về y tá kèm lý do (thay vì bác sĩ tự sửa & xác nhận).
+  async function handleRequestRevision() {
+    if (!revisionReason.trim()) {
+      setError('Cần nêu lý do yêu cầu chỉnh sửa để y tá biết cần sửa gì.')
+      return
+    }
+    setError(null)
+    setSaving(true)
+    try {
+      await doctorAppointmentService.requestRevision(appt.id, revisionReason.trim())
+      onRevisionRequested?.()
+    } catch {
+      setError('Không gửi được yêu cầu chỉnh sửa. Vui lòng thử lại.')
     } finally {
       setSaving(false)
     }
@@ -293,8 +313,24 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-slate-100 pt-1">
+            {/* Yêu cầu chỉnh sửa: đẩy hồ sơ về y tá kèm lý do (song song với "Lưu & Xác nhận"). */}
+            {canConfirm && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+                <label className="input-label text-xs">Lý do yêu cầu chỉnh sửa <span className="font-normal text-slate-400">(gửi cho y tá — điền nếu muốn trả hồ sơ về sửa lại)</span></label>
+                <textarea className="input resize-none bg-white" rows={2}
+                  value={revisionReason} onChange={(e) => setRevisionReason(e.target.value)}
+                  placeholder="VD: Bổ sung sinh hiệu, ghi rõ liều thuốc..." />
+              </div>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-3">
               <button type="button" onClick={onClose} className="btn-secondary">Đóng</button>
+              {canConfirm && (
+                <button type="button" onClick={handleRequestRevision} disabled={saving}
+                  className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 transition-colors">
+                  {saving ? 'Đang gửi...' : 'Yêu cầu chỉnh sửa'}
+                </button>
+              )}
               {!isReadOnly && (
                 <button type="submit" className="btn-primary" disabled={saving}>
                   {primaryLabel}

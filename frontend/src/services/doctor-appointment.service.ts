@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance'
-import type { ApiResponse, DoctorAppointmentDetail, AppointmentStatus, PaymentStatus, KetQuaKhamStatus, DoctorPendingRecord, ExamResultEditPayload } from '@/types'
+import type { ApiResponse, DoctorAppointmentDetail, AppointmentStatus, PaymentStatus, KetQuaKhamStatus, DoctorPendingRecord, ExamResultEditPayload, DoctorExamQueueRow } from '@/types'
 
 interface Filters {
   status?: AppointmentStatus | ''
@@ -58,12 +58,37 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
+  // Yêu cầu y tá chỉnh sửa hồ sơ 'cho_xac_nhan' (khôi phục 2026-07-19, QĐ-1/A). Đẩy hồ sơ về
+  // yeu_cau_chinh_sua kèm lý do; backend revert LichHen về waiting_record (transaction).
+  async requestRevision(
+    id: string | number,
+    ly_do: string,
+  ): Promise<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }> {
+    const res = await axiosInstance.patch<ApiResponse<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }>>(
+      `/doctor/appointments/${id}/result/request-revision`,
+      { ly_do },
+    )
+    return res.data.data
+  },
+
   // Không truyền status: chỉ hồ sơ 'cho_xac_nhan' (dùng cho thẻ thống kê Dashboard — không đổi).
   // status='all': cả 3 trạng thái liên quan bác sĩ (chờ xác nhận/đã xác nhận/cần chỉnh sửa) —
   // dùng cho trang "Hồ sơ chờ xác nhận" để bác sĩ tra cứu lại hồ sơ đã xử lý.
   async listPendingResults(status?: 'all' | KetQuaKhamStatus): Promise<DoctorPendingRecord[]> {
     const params = status ? { status } : undefined
     const res = await axiosInstance.get<ApiResponse<DoctorPendingRecord[]>>('/doctor/appointments/pending-results', { params })
+    return res.data.data
+  },
+
+  // Hàng đợi khám của bác sĩ (online + offline gộp chung, trang "Hồ sơ chờ khám").
+  async getExamQueue(date?: string): Promise<DoctorExamQueueRow[]> {
+    const res = await axiosInstance.get<ApiResponse<DoctorExamQueueRow[]>>('/doctor/queue', { params: date ? { date } : {} })
+    return Array.isArray(res.data.data) ? res.data.data : []
+  },
+
+  // Xác nhận nhanh hồ sơ vãng lai (offline) theo ket_qua_id — không cần appointment_id.
+  async confirmResultByRecord(ketQuaId: string, body: Record<string, unknown> = {}): Promise<unknown> {
+    const res = await axiosInstance.patch<ApiResponse<unknown>>(`/doctor/appointments/result/${ketQuaId}/confirm-by-record`, body)
     return res.data.data
   },
 }

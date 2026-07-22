@@ -24,8 +24,10 @@ const sinhHieuKhamSchema = new mongoose.Schema(
     appointment_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'LichHen',
-      unique: true,
-      required: true,
+    },
+    hang_doi_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HangDoi',
     },
     member_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -79,5 +81,13 @@ const sinhHieuKhamSchema = new mongoose.Schema(
     collection: 'sinh_hieu_kham',
   }
 )
+
+sinhHieuKhamSchema.index({ appointment_id: 1 }, { unique: true, sparse: true })
+sinhHieuKhamSchema.index({ hang_doi_id: 1 }, { unique: true, sparse: true })
+sinhHieuKhamSchema.pre('validate', function () {
+  if (!this.appointment_id && !this.hang_doi_id) {
+    throw new Error('Sinh hieu kham phai gan appointment_id hoac hang_doi_id')
+  }
+})
 
 export default mongoose.model('SinhHieuKham', sinhHieuKhamSchema)

@@ -5,6 +5,8 @@ interface SendPayloadAPI {
   tieu_de: string
   noi_dung: string
   doi_tuong: NotificationTargetAPI
+  kenh_gui?: 'in_app' | 'email'
+  recipient_ids?: string[]
 }
 
 export const notificationService = {

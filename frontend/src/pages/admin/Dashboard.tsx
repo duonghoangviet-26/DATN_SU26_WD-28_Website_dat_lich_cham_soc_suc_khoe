@@ -7,11 +7,9 @@ import DoctorRevenueChart from '@/components/admin/dashboard/DoctorRevenueChart'
 import NewPatientsChart from '@/components/admin/dashboard/NewPatientsChart'
 import RevenueTrendChart from '@/components/admin/dashboard/RevenueTrendChart'
 import TopServicesTable from '@/components/admin/dashboard/TopServicesTable'
-import AnimatedNumber from '@/components/admin/dashboard/AnimatedNumber'
 import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import PageHeader from '@/components/common/PageHeader'
 import { useDashboardRealtime } from '@/hooks/useDashboardRealtime'
-import { useUpdatePulse } from '@/hooks/useUpdatePulse'
 import { dashboardService } from '@/services/dashboard.service'
 import type { AdminDashboardSummary } from '@/types'
 
@@ -49,7 +47,7 @@ function formatDateTime(value: string) {
   }).format(new Date(value))
 }
 
-function DashboardStatCard({ item, loading, pulseKey }: {
+function DashboardStatCard({ item, loading }: {
   item: {
     label: string
     value: number
@@ -60,16 +58,14 @@ function DashboardStatCard({ item, loading, pulseKey }: {
     iconColor: string
   }
   loading: boolean
-  pulseKey: number
 }) {
-  const pulsing = useUpdatePulse(pulseKey)
   return (
-    <div className={`card p-5 ${pulsing ? 'dashboard-update-pulse' : ''}`}>
+    <div className="card p-5">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-sm font-medium text-slate-500">{item.label}</p>
           <p className="mt-1.5 text-2xl font-bold text-slate-800">
-            {loading ? '...' : <AnimatedNumber value={item.value} format={item.format} />}
+            {loading ? '...' : item.format(item.value)}
           </p>
         </div>
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${item.iconBg}`}>
@@ -86,7 +82,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const { connection, versions } = useDashboardRealtime()
-  const revenuePanelPulsing = useUpdatePulse(versions.summary)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -119,7 +114,7 @@ export default function Dashboard() {
       value: summary.appointments_today,
       format: (value: number) => String(Math.round(value)),
       icon: 'calendar',
-      helper: 'Tổng lịch hẹn có ngày_kham trong hôm nay.',
+      helper: 'Tổng số lịch hẹn khám trong ngày hôm nay.',
       iconBg: 'bg-purple-100',
       iconColor: 'text-purple-600',
     },
@@ -128,7 +123,7 @@ export default function Dashboard() {
       value: summary.doctors_active,
       format: (value: number) => String(Math.round(value)),
       icon: 'doctor',
-      helper: "Đếm từ BacSi.trang_thai = 'active'.",
+      helper: 'Số bác sĩ đang hoạt động trong hệ thống.',
       iconBg: 'bg-brand-100',
       iconColor: 'text-brand-600',
     },
@@ -137,7 +132,7 @@ export default function Dashboard() {
       value: summary.revenue.collected_total,
       format: formatCurrency,
       icon: 'payment',
-      helper: "Tong ThanhToan.status = 'paid'.",
+      helper: 'Tổng số tiền đã thanh toán thành công.',
       iconBg: 'bg-blue-100',
       iconColor: 'text-blue-600',
     },
@@ -146,7 +141,7 @@ export default function Dashboard() {
       value: summary.revenue.invoiced_total,
       format: formatCurrency,
       icon: 'file-text',
-      helper: 'Tổng tong_thanh_toan trên hóa đơn.',
+      helper: 'Tổng giá trị đã xuất trên các hóa đơn.',
       iconBg: 'bg-orange-100',
       iconColor: 'text-orange-600',
     },
@@ -156,8 +151,8 @@ export default function Dashboard() {
     <AdminMotionGroup>
       <AdminMotionItem>
         <PageHeader
-          title="Dashboard"
-          description="Tổng quan nhanh từ dữ liệu thật của lịch hẹn, hóa đơn, thanh toán và bác sĩ."
+          title="Tổng quan"
+          description="Tổng quan nhanh từ dữ liệu lịch hẹn, hóa đơn, thanh toán và bác sĩ."
         />
       </AdminMotionItem>
 
@@ -168,7 +163,7 @@ export default function Dashboard() {
             : 'border-blue-200 bg-blue-50 text-blue-800'
         }`} role="status" aria-live="polite">
           <span className={`h-2 w-2 rounded-full ${connection === 'disconnected' ? 'bg-amber-600' : 'animate-pulse bg-blue-600 motion-reduce:animate-none'}`} />
-          {connection === 'disconnected' ? 'Mất kết nối realtime — đang thử lại' : 'Đang kết nối realtime...'}
+          {connection === 'disconnected' ? 'Mất kết nối thời gian thực, đang thử lại' : 'Đang kết nối thời gian thực...'}
         </div>
       )}
 
@@ -182,7 +177,7 @@ export default function Dashboard() {
         <AdminMotionGroup className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((item) => (
             <AdminMotionItem key={item.label}>
-              <DashboardStatCard item={item} loading={loading} pulseKey={versions.summary} />
+              <DashboardStatCard item={item} loading={loading} />
             </AdminMotionItem>
           ))}
         </AdminMotionGroup>
@@ -216,7 +211,7 @@ export default function Dashboard() {
 
       <AdminMotionItem>
         <AdminMotionGroup className="mt-6 grid gap-5 lg:grid-cols-3">
-        <AdminMotionItem className={`card p-5 ${revenuePanelPulsing ? 'dashboard-update-pulse' : ''}`}>
+        <AdminMotionItem className="card p-5">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100">
               <Icon name="payment" className="h-3.5 w-3.5 text-blue-600" />
@@ -228,21 +223,21 @@ export default function Dashboard() {
             <div className="flex items-center justify-between text-sm text-slate-600">
               <span>Đã thu</span>
               <strong className="text-slate-800">
-                {loading ? '...' : <AnimatedNumber value={summary.revenue.collected_total} format={formatCurrency} />}
+                {loading ? '...' : formatCurrency(summary.revenue.collected_total)}
               </strong>
             </div>
 
             <div className="flex items-center justify-between text-sm text-slate-600">
               <span>Đã xuất hóa đơn</span>
               <strong className="text-slate-800">
-                {loading ? '...' : <AnimatedNumber value={summary.revenue.invoiced_total} format={formatCurrency} />}
+                {loading ? '...' : formatCurrency(summary.revenue.invoiced_total)}
               </strong>
             </div>
 
             <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-sm text-slate-600">
               <span>Còn cần thu</span>
               <strong className="text-orange-600">
-                {loading ? '...' : <AnimatedNumber value={summary.revenue.outstanding_total} format={formatCurrency} />}
+                {loading ? '...' : formatCurrency(summary.revenue.outstanding_total)}
               </strong>
             </div>
           </div>

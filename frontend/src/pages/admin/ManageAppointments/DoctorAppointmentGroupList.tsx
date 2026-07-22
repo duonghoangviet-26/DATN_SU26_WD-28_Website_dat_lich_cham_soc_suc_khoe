@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import type { AppointmentItem, AppointmentStatus } from '@/types'
 import { APPOINTMENT_STATUS_LABEL, EXAM_TYPE_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
+import { formatAdminValue } from '@/utils/adminDisplay'
 import { formatPrice } from '@/utils/format'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
@@ -21,6 +22,8 @@ const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red
 const PAYMENT_COLOR: Record<string, 'yellow' | 'green' | 'gray'> = {
   unpaid: 'yellow', paid: 'green', refunded: 'gray',
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 interface DoctorGroup {
   doctor_id: string
@@ -65,7 +68,11 @@ export default function DoctorAppointmentGroupList({
     const group = groupedAppointments.find(g => g.doctor_id === expandedDoctor);
     if (!group) return null;
 
-    const now = new Date().getTime();
+    const nowDate = new Date();
+    const todayStart = new Date(nowDate);
+    todayStart.setHours(0, 0, 0, 0);
+    const tomorrowStart = new Date(todayStart.getTime() + DAY_MS).getTime();
+    const now = nowDate.getTime();
     const buckets: Record<TabType, AppointmentItem[]> = {
       upcoming: [], ongoing: [], completed: [], cancelled: [], overdue: []
     };
@@ -75,7 +82,7 @@ export default function DoctorAppointmentGroupList({
       const appTime = appDate.getTime();
       const isPast = appTime < now;
       const isOngoing = appTime <= now && appTime > now - 3600 * 1000;
-      const isFuture = appTime > now;
+      const isUpcoming = appTime >= tomorrowStart;
 
       if (a.status === 'completed') {
         buckets.completed.push(a);
@@ -83,7 +90,7 @@ export default function DoctorAppointmentGroupList({
         buckets.cancelled.push(a);
       } else if (a.status === 'pending' || a.status === 'confirmed') {
         if (isOngoing) buckets.ongoing.push(a);
-        else if (isFuture) buckets.upcoming.push(a);
+        else if (isUpcoming) buckets.upcoming.push(a);
         else if (isPast) buckets.overdue.push(a);
       }
     });
@@ -189,15 +196,15 @@ export default function DoctorAppointmentGroupList({
                           </td>
                           <td className="px-4 py-3">
                             <Badge color={a.loai_kham === 'clinic' ? 'blue' : 'yellow'}>
-                              {EXAM_TYPE_LABEL[a.loai_kham]}
+                              {EXAM_TYPE_LABEL[a.loai_kham] || formatAdminValue('loai_kham', a.loai_kham)}
                             </Badge>
                           </td>
                           <td className="px-4 py-3 font-medium text-slate-700">{formatPrice(a.gia_kham)}</td>
                           <td className="px-4 py-3">
-                            <Badge color={STATUS_COLOR[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status]}</Badge>
+                            <Badge color={STATUS_COLOR[a.status]}>{APPOINTMENT_STATUS_LABEL[a.status] || formatAdminValue('status', a.status)}</Badge>
                           </td>
                           <td className="px-4 py-3">
-                            <Badge color={PAYMENT_COLOR[a.payment_status] || 'gray'}>{PAYMENT_STATUS_LABEL[a.payment_status]}</Badge>
+                            <Badge color={PAYMENT_COLOR[a.payment_status] || 'gray'}>{PAYMENT_STATUS_LABEL[a.payment_status] || formatAdminValue('payment_status', a.payment_status)}</Badge>
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-2">

@@ -38,8 +38,12 @@ const examinationResultSchema = new mongoose.Schema(
     appointment_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'LichHen',
-      required: true,
-      unique: true,
+      // Bỏ required + unique inline — chuyển sang index sparse-unique bên dưới để
+      // hồ sơ offline (chỉ có hang_doi_id) không vi phạm. KHÔNG set default:null.
+    },
+    hang_doi_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HangDoi',
     },
     nguoi_nhap_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -120,5 +124,14 @@ const examinationResultSchema = new mongoose.Schema(
     collection: 'ket_qua_kham',
   }
 )
+
+// Khóa kép sparse: online mang cả hai, offline chỉ hang_doi_id, dữ liệu cũ chỉ appointment_id.
+examinationResultSchema.index({ appointment_id: 1 }, { unique: true, sparse: true })
+examinationResultSchema.index({ hang_doi_id: 1 }, { unique: true, sparse: true })
+examinationResultSchema.pre('validate', function () {
+  if (!this.appointment_id && !this.hang_doi_id) {
+    throw new Error('Ho so kham phai gan appointment_id (online) hoac hang_doi_id (offline/luot kham)')
+  }
+})
 
 export default mongoose.model('KetQuaKham', examinationResultSchema)

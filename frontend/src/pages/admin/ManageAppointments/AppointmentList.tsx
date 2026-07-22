@@ -4,6 +4,7 @@ import Icon from '@/components/admin/icons'
 import Badge from '@/components/common/Badge'
 import type { AppointmentItem, AppointmentStatus } from '@/types'
 import { APPOINTMENT_STATUS_LABEL, EXAM_TYPE_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
+import { formatAdminValue } from '@/utils/adminDisplay'
 import { formatPrice } from '@/utils/format'
 
 const STATUS_COLOR: Record<AppointmentStatus, 'yellow' | 'blue' | 'green' | 'red' | 'gray'> = {
@@ -122,7 +123,7 @@ export default function AppointmentList({
               <tr key={appointment._id} className="align-top hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <p className="font-semibold text-slate-800">{appointment.ma_lich_hen || 'Chưa có mã'}</p>
-                  <p className="text-xs text-slate-400">{EXAM_TYPE_LABEL[appointment.loai_kham]}</p>
+                  <p className="text-xs text-slate-400">{EXAM_TYPE_LABEL[appointment.loai_kham] || formatAdminValue('loai_kham', appointment.loai_kham)}</p>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -139,7 +140,7 @@ export default function AppointmentList({
                     <p className="text-xs text-blue-500">SĐT người đặt hộ: {appointment.nguoi_dat_sdt}</p>
                   )}
                   {appointment.hinh_thuc_dat_lich && (
-                    <p className="text-xs text-slate-400">Kênh tạo: {appointment.hinh_thuc_dat_lich}</p>
+                    <p className="text-xs text-slate-400">Kênh tạo: {formatAdminValue('hinh_thuc_dat_lich', appointment.hinh_thuc_dat_lich)}</p>
                   )}
                   {appointment.user_email && (
                     <p className="text-xs text-slate-400">{appointment.user_email}</p>
@@ -156,12 +157,12 @@ export default function AppointmentList({
                 </td>
                 <td className="px-4 py-3">
                   <Badge color={STATUS_COLOR[appointment.status]}>
-                    {APPOINTMENT_STATUS_LABEL[appointment.status]}
+                    {APPOINTMENT_STATUS_LABEL[appointment.status] || formatAdminValue('status', appointment.status)}
                   </Badge>
                 </td>
                 <td className="px-4 py-3">
                   <Badge color={PAYMENT_COLOR[appointment.payment_status] || 'gray'}>
-                    {PAYMENT_STATUS_LABEL[appointment.payment_status]}
+                    {PAYMENT_STATUS_LABEL[appointment.payment_status] || formatAdminValue('payment_status', appointment.payment_status)}
                   </Badge>
                   {appointment.invoice?.so_hoa_don && (
                     <p className="mt-1 text-xs text-slate-400">{appointment.invoice.so_hoa_don}</p>

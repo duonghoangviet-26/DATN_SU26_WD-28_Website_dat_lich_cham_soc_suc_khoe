@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import Icon from '@/components/admin/icons'
 import { specialtyService } from '@/services/specialty.service'
-import type { ServiceFormData, ServiceItem, ServiceTargetAudience } from '@/types'
+import type { ServiceFormData, ServiceItem, ServicePackageType, ServiceTargetAudience } from '@/types'
 
 const EMPTY_FORM: ServiceFormData = {
   ten: '',
@@ -14,6 +14,10 @@ const EMPTY_FORM: ServiceFormData = {
   specialty_id: null,
   la_goi: false,
   doi_tuong_ap_dung: null,
+  loai_goi: null,
+  so_nguoi_ap_dung: null,
+  dich_vu_con: [],
+  phan_tram_giam_gia: null,
   khu_vuc: [],
 }
 
@@ -22,6 +26,11 @@ const DOI_TUONG_OPTIONS: { value: ServiceTargetAudience; label: string }[] = [
   { value: 'nguoi_lon', label: 'Người lớn' },
   { value: 'gia_dinh', label: 'Gia đình' },
   { value: 'khong_gioi_han', label: 'Không giới hạn' },
+]
+
+const LOAI_GOI_OPTIONS: { value: ServicePackageType; label: string; hint: string }[] = [
+  { value: 'goi_don', label: 'Gói đơn', hint: 'Áp dụng cho một người, phù hợp gói cá nhân.' },
+  { value: 'goi_gia_dinh', label: 'Gói gia đình', hint: 'Áp dụng cho nhiều thành viên, có mức giảm theo nhóm.' },
 ]
 
 function validate(data: ServiceFormData): Record<string, string> {
@@ -41,6 +50,21 @@ function validate(data: ServiceFormData): Record<string, string> {
 
   if (data.chuan_bi_truoc && data.chuan_bi_truoc.trim().length > 1000) {
     errors.chuan_bi_truoc = 'Hướng dẫn chuẩn bị không vượt quá 1000 ký tự'
+  }
+
+  if (data.la_goi) {
+    if (!data.loai_goi) errors.loai_goi = 'Vui lòng chọn loại gói'
+    if (data.loai_goi === 'goi_gia_dinh') {
+      if (!data.so_nguoi_ap_dung || data.so_nguoi_ap_dung < 2) {
+        errors.so_nguoi_ap_dung = 'Gói gia đình cần ít nhất 2 người'
+      }
+    }
+    if (data.loai_goi === 'goi_don' && data.so_nguoi_ap_dung && data.so_nguoi_ap_dung !== 1) {
+      errors.so_nguoi_ap_dung = 'Gói đơn chỉ áp dụng cho 1 người'
+    }
+    if (data.phan_tram_giam_gia != null && (data.phan_tram_giam_gia < 0 || data.phan_tram_giam_gia > 90)) {
+      errors.phan_tram_giam_gia = 'Phần trăm giảm giá phải từ 0 đến 90'
+    }
   }
 
   if (data.mo_ta_ngan && data.mo_ta_ngan.length > 500) {
@@ -94,6 +118,10 @@ export default function ServiceFormModal({
         specialty_id: service.specialty_id ?? null,
         la_goi: service.la_goi ?? false,
         doi_tuong_ap_dung: service.doi_tuong_ap_dung ?? null,
+        loai_goi: service.loai_goi ?? null,
+        so_nguoi_ap_dung: service.so_nguoi_ap_dung ?? null,
+        dich_vu_con: service.dich_vu_con ?? [],
+        phan_tram_giam_gia: service.phan_tram_giam_gia ?? null,
         khu_vuc: [],
       })
     } else {
@@ -183,10 +211,10 @@ export default function ServiceFormModal({
               Phạm vi giao diện hiện tại
             </p>
             <p className="text-slate-700">
-              Admin hiện chỉ tạo và sửa <span className="font-semibold">dịch vụ liên quan theo chuyên khoa</span>.
+              Quản trị viên chỉ tạo và sửa <span className="font-semibold">dịch vụ liên quan theo chuyên khoa</span>.
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Tùy chọn dịch vụ khám tại nhà đã được tạm ẩn khỏi UI để không ảnh hưởng luồng đặt lịch phòng khám.
+              Dịch vụ đặt lịch tại nhà đã ngừng hỗ trợ tạo mới; dữ liệu cũ chỉ dùng để đối soát lịch sử.
             </p>
           </div>
 
@@ -216,6 +244,10 @@ export default function ServiceFormModal({
                     ...current,
                     la_goi: checked,
                     doi_tuong_ap_dung: checked ? current.doi_tuong_ap_dung : null,
+                    loai_goi: checked ? current.loai_goi ?? 'goi_don' : null,
+                    so_nguoi_ap_dung: checked ? current.so_nguoi_ap_dung ?? 1 : null,
+                    phan_tram_giam_gia: checked ? current.phan_tram_giam_gia ?? 0 : null,
+                    dich_vu_con: checked ? current.dich_vu_con ?? [] : [],
                   }))
                 }}
                 className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-200"
@@ -228,6 +260,71 @@ export default function ServiceFormModal({
               </span>
             </label>
           </div>
+
+          {form.la_goi && (
+            <div className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2">
+              <FormField label="Loại gói" required error={errors.loai_goi}>
+                <div className="grid gap-2">
+                  {LOAI_GOI_OPTIONS.map((option) => (
+                    <label
+                      key={option.value}
+                      className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        form.loai_goi === option.value
+                          ? 'border-brand-300 bg-brand-50 text-brand-700'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        value={option.value}
+                        checked={form.loai_goi === option.value}
+                        onChange={() => {
+                          const nextType = option.value
+                          setForm((current) => ({
+                            ...current,
+                            loai_goi: nextType,
+                            so_nguoi_ap_dung: nextType === 'goi_don' ? 1 : Math.max(current.so_nguoi_ap_dung ?? 3, 2),
+                            doi_tuong_ap_dung: nextType === 'goi_gia_dinh' ? 'gia_dinh' : current.doi_tuong_ap_dung,
+                            phan_tram_giam_gia: nextType === 'goi_gia_dinh'
+                              ? current.phan_tram_giam_gia ?? 15
+                              : current.phan_tram_giam_gia ?? 0,
+                          }))
+                        }}
+                        className="sr-only"
+                      />
+                      <span className="block font-semibold">{option.label}</span>
+                      <span className="mt-0.5 block text-xs opacity-75">{option.hint}</span>
+                    </label>
+                  ))}
+                </div>
+              </FormField>
+
+              <div className="grid gap-4">
+                <FormField label="Số người áp dụng" required error={errors.so_nguoi_ap_dung}>
+                  <input
+                    type="number"
+                    value={form.so_nguoi_ap_dung ?? ''}
+                    onChange={(event) => setField('so_nguoi_ap_dung', Math.floor(Number(event.target.value)))}
+                    min={form.loai_goi === 'goi_gia_dinh' ? 2 : 1}
+                    max={12}
+                    disabled={form.loai_goi === 'goi_don'}
+                    className={`input w-full ${errors.so_nguoi_ap_dung ? 'border-red-300' : ''}`}
+                  />
+                </FormField>
+
+                <FormField label="Phần trăm giảm giá" error={errors.phan_tram_giam_gia}>
+                  <input
+                    type="number"
+                    value={form.phan_tram_giam_gia ?? ''}
+                    onChange={(event) => setField('phan_tram_giam_gia', Math.floor(Number(event.target.value)))}
+                    min={0}
+                    max={90}
+                    className={`input w-full ${errors.phan_tram_giam_gia ? 'border-red-300' : ''}`}
+                  />
+                </FormField>
+              </div>
+            </div>
+          )}
 
           <FormField label="Đối tượng áp dụng">
             <select

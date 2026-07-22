@@ -1,8 +1,10 @@
 import type { ServiceItem, ServiceChangeLog } from '@/types'
 import { SERVICE_TYPE_LABEL } from '@/utils/constants'
+import { formatAdminValue } from '@/utils/adminDisplay'
 import { formatPrice, formatDateTime } from '@/utils/format'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
+import type { ServicePackageType } from '@/types'
 
 // Badge config theo loại hành động audit log
 const LOG_CONFIG: Record<
@@ -13,6 +15,11 @@ const LOG_CONFIG: Record<
   cap_nhat: { color: 'blue',  label: 'Cập nhật' },
   an:       { color: 'red',   label: 'Đã ẩn' },
   hien:     { color: 'green', label: 'Đã hiện' },
+}
+
+const PACKAGE_TYPE_LABEL: Record<ServicePackageType, string> = {
+  goi_don: 'Gói đơn',
+  goi_gia_dinh: 'Gói gia đình',
 }
 
 interface Props {
@@ -56,8 +63,8 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
           <section>
             <div className="mb-3 flex flex-wrap items-start gap-2">
               <h3 className="text-base font-semibold text-slate-800">{service.ten}</h3>
-              <Badge color={service.loai === 'related' ? 'blue' : 'yellow'}>
-                {SERVICE_TYPE_LABEL[service.loai]}
+              <Badge color="blue">
+                {SERVICE_TYPE_LABEL[service.loai] || formatAdminValue('loai', service.loai)}
               </Badge>
               <Badge color={service.status === 'active' ? 'green' : 'gray'}>
                 {service.status === 'active' ? 'Hoạt động' : 'Đã ẩn'}
@@ -68,23 +75,30 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
             <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
               <InfoCell label="Giá dịch vụ" value={formatPrice(service.gia)} />
               <InfoCell label="Thời lượng"  value={service.thoi_gian_phut != null ? `${service.thoi_gian_phut} phút` : '—'} />
-              {service.loai === 'home' ? (
-                <>
-                  <InfoCell label="Đặt trước tối thiểu" value={service.gio_dat_truoc_toi_thieu != null ? `${service.gio_dat_truoc_toi_thieu} giờ` : '—'} />
-                  <InfoCell label="Nhân viên đảm nhận"  value={`${service.so_bac_si ?? 0} nhân viên`} />
-                  <InfoCell label="Lượt đặt"             value={`${service.so_luot_dat ?? 0} lần`} />
-                </>
-              ) : (
-                <InfoCell label="Chuyên khoa" value={service.specialty_ten ?? '—'} />
-              )}
+              <InfoCell label="Chuyên khoa" value={service.specialty_ten ?? '—'} />
             </dl>
 
-            {/* Ghi chú giá tham khảo — related only */}
-            {service.loai === 'related' && (
-              <p className="mt-2 text-xs text-slate-400">
-                * Giá trên là tham khảo — bệnh nhân thanh toán theo chỉ định bác sĩ, không đặt lịch riêng cho dịch vụ này.
-              </p>
+            {service.la_goi && (
+              <div className="mt-3 grid gap-2 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-700 sm:grid-cols-3">
+                <InfoCell
+                  label="Loại gói"
+                  value={service.loai_goi ? PACKAGE_TYPE_LABEL[service.loai_goi] || formatAdminValue('loai_goi', service.loai_goi) : '—'}
+                />
+                <InfoCell
+                  label="Số người"
+                  value={service.so_nguoi_ap_dung ? `${service.so_nguoi_ap_dung} người` : '—'}
+                />
+                <InfoCell
+                  label="Giảm giá"
+                  value={service.phan_tram_giam_gia != null ? `${service.phan_tram_giam_gia}%` : '—'}
+                />
+              </div>
             )}
+
+            {/* Ghi chú giá tham khảo — related only */}
+            <p className="mt-2 text-xs text-slate-400">
+              * Giá trên là tham khảo — bệnh nhân thanh toán theo chỉ định bác sĩ, không đặt lịch riêng cho dịch vụ này.
+            </p>
 
             {/* Lịch áp dụng — cả 2 loại đều có lịch cố định T2–T7 */}
             {(service.ngay_ap_dung || service.gio_bat_dau) && (
@@ -95,27 +109,8 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
               </div>
             )}
 
-            {/* Khu vực (home only) */}
-            {service.loai === 'home' && (service.khu_vuc?.length ?? 0) > 0 && (
-              <div className="mt-3">
-                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Khu vực phục vụ
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {service.khu_vuc!.map((k) => (
-                    <span
-                      key={k}
-                      className="rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs text-yellow-700"
-                    >
-                      {k}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Hướng dẫn chuẩn bị — related only */}
-            {service.loai === 'related' && service.chuan_bi_truoc && (
+            {/* Hướng dẫn chuẩn bị */}
+            {service.chuan_bi_truoc && (
               <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-700">
                   Hướng dẫn chuẩn bị cho bệnh nhân
@@ -126,7 +121,7 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
 
             {/* Mô tả ngắn */}
             {service.mo_ta_ngan && (
-              <p className="mt-3 text-sm italic text-slate-500">"{service.mo_ta_ngan}"</p>
+              <p className="mt-3 text-sm italic text-slate-500">{service.mo_ta_ngan}</p>
             )}
 
             {/* Mô tả chi tiết */}

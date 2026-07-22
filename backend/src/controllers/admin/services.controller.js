@@ -4,6 +4,8 @@ import { ok, created, fail } from '../../utils/response.js'
 
 const isValidId = (id) => id && mongoose.Types.ObjectId.isValid(id)
 const DOI_TUONG_AP_DUNG_VALUES = ['tre_em', 'nguoi_lon', 'gia_dinh', 'khong_gioi_han']
+const LOAI_GOI_VALUES = ['goi_don', 'goi_gia_dinh']
+const SERVICE_HOME_DISABLED_MESSAGE = 'Dich vu tai nha da ngung ho tro. He thong chi giu du lieu cu de doi soat lich su.'
 
 function normalizePackageFields(input = {}) {
   const laGoi = input.la_goi === undefined ? undefined : Boolean(input.la_goi)
@@ -15,9 +17,37 @@ function normalizePackageFields(input = {}) {
     return { error: 'Đối tượng áp dụng không hợp lệ' }
   }
 
+  const loaiGoiRaw = typeof input.loai_goi === 'string' ? input.loai_goi.trim() : input.loai_goi
+  if (loaiGoiRaw != null && loaiGoiRaw !== '' && !LOAI_GOI_VALUES.includes(loaiGoiRaw)) {
+    return { error: 'Loại gói không hợp lệ' }
+  }
+
+  const soNguoiRaw = input.so_nguoi_ap_dung
+  const soNguoi = soNguoiRaw == null || soNguoiRaw === '' ? null : Number(soNguoiRaw)
+  if (soNguoi != null && (!Number.isInteger(soNguoi) || soNguoi < 1 || soNguoi > 12)) {
+    return { error: 'Số người áp dụng phải là số nguyên từ 1 đến 12' }
+  }
+
+  const phanTramRaw = input.phan_tram_giam_gia
+  const phanTram = phanTramRaw == null || phanTramRaw === '' ? null : Number(phanTramRaw)
+  if (phanTram != null && (!Number.isFinite(phanTram) || phanTram < 0 || phanTram > 90)) {
+    return { error: 'Phần trăm giảm giá phải từ 0 đến 90' }
+  }
+
+  const dichVuCon = Array.isArray(input.dich_vu_con)
+    ? input.dich_vu_con.filter(Boolean)
+    : []
+  if (dichVuCon.some((id) => !isValidId(id))) {
+    return { error: 'Danh sách dịch vụ con không hợp lệ' }
+  }
+
   return {
     la_goi: laGoi,
     doi_tuong_ap_dung: doiTuongRaw ? doiTuongRaw : null,
+    loai_goi: loaiGoiRaw || null,
+    so_nguoi_ap_dung: soNguoi,
+    dich_vu_con: dichVuCon,
+    phan_tram_giam_gia: phanTram,
   }
 }
 
@@ -41,9 +71,7 @@ const HANH_DONG_MAP = {
 // (LichHen.service_id luôn null với clinic, và related không có luồng đặt lịch riêng — xem
 // LichHen.js pre-validate hook), nên với related 2 số này luôn = 0, đúng theo thiết kế.
 async function computeExtras(service) {
-  const bacSiFilter = service.loai === 'related'
-    ? { related_services: service._id, trang_thai_duyet: 'approved', la_hien: true }
-    : { services: service._id, trang_thai_duyet: 'approved', la_hien: true }
+  const bacSiFilter = { related_services: service._id, trang_thai_duyet: 'approved', la_hien: true }
 
   const [so_bac_si, so_luot_dat, active_appointments] = await Promise.all([
     BacSi.countDocuments(bacSiFilter),
@@ -114,8 +142,10 @@ export async function list(req, res) {
     const page  = Math.max(1, parseInt(req.query.page,  10) || 1)
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10))
 
-    const filter = {}
-    if (loai)   filter.loai   = loai
+    const filter = { loai: 'related' }
+    if (loai && loai !== 'related') {
+      return ok(res, { items: [], total: 0, page, totalPages: 1 })
+    }
     if (status) filter.status = status
     if (la_goi !== undefined) filter.la_goi = ['true', '1'].includes(String(la_goi).toLowerCase())
     if (search?.trim()) filter.$or = [
@@ -159,6 +189,7 @@ export async function getById(req, res) {
       .populate('nguoi_tao_id', 'ho_ten')
       .lean()
     if (!s) return fail(res, 404, 'Không tìm thấy dịch vụ')
+    if (s.loai === 'home') return fail(res, 410, SERVICE_HOME_DISABLED_MESSAGE)
 
     const [lich_su_thay_doi, extras] = await Promise.all([
       getAuditLogs(s._id),
@@ -184,15 +215,23 @@ export async function create(req, res) {
     const {
       ten, loai, gia, mo_ta_ngan, mo_ta,
       gio_dat_truoc_toi_thieu, specialty_id, khu_vuc, chuan_bi_truoc, la_goi, doi_tuong_ap_dung,
+      loai_goi, so_nguoi_ap_dung, dich_vu_con, phan_tram_giam_gia,
     } = req.body
-    const normalizedPackage = normalizePackageFields({ la_goi, doi_tuong_ap_dung })
+    const normalizedPackage = normalizePackageFields({
+      la_goi,
+      doi_tuong_ap_dung,
+      loai_goi,
+      so_nguoi_ap_dung,
+      dich_vu_con,
+      phan_tram_giam_gia,
+    })
     if (normalizedPackage.error) return fail(res, 400, normalizedPackage.error)
 
     // ── Validate bắt buộc ────────────────────────────────────────────────────
     if (!ten?.trim())  return fail(res, 400, 'Tên dịch vụ là bắt buộc')
     if (ten.trim().length > 255) return fail(res, 400, 'Tên dịch vụ không vượt quá 255 ký tự')
     if (!loai)         return fail(res, 400, 'Loại dịch vụ là bắt buộc')
-    if (!['home', 'related'].includes(loai)) return fail(res, 400, 'Loại dịch vụ không hợp lệ')
+    if (loai !== 'related') return fail(res, 400, SERVICE_HOME_DISABLED_MESSAGE)
     if (gia === undefined || gia === null)    return fail(res, 400, 'Giá dịch vụ là bắt buộc')
     if (!Number.isInteger(Number(gia)) || Number(gia) < 1) return fail(res, 400, 'Giá phải là số nguyên lớn hơn 0')
     if (Number(gia) > 100_000_000) return fail(res, 400, 'Giá không vượt quá 100 triệu VNĐ')
@@ -200,13 +239,6 @@ export async function create(req, res) {
     // ── Validate theo loại ───────────────────────────────────────────────────
     if (loai === 'related') {
       if (!isValidId(specialty_id)) return fail(res, 400, 'Dịch vụ liên quan bắt buộc phải có chuyên khoa')
-    }
-    if (loai === 'home') {
-      const gdt = Number(gio_dat_truoc_toi_thieu ?? 4)
-      if (!Number.isInteger(gdt) || gdt < 1 || gdt > 48)
-        return fail(res, 400, 'Thời gian đặt trước phải từ 1–48 giờ')
-      if (!khu_vuc || khu_vuc.length === 0)
-        return fail(res, 400, 'Dịch vụ tại nhà cần chọn ít nhất 1 khu vực phục vụ')
     }
 
     // related: không đặt lịch riêng (đi kèm khám clinic, BS chỉ định) → thời lượng/lịch áp dụng
@@ -218,16 +250,20 @@ export async function create(req, res) {
       gia:            parseInt(gia, 10),
       mo_ta_ngan:     mo_ta_ngan?.trim() || null,
       mo_ta:          mo_ta?.trim()      || null,
-      thoi_gian_phut: loai === 'home' ? 60 : null,
-      gio_dat_truoc_toi_thieu: loai === 'home' ? parseInt(gio_dat_truoc_toi_thieu ?? 4, 10) : undefined,
-      ngay_ap_dung:   loai === 'home' ? 'T2–T7' : null,
-      gio_bat_dau:    loai === 'home' ? '08:00' : null,
-      gio_ket_thuc:   loai === 'home' ? '17:00' : null,
-      specialty_id:   loai === 'related' ? specialty_id : null,
+      thoi_gian_phut: null,
+      gio_dat_truoc_toi_thieu: undefined,
+      ngay_ap_dung:   null,
+      gio_bat_dau:    null,
+      gio_ket_thuc:   null,
+      specialty_id,
       la_goi:         normalizedPackage.la_goi ?? false,
       doi_tuong_ap_dung: normalizedPackage.la_goi === false ? null : normalizedPackage.doi_tuong_ap_dung,
-      khu_vuc:        loai === 'home' ? (khu_vuc ?? []) : [],
-      chuan_bi_truoc: loai === 'related' ? (chuan_bi_truoc?.trim() || null) : null,
+      loai_goi:       normalizedPackage.la_goi ? normalizedPackage.loai_goi : null,
+      so_nguoi_ap_dung: normalizedPackage.la_goi ? normalizedPackage.so_nguoi_ap_dung : null,
+      dich_vu_con:    normalizedPackage.la_goi ? normalizedPackage.dich_vu_con : [],
+      phan_tram_giam_gia: normalizedPackage.la_goi ? normalizedPackage.phan_tram_giam_gia : null,
+      khu_vuc:        [],
+      chuan_bi_truoc: chuan_bi_truoc?.trim() || null,
       nguoi_tao_id:   req.user.id,
     })
 
@@ -239,9 +275,7 @@ export async function create(req, res) {
     if (err.code === 11000) {
       const { loai } = req.body
       return fail(res, 409,
-        loai === 'related'
-          ? 'Tên dịch vụ đã tồn tại trong chuyên khoa này'
-          : 'Tên dịch vụ tại nhà này đã tồn tại trong hệ thống'
+        'Tên dịch vụ đã tồn tại trong chuyên khoa này'
       )
     }
     return fail(res, 500, err.message)
@@ -256,6 +290,7 @@ export async function update(req, res) {
   try {
     service = await DichVu.findById(req.params.id)
     if (!service) return fail(res, 404, 'Không tìm thấy dịch vụ')
+    if (service.loai === 'home') return fail(res, 410, SERVICE_HOME_DISABLED_MESSAGE)
     const normalizedPackage = normalizePackageFields(req.body)
     if (normalizedPackage.error) return fail(res, 400, normalizedPackage.error)
 
@@ -277,7 +312,7 @@ export async function update(req, res) {
 
     // ── Kiểm tra đổi loại có lịch hẹn đang xử lý không ─────────────────────
     if (req.body.loai !== undefined && req.body.loai !== service.loai) {
-      if (!['home', 'related'].includes(req.body.loai))
+      if (req.body.loai !== 'related')
         return fail(res, 400, 'Loại dịch vụ không hợp lệ')
 
       const activeCount = await LichHen.countDocuments({
@@ -300,24 +335,10 @@ export async function update(req, res) {
 
     // ── Cập nhật các trường còn lại ──────────────────────────────────────────
     const STR_OR_NULL = new Set(['mo_ta_ngan', 'mo_ta'])
-    const EDITABLE    = ['mo_ta_ngan', 'mo_ta', 'gio_dat_truoc_toi_thieu', 'khu_vuc']
+    const EDITABLE    = ['mo_ta_ngan', 'mo_ta']
     for (const f of EDITABLE) {
       if (req.body[f] === undefined) continue
       service[f] = STR_OR_NULL.has(f) ? (req.body[f]?.trim() || null) : req.body[f]
-    }
-
-    // Validate gio_dat_truoc_toi_thieu nếu home
-    if (currentLoai === 'home' && req.body.gio_dat_truoc_toi_thieu !== undefined) {
-      const gdt = parseInt(req.body.gio_dat_truoc_toi_thieu, 10)
-      if (!Number.isInteger(gdt) || gdt < 1 || gdt > 48)
-        return fail(res, 400, 'Thời gian đặt trước phải từ 1–48 giờ')
-      service.gio_dat_truoc_toi_thieu = gdt
-    }
-
-    // Re-validate khu_vuc ≥1 cho home — create() đã chặn, update() trước đây tin client
-    // hoàn toàn (chỉ set nếu body có field), có thể lưu 0 khu vực qua gọi API trực tiếp.
-    if (currentLoai === 'home' && (!service.khu_vuc || service.khu_vuc.length === 0)) {
-      return fail(res, 400, 'Dịch vụ tại nhà cần chọn ít nhất 1 khu vực phục vụ')
     }
 
     // home không dùng specialty_id — luôn clear kể cả khi client không gửi field này
@@ -325,22 +346,16 @@ export async function update(req, res) {
     if (currentLoai === 'related') {
       if (req.body.specialty_id !== undefined) service.specialty_id = req.body.specialty_id
       // đã validate isValidId(specId) ở khối "Validate specialty_id khi loại là related" phía trên
-    } else {
-      service.specialty_id = null
     }
 
     // Luôn reset các trường cố định theo loại hiện tại — related không đặt lịch riêng
     // nên thời lượng/lịch áp dụng vô nghĩa, để null (không phải giá trị giả).
-    service.thoi_gian_phut = currentLoai === 'home' ? 60  : null
-    service.ngay_ap_dung   = currentLoai === 'home' ? 'T2–T7' : null
-    service.gio_bat_dau    = currentLoai === 'home' ? '08:00' : null
-    service.gio_ket_thuc   = currentLoai === 'home' ? '17:00' : null
-    if (currentLoai === 'related') {
-      service.khu_vuc       = []
-      service.chuan_bi_truoc = req.body.chuan_bi_truoc?.trim() || null
-    } else {
-      service.chuan_bi_truoc = null
-    }
+    service.thoi_gian_phut = null
+    service.ngay_ap_dung   = null
+    service.gio_bat_dau    = null
+    service.gio_ket_thuc   = null
+    service.khu_vuc        = []
+    service.chuan_bi_truoc = req.body.chuan_bi_truoc?.trim() || null
 
     if (normalizedPackage.la_goi !== undefined) {
       service.la_goi = normalizedPackage.la_goi
@@ -348,6 +363,18 @@ export async function update(req, res) {
     if (req.body.doi_tuong_ap_dung !== undefined || normalizedPackage.la_goi === false) {
       service.doi_tuong_ap_dung =
         service.la_goi === false ? null : normalizedPackage.doi_tuong_ap_dung
+    }
+    if (req.body.loai_goi !== undefined || normalizedPackage.la_goi === false) {
+      service.loai_goi = service.la_goi === false ? null : normalizedPackage.loai_goi
+    }
+    if (req.body.so_nguoi_ap_dung !== undefined || normalizedPackage.la_goi === false) {
+      service.so_nguoi_ap_dung = service.la_goi === false ? null : normalizedPackage.so_nguoi_ap_dung
+    }
+    if (req.body.dich_vu_con !== undefined || normalizedPackage.la_goi === false) {
+      service.dich_vu_con = service.la_goi === false ? [] : normalizedPackage.dich_vu_con
+    }
+    if (req.body.phan_tram_giam_gia !== undefined || normalizedPackage.la_goi === false) {
+      service.phan_tram_giam_gia = service.la_goi === false ? null : normalizedPackage.phan_tram_giam_gia
     }
 
     await service.save()
@@ -361,9 +388,7 @@ export async function update(req, res) {
   } catch (err) {
     if (err.code === 11000) {
       return fail(res, 409,
-        service?.loai === 'related'
-          ? 'Tên dịch vụ đã tồn tại trong chuyên khoa này'
-          : 'Tên dịch vụ tại nhà này đã tồn tại trong hệ thống'
+        'Tên dịch vụ đã tồn tại trong chuyên khoa này'
       )
     }
     return fail(res, 500, err.message)
@@ -375,6 +400,7 @@ export async function toggle(req, res) {
   try {
     const service = await DichVu.findById(req.params.id)
     if (!service) return fail(res, 404, 'Không tìm thấy dịch vụ')
+    if (service.loai === 'home') return fail(res, 410, SERVICE_HOME_DISABLED_MESSAGE)
 
     const wasActive  = service.status === 'active'
     service.status   = wasActive ? 'inactive' : 'active'

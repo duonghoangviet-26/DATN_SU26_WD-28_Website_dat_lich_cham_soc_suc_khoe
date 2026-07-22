@@ -28,26 +28,33 @@ export async function getDashboard(req, res) {
         phong_kham: s.doctor_id.phong_kham_mac_dinh ?? null,
       }))
 
-    // Lịch hẹn hôm nay thuộc ca của y tá này
-    const apptsToday = await LichHen.find({
-      nurse_id: nurseId,
+    // Lịch hẹn hôm nay thuộc ca của y tá này — lọc theo các BÁC SĨ y tá trực hôm nay
+    // (LichLamViec.nurse_id qua scheduleToday), KHÔNG dựa LichHen.nurse_id (không được gán
+    // lúc đặt online) — nhất quán với appointments/queue.
+    const doctorIdsToday = scheduleToday.filter((s) => s.doctor_id).map((s) => String(s.doctor_id._id))
+    const apptsToday = doctorIdsToday.length === 0 ? [] : await LichHen.find({
+      doctor_id: { $in: doctorIdsToday },
       ngay_kham: { $gte: todayStart, $lt: todayEnd },
-    }).select('_id status ma_lich_hen gio_kham member_id ten_khach').lean()
+    }).select('_id status trang_thai_den ma_lich_hen gio_kham member_id ten_khach').lean()
 
-    const dang_cho_kham = apptsToday.filter((a) => ['confirmed', 'checked_in'].includes(a.status)).length
+    // Tổng lịch hôm nay (KHÔNG tính hủy/không đến).
+    const tong_lich_hom_nay = apptsToday.filter((a) => !['cancelled', 'no_show'].includes(a.status)).length
+    // Cần tiếp nhận = CHƯA đến: còn ở pending/confirmed và chưa đánh dấu đã đến (trang_thai_den).
+    // "Đã đến" dựa trên trang_thai_den (đặt khi check-in), KHÔNG suy từ trạng thái đặt lịch.
+    const can_tiep_nhan = apptsToday.filter((a) =>
+      ['pending', 'confirmed'].includes(a.status) && a.trang_thai_den !== 'da_den',
+    ).length
     const dang_kham = apptsToday.filter((a) => a.status === 'in_progress').length
-    const tong_check_in = apptsToday.filter((a) => a.status !== 'pending' && a.status !== 'cancelled').length
 
-    // Chờ nhập hồ sơ: đã khám xong (confirmed/completed) nhưng CHƯA có KetQuaKham
-    // waiting_record = y tá vừa kết thúc khám qua hàng đợi động (Kế hoạch 2, queue.controller.js
-    // finish()) — PHẢI có ở đây, nếu không widget "chờ nhập hồ sơ" bỏ sót đúng lúc y tá cần nó nhất.
+    // Chờ nhập hồ sơ: đã KẾT THÚC khám (waiting_record) nhưng CHƯA có KetQuaKham.
+    // (Bỏ 'confirmed'/'completed' của bản cũ — confirmed là chưa khám nên bị thổi phồng.)
     const apptIdsToday = apptsToday.map((a) => a._id)
     const recordedApptIds = new Set(
       (await KetQuaKham.find({ appointment_id: { $in: apptIdsToday } }).select('appointment_id').lean())
         .map((r) => String(r.appointment_id)),
     )
     const cho_nhap_ho_so = apptsToday.filter((a) =>
-      ['confirmed', 'completed', 'waiting_record'].includes(a.status) && !recordedApptIds.has(String(a._id)),
+      a.status === 'waiting_record' && !recordedApptIds.has(String(a._id)),
     ).length
 
     // Hồ sơ theo trạng thái — do CHÍNH y tá này nhập (không tính theo ngày, hồ sơ có thể tồn từ hôm trước)
@@ -81,8 +88,8 @@ export async function getDashboard(req, res) {
       ten_y_ta: nurse?.ho_ten ?? null,
       ngay_hien_tai: new Date(),
       bac_si_ho_tro,
-      tong_check_in,
-      dang_cho_kham,
+      tong_lich_hom_nay,
+      can_tiep_nhan,
       dang_kham,
       cho_nhap_ho_so,
       ho_so_cho_xac_nhan,

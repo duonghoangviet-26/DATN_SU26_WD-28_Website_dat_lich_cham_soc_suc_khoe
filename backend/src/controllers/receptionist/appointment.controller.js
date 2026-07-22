@@ -1,10 +1,15 @@
+import mongoose from 'mongoose'
 import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
+import LichLamViec from '../../models/LichLamViec.js'
+import LichSuLichHen from '../../models/LichSuLichHen.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 export const getAppointments = async (req, res) => {
   try {
-    const { date, status, timeframe, search } = req.query
+    const { date, status, timeframe, search, page = 1, limit = 10 } = req.query
+    const pageNum = parseInt(page) || 1
+    const limitNum = parseInt(limit) || 10
     const query = { loai_kham: 'clinic' }
     
     if (search) {
@@ -26,34 +31,26 @@ export const getAppointments = async (req, res) => {
     }
     
     if (date) {
-      const startDate = new Date(date)
-      startDate.setHours(0, 0, 0, 0)
-      const endDate = new Date(date)
-      endDate.setHours(23, 59, 59, 999)
-      query.ngay_kham = { $gte: startDate, $lte: endDate }
+      query.ngay_kham = new Date(`${date}T00:00:00.000Z`)
     } else {
-      const todayStart = new Date()
-      todayStart.setHours(0, 0, 0, 0)
+      const now = new Date()
+      // Ép chuẩn về múi giờ Việt Nam (UTC+7) để Server không bị lạc ngày
+      const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000)
+      const todayString = vnTime.toISOString().split('T')[0]
+      const todayUTC = new Date(`${todayString}T00:00:00.000Z`)
       
-      const todayEnd = new Date()
-      todayEnd.setHours(23, 59, 59, 999)
-
-      const tomorrowStart = new Date()
-      tomorrowStart.setDate(tomorrowStart.getDate() + 1)
-      tomorrowStart.setHours(0, 0, 0, 0)
-
-      const tomorrowEnd = new Date()
-      tomorrowEnd.setDate(tomorrowEnd.getDate() + 1)
-      tomorrowEnd.setHours(23, 59, 59, 999)
+      const tomorrowVn = new Date(vnTime.getTime() + 24 * 60 * 60 * 1000)
+      const tomorrowString = tomorrowVn.toISOString().split('T')[0]
+      const tomorrowUTC = new Date(`${tomorrowString}T00:00:00.000Z`)
 
       if (timeframe === 'today') {
-        query.ngay_kham = { $gte: todayStart, $lte: todayEnd }
+        query.ngay_kham = todayUTC
       } else if (timeframe === 'tomorrow') {
-        query.ngay_kham = { $gte: tomorrowStart, $lte: tomorrowEnd }
+        query.ngay_kham = tomorrowUTC
       } else if (timeframe === 'upcoming') {
-        query.ngay_kham = { $gt: todayEnd }
+        query.ngay_kham = { $gt: todayUTC }
       } else if (timeframe === 'past') {
-        query.ngay_kham = { $lt: todayStart }
+        query.ngay_kham = { $lt: todayUTC }
       }
     }
     
@@ -64,6 +61,9 @@ export const getAppointments = async (req, res) => {
       sortOption = { ngay_kham: -1, gio_kham: -1 }
     }
 
+    const totalDocs = await LichHen.countDocuments(query)
+    const totalPages = Math.ceil(totalDocs / limitNum)
+
     const appointments = await LichHen.find(query)
       .populate('user_id', 'ho_ten so_dien_thoai email anh_dai_dien')
       .populate({
@@ -71,8 +71,19 @@ export const getAppointments = async (req, res) => {
         populate: { path: 'user_id', select: 'ho_ten' }
       })
       .sort(sortOption)
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
       
-    res.status(200).json({ success: true, data: appointments })
+    res.status(200).json({ 
+      success: true, 
+      data: appointments,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        totalDocs,
+        totalPages
+      }
+    })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
@@ -99,35 +110,146 @@ export const markAsArrived = async (req, res) => {
 }
 
 export const rescheduleAppointment = async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
   try {
     const { id } = req.params
     const { ngay_kham, gio_kham, ly_do_doi_lich } = req.body
     
     if (!ngay_kham || !gio_kham) {
+      await session.abortTransaction()
+      session.endSession()
       return res.status(400).json({ success: false, message: 'Vui lòng cung cấp ngày và giờ khám mới' })
     }
 
-    const appointment = await LichHen.findByIdAndUpdate(
-      id,
-      { ngay_kham, gio_kham, ly_do_doi_lich, $inc: { so_lan_thay_doi: 1 } },
-      { new: true }
-    )
+    // 1. Lấy lịch hẹn cũ
+    const appointment = await LichHen.findById(id).session(session)
+    if (!appointment) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
+    }
+
+    const { doctor_id, schedule_id: old_schedule_id, slot_id: old_slot_id, so_lan_thay_doi = 0 } = appointment
+
+    if (so_lan_thay_doi >= 3) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Lịch hẹn này đã đạt giới hạn tối đa 3 lần dời lịch.' })
+    }
+
+    // 2. Tra cứu slot mới trong LichLamViec
+    // Parse ngay_kham (new) to UTC midnight Date
+    const parsedDate = new Date(ngay_kham)
+    parsedDate.setUTCHours(0, 0, 0, 0)
+
+    const newSchedule = await LichLamViec.findOne({
+      doctor_id,
+      ngay: { $gte: parsedDate, $lt: new Date(parsedDate.getTime() + 86400000) },
+      trang_thai_ngay: 'lam_viec',
+      trang_thai_xac_nhan: { $ne: 'tu_choi' },
+      'slots.gio_bat_dau': gio_kham
+    }).session(session)
+
+    if (!newSchedule) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Lịch làm việc của Bác sĩ vào ngày giờ này không tồn tại' })
+    }
+
+    const newSlot = newSchedule.slots.find(s => s.gio_bat_dau === gio_kham)
     
-    if (!appointment) return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
+    // Kiểm tra nếu Lễ tân chọn lại đúng slot của chính lịch hẹn này
+    if (old_schedule_id && old_slot_id && 
+        newSchedule._id.toString() === old_schedule_id.toString() && 
+        newSlot && newSlot._id.toString() === old_slot_id.toString()) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn ngày và giờ khác với lịch hẹn hiện tại' })
+    }
+
+    if (!newSlot || newSlot.status === 'booked') {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Khung giờ này của bác sĩ đã kín' })
+    }
+
+    if (newSlot.status !== 'active') {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Khung giờ này không khả dụng' })
+    }
+
+    // 3. Đánh dấu slot MỚI thành booked
+    newSlot.status = 'booked'
+    await newSchedule.save({ session })
+
+    // 4. Giải phóng slot CŨ thành active
+    if (old_schedule_id && old_slot_id) {
+      const oldSchedule = await LichLamViec.findById(old_schedule_id).session(session)
+      if (oldSchedule) {
+        const oldSlotToFree = oldSchedule.slots.id(old_slot_id)
+        if (oldSlotToFree) {
+          oldSlotToFree.status = 'active'
+          await oldSchedule.save({ session })
+        }
+      }
+    }
+
+    // 5. Cập nhật LichHen với dữ liệu mới
+    appointment.ngay_kham = parsedDate
+    appointment.gio_kham = gio_kham
+    appointment.schedule_id = newSchedule._id
+    appointment.slot_id = newSlot._id
+    appointment.ly_do_doi_lich = ly_do_doi_lich || 'Lễ tân dời lịch'
+    appointment.so_lan_thay_doi = (appointment.so_lan_thay_doi || 0) + 1
+
+    await appointment.save({ session })
     
-    res.status(200).json({ success: true, message: 'Đã dời lịch hẹn', data: appointment })
+    // Ghi lại lịch sử dời lịch
+    await LichSuLichHen.create([{
+      appointment_id: appointment._id,
+      tu_trang_thai: appointment.status,
+      den_trang_thai: appointment.status,
+      loai_thay_doi: 'reschedule',
+      ly_do_thay_doi: ly_do_doi_lich || 'Lễ tân dời lịch',
+      vai_tro: 'admin',
+      kenh_thay_doi: 'web',
+      nguoi_thay_doi_id: req.user?._id || appointment.user_id || new mongoose.Types.ObjectId()
+    }], { session })
+
+    await session.commitTransaction()
+    session.endSession()
+
+    res.status(200).json({ success: true, message: 'Đã dời lịch hẹn thành công', data: appointment })
   } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
     res.status(500).json({ success: false, message: error.message })
   }
 }
 
 export const cancelAppointment = async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
   try {
     const { id } = req.params
     const { ly_do_huy } = req.body
     
-    const appointment = await LichHen.findById(id)
-    if (!appointment) return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
+    const appointment = await LichHen.findById(id).session(session)
+    if (!appointment) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
+    }
+
+    if (appointment.status === 'checked_in') {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Không thể hủy lịch hẹn khi bệnh nhân đã check-in' })
+    }
     
     const oldStatus = appointment.status
     appointment.status = 'cancelled'
@@ -137,10 +259,42 @@ export const cancelAppointment = async (req, res) => {
       appointment.nguoi_huy_id = req.user._id
     }
     
-    await appointment.save()
+    // Giải phóng slot trong LichLamViec
+    const { schedule_id, slot_id } = appointment
+    if (schedule_id && slot_id) {
+      const schedule = await LichLamViec.findById(schedule_id).session(session)
+      if (schedule) {
+        const slot = schedule.slots.id(slot_id)
+        if (slot) {
+          slot.status = 'active'
+          await schedule.save({ session })
+        }
+      }
+    }
+
+    await appointment.save({ session })
+    await session.commitTransaction()
+    session.endSession()
+
     emitDashboardAppointmentChanged(oldStatus, appointment.status)
     
     res.status(200).json({ success: true, message: 'Đã hủy lịch hẹn', data: appointment })
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+export const getRescheduleHistory = async (req, res) => {
+  try {
+    const { id } = req.params
+    const history = await LichSuLichHen.find({
+      appointment_id: id,
+      loai_thay_doi: 'reschedule'
+    }).sort({ thoi_diem: 1 })
+    
+    res.status(200).json({ success: true, data: history })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
@@ -150,5 +304,6 @@ export default {
   getAppointments,
   markAsArrived,
   rescheduleAppointment,
-  cancelAppointment
+  cancelAppointment,
+  getRescheduleHistory
 }

@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axiosInstance from '../../services/axiosInstance';
 import { format } from 'date-fns';
+import Pagination from '../../components/common/Pagination';
+import { receptionistBookingService, ReceptionistBookingSlot } from '../../services/receptionist-booking.service';
+import Icon from '../../components/admin/icons';
 
 interface Appointment {
   _id: string;
@@ -10,7 +13,7 @@ interface Appointment {
   loai_kham: string;
   payment_status: string;
   user_id: { ho_ten: string; so_dien_thoai: string } | null;
-  doctor_id: { user_id?: { ho_ten: string } } | null;
+  doctor_id: { _id?: string; user_id?: { ho_ten: string } } | null;
   ten_khach?: string;
   so_dien_thoai_khach?: string;
   ma_lich_hen?: string;
@@ -19,14 +22,49 @@ interface Appointment {
   ten_dich_vu?: string;
   nguoi_dat_ho_ten?: string;
   dat_ho?: boolean;
+  so_lan_thay_doi?: number;
+}
+
+interface RescheduleHistory {
+  _id: string;
+  loai_thay_doi: string;
+  ly_do_thay_doi: string;
+  thoi_diem: string;
 }
 
 const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
-  const appointmentDate = new Date(ngay_kham);
+  // Tách ngày từ chuỗi UTC (vd: "2026-07-20T00:00...")
+  const dateString = ngay_kham.split('T')[0];
+  const [year, month, day] = dateString.split('-').map(Number);
   const [hours, minutes] = gio_kham.split(':').map(Number);
-  appointmentDate.setHours(hours, minutes, 0, 0);
+  
+  // Tạo Local Date cố định theo đúng các thông số trên
+  const appointmentDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
   const now = new Date();
+  
   return appointmentDate < now;
+};
+
+const getStatusBadge = (status: string, isOverdue: boolean = false) => {
+  switch (status) {
+    case 'checked_in':
+      return { label: 'Đã đến', className: 'bg-emerald-100 text-emerald-700' };
+    case 'in_progress':
+    case 'waiting_record':
+    case 'waiting_doctor_confirm':
+      return { label: 'Đang khám', className: 'bg-indigo-100 text-indigo-700' };
+    case 'completed':
+      return { label: 'Hoàn thành', className: 'bg-blue-100 text-blue-700' };
+    case 'cancelled':
+      return { label: 'Đã hủy', className: 'bg-red-100 text-red-700' };
+    case 'pending':
+    case 'confirmed':
+    default:
+      return { 
+        label: 'Chưa đến', 
+        className: isOverdue ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700' 
+      };
+  }
 };
 
 export default function Appointments() {
@@ -36,6 +74,10 @@ export default function Appointments() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  
+  const isFirstSearchRender = useRef(true);
   
   // States cho Modal Hủy lịch
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -46,18 +88,24 @@ export default function Appointments() {
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
+  const [availableSlots, setAvailableSlots] = useState<ReceptionistBookingSlot[]>([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [rescheduleReason, setRescheduleReason] = useState('');
+  
+  // States cho Modal Lịch sử quá hạn dời lịch
+  const [rescheduleLimitModalOpen, setRescheduleLimitModalOpen] = useState(false);
+  const [rescheduleHistory, setRescheduleHistory] = useState<RescheduleHistory[]>([]);
 
   // States cho Modal Chi tiết
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedDetailAppointment, setSelectedDetailAppointment] = useState<Appointment | null>(null);
 
-  const fetchAppointments = async () => {
+  const fetchAppointments = async (page = currentPage) => {
     try {
       setLoading(true);
       setError('');
       
-      let url = `/receptionist/appointments?timeframe=${activeTab}`;
+      let url = `/receptionist/appointments?timeframe=${activeTab}&page=${page}&limit=10`;
       if (filterDate) {
         url += `&date=${filterDate}`;
       }
@@ -68,6 +116,10 @@ export default function Appointments() {
       const res = await axiosInstance.get(url);
       if (res.data.success) {
         setAppointments(res.data.data);
+        if (res.data.pagination) {
+          setCurrentPage(res.data.pagination.page);
+          setTotalPages(res.data.pagination.totalPages);
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Lỗi khi tải danh sách lịch hẹn');
@@ -77,16 +129,24 @@ export default function Appointments() {
   };
 
   useEffect(() => {
-    fetchAppointments();
+    fetchAppointments(1);
   }, [activeTab, filterDate]); // Re-fetch when tab or date changes
 
   // Thêm một useEffect để fetch với debounce cho search
   useEffect(() => {
+    if (isFirstSearchRender.current) {
+      isFirstSearchRender.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
-      fetchAppointments();
+      fetchAppointments(1);
     }, 500); // 500ms delay for typing
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const handlePageChange = (newPage: number) => {
+    fetchAppointments(newPage);
+  };
 
   const handleArrived = async (id: string) => {
     try {
@@ -117,15 +177,43 @@ export default function Appointments() {
     }
   };
 
-  const handleReschedule = (id: string, oldDate: string, oldTime: string) => {
-    setSelectedAppointmentId(id);
+  const handleReschedule = async (apt: Appointment) => {
+    setSelectedAppointmentId(apt._id);
+    
+    // Nếu đã dời lịch >= 3 lần, bật form Lịch sử
+    if ((apt.so_lan_thay_doi || 0) >= 3) {
+      try {
+        const res = await axiosInstance.get(`/receptionist/appointments/${apt._id}/reschedule-history`);
+        if (res.data.success) {
+          setRescheduleHistory(res.data.data);
+          setRescheduleLimitModalOpen(true);
+        }
+      } catch (err) {
+        alert('Lỗi khi tải lịch sử dời lịch');
+      }
+      return;
+    }
+
+    // Bình thường
+    const docId = apt.doctor_id?._id || '';
+    setSelectedDoctorId(docId);
     // Format date from DB string to YYYY-MM-DD for input type="date"
-    const dateObj = new Date(oldDate);
+    const dateObj = new Date(apt.ngay_kham);
     setNewDate(format(dateObj, 'yyyy-MM-dd'));
-    setNewTime(oldTime);
+    setNewTime(''); // Reset giờ vì list giờ sẽ fetch lại
     setRescheduleReason('');
     setRescheduleModalOpen(true);
   };
+
+  useEffect(() => {
+    if (selectedDoctorId && newDate && rescheduleModalOpen) {
+      receptionistBookingService.getSlots(selectedDoctorId, newDate).then(slots => {
+        setAvailableSlots(slots);
+      }).catch(() => {
+        setAvailableSlots([]);
+      });
+    }
+  }, [selectedDoctorId, newDate, rescheduleModalOpen]);
 
   const confirmReschedule = async () => {
     if (!selectedAppointmentId || !newDate || !newTime || !rescheduleReason.trim()) {
@@ -295,12 +383,8 @@ export default function Appointments() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col items-start gap-1">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            apt.status === 'checked_in' ? 'bg-blue-100 text-blue-700' : 
-                            apt.status === 'cancelled' ? 'bg-red-100 text-red-700' : 
-                            isPendingAndOverdue ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700'
-                          }`}>
-                            {apt.status === 'checked_in' ? 'Đã đến' : apt.status === 'cancelled' ? 'Đã hủy' : 'Chờ khám'}
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(apt.status, isPendingAndOverdue).className}`}>
+                            {getStatusBadge(apt.status, isPendingAndOverdue).label}
                           </span>
                           {isPendingAndOverdue && (
                             <span className="text-[10px] font-bold text-red-500 uppercase tracking-wide">
@@ -310,50 +394,50 @@ export default function Appointments() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {activeTab !== 'past' && (
-                          <>
-                            {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
-                              <button
-                                onClick={() => handleArrived(apt._id)}
-                                className="px-2 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-xs font-medium"
-                              >
-                                Đã đến
-                              </button>
-                            )}
-                            {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
-                              <button
-                                onClick={() => handleReschedule(apt._id, apt.ngay_kham, apt.gio_kham)}
-                                className="px-2 py-1 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded text-xs font-medium"
-                              >
-                                Dời lịch
-                              </button>
-                            )}
-                            {apt.status !== 'cancelled' && (
-                              <button
-                                onClick={() => handleCancel(apt._id)}
-                                className="px-2 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded text-xs font-medium"
-                              >
-                                Hủy
-                              </button>
-                            )}
-                          </>
-                        )}
-                        <button
-                          onClick={() => {
-                            setSelectedDetailAppointment(apt);
-                            setDetailModalOpen(true);
-                          }}
-                          className="px-2 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-xs font-medium flex items-center gap-1"
-                        >
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          Xem chi tiết
-                        </button>
-                      </div>
-                    </td>
+                        <div className="flex items-center gap-2">
+                          {activeTab !== 'past' && !isPendingAndOverdue && (
+                            <>
+                              {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
+                                <button
+                                  title="Đã đến"
+                                  onClick={() => handleArrived(apt._id)}
+                                  className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors"
+                                >
+                                  <Icon name="check" className="w-4 h-4" />
+                                </button>
+                              )}
+                              {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
+                                <button
+                                  title="Dời lịch"
+                                  onClick={() => handleReschedule(apt)}
+                                  className="p-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-md transition-colors"
+                                >
+                                  <Icon name="calendar" className="w-4 h-4" />
+                                </button>
+                              )}
+                              {apt.status !== 'cancelled' && apt.status !== 'checked_in' && (
+                                <button
+                                  title="Hủy lịch"
+                                  onClick={() => handleCancel(apt._id)}
+                                  className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md transition-colors"
+                                >
+                                  <Icon name="ban" className="w-4 h-4" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                          <button
+                            title="Xem chi tiết"
+                            onClick={() => {
+                              setSelectedDetailAppointment(apt);
+                              setDetailModalOpen(true);
+                            }}
+                            className="p-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-md transition-colors"
+                          >
+                            <Icon name="eye" className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                   </tr>
                 );
               })
@@ -361,7 +445,53 @@ export default function Appointments() {
             </tbody>
           </table>
         </div>
+        
+        {/* Component Phân trang */}
+        <div className="p-4 border-t border-slate-200">
+          <Pagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        </div>
       </div>
+
+      {/* Modal Lịch sử Dời Lịch (Quá giới hạn 3 lần) */}
+      {rescheduleLimitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-bold text-red-600 mb-2">Đạt giới hạn dời lịch!</h3>
+            <p className="text-sm text-slate-600 mb-4">
+              Khách hàng này đã thay đổi lịch hẹn <strong className="text-red-500">3 lần</strong>. Hệ thống không cho phép dời lịch thêm nữa để tránh xáo trộn công việc của bác sĩ. Dưới đây là lịch sử dời lịch:
+            </p>
+            
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 max-h-60 overflow-y-auto space-y-4">
+              {rescheduleHistory.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">Không có dữ liệu lịch sử cũ.</p>
+              ) : (
+                rescheduleHistory.map((history, idx) => (
+                  <div key={history._id} className="border-b border-slate-200 pb-3 last:border-0 last:pb-0">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded">Lần {idx + 1}</span>
+                      <span className="text-xs text-slate-500">{new Date(history.thoi_diem).toLocaleString('vi-VN')}</span>
+                    </div>
+                    <p className="text-sm text-slate-700 mt-1">Lý do: {history.ly_do_thay_doi}</p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setRescheduleLimitModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 text-white hover:bg-slate-900 rounded-lg text-sm font-medium transition-colors"
+              >
+                Đóng thông báo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Hủy Lịch */}
       {cancelModalOpen && (
@@ -413,12 +543,20 @@ export default function Appointments() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Giờ khám mới</label>
-                <input
-                  type="time"
+                <select
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
-                />
+                >
+                  <option value="">-- Chọn giờ khám --</option>
+                  {availableSlots.length > 0 ? availableSlots.map((slot) => (
+                    <option key={slot.id} value={slot.gio_bat_dau}>
+                      {slot.gio_bat_dau} - {slot.gio_ket_thuc}
+                    </option>
+                  )) : (
+                    <option value="" disabled>Không có khung giờ rảnh</option>
+                  )}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Lý do dời lịch</label>
@@ -558,11 +696,8 @@ export default function Appointments() {
                       
                       <div className="flex justify-between items-center pt-1">
                         <p className="text-sm text-slate-600">Trạng thái khám:</p>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          selectedDetailAppointment.status === 'checked_in' ? 'bg-blue-100 text-blue-700' : 
-                          selectedDetailAppointment.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {selectedDetailAppointment.status === 'checked_in' ? 'Đã đến' : selectedDetailAppointment.status === 'cancelled' ? 'Đã hủy' : 'Chờ khám'}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(selectedDetailAppointment.status, isAppointmentOverdue(selectedDetailAppointment.ngay_kham, selectedDetailAppointment.gio_kham)).className}`}>
+                          {getStatusBadge(selectedDetailAppointment.status, isAppointmentOverdue(selectedDetailAppointment.ngay_kham, selectedDetailAppointment.gio_kham)).label}
                         </span>
                       </div>
                       
