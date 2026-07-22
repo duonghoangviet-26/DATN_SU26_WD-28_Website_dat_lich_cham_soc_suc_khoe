@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
 import { NguoiDung, ThongBao } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { emitDashboardNewPatient } from '../../realtime/socket.js'
@@ -179,5 +180,61 @@ export async function login(req, res) {
     }, 'Đăng nhập thành công')
   } catch (err) {
     return fail(res, 500, 'Lỗi server: ' + err.message)
+  }
+}
+
+/**
+ * Quên mật khẩu (A1 - Bước 2)
+ */
+export async function forgotPassword(req, res) {
+  try {
+    let { email } = req.body
+    if (!email) {
+      return fail(res, 400, 'Vui lòng cung cấp email')
+    }
+
+    email = email.trim().toLowerCase()
+
+    // Validate định dạng email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return fail(res, 400, 'Email không đúng định dạng')
+    }
+
+    // Tìm người dùng chưa bị xóa mềm
+    const user = await NguoiDung.findOne({ email, ngay_xoa: null })
+
+    // Phản hồi bảo mật: Không tiết lộ email có tồn tại hay không (Email Enumeration protection)
+    if (!user) {
+      return ok(res, null, 'Nếu email tồn tại trên hệ thống, hướng dẫn đặt lại mật khẩu sẽ được gửi.')
+    }
+
+    // Tạo token ngẫu nhiên
+    const rawToken = crypto.randomBytes(32).toString('hex')
+
+    // Băm token trước khi lưu vào DB để tăng tính bảo mật
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex')
+
+    // Lưu token và thời hạn hết hạn (15 phút) vào DB
+    user.reset_password_token = hashedToken
+    user.reset_password_expire = new Date(Date.now() + 15 * 60 * 1000)
+    await user.save()
+
+    // Log ra console phục vụ test
+    console.log(`[TESTING] Reset Password Token cho email ${email}:`)
+    console.log(`- Raw Token (gửi cho client): ${rawToken}`)
+    console.log(`- Hashed Token (lưu trong DB): ${hashedToken}`)
+    console.log(`- Hết hạn lúc: ${user.reset_password_expire.toISOString()}`)
+
+    // Trả cả token về client để dễ kiểm thử ở Bước 2
+    return ok(res, {
+      rawToken,
+      hashedToken,
+      expiresAt: user.reset_password_expire
+    }, 'Mã đặt lại mật khẩu đã được tạo (Phục vụ Test)')
+
+  } catch (err) {
+    console.error(err)
+    return fail(res, 500, 'Đã xảy ra lỗi hệ thống: ' + err.message)
   }
 }
