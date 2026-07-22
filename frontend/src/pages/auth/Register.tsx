@@ -15,24 +15,71 @@ export default function Register() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError('')
+  // Theo dõi ô đang được click/focus trực tiếp và trạng thái đã nhấn submit chưa
+  const [focusedField, setFocusedField] = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(false)
 
-    if (password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp')
-      return
+  // Hàm kiểm tra tính hợp lệ của từng ô dữ liệu
+  function validateFields(
+    ht: string,
+    em: string,
+    sdt: string,
+    pass: string,
+    cPass: string
+  ) {
+    const errs: { [key: string]: string } = {}
+
+    if (!ht.trim()) {
+      errs.hoTen = 'Vui lòng nhập họ và tên'
     }
-    
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!em.trim()) {
+      errs.email = 'Vui lòng nhập địa chỉ email'
+    } else if (!emailRegex.test(em)) {
+      errs.email = 'Email không đúng định dạng'
+    }
+
     const phoneRegex = /^0\d{9}$/
-    if (!phoneRegex.test(soDienThoai)) {
-      setError('Số điện thoại phải gồm 10 số và bắt đầu bằng số 0')
-      return
+    if (!sdt.trim()) {
+      errs.soDienThoai = 'Vui lòng nhập số điện thoại'
+    } else if (!phoneRegex.test(sdt)) {
+      errs.soDienThoai = 'Số điện thoại phải gồm 10 số và bắt đầu bằng số 0'
     }
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
-    if (!passwordRegex.test(password)) {
-      setError('Mật khẩu phải tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và số')
+    if (!pass) {
+      errs.password = 'Vui lòng nhập mật khẩu'
+    } else if (!passwordRegex.test(pass)) {
+      errs.password = 'Mật khẩu phải tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và số'
+    }
+
+    if (!cPass) {
+      errs.confirmPassword = 'Vui lòng nhập lại mật khẩu xác nhận'
+    } else if (pass !== cPass) {
+      errs.confirmPassword = 'Mật khẩu xác nhận không khớp'
+    }
+
+    return errs
+  }
+
+  // Tính toán danh sách lỗi thời gian thực
+  const fieldErrors = validateFields(hoTen, email, soDienThoai, password, confirmPassword)
+
+  // Chỉ hiển thị viền đỏ và lỗi khi:
+  // 1. Người dùng ĐANG CLICK/FOCUS trực tiếp vào ô đó và ô đó chưa đạt validate
+  // HOẶC 2. Người dùng ĐÃ BẤM SUBMIT tạo tài khoản
+  const isFieldError = (field: string) => {
+    const isTargeted = focusedField === field || submitted
+    return Boolean(isTargeted && fieldErrors[field])
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError('')
+    setSubmitted(true)
+
+    if (Object.keys(fieldErrors).length > 0) {
       return
     }
 
@@ -67,51 +114,67 @@ export default function Register() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div>
           <label className="input-label">Họ và tên</label>
           <input
             type="text"
-            className="input"
+            className={`input transition-all ${isFieldError('hoTen') ? '!border-red-500 focus:!border-red-500 focus:!ring-1 focus:!ring-red-500 bg-red-50/20' : ''}`}
             placeholder="Nguyễn Văn A"
             value={hoTen}
+            onFocus={() => setFocusedField('hoTen')}
+            onBlur={() => setFocusedField(null)}
             onChange={(e) => setHoTen(e.target.value)}
-            required
           />
+          {isFieldError('hoTen') && (
+            <p className="mt-1 text-xs text-red-500 font-medium text-left">{fieldErrors.hoTen}</p>
+          )}
         </div>
+
         <div>
           <label className="input-label">Email</label>
           <input
             type="email"
-            className="input"
+            className={`input transition-all ${isFieldError('email') ? '!border-red-500 focus:!border-red-500 focus:!ring-1 focus:!ring-red-500 bg-red-50/20' : ''}`}
             placeholder="email@example.com"
             value={email}
+            onFocus={() => setFocusedField('email')}
+            onBlur={() => setFocusedField(null)}
             onChange={(e) => setEmail(e.target.value)}
-            required
           />
+          {isFieldError('email') && (
+            <p className="mt-1 text-xs text-red-500 font-medium text-left">{fieldErrors.email}</p>
+          )}
         </div>
+
         <div>
           <label className="input-label">Số điện thoại</label>
           <input
             type="tel"
-            className="input"
+            className={`input transition-all ${isFieldError('soDienThoai') ? '!border-red-500 focus:!border-red-500 focus:!ring-1 focus:!ring-red-500 bg-red-50/20' : ''}`}
             placeholder="0901234567"
             value={soDienThoai}
+            onFocus={() => setFocusedField('soDienThoai')}
+            onBlur={() => setFocusedField(null)}
             onChange={(e) => setSoDienThoai(e.target.value)}
-            required
           />
+          {isFieldError('soDienThoai') && (
+            <p className="mt-1 text-xs text-red-500 font-medium text-left">{fieldErrors.soDienThoai}</p>
+          )}
         </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="input-label">Mật khẩu</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
-                className="input pr-9"
+                className={`input pr-9 transition-all ${isFieldError('password') ? '!border-red-500 focus:!border-red-500 focus:!ring-1 focus:!ring-red-500 bg-red-50/20' : ''}`}
                 placeholder="Tối thiểu 8 ký tự"
                 value={password}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
                 onChange={(e) => setPassword(e.target.value)}
-                required
               />
               <button
                 type="button"
@@ -131,17 +194,22 @@ export default function Register() {
                 )}
               </button>
             </div>
+            {isFieldError('password') && (
+              <p className="mt-1 text-xs text-red-500 font-medium text-left">{fieldErrors.password}</p>
+            )}
           </div>
+
           <div>
             <label className="input-label">Xác nhận</label>
             <div className="relative">
               <input
                 type={showConfirmPassword ? 'text' : 'password'}
-                className="input pr-9"
+                className={`input pr-9 transition-all ${isFieldError('confirmPassword') ? '!border-red-500 focus:!border-red-500 focus:!ring-1 focus:!ring-red-500 bg-red-50/20' : ''}`}
                 placeholder="Nhập lại"
                 value={confirmPassword}
+                onFocus={() => setFocusedField('confirmPassword')}
+                onBlur={() => setFocusedField(null)}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                required
               />
               <button
                 type="button"
@@ -161,8 +229,12 @@ export default function Register() {
                 )}
               </button>
             </div>
+            {isFieldError('confirmPassword') && (
+              <p className="mt-1 text-xs text-red-500 font-medium text-left">{fieldErrors.confirmPassword}</p>
+            )}
           </div>
         </div>
+
         <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={loading}>
           {loading ? (
             <span className="flex items-center justify-center gap-2">
