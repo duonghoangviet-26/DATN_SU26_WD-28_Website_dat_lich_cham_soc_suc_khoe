@@ -30,6 +30,8 @@ function normalizeSlotPayload(slot) {
   const normalized = {
     gio_bat_dau: slot.gio_bat_dau,
     gio_ket_thuc: slot.gio_ket_thuc,
+    khung_index: slot.khung_index ?? null,
+    loai_slot: slot.loai_slot ?? 'online',
     benh_nhan_id: slot.benh_nhan_id ?? null,
     benh_nhan_tam_giu_id: slot.benh_nhan_tam_giu_id ?? null,
     specialty_id: slot.specialty_id ?? null,
@@ -41,6 +43,10 @@ function normalizeSlotPayload(slot) {
     cancel_reason: slot.cancel_reason ?? null,
     bi_khoa_boi_nghi_phep: slot.bi_khoa_boi_nghi_phep ?? false,
     nghi_phep_id: slot.nghi_phep_id ?? null,
+  }
+
+  if (!['online', 'walk_in'].includes(normalized.loai_slot)) {
+    throw new Error('loai_slot khong hop le')
   }
 
   for (const field of ['benh_nhan_id', 'benh_nhan_tam_giu_id', 'specialty_id', 'nghi_phep_id']) {
@@ -76,12 +82,20 @@ function summarizeSlots(slots = [], occupiedAppointmentCount = 0) {
   const lockedSlots = slots.filter((slot) => slot.status === 'locked').length
   const unavailableSlots = slots.filter((slot) => ['cancelled', 'expired'].includes(slot.status)).length
 
+  // loai_slot co the thieu o du lieu cu (truoc migration) -> mac dinh coi la 'online'
+  // (khop invariant tuong thich nguoc da ghi trong model LichLamViec.js).
+  const activeSlots = slots.filter((slot) => slot.status === 'active')
+  const slotOnlineTrong = activeSlots.filter((slot) => (slot.loai_slot ?? 'online') !== 'walk_in').length
+  const slotWalkinTrong = activeSlots.filter((slot) => slot.loai_slot === 'walk_in').length
+
   return {
     tong_slot: slots.length,
     slot_trong: Math.max(0, slots.length - occupiedSlots - lockedSlots - unavailableSlots),
     slot_da_dat: occupiedSlots,
     slot_bi_khoa: lockedSlots,
     slot_da_huy: unavailableSlots,
+    slot_online_trong: slotOnlineTrong,
+    slot_walkin_trong: slotWalkinTrong,
     gio_bat_dau: firstSlot?.gio_bat_dau ?? null,
     gio_ket_thuc: lastSlot?.gio_ket_thuc ?? null,
   }
@@ -421,7 +435,7 @@ export async function ensureDoctorWorkday(req, res) {
       ngay: workday,
       trang_thai_ngay: trang_thai_ngay ?? 'lam_viec',
       ghi_chu_ngay: ghi_chu_ngay?.trim() || null,
-      slots: buildDefaultSlots({
+      slots: await buildDefaultSlots({
         specialtyId: fallbackSpecialtyId,
         phongKham: phong_kham ?? doctor.phong_kham_mac_dinh ?? null,
       }),
