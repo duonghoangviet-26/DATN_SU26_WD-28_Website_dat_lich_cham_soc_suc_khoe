@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import LichLamViec from '../../models/LichLamViec.js'
 import BacSi from '../../models/BacSi.js'
 import LichHen from '../../models/LichHen.js'
+import NguoiDung from '../../models/NguoiDung.js'
 import LichSuChinhSuaLichLamViec from '../../models/LichSuChinhSuaLichLamViec.js'
 import { buildDefaultScheduleSlots, generateRollingWindowForAllDoctors } from '../../services/scheduleGenerator.service.js'
 import { ok, fail } from '../../utils/response.js'
@@ -466,6 +467,69 @@ export async function ensureDoctorWorkday(req, res) {
   }
 }
 
+// Bo sung co_lich_hen + ten benh nhan (+ co phai khach vang lai) vao tung slot cua 1 schedule
+// (plain object, co the la ket qua .lean() hoac .toObject()). Dung chung cho getScheduleById
+// va updateSlot de ca 2 API deu tra ve du du lieu "ai da dat" cho FE hien thi.
+async function attachSlotPatientInfo(schedule) {
+  const appointments = await LichHen.find({
+    doctor_id: schedule.doctor_id,
+    status: { $in: APPOINTMENT_OCCUPIED_SLOT_STATUSES },
+    $or: [
+      { schedule_id: schedule._id },
+      { ngay_kham: schedule.ngay },
+    ],
+  })
+    .select('slot_id gio_kham ten_khach khach_vang_lai_id member_id')
+    .populate('member_id', 'ho_ten')
+    .lean()
+  const occupiedSlotIds = new Set(appointments.map((appointment) => String(appointment.slot_id)).filter(Boolean))
+  const occupiedTimes = new Set(appointments.map((appointment) => appointment.gio_kham).filter(Boolean))
+
+  // Ten benh nhan lay tu LichHen — bat buoc doi voi khach vang lai (KHONG co tai khoan
+  // NguoiDung nen slot.benh_nhan_id se la null). Uu tien khop theo slot_id, fallback theo
+  // gio_bat_dau (giong occupiedSlotIds/occupiedTimes o tren).
+  const patientBySlotId = new Map()
+  const patientByTime = new Map()
+  for (const appointment of appointments) {
+    const laKhachVangLai = !!appointment.khach_vang_lai_id || (!appointment.member_id && !!appointment.ten_khach)
+    const info = {
+      ten_benh_nhan: appointment.member_id?.ho_ten ?? appointment.ten_khach ?? null,
+      la_khach_vang_lai: laKhachVangLai,
+    }
+    if (appointment.slot_id) patientBySlotId.set(String(appointment.slot_id), info)
+    if (appointment.gio_kham) patientByTime.set(appointment.gio_kham, info)
+  }
+
+  // Slot.benh_nhan_id (da xac nhan) / benh_nhan_tam_giu_id (dang giu cho khi thanh toan) —
+  // tai khoan da dang nhap la nguon chinh cho ten benh nhan; chi fallback sang LichHen khi
+  // thieu (khach vang lai KHONG co tai khoan NguoiDung).
+  const accountIds = [...new Set(
+    schedule.slots
+      .flatMap((slot) => [slot.benh_nhan_id, slot.benh_nhan_tam_giu_id])
+      .filter(Boolean)
+      .map(String)
+  )]
+  const accounts = accountIds.length
+    ? await NguoiDung.find({ _id: { $in: accountIds } }).select('ho_ten').lean()
+    : []
+  const accountNameById = new Map(accounts.map((account) => [String(account._id), account.ho_ten]))
+
+  schedule.slots = schedule.slots.map((slot) => {
+    const appointmentInfo = patientBySlotId.get(String(slot._id)) ?? patientByTime.get(slot.gio_bat_dau) ?? null
+    const tenTaiKhoan = (slot.benh_nhan_id && accountNameById.get(String(slot.benh_nhan_id)))
+      ?? (slot.benh_nhan_tam_giu_id && accountNameById.get(String(slot.benh_nhan_tam_giu_id)))
+      ?? null
+    return {
+      ...slot,
+      co_lich_hen: occupiedSlotIds.has(String(slot._id)) || occupiedTimes.has(slot.gio_bat_dau),
+      ten_benh_nhan: tenTaiKhoan ?? appointmentInfo?.ten_benh_nhan ?? null,
+      la_khach_vang_lai: appointmentInfo?.la_khach_vang_lai ?? false,
+    }
+  })
+
+  return schedule
+}
+
 export async function getScheduleById(req, res) {
   try {
     const { id } = req.params
@@ -478,20 +542,7 @@ export async function getScheduleById(req, res) {
       return fail(res, 404, 'Khong tim thay lich lam viec')
     }
 
-    const appointments = await LichHen.find({
-      doctor_id: schedule.doctor_id,
-      status: { $in: APPOINTMENT_OCCUPIED_SLOT_STATUSES },
-      $or: [
-        { schedule_id: schedule._id },
-        { ngay_kham: schedule.ngay },
-      ],
-    }).select('slot_id gio_kham').lean()
-    const occupiedSlotIds = new Set(appointments.map((appointment) => String(appointment.slot_id)).filter(Boolean))
-    const occupiedTimes = new Set(appointments.map((appointment) => appointment.gio_kham).filter(Boolean))
-    schedule.slots = schedule.slots.map((slot) => ({
-      ...slot,
-      co_lich_hen: occupiedSlotIds.has(String(slot._id)) || occupiedTimes.has(slot.gio_bat_dau),
-    }))
+    await attachSlotPatientInfo(schedule)
 
     return ok(res, schedule, 'Lay lich lam viec thanh cong')
   } catch (err) {
@@ -584,7 +635,8 @@ export async function updateSlot(req, res) {
       note: 'Admin cập nhật slot khám',
     })
 
-    return ok(res, schedule.toObject(), 'Cap nhat slot thanh cong')
+    const enriched = await attachSlotPatientInfo(schedule.toObject())
+    return ok(res, enriched, 'Cap nhat slot thanh cong')
   } catch (err) {
     const status = err.message.includes('phai') || err.message.includes('hop le') ? 400 : 500
     return fail(res, status, err.message)

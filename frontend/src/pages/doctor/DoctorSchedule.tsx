@@ -529,96 +529,117 @@ export default function DoctorSchedule() {
                     )}
                     {daySlots.length === 0 ? (
                       <p className="px-5 py-4 text-sm text-slate-400">Không có ca làm việc cho ngày này.</p>
-                    ) : groupSlotsByKhung(daySlots).map((khung) => (
-                      <div key={`${khung.gio_bat_dau}-${khung.gio_ket_thuc}`} className="px-5 py-3">
-                        {/* Header khung giờ — chỉ hiện 1 lần dù khung có nhiều slot */}
-                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                          <Icon name="clock" className="h-4 w-4 text-brand-400" />
-                          {khung.gio_bat_dau} – {khung.gio_ket_thuc}
-                          {khung.slots.length > 1 && (
-                            <span className="text-xs font-normal text-slate-400">({khung.slots.length} slot)</span>
-                          )}
-                        </div>
+                    ) : (['sang', 'chieu'] as const).map((ca) => {
+                      // Ca sáng 08:00–11:30 / ca chiều 13:30–17:30 — xem .claude/rules/lich-lam-viec-bac-si.md §1
+                      const caSlots = daySlots.filter((s) => (ca === 'sang' ? s.gio_bat_dau < '12:00' : s.gio_bat_dau >= '12:00'))
+                      if (caSlots.length === 0) return null
 
-                        <div className="mt-2 space-y-2">
-                          {khung.slots.map((slot) => {
-                            const coveringLeave = slot.status === 'active' ? findCoveringLeave(slot, leaves) : undefined
-                            const canRequestLeave = slot.status === 'active' && !isPastDay && !coveringLeave
-                            const loaiSlot = slot.loai_slot ?? 'online'
+                      return (
+                        <div key={ca} className="px-5 py-3">
+                          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+                            {ca === 'sang' ? 'Ca sáng' : 'Ca chiều'}
+                          </p>
 
-                            return (
-                              <div key={slot.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50/70 px-3 py-2">
-                                {/* Phòng khám */}
-                                <span className="flex items-center gap-1 text-xs text-slate-500">
-                                  {slot.phong_kham ? (
-                                    <>
-                                      <Icon name="map-pin" className="h-3 w-3 shrink-0" />
-                                      {slot.phong_kham}
-                                    </>
-                                  ) : (
-                                    <span className="text-amber-500">⚠ Chưa có phòng</span>
-                                  )}
+                          <div className="space-y-3">
+                            {groupSlotsByKhung(caSlots).map((khung) => {
+                              const conTrong = khung.slots.filter((s) => s.status === 'active').length
+
+                              return (
+                            <div key={`${khung.gio_bat_dau}-${khung.gio_ket_thuc}`}>
+                              {/* Header khung giờ — chỉ hiện 1 lần dù khung có nhiều slot */}
+                              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                <Icon name="clock" className="h-4 w-4 text-brand-400" />
+                                {khung.gio_bat_dau} – {khung.gio_ket_thuc}
+                                <span className="text-xs font-normal text-slate-400">
+                                  · còn trống {conTrong}/{khung.slots.length}
                                 </span>
-
-                                {/* Badge trạng thái */}
-                                <Badge color={SCHEDULE_SLOT_STATUS_COLOR[slot.status]}>{STATUS_LABEL[slot.status]}</Badge>
-
-                                {/* Badge loại slot — online vs tại chỗ (walk-in) */}
-                                <Badge color={SLOT_LOAI_COLOR[loaiSlot]}>{SLOT_LOAI_LABEL[loaiSlot]}</Badge>
-
-                                {/* Đánh dấu slot thuộc bản ghi nào khi 1 ngày có >1 document (bất thường dữ liệu) */}
-                                {hasDataAnomaly && (
-                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400">
-                                    Bản ghi {distinctScheduleIds.indexOf(slot.schedule_id) + 1}
-                                  </span>
-                                )}
-
-                                {/* Tên bệnh nhân */}
-                                {slot.benh_nhan && (
-                                  <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                                    <Icon name="user" className="h-3 w-3" />
-                                    {slot.benh_nhan}
-                                  </span>
-                                )}
-
-                                {/* Nút hành động — ẩn hoàn toàn với ngày đã qua (chỉ xem) */}
-                                {!isPastDay && (
-                                  <div className="ml-auto flex items-center gap-2">
-                                    {canRequestLeave && (
-                                      <button
-                                        onClick={() => setLeaveDialog({ slot, ly_do: '' })}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-semibold text-yellow-700 hover:bg-yellow-100"
-                                      >
-                                        <Icon name="calendar" className="h-3 w-3" /> Gửi yêu cầu nghỉ
-                                      </button>
-                                    )}
-                                    {coveringLeave && (
-                                      <span className="inline-flex cursor-default items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-500">
-                                        <Icon name="clock" className="h-3 w-3" /> {LEAVE_STATUS_LABEL[coveringLeave.trang_thai]}
-                                      </span>
-                                    )}
-                                    {slot.status === 'booked' && (
-                                      slot.cancel_requested ? (
-                                        <span className="inline-flex cursor-default items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-500">
-                                          <Icon name="clock" className="h-3 w-3" /> Chờ Admin duyệt
-                                        </span>
-                                      ) : (
-                                        <button
-                                          onClick={() => setCancelDialog({ slot, ly_do: '' })}
-                                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
-                                        >
-                                          <Icon name="alert-circle" className="h-3 w-3" /> Yêu cầu hủy
-                                        </button>
-                                      )
-                                    )}
-                                  </div>
-                                )}
                               </div>
-                            )
-                          })}
+
+                              <div className="mt-2 space-y-2">
+                                {khung.slots.map((slot) => {
+                                  const coveringLeave = slot.status === 'active' ? findCoveringLeave(slot, leaves) : undefined
+                                  const canRequestLeave = slot.status === 'active' && !isPastDay && !coveringLeave
+                                  const loaiSlot = slot.loai_slot ?? 'online'
+
+                                  return (
+                                    <div key={slot.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50/70 px-3 py-2">
+                                      {/* Phòng khám */}
+                                      <span className="flex items-center gap-1 text-xs text-slate-500">
+                                        {slot.phong_kham ? (
+                                          <>
+                                            <Icon name="map-pin" className="h-3 w-3 shrink-0" />
+                                            {slot.phong_kham}
+                                          </>
+                                        ) : (
+                                          <span className="text-amber-500">⚠ Chưa có phòng</span>
+                                        )}
+                                      </span>
+
+                                      {/* Badge trạng thái */}
+                                      <Badge color={SCHEDULE_SLOT_STATUS_COLOR[slot.status]}>{STATUS_LABEL[slot.status]}</Badge>
+
+                                      {/* Badge loại slot — online vs tại chỗ (walk-in) */}
+                                      <Badge color={SLOT_LOAI_COLOR[loaiSlot]}>{SLOT_LOAI_LABEL[loaiSlot]}</Badge>
+
+                                      {/* Đánh dấu slot thuộc bản ghi nào khi 1 ngày có >1 document (bất thường dữ liệu) */}
+                                      {hasDataAnomaly && (
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400">
+                                          Bản ghi {distinctScheduleIds.indexOf(slot.schedule_id) + 1}
+                                        </span>
+                                      )}
+
+                                      {/* Tên bệnh nhân */}
+                                      {slot.benh_nhan && (
+                                        <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                                          <Icon name="user" className="h-3 w-3" />
+                                          {slot.benh_nhan}
+                                          {slot.la_khach_vang_lai && ' (khách vãng lai)'}
+                                        </span>
+                                      )}
+
+                                      {/* Nút hành động — ẩn hoàn toàn với ngày đã qua (chỉ xem) */}
+                                      {!isPastDay && (
+                                        <div className="ml-auto flex items-center gap-2">
+                                          {canRequestLeave && (
+                                            <button
+                                              onClick={() => setLeaveDialog({ slot, ly_do: '' })}
+                                              className="inline-flex items-center gap-1 rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-semibold text-yellow-700 hover:bg-yellow-100"
+                                            >
+                                              <Icon name="calendar" className="h-3 w-3" /> Gửi yêu cầu nghỉ
+                                            </button>
+                                          )}
+                                          {coveringLeave && (
+                                            <span className="inline-flex cursor-default items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-500">
+                                              <Icon name="clock" className="h-3 w-3" /> {LEAVE_STATUS_LABEL[coveringLeave.trang_thai]}
+                                            </span>
+                                          )}
+                                          {slot.status === 'booked' && (
+                                            slot.cancel_requested ? (
+                                              <span className="inline-flex cursor-default items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-500">
+                                                <Icon name="clock" className="h-3 w-3" /> Chờ Admin duyệt
+                                              </span>
+                                            ) : (
+                                              <button
+                                                onClick={() => setCancelDialog({ slot, ly_do: '' })}
+                                                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
+                                              >
+                                                <Icon name="alert-circle" className="h-3 w-3" /> Yêu cầu hủy
+                                              </button>
+                                            )
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                              )
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

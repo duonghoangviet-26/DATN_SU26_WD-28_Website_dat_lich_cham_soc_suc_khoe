@@ -468,6 +468,8 @@ export interface AdminDoctorScheduleSlot {
     bi_khoa_boi_nghi_phep?: boolean;
     nghi_phep_id?: string | null;
     co_lich_hen?: boolean;
+    ten_benh_nhan?: string | null;
+    la_khach_vang_lai?: boolean;
 }
 
 export interface AdminDoctorScheduleDetail {
@@ -616,6 +618,7 @@ export interface DoctorSlot {
     phong_kham?: string | null;
     benh_nhan?: string | null;
     benh_nhan_id?: string | null;
+    la_khach_vang_lai?: boolean;
     // pending_payment: slot bị BN giữ 15 phút trong khi thanh toán VNPay (soft-lock)
     status:
         | "active"
@@ -685,6 +688,7 @@ export interface DoctorScheduleDetailSlot {
     status: DoctorSlot["status"];
     benh_nhan_id: string | null;
     benh_nhan: string | null;
+    la_khach_vang_lai: boolean;
     lock_expires_at: string | null;
     cancel_requested: boolean;
     bi_khoa_boi_nghi_phep: boolean;
