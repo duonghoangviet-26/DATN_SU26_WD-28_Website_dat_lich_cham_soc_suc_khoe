@@ -18,6 +18,7 @@ import {
   type FamilyMember,
   type CreateBookingPayload,
 } from '@/services/patient-booking.service'
+import { specialtyService } from '@/services/specialty.service'
 
 type BookingStep = 1 | 2 | 3 | 4 | 5
 
@@ -61,7 +62,7 @@ export default function Booking() {
   const queryDoctorId = searchParams.get('doctor_id')
 
   const [step, setStep] = useState<BookingStep>(1)
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('')
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(queryDoctorId || '')
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedSlotId, setSelectedSlotId] = useState<string>('')
 
@@ -78,6 +79,11 @@ export default function Booking() {
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
   const [completingMockPayment, setCompletingMockPayment] = useState(false)
+
+  // Specialty filters
+  const [specialties, setSpecialties] = useState<{ id: string; ten: string }[]>([])
+  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('all')
+  const [loadingSpecialties, setLoadingSpecialties] = useState(false)
 
   const [dates, setDates] = useState<{ value: string; label: string }[]>([])
   const [doctors, setDoctors] = useState<PatientBookingDoctor[]>([])
@@ -113,10 +119,13 @@ export default function Booking() {
   }, [])
 
   const filteredDoctors = doctors.filter((doc) => {
-    const matchesName = doc.ho_ten.toLowerCase().includes(doctorSearch.toLowerCase())
-    const matchesSpecialty = doc.specialties.some((s) => s.ten.toLowerCase().includes(doctorSearch.toLowerCase()))
-    return matchesName || matchesSpecialty
+    const matchesSearch = doc.ho_ten.toLowerCase().includes(doctorSearch.toLowerCase()) ||
+      doc.specialties.some((s) => s.ten.toLowerCase().includes(doctorSearch.toLowerCase()))
+    const matchesSpecialty = selectedSpecialtyId === 'all' || doc.specialties.some((s) => s.id === selectedSpecialtyId)
+    return matchesSearch && matchesSpecialty
   })
+
+  const isDefaultAll = selectedSpecialtyId === 'all' && doctorSearch.trim() === ''
 
   useEffect(() => {
     if (user) {
@@ -147,6 +156,7 @@ export default function Booking() {
         setDoctors(data)
         if (queryDoctorId && data.some((doctor) => doctor.id === queryDoctorId)) {
           setSelectedDoctorId(queryDoctorId)
+          setStep(2)
         }
       })
       .catch((error: any) => {
@@ -162,6 +172,26 @@ export default function Booking() {
       ignore = true
     }
   }, [queryDoctorId])
+
+  useEffect(() => {
+    let ignore = false
+    setLoadingSpecialties(true)
+    specialtyService.getAllActive()
+      .then((data) => {
+        if (!ignore) {
+          setSpecialties(data)
+        }
+      })
+      .catch((err) => {
+        console.error('Không tải được danh sách chuyên khoa:', err)
+      })
+      .finally(() => {
+        if (!ignore) setLoadingSpecialties(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!selectedDoctorId || !selectedDate) {
@@ -506,20 +536,67 @@ export default function Booking() {
               )}
             </div>
 
+            {/* Bộ lọc chuyên khoa */}
+            {!loadingSpecialties && specialties.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-100 scrollbar-thin">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSpecialtyId('all')}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-all ${
+                    selectedSpecialtyId === 'all'
+                      ? 'bg-brand-600 text-white shadow-sm shadow-brand-100'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Tất cả chuyên khoa
+                </button>
+                {specialties.map((spec) => (
+                  <button
+                    key={spec.id}
+                    type="button"
+                    onClick={() => setSelectedSpecialtyId(spec.id)}
+                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-all ${
+                      selectedSpecialtyId === spec.id
+                        ? 'bg-brand-600 text-white shadow-sm shadow-brand-100'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {spec.ten}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {doctors.length === 0 ? (
               <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Hiện chưa có bác sĩ khả dụng để đặt lịch.</p>
+            ) : isDefaultAll ? (
+              <div className="space-y-6">
+                {/* Banner hướng dẫn chọn chuyên khoa */}
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600 text-lg">
+                    🩺
+                  </div>
+                  <h4 className="mt-3 text-sm font-bold text-slate-800">Tìm kiếm bác sĩ theo chuyên khoa</h4>
+                  <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500 leading-relaxed">
+                    Vui lòng chọn một chuyên khoa cụ thể từ danh mục phía trên hoặc nhập tên bác sĩ vào ô tìm kiếm để tiến hành đặt lịch khám.
+                  </p>
+                </div>
+              </div>
             ) : filteredDoctors.length === 0 ? (
-              <p className="rounded-xl bg-slate-50 px-4 py-6 text-xs text-slate-400 text-center">Không tìm thấy bác sĩ phù hợp với từ khóa tìm kiếm.</p>
+              <p className="rounded-xl bg-slate-50 px-4 py-6 text-xs text-slate-400 text-center">Không tìm thấy bác sĩ phù hợp với bộ lọc.</p>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
                 {filteredDoctors.map((doctor) => (
                   <button
                     key={doctor.id}
                     type="button"
-                    onClick={() => setSelectedDoctorId(doctor.id)}
+                    onClick={() => {
+                      setSelectedDoctorId(doctor.id)
+                      setStep(2)
+                    }}
                     className={`flex items-start gap-3 rounded-xl border p-3 text-left transition-all ${
                       selectedDoctorId === doctor.id
-                        ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500'
+                        ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 shadow-sm'
                         : 'border-slate-200 hover:bg-slate-50'
                     }`}
                   >
