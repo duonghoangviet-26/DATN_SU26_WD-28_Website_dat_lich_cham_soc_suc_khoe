@@ -2,10 +2,10 @@ import { BacSi, LichLamViec, LichSuChinhSuaLichLamViec } from '../models/index.j
 
 // Phan bo so slot ONLINE trong moi khung 30' cua 1 ca, xen ke theo dung vi du trong
 // .claude/rules/lich-lam-viec-bac-si.md muc 4.3 (VD TMH ca sang 7 khung, online=10/14:
-// [1,2,1,2,1,2,1]). Thuat toan: chia deu (base = floor(target/soKhung)), phan du duoc
-// cong them vao cac khung LE (index 1,3,5,...) cho toi khi het du — dam bao xen ke thay
-// vi don het vao dau/cuoi ca (tranh walk-in bi don het vao cuoi ca — xem muc 4.3).
-// An toan: khong bao gio vuot qua soSlotMoiKhung (uu tien duoi tai neu lam tron gay du thua).
+// [1,2,1,2,1,2,1]). Thuat toan 2-buoc: (1) Phan bo deu (base = floor(target/soKhung))
+// cho tat ca khung. (2) Phan du: Buoc 1 cong +1 vao khung LE (index 1,3,5,...), Buoc 2
+// (neu con du) cong +1 vao khung CHAN (index 0,2,4,...) — dam bao xen ke va dat dung
+// target. An toan: luon dat dung gia tri target, khong bao gio vuot qua soSlotMoiKhung.
 export function phanBoOnlineTheoKhung(soKhung, soSlotMoiKhung, tyLeOnlinePhanTram) {
   const tongSlot = soKhung * soSlotMoiKhung
   const targetOnline = Math.round((tongSlot * tyLeOnlinePhanTram) / 100)
