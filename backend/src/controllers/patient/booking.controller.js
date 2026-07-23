@@ -342,6 +342,9 @@ export async function createBooking(req, res) {
       if (slotForValidation.status !== 'active' || slotForValidation.benh_nhan_id || slotForValidation.bi_khoa_boi_nghi_phep) {
         return rollbackFail(409, 'Slot da duoc dat, vui long chon khung gio khac')
       }
+      if (slotForValidation.loai_slot === 'walk_in') {
+        return rollbackFail(409, 'Slot nay danh cho tiep nhan tai cho, khong the dat online')
+      }
       if (isSlotInPast(appointmentDate, slotForValidation.gio_bat_dau)) {
         return rollbackFail(400, 'Khung gio da qua, vui long chon khung gio khac')
       }
@@ -357,6 +360,7 @@ export async function createBooking(req, res) {
           'slots.status':       'active',
           'slots.benh_nhan_id': null,
           'slots.bi_khoa_boi_nghi_phep': { $ne: true },
+          'slots.loai_slot':    { $ne: 'walk_in' },
         },
         {
           $set: {
