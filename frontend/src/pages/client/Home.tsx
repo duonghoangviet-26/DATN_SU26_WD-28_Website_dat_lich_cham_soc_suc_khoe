@@ -1,10 +1,126 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { mockNews } from '@/mock/news'
 import { patientBookingService, type PatientBookingDoctor } from '@/services/patient-booking.service'
 import { serviceService } from '@/services/service.service'
 import type { ServiceItem } from '@/types'
 import Skeleton from '@/components/common/Skeleton'
+
+interface AutoSliderProps {
+  children: React.ReactNode
+  cardWidthClass?: string
+}
+
+function AutoSlider({ children, cardWidthClass = 'w-[85%] sm:w-[48%] lg:w-[31%]' }: AutoSliderProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [isMouseDown, setIsMouseDown] = useState(false)
+  const [startX, setStartX] = useState(0)
+  const [scrollLeft, setScrollLeft] = useState(0)
+  const [isAutoplayPaused, setIsAutoplayPaused] = useState(false)
+  const autoplayTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Dragging handlers (Mouse)
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!containerRef.current) return
+    setIsMouseDown(true)
+    setIsAutoplayPaused(true)
+    
+    // Clear any resume timers
+    if (autoplayTimerRef.current) {
+      clearTimeout(autoplayTimerRef.current)
+    }
+
+    setStartX(e.pageX - containerRef.current.offsetLeft)
+    setScrollLeft(containerRef.current.scrollLeft)
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isMouseDown || !containerRef.current) return
+    e.preventDefault()
+    const x = e.pageX - containerRef.current.offsetLeft
+    const walk = (x - startX) * 1.5 // Speed multiplier
+    containerRef.current.scrollLeft = scrollLeft - walk
+  }
+
+  const handleMouseUpOrLeave = () => {
+    if (!isMouseDown) return
+    setIsMouseDown(false)
+    
+    // Resume auto-play after 4 seconds of inactivity
+    autoplayTimerRef.current = setTimeout(() => {
+      setIsAutoplayPaused(false)
+    }, 4000)
+  }
+
+  // Touch handlers for mobile
+  const handleTouchStart = () => {
+    setIsAutoplayPaused(true)
+    if (autoplayTimerRef.current) {
+      clearTimeout(autoplayTimerRef.current)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    autoplayTimerRef.current = setTimeout(() => {
+      setIsAutoplayPaused(false)
+    }, 4000)
+  }
+
+  // Clean timers on unmount
+  useEffect(() => {
+    return () => {
+      if (autoplayTimerRef.current) {
+        clearTimeout(autoplayTimerRef.current)
+      }
+    }
+  }, [])
+
+  // Autoplay effect
+  useEffect(() => {
+    if (isAutoplayPaused) return
+
+    const container = containerRef.current
+    if (!container) return
+
+    const interval = setInterval(() => {
+      const currentContainer = containerRef.current
+      if (!currentContainer) return
+
+      const maxScrollLeft = currentContainer.scrollWidth - currentContainer.clientWidth
+
+      // Wrap back to beginning if we are near the end
+      if (currentContainer.scrollLeft >= maxScrollLeft - 10) {
+        currentContainer.scrollTo({ left: 0, behavior: 'smooth' })
+      } else {
+        const firstChild = currentContainer.firstElementChild as HTMLElement
+        const scrollAmount = firstChild ? firstChild.clientWidth + 24 : 320 // slide width + gap
+        currentContainer.scrollBy({ left: scrollAmount, behavior: 'smooth' })
+      }
+    }, 3000) // Autoplay every 3 seconds
+
+    return () => clearInterval(interval)
+  }, [isAutoplayPaused])
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUpOrLeave}
+      onMouseLeave={handleMouseUpOrLeave}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      className="flex gap-6 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory select-none cursor-grab active:cursor-grabbing px-0 py-4"
+      style={{ scrollBehavior: 'smooth' }}
+    >
+      {React.Children.map(children, (child) => (
+        <div className={`snap-start shrink-0 ${cardWidthClass}`}>
+          {child}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export default function Home() {
   const [specialists, setSpecialists] = useState<PatientBookingDoctor[]>([])
@@ -19,7 +135,7 @@ export default function Home() {
     patientBookingService.getDoctors()
       .then((data) => {
         if (!ignore) {
-          setSpecialists(data.slice(0, 4))
+          setSpecialists(data)
         }
       })
       .catch((err) => {
@@ -32,7 +148,7 @@ export default function Home() {
     serviceService.getAll('related', '', 'active', 1, 100)
       .then((res) => {
         if (!ignore) {
-          setClinicServices(res.items.slice(0, 3))
+          setClinicServices(res.items)
         }
       })
       .catch((err) => {
@@ -123,22 +239,24 @@ export default function Home() {
             Các kỹ thuật lâm sàng thế mạnh hỗ trợ điều trị nhanh chóng và triệt để.
           </p>
         </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {loadingServices ? (
-            [1, 2, 3].map((i) => (
+        {loadingServices ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
               <div key={i} className="rounded-2xl border border-slate-100 bg-white p-6 space-y-4 shadow-sm">
                 <Skeleton className="h-12 w-12 rounded-xl" />
                 <Skeleton className="h-5 w-2/3" />
                 <Skeleton className="h-4 w-full" />
               </div>
-            ))
-          ) : clinicServices.length === 0 ? (
-            <div className="col-span-full text-center py-6 text-slate-400 text-sm">
-              Chưa có dịch vụ phòng khám hoạt động.
-            </div>
-          ) : (
-            clinicServices.map((s) => (
-              <div key={s.id} className="group relative flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:border-brand-100">
+            ))}
+          </div>
+        ) : clinicServices.length === 0 ? (
+          <div className="text-center py-6 text-slate-400 text-sm">
+            Chưa có dịch vụ phòng khám hoạt động.
+          </div>
+        ) : (
+          <AutoSlider cardWidthClass="w-[85%] sm:w-[calc((100%-24px)/2)] lg:w-[calc((100%-48px)/3)]">
+            {clinicServices.map((s) => (
+              <div key={s.id} className="group relative flex h-full flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-md hover:border-brand-100 select-none">
                 <div className="space-y-4">
                   <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600 group-hover:bg-brand-500 group-hover:text-white transition-colors duration-300">
                     <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -154,7 +272,7 @@ export default function Home() {
                   <span className="text-sm font-bold text-slate-900">
                     {s.gia === 0 ? 'Miễn phí' : `${s.gia.toLocaleString('vi-VN')} đ`}
                   </span>
-                  <Link to={`/dich-vu/${s.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-800 flex items-center gap-1">
+                  <Link to={`/dich-vu/${s.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-800 flex items-center gap-1 select-none pointer-events-auto">
                     Chi tiết
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -162,9 +280,9 @@ export default function Home() {
                   </Link>
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </AutoSlider>
+        )}
       </section>
 
       {/* 4. DOCTORS SECTION */}
@@ -176,22 +294,24 @@ export default function Home() {
             Các phó giáo sư, thạc sĩ y khoa giàu tâm huyết và trực tiếp thực hiện thăm khám.
           </p>
         </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {loadingDoctors ? (
-            [1, 2, 3, 4].map((i) => (
+        {loadingDoctors ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="rounded-2xl border border-slate-100 bg-white p-4 space-y-4 shadow-sm">
                 <Skeleton className="aspect-square w-full rounded-xl" />
                 <Skeleton className="h-5 w-2/3" />
                 <Skeleton className="h-4 w-1/3" />
               </div>
-            ))
-          ) : specialists.length === 0 ? (
-            <div className="col-span-full text-center py-6 text-slate-400 text-sm">
-              Chưa có bác sĩ chuyên khoa hoạt động.
-            </div>
-          ) : (
-            specialists.map((d) => (
-              <div key={d.id} className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300">
+            ))}
+          </div>
+        ) : specialists.length === 0 ? (
+          <div className="text-center py-6 text-slate-400 text-sm">
+            Chưa có bác sĩ chuyên khoa hoạt động.
+          </div>
+        ) : (
+          <AutoSlider cardWidthClass="w-[85%] sm:w-[calc((100%-24px)/2)] lg:w-[calc((100%-72px)/4)]">
+            {specialists.map((d) => (
+              <div key={d.id} className="group relative flex h-full flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300 select-none">
                 <div>
                   {/* Doctor Avatar */}
                   <div className="aspect-square w-full bg-slate-100 relative overflow-hidden">
@@ -199,10 +319,11 @@ export default function Home() {
                       <img
                         src={d.anh_dai_dien}
                         alt={d.ho_ten}
-                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none"
+                        draggable={false}
                       />
                     ) : (
-                      <div className="grid h-full w-full place-items-center bg-brand-50 text-brand-600 font-extrabold text-3xl">
+                      <div className="grid h-full w-full place-items-center bg-brand-50 text-brand-600 font-extrabold text-3xl select-none">
                         {d.ho_ten.split(' ').pop()?.charAt(0)}
                       </div>
                     )}
@@ -220,15 +341,15 @@ export default function Home() {
                 <div className="p-4 pt-3 border-t border-slate-50 flex items-center justify-center mt-2">
                   <Link
                     to={`/booking?doctor_id=${d.id}`}
-                    className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100"
+                    className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100 pointer-events-auto select-none"
                   >
                     Đặt lịch khám
                   </Link>
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </AutoSlider>
+        )}
       </section>
 
       {/* 5. WHY CHOOSE US */}
