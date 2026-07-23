@@ -252,6 +252,9 @@ export async function getSlots(req, res) {
     const slots = schedule.slots
       .filter((s) => s.status === 'active' && !s.benh_nhan_id && !bookedSlotIds.has(s._id.toString()))
       .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
+      // Chi hien slot ONLINE cho benh nhan tu dat (muc 5.1 dac ta). Dung "!== 'walk_in'" thay vi
+      // "=== 'online'" de tuong thich nguoc voi slot tao TRUOC migration (thieu loai_slot -> undefined).
+      .filter((s) => s.loai_slot !== 'walk_in')
       .map((s) => ({
         id:          s._id,
         schedule_id: schedule._id,
@@ -389,6 +392,7 @@ export async function createBooking(req, res) {
       specialty_id,
       ma_lich_hen:  appointmentCode,
       loai_kham,
+      hinh_thuc_dat_lich: 'patient',
       ngay_kham:    appointmentDate,
       gio_kham:     gio_dat,
       ly_do_kham:   ly_do_kham?.trim() || null,
