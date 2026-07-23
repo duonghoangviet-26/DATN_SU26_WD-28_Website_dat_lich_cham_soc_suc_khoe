@@ -14,6 +14,7 @@ interface Appointment {
   user_id?: { _id: string; ho_ten: string; so_dien_thoai: string } | null;
   nguoi_dat_ho_ten?: string;
   nguoi_dat_sdt?: string;
+  hinh_thuc_dat_lich?: string;
 }
 
 const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
@@ -75,9 +76,9 @@ export default function Dashboard() {
 
   // --- Logic Lọc Dữ liệu cho Khung 2 & 3 ---
   
-  // Khung 2: Lịch đặt trực tiếp (walk-in) - Tạm tính bằng cách user_id === null
+  // Khung 2: Lịch đặt trực tiếp (walk-in) - Tạm tính bằng cách user_id === null hoặc hinh_thuc_dat_lich === 'receptionist'
   const walkinAppointments = allAppointments.filter(
-    (a) => !a.user_id && (a.status === 'pending' || a.status === 'confirmed')
+    (a) => (!a.user_id || a.hinh_thuc_dat_lich === 'receptionist') && (a.status === 'pending' || a.status === 'confirmed')
   );
 
   // Khung 3: Lịch hẹn 4h tới
