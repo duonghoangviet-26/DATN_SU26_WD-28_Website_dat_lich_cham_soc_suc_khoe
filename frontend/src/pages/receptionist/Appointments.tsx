@@ -397,10 +397,16 @@ export default function Appointments() {
                         <div className="flex items-center gap-2">
                           {activeTab !== 'past' && !isPendingAndOverdue && (
                             <>
-                              {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
+                              {(activeTab === 'today' || activeTab === 'tomorrow') && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                                 <button
                                   title="Đã đến"
-                                  onClick={() => handleArrived(apt._id)}
+                                  onClick={() => {
+                                    if (activeTab === 'tomorrow') {
+                                      alert('Chưa đến ngày checkin');
+                                      return;
+                                    }
+                                    handleArrived(apt._id);
+                                  }}
                                   className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors"
                                 >
                                   <Icon name="check" className="w-4 h-4" />
