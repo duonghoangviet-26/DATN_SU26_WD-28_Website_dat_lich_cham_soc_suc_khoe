@@ -48,9 +48,12 @@ const queueSchema = new mongoose.Schema(
     gio_hen_goc: { type: Date, default: null },
 
     // Vòng đời
+    // cho_dich_vu: benh nhan di lam dich vu bo sung (noi soi, xet nghiem...) roi quay lai hang doi
+    // (xem .claude/rules/lich-lam-viec-bac-si.md muc 8/G6). CHUA co endpoint nao chuyen trang thai
+    // nay — chi mo enum truoc, wiring workflow la tinh nang rieng, ngoai pham vi plan nay.
     trang_thai: {
       type: String,
-      enum: ['dang_cho', 'da_goi', 'trong_phong', 'skipped', 'cancelled', 'hoan_thanh'],
+      enum: ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu', 'skipped', 'cancelled', 'hoan_thanh'],
       default: 'dang_cho',
     },
     checkin_time: { type: Date, required: true },
