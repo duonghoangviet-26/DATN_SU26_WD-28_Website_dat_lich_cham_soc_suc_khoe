@@ -183,6 +183,18 @@ export const SCHEDULE_DAY_STATUS_COLOR: Record<string, BadgeColor> = {
     nghi_phep: "red",
 };
 
+// Loại slot (LichLamViec.slots.loai_slot) — phân bổ online/walk-in trong mỗi khung 30' theo
+// tỷ lệ cấu hình ở ChuyenKhoa.ty_le_online_phan_tram. Thiếu field (dữ liệu cũ) = 'online'.
+export const SLOT_LOAI_LABEL: Record<"online" | "walk_in", string> = {
+    online: "Online",
+    walk_in: "Tại chỗ",
+};
+
+export const SLOT_LOAI_COLOR: Record<"online" | "walk_in", BadgeColor> = {
+    online: "blue",
+    walk_in: "gray",
+};
+
 // Trạng thái yêu cầu nghỉ (DoctorLeaveRequest.trang_thai) — khớp STATUS_COLOR cũ trong DoctorLeaveRequests.
 export const DOCTOR_LEAVE_STATUS_COLOR: Record<string, BadgeColor> = {
     cho_duyet: "yellow",

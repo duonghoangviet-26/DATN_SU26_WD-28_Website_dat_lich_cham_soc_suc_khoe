@@ -9,6 +9,7 @@ import PageHeader from '@/components/common/PageHeader'
 import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { adminDoctorScheduleService } from '@/services/admin-doctor-schedule.service'
 import { appointmentService } from '@/services/appointment.service'
+import { SLOT_LOAI_LABEL, SLOT_LOAI_COLOR } from '@/utils/constants'
 import type {
   AdminAppointmentDoctorOption,
   AdminDoctorScheduleAuditLog,
@@ -215,6 +216,7 @@ function SlotEditorModal({
                 <tr>
                   <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Bắt đầu</th>
                   <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Kết thúc</th>
+                  <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Loại slot</th>
                   <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Phòng khám</th>
                   <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Trạng thái</th>
                   <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Đặt lịch</th>
@@ -246,6 +248,15 @@ function SlotEditorModal({
                           disabled={immutableStatus}
                           title={immutableStatus ? 'Không thể đổi giờ của khung giờ đã có lịch hẹn' : undefined}
                         />
+                      </td>
+                      <td className="px-3 py-3">
+                        <span
+                          title={slot.khung_index != null ? `Khung giờ số ${slot.khung_index + 1} trong ca` : undefined}
+                        >
+                          <Badge color={SLOT_LOAI_COLOR[slot.loai_slot ?? 'online']}>
+                            {SLOT_LOAI_LABEL[slot.loai_slot ?? 'online']}
+                          </Badge>
+                        </span>
                       </td>
                       <td className="px-3 py-3">
                         <input

@@ -437,6 +437,8 @@ export interface AdminDoctorWorkdayItem {
     slot_da_dat: number;
     slot_bi_khoa: number;
     slot_da_huy: number;
+    slot_online_trong: number;
+    slot_walkin_trong: number;
     gio_bat_dau?: string | null;
     gio_ket_thuc?: string | null;
     nguon_lich: "stored" | "derived";
@@ -452,6 +454,8 @@ export interface AdminDoctorScheduleSlot {
     _id: string;
     gio_bat_dau: string;
     gio_ket_thuc: string;
+    khung_index?: number | null;
+    loai_slot?: "online" | "walk_in";
     benh_nhan_id?: string | null;
     benh_nhan_tam_giu_id?: string | null;
     specialty_id?: string | null;
@@ -607,6 +611,8 @@ export interface DoctorSlot {
     ngay: string; // 'YYYY-MM-DD'
     gio_bat_dau: string; // 'HH:MM'
     gio_ket_thuc: string;
+    khung_index?: number | null; // vị trí khung 30' trong ca (0-based) — null = dữ liệu cũ trước migration
+    loai_slot?: "online" | "walk_in"; // thiếu = 'online' (tương thích dữ liệu cũ)
     phong_kham?: string | null;
     benh_nhan?: string | null;
     benh_nhan_id?: string | null;
@@ -673,6 +679,8 @@ export interface DoctorScheduleDetailSlot {
     id: string;
     gio_bat_dau: string;
     gio_ket_thuc: string;
+    khung_index: number | null;
+    loai_slot: "online" | "walk_in";
     phong_kham: string | null;
     status: DoctorSlot["status"];
     benh_nhan_id: string | null;
@@ -691,6 +699,8 @@ export interface DoctorScheduleStats {
     slot_da_dat: number;
     slot_bi_khoa: number;
     slot_da_huy: number;
+    slot_online_trong: number;
+    slot_walkin_trong: number;
     tong_lich_hen: number;
     cho_kham: number;
     da_den: number;

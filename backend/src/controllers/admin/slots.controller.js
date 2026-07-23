@@ -367,6 +367,8 @@ export async function getDoctorWorkdays(req, res) {
           slot_da_dat: 0,
           slot_bi_khoa: 0,
           slot_da_huy: 0,
+          slot_online_trong: 0,
+          slot_walkin_trong: 0,
           gio_bat_dau: null,
           gio_ket_thuc: null,
           nguon_lich: 'derived',

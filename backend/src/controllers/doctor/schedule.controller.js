@@ -47,6 +47,8 @@ function flattenSchedules(schedules) {
       nurse:       nurse?.ho_ten ?? null, // null = chưa phân công y tá (dữ liệu thật, không hardcode)
       gio_bat_dau:  s.gio_bat_dau,
       gio_ket_thuc: s.gio_ket_thuc,
+      khung_index:  s.khung_index ?? null,
+      loai_slot:    s.loai_slot ?? 'online',
       phong_kham:   s.phong_kham,
       status:       s.status,
       benh_nhan_id: s.benh_nhan_id?._id ?? s.benh_nhan_id ?? null,
@@ -130,6 +132,8 @@ export async function getScheduleDetail(req, res) {
       id:           s._id,
       gio_bat_dau:  s.gio_bat_dau,
       gio_ket_thuc: s.gio_ket_thuc,
+      khung_index:  s.khung_index ?? null,
+      loai_slot:    s.loai_slot ?? 'online',
       phong_kham:   s.phong_kham,
       status:       s.status,
       benh_nhan_id: s.benh_nhan_id?._id ?? s.benh_nhan_id ?? null,
@@ -139,12 +143,16 @@ export async function getScheduleDetail(req, res) {
       bi_khoa_boi_nghi_phep: s.bi_khoa_boi_nghi_phep ?? false,
     }))
 
+    const activeSlots = slots.filter((s) => s.status === 'active')
     const thong_ke = {
       tong_slot:    slots.length,
-      slot_trong:   slots.filter((s) => s.status === 'active').length,
+      slot_trong:   activeSlots.length,
       slot_da_dat:  slots.filter((s) => s.status === 'booked' || s.status === 'pending_payment').length,
       slot_bi_khoa: slots.filter((s) => s.status === 'locked').length,
       slot_da_huy:  slots.filter((s) => s.status === 'cancelled' || s.status === 'expired').length,
+      // loai_slot co the thieu o du lieu cu (truoc migration) -> mac dinh coi la 'online'
+      slot_online_trong: activeSlots.filter((s) => (s.loai_slot ?? 'online') !== 'walk_in').length,
+      slot_walkin_trong:  activeSlots.filter((s) => s.loai_slot === 'walk_in').length,
       ...thongKeLichHen(appointments),
     }
 

@@ -384,6 +384,14 @@ export default function DoctorScheduleCalendar({
                 ))}
               </dl>
 
+              {selectedDay.slot_trong > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  <span className="font-medium">Trong đó trống:</span>
+                  <Badge color="blue">{selectedDay.slot_online_trong} Online</Badge>
+                  {selectedDay.slot_walkin_trong > 0 && <Badge color="gray">{selectedDay.slot_walkin_trong} Tại chỗ</Badge>}
+                </div>
+              )}
+
               {selectedDay.canh_bao_xung_dot_xac_nhan && <div className="mt-5 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">Bác sĩ đã từ chối ngày làm việc nhưng vẫn còn {selectedDay.so_lich_hen_xung_dot} lịch hẹn cần xử lý.</div>}
               {selectedDay.ly_do_tu_choi_xac_nhan && <p className="mt-4 break-words text-sm text-red-800">Lý do từ chối: {selectedDay.ly_do_tu_choi_xac_nhan}</p>}
               {error && <div className="mt-5 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</div>}
