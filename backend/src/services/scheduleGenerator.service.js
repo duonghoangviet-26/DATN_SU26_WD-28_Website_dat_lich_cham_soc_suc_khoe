@@ -1,4 +1,4 @@
-import { BacSi, LichLamViec, LichSuChinhSuaLichLamViec } from '../models/index.js'
+import { BacSi, LichLamViec, LichSuChinhSuaLichLamViec, ChuyenKhoa } from '../models/index.js'
 
 // Phan bo so slot ONLINE trong moi khung 30' cua 1 ca, xen ke theo dung vi du trong
 // .claude/rules/lich-lam-viec-bac-si.md muc 4.3 (VD TMH ca sang 7 khung, online=10/14:
@@ -45,22 +45,47 @@ function startOfDateUTC(value) {
   return date
 }
 
-export function buildDefaultScheduleSlots({ specialtyId = null, phongKham = null } = {}) {
-  return DEFAULT_SLOT_TIMES.map(([gio_bat_dau, gio_ket_thuc]) => ({
-    gio_bat_dau,
-    gio_ket_thuc,
-    specialty_id: specialtyId,
-    phong_kham: phongKham ?? null,
-    status: 'active',
-    benh_nhan_id: null,
-    benh_nhan_tam_giu_id: null,
-    lock_expires_at: null,
-    pending_expired_at: null,
-    cancel_requested: false,
-    cancel_reason: null,
-    bi_khoa_boi_nghi_phep: false,
-    nghi_phep_id: null,
-  }))
+// Ca sang = DEFAULT_SLOT_TIMES[0..6] (7 khung), ca chieu = DEFAULT_SLOT_TIMES[7..14] (8 khung).
+const CA_SANG_SO_KHUNG = 7
+const CA_CHIEU_SO_KHUNG = 8
+
+export async function buildDefaultScheduleSlots({ specialtyId = null, phongKham = null } = {}) {
+  // Fallback khi khong co specialtyId (vd bac si chua gan chuyen khoa): giu dung hanh vi
+  // CU truoc migration nay — 1 slot/khung, tat ca deu online.
+  const config = specialtyId
+    ? await ChuyenKhoa.findById(specialtyId).select('so_slot_moi_khung ty_le_online_phan_tram').lean()
+    : null
+  const soSlotMoiKhung = config?.so_slot_moi_khung ?? 1
+  const tyLeOnline = config?.ty_le_online_phan_tram ?? 100
+
+  const onlinePerKhungSang = phanBoOnlineTheoKhung(CA_SANG_SO_KHUNG, soSlotMoiKhung, tyLeOnline)
+  const onlinePerKhungChieu = phanBoOnlineTheoKhung(CA_CHIEU_SO_KHUNG, soSlotMoiKhung, tyLeOnline)
+  const onlinePerKhung = [...onlinePerKhungSang, ...onlinePerKhungChieu]
+
+  const slots = []
+  DEFAULT_SLOT_TIMES.forEach(([gio_bat_dau, gio_ket_thuc], khungIndex) => {
+    const soOnlineTrongKhung = onlinePerKhung[khungIndex]
+    for (let i = 0; i < soSlotMoiKhung; i += 1) {
+      slots.push({
+        gio_bat_dau,
+        gio_ket_thuc,
+        khung_index: khungIndex,
+        loai_slot: i < soOnlineTrongKhung ? 'online' : 'walk_in',
+        specialty_id: specialtyId,
+        phong_kham: phongKham ?? null,
+        status: 'active',
+        benh_nhan_id: null,
+        benh_nhan_tam_giu_id: null,
+        lock_expires_at: null,
+        pending_expired_at: null,
+        cancel_requested: false,
+        cancel_reason: null,
+        bi_khoa_boi_nghi_phep: false,
+        nghi_phep_id: null,
+      })
+    }
+  })
+  return slots
 }
 
 export function getWeekStart(value = new Date()) {
@@ -140,7 +165,7 @@ async function generateSlotsForDoctorDate({
       trang_thai_ngay: 'lam_viec',
       ghi_chu_ngay: null,
       trang_thai_xac_nhan: 'cho_xac_nhan',
-      slots: buildDefaultScheduleSlots({
+      slots: await buildDefaultScheduleSlots({
         specialtyId: getFirstSpecialtyId(doctor),
         phongKham: doctor?.phong_kham_mac_dinh ?? null,
       }),
