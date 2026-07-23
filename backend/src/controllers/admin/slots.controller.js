@@ -479,7 +479,7 @@ async function attachSlotPatientInfo(schedule) {
       { ngay_kham: schedule.ngay },
     ],
   })
-    .select('slot_id gio_kham ten_khach khach_vang_lai_id member_id')
+    .select('slot_id gio_kham ten_khach khach_vang_lai_id member_id user_id')
     .populate('member_id', 'ho_ten')
     .lean()
   const occupiedSlotIds = new Set(appointments.map((appointment) => String(appointment.slot_id)).filter(Boolean))
@@ -488,10 +488,13 @@ async function attachSlotPatientInfo(schedule) {
   // Ten benh nhan lay tu LichHen — bat buoc doi voi khach vang lai (KHONG co tai khoan
   // NguoiDung nen slot.benh_nhan_id se la null). Uu tien khop theo slot_id, fallback theo
   // gio_bat_dau (giong occupiedSlotIds/occupiedTimes o tren).
+  // QUAN TRONG: ten_khach duoc dien ca khi tu dat lich bang chinh tai khoan cua minh (khong
+  // co member_id vi khong phai ho so thanh vien gia dinh) — phai kiem tra CA user_id de khong
+  // gan nham nhan "khach vang lai" cho nguoi dung da dang nhap tu dat cho ban than.
   const patientBySlotId = new Map()
   const patientByTime = new Map()
   for (const appointment of appointments) {
-    const laKhachVangLai = !!appointment.khach_vang_lai_id || (!appointment.member_id && !!appointment.ten_khach)
+    const laKhachVangLai = !!appointment.khach_vang_lai_id || (!appointment.user_id && !appointment.member_id && !!appointment.ten_khach)
     const info = {
       ten_benh_nhan: appointment.member_id?.ho_ten ?? appointment.ten_khach ?? null,
       la_khach_vang_lai: laKhachVangLai,

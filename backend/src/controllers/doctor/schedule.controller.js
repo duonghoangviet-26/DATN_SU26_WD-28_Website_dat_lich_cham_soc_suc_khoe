@@ -36,11 +36,14 @@ const OCCUPIED_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in
 // Khách vãng lai (nguon='tai_cho') KHÔNG có tài khoản NguoiDung nên slot.benh_nhan_id luôn
 // null với các lượt này — phải join LichHen theo slot_id (fallback schedule_id+gio_kham) mới
 // biết "ai đã đặt" cho slot đó. Trả về 2 map để tra cứu O(1) khi duyệt slots.
+// QUAN TRỌNG: ten_khach được điền cả khi tự đặt lịch bằng chính tài khoản của mình (không có
+// member_id vì không phải hồ sơ thành viên gia đình) — phải kiểm tra CẢ user_id để không gán
+// nhầm nhãn "khách vãng lai" cho người dùng đã đăng nhập tự đặt cho bản thân.
 function buildPatientInfoMaps(appointments) {
   const bySlotId = new Map()
   const byScheduleTime = new Map()
   for (const a of appointments) {
-    const laKhachVangLai = !!a.khach_vang_lai_id || (!a.member_id && !!a.ten_khach)
+    const laKhachVangLai = !!a.khach_vang_lai_id || (!a.user_id && !a.member_id && !!a.ten_khach)
     const info = {
       ten_benh_nhan: a.member_id?.ho_ten ?? a.ten_khach ?? a.user_id?.ho_ten ?? null,
       la_khach_vang_lai: laKhachVangLai,
@@ -109,7 +112,7 @@ export async function getSchedules(req, res) {
           schedule_id: { $in: schedules.map((sch) => sch._id) },
           status: { $in: OCCUPIED_APPOINTMENT_STATUSES },
         })
-          .select('schedule_id slot_id gio_kham ten_khach khach_vang_lai_id member_id')
+          .select('schedule_id slot_id gio_kham ten_khach khach_vang_lai_id member_id user_id')
           .populate('member_id', 'ho_ten')
           .lean()
       : []
@@ -156,7 +159,7 @@ export async function getScheduleDetail(req, res) {
       gio_ket_thuc:   a.gio_ket_thuc ?? null,
       loai_kham:      a.loai_kham,
       hinh_thuc_dat_lich: a.hinh_thuc_dat_lich ?? null,
-      la_khach_vang_lai:  !!a.khach_vang_lai_id || (!a.member_id && !!a.ten_khach),
+      la_khach_vang_lai:  !!a.khach_vang_lai_id || (!a.user_id && !a.member_id && !!a.ten_khach),
       chuyen_khoa:    a.specialty_id?.ten ?? null,
       ten_dich_vu:    a.ten_dich_vu ?? null,
       status:         a.status,
