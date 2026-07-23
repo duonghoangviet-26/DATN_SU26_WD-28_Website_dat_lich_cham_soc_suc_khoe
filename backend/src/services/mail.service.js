@@ -53,7 +53,7 @@ export function renderNotificationEmail({ title, content, url = null }) {
       <div style="font-size: 14px;">${safeContent}</div>
       ${safeUrl ? `<p style="margin-top: 20px;"><a href="${safeUrl}" style="color: #2563eb;">Xem chi tiet</a></p>` : ''}
       <p style="margin-top: 24px; font-size: 12px; color: #64748b;">
-        Email nay duoc gui tu he thong VitaFamily.
+        Email nay duoc gui tu he thong ViteFamily.
       </p>
     </div>
   `
@@ -91,7 +91,7 @@ export async function sendMail({ to, subject, text, html }) {
   }
 
   const { user } = getMailConfig()
-  const fromName = process.env.SMTP_FROM_NAME || 'VitaFamily'
+  const fromName = process.env.SMTP_FROM_NAME || 'ViteFamily'
   const info = await getTransporter().sendMail({
     from: `"${fromName}" <${user}>`,
     to,
