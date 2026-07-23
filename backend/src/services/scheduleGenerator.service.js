@@ -12,16 +12,22 @@ export function phanBoOnlineTheoKhung(soKhung, soSlotMoiKhung, tyLeOnlinePhanTra
   const base = Math.floor(targetOnline / soKhung)
   let conDu = targetOnline - base * soKhung
 
-  const onlinePerKhung = []
-  for (let i = 0; i < soKhung; i += 1) {
-    let online = base
-    if (conDu > 0 && i % 2 === 1) {
-      online += 1
+  const onlinePerKhung = new Array(soKhung).fill(base)
+  // Buoc 1: cong du vao khung LE truoc (giu dung xen ke nhu vi du dac ta muc 4.3).
+  // Buoc 2: neu con du (VD ty_le_online cao, > ~57-64% tuy soKhung), vong qua khung CHAN
+  // de PHAN BO HET conDu — sua loi "roi mat phan du" cua ban dau (chi cong vao khung le
+  // se lam thieu hut online khi conDu > so khung le co san). Ca 2 buoc luon du cho de hap
+  // thu het conDu (conDu < soKhung theo tinh chat phep chia lay du, tong suc chua 2 buoc = soKhung).
+  for (let pass = 0; pass < 2 && conDu > 0; pass += 1) {
+    const parityCanNhan = pass === 0 ? 1 : 0
+    for (let i = 0; i < soKhung && conDu > 0; i += 1) {
+      if (i % 2 !== parityCanNhan) continue
+      if (onlinePerKhung[i] >= soSlotMoiKhung) continue
+      onlinePerKhung[i] += 1
       conDu -= 1
     }
-    onlinePerKhung.push(Math.min(online, soSlotMoiKhung))
   }
-  return onlinePerKhung
+  return onlinePerKhung.map((online) => Math.min(online, soSlotMoiKhung))
 }
 
 // Weekly schedule generator for VitaFamily private clinic.
