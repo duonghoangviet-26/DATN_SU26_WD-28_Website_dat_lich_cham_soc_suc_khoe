@@ -1,5 +1,29 @@
 import { BacSi, LichLamViec, LichSuChinhSuaLichLamViec } from '../models/index.js'
 
+// Phan bo so slot ONLINE trong moi khung 30' cua 1 ca, xen ke theo dung vi du trong
+// .claude/rules/lich-lam-viec-bac-si.md muc 4.3 (VD TMH ca sang 7 khung, online=10/14:
+// [1,2,1,2,1,2,1]). Thuat toan: chia deu (base = floor(target/soKhung)), phan du duoc
+// cong them vao cac khung LE (index 1,3,5,...) cho toi khi het du — dam bao xen ke thay
+// vi don het vao dau/cuoi ca (tranh walk-in bi don het vao cuoi ca — xem muc 4.3).
+// An toan: khong bao gio vuot qua soSlotMoiKhung (uu tien duoi tai neu lam tron gay du thua).
+export function phanBoOnlineTheoKhung(soKhung, soSlotMoiKhung, tyLeOnlinePhanTram) {
+  const tongSlot = soKhung * soSlotMoiKhung
+  const targetOnline = Math.round((tongSlot * tyLeOnlinePhanTram) / 100)
+  const base = Math.floor(targetOnline / soKhung)
+  let conDu = targetOnline - base * soKhung
+
+  const onlinePerKhung = []
+  for (let i = 0; i < soKhung; i += 1) {
+    let online = base
+    if (conDu > 0 && i % 2 === 1) {
+      online += 1
+      conDu -= 1
+    }
+    onlinePerKhung.push(Math.min(online, soSlotMoiKhung))
+  }
+  return onlinePerKhung
+}
+
 // Weekly schedule generator for VitaFamily private clinic.
 // The clinic works Monday -> Sunday and always excludes 11:30 -> 13:30.
 export const DEFAULT_SLOT_TIMES = [
