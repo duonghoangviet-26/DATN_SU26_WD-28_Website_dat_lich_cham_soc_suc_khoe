@@ -130,6 +130,7 @@ export async function getServices(req, res) {
       gia:        s.gia,
       mo_ta:      s.mo_ta,
       mo_ta_ngan: s.mo_ta_ngan,
+      hinh_anh:   s.hinh_anh ?? null,
       thoi_gian_phut:        s.thoi_gian_phut,
       gio_dat_truoc_toi_thieu: s.gio_dat_truoc_toi_thieu,
       khu_vuc:    s.khu_vuc,

@@ -56,7 +56,7 @@ export default function Login() {
     <>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-800">Chào mừng trở lại</h1>
-        <p className="mt-1 text-sm text-slate-500">Đăng nhập để vào hệ thống VitaFamily.</p>
+        <p className="mt-1 text-sm text-slate-500">Đăng nhập để vào hệ thống ViteFamily.</p>
       </div>
 
       {registered && (

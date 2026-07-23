@@ -6,6 +6,7 @@ import Breadcrumb from '@/components/common/Breadcrumb'
 import Empty from '@/components/common/Empty'
 import Skeleton from '@/components/common/Skeleton'
 import Pagination from '@/components/common/Pagination'
+import { getServiceImage } from '@/utils/serviceImage'
 
 export default function ServiceList() {
   const [loading, setLoading] = useState(true)
@@ -77,7 +78,7 @@ export default function ServiceList() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4 shadow-sm">
-              <Skeleton className="h-4 w-1/4" />
+              <Skeleton className="h-32 w-full rounded-xl" />
               <Skeleton className="h-6 w-3/4" />
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-5 w-1/3" />
@@ -91,34 +92,49 @@ export default function ServiceList() {
       ) : (
         <div className="space-y-8">
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {paginatedServices.map((s) => (
+            {paginatedServices.map((s, index) => (
               <div
                 key={s.id}
-                className="group relative flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:border-brand-100"
+                className="group relative flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-brand-200"
               >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded-md">
+                <div className="space-y-3">
+                  {/* Service Image Banner */}
+                  <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-slate-100">
+                    <img
+                      src={getServiceImage(s, index)}
+                      alt={s.ten}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <span className="absolute top-2.5 left-2.5 text-[10px] font-bold text-white bg-slate-900/70 backdrop-blur-md px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-white/20">
                       {s.ma_dich_vu}
                     </span>
+                    {s.la_goi && (
+                      <span className="absolute top-2.5 right-2.5 text-[10px] font-extrabold text-brand-950 bg-gradient-to-r from-amber-300 to-amber-200 px-2.5 py-0.5 rounded-full shadow-sm">
+                        Gói ưu đãi
+                      </span>
+                    )}
                   </div>
-                  <div className="space-y-1.5 text-left">
-                    <h3 className="font-bold text-slate-800 text-base group-hover:text-brand-600 transition-colors">
+
+                  <div className="space-y-1.5 text-left pt-1">
+                    <h3 className="font-bold text-slate-800 text-base group-hover:text-brand-600 transition-colors line-clamp-1">
                       {s.ten}
                     </h3>
-                    <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">
-                      {s.mo_ta_ngan}
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                      {s.mo_ta_ngan || 'Dịch vụ chẩn đoán & hỗ trợ điều trị chuyên khoa Tai Mũi Họng.'}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
-                  <span className="text-sm font-bold text-slate-900">
-                    {s.gia.toLocaleString('vi-VN')} đ
-                  </span>
+                <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Chi phí</span>
+                    <span className="text-base font-extrabold text-brand-700">
+                      {s.gia === 0 ? 'Miễn phí' : `${s.gia.toLocaleString('vi-VN')} đ`}
+                    </span>
+                  </div>
                   <Link
                     to={`/dich-vu/${s.id}`}
-                    className="text-xs font-semibold text-brand-600 hover:text-brand-800 flex items-center gap-1"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-800 bg-brand-50 hover:bg-brand-100/80 px-3 py-1.5 rounded-lg transition-colors"
                   >
                     Xem chi tiết
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
