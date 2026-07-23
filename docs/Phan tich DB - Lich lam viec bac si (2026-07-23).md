@@ -165,4 +165,4 @@ Thêm `ca` + `phong_id` vào `lich_lam_viec` (unique index đổi thành `(docto
 `admin/appointment.controller.js` (getDoctorSchedules), `admin/doctor-leaves.controller.js` (lockSlotsForLeave — an toàn vì dùng `.find`), `receptionist/booking.controller.js` (getSlots — **vỡ trực tiếp**), `receptionist/appointment.controller.js` (rescheduleAppointment — an toàn có điều kiện nhờ filter `slots.gio_bat_dau`), `doctor/stats.controller.js` (getTodayOverview — **vỡ trực tiếp**), `nurse/dashboard.controller.js` (getDashboard — có thể trùng lặp bác sĩ), `nurse/queue.controller.js` (tinhCanhBaoQuaTai + checkin offline — **vỡ trực tiếp** cả 2 chỗ), `nurse/schedule.controller.js` (list — đếm `so_lich_hen` sai theo ca), `nurse/room-status.controller.js` (findOrCreateRoomStatus — **vỡ trực tiếp**, và `TrangThaiPhongKham` cũng có unique index `(doctor_id,ngay)` xung đột, cần đổi theo).
 
 ### ⏳ P2 — CHƯA TRIỂN KHAI
-`hang_doi.trang_thai` + `cho_dich_vu`; `lich_hen.nguon` + `cho_dich_vu`; chặn `no_show` cho `nguon='tai_cho'`.
+✅ `hang_doi.trang_thai` + `cho_dich_vu` (Task 2, Phase 1A); `lich_hen.nguon` + `cho_dich_vu`; chặn `no_show` cho `nguon='tai_cho'`.
