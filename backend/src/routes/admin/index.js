@@ -12,6 +12,7 @@ import guestPatientsRoutes from './guest-patients.routes.js'
 import doctorLeavesRoutes  from './doctor-leaves.routes.js'
 import medicalReadRoutes   from './medical-read.routes.js'
 import dashboardRoutes     from './dashboard.routes.js'
+import patientRoutes       from './patient.routes.js'
 
 // ============================================================
 // Admin routes — mount tại /api/admin
@@ -28,6 +29,7 @@ const router = Router()
 router.use('/services',      servicesRoutes)       // C4
 router.use('/specialties',   specialtiesRoutes)     // C3
 router.use('/users',         userRoutes)            // C1
+router.use('/patients',      patientRoutes)
 router.use('/reviews',       reviewRoutes)          // C6
 router.use('/payments',      paymentsRoutes)        // C8
 router.use('/slots',         slotsRoutes)           // B2 — sinh lịch thủ công (fallback cron)

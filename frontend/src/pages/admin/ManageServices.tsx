@@ -134,11 +134,6 @@ export default function ManageServices() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Lưu ý: admin hiện chỉ quản lý dịch vụ liên quan theo chuyên khoa. Dịch vụ đặt lịch tại nhà đã ngừng hỗ trợ tạo mới;
-        dữ liệu lịch sử nếu có chỉ dùng để đối soát lịch hẹn cũ.
-      </div>
-
       <div className="flex flex-wrap gap-2">
         {[
           ['all', `Tất cả (${stats.services})`],

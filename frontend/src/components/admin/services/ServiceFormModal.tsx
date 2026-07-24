@@ -206,18 +206,6 @@ export default function ServiceFormModal({
             />
           </FormField>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-              Phạm vi giao diện hiện tại
-            </p>
-            <p className="text-slate-700">
-              Quản trị viên chỉ tạo và sửa <span className="font-semibold">dịch vụ liên quan theo chuyên khoa</span>.
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Dịch vụ đặt lịch tại nhà đã ngừng hỗ trợ tạo mới; dữ liệu cũ chỉ dùng để đối soát lịch sử.
-            </p>
-          </div>
-
           <FormField label="Chuyên khoa liên quan" required error={errors.specialty_id}>
             <select
               value={form.specialty_id ?? ''}
