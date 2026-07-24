@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import Icon from '@/components/admin/icons'
+import { clinicService } from '@/services/clinic.service'
 import { specialtyService } from '@/services/specialty.service'
 import type { ServiceFormData, ServiceItem, ServicePackageType, ServiceTargetAudience } from '@/types'
 
@@ -10,6 +11,7 @@ const EMPTY_FORM: ServiceFormData = {
   gia: 0,
   mo_ta_ngan: '',
   mo_ta: '',
+  image_url: '',
   chuan_bi_truoc: '',
   specialty_id: null,
   la_goi: false,
@@ -75,6 +77,10 @@ function validate(data: ServiceFormData): Record<string, string> {
     errors.mo_ta = 'Mô tả không vượt quá 5000 ký tự'
   }
 
+  if (data.image_url && data.image_url.trim().length > 500) {
+    errors.image_url = 'Đường dẫn ảnh không vượt quá 500 ký tự'
+  }
+
   return errors
 }
 
@@ -98,6 +104,7 @@ export default function ServiceFormModal({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [changeNote, setChangeNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [specialties, setSpecialties] = useState<{ id: string; ten: string }[]>([])
 
   useEffect(() => {
@@ -114,6 +121,7 @@ export default function ServiceFormModal({
         gia: service.gia,
         mo_ta_ngan: service.mo_ta_ngan ?? '',
         mo_ta: service.mo_ta ?? '',
+        image_url: service.image_url ?? '',
         chuan_bi_truoc: service.chuan_bi_truoc ?? '',
         specialty_id: service.specialty_id ?? null,
         la_goi: service.la_goi ?? false,
@@ -133,6 +141,7 @@ export default function ServiceFormModal({
 
     setErrors({})
     setChangeNote('')
+    setUploadingImage(false)
   }, [open, service, initialSpecialtyId])
 
   function setField(field: keyof ServiceFormData, value: unknown) {
@@ -143,6 +152,22 @@ export default function ServiceFormModal({
         delete next[field]
         return next
       })
+    }
+  }
+
+  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setUploadingImage(true)
+    try {
+      const url = await clinicService.uploadImage(file)
+      setField('image_url', url)
+    } catch {
+      setErrors((current) => ({ ...current, image_url: 'Không thể tải ảnh lên. Vui lòng thử lại.' }))
+    } finally {
+      setUploadingImage(false)
     }
   }
 
@@ -204,6 +229,50 @@ export default function ServiceFormModal({
               maxLength={255}
               className={`input w-full ${errors.ten ? 'border-red-300 focus:ring-red-200' : ''}`}
             />
+          </FormField>
+
+          <FormField label="Hình ảnh dịch vụ" error={errors.image_url}>
+            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-400">
+                {form.image_url ? (
+                  <img src={form.image_url} alt={form.ten || 'Hình ảnh dịch vụ'} className="h-full w-full object-cover" />
+                ) : (
+                  <Icon name="image" className="h-7 w-7" />
+                )}
+              </div>
+              <div className="min-w-0 space-y-2">
+                <input
+                  type="url"
+                  value={form.image_url ?? ''}
+                  onChange={(event) => setField('image_url', event.target.value)}
+                  placeholder="https://..."
+                  maxLength={500}
+                  className={`input w-full ${errors.image_url ? 'border-red-300' : ''}`}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-100">
+                    <Icon name="image" className="h-3.5 w-3.5" />
+                    {uploadingImage ? 'Đang tải...' : 'Chọn ảnh'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      disabled={uploadingImage}
+                    />
+                  </label>
+                  {form.image_url && (
+                    <button
+                      type="button"
+                      onClick={() => setField('image_url', '')}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
+                    >
+                      Bỏ ảnh
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </FormField>
 
           <FormField label="Chuyên khoa liên quan" required error={errors.specialty_id}>

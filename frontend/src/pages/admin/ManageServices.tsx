@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import Icon from '@/components/admin/icons'
 import PageHeader from '@/components/common/PageHeader'
 import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import { serviceService } from '@/services/service.service'
@@ -104,6 +105,15 @@ export default function ManageServices() {
     inactiveServices: services.filter((item) => item.status === 'inactive').length,
   }
 
+  const metricCards = [
+    { label: 'Chuyên khoa', value: stats.specialties, icon: 'hospital', color: 'text-slate-700', bg: 'bg-slate-100' },
+    { label: 'Tổng dịch vụ', value: stats.services, icon: 'service', color: 'text-brand-600', bg: 'bg-brand-50' },
+    { label: 'Gói dịch vụ', value: stats.packageServices, icon: 'file-text', color: 'text-cyan-700', bg: 'bg-cyan-50' },
+    { label: PACKAGE_TYPE_LABEL.goi_don, value: stats.singlePackages, icon: 'user', color: 'text-emerald-700', bg: 'bg-emerald-50' },
+    { label: PACKAGE_TYPE_LABEL.goi_gia_dinh, value: stats.familyPackages, icon: 'users', color: 'text-rose-700', bg: 'bg-rose-50' },
+    { label: 'Dịch vụ lẻ', value: stats.regularServices, icon: 'service', color: 'text-amber-700', bg: 'bg-amber-50' },
+  ]
+
   const tabDescription =
     activeTab === 'packages'
       ? 'Đang lọc riêng các gói dịch vụ theo từng chuyên khoa.'
@@ -115,21 +125,19 @@ export default function ManageServices() {
     <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Quản lý dịch vụ"
-        description="Quản trị viên quản lý dịch vụ liên quan theo từng chuyên khoa, đồng thời có tab riêng để rà soát gói dịch vụ."
+        description="Theo dõi dịch vụ theo chuyên khoa, rà soát gói dịch vụ và cập nhật nội dung hiển thị cho bệnh nhân."
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        {[
-          { label: 'Chuyên khoa đang hiển thị', value: stats.specialties, color: 'text-slate-700' },
-          { label: 'Tổng dịch vụ', value: stats.services, color: 'text-blue-600' },
-          { label: 'Gói dịch vụ', value: stats.packageServices, color: 'text-cyan-600' },
-          { label: PACKAGE_TYPE_LABEL.goi_don, value: stats.singlePackages, color: 'text-emerald-600' },
-          { label: PACKAGE_TYPE_LABEL.goi_gia_dinh, value: stats.familyPackages, color: 'text-rose-600' },
-          { label: 'Dịch vụ lẻ', value: stats.regularServices, color: 'text-amber-600' },
-        ].map((item) => (
-          <div key={item.label} className="rounded-lg bg-white p-4 text-center shadow-sm ring-1 ring-slate-200">
-            <div className={`font-mono text-2xl font-bold tabular-nums ${item.color}`}>{item.value}</div>
-            <div className="mt-1 text-xs text-slate-500">{item.label}</div>
+        {metricCards.map((item) => (
+          <div key={item.label} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${item.bg} ${item.color}`}>
+              <Icon name={item.icon} className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <div className={`font-mono text-2xl font-bold leading-none tabular-nums ${item.color}`}>{item.value}</div>
+              <div className="mt-1 truncate text-xs font-medium text-slate-500">{item.label}</div>
+            </div>
           </div>
         ))}
       </div>
@@ -155,13 +163,18 @@ export default function ManageServices() {
         ))}
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="border-b border-slate-100 px-5 py-4">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div>
           <h3 className="font-semibold text-slate-800">Dịch vụ theo chuyên khoa</h3>
           <p className="mt-0.5 text-xs text-slate-400">{tabDescription}</p>
           <p className="mt-1 text-xs text-slate-400">
             Đang hoạt động: {stats.activeServices} | Đã ẩn: {stats.inactiveServices}
           </p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            {stats.services} dịch vụ
+          </span>
         </div>
 
         {loading ? (
@@ -182,10 +195,10 @@ export default function ManageServices() {
                 <button
                   key={specialty.id}
                   onClick={() => navigate(`/admin/services/chuyen-khoa/${specialty.slug}?tab=${activeTab}`)}
-                  className="grid w-full gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-50 md:grid-cols-[minmax(0,1fr)_auto]"
+                  className="group grid w-full gap-4 px-5 py-5 text-left transition-colors hover:bg-brand-50/40 md:grid-cols-[minmax(0,1fr)_auto]"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-50 text-sm font-semibold text-brand-600">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-50 text-sm font-semibold text-brand-600 ring-1 ring-brand-100">
                     {specialty.icon_url && !brokenIcons[specialty.id] ? (
                       <img
                         src={specialty.icon_url}
@@ -203,8 +216,8 @@ export default function ManageServices() {
                     )}
                   </div>
                   <div>
-                    <div className="font-medium text-slate-800">{specialty.ten}</div>
-                    <div className="mt-0.5 text-xs text-slate-400">
+                    <div className="font-semibold text-slate-900">{specialty.ten}</div>
+                    <div className="mt-0.5 max-w-2xl text-sm text-slate-500">
                       {specialty.mo_ta || 'Chưa có mô tả chuyên khoa'}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
@@ -221,8 +234,9 @@ export default function ManageServices() {
                   </div>
                 </div>
 
-                  <div className="text-left md:text-right">
-                    <div className="font-mono text-lg font-semibold text-slate-800 tabular-nums">
+                  <div className="flex items-center justify-between gap-4 text-left md:justify-end md:text-right">
+                    <div>
+                    <div className="font-mono text-xl font-semibold text-slate-900 tabular-nums">
                       {visibleCount}
                     </div>
                     <div className="text-xs font-medium text-slate-500">
@@ -235,6 +249,10 @@ export default function ManageServices() {
                     <div className="mt-1 text-xs text-slate-400">
                       {specialtyStats.total} tổng | {specialty.so_bac_si} bác sĩ
                     </div>
+                    </div>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors group-hover:border-brand-200 group-hover:text-brand-600">
+                      <Icon name="chevron-right" className="h-4 w-4" />
+                    </span>
                   </div>
                 </button>
               )

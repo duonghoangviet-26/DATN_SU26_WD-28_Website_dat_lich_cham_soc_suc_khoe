@@ -304,6 +304,7 @@ export interface ServiceItem {
     gia: number; // home: BN trả | related: giá tham khảo
     mo_ta_ngan?: string | null;
     mo_ta?: string | null;
+    image_url?: string | null;
     // home: cố định 60ph, có lịch áp dụng (đặt lịch riêng, chọn BS+slot)
     // related: null — không đặt lịch riêng (đi kèm khám clinic, BS chỉ định), thời lượng/lịch áp dụng vô nghĩa
     thoi_gian_phut?: number | null;
@@ -319,6 +320,9 @@ export interface ServiceItem {
     la_goi?: boolean;
     loai_goi?: ServicePackageType | null; // chỉ có khi la_goi=true
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
+    so_nguoi_ap_dung?: number | null;
+    dich_vu_con?: string[];
+    phan_tram_giam_gia?: number | null;
     khu_vuc?: string[]; // home only
     so_bac_si?: number; // computed từ BacSi.services[]
     so_luot_dat?: number; // computed từ LichHen (home only)
@@ -336,12 +340,17 @@ export interface ServiceFormData {
     gia: number;
     mo_ta_ngan?: string;
     mo_ta?: string;
+    image_url?: string | null;
     chuan_bi_truoc?: string; // related only — hướng dẫn chuẩn bị trước
     gio_dat_truoc_toi_thieu?: number; // home only
     // related: required | home: optional
     specialty_id?: string | null;
     la_goi?: boolean;
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
+    loai_goi?: ServicePackageType | null;
+    so_nguoi_ap_dung?: number | null;
+    dich_vu_con?: string[];
+    phan_tram_giam_gia?: number | null;
     khu_vuc?: string[]; // home only
 }
 
