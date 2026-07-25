@@ -18,12 +18,14 @@ const router = Router()
 // browse doctors/services/slots. Mutating booking routes protect themselves.
 router.use('/booking', bookingRoutes)
 
+// Payment routes tự quản lý auth bên trong (cần mở cho VNPay gọi vào)
+router.use('/payments',      paymentsRoutes)
+
 router.use(verifyToken, requireRole('user', 'patient'))
 
 router.use('/family',        familyRoutes)
 router.use('/records',       recordsRoutes)
 router.use('/prescriptions', prescriptionsRoutes)
 router.use('/notifications', notificationRoutes)
-router.use('/payments',      paymentsRoutes)
 
 export default router
