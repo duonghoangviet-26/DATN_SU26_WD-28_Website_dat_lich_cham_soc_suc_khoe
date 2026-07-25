@@ -159,7 +159,7 @@ export default function Booking() {
   }, [queryDoctorId])
 
   useEffect(() => {
-    if (!selectedDoctorId || !selectedDate) {
+    if (!selectedDate) {
       setSlots([])
       return
     }
@@ -167,7 +167,7 @@ export default function Booking() {
     let ignore = false
     setLoadingSlots(true)
     setSelectedSlotId('')
-    patientBookingService.getSlots(selectedDoctorId, selectedDate)
+    patientBookingService.getSlots('all', selectedDate)
       .then((data) => {
         if (!ignore) setSlots(data)
       })
@@ -184,7 +184,7 @@ export default function Booking() {
     return () => {
       ignore = true
     }
-  }, [selectedDoctorId, selectedDate])
+  }, [selectedDate])
 
   // Lắng nghe tạo VNPAY Payment Session ở Bước 4
   useEffect(() => {
@@ -339,8 +339,8 @@ export default function Booking() {
   }
 
   async function handleCreateBooking() {
-    if (!selectedDoctor || !selectedSlot) {
-      setToast('Thiếu thông tin bác sĩ hoặc khung giờ khám.')
+    if (!selectedSlot) {
+      setToast('Thiếu thông tin khung giờ khám.')
       return
     }
 
@@ -348,7 +348,7 @@ export default function Booking() {
     try {
       const payload: CreateBookingPayload = {
         loai_kham: 'clinic',
-        doctor_id: selectedDoctor.id,
+        doctor_id: 'auto',
         schedule_id: selectedSlot.schedule_id,
         slot_id: selectedSlot.id,
         ngay_kham: selectedDate,
