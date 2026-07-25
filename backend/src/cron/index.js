@@ -4,7 +4,10 @@ import {
   generateRollingWindowForAllDoctors,
 } from '../services/scheduleGenerator.service.js'
 import { autoCancelExpiredHomeAppointments } from '../services/appointmentAutoCancel.service.js'
-import { nhaSlotQuaHanToanHeThong } from '../services/slotRelease.service.js'
+import {
+  chuyenSlotOnlineQuaCutoffToanHeThong,
+  nhaSlotQuaHanToanHeThong,
+} from '../services/slotRelease.service.js'
 
 const CLINIC_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
@@ -59,6 +62,17 @@ export function startCronJobs() {
       }
     } catch (err) {
       console.error('[cron] Loi nha slot qua han:', err.message)
+    }
+
+    // Cutoff T-30' (rule muc 11): slot online chua ban -> walk-in. Chay SAU khi nha slot
+    // de cho vua duoc nha cung kip xet cutoff trong cung mot luot.
+    try {
+      const { soLich, soSlot } = await chuyenSlotOnlineQuaCutoffToanHeThong()
+      if (soSlot > 0) {
+        console.log(`[cron] Da chuyen ${soSlot} slot online qua cutoff T-30' sang walk-in tren ${soLich} lich`)
+      }
+    } catch (err) {
+      console.error('[cron] Loi chuyen slot online qua cutoff:', err.message)
     }
   }, { timezone: CLINIC_TIMEZONE }))
 

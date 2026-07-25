@@ -89,6 +89,7 @@
 - ⚠️ **CHƯA CHẠY trên DB nhóm:** `dedupe-slot-appointments.js --apply` (gỡ 5 cặp trùng, bắt buộc trước khi index build được) và migration `010`.
 - Còn lại P2: đánh giá bác sĩ tạo được khi chưa `completed` (chỉ cho review lịch `status='completed'`).
 - Chính sách **hoàn tiền đã bị bãi bỏ** (mục 5) — mọi nhánh `HoanTien` trong luồng đặt lịch không còn hiệu lực. **Đổi lịch ≤3 → 1 lần** cho khách yêu cầu.
+- ✅ **Mục 11 ĐÃ TRIỂN KHAI 2026-07-26** (phần mốc thời gian): mọi mốc gom về `utils/clinicTime.js` (`cacMocCuaKhung`, `daQuaCutoffOnline`, `hanGiuChoCoGian`). Cutoff `T-30'` tự chuyển slot online chưa bán → walk-in, chạy **lazy lúc đọc lịch** (`donDepSlotTruocKhiDoc`) + **cron 5′** quét bù, có ghi nhật ký. Giữ chỗ **co giãn** `min(15', T-15' − now)`. `createBooking` chặn đặt sau cutoff bằng **mốc thời gian**, không dựa vào trạng thái dữ liệu. CHƯA làm: hạn chót xin dời lịch tại `T-30'` (luồng dời lịch chưa tồn tại).
 - ✅ **Mục 3 ĐÃ TRIỂN KHAI 2026-07-26**: `MauLichLamViec` + generator đọc mẫu + API/UI admin "Lịch trực tuần" + `phong_id` ở cấp slot + migration `011` seed mẫu giữ nguyên hành vi cũ. Kiểm chứng: bác sĩ không có mẫu → không sinh lịch; bỏ ca chiều → chỉ sinh 14 slot ca sáng; xếp 2 bác sĩ cùng phòng/ca → 409.
 - CÒN THIẾU (theo Gap G1–G7 trong doc): trạng thái `cho_dich_vu`.
 - Khi triển khai: ưu tiên **P0** (thêm field cấu hình `ChuyenKhoa`) → P1 → P2, có migration, **không phá dữ liệu/demo**.

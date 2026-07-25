@@ -10,8 +10,13 @@ import {
 // Doi gio phong kham (UTC+7) -> moc tuyet doi. TRUOC DAY file nay tu viet buildSlotDateTime
 // bang setUTCHours(hours) — hieu "08:00" thanh 08:00Z = 15:00 gio VN, lech 7 tieng, khien he
 // thong chao ban va THU TIEN khung gio da troi qua. Xem docs/Phan tich truoc khi sua... (2026-07-25).
-import { buildSlotDateTime, isSlotInPast } from '../../utils/clinicTime.js'
-import { nhaSlotQuaHanTrongLich } from '../../services/slotRelease.service.js'
+import {
+  buildSlotDateTime,
+  daQuaCutoffOnline,
+  hanGiuChoCoGian,
+  isSlotInPast,
+} from '../../utils/clinicTime.js'
+import { donDepSlotTruocKhiDoc } from '../../services/slotRelease.service.js'
 import { ok, created, fail } from '../../utils/response.js'
 import {
   emitAdminRealtime,
@@ -283,9 +288,10 @@ export async function getSlots(req, res) {
 
     if (!schedule) return ok(res, [])
 
-    // QUET LAZY: nha slot giu cho qua han NGAY TRUOC KHI doc — nguoi dang tim cho thay luon
-    // cho vua duoc giai phong. Cron 5' chi la luoi an toan cho lich khong ai doc toi.
-    await nhaSlotQuaHanTrongLich(schedule)
+    // QUET LAZY ngay TRUOC KHI doc: (1) nha giu cho qua han — nguoi dang tim cho thay luon
+    // cho vua duoc giai phong; (2) chuyen slot online da qua moc T-30' sang walk-in.
+    // Cron 5' chi la luoi an toan cho lich khong ai doc toi.
+    await donDepSlotTruocKhiDoc(schedule)
 
     // Lấy các lịch hẹn hợp lệ (chưa bị hủy) của bác sĩ trong ngày này
     const bookedAppointments = await LichHen.find({
@@ -368,7 +374,9 @@ export async function createBooking(req, res) {
       if (!member) return rollbackFail(404, 'Không tìm thấy thành viên trong gia đình')
     }
 
-    const paymentDeadline = getPaymentDeadline()
+    // Han giu cho: mac dinh 15', nhung CO GIAN theo khung (rule muc 11) — gan dat sau khi
+    // biet gio khung, ngay truoc khi claim slot.
+    let paymentDeadline = getPaymentDeadline()
     let gia_kham, ten_dich_vu, phong_kham = null, gio_dat
     let chi_nhanh_id = null
     let specialty_id = null
@@ -404,6 +412,25 @@ export async function createBooking(req, res) {
       if (isSlotInPast(appointmentDate, slotForValidation.gio_bat_dau)) {
         return rollbackFail(400, 'Khung gio da qua, vui long chon khung gio khac')
       }
+      // Cutoff T-30' (rule muc 11). Quet lazy o getSlots da doi slot nay sang walk_in nen
+      // dieu kien 'loai_slot' phia tren thuong da chan roi — nhung khach co the bam dat tu
+      // mot trang mo truoc do, hoac quet chua kip chay. Kiem lai bang MOC THOI GIAN moi la
+      // nguon su that, khong dua vao trang thai du lieu.
+      if (daQuaCutoffOnline(appointmentDate, slotForValidation.gio_bat_dau)) {
+        return rollbackFail(
+          409,
+          'Khung giờ này đã đóng đặt online (trước giờ khám 30 phút). Vui lòng chọn khung khác hoặc đến quầy lễ tân.',
+        )
+      }
+
+      // Giu cho CO GIAN: min(15', T-15' − now). Cua so co dinh 15' se de giu cho chet QUA
+      // moc T-15' roi moi nha — dung luc le tan da het quyen ban khung do, ghe trong ma
+      // khong ai ngoi duoc (rule muc 11).
+      const hanGiuCho = hanGiuChoCoGian(appointmentDate, slotForValidation.gio_bat_dau)
+      if (!hanGiuCho) {
+        return rollbackFail(409, 'Khung giờ này đã quá hạn giữ chỗ. Vui lòng chọn khung khác.')
+      }
+      paymentDeadline = hanGiuCho
 
       // ── Chan trung luot (rule muc 5) ────────────────────────────────────────
       // Thu tu QUAN TRONG: nha giu cho cu TRUOC, roi moi dem luot con lai. Nguoc lai thi

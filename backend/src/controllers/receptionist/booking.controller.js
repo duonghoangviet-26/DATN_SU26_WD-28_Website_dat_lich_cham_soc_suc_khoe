@@ -8,7 +8,7 @@ import { emitDashboardRevenueChanged } from '../../realtime/socket.js'
 // Ban `-7` cuc bo o file nay VON DA DUNG — nay dung chung mot nguon voi patient/doctor de hai
 // ben khong phan ky lai (truoc do patient tu viet ban thieu `-7`, lech 7 tieng).
 import { buildSlotDateTime, isSlotInPast } from '../../utils/clinicTime.js'
-import { nhaSlotQuaHanTrongLich } from '../../services/slotRelease.service.js'
+import { donDepSlotTruocKhiDoc } from '../../services/slotRelease.service.js'
 
 function parseDateOnly(value) {
   if (!value) return null
@@ -137,8 +137,9 @@ export async function getSlots(req, res) {
 
     if (!schedule) return ok(res, [])
 
-    // QUET LAZY: nha slot giu cho qua han truoc khi doc — le tan thay ngay cho vua giai phong.
-    await nhaSlotQuaHanTrongLich(schedule)
+    // QUET LAZY truoc khi doc: nha giu cho qua han + chuyen slot online qua moc T-30' sang
+    // walk-in. Le tan thay ngay ca cho vua giai phong lan cho online vua duoc mo ra.
+    await donDepSlotTruocKhiDoc(schedule)
 
     const slots = schedule.slots
       .filter((s) => s.status === 'active')
