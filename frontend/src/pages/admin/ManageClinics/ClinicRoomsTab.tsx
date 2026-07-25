@@ -434,7 +434,7 @@ function RoomEditorModal({
                 value={form.loai}
                 onChange={(event) => updateField('loai', event.target.value)}
                 className="input w-full"
-                placeholder="Khám nhi, da liễu, tai mũi họng..."
+                placeholder="Khám tai mũi họng, nội soi, thủ thuật..."
               />
             </Field>
           </div>

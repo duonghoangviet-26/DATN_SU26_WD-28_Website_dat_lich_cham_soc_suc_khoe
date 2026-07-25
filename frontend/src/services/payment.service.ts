@@ -26,7 +26,6 @@ interface PaymentListResponse {
 interface PaymentSummary {
   paidAmount: number
   pendingCount: number
-  refundedAmount: number
 }
 
 function mapPaymentItem(item: Partial<PaymentItem> & { id?: string | number; _id?: string | number }): PaymentItem {
@@ -81,7 +80,6 @@ export const paymentService = {
       summary: {
         paidAmount: Number(res.data.summary?.paidAmount ?? items.filter((item) => item.status === 'paid').reduce((sum, item) => sum + item.so_tien, 0)),
         pendingCount: Number(res.data.summary?.pendingCount ?? items.filter((item) => item.status === 'pending').length),
-        refundedAmount: Number(res.data.summary?.refundedAmount ?? items.filter((item) => item.status === 'refunded').reduce((sum, item) => sum + item.so_tien, 0)),
       },
     }
   },
@@ -89,10 +87,5 @@ export const paymentService = {
   async getById(id: string | number): Promise<PaymentItem> {
     const res = await axiosInstance.get<ApiResponse<PaymentItem>>(`/admin/payments/${id}`)
     return mapPaymentItem(res.data.data ?? {})
-  },
-
-  async refund(id: string | number): Promise<PaymentItem> {
-    await axiosInstance.patch<ApiResponse<{ id: string | number; status: TransactionStatus }>>(`/admin/payments/${id}/refund`)
-    return this.getById(id)
   },
 }

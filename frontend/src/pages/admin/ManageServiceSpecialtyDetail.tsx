@@ -284,12 +284,7 @@ export default function ManageServiceSpecialtyDetail() {
           ← Quay lại Quản lý dịch vụ
         </button>
 
-        <PageHeader title={specialty.ten} description={specialty.mo_ta}>
-          <button onClick={() => setFormTarget('new')} className="btn-primary flex items-center gap-1.5">
-            <Icon name="plus" className="h-4 w-4" />
-            {activeTab === 'packages' ? 'Thêm gói dịch vụ' : 'Thêm dịch vụ'}
-          </button>
-        </PageHeader>
+        <PageHeader title={specialty.ten} description={specialty.mo_ta} />
 
         <div className="mb-6 grid gap-3 sm:grid-cols-3">
           {[
@@ -444,32 +439,40 @@ export default function ManageServiceSpecialtyDetail() {
         )}
 
         <div className="card overflow-hidden">
-          <div className="border-b bg-slate-50 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-700">
-              {activeTab === 'packages'
-                ? `Gói dịch vụ (${filteredServices.length})`
-                : activeTab === 'regular'
-                  ? `Dịch vụ lẻ (${filteredServices.length})`
-                  : `Dịch vụ liên quan (${filteredServices.length})`}
-            </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 px-4 py-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">
+                {activeTab === 'packages'
+                  ? `Gói dịch vụ (${filteredServices.length})`
+                  : activeTab === 'regular'
+                    ? `Dịch vụ lẻ (${filteredServices.length})`
+                    : `Dịch vụ liên quan (${filteredServices.length})`}
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Quản lý nội dung, hình ảnh, giá tham khảo và trạng thái hiển thị của từng dịch vụ.
+              </p>
+            </div>
+            <button onClick={() => setFormTarget('new')} className="btn-primary h-9 px-3 text-xs">
+              <Icon name="plus" className="h-4 w-4" />
+              Thêm dịch vụ
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Mã DV
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="min-w-[380px] px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
                     Tên dịch vụ
                   </th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-500">
                     Giá
                   </th>
                   <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
                     Trạng thái
                   </th>
-                  <th className="px-4 py-3" />
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Thao tác
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -488,40 +491,49 @@ export default function ManageServiceSpecialtyDetail() {
                   const dim = service.status === 'inactive' ? 'opacity-40' : ''
                   return (
                     <tr key={service.id} className="hover:bg-slate-50">
-                      <td className={`px-4 py-3 font-mono text-xs text-slate-500 ${dim}`}>
-                        {service.ma_dich_vu}
-                      </td>
                       <td className={`px-4 py-3 ${dim}`}>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="font-medium text-slate-800">{service.ten}</div>
-                          {service.la_goi && service.loai_goi && (
-                            <Badge color={PACKAGE_TYPE_BADGE[service.loai_goi] ?? 'blue'}>
-                              {PACKAGE_TYPE_LABEL[service.loai_goi] ?? formatAdminValue('loai_goi', service.loai_goi)}
-                            </Badge>
-                          )}
-                          {service.la_goi && service.doi_tuong_ap_dung && (
-                            <Badge color="yellow">
-                              {DOI_TUONG_LABEL[service.doi_tuong_ap_dung] ?? formatAdminValue('doi_tuong_ap_dung', service.doi_tuong_ap_dung)}
-                            </Badge>
-                          )}
-                          {service.la_goi && service.so_nguoi_ap_dung && (
-                            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                              {service.so_nguoi_ap_dung} người
-                            </span>
-                          )}
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+                            {service.image_url ? (
+                              <img src={service.image_url} alt={service.ten} className="h-full w-full object-cover" />
+                            ) : (
+                              <Icon name="service" className="h-5 w-5" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs text-slate-500">{service.ma_dich_vu}</span>
+                              <div className="font-medium text-slate-900">{service.ten}</div>
+                              {service.la_goi && service.loai_goi && (
+                                <Badge color={PACKAGE_TYPE_BADGE[service.loai_goi] ?? 'blue'}>
+                                  {PACKAGE_TYPE_LABEL[service.loai_goi] ?? formatAdminValue('loai_goi', service.loai_goi)}
+                                </Badge>
+                              )}
+                              {service.la_goi && service.doi_tuong_ap_dung && (
+                                <Badge color="yellow">
+                                  {DOI_TUONG_LABEL[service.doi_tuong_ap_dung] ?? formatAdminValue('doi_tuong_ap_dung', service.doi_tuong_ap_dung)}
+                                </Badge>
+                              )}
+                              {service.la_goi && service.so_nguoi_ap_dung && (
+                                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                  {service.so_nguoi_ap_dung} người
+                                </span>
+                              )}
+                            </div>
+                            {service.mo_ta_ngan && (
+                              <div className="mt-1 line-clamp-1 text-xs text-slate-500">
+                                {service.mo_ta_ngan}
+                              </div>
+                            )}
+                            {service.la_goi && service.phan_tram_giam_gia != null && service.phan_tram_giam_gia > 0 && (
+                              <div className="mt-1 text-xs text-emerald-600">
+                                Giảm {service.phan_tram_giam_gia}% so với giá lẻ tương ứng
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        {service.mo_ta_ngan && (
-                          <div className="mt-0.5 line-clamp-1 text-xs text-slate-400">
-                            {service.mo_ta_ngan}
-                          </div>
-                        )}
-                        {service.la_goi && service.phan_tram_giam_gia != null && service.phan_tram_giam_gia > 0 && (
-                          <div className="mt-1 text-xs text-emerald-600">
-                            Giảm {service.phan_tram_giam_gia}% so với giá lẻ tương ứng
-                          </div>
-                        )}
                       </td>
-                      <td className={`px-4 py-3 font-semibold text-slate-800 ${dim}`}>
+                      <td className={`px-4 py-3 text-right font-semibold text-slate-800 ${dim}`}>
                         {formatPrice(service.gia)}
                       </td>
                       <td className={`px-4 py-3 ${dim}`}>
@@ -530,35 +542,35 @@ export default function ManageServiceSpecialtyDetail() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-                          <button
+                        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                          <ActionIconButton
+                            label="Xem chi tiết"
+                            icon="eye"
                             onClick={() => handleView(service)}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600"
-                          >
-                            Xem
-                          </button>
-                          <button
+                            className="hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600"
+                          />
+                          <ActionIconButton
+                            label="Lịch sử chỉnh sửa"
+                            icon="clock"
                             onClick={() => handleHistory(service)}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-600"
-                          >
-                            {'L\u1ecbch s\u1eed'}
-                          </button>
-                          <button
+                            className="hover:border-violet-300 hover:bg-violet-50 hover:text-violet-600"
+                          />
+                          <ActionIconButton
+                            label="Sửa dịch vụ"
+                            icon="edit"
                             onClick={() => setFormTarget(service)}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
-                          >
-                            Sửa
-                          </button>
-                          <button
+                            className="hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+                          />
+                          <ActionIconButton
+                            label={service.status === 'active' ? 'Ẩn dịch vụ' : 'Hiện dịch vụ'}
+                            icon={service.status === 'active' ? 'eye-off' : 'eye'}
                             onClick={() => setToggleTarget(service)}
-                            className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                            className={
                               service.status === 'active'
-                                ? 'border-slate-200 bg-white text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                                ? 'hover:border-red-200 hover:bg-red-50 hover:text-red-600'
                                 : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
-                            }`}
-                          >
-                            {service.status === 'active' ? 'Ẩn' : 'Hiện'}
-                          </button>
+                            }
+                          />
                         </div>
                       </td>
                     </tr>
@@ -619,5 +631,29 @@ export default function ManageServiceSpecialtyDetail() {
         />
       </div>
     </AdminAutoStagger>
+  )
+}
+
+function ActionIconButton({
+  label,
+  icon,
+  onClick,
+  className = '',
+}: {
+  label: string
+  icon: string
+  onClick: () => void
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-100 ${className}`}
+    >
+      <Icon name={icon} className="h-4 w-4" />
+    </button>
   )
 }

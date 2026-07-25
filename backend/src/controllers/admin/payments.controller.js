@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 
-import { ThanhToan, LichHen, HoanTien, HoaDon } from '../../models/index.js'
+import { ThanhToan, LichHen, HoaDon } from '../../models/index.js'
 import {
   finalizePendingPayment,
   withOptionalTransaction,
@@ -197,7 +197,6 @@ export async function list(req, res) {
             _id: null,
             paidAmount: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$so_tien', 0] } },
             pendingCount: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
-            refundedAmount: { $sum: { $cond: [{ $eq: ['$status', 'refunded'] }, '$so_tien', 0] } },
           },
         },
       ]),
@@ -236,7 +235,6 @@ export async function list(req, res) {
       summary: {
         paidAmount: Number(summaryRows[0]?.paidAmount ?? 0),
         pendingCount: Number(summaryRows[0]?.pendingCount ?? 0),
-        refundedAmount: Number(summaryRows[0]?.refundedAmount ?? 0),
       },
     })
   } catch (err) {
@@ -490,59 +488,3 @@ export async function update(req, res) {
   }
 }
 
-// ─── PATCH /api/admin/payments/:id/refund ───────────────────────────────────
-export async function refund(req, res) {
-  try {
-    const { ly_do } = req.body
-    const payment = await ThanhToan.findById(req.params.id)
-    if (!payment) return fail(res, 404, 'Khong tim thay giao dich')
-    if (payment.status !== 'paid') {
-      return fail(res, 409, 'Chi hoan tien giao dich da thanh toan')
-    }
-
-    payment.status = 'refunded'
-    await payment.save()
-    if (payment.hoa_don_id) {
-      await tinhTrangThaiHoaDon(payment.hoa_don_id)
-    }
-
-    await syncAppointmentPaymentStatusFromPayment(payment, { trang_thai_hoa_don: 'chua_thanh_toan' })
-
-    try {
-      await HoanTien.create({
-        payment_id: payment._id,
-        appointment_id: payment.appointment_id,
-        so_tien_hoan: payment.so_tien,
-        so_tien_da_thu: payment.so_tien,
-        phi_huy: 0,
-        chinh_sach_hoan: 'Hoan tien thu cong boi admin',
-        phan_tram_hoan: 100,
-        ly_do: ly_do?.trim() || 'Admin hoan tien',
-        ly_do_hoan: ly_do?.trim() || 'Admin hoan tien',
-        nguoi_xu_ly_id: req.user.id,
-        phuong_thuc_hoan: payment.phuong_thuc,
-        ngay_xu_ly: new Date(),
-        thoi_diem_hoan_thanh: new Date(),
-        status: 'completed',
-      })
-    } catch (_) {
-      // Khong chan luong chinh
-    }
-    emitAdminRealtime('admin:payment_updated', {
-      payment_id: payment._id,
-      appointment_id: payment.appointment_id ?? null,
-      status: payment.status,
-      source: 'admin_payment_refund',
-    })
-    if (payment.appointment_id) {
-      emitAdminRealtime('admin:appointment_updated', {
-        appointment_id: payment.appointment_id,
-        source: 'admin_payment_refund',
-      })
-    }
-
-    return ok(res, { id: payment._id, status: payment.status }, 'Da hoan tien thanh cong')
-  } catch (err) {
-    return fail(res, 500, err.message)
-  }
-}

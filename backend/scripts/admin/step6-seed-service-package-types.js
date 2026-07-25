@@ -7,17 +7,9 @@ import DichVu from '../../src/models/DichVu.js'
 const GENERATED_BY = 'step6-package-types'
 
 const FALLBACK_REGULAR_SERVICES = {
-  'nhi-khoa': [
-    { ten: 'Kham nhi tong quat', gia: 220000, mo_ta_ngan: 'Dich vu kham tong quat cho tre em.' },
-    { ten: 'Tu van dinh duong tre em', gia: 180000, mo_ta_ngan: 'Danh gia va tu van dinh duong theo do tuoi.' },
-  ],
   'tai-mui-hong': [
     { ten: 'Noi soi tai mui hong', gia: 260000, mo_ta_ngan: 'Noi soi ho tro chan doan tai mui hong.' },
     { ten: 'Rua mui va ve sinh tai', gia: 140000, mo_ta_ngan: 'Dich vu ve sinh tai mui hong theo chi dinh.' },
-  ],
-  'da-lieu': [
-    { ten: 'Soi da va tu van cham soc da', gia: 180000, mo_ta_ngan: 'Soi da co ban va tu van cham soc da.' },
-    { ten: 'Cham soc viem da co ban', gia: 240000, mo_ta_ngan: 'Dich vu ho tro theo doi viem da co ban.' },
   ],
 }
 

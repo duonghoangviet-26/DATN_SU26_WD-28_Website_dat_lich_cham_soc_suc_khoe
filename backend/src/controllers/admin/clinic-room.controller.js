@@ -353,8 +353,6 @@ export async function getRoomOptions(_req, res) {
 
 export async function getRooms(req, res) {
   try {
-    await normalizeClinicBuildingData()
-
     const { status, keyword } = req.query
     const filter = {}
     if (status && ROOM_STATUS.includes(status)) filter.trang_thai = status

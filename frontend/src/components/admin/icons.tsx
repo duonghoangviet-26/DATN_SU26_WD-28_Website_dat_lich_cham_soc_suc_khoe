@@ -76,6 +76,7 @@ const ICONS: Record<string, string[]> = {
     'M4.93 4.93l14.14 14.14',
   ],
   'chevron-down': ['M6 9l6 6 6-6'],
+  'chevron-right': ['M9 18l6-6-6-6'],
   'file-text': [
     'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z',
     'M14 2v6h6',
