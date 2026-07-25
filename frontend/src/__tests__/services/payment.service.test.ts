@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/services/axiosInstance', () => ({
   default: {
     get: vi.fn(),
-    patch: vi.fn(),
   },
 }))
 
@@ -11,12 +10,10 @@ import axiosInstance from '@/services/axiosInstance'
 import { paymentService } from '@/services/payment.service'
 
 const mockedGet = vi.mocked(axiosInstance.get)
-const mockedPatch = vi.mocked(axiosInstance.patch)
 
 describe('paymentService', () => {
   beforeEach(() => {
     mockedGet.mockReset()
-    mockedPatch.mockReset()
   })
 
   it('getAll() calls real admin payments API with mapped filters', async () => {
@@ -78,27 +75,4 @@ describe('paymentService', () => {
     expect(item.status).toBe('pending')
   })
 
-  it('refund() calls refund endpoint then reloads payment detail', async () => {
-    mockedPatch.mockResolvedValue({ data: { data: { id: 'pay-3', status: 'refunded' } } } as never)
-    mockedGet.mockResolvedValue({
-      data: {
-        data: {
-          id: 'pay-3',
-          ma_giao_dich: 'TXN0003',
-          benh_nhan: 'Tran Thi E',
-          bac_si: 'BS. Nguyen F',
-          so_tien: 500000,
-          phuong_thuc: 'tien_mat',
-          status: 'refunded',
-          ngay_tao: '2026-07-07T10:00:00.000Z',
-        },
-      },
-    } as never)
-
-    const item = await paymentService.refund('pay-3')
-
-    expect(mockedPatch).toHaveBeenCalledWith('/admin/payments/pay-3/refund')
-    expect(mockedGet).toHaveBeenCalledWith('/admin/payments/pay-3')
-    expect(item.status).toBe('refunded')
-  })
 })

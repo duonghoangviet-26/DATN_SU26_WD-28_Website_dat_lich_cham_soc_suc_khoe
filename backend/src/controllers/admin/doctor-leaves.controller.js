@@ -99,7 +99,7 @@ async function lockSlotsForLeave(leave, session) {
 }
 
 // Lịch hẹn CÒN HIỆU LỰC trong khoảng nghỉ (+ khung giờ nếu có) — trả cho Admin biết cần
-// liên hệ bệnh nhân xử lý (dời lịch/hoàn tiền). CHỈ ĐỌC, không tự hủy/sửa lịch hẹn.
+// liên hệ bệnh nhân xử lý (dời lịch hoặc xử lý theo quy định phòng khám). CHỈ ĐỌC, không tự hủy/sửa lịch hẹn.
 async function findAffectedAppointments(leave, session) {
   const endExclusive = new Date(leave.den_ngay)
   endExclusive.setDate(endExclusive.getDate() + 1)
