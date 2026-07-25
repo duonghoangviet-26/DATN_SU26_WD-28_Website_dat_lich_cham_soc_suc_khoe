@@ -89,7 +89,8 @@
 - ⚠️ **CHƯA CHẠY trên DB nhóm:** `dedupe-slot-appointments.js --apply` (gỡ 5 cặp trùng, bắt buộc trước khi index build được) và migration `010`.
 - Còn lại P2: đánh giá bác sĩ tạo được khi chưa `completed` (chỉ cho review lịch `status='completed'`).
 - Chính sách **hoàn tiền đã bị bãi bỏ** (mục 5) — mọi nhánh `HoanTien` trong luồng đặt lịch không còn hiệu lực. **Đổi lịch ≤3 → 1 lần** cho khách yêu cầu.
-- CÒN THIẾU (theo Gap G1–G7 trong doc): tầng khung giờ + nhiều slot/khung, ca làm việc, cấu hình chuyên khoa, `loai_slot` online/walk-in, ràng buộc phòng, trạng thái `cho_dich_vu`.
+- ✅ **Mục 3 ĐÃ TRIỂN KHAI 2026-07-26**: `MauLichLamViec` + generator đọc mẫu + API/UI admin "Lịch trực tuần" + `phong_id` ở cấp slot + migration `011` seed mẫu giữ nguyên hành vi cũ. Kiểm chứng: bác sĩ không có mẫu → không sinh lịch; bỏ ca chiều → chỉ sinh 14 slot ca sáng; xếp 2 bác sĩ cùng phòng/ca → 409.
+- CÒN THIẾU (theo Gap G1–G7 trong doc): trạng thái `cho_dich_vu`.
 - Khi triển khai: ưu tiên **P0** (thêm field cấu hình `ChuyenKhoa`) → P1 → P2, có migration, **không phá dữ liệu/demo**.
 
 ## 10. Bảng & field DB BẮT BUỘC cho nghiệp vụ này
@@ -103,11 +104,12 @@
 - `lich_hen` **(P2)**: thêm `cho_dich_vu` vào `status`. (`nguon` đã chuyển thành **bắt buộc** — xem mục D bên dưới.)
 
 **B. Bảng MỚI:**
-- `mau_lich_lam_viec` (MauLichLamViec) **(P1)** — mẫu đăng ký ca theo tuần của bác sĩ (nguồn để generator sinh lịch, thay cho auto full-day). Fields: `bac_si_id, thu_trong_tuan(0-6), ca, phong_id, chuyen_khoa_id, trang_thai, hieu_luc_tu, hieu_luc_den`.
+- `mau_lich_lam_viec` (MauLichLamViec) **(P1 — ✅ ĐÃ TRIỂN KHAI 2026-07-26)** — mẫu đăng ký ca theo tuần của bác sĩ (nguồn để generator sinh lịch, thay cho auto full-day). Fields: `bac_si_id, thu_trong_tuan(0-6), ca, phong_id, chuyen_khoa_id, trang_thai, hieu_luc_tu, hieu_luc_den`. Kèm API `/api/admin/schedule-templates` + trang admin "Lịch trực tuần".
 
 **C. Index / migration:**
-- `lich_lam_viec`: unique `(doctor_id, ngay)` → **`(doctor_id, ngay, ca)`**; thêm unique `(phong_id, ngay, ca)` (ràng buộc 1 phòng=1 BS/ca).
-- Sửa `scheduleGenerator.service.js`: sinh lịch theo `mau_lich_lam_viec` + số slot/khung theo `chuyen_khoa`, **KHÔNG** auto full-day cho mọi bác sĩ.
+- **Ràng buộc `1 phòng = 1 BS/ca` và `1 BS = 1 phòng/ca` gác ở `mau_lich_lam_viec`, KHÔNG gác ở `lich_lam_viec`** (chốt 2026-07-26). Mẫu là **nguồn** đăng ký, lịch làm việc chỉ là **hệ quả** được sinh ra — chặn ở nguồn thì lịch sinh ra không bao giờ vi phạm. Gác ở lịch sẽ buộc phải tách mỗi bản ghi ngày thành 2 bản ghi ca, đại phẫu chạm ~9 chỗ đang giả định "1 lịch / bác sĩ / ngày" (`queue.controller`, `stats.controller`, `room-status.controller`, `slots.controller`, generator, seed…) — trái điều khoản "KHÔNG đại phẫu" ở mục 7. Vì vậy **GIỮ NGUYÊN** unique `(doctor_id, ngay)` trên `lich_lam_viec`; `phong_id` nằm ở cấp **SLOT** (phòng gắn với CA, không gắn với NGÀY — bác sĩ có thể sáng phòng 101, chiều phòng 102).
+- Kiểm chồng lấn khoảng hiệu lực (`hieu_luc_tu`/`hieu_luc_den`) phải làm ở **service** — `partialFilterExpression` của unique index không diễn tả được khoảng thời gian. Dùng `timMauXungDot()` trong `models/MauLichLamViec.js`, cùng cách `NghiPhepBacSi` chặn trùng đơn.
+- ✅ `scheduleGenerator.service.js`: sinh lịch theo `mau_lich_lam_viec` + số slot/khung theo `chuyen_khoa`, **KHÔNG** còn auto full-day. Bác sĩ chưa được xếp ca → không sinh lịch (`reason: 'khong_dang_ky_ca'`).
 
 **D. Field BẮT BUỘC cho mục 11–15 (chốt 2026-07-25):**
 - `chuyen_khoa`: `gia_kham` (giá niêm yết dùng cho luồng tự gán — mục 12).

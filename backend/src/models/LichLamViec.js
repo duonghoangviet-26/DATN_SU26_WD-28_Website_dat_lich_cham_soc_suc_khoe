@@ -44,7 +44,16 @@ const slotSchema = new mongoose.Schema(
       enum: ['online', 'walk_in'],
       default: 'online', // giu hanh vi cu: moi slot deu kha dung cho dat online
     },
+    // Ten phong dang snapshot ("Phòng 101, Tầng 1, Tòa A") — giu de doi ten phong khong
+    // lam vo lich cu. `phong_id` la khoa that, them 2026-07-26 cung `MauLichLamViec`:
+    // phong gan voi CA chu khong gan voi NGAY (bac si co the sang phong 101, chieu 102),
+    // nen no phai nam o cap SLOT, khong nam o cap lich.
     phong_kham: { type: String, default: null },
+    phong_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PhongKham',
+      default: null,
+    },
     status: {
       type: String,
       enum: ['active', 'pending_payment', 'booked', 'locked', 'cancelled', 'expired'],

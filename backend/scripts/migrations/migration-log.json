@@ -25,5 +25,23 @@
     "status": "success",
     "rollbackable": true,
     "error_message": null
+  },
+  {
+    "name": "011-seed-mau-lich-lam-viec",
+    "started_at": "2026-07-25T19:17:00.063Z",
+    "finished_at": "2026-07-25T19:17:00.981Z",
+    "affected_documents": 56,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
+  },
+  {
+    "name": "011-seed-mau-lich-lam-viec",
+    "started_at": "2026-07-25T19:20:31.067Z",
+    "finished_at": "2026-07-25T19:20:31.866Z",
+    "affected_documents": 42,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
   }
 ]

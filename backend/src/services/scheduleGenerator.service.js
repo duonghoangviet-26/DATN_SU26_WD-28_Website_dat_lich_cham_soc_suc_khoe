@@ -1,4 +1,5 @@
-import { BacSi, LichLamViec, LichSuChinhSuaLichLamViec, ChuyenKhoa } from '../models/index.js'
+import { BacSi, LichLamViec, LichSuChinhSuaLichLamViec, ChuyenKhoa, MauLichLamViec } from '../models/index.js'
+import { caCuaKhung } from '../models/MauLichLamViec.js'
 import {
   FALLBACK_KHONG_CHUYEN_KHOA,
   chotSoSlotMoiKhung,
@@ -54,7 +55,22 @@ function startOfDateUTC(value) {
 const CA_SANG_SO_KHUNG = 7
 const CA_CHIEU_SO_KHUNG = 8
 
-export async function buildDefaultScheduleSlots({ specialtyId = null, phongKham = null } = {}) {
+// Khung thuoc ca sang (0..6) hay ca chieu (7..14) — dung chung dinh nghia voi
+// models/MauLichLamViec.js de hai ben khong the phan ky.
+function khungThuocCa(khungIndex) {
+  return caCuaKhung(khungIndex)
+}
+
+export async function buildDefaultScheduleSlots({
+  specialtyId = null,
+  phongKham = null,
+  // Danh sach ca duoc sinh slot. `null` = sinh ca 2 ca (hanh vi cu, dung khi bac si
+  // chua co mau dang ky nao — xem generateSlotsForDoctorDate).
+  caLamViec = null,
+  // Map ca -> { phong_kham, phong_id } lay tu mau dang ky. Cho phep bac si sang phong
+  // 101, chieu phong 102 — thu ma cap LICH khong luu duoc vi phong gan voi CA.
+  phongTheoCa = null,
+} = {}) {
   // Bac si CHUA GAN CHUYEN KHOA: khong biet thoi gian kham -> giu fallback thu cong
   // (1 slot/khung, 100% online). Co chuyen khoa nhung thieu field cau hinh (du lieu cu
   // chua backfill) -> chotSoSlotMoiKhung/chotTyLeOnline ap mac dinh theo rule (15' -> 2
@@ -77,6 +93,12 @@ export async function buildDefaultScheduleSlots({ specialtyId = null, phongKham 
 
   const slots = []
   DEFAULT_SLOT_TIMES.forEach(([gio_bat_dau, gio_ket_thuc], khungIndex) => {
+    const ca = khungThuocCa(khungIndex)
+    // Ca bac si KHONG dang ky truc -> khong sinh slot nao. Day chinh la muc 3:
+    // "Admin chua tao lich ngay/ca nao -> khong hien thi dat online ngay/ca do."
+    if (caLamViec && !caLamViec.includes(ca)) return
+
+    const phongCuaCa = phongTheoCa?.[ca] ?? null
     const soOnlineTrongKhung = onlinePerKhung[khungIndex]
     for (let i = 0; i < soSlotMoiKhung; i += 1) {
       slots.push({
@@ -85,7 +107,8 @@ export async function buildDefaultScheduleSlots({ specialtyId = null, phongKham 
         khung_index: khungIndex,
         loai_slot: i < soOnlineTrongKhung ? 'online' : 'walk_in',
         specialty_id: specialtyId,
-        phong_kham: phongKham ?? null,
+        phong_kham: phongCuaCa?.phong_kham ?? phongKham ?? null,
+        phong_id: phongCuaCa?.phong_id ?? null,
         status: 'active',
         benh_nhan_id: null,
         benh_nhan_tam_giu_id: null,
@@ -154,6 +177,41 @@ async function writeScheduleAudit({
   })
 }
 
+// Doc mau dang ky cua bac si cho MOT ngay cu the.
+// Tra ve { caLamViec: ['sang','chieu'], phongTheoCa: { sang: {...}, chieu: {...} } },
+// hoac null neu bac si khong dang ky ca nao trong ngay do.
+export async function docMauChoNgay(doctorId, workday) {
+  const thu = workday.getUTCDay()
+  const mau = await MauLichLamViec.find({
+    bac_si_id: doctorId,
+    thu_trong_tuan: thu,
+    trang_thai: 'active',
+    hieu_luc_tu: { $lte: workday },
+    $or: [{ hieu_luc_den: null }, { hieu_luc_den: { $gte: workday } }],
+  })
+    .populate('phong_id', 'ten tang toa')
+    .lean()
+
+  if (mau.length === 0) return null
+
+  const phongTheoCa = {}
+  for (const m of mau) {
+    const phong = m.phong_id
+    phongTheoCa[m.ca] = {
+      phong_id: phong?._id ?? null,
+      // Luu snapshot ten phong nhu cac cho khac trong he thong: doi ten phong sau nay
+      // khong duoc lam vo lich cu.
+      phong_kham: phong ? `${phong.ten}, Tầng ${phong.tang}, Tòa ${phong.toa}` : null,
+    }
+  }
+
+  return {
+    caLamViec: mau.map((m) => m.ca),
+    phongTheoCa,
+    chuyenKhoaId: mau.find((m) => m.chuyen_khoa_id)?.chuyen_khoa_id ?? null,
+  }
+}
+
 async function generateSlotsForDoctorDate({
   doctor,
   date,
@@ -170,6 +228,13 @@ async function generateSlotsForDoctorDate({
     return { created: false, scheduleId: existing._id, reason: 'exists' }
   }
 
+  // ⛔ KHONG con auto full-day cho moi bac si (rule muc 3). Bac si khong dang ky ca nao
+  // trong thu do thi ngay do khong ton tai lich — benh nhan khong thay gi de dat.
+  const mau = await docMauChoNgay(doctorId, workday)
+  if (!mau) {
+    return { created: false, scheduleId: null, reason: 'khong_dang_ky_ca' }
+  }
+
   try {
     const schedule = await LichLamViec.create({
       doctor_id: doctorId,
@@ -179,8 +244,10 @@ async function generateSlotsForDoctorDate({
       ghi_chu_ngay: null,
       trang_thai_xac_nhan: 'cho_xac_nhan',
       slots: await buildDefaultScheduleSlots({
-        specialtyId: getFirstSpecialtyId(doctor),
+        specialtyId: mau.chuyenKhoaId ?? getFirstSpecialtyId(doctor),
         phongKham: doctor?.phong_kham_mac_dinh ?? null,
+        caLamViec: mau.caLamViec,
+        phongTheoCa: mau.phongTheoCa,
       }),
     })
 
@@ -220,6 +287,10 @@ export async function generateWeeklySchedule({
 
   let generated = 0
   let skipped = 0
+  // Tach rieng "khong dang ky ca" khoi "da co lich": hai cai deu la skipped nhung y nghia
+  // trai nguoc — mot cai la binh thuong, mot cai co the la dau hieu bac si chua duoc
+  // admin xep ca nao ca (rule muc 3).
+  let khongDangKyCa = 0
   const details = []
 
   for (const doctor of activeDoctors) {
@@ -235,6 +306,7 @@ export async function generateWeeklySchedule({
 
       if (result.created) generated += 1
       else skipped += 1
+      if (result.reason === 'khong_dang_ky_ca') khongDangKyCa += 1
 
       details.push({
         doctor_id: getDoctorId(doctor),
@@ -252,6 +324,7 @@ export async function generateWeeklySchedule({
     doctors: activeDoctors.length,
     generated,
     skipped,
+    khong_dang_ky_ca: khongDangKyCa,
     details,
   }
 }
@@ -280,6 +353,7 @@ export async function generateAutoScheduleWindowForAllDoctors({
   const weeklyResults = []
   let generated = 0
   let skipped = 0
+  let khongDangKyCa = 0
 
   for (const weekStart of weeks) {
     const result = await generateWeeklySchedule({
@@ -293,6 +367,7 @@ export async function generateAutoScheduleWindowForAllDoctors({
     weeklyResults.push(result)
     generated += result.generated
     skipped += result.skipped
+    khongDangKyCa += result.khong_dang_ky_ca ?? 0
   }
 
   return {
@@ -302,10 +377,14 @@ export async function generateAutoScheduleWindowForAllDoctors({
     doctors: doctors.length,
     generated,
     skipped,
+    khong_dang_ky_ca: khongDangKyCa,
     weekly_results: weeklyResults,
   }
 }
 
+// Goi khi admin duyet bac si moi. Tu 2026-07-26 khong con tu dong co lich: bac si phai
+// duoc admin xep ca (`MauLichLamViec`) truoc (rule muc 3). Ham van tra ve ket qua co
+// `khong_dang_ky_ca > 0` de noi goi hien thong bao huong dan, thay vi im lang.
 export async function generateInitialWindowForDoctor(doctorId, phongMacDinh) {
   return generateWeeklySchedule({
     weekStart: new Date(),
