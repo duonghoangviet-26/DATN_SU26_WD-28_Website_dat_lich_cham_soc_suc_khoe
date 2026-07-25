@@ -8,7 +8,6 @@ import specialtiesRoutes  from './admin/specialties.routes.js'
 import uploadRoutes       from './admin/upload.routes.js'
 import doctorRoutes       from './doctor/index.js'
 import adminDoctorRoutes  from './doctor.routes.js'
-import nurseRoutes        from './nurse/index.js'
 import receptionistRoutes from './receptionist/index.js'
 import patientRoutes      from './patient/index.js'
 import thongKeRoutes      from './thong-ke.routes.js'
@@ -21,7 +20,6 @@ router.get('/health', (req, res) => {
 
 router.use('/auth', authRoutes)
 router.use('/doctor', doctorRoutes)
-router.use('/nurse', nurseRoutes)
 router.use('/patient', patientRoutes)
 router.use('/admin', adminRoutes)
 router.use('/thong-ke', thongKeRoutes)

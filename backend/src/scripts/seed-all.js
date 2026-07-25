@@ -166,14 +166,6 @@ async function seedAll() {
         status: 'active',
       },
       {
-        ho_ten: 'Điều dưỡng Thanh Hà',
-        email: 'nurse@vitafamily.vn',
-        mat_khau: passwordHash,
-        so_dien_thoai: '0901000010',
-        role: 'nurse',
-        status: 'active',
-      },
-      {
         ho_ten: 'BS. Trần Minh Khang',
         email: 'doctor.khang@vitafamily.vn',
         mat_khau: passwordHash,
@@ -235,13 +227,12 @@ async function seedAll() {
 
     const admin = users[0]
     const receptionist = users[1]
-    const nurse = users[2]
-    const doctorUserA = users[3]
-    const doctorUserB = users[4]
-    const doctorUserC = users[5]
-    const patientA = users[6]
-    const patientB = users[7]
-    const patientC = users[8]
+    const doctorUserA = users[2]
+    const doctorUserB = users[3]
+    const doctorUserC = users[4]
+    const patientA = users[5]
+    const patientB = users[6]
+    const patientC = users[7]
 
     const services = await DichVu.create([
       {

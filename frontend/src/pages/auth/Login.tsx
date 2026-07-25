@@ -8,7 +8,6 @@ const demoAccounts = [
   { role: 'Admin', email: 'admin@vitafamily.vn' },
   { role: 'Bác sĩ', email: 'haiv5634@gmail.com' },
   { role: 'Bệnh nhân', email: 'lt14062006meitu@gmail.com' },
-  { role: 'Y tá', email: 'ducluong140606@gmail.com' },
   { role: 'Lễ tân', email: 'luongtran140606@gmail.com' },
 ]
 
@@ -40,8 +39,6 @@ export default function Login() {
         navigate(from?.startsWith('/receptionist') ? from : '/receptionist', { replace: true })
       } else if (user.role === 'doctor') {
         navigate(from?.startsWith('/doctor') ? from : '/doctor', { replace: true })
-      } else if (user.role === 'nurse') {
-        navigate(from?.startsWith('/nurse') ? from : '/nurse', { replace: true })
       } else {
         navigate(from || '/', { replace: true })
       }

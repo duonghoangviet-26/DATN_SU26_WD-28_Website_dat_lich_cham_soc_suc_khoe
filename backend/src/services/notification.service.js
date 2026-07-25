@@ -7,11 +7,10 @@ import NhatKyThaoTac from '../models/NhatKyThaoTac.js'
 import { isMailConfigured, sendNotificationEmail } from './mail.service.js'
 
 const TARGET_ROLES = {
-  tat_ca: ['user', 'patient', 'doctor', 'receptionist', 'nurse'],
+  tat_ca: ['user', 'patient', 'doctor', 'receptionist'],
   benh_nhan: ['user', 'patient'],
   bac_si: ['doctor'],
   le_tan: ['receptionist'],
-  y_ta: ['nurse'],
 }
 
 const TARGETS = Object.keys(TARGET_ROLES)

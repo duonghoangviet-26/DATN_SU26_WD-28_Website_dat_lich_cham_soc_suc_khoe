@@ -215,6 +215,7 @@ export async function createBooking(req, res) {
       specialty_id: doc.specialties?.[0]?._id ?? null,
       ma_lich_hen: appointmentCode,
       loai_kham: 'clinic',
+      hinh_thuc_dat_lich: 'receptionist',
       ngay_kham: appointmentDate,
       gio_kham: slot.gio_bat_dau,
       phong_kham: slot.phong_kham,

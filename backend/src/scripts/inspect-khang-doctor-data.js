@@ -44,7 +44,7 @@ function line(title) {
   console.log('='.repeat(70))
 }
 
-async function analyzeDoctorDeep(doctorUser, bacSi, nurses) {
+async function analyzeDoctorDeep(doctorUser, bacSi) {
   const docId = bacSi._id
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
   const todayEnd = new Date(todayStart); todayEnd.setDate(todayEnd.getDate() + 1)
@@ -129,7 +129,6 @@ async function analyzeDoctorDeep(doctorUser, bacSi, nurses) {
   console.log(`doctor_id=${docId} | user_id=${doctorUser._id}`)
   console.log(`Lịch làm việc: ${schedules.length} | Lịch hẹn: ${appts.length} | Hồ sơ khám: ${records.length}`)
   console.log(`Bệnh nhân có tài khoản: ${memberIdsOfDoc.length} | Khách vãng lai: ${guestNamesOfDoc.length}`)
-  console.log(`Y tá hệ thống hiện có (chưa gắn field nào — nurse_id không tồn tại trên LichHen/LichLamViec/KetQuaKham): ${nurses.length}`)
 }
 
 async function main() {
@@ -157,13 +156,6 @@ async function main() {
     console.log(`\n⚠️ CÓ ${doctorUsers.length} bác sĩ khác nhau khớp "khang" — phân tích riêng từng người bên dưới.`)
   }
 
-  line('2. Y TÁ HIỆN CÓ TRONG HỆ THỐNG (chung, không riêng theo bác sĩ)')
-  const nurses = await NguoiDung.find({ role: 'nurse' }).select('_id ho_ten email status').lean()
-  console.log(`Tổng số NguoiDung role='nurse': ${nurses.length}`)
-  for (const n of nurses) {
-    console.log(`  - _id=${n._id} | ho_ten="${n.ho_ten}" | email=${maskEmail(n.email)} | status=${n.status}`)
-  }
-
   for (const doctorUser of doctorUsers) {
     line(`3. HỒ SƠ BacSi — ${doctorUser.ho_ten} (${maskEmail(doctorUser.email)})`)
     const bacSi = await BacSi.findOne({ user_id: doctorUser._id }).populate('specialties', 'ten').lean()
@@ -175,7 +167,7 @@ async function main() {
     console.log(`specialties: ${(bacSi.specialties || []).map((s) => s.ten).join(', ') || '(không có)'}`)
     console.log(`trang_thai_duyet: ${bacSi.trang_thai_duyet} | phong_kham_mac_dinh: ${bacSi.phong_kham_mac_dinh || '(không có)'} | gia_kham: ${bacSi.gia_kham}`)
 
-    await analyzeDoctorDeep(doctorUser, bacSi, nurses)
+    await analyzeDoctorDeep(doctorUser, bacSi)
   }
 
   await mongoose.disconnect()

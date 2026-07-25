@@ -28,7 +28,6 @@ const dichVuPhatSinhSchema = new mongoose.Schema(
     don_gia: { type: Number, required: true, min: 0 },
     thanh_tien: { type: Number, required: true, min: 0 },
     chi_dinh_boi_bac_si_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
-    them_boi_y_ta_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
   },
   { _id: true }
 )
@@ -64,12 +63,11 @@ const examinationResultSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    // Luồng xác nhận hồ sơ khám (B4): hồ sơ do Y TÁ nhập luôn bắt đầu 'ban_nhap' → gửi
-    // 'cho_xac_nhan' → bác sĩ "Xác nhận hồ sơ" (→ da_xac_nhan) hoặc "Yêu cầu chỉnh sửa"
-    // (→ yeu_cau_chinh_sua). Hồ sơ do chính BÁC SĨ tự nhập (createResult, không qua y tá)
-    // vào thẳng 'da_xac_nhan' luôn — bác sĩ không cần tự xác nhận lại hồ sơ do chính mình
-    // viết (quyết định 2026-07-11, xem docs/Bác sĩ/Kiem tra - Luong nghiep vu Ho so xac
-    // nhan hien tai). Default schema 'cho_xac_nhan' chỉ áp dụng khi không truyền status rõ ràng.
+    // Luồng xác nhận hồ sơ khám (B4): hồ sơ do BÁC SĨ tự nhập (createResult) vào thẳng
+    // 'da_xac_nhan' luôn — bác sĩ không cần tự xác nhận lại hồ sơ do chính mình viết (quyết
+    // định 2026-07-11). 'ban_nhap' → 'cho_xac_nhan' → 'da_xac_nhan'/'yeu_cau_chinh_sua' vẫn
+    // dùng cho luồng nhập nháp rồi gửi xác nhận. Default schema 'cho_xac_nhan' chỉ áp dụng
+    // khi không truyền status rõ ràng.
     status: {
       type: String,
       enum: ['ban_nhap', 'cho_xac_nhan', 'da_xac_nhan', 'yeu_cau_chinh_sua'],
@@ -78,7 +76,7 @@ const examinationResultSchema = new mongoose.Schema(
     // Lý do bác sĩ yêu cầu chỉnh sửa (bản mới nhất) — tách riêng khỏi lich_su_sua để hiển thị
     // nhanh trên UI mà không phải đọc lại toàn bộ mảng lịch sử.
     doctor_revision_note: { type: String, default: null },
-    // Thời điểm y tá/bác sĩ gửi hồ sơ cho bác sĩ xác nhận lần gần nhất.
+    // Thời điểm gửi hồ sơ cho bác sĩ xác nhận lần gần nhất.
     submitted_at: { type: Date, default: null },
     chan_doan: {
       type: String,
@@ -87,8 +85,8 @@ const examinationResultSchema = new mongoose.Schema(
     },
     huong_dan_dieu_tri: { type: String, default: null },
     ghi_chu: { type: String, default: null },
-    // Phần y tá nhập khi tiếp nhận ban đầu (trước khi bác sĩ kết luận) — tách riêng khỏi
-    // ghi_chu/huong_dan_dieu_tri (thuộc chuyên môn bác sĩ) để không lẫn 2 vai trò.
+    // Phần ghi nhận khi tiếp nhận ban đầu (trước khi bác sĩ kết luận) — tách riêng khỏi
+    // ghi_chu/huong_dan_dieu_tri (thuộc chuyên môn bác sĩ) để không lẫn thông tin.
     trieu_chung_ban_dau: { type: String, default: null },
     ghi_chu_dieu_duong: { type: String, default: null },
     ngay_tai_kham: { type: Date, default: null },

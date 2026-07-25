@@ -253,6 +253,9 @@ export async function getSlots(req, res) {
     const slots = schedule.slots
       .filter((s) => s.status === 'active' && !s.benh_nhan_id && !bookedSlotIds.has(s._id.toString()))
       .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
+      // Chi hien slot ONLINE cho benh nhan tu dat (muc 5.1 dac ta). Dung "!== 'walk_in'" thay vi
+      // "=== 'online'" de tuong thich nguoc voi slot tao TRUOC migration (thieu loai_slot -> undefined).
+      .filter((s) => s.loai_slot !== 'walk_in')
       .map((s) => ({
         id:          s._id,
         schedule_id: schedule._id,
@@ -340,6 +343,9 @@ export async function createBooking(req, res) {
       if (slotForValidation.status !== 'active' || slotForValidation.benh_nhan_id || slotForValidation.bi_khoa_boi_nghi_phep) {
         return rollbackFail(409, 'Slot da duoc dat, vui long chon khung gio khac')
       }
+      if (slotForValidation.loai_slot === 'walk_in') {
+        return rollbackFail(409, 'Slot nay danh cho tiep nhan tai cho, khong the dat online')
+      }
       if (isSlotInPast(appointmentDate, slotForValidation.gio_bat_dau)) {
         return rollbackFail(400, 'Khung gio da qua, vui long chon khung gio khac')
       }
@@ -355,6 +361,7 @@ export async function createBooking(req, res) {
           'slots.status':       'active',
           'slots.benh_nhan_id': null,
           'slots.bi_khoa_boi_nghi_phep': { $ne: true },
+          'slots.loai_slot':    { $ne: 'walk_in' },
         },
         {
           $set: {
@@ -390,6 +397,7 @@ export async function createBooking(req, res) {
       specialty_id,
       ma_lich_hen:  appointmentCode,
       loai_kham,
+      hinh_thuc_dat_lich: 'patient',
       ngay_kham:    appointmentDate,
       gio_kham:     gio_dat,
       ly_do_kham:   ly_do_kham?.trim() || null,
