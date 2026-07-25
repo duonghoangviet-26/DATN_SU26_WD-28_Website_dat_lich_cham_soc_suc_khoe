@@ -49,6 +49,7 @@ const serviceSchema = new mongoose.Schema(
     },
     mo_ta_ngan: { type: String, default: null, maxlength: 500 },
     mo_ta:      { type: String, default: null, maxlength: 5000 },
+    image_url:  { type: String, default: null, maxlength: 500 },
     gia: {
       type: Number,
       required: [true, 'Giá dịch vụ là bắt buộc'],

@@ -313,7 +313,6 @@ export default function ManageAppointments() {
                 <option value="unpaid">Chưa thanh toán</option>
                 <option value="partial">Thanh toán một phần</option>
                 <option value="paid">Đã thanh toán</option>
-                <option value="refunded">Đã hoàn tiền</option>
               </select>
               <select
                 className="input"

@@ -26,6 +26,7 @@ import NewsDetail from '@/pages/client/NewsDetail'
 
 import Dashboard from '@/pages/admin/Dashboard'
 import ManageUsers from '@/pages/admin/ManageUsers'
+import ManagePatients from '@/pages/admin/ManagePatients'
 import ManageDoctors from '@/pages/admin/ManageDoctors'
 import ManageClinics from '@/pages/admin/ManageClinics/ManageClinics'
 import ManageServices from '@/pages/admin/ManageServices'
@@ -92,6 +93,7 @@ export default function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="users" element={<ManageUsers />} />           {/* C1 */}
+        <Route path="patients" element={<ManagePatients />} />
         <Route path="doctors" element={<ManageDoctors />} />       {/* C2 */}
         <Route path="clinics" element={<ManageClinics />} />       {/* C3 */}
         <Route path="hospitals" element={<Navigate to="/admin/clinics" replace />} />
