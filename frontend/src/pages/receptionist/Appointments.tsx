@@ -180,8 +180,8 @@ export default function Appointments() {
   const handleReschedule = async (apt: Appointment) => {
     setSelectedAppointmentId(apt._id);
     
-    // Nếu đã dời lịch >= 3 lần, bật form Lịch sử
-    if ((apt.so_lan_thay_doi || 0) >= 3) {
+    // Nếu đã dời lịch >= 1 lần, bật form Lịch sử
+    if ((apt.so_lan_thay_doi || 0) >= 1) {
       try {
         const res = await axiosInstance.get(`/receptionist/appointments/${apt._id}/reschedule-history`);
         if (res.data.success) {
@@ -397,10 +397,16 @@ export default function Appointments() {
                         <div className="flex items-center gap-2">
                           {activeTab !== 'past' && !isPendingAndOverdue && (
                             <>
-                              {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
+                              {(activeTab === 'today' || activeTab === 'tomorrow') && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                                 <button
                                   title="Đã đến"
-                                  onClick={() => handleArrived(apt._id)}
+                                  onClick={() => {
+                                    if (activeTab === 'tomorrow') {
+                                      alert('Chưa đến ngày checkin');
+                                      return;
+                                    }
+                                    handleArrived(apt._id);
+                                  }}
                                   className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors"
                                 >
                                   <Icon name="check" className="w-4 h-4" />
@@ -456,13 +462,13 @@ export default function Appointments() {
         </div>
       </div>
 
-      {/* Modal Lịch sử Dời Lịch (Quá giới hạn 3 lần) */}
+      {/* Modal Lịch sử Dời Lịch (Quá giới hạn 1 lần) */}
       {rescheduleLimitModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-red-600 mb-2">Đạt giới hạn dời lịch!</h3>
             <p className="text-sm text-slate-600 mb-4">
-              Khách hàng này đã thay đổi lịch hẹn <strong className="text-red-500">3 lần</strong>. Hệ thống không cho phép dời lịch thêm nữa để tránh xáo trộn công việc của bác sĩ. Dưới đây là lịch sử dời lịch:
+              Khách hàng này đã thay đổi lịch hẹn <strong className="text-red-500">1 lần</strong>. Hệ thống không cho phép dời lịch thêm nữa để tránh xáo trộn công việc của bác sĩ. Dưới đây là lịch sử dời lịch:
             </p>
             
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 max-h-60 overflow-y-auto space-y-4">

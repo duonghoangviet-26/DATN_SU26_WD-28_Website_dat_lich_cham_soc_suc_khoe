@@ -41,6 +41,7 @@ const serviceSchema = new mongoose.Schema(
       trim: true,
       maxlength: [255, 'Tên dịch vụ không vượt quá 255 ký tự'],
     },
+    hinh_anh: { type: String, default: null, maxlength: 1000 },
     loai: {
       type: String,
       enum: ['home', 'related'],

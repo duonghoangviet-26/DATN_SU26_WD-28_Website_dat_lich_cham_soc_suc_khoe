@@ -225,6 +225,7 @@ export async function createBooking(req, res) {
       ten_khach,
       so_dien_thoai_khach,
       ly_do_kham: ly_do_kham || null,
+      hinh_thuc_dat_lich: 'receptionist',
     }], { session })
 
     const invoiceDate = new Date()
