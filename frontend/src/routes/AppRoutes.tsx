@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 
 import AdminLayout from '@/layouts/AdminLayout'
 import DoctorLayout from '@/layouts/DoctorLayout'
-import NurseLayout from '@/layouts/NurseLayout'
 import AuthLayout from '@/layouts/AuthLayout'
 import ClientLayout from '@/layouts/ClientLayout'
 import ProtectedRoute from '@/routes/ProtectedRoute'
@@ -43,13 +42,6 @@ import DoctorSchedule from '@/pages/doctor/DoctorSchedule'
 import DoctorAppointments from '@/pages/doctor/DoctorAppointments'
 import DoctorExamQueue from '@/pages/doctor/DoctorExamQueue'
 import DoctorLeaveRequests from '@/pages/doctor/DoctorLeaveRequests'
-
-import NurseDashboard from '@/pages/nurse/NurseDashboard'
-import NurseSchedule from '@/pages/nurse/NurseSchedule'
-import NurseQueue from '@/pages/nurse/NurseQueue'
-import NursePendingRecords from '@/pages/nurse/NursePendingRecords'
-import NurseAppointmentDetail from '@/pages/nurse/NurseAppointmentDetail'
-import NurseRevisions from '@/pages/nurse/NurseRevisions'
 
 import NotFound from '@/pages/NotFound'
 
@@ -142,23 +134,6 @@ export default function AppRoutes() {
         <Route path="schedule" element={<DoctorSchedule />} />         {/* B2 */}
         <Route path="leave-requests" element={<DoctorLeaveRequests />} /> {/* B8 — xin nghỉ */}
         <Route path="profile" element={<DoctorProfile />} />           {/* B1 */}
-      </Route>
-
-      {/* Khu vực Nurse — yêu cầu role = nurse */}
-      <Route
-        path="/nurse"
-        element={
-          <ProtectedRoute roles={['nurse']}>
-            <NurseLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<NurseDashboard />} />
-        <Route path="schedule" element={<NurseSchedule />} />
-        <Route path="queue" element={<NurseQueue />} />
-        <Route path="pending-records" element={<NursePendingRecords />} />
-        <Route path="appointments/:id" element={<NurseAppointmentDetail />} />
-        <Route path="revisions" element={<NurseRevisions />} />
       </Route>
 
       <Route path="/404" element={<NotFound />} />

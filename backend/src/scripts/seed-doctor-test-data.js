@@ -18,7 +18,7 @@ import {
 //   - Mỗi entity được tìm trước bằng khóa duy nhất (email / ma_lich_hen / doctor_id+ngay / ...),
 //     nếu đã tồn tại thì TÁI SỬ DỤNG, không tạo trùng.
 //   - Toàn bộ dữ liệu test có prefix rõ ràng: "(TEST)" trong tên, "TEST_" trong ma_lich_hen/ten_khach.
-//   - Chỉ tái sử dụng specialty/room/nurse/clinic đã có sẵn (không đụng dữ liệu quản lý của Admin).
+//   - Chỉ tái sử dụng specialty/room/clinic đã có sẵn (không đụng dữ liệu quản lý của Admin).
 // ============================================================
 
 const __filename = fileURLToPath(import.meta.url)
@@ -246,9 +246,6 @@ async function main() {
 
   const docId = bacSi._id
 
-  // Y tá đã có sẵn trong DB — tái sử dụng để test luồng "hồ sơ do y tá nhập"
-  const nurse = await NguoiDung.findOne({ role: 'nurse' })
-
   // ── 1b. Bác sĩ khác (test phân quyền) + bệnh nhân tài khoản thật ────────
   const { user: otherDoctorUser, doc: otherDoc, userCreated: otherUserCreated, docCreated: otherDocCreated } = await findOrCreateOtherDoctor()
   bump(otherUserCreated ? 'created' : 'existed', 'other_doctor_user')
@@ -437,7 +434,7 @@ async function main() {
     if (resultStatus === 'cho_xac_nhan') {
       const { created } = await findOrCreateResult(appt._id, async () => ({
         appointment_id: appt._id,
-        nguoi_nhap_id: nurse ? nurse._id : doctorUser._id, // mô phỏng hồ sơ do y tá nhập (theo đúng quy ước dữ liệu demo hiện có trong DB)
+        nguoi_nhap_id: doctorUser._id,
         bac_si_phu_trach_id: docId,
         status: 'cho_xac_nhan',
         chan_doan: '(TEST) Viêm họng cấp, theo dõi thêm',
@@ -466,7 +463,7 @@ async function main() {
     if (resultStatus === 'yeu_cau_chinh_sua') {
       const { created } = await findOrCreateResult(appt._id, async () => ({
         appointment_id: appt._id,
-        nguoi_nhap_id: nurse ? nurse._id : doctorUser._id,
+        nguoi_nhap_id: doctorUser._id,
         bac_si_phu_trach_id: docId,
         status: 'yeu_cau_chinh_sua',
         chan_doan: '(TEST) Đau bụng chưa rõ nguyên nhân',
@@ -496,7 +493,7 @@ async function main() {
         huyet_ap: '120/80',
         nhiet_do: 37,
         nhip_tim: 78,
-        nguoi_do_id: nurse ? nurse._id : doctorUser._id,
+        nguoi_do_id: doctorUser._id,
       })
       bump('created', 'vital_signs')
     } else {

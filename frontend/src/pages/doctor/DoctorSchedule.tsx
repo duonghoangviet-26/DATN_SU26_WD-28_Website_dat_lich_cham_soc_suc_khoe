@@ -158,11 +158,7 @@ function ScheduleDetailModal({ scheduleId, onClose }: { scheduleId: string; onCl
             </p>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <Icon name="user" className="h-4 w-4 shrink-0 text-slate-400" />
-              Y tá hỗ trợ: <span className="font-medium text-slate-800">{detail.nurse ?? 'Chưa phân công'}</span>
-            </div>
+          <div className="grid gap-3">
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <Icon name="map-pin" className="h-4 w-4 shrink-0 text-slate-400" />
               Phòng khám: <span className="font-medium text-slate-800">{phongList.length > 0 ? phongList.join(', ') : 'Chưa phân công'}</span>
@@ -416,10 +412,6 @@ export default function DoctorSchedule() {
             const hasDataAnomaly = distinctScheduleIds.length > 1
 
             const dayStatus = !hasDataAnomaly ? (daySlots[0]?.trang_thai_ngay ?? null) : null
-            // Không coalesce về null — cần phân biệt "không có lịch ngày này" (undefined, ẩn dòng y tá)
-            // với "có lịch nhưng chưa phân công y tá" (null, hiện "Chưa phân công y tá"). Khi có
-            // bất thường (nhiều document), không khẳng định 1 y tá duy nhất — ẩn dòng này.
-            const nurseName = !hasDataAnomaly ? daySlots[0]?.nurse : undefined
             const timeStatus = isToday ? todayTimeStatus(daySlots) : null
             const scheduleId = !hasDataAnomaly ? (daySlots[0]?.schedule_id ?? null) : null
 
@@ -458,12 +450,6 @@ export default function DoctorSchedule() {
                     <div className="mt-1 flex flex-wrap items-center gap-3">
                       <DaySummary slots={daySlots} />
                       <DotBar slots={daySlots} />
-                      {nurseName !== undefined && (
-                        <span className="flex items-center gap-1 text-xs text-slate-400">
-                          <Icon name="user" className="h-3 w-3" />
-                          {nurseName ?? 'Chưa phân công y tá'}
-                        </span>
-                      )}
                     </div>
                   </div>
 

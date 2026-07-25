@@ -204,14 +204,6 @@ async function seedAll() {
         status: 'active',
       },
       {
-        ho_ten: 'Điều dưỡng Thanh Hà',
-        email: 'nurse@vitafamily.vn',
-        mat_khau: passwordHash,
-        so_dien_thoai: '0901000010',
-        role: 'nurse',
-        status: 'active',
-      },
-      {
         ho_ten: 'BS. Trần Minh Khang',
         email: 'doctor.khang@vitafamily.vn',
         mat_khau: passwordHash,
@@ -273,13 +265,12 @@ async function seedAll() {
 
     const admin = users[0]
     const receptionist = users[1]
-    const nurse = users[2]
-    const doctorUserA = users[3]
-    const doctorUserB = users[4]
-    const doctorUserC = users[5]
-    const patientA = users[6]
-    const patientB = users[7]
-    const patientC = users[8]
+    const doctorUserA = users[2]
+    const doctorUserB = users[3]
+    const doctorUserC = users[4]
+    const patientA = users[5]
+    const patientB = users[6]
+    const patientC = users[7]
 
     const services = await DichVu.create([
       {
@@ -1028,7 +1019,7 @@ async function seedAll() {
     const examResults = await KetQuaKham.create([
       {
         appointment_id: appointments[0]._id,
-        nguoi_nhap_id: nurse._id,
+        nguoi_nhap_id: doctorUserA._id,
         bac_si_phu_trach_id: doctors[0]._id,
         nguoi_xac_nhan_id: doctorUserA._id,
         thoi_diem_xac_nhan: new Date(),
@@ -1045,7 +1036,7 @@ async function seedAll() {
       },
       {
         appointment_id: appointments[4]._id,
-        nguoi_nhap_id: nurse._id,
+        nguoi_nhap_id: doctorUserC._id,
         bac_si_phu_trach_id: doctors[2]._id,
         nguoi_xac_nhan_id: doctorUserC._id,
         thoi_diem_xac_nhan: new Date(),
@@ -1062,7 +1053,7 @@ async function seedAll() {
       },
       {
         appointment_id: appointments[3]._id,
-        nguoi_nhap_id: nurse._id,
+        nguoi_nhap_id: doctorUserA._id,
         bac_si_phu_trach_id: doctors[0]._id,
         nguoi_xac_nhan_id: null,
         thoi_diem_xac_nhan: null,
@@ -1075,7 +1066,7 @@ async function seedAll() {
         chi_dinh_tai_kham: false,
         da_dat_lich_tai_kham: false,
         da_gui_cho_benh_nhan: false,
-        lich_su_sua: [{ nguoi_sua_id: nurse._id, noi_dung: 'Nhập kết quả sơ bộ.' }],
+        lich_su_sua: [{ nguoi_sua_id: doctorUserA._id, noi_dung: 'Nhập kết quả sơ bộ.' }],
       },
     ])
 
@@ -1136,10 +1127,10 @@ async function seedAll() {
         huyet_ap: '120/80',
         nhiet_do: 36.8,
         nhip_tim: 78,
-        nguoi_do_id: nurse._id,
+        nguoi_do_id: doctorUserA._id,
         thoi_diem_do: new Date(),
         co_the_sua: false,
-        lich_su_cap_nhat: [{ nguoi_cap_nhat_id: nurse._id, noi_dung: 'Nhập sinh hiệu ban đầu.' }],
+        lich_su_cap_nhat: [{ nguoi_cap_nhat_id: doctorUserA._id, noi_dung: 'Nhập sinh hiệu ban đầu.' }],
       },
       {
         appointment_id: appointments[4]._id,
@@ -1149,10 +1140,10 @@ async function seedAll() {
         huyet_ap: '100/65',
         nhiet_do: 37.4,
         nhip_tim: 95,
-        nguoi_do_id: nurse._id,
+        nguoi_do_id: doctorUserC._id,
         thoi_diem_do: new Date(),
         co_the_sua: true,
-        lich_su_cap_nhat: [{ nguoi_cap_nhat_id: nurse._id, noi_dung: 'Đã đo lại nhiệt độ do bé sốt nhẹ.' }],
+        lich_su_cap_nhat: [{ nguoi_cap_nhat_id: doctorUserC._id, noi_dung: 'Đã đo lại nhiệt độ do bé sốt nhẹ.' }],
       },
       {
         appointment_id: appointments[3]._id,
@@ -1162,10 +1153,10 @@ async function seedAll() {
         huyet_ap: '118/76',
         nhiet_do: 36.7,
         nhip_tim: 80,
-        nguoi_do_id: nurse._id,
+        nguoi_do_id: doctorUserA._id,
         thoi_diem_do: new Date(),
         co_the_sua: true,
-        lich_su_cap_nhat: [{ nguoi_cap_nhat_id: nurse._id, noi_dung: 'Sinh hiệu cho lịch home.' }],
+        lich_su_cap_nhat: [{ nguoi_cap_nhat_id: doctorUserA._id, noi_dung: 'Sinh hiệu cho lịch home.' }],
       },
     ])
 

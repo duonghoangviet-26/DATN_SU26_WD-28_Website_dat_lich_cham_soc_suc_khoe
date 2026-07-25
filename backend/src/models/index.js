@@ -19,7 +19,6 @@ export { default as KhachVangLai }       from './KhachVangLai.js'
 
 export { default as BacSi }              from './BacSi.js'
 export { default as NghiPhepBacSi }      from './NghiPhepBacSi.js'
-export { default as NghiPhepYTa }        from './NghiPhepYTa.js'
 export { default as HoSoChiTietBacSi }   from './HoSoChiTietBacSi.js'
 export { default as LichLamViec }        from './LichLamViec.js'
 export { default as LichSuChinhSuaLichLamViec } from './LichSuChinhSuaLichLamViec.js'

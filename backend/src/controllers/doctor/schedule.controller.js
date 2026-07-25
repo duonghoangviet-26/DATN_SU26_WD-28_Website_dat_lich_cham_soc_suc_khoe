@@ -55,12 +55,10 @@ function buildPatientInfoMaps(appointments) {
 }
 
 // Trải mỗi document lịch (1 ngày) thành mảng slot phẳng cho FE. Bổ sung dữ liệu cấp NGÀY
-// (y tá phụ trách, trạng thái ngày, chi nhánh) vào từng slot — các field này đã có trong DB,
-// trước đây API không trả nên FE phải hardcode "Chưa phân công y tá" (xem docs/doctor-schedule-*).
+// (trạng thái ngày, chi nhánh) vào từng slot.
 function flattenSchedules(schedules, patientMaps) {
   const { bySlotId, byScheduleTime } = patientMaps
   return schedules.flatMap((sch) => {
-    const nurse = sch.nurse_id // đã populate 'ho_ten'
     return sch.slots.map((s) => {
       const patientInfo = bySlotId.get(String(s._id)) ?? byScheduleTime.get(`${sch._id}-${s.gio_bat_dau}`) ?? null
       return {
@@ -69,8 +67,6 @@ function flattenSchedules(schedules, patientMaps) {
         ngay:        localDateStr(sch.ngay),
         trang_thai_ngay: sch.trang_thai_ngay ?? null,
         chi_nhanh_id: sch.chi_nhanh_id ?? null,
-        nurse_id:    nurse?._id ?? sch.nurse_id ?? null,
-        nurse:       nurse?.ho_ten ?? null, // null = chưa phân công y tá (dữ liệu thật, không hardcode)
         gio_bat_dau:  s.gio_bat_dau,
         gio_ket_thuc: s.gio_ket_thuc,
         khung_index:  s.khung_index ?? null,
@@ -103,7 +99,6 @@ export async function getSchedules(req, res) {
 
     const schedules = await LichLamViec.find(filter)
       .populate('slots.benh_nhan_id', 'ho_ten')
-      .populate('nurse_id', 'ho_ten')
       .sort({ ngay: 1 })
       .lean()
 
@@ -124,7 +119,7 @@ export async function getSchedules(req, res) {
 }
 
 // ─── GET /api/doctor/schedule/:scheduleId ───────────────────────────────────
-// Chi tiết 1 ca làm việc (1 ngày) của CHÍNH bác sĩ đăng nhập: thông tin ngày, y tá,
+// Chi tiết 1 ca làm việc (1 ngày) của CHÍNH bác sĩ đăng nhập: thông tin ngày,
 // danh sách slot, danh sách lịch hẹn thuộc ca (join tên BN online + khách vãng lai),
 // và số liệu tổng hợp (đếm slot + đếm lịch hẹn theo nhóm). CHỈ ĐỌC — không ghi DB.
 export async function getScheduleDetail(req, res) {
@@ -136,7 +131,6 @@ export async function getScheduleDetail(req, res) {
     // không lộ ca có tồn tại hay không.
     const schedule = await LichLamViec.findOne({ _id: req.params.scheduleId, doctor_id: doc._id })
       .populate('slots.benh_nhan_id', 'ho_ten')
-      .populate('nurse_id', 'ho_ten')
       .lean()
     if (!schedule) return fail(res, 404, 'Không tìm thấy lịch làm việc')
 
@@ -205,8 +199,6 @@ export async function getScheduleDetail(req, res) {
       trang_thai_ngay: schedule.trang_thai_ngay ?? null,
       ghi_chu_ngay:    schedule.ghi_chu_ngay ?? null,
       chi_nhanh_id:    schedule.chi_nhanh_id ?? null,
-      nurse_id:        schedule.nurse_id?._id ?? schedule.nurse_id ?? null,
-      nurse:           schedule.nurse_id?.ho_ten ?? null,
       slots,
       lich_hen:        dsLichHen,
       thong_ke,

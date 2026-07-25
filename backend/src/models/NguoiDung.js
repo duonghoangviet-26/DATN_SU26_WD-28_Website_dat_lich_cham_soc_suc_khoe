@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema(
     anh_dai_dien: { type: String, default: null, maxlength: 500 },
     role: {
       type: String,
-      enum: ['user', 'patient', 'doctor', 'admin', 'receptionist', 'nurse'],
+      enum: ['user', 'patient', 'doctor', 'admin', 'receptionist'],
       default: 'user',
     },
     status: {

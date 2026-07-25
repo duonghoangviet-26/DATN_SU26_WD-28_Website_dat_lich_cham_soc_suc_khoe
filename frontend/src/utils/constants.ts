@@ -151,8 +151,8 @@ export const KET_QUA_KHAM_STATUS_COLOR: Record<string, BadgeColor> = {
 };
 
 // Nhãn trạng thái hồ sơ khám (KetQuaKhamStatus) — nguồn duy nhất, khớp KET_QUA_STATUS_LABEL
-// đang lặp lại độc lập ở NurseAppointmentDetail.tsx/DoctorAppointments.tsx/DoctorPendingRecords.tsx
-// (chưa thay các nơi đó — đó là việc của Kế hoạch 5, ở đây chỉ tạo nguồn dùng chung).
+// đang lặp lại độc lập ở DoctorAppointments.tsx/DoctorExamQueue.tsx (chưa hợp nhất các nơi đó,
+// ở đây chỉ tạo nguồn dùng chung).
 export const KET_QUA_KHAM_STATUS_LABEL: Record<string, string> = {
     ban_nhap: "Nháp",
     cho_xac_nhan: "Chờ bác sĩ xác nhận",

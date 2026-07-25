@@ -80,7 +80,7 @@ async function main() {
     report(
       'GET /doctor/stats/today',
       status === 200 && !!d,
-      `status=${status} tong_lich_hen=${d?.tong_lich_hen} y_ta_ho_tro=${JSON.stringify(d?.y_ta_ho_tro)}`,
+      `status=${status} tong_lich_hen=${d?.tong_lich_hen}`,
     )
   }
 

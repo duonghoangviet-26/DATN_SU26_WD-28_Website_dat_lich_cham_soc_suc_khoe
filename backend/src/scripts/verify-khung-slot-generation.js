@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url'
 import { ChuyenKhoa } from '../models/index.js'
 import { buildDefaultScheduleSlots, phanBoOnlineTheoKhung } from '../services/scheduleGenerator.service.js'
 
-// Script xac minh (khong phai unit test) — khop convention da co trong backend/src/scripts/
-// (vd verify-khang-nurse-live-flow.js). Chay: node src/scripts/verify-khung-slot-generation.js
+// Script xac minh (khong phai unit test) — khop convention da co trong backend/src/scripts/.
+// Chay: node src/scripts/verify-khung-slot-generation.js
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)

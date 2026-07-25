@@ -27,7 +27,7 @@ describe('scheduleService', () => {
           {
             id: 'slot-1', schedule_id: 'sched-1', ngay: '2026-07-20',
             gio_bat_dau: '08:00', gio_ket_thuc: '08:30',
-            status: 'active', nurse: 'Điều dưỡng Thanh Hà', nurse_id: 'nurse-1',
+            status: 'active',
             trang_thai_ngay: 'lam_viec',
           },
         ],
@@ -41,7 +41,6 @@ describe('scheduleService', () => {
       params: { from: '2026-07-20', to: '2026-07-25' },
       signal: controller.signal,
     })
-    expect(list[0].nurse).toBe('Điều dưỡng Thanh Hà')
     expect(list[0].trang_thai_ngay).toBe('lam_viec')
   })
 
@@ -50,7 +49,7 @@ describe('scheduleService', () => {
       data: {
         data: {
           id: 'sched-1', ngay: '2026-07-20', trang_thai_ngay: 'lam_viec',
-          ghi_chu_ngay: null, chi_nhanh_id: null, nurse_id: null, nurse: null,
+          ghi_chu_ngay: null, chi_nhanh_id: null,
           slots: [], lich_hen: [],
           thong_ke: {
             tong_slot: 0, slot_trong: 0, slot_da_dat: 0, slot_bi_khoa: 0, slot_da_huy: 0,
