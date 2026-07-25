@@ -3,6 +3,7 @@ import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc
 import { ok, created, fail } from '../../utils/response.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
+import { soSanhThuTuHangDoi, tinhBacUuTienDong } from '../../models/HangDoi.js'
 
 // Upsert sinh hiệu — gắn theo appointment_id (lượt online) hoặc hang_doi_id (lượt offline,
 // không có LichHen). Bác sĩ tự đo/nhập ngay khi nhập kết quả khám.
@@ -104,7 +105,7 @@ export async function list(req, res) {
 // ─── GET /api/doctor/queue?date= ────────────────────────────────────────────
 // "Hồ sơ chờ khám" — toàn bộ lượt khám (online + offline) đã check-in gán cho bác sĩ này.
 // Neo trên HangDoi; join KetQuaKham theo hang_doi_id (và appointment_id cho dữ liệu cũ).
-const HANGDOI_WEIGHT = { online_uu_tien: 0, online_thuong: 1, offline: 2 }
+// Thứ tự ưu tiên nay tính động qua `soSanhThuTuHangDoi()` — xem models/HangDoi.js.
 
 function trangThaiTongHop(entry, kq) {
   if (entry.trang_thai === 'cancelled') return 'da_huy'
@@ -140,8 +141,11 @@ export async function examQueue(req, res) {
     const kqByHangDoi = new Map(results.filter((r) => r.hang_doi_id).map((r) => [String(r.hang_doi_id), r]))
     const kqByAppt = new Map(results.filter((r) => r.appointment_id).map((r) => [String(r.appointment_id), r]))
 
+    // Bậc ưu tiên tính ĐỘNG (rule mục 6) — `muc_uu_tien` trong DB chỉ là snapshot lúc
+    // check-in, dùng nó để xếp thứ tự sẽ phạt oan người đến sớm.
+    const now = new Date()
     const rows = entries
-      .sort((a, b) => (HANGDOI_WEIGHT[a.muc_uu_tien] - HANGDOI_WEIGHT[b.muc_uu_tien]) || (new Date(a.checkin_time) - new Date(b.checkin_time)))
+      .sort((a, b) => soSanhThuTuHangDoi(a, b, now))
       .map((e) => {
         const kq = kqByHangDoi.get(String(e._id)) || (e.appointment_id ? kqByAppt.get(String(e.appointment_id)) : null)
         return {
@@ -152,7 +156,7 @@ export async function examQueue(req, res) {
           tuoi: e.tuoi ?? null,
           gioi_tinh: e.gioi_tinh ?? null,
           phong_kham: e.phong_kham ?? null,
-          muc_uu_tien: e.muc_uu_tien,
+          muc_uu_tien: tinhBacUuTienDong(e, now),
           hang_doi_trang_thai: e.trang_thai,
           checkin_time: e.checkin_time,
           ket_qua_id: kq?._id ?? null,

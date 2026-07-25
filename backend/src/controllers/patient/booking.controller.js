@@ -17,6 +17,7 @@ import {
   isSlotInPast,
 } from '../../utils/clinicTime.js'
 import { donDepSlotTruocKhiDoc } from '../../services/slotRelease.service.js'
+import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 import { ok, created, fail } from '../../utils/response.js'
 import {
   emitAdminRealtime,
@@ -421,6 +422,21 @@ export async function createBooking(req, res) {
           409,
           'Khung giờ này đã đóng đặt online (trước giờ khám 30 phút). Vui lòng chọn khung khác hoặc đến quầy lễ tân.',
         )
+      }
+
+      // Overflow control (rule muc 6): ca da tre >= 2 khung (60') thi khong nhan them luot
+      // vao cac khung con lai — ban tiep chi bien mot buoi chieu muon 30 phut thanh mot
+      // buoi toi muon 2 tieng. CHI ap cho lich HOM NAY: ca ngay mai chua bat dau, do tre
+      // hom nay khong noi len gi ve no.
+      if (appointmentDate.getTime() === getTodayDateOnly().getTime()) {
+        const quaTai = await kiemTraQuaTai(doc._id)
+        if (quaTai.chanDatOnline) {
+          return rollbackFail(
+            409,
+            `Bác sĩ đang khám trễ ${quaTai.doTrePhut} phút nên tạm ngừng nhận thêm lượt hôm nay. `
+            + 'Vui lòng chọn bác sĩ khác hoặc ngày khác.',
+          )
+        }
       }
 
       // Giu cho CO GIAN: min(15', T-15' − now). Cua so co dinh 15' se de giu cho chet QUA

@@ -9,6 +9,7 @@ import { emitDashboardRevenueChanged } from '../../realtime/socket.js'
 // ben khong phan ky lai (truoc do patient tu viet ban thieu `-7`, lech 7 tieng).
 import { buildSlotDateTime, isSlotInPast } from '../../utils/clinicTime.js'
 import { donDepSlotTruocKhiDoc } from '../../services/slotRelease.service.js'
+import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 
 function parseDateOnly(value) {
   if (!value) return null
@@ -192,6 +193,16 @@ export async function createBooking(req, res) {
 
     const slot = schedule.slots.id(slot_id)
     if (!slot || slot.status !== 'active') return rollbackFail(409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
+
+    // Overflow control (rule mục 6): ca trễ ≥ 1 khung (30') thì ngừng nhận khách tới quầy
+    // cho các khung còn lại. Nhận thêm lúc này chỉ đẩy độ trễ sang bệnh nhân đang ngồi chờ.
+    // Chỉ áp cho lịch HÔM NAY.
+    if (appointmentDate.getTime() === getTodayDateOnly().getTime()) {
+      const quaTai = await kiemTraQuaTai(doc._id)
+      if (quaTai.ngungBanWalkIn) {
+        return rollbackFail(409, quaTai.canhBao)
+      }
+    }
     
     // Lễ tân đặt luôn nên slot booked.
     // ⚠️ Điều kiện về slot phải nằm trong MỘT $elemMatch: viết rời ('slots._id' + 'slots.status')

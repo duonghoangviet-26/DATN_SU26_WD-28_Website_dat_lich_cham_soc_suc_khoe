@@ -1,10 +1,16 @@
 import mongoose from 'mongoose'
 import { HangDoi, LichHen, LichLamViec, TrangThaiPhongKham, ThanhVien, NhatKyThaoTac, ThongBao, NguoiDung, BacSi } from '../../models/index.js'
-import { tinhMucUuTien } from '../../models/HangDoi.js'
+import {
+  daToiKhungCuaMinh,
+  soSanhThuTuHangDoi,
+  tinhBacUuTienDong,
+  tinhMucUuTien,
+} from '../../models/HangDoi.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { findOrCreateRoomStatus } from './room-status.controller.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { buildSlotDateTime } from '../../utils/clinicTime.js'
+import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 
 // ============================================================
 // Hàng đợi động (Bác sĩ) — Routes: /api/doctor/queue
@@ -13,7 +19,6 @@ import { buildSlotDateTime } from '../../utils/clinicTime.js'
 // Bác sĩ chỉ thao tác trên hàng đợi của chính mình (docId = BacSi._id của req.user).
 // ============================================================
 
-const UU_TIEN_WEIGHT = { online_uu_tien: 0, online_thuong: 1, offline: 2 }
 const CON_HIEN_DIEN = ['dang_cho', 'da_goi']
 const DANG_XU_LY = ['dang_cho', 'da_goi', 'trong_phong']
 
@@ -39,12 +44,11 @@ async function updateAppointmentStatus(appointmentId, nextStatus) {
   emitDashboardAppointmentChanged(oldStatus, nextStatus)
 }
 
-function sapXepHangDoi(list) {
-  return [...list].sort((a, b) => {
-    const w = UU_TIEN_WEIGHT[a.muc_uu_tien] - UU_TIEN_WEIGHT[b.muc_uu_tien]
-    if (w !== 0) return w
-    return new Date(a.checkin_time) - new Date(b.checkin_time)
-  })
+// Sắp xếp theo bậc ưu tiên ĐỘNG (rule mục 6) — KHÔNG dùng `muc_uu_tien` lưu trong DB.
+// Giá trị lưu cứng đó là snapshot lúc check-in; dùng nó để xếp thứ tự sẽ phạt oan người
+// đến sớm và không bao giờ tự nâng bậc khi tới khung.
+function sapXepHangDoi(list, now = new Date()) {
+  return [...list].sort((a, b) => soSanhThuTuHangDoi(a, b, now))
 }
 
 // gio_hen_goc quyet dinh BAC UU TIEN hang doi (rule §6) nen sai gio la sai thu tu goi benh nhan.
@@ -90,10 +94,19 @@ async function tinhCanhBaoQuaTai(doctorId, todayStart) {
   const soDangPhucVu = await HangDoi.countDocuments({ doctor_id: doctorId, trang_thai: { $in: DANG_XU_LY } })
   const duKienXong = new Date(Date.now() + (soDangPhucVu + 1) * tbPhut * 60000)
 
+  // Hai loại cảnh báo khác nhau, gộp lại cho người dùng thấy đủ:
+  //  - QUÁ TẢI DỰ KIẾN: ước lượng tương lai, "kiểu này sẽ xong sau giờ đóng ca".
+  //  - ĐỘ TRỄ TÍCH LUỸ: sự thật hiện tại, "người khung 09:00 vẫn chưa được gọi lúc 09:35".
+  //    Chính con số này quyết định có ngừng bán chỗ hay không (rule mục 6).
+  const canhBao = []
   if (duKienXong > ketThucCa) {
-    return `Dự kiến xong lúc ${duKienXong.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, sau giờ kết thúc ca (${gioKetThucCa}). Cân nhắc hẹn đợt sau.`
+    canhBao.push(`Dự kiến xong lúc ${duKienXong.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, sau giờ kết thúc ca (${gioKetThucCa}). Cân nhắc hẹn đợt sau.`)
   }
-  return null
+
+  const quaTai = await kiemTraQuaTai(doctorId)
+  if (quaTai.canhBao) canhBao.push(quaTai.canhBao)
+
+  return canhBao.length > 0 ? canhBao.join(' ') : null
 }
 
 // ─── POST /api/doctor/queue/checkin ──────────────────────────────────────────
@@ -228,8 +241,9 @@ export async function list(req, res) {
     const entries = await HangDoi.find(filter).lean()
     const room = await TrangThaiPhongKham.findOne({ doctor_id: docId }).lean()
     const tbPhut = room?.thoi_gian_kham_tb_phut ?? 20
+    const now = new Date()
 
-    const sorted = sapXepHangDoi(entries)
+    const sorted = sapXepHangDoi(entries, now)
     let viTriChoDangCho = 0
     const result = sorted.map((e) => {
       const isWaiting = CON_HIEN_DIEN.includes(e.trang_thai)
@@ -242,7 +256,11 @@ export async function list(req, res) {
         gioi_tinh: e.gioi_tinh,
         doctor_id: e.doctor_id,
         phong_kham: e.phong_kham,
-        muc_uu_tien: e.muc_uu_tien,
+        // Bậc ĐANG có hiệu lực, không phải snapshot lúc check-in.
+        muc_uu_tien: tinhBacUuTienDong(e, now),
+        muc_uu_tien_luc_checkin: e.muc_uu_tien,
+        gio_hen_goc: e.gio_hen_goc,
+        da_toi_khung: daToiKhungCuaMinh(e, now),
         trang_thai: e.trang_thai,
         checkin_time: e.checkin_time,
         so_lan_goi: e.so_lan_goi,
@@ -264,6 +282,31 @@ export async function call(req, res) {
     if (error) return fail(res, ...error)
     if (!CON_HIEN_DIEN.includes(entry.trang_thai)) {
       return fail(res, 409, 'Chỉ gọi được bệnh nhân đang chờ hoặc đã gọi trước đó')
+    }
+
+    // Đến sớm KHÔNG bị phạt, nhưng cũng KHÔNG được gọi trước đầu khung của mình —
+    // ngoại lệ duy nhất là bác sĩ đang rảnh và không còn ai thuộc khung hiện tại
+    // (rule mục 6). `so_lan_goi > 0` = đã gọi rồi, gọi lại luôn được.
+    const now = new Date()
+    if (entry.so_lan_goi === 0 && !daToiKhungCuaMinh(entry, now)) {
+      const dsChoKhac = await HangDoi.find({
+        doctor_id: docId,
+        trang_thai: 'dang_cho',
+        _id: { $ne: entry._id },
+      }).select('nguon gio_hen_goc checkin_time trang_thai').lean()
+
+      const daToiLuot = dsChoKhac.filter((e) => daToiKhungCuaMinh(e, now))
+      if (daToiLuot.length > 0) {
+        const gioKhung = new Date(entry.gio_hen_goc).toLocaleTimeString('vi-VN', {
+          hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh',
+        })
+        return fail(
+          res,
+          409,
+          `Bệnh nhân này đến sớm, khung ${gioKhung} chưa tới. Còn ${daToiLuot.length} người đã tới lượt đang chờ — `
+          + 'gọi họ trước, hoặc chờ tới khung của bệnh nhân này.',
+        )
+      }
     }
 
     const tu = entry.trang_thai
