@@ -375,7 +375,7 @@ export async function createBooking(req, res) {
       if (!updated) return rollbackFail(409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
 
       const claimedSlot = updated.slots.id(slot_id)
-      phong_kham = claimedSlot.phong_kham
+      phong_kham = claimedSlot.phong_kham || doc.phong_kham_mac_dinh || 'Phòng 102 - Tầng 1'
       gio_dat    = claimedSlot.gio_bat_dau
       gia_kham   = doc.phi_kham ?? doc.gia_kham ?? 0
       ten_dich_vu = doc.specialties?.[0]?.ten ?? 'Khám tổng quát'
