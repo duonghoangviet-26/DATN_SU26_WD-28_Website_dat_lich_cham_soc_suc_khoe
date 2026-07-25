@@ -378,8 +378,8 @@ async function seedAll() {
 
     const doctors = await BacSi.create([
       {
-        tieu_su: 'B??c s?? da li???u v???i h??n 10 n??m kinh nghi???m ??i???u tr??? v?? theo d??i ?????nh k???.',
-        bang_cap: 'BSCKI Da li???u',
+        user_id: doctorUserA._id,
+        chi_nhanh_id: clinic._id,
         tieu_su: 'Bác sĩ nội khoa với hơn 10 năm kinh nghiệm.',
         bang_cap: 'BSCKI Nội khoa',
         kinh_nghiem: 'Từng công tác tại bệnh viện đa khoa tuyến tỉnh.',
@@ -443,7 +443,9 @@ async function seedAll() {
         specialties: [specialties[2]._id],
         services: [services[2]._id],
         bao_hiem: { nha_nuoc: true, bao_lanh: false },
-        related_services: [services[6]._id],
+        // Mang services da bi .filter(loai !== 'home') o tren -> chi con 5 phan tu (0..4).
+        // Chi so cu services[6] la ngoai pham vi, lam seed vo ngay tu dau.
+        related_services: [services[4]._id],
         loai: 'specialist',
       },
     ])
@@ -631,7 +633,8 @@ async function seedAll() {
       {
         doctor_id: doctors[0]._id,
         chi_nhanh_id: clinic._id,
-        ghi_chu_ngay: 'Ca s??ng da li???u.',
+        // ngay suy ra tu lich hen tham chieu schedules[0].slots[0] (ngay_kham: twoDaysAgo).
+        ngay: twoDaysAgo,
         trang_thai_ngay: 'lam_viec',
         ghi_chu_ngay: 'Ca sáng nội khoa.',
         slots: [
@@ -664,7 +667,8 @@ async function seedAll() {
       {
         doctor_id: doctors[0]._id,
         chi_nhanh_id: clinic._id,
-        ghi_chu_ngay: 'Ca chi???u da li???u v?? theo d??i x??t nghi???m t???i nh??.',
+        // ngay suy ra tu lich hen tham chieu schedules[3].slots[0] (ngay_kham: tomorrow).
+        ngay: tomorrow,
         trang_thai_ngay: 'lam_viec',
         ghi_chu_ngay: 'Ca chiều nội khoa và theo dõi xét nghiệm tại nhà.',
         slots: [
@@ -849,7 +853,6 @@ async function seedAll() {
         appointment_id: appointments[0]._id,
         so_hoa_don: 'HD-DEMO-001',
         chi_nhanh_id: clinic._id,
-        chi_tiet_thu_phi: [{ loai: 'phi_kham', ten: 'Ph?? kh??m da li???u', so_tien: 200000, thanh_tien: 200000 }],
         tong_tien_kham: 200000,
         chi_tiet_thu_phi: [{ loai: 'phi_kham', ten: 'Phí khám nội khoa', so_tien: 200000, thanh_tien: 200000 }],
         tong_tien_phat_sinh: 0,
@@ -1033,7 +1036,7 @@ async function seedAll() {
         ghi_chu: 'Không ghi nhận dấu hiệu thần kinh khu trú.',
         ngay_tai_kham: addDays(today, 7),
         co_the_sua: false,
-        dich_vu_phat_sinh: [{ ten: 'Đo huyết áp tư thế', gia: 50000 }],
+        dich_vu_phat_sinh: [{ ten: 'Đo huyết áp tư thế', so_luong: 1, don_gia: 50000, thanh_tien: 50000 }],
         chi_dinh_tai_kham: true,
         da_dat_lich_tai_kham: false,
         da_gui_cho_benh_nhan: true,
@@ -1050,7 +1053,7 @@ async function seedAll() {
         ghi_chu: 'Có hình ảnh nội soi lưu kèm.',
         ngay_tai_kham: addDays(today, 5),
         co_the_sua: true,
-        dich_vu_phat_sinh: [{ ten: 'Nội soi TMH', gia: 50000 }],
+        dich_vu_phat_sinh: [{ ten: 'Nội soi TMH', so_luong: 1, don_gia: 50000, thanh_tien: 50000 }],
         chi_dinh_tai_kham: true,
         da_dat_lich_tai_kham: true,
         da_gui_cho_benh_nhan: true,
@@ -1179,8 +1182,7 @@ async function seedAll() {
             lieu_luong: '1 viên',
             tan_suat: '2 lần/ngày',
             gio_uong: ['08:00', '20:00'],
-            ngay_bat_dau: today,
-            ngay_ket_thuc: addDays(today, 5),
+            so_ngay: 5,
             ghi_chu: 'Không tự ý tăng liều.',
           },
           {
@@ -1188,8 +1190,7 @@ async function seedAll() {
             lieu_luong: '1 viên',
             tan_suat: '1 lần/ngày',
             gio_uong: ['08:00'],
-            ngay_bat_dau: today,
-            ngay_ket_thuc: addDays(today, 10),
+            so_ngay: 10,
           },
         ],
       },
@@ -1206,8 +1207,7 @@ async function seedAll() {
             lieu_luong: '1 gói',
             tan_suat: 'Khi sốt trên 38.5',
             gio_uong: ['08:00', '14:00', '20:00'],
-            ngay_bat_dau: today,
-            ngay_ket_thuc: addDays(today, 3),
+            so_ngay: 3,
           },
         ],
       },
@@ -1224,8 +1224,7 @@ async function seedAll() {
             lieu_luong: '1 gói',
             tan_suat: '1 lần/ngày',
             gio_uong: ['09:00'],
-            ngay_bat_dau: today,
-            ngay_ket_thuc: addDays(today, 2),
+            so_ngay: 2,
           },
         ],
       },
@@ -1452,9 +1451,10 @@ async function seedAll() {
         vai_tro: 'admin',
         hanh_dong: 'CREATE_SERVICE',
         loai_doi_tuong: 'service',
-        doi_tuong_id: services[6]._id,
+        // services chi con 5 phan tu sau .filter(loai !== 'home') — xem ghi chu o BacSi.create.
+        doi_tuong_id: services[4]._id,
         ly_do: 'Bổ sung gói dịch vụ TMH.',
-        du_lieu_moi: { ten: services[6].ten, la_goi: true },
+        du_lieu_moi: { ten: services[4].ten, la_goi: true },
       },
       {
         nguoi_thuc_hien_id: admin._id,

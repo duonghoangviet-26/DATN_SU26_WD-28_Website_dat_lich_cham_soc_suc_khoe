@@ -36,6 +36,9 @@ others
 
 # Local backup / temp artifacts
 backup/
+# Sao luu du lieu that truoc khi chay script sua DB (chua thong tin benh nhan) — KHONG commit.
+backups/
+backend/backups/
 reports/
 backend/reports/
 tmp/
