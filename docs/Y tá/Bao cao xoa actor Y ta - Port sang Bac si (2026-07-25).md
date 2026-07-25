@@ -67,3 +67,27 @@ Sau khi xóa code, kiểm tra trực tiếp MongoDB Atlas (read-only trước, s
 **Xác nhận sau khi dọn:** tất cả 4 chỉ số trên đều về 0/false; `nhat_ky_thao_tac.vai_tro='nurse'` vẫn còn nguyên 195 documents (không đụng).
 
 Script kiểm tra/dọn dẹp là file tạm (`backend/src/scripts/_tmp-*.js`), chạy 1 lần trực tiếp trên DB rồi xóa ngay sau đó — không commit vào repo.
+
+## Rà soát lại lần 2 (2026-07-25, sau khi đã commit + push lên `Bac_si`)
+
+Rà soát toàn diện lại để đảm bảo không còn sót gì và không phát sinh lỗi mới.
+
+**Grep lại toàn bộ `backend/src` + `frontend/src`:**
+- `nurse|Nurse|NURSE`: backend chỉ còn 1 chỗ (`NhatKyThaoTac.vai_tro` enum — giữ chủ đích); frontend 0 kết quả.
+- `y_ta|y tá`: backend chỉ còn 2 enum lịch sử (`DonThuoc.nguon`, `ThongBaoHeThong.doi_tuong`) + 1 dòng comment giải thích bối cảnh; frontend 0 kết quả thật (chỉ trùng chuỗi con `ngay_tao`/`ngay_tai_kham`, không liên quan).
+- `điều dưỡng`/`dieu duong`: có 3 kết quả nhưng đều KHÔNG liên quan actor y tá — 2 chỗ là mô tả bằng cấp/dịch vụ lấy mẫu tại nhà (`mock/doctors.ts`, `seed-all.js`, tính năng "home_staff" khác hoàn toàn), 1 chỗ là seed notification text cũ.
+
+**Phát hiện thêm 1 field còn sót chưa liệt kê trong lần audit trước:** `KetQuaKham.ghi_chu_dieu_duong` (+ type tương ứng trong `frontend/types/index.ts`). Trước đây y tá tự nhập field này qua `NurseAppointmentDetail.tsx` (đã xóa). Kiểm tra kỹ:
+- Không còn controller/route/UI nào đọc hoặc ghi field này nữa (đúng — vì không còn ai đóng vai trò nhập) — **không phải lỗi, không phải regression**, mà là hệ quả đúng của việc bỏ actor y tá.
+- DB thật có **24 bản ghi `ket_qua_kham` cũ** chứa dữ liệu lâm sàng thật ở field này (vd: "Bệnh nhân tỉnh, hợp tác tốt") kèm `lich_su_sua` có dòng "Y tá nhập hồ sơ khám" — đây là **dữ liệu hồ sơ khám bệnh thật của bệnh nhân**, không phải rác test.
+- Quyết định: **giữ nguyên** field + dữ liệu (cùng chính sách với `nhat_ky_thao_tac` — không viết lại lịch sử hồ sơ y tế), không xóa. Field vẫn được trả về nguyên vẹn qua `GET /api/doctor/appointments/:id/result` (query `.lean()` không giới hạn field) nên không mất dữ liệu khi bác sĩ xem lại hồ sơ cũ, chỉ là hiện tại chưa có UI hiển thị riêng cho trường này (không nằm trong phạm vi yêu cầu ban đầu).
+
+**Xác minh không phát sinh lỗi:**
+- `npx tsc --noEmit` (frontend): 96 lỗi — **y hệt baseline trước khi có thay đổi này**, 0 lỗi liên quan `nurse`.
+- `npx eslint .` (frontend): 19 lỗi / 27 warning — đối chiếu `git log -S` từng dòng, xác nhận **toàn bộ đã tồn tại từ trước** (các file `Booking.tsx`, `Profile.tsx`, `doctor.service.ts`...), không phát sinh mới từ việc xóa y tá.
+- `npx vitest run` (frontend): **50/50 test pass**.
+- `node -e "import('./src/app.js')"` (backend): load thành công, không lỗi.
+- Kiểm tra route runtime thật (server dev đang chạy): `GET /api/nurse/dashboard` → **404** (route không còn tồn tại); `GET /api/doctor/queue`, `/api/doctor/room-status`, `/api/doctor/queue-entries` → **401** (route tồn tại, đúng middleware, chỉ thiếu token).
+- `git status` sau toàn bộ quá trình rà soát: sạch, không sót file tạm nào.
+
+**Kết luận:** actor Y tá đã được loại bỏ hoàn toàn khỏi code (backend + frontend) và dữ liệu vận hành trong DB thật, không phát sinh lỗi type/lint/test/runtime mới. Phần dữ liệu lịch sử còn giữ lại (195 audit log + 24 hồ sơ khám cũ có ghi chú điều dưỡng) là chủ đích, đúng theo nguyên tắc không phá dữ liệu y tế/audit đã có.
