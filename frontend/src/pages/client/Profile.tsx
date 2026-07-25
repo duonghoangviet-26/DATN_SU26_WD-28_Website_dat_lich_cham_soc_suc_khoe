@@ -123,9 +123,23 @@ export default function Profile() {
 
   useEffect(() => {
     const bookedId = searchParams.get('id')
-    if (justBooked && bookedId) {
+    const paymentId = searchParams.get('payment_id')
+    const isPaymentSuccess = searchParams.get('payment_status') === 'success'
+
+    if (isPaymentSuccess && paymentId) {
+      patientBookingService.confirmPayment(paymentId)
+        .then(() => {
+          patientRecordsService.getAppointments().then((res) => {
+            setAppointments(Array.isArray(res?.data) ? res.data : [])
+          })
+        })
+        .catch(() => {})
+    }
+
+    const targetId = bookedId || paymentId
+    if (targetId && (justBooked || isPaymentSuccess || paymentId)) {
       setDetailLoading(true)
-      patientRecordsService.getAppointmentDetail(bookedId)
+      patientRecordsService.getAppointmentDetail(targetId)
         .then((detail) => {
           setSelectedAppointment(detail)
           setDetailModalOpen(true)
@@ -843,7 +857,7 @@ export default function Profile() {
             <div className="space-y-3 text-sm">
               <div className="border-b border-slate-100 pb-2">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Địa điểm khám</p>
-                <p className="font-semibold text-slate-800 mt-1">🏠 {selectedAppointment.phong_kham || 'Phòng khám Tai Mũi Họng ViteFamily'}</p>
+                <p className="font-semibold text-slate-800 mt-1">🏠 {selectedAppointment.phong_kham ? `${selectedAppointment.phong_kham} - Phòng khám Tai Mũi Họng ViteFamily` : 'Phòng 102 - Tầng 1 - Phòng khám Tai Mũi Họng ViteFamily'}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{selectedAppointment.dia_chi_kham || 'Thành phố Hà Nội'}</p>
               </div>
 
