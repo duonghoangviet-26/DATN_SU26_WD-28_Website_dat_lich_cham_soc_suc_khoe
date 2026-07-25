@@ -5,6 +5,10 @@ import {
 } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { emitDashboardRevenueChanged } from '../../realtime/socket.js'
+// Ban `-7` cuc bo o file nay VON DA DUNG — nay dung chung mot nguon voi patient/doctor de hai
+// ben khong phan ky lai (truoc do patient tu viet ban thieu `-7`, lech 7 tieng).
+import { buildSlotDateTime, isSlotInPast } from '../../utils/clinicTime.js'
+import { nhaSlotQuaHanTrongLich } from '../../services/slotRelease.service.js'
 
 function parseDateOnly(value) {
   if (!value) return null
@@ -24,19 +28,8 @@ function getTodayDateOnly() {
   return today
 }
 
-function buildSlotDateTime(dateOnly, hhmm) {
-  const [hours, minutes] = String(hhmm || '').split(':').map(Number)
-  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
-  const dateTime = new Date(dateOnly)
-  // Tính theo giờ Việt Nam (UTC+7) nên ta lấy hours - 7 để ra giờ UTC tương ứng
-  dateTime.setUTCHours(hours - 7, minutes, 0, 0)
-  return dateTime
-}
-
-function isSlotInPast(dateOnly, slotStart, now = new Date()) {
-  const slotDateTime = buildSlotDateTime(dateOnly, slotStart)
-  return !slotDateTime || slotDateTime.getTime() <= now.getTime()
-}
+// buildSlotDateTime / isSlotInPast: nay dung chung tu utils/clinicTime.js (xem import o dau file).
+// Hanh vi GIU NGUYEN — ban dung chung cung tinh `hours - 7` nhu ban cuc bo cu.
 
 function formatDatePart(date) {
   const year = String(date.getUTCFullYear()).slice(-2)
@@ -134,17 +127,23 @@ export async function getSlots(req, res) {
     if (!ngayDate) return fail(res, 400, 'Ngay khong hop le')
     if (ngayDate.getTime() < getTodayDateOnly().getTime()) return ok(res, [])
 
+    // KHONG .lean() — can document that de nhaSlotQuaHanTrongLich() cap nhat ban in-memory.
     const schedule = await LichLamViec.findOne({
       doctor_id: doc._id,
       ngay: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
       trang_thai_ngay: 'lam_viec',
       trang_thai_xac_nhan: { $ne: 'tu_choi' },
-    }).lean()
+    })
 
     if (!schedule) return ok(res, [])
 
+    // QUET LAZY: nha slot giu cho qua han truoc khi doc — le tan thay ngay cho vua giai phong.
+    await nhaSlotQuaHanTrongLich(schedule)
+
     const slots = schedule.slots
       .filter((s) => s.status === 'active')
+      // Dong bo voi getSlots ben patient: slot bi khoa boi nghi phep da duyet khong duoc chao ban.
+      .filter((s) => !s.bi_khoa_boi_nghi_phep)
       .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
       .map((s) => ({
         id: s._id, schedule_id: schedule._id,
@@ -193,9 +192,20 @@ export async function createBooking(req, res) {
     const slot = schedule.slots.id(slot_id)
     if (!slot || slot.status !== 'active') return rollbackFail(409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
     
-    // Lễ tân đặt luôn nên slot booked
+    // Lễ tân đặt luôn nên slot booked.
+    // ⚠️ Điều kiện về slot phải nằm trong MỘT $elemMatch: viết rời ('slots._id' + 'slots.status')
+    // cho phép Mongo khớp hai điều kiện trên hai phần tử KHÁC NHAU của mảng, rồi `$` lại trỏ
+    // về phần tử đầu tiên — lễ tân có thể vô tình ghi đè slot người khác đang giữ. (rule mục 9, P0)
     const updated = await LichLamViec.findOneAndUpdate(
-      { _id: schedule_id, 'slots._id': slot_id, 'slots.status': 'active' },
+      {
+        _id: schedule_id,
+        slots: {
+          $elemMatch: {
+            _id: new mongoose.Types.ObjectId(String(slot_id)),
+            status: 'active',
+          },
+        },
+      },
       { $set: { 'slots.$.status': 'booked' } },
       { new: true, session }
     )

@@ -227,6 +227,13 @@ export interface SpecialtyItem {
     doctor_count?: number;
     status: "active" | "hidden";
     ngay_tao?: string;
+    // Cấu hình năng lực khám — rule mục 2/4/12 (.claude/rules/lich-lam-viec-bac-si.md).
+    // Optional vì bản ghi tạo trước migration 010 chưa có các field này.
+    thoi_gian_kham_trung_binh_phut?: number;
+    so_slot_moi_khung?: number | null; // null = tự tính floor(30 / thời gian khám)
+    ty_le_online_phan_tram?: number;
+    gia_kham?: number;
+    so_slot_moi_khung_thuc_dung?: number; // backend tính sẵn, chỉ để đọc
 }
 
 // ─── Dịch vụ ─────────────────────────────────────────────────────────────────

@@ -1,4 +1,9 @@
 import { BacSi, LichLamViec, LichSuChinhSuaLichLamViec, ChuyenKhoa } from '../models/index.js'
+import {
+  FALLBACK_KHONG_CHUYEN_KHOA,
+  chotSoSlotMoiKhung,
+  chotTyLeOnline,
+} from '../utils/slotConfig.js'
 
 // Phan bo so slot ONLINE trong moi khung 30' cua 1 ca, xen ke theo dung vi du trong
 // .claude/rules/lich-lam-viec-bac-si.md muc 4.3 (VD TMH ca sang 7 khung, online=10/14:
@@ -50,13 +55,21 @@ const CA_SANG_SO_KHUNG = 7
 const CA_CHIEU_SO_KHUNG = 8
 
 export async function buildDefaultScheduleSlots({ specialtyId = null, phongKham = null } = {}) {
-  // Fallback khi khong co specialtyId (vd bac si chua gan chuyen khoa): giu dung hanh vi
-  // CU truoc migration nay — 1 slot/khung, tat ca deu online.
+  // Bac si CHUA GAN CHUYEN KHOA: khong biet thoi gian kham -> giu fallback thu cong
+  // (1 slot/khung, 100% online). Co chuyen khoa nhung thieu field cau hinh (du lieu cu
+  // chua backfill) -> chotSoSlotMoiKhung/chotTyLeOnline ap mac dinh theo rule (15' -> 2
+  // slot, 70% online), KHONG con am tham tut ve 1 slot/100% online nhu truoc.
   const config = specialtyId
-    ? await ChuyenKhoa.findById(specialtyId).select('so_slot_moi_khung ty_le_online_phan_tram').lean()
+    ? await ChuyenKhoa.findById(specialtyId)
+        .select('so_slot_moi_khung ty_le_online_phan_tram thoi_gian_kham_trung_binh_phut')
+        .lean()
     : null
-  const soSlotMoiKhung = config?.so_slot_moi_khung ?? 1
-  const tyLeOnline = config?.ty_le_online_phan_tram ?? 100
+  const soSlotMoiKhung = config
+    ? chotSoSlotMoiKhung(config)
+    : FALLBACK_KHONG_CHUYEN_KHOA.so_slot_moi_khung
+  const tyLeOnline = config
+    ? chotTyLeOnline(config)
+    : FALLBACK_KHONG_CHUYEN_KHOA.ty_le_online_phan_tram
 
   const onlinePerKhungSang = phanBoOnlineTheoKhung(CA_SANG_SO_KHUNG, soSlotMoiKhung, tyLeOnline)
   const onlinePerKhungChieu = phanBoOnlineTheoKhung(CA_CHIEU_SO_KHUNG, soSlotMoiKhung, tyLeOnline)

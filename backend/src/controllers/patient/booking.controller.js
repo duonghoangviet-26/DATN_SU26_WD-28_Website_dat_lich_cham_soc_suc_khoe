@@ -7,6 +7,11 @@ import {
   cancelAppointmentWithPaymentSync,
   withOptionalTransaction,
 } from '../../services/bookingPaymentState.service.js'
+// Doi gio phong kham (UTC+7) -> moc tuyet doi. TRUOC DAY file nay tu viet buildSlotDateTime
+// bang setUTCHours(hours) — hieu "08:00" thanh 08:00Z = 15:00 gio VN, lech 7 tieng, khien he
+// thong chao ban va THU TIEN khung gio da troi qua. Xem docs/Phan tich truoc khi sua... (2026-07-25).
+import { buildSlotDateTime, isSlotInPast } from '../../utils/clinicTime.js'
+import { nhaSlotQuaHanTrongLich } from '../../services/slotRelease.service.js'
 import { ok, created, fail } from '../../utils/response.js'
 import {
   emitAdminRealtime,
@@ -38,17 +43,57 @@ function getTodayDateOnly() {
   return today
 }
 
-function buildSlotDateTime(dateOnly, hhmm) {
-  const [hours, minutes] = String(hhmm || '').split(':').map(Number)
-  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
-  const dateTime = new Date(dateOnly)
-  dateTime.setUTCHours(hours, minutes, 0, 0)
-  return dateTime
+// buildSlotDateTime / isSlotInPast: nay dung chung tu utils/clinicTime.js (xem import o dau file).
+
+// Trang thai coi la con chiem mot luot kham. `cancelled` va `no_show` KHONG tinh:
+// khach da huy thi thoi, khach no_show thi da mat 100% tien roi (rule muc 5) — chan ho
+// dat lai trong ngay chi la phat chong len phat.
+const TRANG_THAI_CHIEM_LUOT = [
+  'pending', 'confirmed', 'checked_in', 'in_progress',
+  'waiting_record', 'waiting_doctor_confirm', 'completed',
+]
+
+// Dinh danh NGUOI DUOC KHAM, khong phai nguoi dat.
+// Rule muc 5: gioi han tinh theo `member_id` vi mot tai khoan dat cho ca gia dinh —
+// tinh theo `user_id` se chan nham me dat cho hai con trong cung mot ngay.
+function dinhDanhNguoiDuocKham(userId, memberId) {
+  return memberId ? { member_id: memberId } : { user_id: userId, member_id: null }
 }
 
-function isSlotInPast(dateOnly, slotStart, now = new Date()) {
-  const slotDateTime = buildSlotDateTime(dateOnly, slotStart)
-  return !slotDateTime || slotDateTime.getTime() <= now.getTime()
+// Rule muc 5: toi da 1 slot `pending_payment` dang hoat dong / nguoi duoc kham.
+// Dat moi thi NHA giu cho cu ngay, khong de khach om nhieu cho cung luc.
+async function nhaGiuChoCuCuaNguoiKham({ userId, memberId, session }) {
+  const dangGiu = await LichHen.find({
+    ...dinhDanhNguoiDuocKham(userId, memberId),
+    status: 'pending',
+    payment_status: 'unpaid',
+  }).select('_id').session(session).lean()
+
+  for (const item of dangGiu) {
+    await cancelAppointmentWithPaymentSync({
+      appointmentId: item._id,
+      actorUserId: userId,
+      actorRole: 'user',
+      channel: 'patient_rebook',
+      reason: 'Tu dong huy giu cho cu vi benh nhan dat luot moi (rule muc 5)',
+      session,
+    })
+  }
+
+  return dangGiu.length
+}
+
+// Rule muc 5: 1 luot / CHUYEN KHOA / ngay / nguoi duoc kham.
+// Gioi han theo BAC SI (ban cu) vo nghia khi he thong tu gan bac si (muc 12) — khach
+// khong chon nguoi thi khong the lay nguoi lam don vi dem.
+async function timLuotTrungTrongNgay({ userId, memberId, specialtyId, ngay, session }) {
+  if (!specialtyId) return null
+  return LichHen.findOne({
+    ...dinhDanhNguoiDuocKham(userId, memberId),
+    specialty_id: specialtyId,
+    ngay_kham: { $gte: ngay, $lt: addDays(ngay, 1) },
+    status: { $in: TRANG_THAI_CHIEM_LUOT },
+  }).select('ma_lich_hen gio_kham status').session(session).lean()
 }
 
 // ============================================================
@@ -228,14 +273,19 @@ export async function getSlots(req, res) {
     if (ngayDate.getTime() < getTodayDateOnly().getTime()) return ok(res, [])
     if (isNaN(ngayDate)) return fail(res, 400, 'Ngày không hợp lệ')
 
+    // KHONG .lean() — can document that de nhaSlotQuaHanTrongLich() cap nhat duoc ban in-memory.
     const schedule = await LichLamViec.findOne({
       doctor_id: doc._id,
       ngay: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
       trang_thai_ngay: 'lam_viec',
       trang_thai_xac_nhan: { $ne: 'tu_choi' },
-    }).lean()
+    })
 
     if (!schedule) return ok(res, [])
+
+    // QUET LAZY: nha slot giu cho qua han NGAY TRUOC KHI doc — nguoi dang tim cho thay luon
+    // cho vua duoc giai phong. Cron 5' chi la luoi an toan cho lich khong ai doc toi.
+    await nhaSlotQuaHanTrongLich(schedule)
 
     // Lấy các lịch hẹn hợp lệ (chưa bị hủy) của bác sĩ trong ngày này
     const bookedAppointments = await LichHen.find({
@@ -252,6 +302,11 @@ export async function getSlots(req, res) {
 
     const slots = schedule.slots
       .filter((s) => s.status === 'active' && !s.benh_nhan_id && !bookedSlotIds.has(s._id.toString()))
+      // Slot bi khoa boi nghi phep da duyet: createBooking DA chan (xem duoi), nhung getSlots
+      // truoc day KHONG loc -> van chao ban roi bam dat moi bao 409. Hai test bat loi nay:
+      // doctor.leave-sync.test.js "Duyet nghi theo khung gio..." va "getSlots va createBooking
+      // loai slot co bi_khoa_boi_nghi_phep=true du status con active".
+      .filter((s) => !s.bi_khoa_boi_nghi_phep)
       .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
       // Chi hien slot ONLINE cho benh nhan tu dat (muc 5.1 dac ta). Dung "!== 'walk_in'" thay vi
       // "=== 'online'" de tuong thich nguoc voi slot tao TRUOC migration (thieu loai_slot -> undefined).
@@ -350,6 +405,37 @@ export async function createBooking(req, res) {
         return rollbackFail(400, 'Khung gio da qua, vui long chon khung gio khac')
       }
 
+      // ── Chan trung luot (rule muc 5) ────────────────────────────────────────
+      // Thu tu QUAN TRONG: nha giu cho cu TRUOC, roi moi dem luot con lai. Nguoc lai thi
+      // chinh giu cho bo do cua khach se chan khach dat lai — day dung la tinh huong da
+      // sinh ra 2 lich hen trung slot tren DB that (do 2026-07-26, slot ...83c3e8).
+      const specialtyDuKien = slotForValidation.specialty_id ?? doc.specialties?.[0]?._id ?? null
+      await nhaGiuChoCuCuaNguoiKham({
+        userId: req.user.id,
+        memberId: member_id || null,
+        session,
+      })
+
+      const luotTrung = await timLuotTrungTrongNgay({
+        userId: req.user.id,
+        memberId: member_id || null,
+        specialtyId: specialtyDuKien,
+        ngay: appointmentDate,
+        session,
+      })
+      if (luotTrung) {
+        return rollbackFail(
+          409,
+          `Người được khám đã có lịch ${luotTrung.ma_lich_hen ?? ''} lúc ${luotTrung.gio_kham} cùng chuyên khoa trong ngày này. `
+          + 'Mỗi người chỉ đặt 1 lượt / chuyên khoa / ngày — vui lòng chọn ngày khác hoặc hủy lịch cũ.',
+        )
+      }
+
+      // ⚠️ PHAI gói mọi điều kiện về slot trong MỘT $elemMatch. Viết rời từng khoá
+      // ('slots._id', 'slots.status', ...) thì Mongo cho phép mỗi điều kiện khớp một PHẦN TỬ
+      // KHÁC NHAU của mảng: chỉ cần trong ngày còn bất kỳ slot nào 'active' là điều kiện
+      // status đã thoả, rồi toán tử `$` lại trỏ về phần tử khớp ĐẦU TIÊN — tức slot đang
+      // pending_payment của người khác vẫn có thể bị cướp. (rule mục 9, P0)
       const updated = await LichLamViec.findOneAndUpdate(
         {
           _id:                  schedule_id,
@@ -357,11 +443,15 @@ export async function createBooking(req, res) {
           ngay: { $gte: appointmentDate, $lt: addDays(appointmentDate, 1) },
           trang_thai_ngay: 'lam_viec',
           trang_thai_xac_nhan: { $ne: 'tu_choi' },
-          'slots._id':          slot_id,
-          'slots.status':       'active',
-          'slots.benh_nhan_id': null,
-          'slots.bi_khoa_boi_nghi_phep': { $ne: true },
-          'slots.loai_slot':    { $ne: 'walk_in' },
+          slots: {
+            $elemMatch: {
+              _id:          new mongoose.Types.ObjectId(String(slot_id)),
+              status:       'active',
+              benh_nhan_id: null,
+              bi_khoa_boi_nghi_phep: { $ne: true },
+              loai_slot:    { $ne: 'walk_in' },
+            },
+          },
         },
         {
           $set: {
@@ -508,11 +598,11 @@ export async function cancelBooking(req, res) {
     if (['completed', 'cancelled'].includes(a.status)) {
       return fail(res, 409, 'Lịch hẹn không thể hủy ở trạng thái hiện tại')
     }
-    const [h, m] = a.gio_kham.split(':').map(Number)
-    const gioKham = new Date(a.ngay_kham)
-    gioKham.setHours(h || 0, m || 0, 0, 0)
+    // gio_kham la gio phong kham (UTC+7). Truoc day dung setHours() truc tiep — duoi TZ=UTC
+    // (config/timezone.js) no chinh la setUTCHours nen lech 7 tieng, chan huy sai thoi diem.
+    const gioKham = buildSlotDateTime(a.ngay_kham, a.gio_kham)
 
-    if (gioKham.getTime() < Date.now()) {
+    if (!gioKham || gioKham.getTime() < Date.now()) {
       return fail(res, 400, 'Không thể hủy lịch hẹn đã qua thời gian khám')
     }
 

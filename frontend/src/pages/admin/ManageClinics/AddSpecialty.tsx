@@ -2,6 +2,12 @@ import { useState } from 'react'
 import type { SpecialtyItem } from '@/types'
 import { clinicService } from '@/services/clinic.service'
 import Icon from '@/components/admin/icons'
+import SpecialtyCapacityFields, {
+  CAPACITY_MAC_DINH,
+  capacityPayload,
+  kiemTraCapacity,
+  type CapacityForm,
+} from './SpecialtyCapacityFields'
 
 interface Props {
   onSaved: (specialty: SpecialtyItem) => void
@@ -10,6 +16,7 @@ interface Props {
 
 export default function AddSpecialty({ onSaved, onCancel }: Props) {
   const [form, setForm] = useState({ ten: '', mo_ta: '', icon_url: '', thu_tu: 0 })
+  const [capacity, setCapacity] = useState<CapacityForm>(CAPACITY_MAC_DINH)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,6 +47,11 @@ export default function AddSpecialty({ onSaved, onCancel }: Props) {
       setError('Tên chuyên khoa là bắt buộc')
       return
     }
+    const loiCapacity = kiemTraCapacity(capacity)
+    if (loiCapacity) {
+      setError(loiCapacity)
+      return
+    }
 
     try {
       setSaving(true)
@@ -49,6 +61,7 @@ export default function AddSpecialty({ onSaved, onCancel }: Props) {
         mo_ta: form.mo_ta || undefined,
         icon_url: form.icon_url || undefined,
         thu_tu: form.thu_tu,
+        ...capacityPayload(capacity),
       })
       onSaved(created)
     } catch (err: unknown) {
@@ -123,6 +136,11 @@ export default function AddSpecialty({ onSaved, onCancel }: Props) {
               />
             </div>
           </div>
+
+          <SpecialtyCapacityFields
+            form={capacity}
+            onChange={(patch) => setCapacity((prev) => ({ ...prev, ...patch }))}
+          />
         </div>
 
         <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-5 sm:px-6 lg:border-l lg:border-t-0">

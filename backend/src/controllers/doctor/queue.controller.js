@@ -4,6 +4,7 @@ import { tinhMucUuTien } from '../../models/HangDoi.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { findOrCreateRoomStatus } from './room-status.controller.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
+import { buildSlotDateTime } from '../../utils/clinicTime.js'
 
 // ============================================================
 // Hàng đợi động (Bác sĩ) — Routes: /api/doctor/queue
@@ -46,12 +47,13 @@ function sapXepHangDoi(list) {
   })
 }
 
+// gio_hen_goc quyet dinh BAC UU TIEN hang doi (rule §6) nen sai gio la sai thu tu goi benh nhan.
+// Comment cu o day ghi "local — KHONG dung setUTCHours (tranh lech mui gio)" la HIEU NHAM:
+// config/timezone.js ep TZ=UTC toan tien trinh nen setHours() CHINH LA setUTCHours() -> van lech
+// 7 tieng. Nay dung ham chuan (tru 7) trong utils/clinicTime.js.
 function buildGioHenGoc(ngayKham, gioKham) {
   if (!gioKham) return null
-  const [h, m] = gioKham.split(':').map(Number)
-  const d = new Date(ngayKham)
-  d.setHours(h, m, 0, 0) // local — KHÔNG dùng setUTCHours (tránh lệch múi giờ)
-  return d
+  return buildSlotDateTime(ngayKham, gioKham)
 }
 
 async function ghiAuditQueue(doctorUserId, hanhDong, entryId, duLieuCu, duLieuMoi) {
@@ -79,9 +81,9 @@ async function tinhCanhBaoQuaTai(doctorId, todayStart) {
   const schedule = await LichLamViec.findOne({ doctor_id: doctorId, ngay: todayStart }).lean()
   if (!schedule?.slots?.length) return null
   const gioKetThucCa = schedule.slots.reduce((max, s) => (s.gio_ket_thuc > max ? s.gio_ket_thuc : max), '00:00')
-  const [h, m] = gioKetThucCa.split(':').map(Number)
-  const ketThucCa = new Date(todayStart)
-  ketThucCa.setHours(h, m, 0, 0)
+  // Gio ket thuc ca cung la gio phong kham -> dung ham chuan, khong setHours truc tiep.
+  const ketThucCa = buildSlotDateTime(todayStart, gioKetThucCa)
+  if (!ketThucCa) return null
 
   const room = await TrangThaiPhongKham.findOne({ doctor_id: doctorId, ngay: todayStart }).lean()
   const tbPhut = room?.thoi_gian_kham_tb_phut ?? 20

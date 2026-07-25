@@ -78,14 +78,16 @@
 - Đã bước chân tới quầy (có `HangDoi`) thì **không bao giờ** thành `no_show`, dù trễ bao lâu.
 - Lịch hẹn thuộc ca có bác sĩ nghỉ **không bao giờ** được tự động chuyển `no_show`.
 
-## 9. Trạng thái đồng bộ với code (2026-07-23, cập nhật 2026-07-25)
+## 9. Trạng thái đồng bộ với code (2026-07-23, cập nhật 2026-07-26)
 - ĐÃ ĐẠT (không đổi): `HangDoi`, giữ slot `pending_payment`.
-- ⚠️ **LỖI ĐANG TỒN TẠI — phải sửa trước khi triển khai mục 11–14** (chi tiết + bằng chứng dòng code: xem doc phân tích 2026-07-25):
-  - **P0 — nghiệp vụ 70/30 hiện KHÔNG chạy:** `models/ChuyenKhoa.js` mất 3 field cấu hình sau khi merge `main` (commit `ca685dc`), trong khi `scheduleGenerator.service.js:56` vẫn `.select()` chúng → Mongoose trả `undefined` → fallback **1 slot/khung, 100% online**. Phải khôi phục field + backfill + sinh lại lịch tương lai.
-  - **P0 — lệch múi giờ 7 tiếng:** `buildSlotDateTime` dùng `setUTCHours` (08:00Z = 15:00 VN) nên cho đặt slot đã qua; `cancelBooking` lại dùng `setHours` local. Phải có **một** hàm chuẩn `Asia/Ho_Chi_Minh` dùng chung — mọi mốc `T-30'`/`T-15'`/`T+15'` phụ thuộc vào nó.
-  - **P0 — claim slot sai phần tử mảng:** filter đặt `'slots._id'`, `'slots.status'`, `'slots.benh_nhan_id'` ngang cấp → Mongo khớp trên các phần tử KHÁC NHAU, có thể cướp slot đang `pending_payment`. Phải gói vào **một `$elemMatch`**.
-  - **P0 — không chặn trùng lượt:** `createBooking` hiện không kiểm tra gì; phải áp giới hạn ở mục 5.
-  - P2: đánh giá bác sĩ tạo được khi chưa `completed` (chỉ cho review lịch `status='completed'`); thiếu unique partial index `{schedule_id, slot_id}` cho ràng buộc 1 slot ↔ 1 `LichHen`.
+- ✅ **4 lỗi P0 ĐÃ SỬA 2026-07-26** (chi tiết + kiểm chứng: `docs/Trien khai L14 + rang buoc slot (2026-07-26).md`):
+  - ~~Nghiệp vụ 70/30 không chạy~~ → khôi phục 4 field cấu hình vào `models/ChuyenKhoa.js` + `utils/slotConfig.js` (nguồn duy nhất cho phép tính) + migration `010`. **Lưu ý: dữ liệu trong DB KHÔNG mất — chỉ model mất field.** Đã kiểm chứng lịch sinh ra đúng 2 slot/khung, sáng 14 (10 online) / chiều 16 (11 online) / ngày 30.
+  - ~~Lệch múi giờ 7 tiếng~~ → `utils/clinicTime.js` dùng chung (đã xong 2026-07-25).
+  - ~~Claim slot sai phần tử mảng~~ → gói vào **một `$elemMatch`** ở cả `patient/booking.controller.js` và `receptionist/booking.controller.js`.
+  - ~~Không chặn trùng lượt~~ → `createBooking` nay nhả giữ chỗ cũ **trước**, rồi mới đếm 1 lượt/chuyên khoa/ngày/`member_id`.
+  - Ràng buộc 1 slot ↔ 1 `LichHen` nay có **unique partial index** `uniq_lich_hen_theo_slot` ở tầng DB (`$type: 'objectId'` + `status $in`, cần MongoDB ≥ 5.3 — cluster đang chạy 8.0.28).
+- ⚠️ **CHƯA CHẠY trên DB nhóm:** `dedupe-slot-appointments.js --apply` (gỡ 5 cặp trùng, bắt buộc trước khi index build được) và migration `010`.
+- Còn lại P2: đánh giá bác sĩ tạo được khi chưa `completed` (chỉ cho review lịch `status='completed'`).
 - Chính sách **hoàn tiền đã bị bãi bỏ** (mục 5) — mọi nhánh `HoanTien` trong luồng đặt lịch không còn hiệu lực. **Đổi lịch ≤3 → 1 lần** cho khách yêu cầu.
 - CÒN THIẾU (theo Gap G1–G7 trong doc): tầng khung giờ + nhiều slot/khung, ca làm việc, cấu hình chuyên khoa, `loai_slot` online/walk-in, ràng buộc phòng, trạng thái `cho_dich_vu`.
 - Khi triển khai: ưu tiên **P0** (thêm field cấu hình `ChuyenKhoa`) → P1 → P2, có migration, **không phá dữ liệu/demo**.

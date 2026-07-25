@@ -1,4 +1,52 @@
+import "../config/timezone.js"; // PHẢI đứng đầu — ép TZ=UTC để seed ghi `ngay` cùng múi giờ với cron
 import mongoose from "mongoose";
+import dotenv from "dotenv";
+import bcrypt from "bcryptjs";
+import path from "path";
+import { fileURLToPath } from "url";
+import * as models from "../models/index.js";
+
+// ⚠️ Toàn bộ phần header của file này (đọc .env, import models/bcrypt, 2 hàm tiện ích
+// ngày tháng) đã MẤT trong một lần merge — script chết ngay dòng `mongoose.connect(uri)`
+// với ReferenceError, tức cả nhóm không seed lại DB được. Khôi phục 2026-07-26.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, "../../.env") });
+
+const uri = process.env.MONGODB_URI;
+if (!uri) {
+    console.error("❌ Thiếu MONGODB_URI trong backend/.env");
+    process.exit(1);
+}
+
+// Ngày "trần" theo UTC. TZ tiến trình đã bị ép = UTC (config/timezone.js) nên đây cũng
+// chính là mốc mà cron và scheduleGenerator dùng — không được đổi sang setHours local.
+function dateOnlyUtc(value) {
+    const date = new Date(value);
+    date.setUTCHours(0, 0, 0, 0);
+    return date;
+}
+
+function addDays(date, days) {
+    return new Date(date.getTime() + days * 86400000);
+}
+
+// "YYYY-MM-DD" theo UTC — phải dùng getUTC* để khớp `formatDatePart` trong các controller
+// sinh mã lịch hẹn / số hóa đơn, nếu không counter seed ra sẽ lệch key một ngày.
+function isoDateOnly(value) {
+    const date = new Date(value);
+    return [
+        date.getUTCFullYear(),
+        String(date.getUTCMonth() + 1).padStart(2, "0"),
+        String(date.getUTCDate()).padStart(2, "0"),
+    ].join("-");
+}
+
+// Tên phòng dạng đầy đủ — PHẢI khớp virtual `full_name` của models/PhongKham.js và
+// clinic-room.controller.js, vì `BacSi.phong_kham_mac_dinh` lưu chuỗi này chứ không lưu id.
+function roomFullName(room) {
+    if (!room) return null;
+    return `${room.ten}, Tầng ${room.tang}, Tòa ${room.toa}`;
+}
 
 async function seedAll() {
     try {
@@ -133,6 +181,9 @@ async function seedAll() {
             },
         ]);
 
+        // Cấu hình năng lực khám (rule mục 2): thời gian khám TB quyết định số slot/khung 30',
+        // ty_le_online_phan_tram quyết định quota giữ chỗ online vs khách tới quầy,
+        // gia_kham là MỘT giá duy nhất cho cả chuyên khoa (rule mục 12).
         const specialties = await ChuyenKhoa.create([
             {
                 phong_kham_id: clinic._id,
@@ -142,6 +193,10 @@ async function seedAll() {
                 slug: "nhi-khoa",
                 thu_tu: 1,
                 status: "active",
+                thoi_gian_kham_trung_binh_phut: 15,
+                so_slot_moi_khung: null, // tự tính floor(30/15) = 2
+                ty_le_online_phan_tram: 70,
+                gia_kham: 200000,
             },
             {
                 phong_kham_id: clinic._id,
@@ -151,6 +206,10 @@ async function seedAll() {
                 slug: "da-lieu",
                 thu_tu: 2,
                 status: "active",
+                thoi_gian_kham_trung_binh_phut: 15,
+                so_slot_moi_khung: null,
+                ty_le_online_phan_tram: 70,
+                gia_kham: 250000,
             },
             {
                 phong_kham_id: clinic._id,
@@ -160,6 +219,10 @@ async function seedAll() {
                 slug: "tai-mui-hong",
                 thu_tu: 3,
                 status: "active",
+                thoi_gian_kham_trung_binh_phut: 15,
+                so_slot_moi_khung: null, // 2 slot/khung -> sáng 14, chiều 16, ngày 30
+                ty_le_online_phan_tram: 70,
+                gia_kham: 300000,
             },
         ]);
 

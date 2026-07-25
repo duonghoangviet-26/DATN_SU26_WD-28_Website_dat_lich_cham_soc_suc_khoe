@@ -4,6 +4,7 @@ import {
   generateRollingWindowForAllDoctors,
 } from '../services/scheduleGenerator.service.js'
 import { autoCancelExpiredHomeAppointments } from '../services/appointmentAutoCancel.service.js'
+import { nhaSlotQuaHanToanHeThong } from '../services/slotRelease.service.js'
 
 const CLINIC_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
@@ -35,19 +36,33 @@ export function startCronJobs() {
     }
   }, { timezone: CLINIC_TIMEZONE }))
 
-  // Every 15 minutes: auto-cancel expired unpaid home appointments.
-  tasks.push(cron.schedule('*/15 * * * *', async () => {
+  // Moi 5 phut: huy lich qua han thanh toan (di TU PHIA LICH HEN) + nha slot ket
+  // (di TU PHIA SLOT). Hai chieu bo sung cho nhau:
+  //   - autoCancel...: co LichHen qua han -> huy lich + nha slot cua no.
+  //   - nhaSlotQuaHan...: slot ket ma KHONG con LichHen nao tro toi -> chieu kia khong voi toi.
+  // Ha 15' -> 5' vi cutoff dong dat online la T-30': cron cham 15' an mat nua cua so ban lai
+  // (rule §11). Day chi la LUOI AN TOAN — duong chinh la quet lazy luc doc lich.
+  tasks.push(cron.schedule('*/5 * * * *', async () => {
     try {
       const count = await autoCancelExpiredHomeAppointments()
       if (count > 0) {
-        console.log(`[cron] Da tu dong huy ${count} lich home qua han thanh toan`)
+        console.log(`[cron] Da tu dong huy ${count} lich qua han thanh toan`)
       }
     } catch (err) {
-      console.error('[cron] Loi auto-cancel home:', err.message)
+      console.error('[cron] Loi auto-cancel:', err.message)
+    }
+
+    try {
+      const { soLich, soSlot } = await nhaSlotQuaHanToanHeThong()
+      if (soSlot > 0) {
+        console.log(`[cron] Da nha ${soSlot} slot giu cho qua han tren ${soLich} lich lam viec`)
+      }
+    } catch (err) {
+      console.error('[cron] Loi nha slot qua han:', err.message)
     }
   }, { timezone: CLINIC_TIMEZONE }))
 
-  console.log('Da khoi dong cron jobs (auto fill lich khi startup, sinh/bu lich 00:00 Chu nhat, auto-cancel moi 15 phut)')
+  console.log('Da khoi dong cron jobs (auto fill lich khi startup, sinh/bu lich 00:00 Chu nhat, auto-cancel + nha slot ket moi 5 phut)')
 
   return {
     stop() {

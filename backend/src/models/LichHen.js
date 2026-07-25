@@ -101,6 +101,35 @@ appointmentSchema.index({ ngay_kham: 1, status: 1 })
 appointmentSchema.index({ ngay_kham: 1, payment_status: 1 })
 appointmentSchema.index({ ngay_kham: 1, doctor_id: 1 })
 
+// ── Rang buoc BAT BIEN: 1 slot <-> toi da 1 LichHen (rule muc 7) ─────────────
+// Truoc day rang buoc nay CHI ton tai trong code (check + findOneAndUpdate), nen moi lo
+// hong claim slot deu de lai du lieu trung ma khong ai phat hien. Day la luoi cuoi cung
+// o tang DB: du controller co sai, Mongo van tu choi ban ghi thu hai.
+//
+// $type: 'objectId' thay vi $ne: null — partialFilterExpression KHONG ho tro $ne, va lich
+// kham tai nha cu co schedule_id/slot_id = null se dung chung khoa (null, null) neu khong loc.
+// `cancelled` co y KHONG nam trong danh sach: lich da huy nha slot ra, cho phep ban lai.
+//
+// ⚠️ Index nay chi build duoc khi du lieu da sach. Chay truoc:
+//    node src/scripts/dedupe-slot-appointments.js --apply
+appointmentSchema.index(
+  { schedule_id: 1, slot_id: 1 },
+  {
+    unique: true,
+    name: 'uniq_lich_hen_theo_slot',
+    partialFilterExpression: {
+      schedule_id: { $type: 'objectId' },
+      slot_id: { $type: 'objectId' },
+      status: {
+        $in: [
+          'pending', 'confirmed', 'checked_in', 'in_progress',
+          'waiting_record', 'waiting_doctor_confirm', 'completed', 'no_show', 'skipped',
+        ],
+      },
+    },
+  }
+)
+
 appointmentSchema.pre('validate', function () {
   if (this.loai_kham === 'home') {
     if (!this.dia_chi_kham) throw new Error('Kham tai nha (home) bat buoc co dia_chi_kham')
