@@ -68,7 +68,7 @@ export default function AddSpecialty({ onSaved, onCancel }: Props) {
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Thêm mới</p>
           <h2 className="mt-2 text-lg font-bold text-slate-800">Khởi tạo chuyên khoa</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Tạo nhanh một chuyên khoa mới và bổ sung mô tả, icon, thứ tự hiển thị ngay trong cùng màn hình.
+            Tạo nhanh một chuyên khoa mới và bổ sung mô tả, hình ảnh, thứ tự hiển thị ngay trong cùng màn hình.
           </p>
         </div>
         <button onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
@@ -96,7 +96,7 @@ export default function AddSpecialty({ onSaved, onCancel }: Props) {
                 className="input w-full"
                 placeholder="VD: Nội khoa"
               />
-              <p className="mt-1 text-xs text-slate-400">Slug sẽ được tạo tự động dựa trên tên chuyên khoa.</p>
+              <p className="mt-1 text-xs text-slate-400">Đường dẫn chuyên khoa sẽ được tạo tự động dựa trên tên.</p>
             </div>
 
             <div className="sm:col-span-2">
@@ -127,10 +127,10 @@ export default function AddSpecialty({ onSaved, onCancel }: Props) {
 
         <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-5 sm:px-6 lg:border-l lg:border-t-0">
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Icon / Hình ảnh</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Hình ảnh</p>
             <div className="mt-4 flex items-center gap-3">
               {form.icon_url ? (
-                <img src={form.icon_url} alt="Icon" className="h-16 w-16 rounded-2xl border border-slate-200 object-cover" />
+                <img src={form.icon_url} alt="Hình ảnh chuyên khoa" className="h-16 w-16 rounded-2xl border border-slate-200 object-cover" />
               ) : (
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 text-slate-400">
                   <Icon name="image" className="h-6 w-6" />
@@ -145,7 +145,7 @@ export default function AddSpecialty({ onSaved, onCancel }: Props) {
                   disabled={uploading}
                 />
                 <p className="mt-2 text-xs text-slate-400">
-                  {uploading ? 'Đang tải lên...' : 'Nên dùng icon rõ ràng, tỉ lệ vuông để hiển thị đẹp ở danh sách.'}
+                  {uploading ? 'Đang tải lên...' : 'Nên dùng hình vuông, rõ nét để hiển thị đẹp trong danh sách.'}
                 </p>
               </div>
             </div>

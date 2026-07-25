@@ -169,7 +169,7 @@ export default function ReviewFilter({ filters, onChange, doctors }: Props) {
 
             {/* Popover chọn ngày */}
             {showDateFields && (
-              <div className="absolute right-0 top-full mt-2 z-30 w-72 p-4 bg-white rounded-xl shadow-xl border border-slate-100 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 top-full mt-2 z-30 w-72 p-4 bg-white rounded-xl shadow-xl border border-slate-100 space-y-3">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <span className="text-xs font-bold text-slate-700">Lọc theo ngày</span>
                   <button

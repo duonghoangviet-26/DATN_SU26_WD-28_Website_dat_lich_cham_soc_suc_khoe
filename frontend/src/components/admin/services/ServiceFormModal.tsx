@@ -211,7 +211,7 @@ export default function ServiceFormModal({
               Phạm vi giao diện hiện tại
             </p>
             <p className="text-slate-700">
-              Admin chỉ tạo và sửa <span className="font-semibold">dịch vụ liên quan theo chuyên khoa</span>.
+              Quản trị viên chỉ tạo và sửa <span className="font-semibold">dịch vụ liên quan theo chuyên khoa</span>.
             </p>
             <p className="mt-1 text-xs text-slate-500">
               Dịch vụ đặt lịch tại nhà đã ngừng hỗ trợ tạo mới; dữ liệu cũ chỉ dùng để đối soát lịch sử.

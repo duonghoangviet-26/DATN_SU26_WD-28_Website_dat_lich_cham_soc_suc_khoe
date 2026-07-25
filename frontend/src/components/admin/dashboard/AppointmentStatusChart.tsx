@@ -37,14 +37,13 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
   return (
     <ChartCard
       title="Trạng thái lịch hẹn"
-      subtitle="Phân bổ LichHen theo trạng thái trong 30 ngày gần nhất."
+      subtitle="Phân bổ lịch hẹn theo trạng thái trong 30 ngày gần nhất."
       icon="calendar"
       iconBackgroundClassName="bg-purple-100"
       iconClassName="text-purple-600"
       loading={loading}
       empty={!data.length}
       error={error}
-      pulseKey={refreshVersion}
     >
       <div className="relative h-56 w-full" aria-label="Biểu đồ trạng thái lịch hẹn">
         <ResponsiveContainer width="100%" height="100%">

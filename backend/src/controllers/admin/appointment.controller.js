@@ -15,6 +15,7 @@ const ADMIN_REFUND_SETTING_KEYS = ['hoan_tien_admin_huy', 'hoan_tien_admin_huy_k
 const APPOINTMENT_LIST_LIMIT_MAX = 100
 const ACTIVE_OPERATIONAL_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress']
 const CLINIC_TIME_OFFSET_MS = 7 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
@@ -152,6 +153,7 @@ function buildSortedAppointmentIdsPipeline(query, skip, limit) {
 
 function getQuickFilterConditions(quickFilter) {
   const today = toDateOnly(new Date())
+  const tomorrow = new Date(today.getTime() + DAY_MS)
 
   switch (quickFilter) {
     case 'today':
@@ -161,7 +163,7 @@ function getQuickFilterConditions(quickFilter) {
       }
     case 'upcoming':
       return {
-        ngay_kham: { $gte: today },
+        ngay_kham: { $gte: tomorrow },
         status: { $in: ACTIVE_OPERATIONAL_STATUSES },
       }
     case 'unpaid':

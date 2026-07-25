@@ -253,7 +253,7 @@ export default function ManageReviews() {
 
       {/* Thanh tác vụ hàng loạt */}
       {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl animate-in fade-in slide-in-from-top-4 duration-200">
+        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-xl">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-700">
               Đã chọn <strong className="text-brand-600">{selectedIds.length}</strong> đánh giá

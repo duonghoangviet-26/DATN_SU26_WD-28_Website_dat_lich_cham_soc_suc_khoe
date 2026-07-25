@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { doctorService } from '@/services/doctor.service'
 import type { DoctorDetailAPI, DoctorAuditLog, DoctorApproval, DoctorAppointmentHistory } from '@/types'
 import { DOCTOR_APPROVAL_LABEL, APPOINTMENT_STATUS_LABEL } from '@/utils/constants'
+import { formatAdminActionLabel, formatAdminFieldLabel, formatAdminValue } from '@/utils/adminDisplay'
 import { formatPrice, formatDateTime, formatDate } from '@/utils/format'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
@@ -44,11 +45,9 @@ const formatLogValue = (field: string, value: unknown) => {
   if (value === null || value === undefined || value === '') return 'Trống'
   if (field === 'anh_dai_dien') return value ? 'Có ảnh' : 'Không có ảnh'
   if (field === 'phi_kham' || field === 'phi_tu_van') return formatPrice(Number(value))
-  if (field === 'trang_thai_duyet') return DOCTOR_APPROVAL_LABEL[value as DoctorApproval] || String(value)
+  if (field === 'trang_thai_duyet') return DOCTOR_APPROVAL_LABEL[value as DoctorApproval] || formatAdminValue(field, value)
   if (field === 'la_hien' || typeof value === 'boolean') return value ? 'Có' : 'Không'
-  if (Array.isArray(value)) return value.length ? value.map((item) => typeof item === 'object' ? JSON.stringify(item) : String(item)).join(', ') : 'Trống'
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
+  return formatAdminValue(field, value)
 }
 
 const getChangedFields = (log: DoctorAuditLog) => {
@@ -321,9 +320,9 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                               <div className="flex justify-between items-start mb-2">
                                 <div>
                                   <p className="font-semibold text-slate-800 text-sm">
-                                    {ACTION_LABEL_MAP[log.hanh_dong] || log.hanh_dong}
+                                    {ACTION_LABEL_MAP[log.hanh_dong] || formatAdminActionLabel(log.hanh_dong)}
                                   </p>
-                                  <p className="text-xs text-slate-500 mt-0.5">Bởi: {log.nguoi_thuc_hien_id?.ho_ten || 'Admin ẩn'}</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">Bởi: {log.nguoi_thuc_hien_id?.ho_ten || 'Quản trị viên ẩn danh'}</p>
                                 </div>
                                 <span className="text-xs text-slate-400 whitespace-nowrap">{formatDateTime(log.ngay_tao)}</span>
                               </div>
@@ -345,7 +344,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                                     <tbody className="divide-y divide-slate-100 bg-white">
                                       {changedFields.map((field) => (
                                         <tr key={field}>
-                                          <td className="px-3 py-2 font-semibold text-slate-600">{FIELD_LABELS[field] || field}</td>
+                                          <td className="px-3 py-2 font-semibold text-slate-600">{FIELD_LABELS[field] || formatAdminFieldLabel(field)}</td>
                                           <td className="max-w-[180px] break-words px-3 py-2 text-red-500 line-through">{formatLogValue(field, log.du_lieu_cu?.[field])}</td>
                                           <td className="max-w-[180px] break-words px-3 py-2 font-semibold text-emerald-600">{formatLogValue(field, log.du_lieu_moi?.[field])}</td>
                                         </tr>
@@ -418,7 +417,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                                   </td>
                                   <td className="px-5 py-3 whitespace-nowrap">
                                     <Badge color={STATUS_COLOR[apt.status] || 'gray'}>
-                                      {APPOINTMENT_STATUS_LABEL[apt.status] || apt.status}
+                                      {APPOINTMENT_STATUS_LABEL[apt.status] || formatAdminValue('status', apt.status)}
                                     </Badge>
                                   </td>
                                   <td className="px-5 py-3 whitespace-nowrap text-right font-medium text-slate-700">

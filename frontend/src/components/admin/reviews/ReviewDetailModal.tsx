@@ -96,7 +96,7 @@ export default function ReviewDetailModal({ open, review, onClose, onActionSucce
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-200">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl border border-slate-100">
         
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4">
