@@ -24,13 +24,32 @@ function getGatewayResponseObject(payment) {
 }
 
 function formatVnpDate(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  return `${year}${month}${day}${hours}${minutes}${seconds}`
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+
+  const parts = formatter.formatToParts(date)
+  let y = '', m = '', d = '', h = '', min = '', s = ''
+
+  parts.forEach(part => {
+    if (part.type === 'year') y = part.value
+    if (part.type === 'month') m = part.value
+    if (part.type === 'day') d = part.value
+    if (part.type === 'hour') h = part.value
+    if (part.type === 'minute') min = part.value
+    if (part.type === 'second') s = part.value
+  })
+
+  if (h === '24') h = '00'
+
+  return `${y}${m}${d}${h}${min}${s}`
 }
 
 function toDateOrNull(value) {
@@ -70,7 +89,7 @@ function buildMockVnpayUrl({
     vnp_IpAddr: '127.0.0.1',
     vnp_CreateDate: formatVnpDate(new Date()),
     vnp_ExpireDate: formatVnpDate(expiresAt),
-    vnp_ReturnUrl: `${DEFAULT_CLIENT_BASE_URL}/booking?payment_id=${payment._id}&gateway=vnpay`,
+    vnp_ReturnUrl: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/patient/payments/vnpay-return`,
   }
 
   const sortedKeys = Object.keys(rawParams).sort()
@@ -461,5 +480,230 @@ export async function confirmPayment(req, res) {
     await session.abortTransaction()
     session.endSession()
     return fail(res, err.statusCode || 500, err.message)
+  }
+}
+
+function sortObject(obj) {
+  const sorted = {}
+  const keys = Object.keys(obj).sort()
+  keys.forEach((key) => {
+    sorted[key] = obj[key]
+  })
+  return sorted
+}
+
+export async function vnpayIpn(req, res) {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+  try {
+    const vnp_Params = { ...req.query }
+    const secureHash = vnp_Params['vnp_SecureHash']
+
+    delete vnp_Params['vnp_SecureHash']
+    delete vnp_Params['vnp_SecureHashType']
+
+    const sortedParams = sortObject(vnp_Params)
+    const signData = new URLSearchParams()
+    Object.keys(sortedParams).forEach((key) => {
+      signData.append(key, sortedParams[key])
+    })
+
+    const secretKey = process.env.VNP_HASHSECRET || 'MPCYVPEZAQLIXFLZLGWBKOIXOPTHNWVA'
+    const hmac = crypto.createHmac('sha512', secretKey)
+    const signed = hmac.update(Buffer.from(signData.toString(), 'utf-8')).digest('hex')
+
+    if (secureHash !== signed) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(200).json({ RspCode: '97', Message: 'Checksum failed' })
+    }
+
+    const vnp_TxnRef = vnp_Params['vnp_TxnRef']
+    const payment = await ThanhToan.findOne({ 'gateway_response.vnp_txn_ref': vnp_TxnRef }).session(session)
+
+    if (!payment) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(200).json({ RspCode: '01', Message: 'Order not found' })
+    }
+
+    if (payment.status !== 'pending') {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(200).json({ RspCode: '02', Message: 'Order already confirmed' })
+    }
+
+    const rspCode = vnp_Params['vnp_ResponseCode']
+    if (rspCode === '00') {
+      const appointment = await LichHen.findById(payment.appointment_id).session(session)
+      let invoice = null
+      if (payment.hoa_don_id) {
+        invoice = await HoaDon.findById(payment.hoa_don_id).session(session)
+      }
+
+      await finalizePendingPayment({
+        payment,
+        appointment,
+        actorUserId: payment.benh_nhan_id,
+        actorRole: 'system',
+        channel: 'vnpay_ipn',
+        reason: 'VNPay xac nhan thanh toan thanh cong (IPN)',
+        providerData: {
+          provider: 'vnpay',
+          bank_code: vnp_Params['vnp_BankCode'] || 'VNBANK',
+          vnp_txn_ref: vnp_TxnRef,
+          gateway_transaction_id: vnp_Params['vnp_TransactionNo'],
+          confirmed_by: 'vnpay_ipn',
+        },
+        session,
+      })
+
+      await session.commitTransaction()
+      session.endSession()
+
+      emitAdminRealtime('admin:payment_updated', {
+        payment_id: payment._id,
+        appointment_id: appointment._id,
+        status: 'paid',
+        source: 'vnpay_ipn',
+      })
+      emitAdminRealtime('admin:appointment_updated', {
+        appointment_id: appointment._id,
+        status: 'confirmed',
+        payment_status: 'paid',
+        source: 'vnpay_ipn',
+      })
+      emitDashboardRevenueChanged({
+        ngay: payment.ngay_thanh_toan,
+        so_tien: payment.so_tien,
+        loai: 'thanh_toan',
+      })
+      emitDashboardAppointmentChanged('pending', 'confirmed')
+
+      if (invoice?._id) {
+        await tinhTrangThaiHoaDon(invoice._id)
+      }
+
+      return res.status(200).json({ RspCode: '00', Message: 'Confirm Success' })
+    } else {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(200).json({ RspCode: '00', Message: 'Payment failed' })
+    }
+  } catch (err) {
+    await session.abortTransaction()
+    session.endSession()
+    return res.status(200).json({ RspCode: '99', Message: 'Unknown error' })
+  }
+}
+
+export async function vnpayReturn(req, res) {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+  try {
+    const vnp_Params = { ...req.query }
+    const secureHash = vnp_Params['vnp_SecureHash']
+
+    delete vnp_Params['vnp_SecureHash']
+    delete vnp_Params['vnp_SecureHashType']
+
+    const sortedParams = sortObject(vnp_Params)
+    const signData = new URLSearchParams()
+    Object.keys(sortedParams).forEach((key) => {
+      signData.append(key, sortedParams[key])
+    })
+
+    const secretKey = process.env.VNP_HASHSECRET || 'MPCYVPEZAQLIXFLZLGWBKOIXOPTHNWVA'
+    const hmac = crypto.createHmac('sha512', secretKey)
+    const signed = hmac.update(Buffer.from(signData.toString(), 'utf-8')).digest('hex')
+
+    if (secureHash !== signed) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed&reason=checksum`)
+    }
+
+    const vnp_TxnRef = vnp_Params['vnp_TxnRef']
+    const rspCode = vnp_Params['vnp_ResponseCode']
+    const payment = await ThanhToan.findOne({ 'gateway_response.vnp_txn_ref': vnp_TxnRef }).session(session)
+
+    if (!payment) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed&reason=not_found`)
+    }
+
+    if (rspCode !== '00') {
+      await session.abortTransaction()
+      session.endSession()
+      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed&reason=payment_failed`)
+    }
+
+    if (payment.status === 'paid') {
+      await session.abortTransaction()
+      session.endSession()
+      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=success&payment_id=${payment._id}`)
+    }
+
+    if (payment.status === 'pending') {
+      const appointment = await LichHen.findById(payment.appointment_id).session(session)
+      let invoice = null
+      if (payment.hoa_don_id) {
+        invoice = await HoaDon.findById(payment.hoa_don_id).session(session)
+      }
+
+      await finalizePendingPayment({
+        payment,
+        appointment,
+        actorUserId: payment.benh_nhan_id,
+        actorRole: 'system',
+        channel: 'vnpay_return',
+        reason: 'VNPay xac nhan thanh toan thanh cong (Return URL)',
+        providerData: {
+          provider: 'vnpay',
+          bank_code: vnp_Params['vnp_BankCode'] || 'VNBANK',
+          vnp_txn_ref: vnp_TxnRef,
+          gateway_transaction_id: vnp_Params['vnp_TransactionNo'],
+          confirmed_by: 'vnpay_return',
+        },
+        session,
+      })
+
+      await session.commitTransaction()
+      session.endSession()
+
+      emitAdminRealtime('admin:payment_updated', {
+        payment_id: payment._id,
+        appointment_id: appointment._id,
+        status: 'paid',
+        source: 'vnpay_return',
+      })
+      emitAdminRealtime('admin:appointment_updated', {
+        appointment_id: appointment._id,
+        status: 'confirmed',
+        payment_status: 'paid',
+        source: 'vnpay_return',
+      })
+      emitDashboardRevenueChanged({
+        ngay: payment.ngay_thanh_toan,
+        so_tien: payment.so_tien,
+        loai: 'thanh_toan',
+      })
+      emitDashboardAppointmentChanged('pending', 'confirmed')
+
+      if (invoice?._id) {
+        await tinhTrangThaiHoaDon(invoice._id)
+      }
+
+      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=success&payment_id=${payment._id}`)
+    }
+
+    await session.abortTransaction()
+    session.endSession()
+    return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed`)
+  } catch (err) {
+    await session.abortTransaction()
+    session.endSession()
+    return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=error`)
   }
 }
