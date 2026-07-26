@@ -11,11 +11,13 @@ const formatGatewayExpiry = (dateStr: string) => {
 
 export interface BookingStep4PaymentProps {
   createdBooking: CreatedReceptionistBookingResult | null
+  paymentMethod: 'cash' | 'transfer'
   onDone: () => void
 }
 
 export default function BookingStep4Payment({
   createdBooking,
+  paymentMethod,
   onDone,
 }: BookingStep4PaymentProps) {
   const [paymentSnapshot, setPaymentSnapshot] = useState<ReceptionistPaymentStatusResult | null>(null)
@@ -25,7 +27,7 @@ export default function BookingStep4Payment({
   // Lắng nghe tạo VNPAY Payment Session
   const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
   useEffect(() => {
-    if (!createdBooking?.payment_id) return
+    if (!createdBooking?.payment_id || paymentMethod === 'cash') return
 
     let ignore = false
     setCreatingPaymentSession(true)
@@ -145,6 +147,34 @@ export default function BookingStep4Payment({
   }
 
   if (!createdBooking) return null
+
+  if (paymentMethod === 'cash') {
+    return (
+      <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+          <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-xl font-extrabold text-slate-800">Đặt lịch thành công!</h3>
+          <p className="text-sm text-slate-500">
+            Lịch khám đã được tạo và ghi nhận thanh toán tiền mặt tại quầy.
+          </p>
+        </div>
+        <div className="mx-auto max-w-sm space-y-2 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl text-left border border-slate-100">
+          <p className="flex justify-between"><span className="font-semibold">Mã lịch hẹn:</span> <span>{createdBooking.appointment_id}</span></p>
+          <p className="flex justify-between"><span className="font-semibold">Mã giao dịch:</span> <span>{createdBooking.ma_giao_dich}</span></p>
+          <p className="flex justify-between"><span className="font-semibold">Số tiền thu:</span> <span className="font-bold text-slate-800">{formatCurrency(createdBooking.gia_kham)}</span></p>
+        </div>
+        <div className="pt-4">
+          <Button onClick={onDone} className="bg-brand-600 hover:bg-brand-700 text-white min-w-[200px]">
+            Hoàn tất & Về danh sách
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">

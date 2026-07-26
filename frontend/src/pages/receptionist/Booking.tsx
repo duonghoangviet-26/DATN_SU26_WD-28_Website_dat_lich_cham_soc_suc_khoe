@@ -40,28 +40,40 @@ export default function ReceptionistBooking() {
   const [symptoms, setSymptoms] = useState('')
   const [bookingFor, setBookingFor] = useState<'self' | 'member' | 'other'>('other')
   const [selectedMemberId, setSelectedMemberId] = useState<string>('')
-
-  // --- Trạng thái Bước 3 & 4: Thanh toán & Kết quả ---
+  
+  // Trạng thái kết quả tạo
   const [createdBooking, setCreatedBooking] = useState<CreatedReceptionistBookingResult | null>(null)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'cash' | 'transfer'>('cash')
   const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
   const [paymentSnapshot, setPaymentSnapshot] = useState<ReceptionistPaymentStatusResult | null>(null)
+
+  // Validate form info
+  const handleValidateStep2 = () => {
+    if (!patientName.trim()) {
+      setToast({ message: 'Vui lòng nhập họ tên khách hàng.', type: 'error' })
+      return false
+    }
+    if (!patientPhone.trim()) {
+      setToast({ message: 'Vui lòng nhập số điện thoại khách hàng.', type: 'error' })
+      return false
+    }
+    if (!/^0\d{9,10}$/.test(patientPhone.trim())) {
+      setToast({ message: 'Số điện thoại không hợp lệ.', type: 'error' })
+      return false
+    }
+    return true
+  }
 
   // Khởi tạo danh sách 7 ngày tiếp theo
   useEffect(() => {
     const datesList = []
     const today = new Date()
-    for (let i = 0; i <= 7; i++) {
-      const nextDate = new Date(today)
-      nextDate.setDate(today.getDate() + i)
-      const yyyy = nextDate.getFullYear()
-      const mm = String(nextDate.getMonth() + 1).padStart(2, '0')
-      const dd = String(nextDate.getDate()).padStart(2, '0')
-      const dateStr = `${yyyy}-${mm}-${dd}`
-      const weekday = nextDate.toLocaleDateString('vi-VN', { weekday: 'short' })
-      const day = nextDate.getDate()
-      const month = nextDate.getMonth() + 1
-      const label = i === 0 ? `Hôm nay, ${day}/${month}` : `${weekday}, ${day}/${month}`
-      datesList.push({ value: dateStr, label })
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today)
+      date.setDate(today.getDate() + i)
+      const dateString = date.toISOString().split('T')[0]
+      const label = i === 0 ? 'Hôm nay' : i === 1 ? 'Ngày mai' : date.toLocaleDateString('vi-VN')
+      datesList.push({ value: dateString, label })
     }
     setDates(datesList)
     if (datesList.length > 0) {
@@ -84,9 +96,10 @@ export default function ReceptionistBooking() {
     }
   }, [selectedDate])
 
-  const selectedSlot = useMemo(() => {
-    return currentSlots.find(s => s.id === selectedSlotId) || null
-  }, [currentSlots, selectedSlotId])
+  const selectedSlot = useMemo(
+    () => currentSlots.find((s) => s.id === selectedSlotId) || null,
+    [currentSlots, selectedSlotId]
+  )
 
   const selectedDoctor = useMemo(() => {
     if (doctors.length === 0) return null
@@ -103,6 +116,7 @@ export default function ReceptionistBooking() {
     }
 
     setSubmittingBooking(true)
+    setSelectedPaymentMethod(paymentMethod)
     try {
       const payload: any = {
         doctor_id: 'auto', // LUÔN GÁN BẰNG AUTO THEO YÊU CẦU MỚI CỦA LỄ TÂN
@@ -265,6 +279,7 @@ export default function ReceptionistBooking() {
           {step === 4 && (
             <BookingStep4Payment
               createdBooking={createdBooking}
+              paymentMethod={selectedPaymentMethod}
               onDone={() => navigate('/receptionist/appointments')}
             />
           )}
