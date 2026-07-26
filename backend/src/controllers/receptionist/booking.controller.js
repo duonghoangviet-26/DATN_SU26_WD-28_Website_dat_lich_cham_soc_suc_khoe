@@ -252,9 +252,20 @@ export async function createBooking(req, res) {
 
       if (!schedules.length) return rollbackFail(409, 'Không còn bác sĩ nào trống lịch vào khung giờ này')
 
-      // 3. Loại trừ các bác sĩ đã có lịch hẹn ở khung giờ đó
+      // Lấy danh sách bác sĩ hợp lệ
+      const scheduleDocIds = [...new Set(schedules.map((s) => s.doctor_id.toString()))]
+      const validDoctors = await BacSi.find({
+        _id: { $in: scheduleDocIds },
+        trang_thai_duyet: 'approved',
+        la_hien: true
+      }).lean()
+      const validDocIds = new Set(validDoctors.map(d => d._id.toString()))
+
+      // 3. Loại trừ các bác sĩ đã có lịch hẹn ở khung giờ đó & chỉ lấy bác sĩ hợp lệ
       const availableSchedules = []
       for (const s of schedules) {
+        if (!validDocIds.has(s.doctor_id.toString())) continue
+
         const hasAppointment = await LichHen.exists({
           doctor_id: s.doctor_id,
           ngay_kham: { $gte: appointmentDate, $lt: addDays(appointmentDate, 1) },
@@ -266,7 +277,7 @@ export async function createBooking(req, res) {
         }
       }
 
-      if (!availableSchedules.length) return rollbackFail(409, 'Tất cả các bác sĩ đều đã có lịch hẹn vào khung giờ này')
+      if (!availableSchedules.length) return rollbackFail(409, 'Tất cả các bác sĩ đều đã có lịch hẹn hoặc không hợp lệ vào khung giờ này')
 
       // 4. Random bác sĩ (có thể thay đổi bằng thuật toán ưu tiên)
       const randomIndex = Math.floor(Math.random() * availableSchedules.length)
