@@ -78,7 +78,6 @@ export default function Booking() {
   const [toast, setToast] = useState<string | null>(null)
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
-  const [completingMockPayment, setCompletingMockPayment] = useState(false)
 
   // Specialty filters
   const [specialties, setSpecialties] = useState<{ id: string; ten: string }[]>([])
@@ -452,21 +451,6 @@ export default function Booking() {
       return
     }
     setSelectedDate(dateValue)
-  }
-
-  async function handleMockCompletePayment() {
-    if (!createdBooking?.payment_id) return
-
-    setCompletingMockPayment(true)
-    try {
-      const updated = await patientBookingService.completeMockVnpayPayment(createdBooking.payment_id)
-      setPaymentSnapshot(updated)
-      setToast('Đã mô phỏng thanh toán thành công. Đang chuyển về hồ sơ của bạn...')
-    } catch (error: any) {
-      setToast(error.response?.data?.message || error.message || 'Xác nhận thanh toán VNPAY mock thất bại')
-    } finally {
-      setCompletingMockPayment(false)
-    }
   }
 
   if (authLoading || loadingDoctors) {
@@ -893,10 +877,10 @@ export default function Booking() {
       {step === 5 && createdBooking && (
         <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wider text-brand-600">VNPAY Mock QR</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-brand-600">Thanh toán VNPAY</p>
             <h3 className="text-xl font-extrabold text-slate-800">Thanh toán qua mã QR</h3>
             <p className="text-sm text-slate-500">
-              Hệ thống đã tạo lịch hẹn và giao dịch thật trong MongoDB. Bước này mô phỏng đúng luồng quét QR VNPAY trước khi backend xác nhận giao dịch.
+              Hệ thống đã tạo lịch hẹn. Vui lòng quét mã QR VNPAY để hoàn tất thanh toán.
             </p>
           </div>
 
@@ -943,11 +927,11 @@ export default function Booking() {
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-                  <p className="font-semibold text-slate-700">Cách test luồng này</p>
+                  <p className="font-semibold text-slate-700">Hướng dẫn thanh toán</p>
                   <ol className="mt-2 list-decimal space-y-1 pl-5">
-                    <li>Mở ứng dụng ngân hàng hoặc ví có hỗ trợ quét QR.</li>
-                    <li>Quét mã QR mô phỏng hoặc bấm mở trang VNPAY để xem session.</li>
-                    <li>Sau đó bấm nút mô phỏng thanh toán thành công để backend nhận callback giả lập.</li>
+                    <li>Mở ứng dụng ngân hàng có hỗ trợ quét QR.</li>
+                    <li>Quét mã QR bên trên hoặc bấm mở trang VNPAY để thanh toán.</li>
+                    <li>Hệ thống sẽ tự động chuyển hướng khi thanh toán thành công.</li>
                   </ol>
                 </div>
               </div>
@@ -969,7 +953,7 @@ export default function Booking() {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-700">
-                    QR này được tạo theo session VNPAY mock. Backend chỉ chuyển lịch sang confirmed khi nhận thao tác mô phỏng callback thành công.
+                    Mã QR thanh toán VNPay hợp lệ. Vui lòng không đóng trình duyệt trong quá trình thanh toán.
                   </div>
                 )}
 
@@ -979,13 +963,6 @@ export default function Booking() {
                   </Button>
                   <Button variant="secondary" onClick={handleRefreshVnpaySession} loading={creatingPaymentSession}>
                     Tạo lại mã QR
-                  </Button>
-                  <Button
-                    onClick={handleMockCompletePayment}
-                    loading={completingMockPayment}
-                    disabled={paymentSnapshot.gateway.is_expired || paymentSnapshot.payment_status !== 'pending'}
-                  >
-                    Mô phỏng thanh toán thành công
                   </Button>
                   <Button variant="secondary" onClick={() => navigate('/profile', { replace: true })}>
                     Thanh toán sau
