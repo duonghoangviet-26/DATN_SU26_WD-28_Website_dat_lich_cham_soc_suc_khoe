@@ -18,6 +18,11 @@ import {
 } from '../../utils/clinicTime.js'
 import { donDepSlotTruocKhiDoc } from '../../services/slotRelease.service.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
+import {
+  chonBacSiChoKhung,
+  layGiaKhamChuyenKhoa,
+  layKhungTrongCuaChuyenKhoa,
+} from '../../services/doctorAssignment.service.js'
 import { ok, created, fail } from '../../utils/response.js'
 import {
   emitAdminRealtime,
@@ -26,6 +31,11 @@ import {
 } from '../../realtime/socket.js'
 
 const PAYMENT_HOLD_MINUTES = Number(process.env.PAYMENT_HOLD_MINUTES || process.env.VNPAY_SESSION_MINUTES || 15)
+
+// Phiên bản điều khoản đặt lịch (gồm chính sách KHÔNG HOÀN TIỀN — rule mục 5).
+// Đổi nội dung điều khoản thì PHẢI tăng số này, nếu không lịch hẹn cũ và mới cùng trỏ về
+// một version mà nội dung lại khác nhau — mất giá trị làm bằng chứng.
+const DIEU_KHOAN_VERSION = process.env.DIEU_KHOAN_VERSION || '2026-07-26.v1'
 
 function getPaymentDeadline(now = new Date()) {
   return new Date(now.getTime() + PAYMENT_HOLD_MINUTES * 60 * 1000)
@@ -332,6 +342,31 @@ export async function getSlots(req, res) {
   }
 }
 
+// ─── GET /api/patient/booking/specialties/:id/slots?date=YYYY-MM-DD ─────────
+// Luồng MẶC ĐỊNH (rule mục 12): bệnh nhân chọn chuyên khoa + ngày + khung giờ, hệ thống
+// tự gán bác sĩ. Đường chọn đích danh bác sĩ (`/doctors/:id/slots`) vẫn giữ nguyên.
+//
+// Giá trả kèm ở đây vì rule yêu cầu hiển thị giá TRƯỚC khi giữ chỗ.
+export async function getSpecialtySlots(req, res) {
+  try {
+    const { date } = req.query
+    if (!date) return fail(res, 400, 'Tham số date là bắt buộc (YYYY-MM-DD)')
+
+    const ngayDate = parseDateOnly(date)
+    if (!ngayDate) return fail(res, 400, 'Ngày không hợp lệ')
+    if (ngayDate.getTime() < getTodayDateOnly().getTime()) {
+      return ok(res, { gia_kham: null, khung_gio: [] })
+    }
+
+    const { gia_kham, ten_chuyen_khoa } = await layGiaKhamChuyenKhoa(req.params.id)
+    const khungGio = await layKhungTrongCuaChuyenKhoa(req.params.id, ngayDate)
+
+    return ok(res, { ten_chuyen_khoa, gia_kham, ngay: ngayDate, khung_gio: khungGio })
+  } catch (err) {
+    return fail(res, err.statusCode ?? 500, err.message)
+  }
+}
+
 // ─── POST /api/patient/booking ───────────────────────────────────────────────
 export async function createBooking(req, res) {
   const session = await mongoose.startSession()
@@ -344,23 +379,56 @@ export async function createBooking(req, res) {
     }
 
     const {
-      loai_kham, doctor_id,
-      schedule_id, slot_id,
+      loai_kham,
       ngay_kham, ly_do_kham,
       member_id, ten_khach, so_dien_thoai_khach, nam_sinh_khach,
+      // Đường TỰ GÁN (rule mục 12): khách chỉ chọn chuyên khoa + khung giờ.
+      specialty_id: specialtyYeuCau, gio_bat_dau,
     } = req.body
+    let { doctor_id, schedule_id, slot_id } = req.body
 
     if (!loai_kham)  return rollbackFail(400, 'Loại khám là bắt buộc')
     if (loai_kham !== 'clinic') return rollbackFail(400, 'Dich vu tai nha da ngung ho tro dat lich moi')
     if (!ngay_kham)  return rollbackFail(400, 'Ngày khám là bắt buộc')
     if (!member_id && !ten_khach) return rollbackFail(400, 'Phải có member_id hoặc ten_khach')
 
+    // ⛔ Không có bằng chứng khách đồng ý điều khoản KHÔNG HOÀN TIỀN thì KHÔNG được thu
+    // tiền (rule mục 5). Thu trước rồi mới tranh cãi là phòng khám thua — phải chặn ở đây,
+    // không phải nhắc nhở ở giao diện.
+    if (req.body.dong_y_dieu_khoan !== true) {
+      return rollbackFail(
+        400,
+        'Vui lòng xác nhận đã đọc và đồng ý điều khoản đặt lịch (bao gồm chính sách không hoàn tiền) trước khi giữ chỗ.',
+      )
+    }
+
     const appointmentDate = parseDateOnly(ngay_kham)
     if (!appointmentDate) return rollbackFail(400, 'Ngay kham khong hop le')
 
+    // ── Tự gán bác sĩ (rule mục 12) ─────────────────────────────────────────
+    // Chạy TRƯỚC mọi kiểm tra khác để phần dưới không phải biết khách đã đi đường nào:
+    // sau bước này luôn có đủ doctor_id + schedule_id + slot_id như đường chọn đích danh.
+    if (!doctor_id && specialtyYeuCau) {
+      if (!gio_bat_dau) return rollbackFail(400, 'Thiếu khung giờ khám (gio_bat_dau)')
+      const daChon = await chonBacSiChoKhung({
+        specialtyId: specialtyYeuCau,
+        ngay: appointmentDate,
+        gioBatDau: gio_bat_dau,
+        userId: req.user.id,
+        memberId: member_id || null,
+        session,
+      })
+      if (!daChon) {
+        return rollbackFail(409, `Khung ${gio_bat_dau} đã hết chỗ. Vui lòng chọn khung giờ khác.`)
+      }
+      doctor_id = daChon.doctorId
+      schedule_id = daChon.scheduleId
+      slot_id = daChon.slotId
+    }
+
     let doc = null
     if (loai_kham === 'clinic') {
-      if (!doctor_id) return rollbackFail(400, 'Bác sĩ là bắt buộc')
+      if (!doctor_id) return rollbackFail(400, 'Cần chọn bác sĩ hoặc chuyên khoa để hệ thống tự xếp')
       doc = await BacSi.findOne({ _id: doctor_id, trang_thai_duyet: 'approved', la_hien: true })
         .populate('specialties', 'ten')
         .session(session)
@@ -510,11 +578,19 @@ export async function createBooking(req, res) {
       const claimedSlot = updated.slots.id(slot_id)
       phong_kham = claimedSlot.phong_kham
       gio_dat    = claimedSlot.gio_bat_dau
-      gia_kham   = doc.phi_kham ?? doc.gia_kham ?? 0
-      ten_dich_vu = doc.specialties?.[0]?.ten ?? 'Khám tổng quát'
       chi_nhanh_id = updated.chi_nhanh_id ?? doc.chi_nhanh_id ?? null
       specialty_id = claimedSlot.specialty_id ?? doc.specialties?.[0]?._id ?? null
 
+      // GIÁ theo CHUYÊN KHOA, không theo bác sĩ (rule mục 12). Hệ thống tự gán bác sĩ nên
+      // giá nhảy theo người khám sẽ sinh khiếu nại "sao người kia khám rẻ hơn tôi" —
+      // khách đâu có chọn ai. `BacSi.gia_kham` giữ lại nhưng không dùng để tính tiền.
+      try {
+        const bangGia = await layGiaKhamChuyenKhoa(specialty_id, session)
+        gia_kham = bangGia.gia_kham
+        ten_dich_vu = bangGia.ten_chuyen_khoa
+      } catch (err) {
+        return rollbackFail(err.statusCode ?? 400, err.message)
+      }
     }
 
     const appointmentCode = await nextAppointmentCode(session, new Date(ngay_kham))
@@ -544,6 +620,11 @@ export async function createBooking(req, res) {
       ten_khach:           ten_khach           || null,
       so_dien_thoai_khach: so_dien_thoai_khach || null,
       nam_sinh_khach:      nam_sinh_khach       || null,
+      nguon: 'online',
+      // Bằng chứng đồng ý điều khoản không hoàn tiền (rule mục 5) — lưu cùng lịch hẹn để
+      // sau này đối chiếu được đúng bản điều khoản khách đã thấy.
+      dieu_khoan_version: DIEU_KHOAN_VERSION,
+      dieu_khoan_dong_y_luc: new Date(),
     }], { session })
 
     const invoiceDate = appointment.ngay_tao instanceof Date ? appointment.ngay_tao : new Date()

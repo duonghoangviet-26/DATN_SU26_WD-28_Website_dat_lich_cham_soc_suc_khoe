@@ -8,6 +8,7 @@ import {
   chuyenSlotOnlineQuaCutoffToanHeThong,
   nhaSlotQuaHanToanHeThong,
 } from '../services/slotRelease.service.js'
+import { apDungDeXuatQuaHan } from '../services/appointmentReschedule.service.js'
 
 const CLINIC_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
@@ -73,6 +74,15 @@ export function startCronJobs() {
       }
     } catch (err) {
       console.error('[cron] Loi chuyen slot online qua cutoff:', err.message)
+    }
+
+    // Khach khong phan hoi de xuat doi lich -> ap phuong an DA GIU SAN (rule muc 15).
+    // Khach khong bao gio mat cho chi vi khong kip tra loi.
+    try {
+      const daAp = await apDungDeXuatQuaHan()
+      if (daAp > 0) console.log(`[cron] Da tu ap phuong an doi lich cho ${daAp} lich hen qua han phan hoi`)
+    } catch (err) {
+      console.error('[cron] Loi ap de xuat doi lich qua han:', err.message)
     }
   }, { timezone: CLINIC_TIMEZONE }))
 

@@ -10,6 +10,15 @@ import { emitDashboardRevenueChanged } from '../../realtime/socket.js'
 import { buildSlotDateTime, isSlotInPast } from '../../utils/clinicTime.js'
 import { donDepSlotTruocKhiDoc } from '../../services/slotRelease.service.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
+import {
+  cacKhungDuocBanTaiQuay,
+  laHomNay,
+  locSlotBanTaiQuay,
+  nhanMucDo,
+  xepMucDo,
+} from '../../services/walkInWindow.service.js'
+import { NhatKyThaoTac } from '../../models/index.js'
+import { caCuaKhung } from '../../models/MauLichLamViec.js'
 
 function parseDateOnly(value) {
   if (!value) return null
@@ -126,7 +135,16 @@ export async function getSlots(req, res) {
 
     const ngayDate = parseDateOnly(date)
     if (!ngayDate) return fail(res, 400, 'Ngay khong hop le')
-    if (ngayDate.getTime() < getTodayDateOnly().getTime()) return ok(res, [])
+
+    // ⛔ Rule mục 13: lễ tân chỉ tiếp nhận khách ĐANG ĐỨNG Ở QUẦY, không đặt hộ cho ngày
+    // khác. Khách gọi điện hỏi ngày mai -> dùng endpoint tra cứu mức độ (getAvailability).
+    if (!laHomNay(ngayDate)) {
+      return fail(
+        res,
+        400,
+        'Quầy lễ tân chỉ tiếp nhận khách khám trong ngày hôm nay. Khách muốn đặt ngày khác vui lòng đặt online.',
+      )
+    }
 
     // KHONG .lean() — can document that de nhaSlotQuaHanTrongLich() cap nhat ban in-memory.
     const schedule = await LichLamViec.findOne({
@@ -142,16 +160,92 @@ export async function getSlots(req, res) {
     // walk-in. Le tan thay ngay ca cho vua giai phong lan cho online vua duoc mo ra.
     await donDepSlotTruocKhiDoc(schedule)
 
-    const slots = schedule.slots
-      .filter((s) => s.status === 'active')
-      // Dong bo voi getSlots ben patient: slot bi khoa boi nghi phep da duyet khong duoc chao ban.
-      .filter((s) => !s.bi_khoa_boi_nghi_phep)
-      .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
+    // Chi slot walk-in, chi khung dang dien ra + ke tiep cung ca (rule muc 13).
+    const slots = locSlotBanTaiQuay(schedule)
+      .filter((s) => !isSlotInPast(ngayDate, s.gio_ket_thuc))
       .map((s) => ({
         id: s._id, schedule_id: schedule._id,
         gio_bat_dau: s.gio_bat_dau, gio_ket_thuc: s.gio_ket_thuc,
+        khung_index: s.khung_index,
       }))
     return ok(res, slots)
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── GET /api/receptionist/booking/availability?specialty_id=&date= ─────────
+// Tra cứu cho khách GỌI ĐIỆN hỏi (rule mục 13).
+//
+// Trả MỨC ĐỘ, không trả con số. Khách nghe "còn 3 chỗ" sẽ hiểu là đã giữ 3 chỗ cho mình;
+// tới nơi hết chỗ thì thành khiếu nại. "Còn nhiều / còn ít / đã đầy" đủ để khách quyết
+// định có đi hay không, mà không hứa gì.
+//
+// Mỗi lượt tra cứu được GHI NHẬT KÝ để đối chiếu về sau — khi khách khiếu nại "lễ tân bảo
+// còn chỗ", có bằng chứng lúc đó hệ thống báo mức nào.
+export async function getAvailability(req, res) {
+  try {
+    const { specialty_id, date } = req.query
+    const ngayDate = parseDateOnly(date) ?? getTodayDateOnly()
+
+    if (ngayDate.getTime() < getTodayDateOnly().getTime()) {
+      return fail(res, 400, 'Khong tra cuu duoc ngay da qua')
+    }
+    if (specialty_id && !mongoose.Types.ObjectId.isValid(specialty_id)) {
+      return fail(res, 400, 'specialty_id khong hop le')
+    }
+
+    const doctorFilter = { trang_thai_duyet: 'approved', la_hien: true }
+    if (specialty_id) doctorFilter.specialties = specialty_id
+    const doctors = await BacSi.find(doctorFilter).select('_id').lean()
+    if (doctors.length === 0) {
+      return ok(res, { ngay: ngayDate, theo_ca: [], muc_do_chung: 'da_day', nhan: nhanMucDo('da_day') })
+    }
+
+    const schedules = await LichLamViec.find({
+      doctor_id: { $in: doctors.map((d) => d._id) },
+      ngay: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
+      trang_thai_ngay: 'lam_viec',
+      trang_thai_xac_nhan: { $ne: 'tu_choi' },
+    })
+
+    // Quét lazy để con số phản ánh đúng hiện tại, không phải trạng thái tồn đọng.
+    for (const schedule of schedules) await donDepSlotTruocKhiDoc(schedule)
+
+    const dem = { sang: 0, chieu: 0 }
+    for (const schedule of schedules) {
+      for (const slot of schedule.slots) {
+        if (slot.status !== 'active' || slot.bi_khoa_boi_nghi_phep) continue
+        if (isSlotInPast(ngayDate, slot.gio_ket_thuc)) continue
+        dem[caCuaKhung(slot.khung_index)] += 1
+      }
+    }
+
+    const theoCa = [
+      { ca: 'sang', ca_ten: 'Ca sáng', gio: '08:00 – 11:30', muc_do: xepMucDo(dem.sang) },
+      { ca: 'chieu', ca_ten: 'Ca chiều', gio: '13:30 – 17:30', muc_do: xepMucDo(dem.chieu) },
+    ].map((x) => ({ ...x, nhan: nhanMucDo(x.muc_do) }))
+
+    const mucDoChung = xepMucDo(dem.sang + dem.chieu)
+
+    await NhatKyThaoTac.create({
+      nguoi_thuc_hien_id: req.user?.id ?? null,
+      vai_tro: 'receptionist',
+      hanh_dong: 'TRA_CUU_MUC_DO_CON_TRONG',
+      loai_doi_tuong: 'clinic_availability',
+      doi_tuong_id: specialty_id ? new mongoose.Types.ObjectId(specialty_id) : doctors[0]._id,
+      ly_do: `Tra cuu ngay ${ngayDate.toISOString().slice(0, 10)}: sang=${theoCa[0].muc_do}, chieu=${theoCa[1].muc_do}`,
+    })
+
+    return ok(res, {
+      ngay: ngayDate,
+      theo_ca: theoCa,
+      muc_do_chung: mucDoChung,
+      nhan: nhanMucDo(mucDoChung),
+      // Câu lễ tân đọc cho khách — soạn sẵn để không ai lỡ miệng nói ra con số.
+      loi_nhan: 'Phòng khám không giữ chỗ qua điện thoại. Anh/chị vui lòng tới quầy, '
+        + 'hoặc đặt online trên ứng dụng để chắc chắn có chỗ.',
+    })
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -194,14 +288,37 @@ export async function createBooking(req, res) {
     const slot = schedule.slots.id(slot_id)
     if (!slot || slot.status !== 'active') return rollbackFail(409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
 
+    // ── Ba ràng buộc của quầy lễ tân (rule mục 13) ──────────────────────────
+    // Chính sách "không nhận đặt hộ" chỉ đứng vững nếu code chặn được. Kiểm ở ĐÂY chứ
+    // không chỉ ở getSlots: getSlots chỉ quyết định thấy gì, còn đây mới là nơi ghi.
+    if (!laHomNay(appointmentDate)) {
+      return rollbackFail(
+        400,
+        'Quầy lễ tân chỉ tiếp nhận khách khám trong ngày hôm nay. Khách muốn đặt ngày khác vui lòng đặt online.',
+      )
+    }
+    if (slot.loai_slot !== 'walk_in') {
+      return rollbackFail(
+        409,
+        'Chỗ này đang giữ cho khách đặt online. Quầy chỉ nhận được chỗ dành cho khách tới trực tiếp.',
+      )
+    }
+    if (slot.bi_khoa_boi_nghi_phep) {
+      return rollbackFail(409, 'Khung giờ này đã bị khoá do bác sĩ nghỉ.')
+    }
+    const khungDuocBan = cacKhungDuocBanTaiQuay(schedule.slots, schedule.ngay)
+    if (!khungDuocBan.has(slot.khung_index)) {
+      return rollbackFail(
+        409,
+        `Khung ${slot.gio_bat_dau} không nhận được tại quầy. Quầy chỉ tiếp nhận khung đang khám và khung kế tiếp trong cùng ca.`,
+      )
+    }
+
     // Overflow control (rule mục 6): ca trễ ≥ 1 khung (30') thì ngừng nhận khách tới quầy
     // cho các khung còn lại. Nhận thêm lúc này chỉ đẩy độ trễ sang bệnh nhân đang ngồi chờ.
-    // Chỉ áp cho lịch HÔM NAY.
-    if (appointmentDate.getTime() === getTodayDateOnly().getTime()) {
-      const quaTai = await kiemTraQuaTai(doc._id)
-      if (quaTai.ngungBanWalkIn) {
-        return rollbackFail(409, quaTai.canhBao)
-      }
+    const quaTai = await kiemTraQuaTai(doc._id)
+    if (quaTai.ngungBanWalkIn) {
+      return rollbackFail(409, quaTai.canhBao)
     }
     
     // Lễ tân đặt luôn nên slot booked.
@@ -224,17 +341,25 @@ export async function createBooking(req, res) {
     if (!updated) return rollbackFail(409, 'Slot đã được đặt')
 
     const appointmentCode = await nextAppointmentCode(session, appointmentDate)
-    const gia_kham = doc.phi_kham ?? doc.gia_kham ?? 0
-    
-    if (gia_kham === undefined || gia_kham === null || gia_kham <= 0) {
-      return rollbackFail(400, 'Bác sĩ chưa được cấu hình giá khám hợp lệ. Vui lòng kiểm tra lại cấu hình Bác sĩ.')
+
+    // GIÁ theo CHUYÊN KHOA, không theo bác sĩ (rule mục 12) — phải khớp với giá khách đặt
+    // online nhìn thấy, nếu không cùng một ca khám lại có hai giá tuỳ đường vào.
+    const specialtyId = slot.specialty_id ?? doc.specialties?.[0]?._id ?? null
+    let gia_kham
+    let ten_chuyen_khoa
+    try {
+      const bangGia = await layGiaKhamChuyenKhoa(specialtyId, session)
+      gia_kham = bangGia.gia_kham
+      ten_chuyen_khoa = bangGia.ten_chuyen_khoa
+    } catch (err) {
+      return rollbackFail(err.statusCode ?? 400, err.message)
     }
 
     const isPaid = payment_method === 'cash'
     const [appointment] = await LichHen.create([{
       doctor_id: doc._id, schedule_id, slot_id, user_id: finalUserId || null,
       chi_nhanh_id: doc.chi_nhanh_id ?? null,
-      specialty_id: doc.specialties?.[0]?._id ?? null,
+      specialty_id: specialtyId,
       ma_lich_hen: appointmentCode,
       loai_kham: 'clinic',
       hinh_thuc_dat_lich: 'receptionist',
@@ -244,9 +369,10 @@ export async function createBooking(req, res) {
       status: isPaid ? 'confirmed' : 'pending',
       payment_status: isPaid ? 'paid' : 'unpaid',
       gia_kham,
-      ten_dich_vu: doc.specialties?.[0]?.ten ?? 'Khám tổng quát',
+      ten_dich_vu: ten_chuyen_khoa,
       ten_khach,
       so_dien_thoai_khach,
+      nguon: 'tai_cho',
       ly_do_kham: ly_do_kham || null,
       hinh_thuc_dat_lich: 'receptionist',
     }], { session })

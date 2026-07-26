@@ -82,6 +82,62 @@ const appointmentSchema = new mongoose.Schema(
     payment_deadline: { type: Date, default: null },
     pending_booking_id: { type: String, default: null },
     ket_qua_url: { type: String, default: null, maxlength: 2000 },
+
+    // ── Dời lịch & điều khoản (rule mục 5, 10.D, 14, 15) ─────────────────────
+    // Nguồn của lượt khám. `hinh_thuc_dat_lich` là kênh tạo (patient/receptionist/admin),
+    // còn đây là bản chất nghiệp vụ: đặt trước qua mạng hay tới quầy.
+    nguon: {
+      type: String,
+      enum: ['online', 'tai_cho'],
+      default: null,
+    },
+    // BẮT BUỘC khi dời. Hai loại đếm hạn mức RIÊNG: khách tự xin dời chỉ được 1 lần,
+    // còn lỗi phòng khám thì dời bao nhiêu lần cũng không tính vào hạn mức của khách.
+    ly_do_doi: {
+      type: String,
+      enum: ['khach_yeu_cau', 'phong_kham'],
+      default: null,
+    },
+    so_lan_doi_khach_yeu_cau: { type: Number, default: 0, min: 0 },
+
+    // Bằng chứng khách đồng ý điều khoản KHÔNG HOÀN TIỀN. Không có thì KHÔNG được thu tiền
+    // (rule mục 5) — thu rồi mới tranh cãi là phòng khám thua.
+    dieu_khoan_version: { type: String, default: null, maxlength: 50 },
+    dieu_khoan_dong_y_luc: { type: Date, default: null },
+
+    // Đề xuất dời do PHÒNG KHÁM khởi xướng (bác sĩ nghỉ / bận một khung — mục 14, 15).
+    // Nhúng vào lịch hẹn thay vì tạo bảng mới: mỗi lịch hẹn có tối đa một đề xuất đang mở,
+    // và đề xuất chết theo lịch hẹn.
+    de_xuat_doi: {
+      type: new mongoose.Schema({
+        nghi_phep_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NghiPhepBacSi', default: null },
+        trang_thai: {
+          type: String,
+          enum: ['cho_khach_chon', 'cho_admin_duyet', 'da_ap_dung', 'da_huy'],
+          default: 'cho_khach_chon',
+        },
+        han_phan_hoi: { type: Date, default: null },
+        // Phương án đầu tiên luôn là phương án đã GIỮ SẴN chỗ: quá hạn không phản hồi thì
+        // áp dụng nó, khách không bao giờ mất chỗ (rule mục 15).
+        phuong_an: [{
+          loai: { type: String, enum: ['doi_bac_si', 'doi_khung'], required: true },
+          doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi' },
+          schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec' },
+          slot_id: { type: mongoose.Schema.Types.ObjectId },
+          ngay: Date,
+          gio_bat_dau: String,
+          bac_si_ten: String,
+          mo_ta: String,
+          da_giu_cho: { type: Boolean, default: false },
+          lan_walk_in: { type: Boolean, default: false },
+        }],
+        phuong_an_khach_chon: { type: Number, default: null },
+        nguoi_duyet_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
+        thoi_diem_duyet: { type: Date, default: null },
+        ghi_chu: { type: String, default: null, maxlength: 500 },
+      }, { _id: false }),
+      default: null,
+    },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },

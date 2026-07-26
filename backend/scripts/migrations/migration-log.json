@@ -43,5 +43,23 @@
     "status": "success",
     "rollbackable": true,
     "error_message": null
+  },
+  {
+    "name": "012-backfill-nguon-lich-hen",
+    "started_at": "2026-07-26T02:30:43.602Z",
+    "finished_at": "2026-07-26T02:30:44.486Z",
+    "affected_documents": 34,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
+  },
+  {
+    "name": "012-backfill-nguon-lich-hen",
+    "started_at": "2026-07-26T02:32:27.804Z",
+    "finished_at": "2026-07-26T02:32:28.790Z",
+    "affected_documents": 246,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
   }
 ]
