@@ -18,16 +18,36 @@ import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
 // ⚠️ Hàm này XOÁ TIỀN của khách (mục 5: no_show = mất 100%), nên mọi điều kiện loại trừ ở
 // dưới đều là điều kiện AN TOÀN — thà bỏ sót một lịch còn hơn phạt oan một người đã tới.
 
-// Công tắc vận hành. Bật theo mặc định vì rule mục 8 yêu cầu `no_show` phải được đặt TỰ ĐỘNG.
-// Đặt `NO_SHOW_SWEEP_ENABLED=false` để tắt trong buổi demo hoặc khi đang dựng dữ liệu mẫu:
-// lịch hẹn trong demo thường không ai check-in, mà mỗi lần đánh dấu là 100% tiền của một
-// bản ghi (mục 5) — không nên để cron âm thầm đổi dữ liệu người khác đang trình bày.
-// Chỉ ảnh hưởng LƯỢT QUÉT ĐỊNH KỲ; gọi tay `quetNoShowHetCa()` vẫn chạy bình thường.
+// ── Công tắc vận hành ────────────────────────────────────────────────────────
+// MẶC ĐỊNH theo môi trường: BẬT khi `NODE_ENV=production`, TẮT ở mọi nơi khác.
 //
-// Nhận cả `false`/`FALSE`/`0`/`off`/`no`: đây là công tắc chặn một hành động mất tiền, ai gõ
-// `FALSE` mà hệ thống vẫn quét thì lỗi thuộc về cái công tắc, không thuộc về người gõ.
+// Rule mục 8 yêu cầu `no_show` phải được đặt TỰ ĐỘNG — đó là yêu cầu về hành vi của HỆ THỐNG
+// THẬT, không phải về máy của lập trình viên. Trên DB dùng chung khi phát triển, lịch demo
+// không bao giờ có ai check-in, nên quét sẽ đánh dấu sạch dữ liệu cả nhóm đang trình bày, mà
+// mỗi bản ghi là 100% tiền của một người (mục 5). Chuyện này đã xảy ra thật 2026-07-26: cron
+// đánh dấu 5 lịch đã thanh toán trên DB chính, phải hoàn tác bằng
+// `src/scripts/hoan-tac-no-show.js`.
+//
+// `NO_SHOW_SWEEP_ENABLED` ghi đè cả hai chiều khi cần thử. Nhận `false`/`FALSE`/`0`/`off`/`no`
+// — đây là công tắc chặn một hành động mất tiền, ai gõ `FALSE` mà hệ thống vẫn quét thì lỗi
+// thuộc về cái công tắc, không thuộc về người gõ.
+//
+// Chỉ ảnh hưởng LƯỢT QUÉT ĐỊNH KỲ; gọi tay `quetNoShowHetCa()` vẫn chạy bình thường.
 const TAT = new Set(['false', '0', 'off', 'no'])
-export const BAT_QUET_NO_SHOW = !TAT.has(String(process.env.NO_SHOW_SWEEP_ENABLED ?? 'true').trim().toLowerCase())
+const BAT = new Set(['true', '1', 'on', 'yes'])
+
+function docCongTac(giaTri, macDinh) {
+  const chuan = String(giaTri ?? '').trim().toLowerCase()
+  if (chuan === '') return macDinh
+  if (TAT.has(chuan)) return false
+  if (BAT.has(chuan)) return true
+  return macDinh // giá trị lạ -> giữ mặc định của môi trường, không đoán
+}
+
+export const BAT_QUET_NO_SHOW = docCongTac(
+  process.env.NO_SHOW_SWEEP_ENABLED,
+  process.env.NODE_ENV === 'production',
+)
 
 // Giờ kết thúc ca mặc định, dùng khi không tra được lịch làm việc thật.
 // Khớp `DEFAULT_SLOT_TIMES` của `scheduleGenerator`: ca sáng 08:00–11:30, chiều 13:30–17:30.

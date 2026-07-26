@@ -101,9 +101,13 @@
   - ~~Không có gì đặt `no_show`~~ → `services/noShowSweep.service.js` + cron 5′. **Chỉ tự động**, chỉ khi hết ca, chỉ khi không có `HangDoi`; **loại trừ** `checked_in`, lịch có `HangDoi`, ca bác sĩ nghỉ (cả ngày hoặc slot `bi_khoa_boi_nghi_phep`). Mặc định **chỉ quét hôm nay** (`soNgay=1`) — không quét ngược lịch sử. Có nhật ký `AUTO_MARK_NO_SHOW` + thông báo cho khách. Công tắc `NO_SHOW_SWEEP_ENABLED=false` để tắt khi demo.
   - Giao diện: bảng **"Chờ tiếp nhận"** ở `DoctorExamQueue.tsx` + hai endpoint `GET .../pending-checkin` (bác sĩ và lễ tân). Trước đó UI chỉ có nhánh check-in khách vãng lai, lượt online không có đường nào vào hàng đợi.
   - Kiểm chứng: `src/scripts/e2e-luong-tiep-nhan.js` — 36/36.
+- ✅ **Xác thực route lễ tân + dời lịch của lễ tân ĐÃ SỬA 2026-07-26**:
+  - ~~Route lễ tân không cần token~~ → `verifyToken` + `requireRole('receptionist','admin')` ở `routes/receptionist/index.js`, khớp guard frontend. Trước đó ai biết URL cũng hủy được lịch, dời lịch, xác nhận thu tiền mặt, lấy danh sách bệnh nhân kèm SĐT.
+  - ~~`rescheduleAppointment` không tuân mục 5/11~~ → dùng **chung `apDungPhuongAn()`** với luồng bệnh nhân. Vá 5 lỗi: không kiểm `T-30'`; lấy slot đầu tiên trùng giờ (khung nhiều slot → báo "đã kín" oan); nhận cả slot `walk_in`/đang giữ chỗ; đếm hạn mức bằng `so_lan_thay_doi` (làm lần dời do lỗi phòng khám ăn mất quyền của khách); không ghi `ly_do_doi`. `ly_do_doi='phong_kham'` bắt buộc kèm lý do cụ thể, không áp mốc `T-30'` (mục 15).
+  - UI lễ tân: ô chọn "Dời theo yêu cầu của ai?", modal hết lượt có nút "Dời do lỗi phòng khám", chặn theo `so_lan_doi_khach_yeu_cau`.
+- ⚠️ **Cron `no_show` mặc định CHỈ BẬT khi `NODE_ENV=production`** (đổi 2026-07-26 sau sự cố: cron chạy trên DB dùng chung đánh dấu 5 lịch demo đã thanh toán thành `no_show`). Rule mục 8 nói về hành vi hệ thống THẬT, không phải máy dev. Ghi đè bằng `NO_SHOW_SWEEP_ENABLED`. Hoàn tác bằng `src/scripts/hoan-tac-no-show.js`.
 - CÒN THIẾU (theo Gap G1–G7 trong doc): trạng thái `cho_dich_vu`.
-- ⚠️ **Route lễ tân chưa có xác thực** (`routes/receptionist/index.js` vẫn để TODO bọc middleware) — `arrived`/`cancel`/`reschedule` gọi được không cần token. Thuộc phần thành viên khác, cần xử lý sớm.
-- ⚠️ **`receptionist/.../rescheduleAppointment` chưa tuân mục 5/11**: không kiểm cutoff `T-30'`, lấy slot đầu tiên trùng giờ (có thể là walk-in hoặc slot đang được giữ), không ghi `ly_do_doi`, dùng `so_lan_thay_doi` thay `so_lan_doi_khach_yeu_cau`.
+- ❓ **Cần chốt:** slot cũ khi **khách tự dời trước `T-30'`** nên `locked` (mục 15) hay trả về pool để bán lại (hàm ý của mục 11)? Hai mục nói về hai tình huống khác nhau; hiện thực đang theo mục 15 cho cả hai.
 - Khi triển khai: ưu tiên **P0** (thêm field cấu hình `ChuyenKhoa`) → P1 → P2, có migration, **không phá dữ liệu/demo**.
 
 ## 10. Bảng & field DB BẮT BUỘC cho nghiệp vụ này

@@ -23,6 +23,13 @@ interface Appointment {
   nguoi_dat_ho_ten?: string;
   dat_ho?: boolean;
   so_lan_thay_doi?: number;
+  /**
+   * Số lần KHÁCH tự xin dời — trần 1 (rule mục 5). Khác `so_lan_thay_doi` (đếm MỌI thay đổi,
+   * kể cả lần dời do lỗi phòng khám). Chặn theo `so_lan_thay_doi` sẽ tước oan quyền dời của
+   * khách khi lần trước là lỗi phòng khám.
+   */
+  so_lan_doi_khach_yeu_cau?: number;
+  ly_do_doi?: 'khach_yeu_cau' | 'phong_kham' | null;
 }
 
 interface RescheduleHistory {
@@ -91,6 +98,11 @@ export default function Appointments() {
   const [availableSlots, setAvailableSlots] = useState<ReceptionistBookingSlot[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [rescheduleReason, setRescheduleReason] = useState('');
+  // Phân loại nghiệp vụ của lần dời (rule mục 5, 10.D): khách yêu cầu thì tính vào trần 1 lần
+  // và phải trước `T-30'`; lỗi phòng khám thì không tính hạn mức và không bị mốc đó chặn.
+  const [lyDoDoi, setLyDoDoi] = useState<'khach_yeu_cau' | 'phong_kham'>('khach_yeu_cau');
+  const [khachHetLuotDoi, setKhachHetLuotDoi] = useState(false);
+  const [aptDangDoi, setAptDangDoi] = useState<Appointment | null>(null);
   
   // States cho Modal Lịch sử quá hạn dời lịch
   const [rescheduleLimitModalOpen, setRescheduleLimitModalOpen] = useState(false);
@@ -184,15 +196,31 @@ export default function Appointments() {
     }
   };
 
+  // Mở modal dời lịch. Trần 1 lần chỉ áp cho lần dời do KHÁCH yêu cầu (rule mục 5) —
+  // đếm bằng `so_lan_doi_khach_yeu_cau`, KHÔNG phải `so_lan_thay_doi`. Lần dời do lỗi phòng
+  // khám không tính hạn mức, nên hết lượt vẫn phải dời được, chỉ là buộc chọn "lỗi phòng khám".
+  const moModalDoiLich = (apt: Appointment) => {
+    setSelectedDoctorId(apt.doctor_id?._id || '');
+    setNewDate(format(new Date(apt.ngay_kham), 'yyyy-MM-dd'));
+    setNewTime(''); // Reset giờ vì list giờ sẽ fetch lại
+    setRescheduleReason('');
+    setRescheduleModalOpen(true);
+  };
+
   const handleReschedule = async (apt: Appointment) => {
     setSelectedAppointmentId(apt._id);
-    
-    // Nếu đã dời lịch >= 1 lần, bật form Lịch sử
-    if ((apt.so_lan_thay_doi || 0) >= 1) {
+
+    const hetLuotKhach = (apt.so_lan_doi_khach_yeu_cau || 0) >= 1;
+    setKhachHetLuotDoi(hetLuotKhach);
+    // Hết lượt của khách -> chỉ còn đường "lỗi phòng khám", chốt sẵn để lễ tân không chọn sai.
+    setLyDoDoi(hetLuotKhach ? 'phong_kham' : 'khach_yeu_cau');
+
+    if (hetLuotKhach) {
       try {
         const res = await axiosInstance.get(`/receptionist/appointments/${apt._id}/reschedule-history`);
         if (res.data.success) {
           setRescheduleHistory(res.data.data);
+          setAptDangDoi(apt);
           setRescheduleLimitModalOpen(true);
         }
       } catch (err) {
@@ -201,15 +229,7 @@ export default function Appointments() {
       return;
     }
 
-    // Bình thường
-    const docId = apt.doctor_id?._id || '';
-    setSelectedDoctorId(docId);
-    // Format date from DB string to YYYY-MM-DD for input type="date"
-    const dateObj = new Date(apt.ngay_kham);
-    setNewDate(format(dateObj, 'yyyy-MM-dd'));
-    setNewTime(''); // Reset giờ vì list giờ sẽ fetch lại
-    setRescheduleReason('');
-    setRescheduleModalOpen(true);
+    moModalDoiLich(apt);
   };
 
   useEffect(() => {
@@ -237,12 +257,14 @@ export default function Appointments() {
     }
 
     try {
-      await axiosInstance.patch(`/receptionist/appointments/${selectedAppointmentId}/reschedule`, { 
-        ngay_kham: newDate, 
+      const res = await axiosInstance.patch(`/receptionist/appointments/${selectedAppointmentId}/reschedule`, {
+        ngay_kham: newDate,
         gio_kham: newTime,
-        ly_do_doi_lich: rescheduleReason
+        ly_do_doi_lich: rescheduleReason,
+        ly_do_doi: lyDoDoi,
       });
       setRescheduleModalOpen(false);
+      if (res.data?.message) alert(res.data.message);
       fetchAppointments();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Lỗi khi dời lịch');
@@ -473,9 +495,11 @@ export default function Appointments() {
       {rescheduleLimitModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-red-600 mb-2">Đạt giới hạn dời lịch!</h3>
+            <h3 className="text-xl font-bold text-red-600 mb-2">Khách đã dùng hết lượt dời lịch</h3>
             <p className="text-sm text-slate-600 mb-4">
-              Khách hàng này đã thay đổi lịch hẹn <strong className="text-red-500">1 lần</strong>. Hệ thống không cho phép dời lịch thêm nữa để tránh xáo trộn công việc của bác sĩ. Dưới đây là lịch sử dời lịch:
+              Khách hàng này đã tự xin dời <strong className="text-red-500">1 lần</strong> — hết hạn mức. Khách vẫn
+              được khám nếu tới trong ca và <strong>không mất tiền</strong>. Nếu lần này là <strong>lỗi phòng khám</strong>
+              {' '}(bác sĩ nghỉ, bận đột xuất, sự cố thiết bị) thì vẫn dời được và không tính vào hạn mức của khách.
             </p>
             
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 max-h-60 overflow-y-auto space-y-4">
@@ -497,9 +521,19 @@ export default function Appointments() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setRescheduleLimitModalOpen(false)}
-                className="px-4 py-2 bg-slate-800 text-white hover:bg-slate-900 rounded-lg text-sm font-medium transition-colors"
+                className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
               >
                 Đóng thông báo
+              </button>
+              <button
+                onClick={() => {
+                  if (!aptDangDoi) return;
+                  setRescheduleLimitModalOpen(false);
+                  moModalDoiLich(aptDangDoi);
+                }}
+                className="px-4 py-2 bg-amber-500 text-white hover:bg-amber-600 rounded-lg text-sm font-medium transition-colors"
+              >
+                Dời do lỗi phòng khám
               </button>
             </div>
           </div>
@@ -543,8 +577,28 @@ export default function Appointments() {
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-slate-800 mb-4">Dời lịch hẹn</h3>
             <p className="text-sm text-slate-600 mb-4">Vui lòng chọn ngày và giờ khám mới cho bệnh nhân.</p>
-            
+
             <div className="space-y-4 mb-6">
+              {/* Phân loại lý do quyết định hạn mức và mốc thời gian (rule mục 5, 11) —
+                  phải là lựa chọn tường minh, không suy đoán hộ lễ tân. */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Dời theo yêu cầu của ai?</label>
+                <select
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  value={lyDoDoi}
+                  onChange={(e) => setLyDoDoi(e.target.value as 'khach_yeu_cau' | 'phong_kham')}
+                >
+                  <option value="khach_yeu_cau" disabled={khachHetLuotDoi}>
+                    Khách yêu cầu — tính vào hạn mức 1 lần{khachHetLuotDoi ? ' (đã hết lượt)' : ''}
+                  </option>
+                  <option value="phong_kham">Lỗi phòng khám — không tính hạn mức</option>
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  {lyDoDoi === 'khach_yeu_cau'
+                    ? 'Khách chỉ được dời 1 lần, và phải trước giờ khám 30 phút.'
+                    : 'Không giới hạn số lần, không bị mốc 30 phút chặn. Bắt buộc ghi rõ lý do bên dưới.'}
+                </p>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Ngày khám mới</label>
                 <input

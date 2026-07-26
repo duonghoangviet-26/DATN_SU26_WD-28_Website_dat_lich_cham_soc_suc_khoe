@@ -202,20 +202,91 @@ chính, dùng server **tắt cron** để lượt quét `no_show` không chạm 
 
 ---
 
-## 6. Còn thiếu / cần nhóm quyết
+## 6. Đợt bổ sung cùng ngày (sau sự cố cron)
 
-1. **Route lễ tân không có xác thực.** `routes/receptionist/index.js` còn ghi *"Bọc middleware
-   kiểm tra quyền lễ tân tại đây sau"* — hiện `PATCH .../cancel`, `.../arrived` gọi được **không
-   cần token**. Không sửa trong đợt này vì thuộc phần thành viên khác và việc bọc `verifyToken`
-   có thể làm vỡ giao diện của họ nếu chưa gửi token. Cần xử lý sớm.
-2. **`receptionist/appointment.controller.js → rescheduleAppointment`** bỏ qua gần hết mục 5/11:
-   không kiểm cutoff `T-30'`, lấy slot đầu tiên trùng giờ (có thể là slot walk-in hoặc slot
-   người khác đang giữ), không ghi `ly_do_doi`, dùng `so_lan_thay_doi` thay vì
-   `so_lan_doi_khach_yeu_cau`. Unique index `uniq_lich_hen_theo_slot` chặn được double-book
-   nhưng trả 500 chứ không phải thông báo đọc được.
-3. **Bậc `khan_cap`** của mục 6 vẫn chưa làm được — không có cơ chế đánh dấu ca khẩn cấp. Cần
+### Sự cố: cron đánh dấu `no_show` trên DB dùng chung
+
+Sau khi commit `c897dbf`, server dev khởi động lại và cron chạy trên **DB chính**. Hai lượt
+quét (16:35 và 17:30) đánh dấu **5 lịch hẹn demo đã thanh toán** thành `no_show`.
+
+Mã chạy **đúng rule mục 8** — hết ca, không ai check-in, bác sĩ vẫn làm việc, slot không khoá
+nghỉ phép. Sai là ở **mặc định**: bật một cron ghi dữ liệu tiền theo mặc định `true` trong lúc
+đang phát triển, trên DB cả nhóm đang dùng.
+
+Hoàn tác một lần đầu **thất bại**: 5 phút sau cron đánh dấu lại, vì tiến trình đang chạy đã đọc
+env lúc khởi động. Thứ tự đúng là **khởi động lại rồi mới hoàn tác** — đã làm, DB chính hiện
+sạch (0 `no_show`, 0 thông báo).
+
+**Đã sửa:**
+- Mặc định đổi thành **BẬT theo `NODE_ENV=production`**, TẮT ở mọi nơi khác. Rule mục 8 nói về
+  hành vi của hệ thống thật, không phải máy lập trình viên. `NO_SHOW_SWEEP_ENABLED` ghi đè cả
+  hai chiều; nhận `false/0/off/no` và `true/1/on/yes`, không phân biệt chữ hoa (bản đầu chỉ so
+  đúng chuỗi `'false'` nên `FALSE` vẫn **bật** — bẫy chết người với công tắc chặn mất tiền).
+- `src/scripts/hoan-tac-no-show.js`: chỉ hoàn tác bản ghi **có nhật ký `AUTO_MARK_NO_SHOW`**,
+  lấy trạng thái cũ từ `du_lieu_cu` (không đoán), mặc định chạy thử, luôn sao lưu JSON.
+
+### Vá lỗ hổng xác thực route lễ tân
+
+`routes/receptionist/index.js` trước đó chỉ có một dòng TODO. **Toàn bộ** route lễ tân gọi được
+không cần token: bất kỳ ai biết URL đều hủy được lịch hẹn, dời lịch, check-in bệnh nhân, xác
+nhận đã thu tiền mặt, hoặc lấy danh sách bệnh nhân kèm số điện thoại.
+
+Nay `verifyToken` + `requireRole('receptionist', 'admin')` — khớp đúng guard của frontend
+(`ProtectedRoute roles={['receptionist','admin']}`), và `axiosInstance` đã tự gắn token nên
+giao diện đang có không vỡ.
+
+### Dời lịch của lễ tân về đúng nghiệp vụ
+
+`rescheduleAppointment` nay dùng **chung `apDungPhuongAn()`** với luồng bệnh nhân tự dời. Năm
+lỗi đã vá:
+
+| Lỗi cũ | Hậu quả | Nay |
+|---|---|---|
+| Không kiểm mốc `T-30'` | Khách sắp trễ nhờ lễ tân dời lúc `T-5'`, phòng khám mất trắng chỗ — đúng chiêu mục 11 dựng mốc để chặn | Chặn với `khach_yeu_cau`; `phong_kham` không bị chặn (mục 15) |
+| `slots.find(gio_bat_dau === x)` lấy slot **đầu tiên** | Khung có 2 slot (TMH): slot đầu kín thì báo "đã kín" oan dù slot bên cạnh trống | Quét mọi slot trùng giờ |
+| Nhận cả slot `walk_in` và slot đang giữ chỗ | Khách tự dời lấn chỗ khách tới quầy — mục 5 cấm | Loại `walk_in`, loại slot đã có lịch hẹn khác |
+| Đếm hạn mức bằng `so_lan_thay_doi` | Một lần dời do **lỗi phòng khám** cũng ăn mất quyền dời của khách — trái mục 5 | Đếm `so_lan_doi_khach_yeu_cau` |
+| Không ghi `ly_do_doi` | Không phân biệt được ai gây ra việc dời | Bắt buộc; `phong_kham` phải kèm lý do cụ thể |
+
+Slot cũ chuyển `locked`, không trả pool — giữ đúng hành vi `apDungPhuongAn` đang dùng cho luồng
+bệnh nhân. **Điểm cần nhóm chốt:** với lần dời do *khách yêu cầu trước `T-30'`*, mục 11 hàm ý
+slot cũ **nên** được bán lại ("slot không kịp bán cho ai" là lý do dựng mốc đó), nhưng mục 15
+lại nói `locked`. Hai mục nói về hai tình huống khác nhau; hiện thực đang theo mục 15 cho cả
+hai. Không tự đổi vì rule đã đóng băng.
+
+Giao diện lễ tân: thêm ô chọn **"Dời theo yêu cầu của ai?"** (khách yêu cầu / lỗi phòng khám)
+kèm giải thích hệ quả; modal "hết lượt" nay có nút **"Dời do lỗi phòng khám"** thay vì chặn
+cứng, và chặn theo `so_lan_doi_khach_yeu_cau` thay vì `so_lan_thay_doi`.
+
+### Kiểm chứng đợt bổ sung
+
+`e2e-luong-tiep-nhan.js` mở rộng lên **56/56**, thêm nhóm 0 (xác thực) và nhóm 7 (dời lịch):
+
+```
+0. khong token -> 401 | token bac si -> 403 | token le tan -> 200 | huy khong token -> 401
+7. qua T-30' -> 409 | phong kham thieu ly do -> 400 | phong kham co ly do -> 200
+   ly_do_doi dung | KHONG tinh han muc | slot cu -> locked
+   khach yeu cau lan 1 -> 200, dem 1 lan | lan 2 -> 409
+   doi vao dung khung hien tai -> 400 | khong lan walk-in -> 409 | bi chan thi lich KHONG doi
+   lich su doi lich con ghi day du
+```
+
+Công tắc môi trường: 8/8 tổ hợp (`NODE_ENV` × giá trị biến, kể cả giá trị lạ → giữ mặc định).
+`e2e-luong-dat-lich.js` **85/85**, bộ test có sẵn **60/64** (4 lỗi cũ), `tsc` 43 = baseline.
+
+---
+
+## 7. Còn thiếu / cần nhóm quyết
+
+1. **Bậc `khan_cap`** của mục 6 vẫn chưa làm được — không có cơ chế đánh dấu ca khẩn cấp. Cần
    quyết định nghiệp vụ: ai đánh dấu, theo tiêu chí gì.
-4. **Trạng thái `cho_dich_vu`** (mục 8/G6): enum đã mở, chưa có endpoint chuyển trạng thái.
-5. **Giao diện còn thiếu**: trang admin duyệt phương án dời lịch (`/admin/reschedule-approvals`
+2. **Trạng thái `cho_dich_vu`** (mục 8/G6): enum đã mở, chưa có endpoint chuyển trạng thái.
+3. **Giao diện còn thiếu**: trang admin duyệt phương án dời lịch (`/admin/reschedule-approvals`
    — API đã có); trang lễ tân tra mức độ còn trống (`/receptionist/booking/availability` — API
    đã có).
+4. **Slot cũ khi khách tự dời**: `locked` hay trả về pool — xem phần dời lịch ở trên.
+5. **`vai_tro` của `LichSuLichHen`** chưa có `'receptionist'`; hành động của lễ tân đang ghi
+   `'admin'` như code cũ. Không đổi enum để tránh chạm schema của thành viên khác.
+6. **Bảng "Chờ tiếp nhận" chưa được xem trên trình duyệt.** Đã kiểm hợp đồng API, kiểu
+   TypeScript và đối chiếu từng trường component đọc với JSON thật, nhưng chưa render lần nào —
+   vào trang bác sĩ cần đăng nhập.

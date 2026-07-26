@@ -395,6 +395,14 @@ export interface AppointmentItem {
     ghi_chu_le_tan?: string | null;
     ghi_chu_tiep_nhan?: string | null;
     so_lan_thay_doi?: number;
+    /**
+     * Số lần KHÁCH tự xin dời — trần 1 (rule mục 5). Khác `so_lan_thay_doi` (đếm MỌI thay
+     * đổi, kể cả lần dời do lỗi phòng khám). Chặn theo `so_lan_thay_doi` sẽ tước oan quyền
+     * dời của khách khi lần trước là lỗi phòng khám.
+     */
+    so_lan_doi_khach_yeu_cau?: number;
+    /** Phân loại lần dời gần nhất: khách yêu cầu (tính hạn mức) hay lỗi phòng khám (không tính). */
+    ly_do_doi?: 'khach_yeu_cau' | 'phong_kham' | null;
     canh_bao?: {
         unpaid: boolean;
         rescheduled_multiple_times: boolean;

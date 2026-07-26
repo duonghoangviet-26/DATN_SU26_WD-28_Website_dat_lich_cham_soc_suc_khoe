@@ -110,10 +110,10 @@ async function main() {
   let slotRanh = []
   for (const s of schedules) {
     const free = (s.slots || []).filter((x) => !x.benh_nhan_id && !x.bi_khoa_boi_nghi_phep && !slotDaDung.has(String(x._id)))
-    if (free.length >= 4) { schedule = s; slotRanh = free; break }
+    if (free.length >= 5) { schedule = s; slotRanh = free; break }
   }
   if (!schedule) {
-    console.error(`[${TAG}] Khong tim duoc lich lam viec hom nay con >= 4 slot ranh.`)
+    console.error(`[${TAG}] Khong tim duoc lich lam viec hom nay con >= 5 slot ranh.`)
     process.exit(1)
   }
 
@@ -122,6 +122,15 @@ async function main() {
   const benhNhan = await NguoiDung.findOne({ role: { $in: ['user', 'patient'] } }).lean()
   const thanhVien = await ThanhVien.findOne({ user_id: benhNhan._id }).lean()
   const tokBacSi = taoToken(bacSiUser)
+
+  // Route le tan yeu cau role receptionist|admin (boc verifyToken 2026-07-26).
+  const leTan = await NguoiDung.findOne({ role: 'receptionist' }).lean()
+    ?? await NguoiDung.findOne({ role: 'admin' }).lean()
+  if (!leTan) {
+    console.error(`[${TAG}] Khong co tai khoan le tan/admin tren DB test.`)
+    process.exit(1)
+  }
+  const tokLeTan = taoToken(leTan)
 
   console.log(`[${TAG}] Bac si: ${bacSiUser.ho_ten} | benh nhan: ${benhNhan.ho_ten} | ${slotRanh.length} slot ranh`)
 
@@ -153,6 +162,23 @@ async function main() {
 
   const apptId = await taoLichHen(slotRanh[0])
 
+  // ── 0 ────────────────────────────────────────────────────────────────────
+  // Truoc 2026-07-26 toan bo route le tan goi duoc MA KHONG CAN TOKEN.
+  muc('0. Xac thuc route le tan')
+  {
+    const khongToken = await api('GET', '/receptionist/appointments?timeframe=today')
+    kt('khong token -> 401', khongToken.status === 401, `${khongToken.status} ${khongToken.body?.message}`)
+
+    const saiVaiTro = await api('GET', '/receptionist/appointments?timeframe=today', { tok: tokBacSi })
+    kt('token bac si -> 403 (sai vai tro)', saiVaiTro.status === 403, `${saiVaiTro.status} ${saiVaiTro.body?.message}`)
+
+    const dungVaiTro = await api('GET', '/receptionist/appointments?timeframe=today', { tok: tokLeTan })
+    kt('token le tan -> 200', dungVaiTro.status === 200, `${dungVaiTro.status}`)
+
+    const huyKhongToken = await api('PATCH', '/receptionist/appointments/000000000000000000000001/cancel')
+    kt('huy lich khong token -> 401', huyKhongToken.status === 401, `${huyKhongToken.status}`)
+  }
+
   // ── 1 ────────────────────────────────────────────────────────────────────
   muc('1. Truoc khi tiep nhan')
   {
@@ -171,7 +197,7 @@ async function main() {
   // ── 2 ────────────────────────────────────────────────────────────────────
   muc('2. Le tan tiep nhan (PATCH /receptionist/appointments/:id/arrived)')
   {
-    const r = await api('PATCH', `/receptionist/appointments/${apptId}/arrived`)
+    const r = await api('PATCH', `/receptionist/appointments/${apptId}/arrived`, { tok: tokLeTan })
     kt('tra 200', r.status === 200, r.body?.message)
     kt('tra kem thong tin hang doi', !!r.body?.hang_doi?.id)
 
@@ -203,7 +229,7 @@ async function main() {
   // ── 4 ────────────────────────────────────────────────────────────────────
   muc('4. Rang buoc tiep nhan (rule muc 7)')
   {
-    const r = await api('PATCH', `/receptionist/appointments/${apptId}/arrived`)
+    const r = await api('PATCH', `/receptionist/appointments/${apptId}/arrived`, { tok: tokLeTan })
     kt('tiep nhan lan 2 bi chan 409', r.status === 409, `${r.status} ${r.body?.message}`)
     kt('van chi co 1 ban ghi hang doi', (await HangDoi.countDocuments({ appointment_id: apptId })) === 1)
 
@@ -229,7 +255,7 @@ async function main() {
       ma_lich_hen: `${TAG}H${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
     })
     daTao.lichHen.push(home._id)
-    const rh = await api('PATCH', `/receptionist/appointments/${home._id}/arrived`)
+    const rh = await api('PATCH', `/receptionist/appointments/${home._id}/arrived`, { tok: tokLeTan })
     kt('lich kham tai nha bi chan 400', rh.status === 400, `${rh.status} ${rh.body?.message}`)
   }
 
@@ -289,7 +315,118 @@ async function main() {
     kt("lich hen -> 'waiting_record'", (await LichHen.findById(apptId).lean()).status === 'waiting_record')
   }
 
-  muc('7. Check-in khach vang lai (khong hoi quy)')
+  // ── 7: DOI LICH phia le tan (rule muc 5, 10.D, 11) ──────────────────────
+  // Dung lich NGAY MAI: mọi khung hom nay da qua moc `T-30'` nen khong doi duoc,
+  // dung no chi kiem duoc nhanh bi chan.
+  muc('7. Le tan doi lich (rule muc 5, 11)')
+  {
+    const mai = new Date(homNay); mai.setUTCDate(mai.getUTCDate() + 1)
+    const maiKe = new Date(mai); maiKe.setUTCDate(maiKe.getUTCDate() + 1)
+    const schedMai = await LichLamViec.findOne({
+      doctor_id: schedule.doctor_id,
+      ngay: { $gte: mai, $lt: maiKe },
+      trang_thai_ngay: 'lam_viec',
+    }).lean()
+
+    if (!schedMai) {
+      console.log('  (bo qua: bac si khong co lich lam viec ngay mai)')
+    } else {
+      const daDungMai = new Set(
+        (await LichHen.find({ schedule_id: schedMai._id, status: { $ne: 'cancelled' } }).select('slot_id').lean())
+          .filter((a) => a.slot_id).map((a) => String(a.slot_id)),
+      )
+      const ranhMai = schedMai.slots.filter(
+        (s) => s.status === 'active' && !s.benh_nhan_id && !s.bi_khoa_boi_nghi_phep
+          && s.loai_slot !== 'walk_in' && !daDungMai.has(String(s._id)),
+      )
+      const walkInMai = schedMai.slots.find(
+        (s) => s.status === 'active' && !s.benh_nhan_id && s.loai_slot === 'walk_in'
+          && !daDungMai.has(String(s._id)) && !ranhMai.some((r) => r.gio_bat_dau === s.gio_bat_dau),
+      )
+
+      // Can 4 slot: [0] dich cua lan doi do loi phong kham, [1]->[2] lan doi cua khach,
+      // [3] cho hai phep kiem bi CHAN (khong ton slot nao).
+      if (ranhMai.length < 4) {
+        console.log('  (bo qua: ngay mai khong con >= 4 slot online ranh)')
+      } else {
+        const ngayMaiISO = mai.toISOString().slice(0, 10)
+
+        // (a) Lich HOM NAY da qua cutoff -> khach yeu cau doi phai bi chan.
+        // slotRanh[3] da dung cho lich kham tai nha o nhom 4.
+        const idHomNay = await taoLichHen(slotRanh[4])
+        const quaHan = await api('PATCH', `/receptionist/appointments/${idHomNay}/reschedule`,
+          { tok: tokLeTan, body: { ngay_kham: ngayMaiISO, gio_kham: ranhMai[0].gio_bat_dau } })
+        kt("qua moc T-30' -> chan 409", quaHan.status === 409, `${quaHan.status} ${quaHan.body?.message}`)
+
+        // (b) Loi PHONG KHAM khong ap moc T-30' nhung BAT BUOC co ly do.
+        const thieuLyDo = await api('PATCH', `/receptionist/appointments/${idHomNay}/reschedule`, {
+          tok: tokLeTan,
+          body: { ngay_kham: ngayMaiISO, gio_kham: ranhMai[0].gio_bat_dau, ly_do_doi: 'phong_kham' },
+        })
+        kt('loi phong kham thieu ly do -> 400', thieuLyDo.status === 400, `${thieuLyDo.status} ${thieuLyDo.body?.message}`)
+
+        const coLyDo = await api('PATCH', `/receptionist/appointments/${idHomNay}/reschedule`, {
+          tok: tokLeTan,
+          body: {
+            ngay_kham: ngayMaiISO, gio_kham: ranhMai[0].gio_bat_dau,
+            ly_do_doi: 'phong_kham', ly_do_doi_lich: 'Bac si bao ban dot xuat',
+          },
+        })
+        kt('loi phong kham co ly do -> 200 (khong ap cutoff)', coLyDo.status === 200, `${coLyDo.status} ${coLyDo.body?.message}`)
+        const sauPK = await LichHen.findById(idHomNay).lean()
+        kt("ly_do_doi = 'phong_kham'", sauPK?.ly_do_doi === 'phong_kham', sauPK?.ly_do_doi)
+        kt('KHONG tinh vao han muc cua khach', (sauPK?.so_lan_doi_khach_yeu_cau ?? 0) === 0,
+          `so_lan_doi_khach_yeu_cau=${sauPK?.so_lan_doi_khach_yeu_cau}`)
+
+        // Slot cu phai thanh `locked`, KHONG tra ve pool (mục 15).
+        const schedCu = await LichLamViec.findById(schedule._id).lean()
+        const slotCu = schedCu.slots.find((s) => String(s._id) === String(slotRanh[4]._id))
+        kt("slot cu -> 'locked', khong tra pool", slotCu?.status === 'locked', slotCu?.status)
+
+        // (c) KHACH YEU CAU tren lich ngay mai: hop le lan 1, chan lan 2.
+        // PHAI truyen ngay_kham=schedMai.ngay:  mac dinh dat ngay HOM NAY, ma moc
+        //  tinh theo ngay_kham cua lich hen — de nguyen thi lich nao cung qua han.
+        // ranhMai[0] da bi lan doi o (b) chiem -> dung [1] lam cho xuat phat, [2] lam dich.
+        const idMai = await taoLichHen(ranhMai[1], schedMai, { ngay_kham: schedMai.ngay })
+        const lan1 = await api('PATCH', `/receptionist/appointments/${idMai}/reschedule`,
+          { tok: tokLeTan, body: { ngay_kham: ngayMaiISO, gio_kham: ranhMai[2].gio_bat_dau } })
+        kt('khach yeu cau doi lan 1 -> 200', lan1.status === 200, `${lan1.status} ${lan1.body?.message}`)
+        const sauLan1 = await LichHen.findById(idMai).lean()
+        kt("ly_do_doi = 'khach_yeu_cau'", sauLan1?.ly_do_doi === 'khach_yeu_cau', sauLan1?.ly_do_doi)
+        kt('dem dung 1 lan', sauLan1?.so_lan_doi_khach_yeu_cau === 1, `${sauLan1?.so_lan_doi_khach_yeu_cau}`)
+        kt('gio da doi', sauLan1?.gio_kham === ranhMai[2].gio_bat_dau, `${sauLan1?.gio_kham}`)
+
+        const lan2 = await api('PATCH', `/receptionist/appointments/${idMai}/reschedule`,
+          { tok: tokLeTan, body: { ngay_kham: ngayMaiISO, gio_kham: ranhMai[3].gio_bat_dau } })
+        kt('doi lan 2 -> chan 409 (tran 1 lan)', lan2.status === 409, `${lan2.status} ${lan2.body?.message}`)
+
+        // (d) + (e) dung CUNG mot lich hen: ca hai phep kiem deu ky vong BI CHAN nen khong
+        // lam thay doi slot nao, dung lai duoc.
+        const idChan = await taoLichHen(ranhMai[3], schedMai, { ngay_kham: schedMai.ngay })
+
+        const trungCho = await api('PATCH', `/receptionist/appointments/${idChan}/reschedule`,
+          { tok: tokLeTan, body: { ngay_kham: ngayMaiISO, gio_kham: ranhMai[3].gio_bat_dau } })
+        kt('doi vao dung khung hien tai -> 400', trungCho.status === 400, `${trungCho.status} ${trungCho.body?.message}`)
+
+        if (walkInMai) {
+          const lan = await api('PATCH', `/receptionist/appointments/${idChan}/reschedule`,
+            { tok: tokLeTan, body: { ngay_kham: ngayMaiISO, gio_kham: walkInMai.gio_bat_dau } })
+          kt('khong lan slot walk-in -> 409', lan.status === 409, `${lan.status} ${lan.body?.message}`)
+          const vanCho = await LichHen.findById(idChan).lean()
+          kt('bi chan thi lich KHONG doi', vanCho?.gio_kham === ranhMai[3].gio_bat_dau, vanCho?.gio_kham)
+        } else {
+          console.log('  (bo qua: khong tim duoc khung chi con slot walk-in)')
+        }
+
+        // (f) Lich su doi lich con ghi day du (trang cua thanh vien khac doc no).
+        const ls = await api('GET', `/receptionist/appointments/${idMai}/reschedule-history`, { tok: tokLeTan })
+        kt('lich su doi lich tra 200', ls.status === 200, `${ls.status}`)
+        kt('co ban ghi lich su', (ls.body?.data ?? []).length >= 1, `${(ls.body?.data ?? []).length} ban ghi`)
+      }
+    }
+  }
+
+  muc('8. Check-in khach vang lai (khong hoi quy)')
   {
     const r = await api('POST', '/doctor/queue/checkin', {
       tok: tokBacSi,
