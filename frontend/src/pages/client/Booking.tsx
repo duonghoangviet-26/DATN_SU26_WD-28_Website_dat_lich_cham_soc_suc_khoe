@@ -17,6 +17,7 @@ import {
   type PatientPaymentStatusResult,
   type FamilyMember,
   type CreateBookingPayload,
+  type SpecialtySlotsResult,
 } from '@/services/patient-booking.service'
 import { specialtyService } from '@/services/specialty.service'
 import DieuKhoanDatLich from '@/components/client/DieuKhoanDatLich'
@@ -69,6 +70,13 @@ export default function Booking() {
   // Bằng chứng đồng ý điều khoản không hoàn tiền — backend từ chối tạo lịch nếu thiếu
   // (rule mục 5: không có bằng chứng thì không được thu tiền).
   const [dongYDieuKhoan, setDongYDieuKhoan] = useState(false)
+
+  // Hai đường đặt lịch (rule mục 12). Mặc định để phòng khám xếp bác sĩ: khách chỉ cần
+  // biết mình khám chuyên khoa nào và giờ nào, không phải tự so sánh từng bác sĩ.
+  const [cheDoChon, setCheDoChon] = useState<'tu_dong' | 'chon_bac_si'>('tu_dong')
+  const [khungTheoChuyenKhoa, setKhungTheoChuyenKhoa] = useState<SpecialtySlotsResult | null>(null)
+  const [dangTaiKhungCK, setDangTaiKhungCK] = useState(false)
+  const [khungGioDaChon, setKhungGioDaChon] = useState<string>('')
 
   // Booking target states
   const [bookingFor, setBookingFor] = useState<'self' | 'member' | 'other'>('self')
@@ -196,6 +204,29 @@ export default function Booking() {
     }
   }, [])
 
+  // Chế độ tự gán: nạp khung giờ gộp của CẢ chuyên khoa (rule mục 12), kèm giá.
+  useEffect(() => {
+    if (cheDoChon !== 'tu_dong' || selectedSpecialtyId === 'all' || !selectedDate) {
+      setKhungTheoChuyenKhoa(null)
+      return
+    }
+
+    let ignore = false
+    setDangTaiKhungCK(true)
+    setKhungGioDaChon('')
+    patientBookingService.getSpecialtySlots(selectedSpecialtyId, selectedDate)
+      .then((data) => { if (!ignore) setKhungTheoChuyenKhoa(data) })
+      .catch((error: any) => {
+        if (!ignore) {
+          setKhungTheoChuyenKhoa(null)
+          setToast(error.response?.data?.message || 'Không tải được khung giờ của chuyên khoa')
+        }
+      })
+      .finally(() => { if (!ignore) setDangTaiKhungCK(false) })
+
+    return () => { ignore = true }
+  }, [cheDoChon, selectedSpecialtyId, selectedDate])
+
   useEffect(() => {
     if (!selectedDoctorId || !selectedDate) {
       setSlots([])
@@ -318,7 +349,12 @@ export default function Booking() {
 
   function handleNextStep() {
     if (step === 1) {
-      if (!selectedDoctorId) {
+      if (cheDoChon === 'tu_dong') {
+        if (selectedSpecialtyId === 'all') {
+          setToast('Vui lòng chọn chuyên khoa bạn muốn khám.')
+          return
+        }
+      } else if (!selectedDoctorId) {
         setToast('Vui lòng chọn bác sĩ khám chuyên khoa.')
         return
       }
@@ -327,8 +363,12 @@ export default function Booking() {
     }
 
     if (step === 2) {
-      if (!selectedDate || !selectedSlotId) {
-        setToast('Vui lòng chọn ngày khám và khung giờ còn trống.')
+      if (!selectedDate) {
+        setToast('Vui lòng chọn ngày khám.')
+        return
+      }
+      if (cheDoChon === 'tu_dong' ? !khungGioDaChon : !selectedSlotId) {
+        setToast('Vui lòng chọn khung giờ còn trống.')
         return
       }
       setStep(3)
@@ -387,8 +427,9 @@ export default function Booking() {
   }
 
   async function handleCreateBooking() {
-    if (!selectedDoctor || !selectedSlot) {
-      setToast('Thiếu thông tin bác sĩ hoặc khung giờ khám.')
+    const tuDong = cheDoChon === 'tu_dong'
+    if (tuDong ? !khungGioDaChon : (!selectedDoctor || !selectedSlot)) {
+      setToast('Thiếu thông tin khung giờ khám.')
       return
     }
     // Backend cũng chặn (rule mục 5: không có bằng chứng đồng ý thì không được thu tiền).
@@ -400,11 +441,13 @@ export default function Booking() {
 
     setSubmittingBooking(true)
     try {
+      // Tự gán: chỉ gửi chuyên khoa + khung giờ, backend chọn bác sĩ theo thứ tự xác định.
+      // Đích danh: gửi đủ doctor/schedule/slot như luồng cũ.
       const payload: CreateBookingPayload = {
         loai_kham: 'clinic',
-        doctor_id: selectedDoctor.id,
-        schedule_id: selectedSlot.schedule_id,
-        slot_id: selectedSlot.id,
+        ...(tuDong
+          ? { specialty_id: selectedSpecialtyId, gio_bat_dau: khungGioDaChon }
+          : { doctor_id: selectedDoctor!.id, schedule_id: selectedSlot!.schedule_id, slot_id: selectedSlot!.id }),
         ngay_kham: selectedDate,
         ly_do_kham: symptoms.trim(),
         ten_khach: patientName.trim(),
@@ -508,12 +551,50 @@ export default function Booking() {
 
       {step === 1 && (
         <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
+          {/* Rule mục 12: mặc định để phòng khám xếp bác sĩ. Đường chọn đích danh vẫn giữ
+              cho khách tái khám hoặc có nguyện vọng riêng. */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setCheDoChon('tu_dong')}
+              className={`rounded-xl border p-4 text-left transition ${
+                cheDoChon === 'tu_dong'
+                  ? 'border-brand-500 bg-brand-50/40 shadow-sm'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <p className="text-sm font-bold text-slate-800">Để phòng khám xếp bác sĩ</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                Bạn chọn chuyên khoa và giờ khám, chúng tôi xếp bác sĩ đang trực. Giá khám như nhau
+                với mọi bác sĩ trong cùng chuyên khoa.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCheDoChon('chon_bac_si')}
+              className={`rounded-xl border p-4 text-left transition ${
+                cheDoChon === 'chon_bac_si'
+                  ? 'border-brand-500 bg-brand-50/40 shadow-sm'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <p className="text-sm font-bold text-slate-800">Tôi chọn bác sĩ</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                Dành cho tái khám hoặc khi bạn muốn gặp đúng một bác sĩ. Khung giờ sẽ phụ thuộc lịch
+                trực của người đó.
+              </p>
+            </button>
+          </div>
+
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn bác sĩ phụ trách</label>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                {cheDoChon === 'tu_dong' ? 'Chọn chuyên khoa' : 'Chọn bác sĩ phụ trách'}
+              </label>
               
-              {/* Ô tìm kiếm bác sĩ */}
-              {doctors.length > 0 && (
+              {/* Ô tìm kiếm bác sĩ — vô nghĩa ở chế độ tự gán, khách không chọn người */}
+              {cheDoChon === 'chon_bac_si' && doctors.length > 0 && (
                 <div className="relative w-full sm:w-72">
                   <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -562,7 +643,18 @@ export default function Booking() {
               </div>
             )}
 
-            {doctors.length === 0 ? (
+            {cheDoChon === 'tu_dong' ? (
+              selectedSpecialtyId === 'all' ? (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Chọn một chuyên khoa phía trên để xem các khung giờ còn trống.
+                </p>
+              ) : (
+                <p className="rounded-xl border border-brand-100 bg-brand-50/40 px-4 py-3 text-sm text-brand-800">
+                  Đã chọn <strong>{specialties.find((sp) => sp.id === selectedSpecialtyId)?.ten}</strong>.
+                  Bấm <strong>Tiếp tục</strong> để chọn ngày và khung giờ — bác sĩ sẽ được xếp tự động.
+                </p>
+              )
+            ) : doctors.length === 0 ? (
               <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Hiện chưa có bác sĩ khả dụng để đặt lịch.</p>
             ) : isDefaultAll ? (
               <div className="space-y-6">
@@ -662,6 +754,64 @@ export default function Booking() {
             </div>
           </div>
 
+          {cheDoChon === 'tu_dong' ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn khung giờ khám</label>
+                {khungTheoChuyenKhoa && (
+                  <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                    Phí khám: {formatCurrency(khungTheoChuyenKhoa.gia_kham)}
+                  </span>
+                )}
+              </div>
+
+              {dangTaiKhungCK ? (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Đang tải khung giờ còn trống...</p>
+              ) : !khungTheoChuyenKhoa || khungTheoChuyenKhoa.khung_gio.length === 0 ? (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Không còn khung giờ trống cho ngày đã chọn. Vui lòng chọn ngày khác.
+                </p>
+              ) : (
+                (['sang', 'chieu'] as const).map((ca) => {
+                  const dsKhung = khungTheoChuyenKhoa.khung_gio.filter((k) => k.ca === ca)
+                  if (dsKhung.length === 0) return null
+                  return (
+                    <div key={ca} className="space-y-2">
+                      <p className="text-xs font-semibold text-slate-500">
+                        {ca === 'sang' ? 'Ca sáng · 08:00 – 11:30' : 'Ca chiều · 13:30 – 17:30'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {dsKhung.map((khung) => (
+                          <button
+                            key={khung.gio_bat_dau}
+                            type="button"
+                            onClick={() => setKhungGioDaChon(khung.gio_bat_dau)}
+                            className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-all ${
+                              khungGioDaChon === khung.gio_bat_dau
+                                ? 'border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-100'
+                                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span className="block">{khung.gio_bat_dau}</span>
+                            <span className={`block text-[10px] font-normal ${
+                              khungGioDaChon === khung.gio_bat_dau ? 'text-white/80' : 'text-slate-400'
+                            }`}>
+                              còn {khung.so_cho_trong} chỗ
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+
+              <p className="text-xs leading-relaxed text-slate-400">
+                Bác sĩ trực khung giờ này sẽ được xếp tự động và hiển thị ở bước xác nhận.
+                Đặt lịch online đóng trước giờ khám 30 phút.
+              </p>
+            </div>
+          ) : (
           <div className="space-y-3">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn khung giờ khám</label>
             {loadingSlots ? (
@@ -687,6 +837,7 @@ export default function Booking() {
               </div>
             )}
           </div>
+          )}
         </div>
       )}
 
@@ -868,8 +1019,32 @@ export default function Booking() {
           <div className="grid gap-4 text-sm text-slate-600 sm:grid-cols-2">
             <div className="space-y-2">
               <p><span className="font-semibold text-slate-500">Hình thức:</span> Khám chuyên khoa tại phòng khám</p>
-              <p><span className="font-semibold text-slate-500">Bác sĩ phụ trách:</span> <span className="font-bold text-slate-800">{selectedDoctor?.ho_ten}</span></p>
-              <p><span className="font-semibold text-slate-500">Thời gian:</span> <span className="font-semibold text-brand-600">{selectedSlot ? formatSlotLabel(selectedSlot) : '--'}</span>, ngày {selectedDate}</p>
+              <p>
+                <span className="font-semibold text-slate-500">Bác sĩ phụ trách:</span>{' '}
+                {cheDoChon === 'tu_dong' ? (
+                  <span className="font-semibold text-slate-600">Phòng khám xếp bác sĩ đang trực</span>
+                ) : (
+                  <span className="font-bold text-slate-800">{selectedDoctor?.ho_ten}</span>
+                )}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-500">Thời gian:</span>{' '}
+                <span className="font-semibold text-brand-600">
+                  {cheDoChon === 'tu_dong'
+                    ? khungGioDaChon || '--'
+                    : (selectedSlot ? formatSlotLabel(selectedSlot) : '--')}
+                </span>, ngày {selectedDate}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-500">Phí khám:</span>{' '}
+                <span className="font-bold text-slate-800">
+                  {formatCurrency(
+                    cheDoChon === 'tu_dong'
+                      ? (khungTheoChuyenKhoa?.gia_kham ?? 0)
+                      : (selectedDoctor?.gia_kham ?? 0),
+                  )}
+                </span>
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -882,7 +1057,7 @@ export default function Booking() {
           <DieuKhoanDatLich
             daDongY={dongYDieuKhoan}
             onChange={setDongYDieuKhoan}
-            giaKham={selectedDoctor?.gia_kham ?? null}
+            giaKham={cheDoChon === 'tu_dong' ? (khungTheoChuyenKhoa?.gia_kham ?? null) : (selectedDoctor?.gia_kham ?? null)}
           />
 
           <div className="rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">

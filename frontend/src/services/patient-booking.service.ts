@@ -42,11 +42,16 @@ export interface FamilyGroup {
   members: FamilyMember[]
 }
 
+// Hai đường đặt lịch (rule mục 12):
+//   TỰ GÁN      — gửi `specialty_id` + `gio_bat_dau`, hệ thống chọn bác sĩ
+//   ĐÍCH DANH   — gửi `doctor_id` + `schedule_id` + `slot_id` như trước
 export interface CreateBookingPayload {
   loai_kham: 'clinic'
-  doctor_id: string
-  schedule_id: string
-  slot_id: string
+  doctor_id?: string
+  schedule_id?: string
+  slot_id?: string
+  specialty_id?: string
+  gio_bat_dau?: string
   ngay_kham: string
   ly_do_kham: string
   ten_khach: string
@@ -56,6 +61,56 @@ export interface CreateBookingPayload {
   // BẮT BUỘC. Backend trả 400 nếu thiếu — không có bằng chứng khách đồng ý điều khoản
   // không hoàn tiền thì không được thu tiền (rule mục 5).
   dong_y_dieu_khoan: true
+}
+
+// ── Luồng chọn chuyên khoa, hệ thống tự xếp bác sĩ (rule mục 12) ───────────
+export interface SpecialtyTimeSlot {
+  khung_index: number | null
+  gio_bat_dau: string
+  gio_ket_thuc: string
+  ca: 'sang' | 'chieu'
+  so_cho_trong: number
+}
+
+export interface SpecialtySlotsResult {
+  ten_chuyen_khoa: string
+  gia_kham: number
+  ngay: string
+  khung_gio: SpecialtyTimeSlot[]
+}
+
+// ── Dời lịch (rule mục 5, 14, 15) ──────────────────────────────────────────
+export interface ReschedulePlan {
+  index: number
+  loai: 'doi_bac_si' | 'doi_khung'
+  mo_ta: string
+  ngay: string
+  gio_bat_dau: string
+  bac_si_ten: string | null
+  da_giu_cho: boolean
+}
+
+export interface RescheduleOptions {
+  // 'phong_kham_de_xuat' = phòng khám đổi lịch (bác sĩ bận/nghỉ).
+  // 'khach_tu_doi'       = khách tự xin dời, có hạn mức.
+  loai: 'phong_kham_de_xuat' | 'khach_tu_doi'
+  trang_thai?: 'cho_khach_chon' | 'cho_admin_duyet'
+  han_phan_hoi?: string | null
+  con_lai?: number
+  han_chot?: string
+  khong_mat_tien: boolean
+  thong_diep: string
+  phuong_an: ReschedulePlan[]
+}
+
+export interface RescheduleResult {
+  id: string
+  ma_lich_hen: string | null
+  ngay_kham: string
+  gio_kham: string
+  doctor_id: string
+  ly_do_doi: 'khach_yeu_cau' | 'phong_kham' | null
+  so_lan_doi_khach_yeu_cau: number
 }
 
 export interface CreatedBookingResult {
@@ -124,8 +179,35 @@ export const patientBookingService = {
     return Array.isArray(res.data.data) ? res.data.data : []
   },
 
+  // Luồng MẶC ĐỊNH (rule mục 12): chọn chuyên khoa + khung giờ, hệ thống tự xếp bác sĩ.
+  // Trả kèm giá vì giá phải hiển thị TRƯỚC khi giữ chỗ.
+  async getSpecialtySlots(specialtyId: string, date: string): Promise<SpecialtySlotsResult> {
+    const res = await axiosInstance.get<ApiResponse<SpecialtySlotsResult>>(
+      `/patient/booking/specialties/${specialtyId}/slots`,
+      { params: { date } },
+    )
+    return res.data.data
+  },
+
   async createBooking(payload: CreateBookingPayload): Promise<CreatedBookingResult> {
     const res = await axiosInstance.post<ApiResponse<CreatedBookingResult>>('/patient/booking', payload)
+    return res.data.data
+  },
+
+  // ── Dời lịch (rule mục 5, 14, 15) ─────────────────────────────────────────
+  // KHÔNG hoàn tiền — tiền được bảo toàn dưới dạng quyền dời lịch.
+  async getRescheduleOptions(appointmentId: string): Promise<RescheduleOptions> {
+    const res = await axiosInstance.get<ApiResponse<RescheduleOptions>>(
+      `/patient/appointments/${appointmentId}/reschedule`,
+    )
+    return res.data.data
+  },
+
+  async chooseReschedule(appointmentId: string, phuongAnIndex: number): Promise<RescheduleResult> {
+    const res = await axiosInstance.post<ApiResponse<RescheduleResult>>(
+      `/patient/appointments/${appointmentId}/reschedule`,
+      { phuong_an_index: phuongAnIndex },
+    )
     return res.data.data
   },
 

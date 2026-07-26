@@ -1,5 +1,5 @@
 import { BacSi, ChuyenKhoa, LichHen, LichLamViec } from '../models/index.js'
-import { caCuaKhung } from '../models/MauLichLamViec.js'
+import { caTheoGio } from '../models/MauLichLamViec.js'
 import { daQuaCutoffOnline, isSlotInPast } from '../utils/clinicTime.js'
 
 // ============================================================
@@ -81,7 +81,10 @@ export async function layKhungTrongCuaChuyenKhoa(specialtyId, ngay, now = new Da
       if (isSlotInPast(ngay, slot.gio_bat_dau, now)) continue
       if (daQuaCutoffOnline(ngay, slot.gio_bat_dau, now)) continue
 
-      const key = slot.khung_index ?? slot.gio_bat_dau
+      // Gộp theo GIỜ, không theo `khung_index`: slot cũ thiếu `khung_index` nên gộp theo nó
+      // sẽ tách cùng một khung thành hai dòng, và `Number(null) === 0` còn xếp khung 13:30
+      // vào ca sáng. Giờ bắt đầu luôn tồn tại và luôn đúng.
+      const key = slot.gio_bat_dau
       const hienCo = theoKhung.get(key)
       if (hienCo) hienCo.so_cho_trong += 1
       else {
@@ -89,7 +92,7 @@ export async function layKhungTrongCuaChuyenKhoa(specialtyId, ngay, now = new Da
           khung_index: slot.khung_index ?? null,
           gio_bat_dau: slot.gio_bat_dau,
           gio_ket_thuc: slot.gio_ket_thuc,
-          ca: caCuaKhung(slot.khung_index),
+          ca: caTheoGio(slot.gio_bat_dau),
           so_cho_trong: 1,
         })
       }
@@ -178,16 +181,18 @@ export async function chonBacSiChoKhung({
 
   // (2) Ít lịch nhất TRONG CA — không phải cả ngày: bác sĩ kín sáng nhưng trống chiều
   // vẫn nên nhận khách chiều.
-  const caCuaKhungNay = caCuaKhung(ungVien[0].khungIndex)
-  const slotTheoKhung = new Map()
+  // Suy ca từ GIỜ, không từ `khung_index` — slot cũ thiếu field đó và `Number(null) === 0`
+  // sẽ đếm nhầm lịch ca chiều thành ca sáng, làm sai luôn phép "ít lịch nhất trong ca".
+  const caCuaKhungNay = caTheoGio(gioBatDau)
+  const gioTheoSlot = new Map()
   for (const schedule of schedules) {
-    for (const s of schedule.slots) slotTheoKhung.set(String(s._id), s.khung_index)
+    for (const s of schedule.slots) gioTheoSlot.set(String(s._id), s.gio_bat_dau)
   }
   const soLichTrongCa = new Map()
   for (const appt of appointments) {
     if (!appt.slot_id) continue
-    const khungIndex = slotTheoKhung.get(String(appt.slot_id))
-    if (khungIndex === undefined || caCuaKhung(khungIndex) !== caCuaKhungNay) continue
+    const gio = gioTheoSlot.get(String(appt.slot_id)) ?? appt.gio_kham
+    if (!gio || caTheoGio(gio) !== caCuaKhungNay) continue
     const key = String(appt.doctor_id)
     soLichTrongCa.set(key, (soLichTrongCa.get(key) ?? 0) + 1)
   }

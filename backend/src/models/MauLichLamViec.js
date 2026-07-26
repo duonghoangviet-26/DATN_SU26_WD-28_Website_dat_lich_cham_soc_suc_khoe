@@ -27,6 +27,21 @@ export function caCuaKhung(khungIndex) {
   return Number(khungIndex) >= KHUNG_DAU_CA_CHIEU ? CA_CHIEU : CA_SANG
 }
 
+// Nghỉ trưa 11:30–13:30, nên mọi khung từ 12:00 trở đi thuộc ca chiều.
+const GIO_BAT_DAU_CA_CHIEU = '12:00'
+
+/**
+ * Ca của một khung, suy từ GIỜ thay vì `khung_index`.
+ *
+ * `khung_index` được thêm sau (migration 2026-07-23) nên slot cũ có thể thiếu — khi đó
+ * `Number(null) === 0` khiến khung 13:30 bị xếp vào ca sáng. Giờ bắt đầu thì luôn tồn tại
+ * và luôn đúng, nên đây là nguồn đáng tin hơn khi hiển thị cho bệnh nhân.
+ */
+export function caTheoGio(gioBatDau) {
+  if (!gioBatDau) return CA_SANG
+  return String(gioBatDau) >= GIO_BAT_DAU_CA_CHIEU ? CA_CHIEU : CA_SANG
+}
+
 const mauLichLamViecSchema = new mongoose.Schema(
   {
     bac_si_id: {

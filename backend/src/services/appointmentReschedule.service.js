@@ -129,13 +129,13 @@ export async function sinhPhuongAnDoi({ appointment, duocLanWalkIn = false, now 
   ungVienKhungKhac.sort((a, b) => a._lechPhut - b._lechPhut || a.gio_bat_dau.localeCompare(b.gio_bat_dau))
 
   // Giới hạn số phương án: đưa 10 lựa chọn cho khách chỉ làm họ khó chọn hơn.
-  for (const item of ungVienKhungKhac.slice(0, 3)) {
+  for (const item of ungVienKhungKhac.slice(0, 6)) {
     delete item._lechPhut
     phuongAn.push(item)
   }
 
   // Trần lấn walk-in: 1 slot/khung, và chỉ khi lỗi phòng khám (mục 15).
-  return capTranLanWalkIn(phuongAn)
+  return capTranLanWalkIn(gopPhuongAnTrung(phuongAn)).slice(0, 4)
 }
 
 function khoangCachKhung(a, b) {
@@ -144,6 +144,19 @@ function khoangCachKhung(a, b) {
     return h * 60 + m
   }
   return phut(a) - phut(b)
+}
+
+// Một khung chứa NHIỀU slot (TMH 2 slot/khung), nên cùng một bác sĩ ở cùng một giờ sẽ
+// sinh ra nhiều phương án giống hệt nhau. Khách nhìn thấy hai lựa chọn y hệt thì không
+// biết chọn cái nào — gộp lại, giữ slot đầu tiên.
+function gopPhuongAnTrung(phuongAn) {
+  const daCo = new Set()
+  return phuongAn.filter((pa) => {
+    const khoa = `${pa.doctor_id}|${pa.ngay?.toISOString?.() ?? pa.ngay}|${pa.gio_bat_dau}`
+    if (daCo.has(khoa)) return false
+    daCo.add(khoa)
+    return true
+  })
 }
 
 function capTranLanWalkIn(phuongAn) {
