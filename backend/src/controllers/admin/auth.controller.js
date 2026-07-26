@@ -128,7 +128,8 @@ export async function register(req, res) {
       user_id: ADMIN_ID,
       tieu_de: 'Người dùng mới đăng ký',
       noi_dung: `Người dùng ${ho_ten} (${email}) vừa tạo tài khoản thành công.`,
-      loai: 'system'
+      loai: 'system',
+      ngay_gui_du_kien: new Date(),
     })
     emitDashboardNewPatient(user.ngay_tao)
 
