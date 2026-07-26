@@ -389,8 +389,10 @@ export default function Booking() {
         return
       }
 
-      // Kiểm tra định dạng Họ tên (chữ cái Tiếng Việt có dấu, khoảng trắng)
-      const nameRegex = /^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂÂÊÔƠƯưăâêôơưẠ-ỹđĐ\s']{2,100}$/
+      // Kiểm tra định dạng Họ tên (chữ cái Tiếng Việt có dấu, khoảng trắng, dấu chấm cho danh xưng
+      // như "BS.", "ThS." — bắt buộc phải cho phép vì "Tự khám" khoá cứng tên theo user.ho_ten,
+      // không có ô sửa, nên tài khoản bác sĩ tự đặt lịch sẽ luôn bị chặn nếu thiếu dấu chấm)
+      const nameRegex = /^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂÂÊÔƠƯưăâêôơưẠ-ỹđĐ\s'.]{2,100}$/
       if (!nameRegex.test(nameTrimmed)) {
         setToast('Họ tên bệnh nhân không hợp lệ (phải từ 2 ký tự trở lên và chỉ chứa chữ cái).')
         return
