@@ -23,7 +23,11 @@ import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
 // lịch hẹn trong demo thường không ai check-in, mà mỗi lần đánh dấu là 100% tiền của một
 // bản ghi (mục 5) — không nên để cron âm thầm đổi dữ liệu người khác đang trình bày.
 // Chỉ ảnh hưởng LƯỢT QUÉT ĐỊNH KỲ; gọi tay `quetNoShowHetCa()` vẫn chạy bình thường.
-export const BAT_QUET_NO_SHOW = String(process.env.NO_SHOW_SWEEP_ENABLED ?? 'true') !== 'false'
+//
+// Nhận cả `false`/`FALSE`/`0`/`off`/`no`: đây là công tắc chặn một hành động mất tiền, ai gõ
+// `FALSE` mà hệ thống vẫn quét thì lỗi thuộc về cái công tắc, không thuộc về người gõ.
+const TAT = new Set(['false', '0', 'off', 'no'])
+export const BAT_QUET_NO_SHOW = !TAT.has(String(process.env.NO_SHOW_SWEEP_ENABLED ?? 'true').trim().toLowerCase())
 
 // Giờ kết thúc ca mặc định, dùng khi không tra được lịch làm việc thật.
 // Khớp `DEFAULT_SLOT_TIMES` của `scheduleGenerator`: ca sáng 08:00–11:30, chiều 13:30–17:30.
