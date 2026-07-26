@@ -542,7 +542,7 @@ export default function Appointments() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Ngày khám mới</label>
                 <input
                   type="date"
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
                   value={newDate}
                   onChange={(e) => setNewDate(e.target.value)}
                 />
@@ -550,7 +550,7 @@ export default function Appointments() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Giờ khám mới</label>
                 <select
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
                 >
@@ -567,7 +567,7 @@ export default function Appointments() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Lý do dời lịch</label>
                 <textarea
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none resize-none"
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none resize-none"
                   rows={3}
                   placeholder="Nhập lý do dời lịch..."
                   value={rescheduleReason}
@@ -585,7 +585,7 @@ export default function Appointments() {
               </button>
               <button
                 onClick={confirmReschedule}
-                className="px-4 py-2 bg-amber-500 text-white hover:bg-amber-600 rounded-lg text-sm font-medium transition-colors"
+                className="px-4 py-2 bg-brand-600 text-white hover:bg-brand-700 rounded-lg text-sm font-medium transition-colors"
               >
                 Lưu thay đổi
               </button>
@@ -724,7 +724,7 @@ export default function Appointments() {
 
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Lý do khám / Triệu chứng</h4>
-                    <div className="bg-amber-50/50 p-4 rounded-lg border border-amber-100 text-sm text-slate-700 leading-relaxed min-h-[80px]">
+                    <div className="bg-brand-50/50 p-4 rounded-lg border border-brand-100 text-sm text-slate-700 leading-relaxed min-h-[80px]">
                       {selectedDetailAppointment.ly_do_kham || <span className="text-slate-400 italic">Bệnh nhân không ghi chú gì thêm.</span>}
                     </div>
                   </div>
