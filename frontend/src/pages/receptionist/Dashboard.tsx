@@ -65,9 +65,15 @@ export default function Dashboard() {
     fetchNotifications();
   }, []);
 
+  // Check-in đưa bệnh nhân vào hàng đợi bác sĩ (rule mục 6) — xem chú thích ở Appointments.tsx.
   const handleArrived = async (id: string) => {
     try {
-      await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
+      const res = await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
+      const canhBao: string[] = res.data?.canh_bao ?? [];
+      const phong = res.data?.hang_doi?.phong_kham;
+      if (canhBao.length > 0) {
+        alert(`Đã đưa vào hàng đợi${phong ? ` — phòng ${phong}` : ''}.\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`);
+      }
       fetchStats(); // Cập nhật lại danh sách và số lượng
     } catch (err: any) {
       alert(err.response?.data?.message || 'Lỗi khi check-in');

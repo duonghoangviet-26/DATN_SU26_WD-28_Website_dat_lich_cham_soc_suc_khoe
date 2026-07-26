@@ -5,7 +5,7 @@ import Button from '@/components/common/Button'
 import Icon from '@/components/admin/icons'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
-import type { DoctorExamQueueRow, ExamQueueStatus, DoctorAppointmentDetail, RoomStatus, PhongKhamTrangThai } from '@/types'
+import type { DoctorExamQueueRow, ExamQueueStatus, DoctorAppointmentDetail, RoomStatus, PhongKhamTrangThai, LichChoTiepNhan } from '@/types'
 import { formatDate } from '@/utils/format'
 
 const ROOM_STATUS_LABEL: Record<PhongKhamTrangThai, string> = {
@@ -62,6 +62,90 @@ const STATUS_COLOR: Record<ExamQueueStatus, 'green' | 'red' | 'blue' | 'yellow' 
 }
 const TH = 'px-4 py-3 text-xs font-semibold text-slate-600'
 
+// Tình trạng thời gian của một lượt chờ tiếp nhận, theo mốc rule mục 11.
+// Người trễ vẫn được khám và KHÔNG mất tiền — nhãn nói rõ để không ai hiểu thành "từ chối".
+function nhanThoiDiem(row: LichChoTiepNhan): { text: string; color: 'green' | 'yellow' | 'gray' } {
+  if (row.tre_qua_grace) return { text: `Trễ sau ${row.gio_kham} — vẫn khám, xếp sau`, color: 'yellow' }
+  if (row.con_trong_grace) return { text: 'Đúng giờ', color: 'green' }
+  return { text: 'Đến sớm', color: 'gray' }
+}
+
+// Bảng "Chờ tiếp nhận": khách đã đặt lịch hôm nay nhưng chưa có ai bấm tiếp nhận.
+// Không có bảng này thì lượt đã thanh toán không có đường nào vào hàng đợi của bác sĩ.
+function BangChoTiepNhan({
+  rows, loading, checkingId, onCheckin,
+}: {
+  rows: LichChoTiepNhan[]
+  loading: boolean
+  checkingId: string | null
+  onCheckin: (row: LichChoTiepNhan) => void
+}) {
+  if (loading) return null
+  if (rows.length === 0) return null
+
+  return (
+    <div className="card mb-4 overflow-hidden">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-amber-50 px-4 py-3">
+        <Icon name="clock" className="h-4 w-4 text-amber-600" />
+        <span className="text-sm font-semibold text-slate-800">Chờ tiếp nhận</span>
+        <span className="text-xs text-slate-500">
+          Khách đã đặt lịch hôm nay, chưa vào hàng đợi. Bấm “Tiếp nhận” khi bệnh nhân có mặt.
+        </span>
+        <span className="ml-auto text-xs font-semibold text-amber-700">{rows.length} lượt</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-left">
+              <th className={TH}>Khung giờ</th>
+              <th className={TH}>Bệnh nhân</th>
+              <th className={TH}>Phòng</th>
+              <th className={TH}>Thanh toán</th>
+              <th className={TH}>Tình trạng</th>
+              <th className={TH}>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((r) => {
+              const thoiDiem = nhanThoiDiem(r)
+              return (
+                <tr key={r.appointment_id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-slate-800">{r.gio_kham}</p>
+                    {r.ma_lich_hen && <p className="text-xs text-slate-400">{r.ma_lich_hen}</p>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-slate-800">{r.ten_benh_nhan}</p>
+                    <p className="text-xs text-slate-400">
+                      {[r.so_dien_thoai, r.chuyen_khoa].filter(Boolean).join(' · ') || '—'}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{r.phong_kham ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <Badge color={r.payment_status === 'paid' ? 'green' : 'red'}>
+                      {r.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge color={thoiDiem.color}>{thoiDiem.text}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Button size="sm" disabled={checkingId === r.appointment_id}
+                      onClick={() => onCheckin(r)}
+                      icon={<Icon name="check" className="h-3.5 w-3.5" />}>
+                      {checkingId === r.appointment_id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}
+                    </Button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export default function DoctorExamQueue() {
   const [rows, setRows] = useState<DoctorExamQueueRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -77,18 +161,47 @@ export default function DoctorExamQueue() {
   const [checkinName, setCheckinName] = useState('')
   const [checkinPhone, setCheckinPhone] = useState('')
   const [checkinSaving, setCheckinSaving] = useState(false)
+  const [choTiepNhan, setChoTiepNhan] = useState<LichChoTiepNhan[]>([])
+  const [choTiepNhanLoading, setChoTiepNhanLoading] = useState(true)
+  const [tiepNhanId, setTiepNhanId] = useState<string | null>(null)
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
+    // Cảnh báo (chưa thanh toán, ca quá tải) dài hơn một dòng — để lâu hơn cho đọc kịp.
+    setTimeout(() => setToast(null), message.length > 60 ? 7000 : 3000)
   }
 
   function load() {
     setLoading(true); setError(false)
     doctorAppointmentService.getExamQueue()
       .then(setRows).catch(() => setError(true)).finally(() => setLoading(false))
+    setChoTiepNhanLoading(true)
+    doctorAppointmentService.getPendingCheckin()
+      .then(setChoTiepNhan).catch(() => setChoTiepNhan([])).finally(() => setChoTiepNhanLoading(false))
   }
   useEffect(load, [])
+
+  // Tiếp nhận khách đã đặt lịch: tạo lượt trong hàng đợi (rule mục 6 — hàng đợi chỉ sinh ra
+  // khi check-in). Cảnh báo trả về từ server (chưa thanh toán / trễ / ca quá tải) hiện nguyên văn.
+  async function handleTiepNhan(row: LichChoTiepNhan) {
+    setTiepNhanId(row.appointment_id)
+    try {
+      const kq = await doctorAppointmentService.checkinQueue({ appointment_id: row.appointment_id })
+      const canhBao = kq.canh_bao ?? []
+      showToast(
+        canhBao.length > 0
+          ? `Đã tiếp nhận ${row.ten_benh_nhan}. ${canhBao.join(' ')}`
+          : `Đã tiếp nhận ${row.ten_benh_nhan} vào hàng đợi`,
+        canhBao.length > 0 ? 'error' : 'success',
+      )
+      load()
+    } catch (e) {
+      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      showToast(message ?? 'Không tiếp nhận được, vui lòng thử lại', 'error')
+    } finally {
+      setTiepNhanId(null)
+    }
+  }
 
   // Chỉ mở modal xác nhận khi tới bước của bác sĩ (đã có ket_qua_id + đang chờ xác nhận).
   async function openConfirm(r: DoctorExamQueueRow) {
@@ -165,6 +278,9 @@ export default function DoctorExamQueue() {
 
       <RoomStatusWidget />
 
+      <BangChoTiepNhan rows={choTiepNhan} loading={choTiepNhanLoading}
+        checkingId={tiepNhanId} onCheckin={handleTiepNhan} />
+
       <div className="card mb-4 flex flex-wrap items-end gap-4 p-4">
         <div className="min-w-[220px] flex-1">
           <label className="mb-1 block text-xs font-semibold text-slate-500">Tìm kiếm</label>
@@ -205,8 +321,13 @@ export default function DoctorExamQueue() {
           <Button variant="secondary" size="sm" onClick={load}>Thử lại</Button>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
-          Chưa có bệnh nhân nào trong hàng đợi.
+        <div className="flex h-64 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+          <p>Chưa có bệnh nhân nào trong hàng đợi.</p>
+          {choTiepNhan.length > 0 && (
+            <p className="text-xs text-amber-700">
+              {choTiepNhan.length} khách đã đặt lịch hôm nay — bấm “Tiếp nhận” ở bảng trên khi họ có mặt.
+            </p>
+          )}
         </div>
       ) : (
         <div className="card overflow-hidden">

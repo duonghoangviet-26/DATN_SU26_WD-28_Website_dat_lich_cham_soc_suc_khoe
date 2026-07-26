@@ -148,9 +148,16 @@ export default function Appointments() {
     fetchAppointments(newPage);
   };
 
+  // Check-in đưa bệnh nhân vào HÀNG ĐỢI của bác sĩ (rule mục 6), không chỉ đổi trạng thái lịch.
+  // Server trả kèm cảnh báo cần xử lý ngay tại quầy: chưa thanh toán, đến sớm/trễ, ca quá tải.
   const handleArrived = async (id: string) => {
     try {
-      await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
+      const res = await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
+      const canhBao: string[] = res.data?.canh_bao ?? [];
+      const phong = res.data?.hang_doi?.phong_kham;
+      if (canhBao.length > 0) {
+        alert(`Đã đưa vào hàng đợi${phong ? ` — phòng ${phong}` : ''}.\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`);
+      }
       fetchAppointments();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Lỗi khi check-in');

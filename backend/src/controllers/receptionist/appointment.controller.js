@@ -4,6 +4,7 @@ import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
 import LichSuLichHen from '../../models/LichSuLichHen.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
+import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
 
 export const getAppointments = async (req, res) => {
   try {
@@ -89,23 +90,52 @@ export const getAppointments = async (req, res) => {
   }
 }
 
+// Lễ tân tiếp nhận bệnh nhân tới quầy.
+//
+// ⚠️ Trước 2026-07-26 hàm này CHỈ đổi `status = 'checked_in'`. Bệnh nhân đặt online, đã thanh
+// toán, tới quầy, lễ tân bấm "đã đến" — và không bao giờ xuất hiện trong hàng đợi của bác sĩ,
+// vì hàng đợi neo trên collection `HangDoi` chứ không trên `LichHen.status`. Bác sĩ không có
+// cách nào tiếp nhận họ; tệ hơn, rule mục 8 định nghĩa `no_show` = "hết ca mà không có bản ghi
+// HangDoi" nên người đã tới quầy vẫn bị coi là không đến và mất 100% tiền (mục 5).
+//
+// Nay gọi CHUNG service check-in với bác sĩ (rule mục 7). Khác biệt duy nhất: lễ tân tiếp nhận
+// cho cả phòng khám nên không truyền `restrictToDoctorId`.
 export const markAsArrived = async (req, res) => {
   try {
-    const { id } = req.params
-    const appointment = await LichHen.findById(id)
-    
-    if (!appointment) return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
-    if (appointment.loai_kham !== 'clinic') return res.status(400).json({ success: false, message: 'Chỉ áp dụng cho lịch khám tại phòng khám' })
-    
-    const oldStatus = appointment.status
-    appointment.status = 'checked_in'
-    appointment.gio_den_thuc_te = new Date()
-    await appointment.save()
-    emitDashboardAppointmentChanged(oldStatus, appointment.status)
-    
-    res.status(200).json({ success: true, message: 'Đã check-in bệnh nhân thành công', data: appointment })
+    const { entry, appointment, trang_thai_cu, canh_bao } = await checkInLichHen({
+      appointmentId: req.params.id,
+      actorUserId: req.user?._id ?? req.user?.id ?? null,
+      actorRole: 'receptionist',
+    })
+
+    emitDashboardAppointmentChanged(trang_thai_cu, appointment.status)
+
+    res.status(200).json({
+      success: true,
+      message: 'Đã check-in bệnh nhân vào hàng đợi',
+      data: appointment,
+      hang_doi: {
+        id: entry._id,
+        doctor_id: entry.doctor_id,
+        phong_kham: entry.phong_kham,
+        gio_hen_goc: entry.gio_hen_goc,
+        checkin_time: entry.checkin_time,
+      },
+      canh_bao,
+    })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    res.status(error.statusCode ?? 500).json({ success: false, message: error.message })
+  }
+}
+
+// GET /api/receptionist/appointments/pending-checkin — khách đã đặt hôm nay, chưa vào hàng đợi.
+// Cùng nguồn dữ liệu với danh sách của bác sĩ, chỉ khác là không giới hạn theo một bác sĩ.
+export const getPendingCheckin = async (req, res) => {
+  try {
+    const rows = await layLichChoTiepNhan({ ngay: req.query.date ?? null })
+    res.status(200).json({ success: true, data: rows })
+  } catch (error) {
+    res.status(error.statusCode ?? 500).json({ success: false, message: error.message })
   }
 }
 
@@ -303,6 +333,7 @@ export const getRescheduleHistory = async (req, res) => {
 export default {
   getAppointments,
   markAsArrived,
+  getPendingCheckin,
   rescheduleAppointment,
   cancelAppointment,
   getRescheduleHistory

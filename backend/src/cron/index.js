@@ -9,6 +9,7 @@ import {
   nhaSlotQuaHanToanHeThong,
 } from '../services/slotRelease.service.js'
 import { apDungDeXuatQuaHan } from '../services/appointmentReschedule.service.js'
+import { BAT_QUET_NO_SHOW, quetNoShowHetCa } from '../services/noShowSweep.service.js'
 
 const CLINIC_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
@@ -84,9 +85,22 @@ export function startCronJobs() {
     } catch (err) {
       console.error('[cron] Loi ap de xuat doi lich qua han:', err.message)
     }
+
+    // Het ca ma khong co ban ghi HangDoi -> `no_show` (rule muc 8). CHI tu dong, khong ai
+    // set tay duoc, vi no_show = mat 100% tien (muc 5). Chi quet NGAY HOM NAY (soNgay=1
+    // mac dinh) — khong quet nguoc lich su, xem chu thich trong service.
+    // Tat bang NO_SHOW_SWEEP_ENABLED=false khi demo (xem BAT_QUET_NO_SHOW).
+    if (BAT_QUET_NO_SHOW) {
+      try {
+        const { daDanhDau } = await quetNoShowHetCa()
+        if (daDanhDau > 0) console.log(`[cron] Da danh dau ${daDanhDau} lich hen 'no_show' (het ca, khong toi quay)`)
+      } catch (err) {
+        console.error('[cron] Loi quet no_show:', err.message)
+      }
+    }
   }, { timezone: CLINIC_TIMEZONE }))
 
-  console.log('Da khoi dong cron jobs (auto fill lich khi startup, sinh/bu lich 00:00 Chu nhat, auto-cancel + nha slot ket moi 5 phut)')
+  console.log('Da khoi dong cron jobs (auto fill lich khi startup, sinh/bu lich 00:00 Chu nhat, moi 5 phut: auto-cancel + nha slot ket + cutoff walk-in + de xuat doi qua han + quet no_show)')
 
   return {
     stop() {

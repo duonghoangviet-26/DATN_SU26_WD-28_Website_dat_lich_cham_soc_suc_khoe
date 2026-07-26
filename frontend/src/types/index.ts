@@ -913,7 +913,34 @@ export interface QueueCheckinEntry {
 
 export interface QueueCheckinResult {
     entry: QueueCheckinEntry;
+    /** Danh sách cảnh báo tại quầy: chưa thanh toán, đến sớm/trễ, ca đang quá tải. */
+    canh_bao: string[];
+    /** Giữ lại cho code cũ — cùng nội dung với `canh_bao`, gộp thành một chuỗi. */
     canh_bao_qua_tai: string | null;
+}
+
+// GET /doctor/queue/pending-checkin — khách đã đặt hôm nay nhưng CHƯA vào hàng đợi.
+// Mắt xích giữa "khách đã đặt + đã trả tiền" và "bác sĩ tiếp nhận".
+export interface LichChoTiepNhan {
+    appointment_id: string;
+    ma_lich_hen: string | null;
+    ten_benh_nhan: string;
+    so_dien_thoai: string | null;
+    tuoi: number | null;
+    gioi_tinh: "nam" | "nu" | "khac" | null;
+    doctor_id: string;
+    chuyen_khoa: string | null;
+    gio_kham: string;
+    phong_kham: string | null;
+    nguon: "online" | "tai_cho";
+    status: string;
+    payment_status: "unpaid" | "partial" | "paid" | "refunded";
+    /** Đã tới giờ khung của mình chưa (mốc `T` — rule mục 11). */
+    da_toi_khung: boolean;
+    /** Đang trong 15 phút grace `T` → `T+15'` — vẫn giữ ưu tiên online. */
+    con_trong_grace: boolean;
+    /** Trễ quá `T+15'` — vẫn được khám, xếp sau, KHÔNG mất tiền. */
+    tre_qua_grace: boolean;
 }
 
 // PATCH /doctor/queue/:id/{call,into-room,finish,skip,cancel}

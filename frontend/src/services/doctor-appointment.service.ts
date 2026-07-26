@@ -12,6 +12,7 @@ import type {
   QueueCheckinPayload,
   QueueCheckinResult,
   QueueActionResult,
+  LichChoTiepNhan,
   HangDoiTrangThai,
   RoomStatus,
   PhongKhamTrangThai,
@@ -118,6 +119,15 @@ export const doctorAppointmentService = {
   async checkinQueue(payload: QueueCheckinPayload): Promise<QueueCheckinResult> {
     const res = await axiosInstance.post<ApiResponse<QueueCheckinResult>>('/doctor/queue/checkin', payload)
     return res.data.data
+  },
+
+  // Khách đã đặt lịch hôm nay nhưng chưa vào hàng đợi — nguồn cho nút "Tiếp nhận".
+  async getPendingCheckin(date?: string): Promise<LichChoTiepNhan[]> {
+    const res = await axiosInstance.get<ApiResponse<LichChoTiepNhan[]>>(
+      '/doctor/queue/pending-checkin',
+      { params: date ? { date } : {} },
+    )
+    return Array.isArray(res.data.data) ? res.data.data : []
   },
 
   async callQueuePatient(id: string): Promise<QueueActionResult> {
