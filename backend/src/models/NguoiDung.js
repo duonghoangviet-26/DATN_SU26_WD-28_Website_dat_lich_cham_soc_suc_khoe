@@ -57,6 +57,8 @@ const userSchema = new mongoose.Schema(
       min: 0,
     },
     ngay_xoa: { type: Date, default: null },
+    reset_password_token: { type: String, default: null },
+    reset_password_expire: { type: Date, default: null },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
