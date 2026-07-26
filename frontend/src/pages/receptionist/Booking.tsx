@@ -265,10 +265,6 @@ export default function ReceptionistBooking() {
           {step === 4 && (
             <BookingStep4Payment
               createdBooking={createdBooking}
-              paymentSnapshot={paymentSnapshot?.gateway || null}
-              isRefreshing={creatingPaymentSession}
-              onRefreshSession={() => {}} // Chỉ cash, không cần refresh
-              onOpenPaymentPage={() => {}}
               onDone={() => navigate('/receptionist/appointments')}
             />
           )}

@@ -1,76 +1,236 @@
-import { CreatedReceptionistBookingResult, ReceptionistPaymentGatewaySnapshot } from '@/services/receptionist-booking.service'
+import { useState, useEffect } from 'react'
+import QRCode from 'qrcode'
+import { CreatedReceptionistBookingResult, ReceptionistPaymentStatusResult, receptionistBookingService } from '@/services/receptionist-booking.service'
+import Button from '@/components/common/Button'
+
+const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)
+const formatGatewayExpiry = (dateStr: string) => {
+  if (!dateStr) return '--'
+  return new Date(dateStr).toLocaleString('vi-VN')
+}
 
 export interface BookingStep4PaymentProps {
   createdBooking: CreatedReceptionistBookingResult | null
-  paymentSnapshot: ReceptionistPaymentGatewaySnapshot | null
-  onRefreshSession: () => void
-  isRefreshing: boolean
-  onOpenPaymentPage: () => void
   onDone: () => void
 }
 
 export default function BookingStep4Payment({
   createdBooking,
-  paymentSnapshot,
-  onRefreshSession,
-  isRefreshing,
-  onOpenPaymentPage,
   onDone,
 }: BookingStep4PaymentProps) {
+  const [paymentSnapshot, setPaymentSnapshot] = useState<ReceptionistPaymentStatusResult | null>(null)
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
+  const [countdownLabel, setCountdownLabel] = useState<string>('')
+
+  // Lắng nghe tạo VNPAY Payment Session
+  const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
+  useEffect(() => {
+    if (!createdBooking?.payment_id) return
+
+    let ignore = false
+    setCreatingPaymentSession(true)
+    receptionistBookingService.createVnpaySession(createdBooking.payment_id)
+      .then((data) => {
+        if (!ignore) setPaymentSnapshot(data)
+      })
+      .catch((error: any) => {
+        console.error("Lỗi tạo session VNPAY", error)
+      })
+      .finally(() => {
+        if (!ignore) setCreatingPaymentSession(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [createdBooking?.payment_id])
+
+  // Render QR Code từ payload
+  useEffect(() => {
+    if (!paymentSnapshot?.gateway?.qr_payload) {
+      setQrCodeDataUrl('')
+      return
+    }
+
+    let cancelled = false
+    QRCode.toDataURL(paymentSnapshot.gateway.qr_payload, {
+      width: 320,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    })
+      .then((url) => {
+        if (!cancelled) setQrCodeDataUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQrCodeDataUrl('')
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [paymentSnapshot?.gateway?.qr_payload])
+
+  // Polling trạng thái thanh toán
+  useEffect(() => {
+    if (!createdBooking?.payment_id || paymentSnapshot?.payment_status !== 'pending') return
+
+    let cancelled = false
+    const intervalId = window.setInterval(() => {
+      receptionistBookingService.getPaymentStatus(createdBooking.payment_id)
+        .then((data) => {
+          if (!cancelled) setPaymentSnapshot(data)
+        })
+        .catch(() => {})
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [createdBooking?.payment_id, paymentSnapshot?.payment_status])
+
+  // Countdown timer
+  useEffect(() => {
+    if (!paymentSnapshot?.gateway?.expires_at) return
+    const expiry = new Date(paymentSnapshot.gateway.expires_at).getTime()
+    
+    const interval = setInterval(() => {
+      const now = Date.now()
+      const diff = expiry - now
+      if (diff <= 0) {
+        setCountdownLabel('Hết hạn')
+        clearInterval(interval)
+      } else {
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+        const secs = Math.floor((diff % (1000 * 60)) / 1000)
+        setCountdownLabel(`${mins}:${secs.toString().padStart(2, '0')}`)
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [paymentSnapshot?.gateway?.expires_at])
+
+  const handleOpenVnpayPage = () => {
+    if (paymentSnapshot?.gateway?.payment_url) {
+      window.open(paymentSnapshot.gateway.payment_url, '_blank')
+    }
+  }
+
+  const handleRefreshVnpaySession = async () => {
+    if (!createdBooking?.payment_id) return
+    setCreatingPaymentSession(true)
+    try {
+      const data = await receptionistBookingService.createVnpaySession(createdBooking.payment_id)
+      setPaymentSnapshot(data)
+    } catch (error: any) {
+      console.error(error)
+    } finally {
+      setCreatingPaymentSession(false)
+    }
+  }
+
+  const handleMockComplete = async () => {
+    if (!createdBooking?.payment_id) return
+    setCreatingPaymentSession(true)
+    try {
+      const data = await receptionistBookingService.completeMockVnpayPayment(createdBooking.payment_id)
+      setPaymentSnapshot(data)
+    } catch (error: any) {
+      console.error(error)
+    } finally {
+      setCreatingPaymentSession(false)
+    }
+  }
+
+  if (!createdBooking) return null
+
   return (
-    <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm">
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-4 animate-bounce">
-        <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-        </svg>
+    <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
+      <div className="space-y-2">
+        <p className="text-xs font-bold uppercase tracking-wider text-brand-600">Thanh toán VNPAY</p>
+        <h3 className="text-xl font-extrabold text-slate-800">Thanh toán qua mã QR</h3>
+        <p className="text-sm text-slate-500">
+          Hệ thống đã tạo lịch hẹn. Lễ tân có thể yêu cầu khách hàng quét mã QR VNPAY dưới đây để thanh toán, hoặc bấm mô phỏng thanh toán thành công.
+        </p>
       </div>
 
-      <h3 className="text-xl font-black text-slate-800">Đặt lịch thành công!</h3>
-      <p className="text-sm text-slate-500 max-w-sm mx-auto">
-        Lịch hẹn của bệnh nhân đã được lưu trên hệ thống và bác sĩ đã được phân bổ thành công.
-      </p>
+      <div className="grid gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-5 sm:grid-cols-2">
+        <div className="space-y-2 text-sm text-slate-600">
+          <p><span className="font-semibold text-slate-500">Mã lịch hẹn:</span> {createdBooking.appointment_id}</p>
+          <p><span className="font-semibold text-slate-500">Mã giao dịch:</span> {createdBooking.ma_giao_dich}</p>
+          <p><span className="font-semibold text-slate-500">Số hóa đơn:</span> {createdBooking.so_hoa_don}</p>
+        </div>
+        <div className="space-y-2 text-sm text-slate-600">
+          <p><span className="font-semibold text-slate-500">Trạng thái lịch:</span> {paymentSnapshot?.appointment_status || createdBooking.status}</p>
+          <p><span className="font-semibold text-slate-500">Trạng thái thanh toán:</span> {paymentSnapshot?.appointment_payment_status || createdBooking.payment_status}</p>
+          <p><span className="font-semibold text-slate-500">Số tiền:</span> <span className="font-bold text-slate-800">{formatCurrency(createdBooking.gia_kham)}</span></p>
+        </div>
+      </div>
 
-      {createdBooking?.qr_payload ? (
-        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 mt-6 inline-block w-full max-w-sm">
-          <p className="text-xs font-bold text-slate-600 uppercase mb-4 tracking-wider">Quét mã QR để thanh toán</p>
-          <div className="flex justify-center mb-4 p-2 bg-white rounded-lg shadow-sm border border-slate-200 inline-block">
-            {/* Giả lập QR code */}
-            <div className="w-40 h-40 bg-slate-100 flex items-center justify-center text-slate-400 border-2 border-dashed border-slate-300">
-              <span className="text-[10px] font-bold uppercase rotate-[-45deg]">QR CODE</span>
+      {creatingPaymentSession && !paymentSnapshot ? (
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-6 text-center text-sm text-slate-500">
+          Đang tạo session VNPAY và mã QR thanh toán...
+        </div>
+      ) : paymentSnapshot && paymentSnapshot.gateway ? (
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Mã tham chiếu VNPAY</p>
+                <p className="mt-1 font-mono text-sm font-semibold text-slate-800">{paymentSnapshot.gateway.vnp_txn_ref || '--'}</p>
+              </div>
+              <div className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                paymentSnapshot.gateway.is_expired ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+              }`}>
+                {countdownLabel || 'Sẵn sàng'}
+              </div>
+            </div>
+
+            <div className="grid place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
+              {qrCodeDataUrl ? (
+                <img src={qrCodeDataUrl} alt="Mã QR VNPAY mock" className="h-72 w-72 rounded-xl bg-white p-3 shadow-sm" />
+              ) : (
+                <div className="grid h-72 w-72 place-items-center rounded-xl bg-white text-sm text-slate-400 shadow-sm">
+                  Đang render mã QR...
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={onRefreshSession}
-              disabled={isRefreshing}
-              className="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-all"
-            >
-              {isRefreshing ? 'Đang tạo lại...' : 'Tạo lại mã QR'}
-            </button>
-            <button
-              onClick={onOpenPaymentPage}
-              className="flex-1 rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700 transition-all shadow-md shadow-brand-200"
-            >
-              Mở link Cổng TT
-            </button>
+
+          <div className="space-y-4 rounded-2xl border border-slate-100 bg-white p-5">
+            <div className="space-y-2 text-sm text-slate-600">
+              <p><span className="font-semibold text-slate-500">Nhà cung cấp:</span> {paymentSnapshot.gateway.provider || 'vnpay'}</p>
+              <p><span className="font-semibold text-slate-500">Mode:</span> {paymentSnapshot.gateway.mode || 'mock'}</p>
+              <p><span className="font-semibold text-slate-500">Merchant:</span> {paymentSnapshot.gateway.merchant_name || 'ViteFamily'}</p>
+              <p><span className="font-semibold text-slate-500">Mã merchant:</span> {paymentSnapshot.gateway.merchant_code || 'VITEFAMILY'}</p>
+              <p><span className="font-semibold text-slate-500">Ngân hàng:</span> {paymentSnapshot.gateway.bank_code || 'VNBANK'}</p>
+              <p><span className="font-semibold text-slate-500">Hạn thanh toán:</span> {formatGatewayExpiry(paymentSnapshot.gateway.expires_at)}</p>
+              <p><span className="font-semibold text-slate-500">Trạng thái gateway:</span> {paymentSnapshot.gateway.mock_status || 'waiting_for_customer'}</p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Button variant="secondary" onClick={handleOpenVnpayPage} disabled={!paymentSnapshot.gateway.payment_url}>
+                Mở trang VNPAY
+              </Button>
+              <Button variant="secondary" onClick={handleRefreshVnpaySession} loading={creatingPaymentSession}>
+                Tạo lại mã QR
+              </Button>
+              <Button onClick={handleMockComplete} loading={creatingPaymentSession} className="bg-blue-600 hover:bg-blue-700 text-white">
+                Mô phỏng thanh toán thành công
+              </Button>
+              <Button variant="secondary" onClick={onDone}>
+                Thanh toán sau (Về danh sách)
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
-        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 mt-6 max-w-sm mx-auto">
-          <p className="text-sm font-semibold text-slate-700">Thanh toán bằng Tiền mặt</p>
-          <p className="text-xs text-slate-500 mt-1">Lễ tân thu tiền mặt trực tiếp tại quầy.</p>
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-600">
+          Không tải được session VNPAY mock cho lịch hẹn này.
         </div>
       )}
-
-      <div className="pt-6">
-        <button
-          type="button"
-          onClick={onDone}
-          className="rounded-xl bg-emerald-600 px-8 py-3 text-sm font-bold text-white shadow-md shadow-emerald-200 hover:bg-emerald-700 active:scale-95 transition-all"
-        >
-          Hoàn thành & Quay lại danh sách
-        </button>
-      </div>
     </div>
   )
 }

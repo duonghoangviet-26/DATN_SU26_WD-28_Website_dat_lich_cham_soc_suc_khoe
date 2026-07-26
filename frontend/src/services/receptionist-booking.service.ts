@@ -55,6 +55,11 @@ export interface CreateReceptionistBookingPayload {
 export interface CreatedReceptionistBookingResult {
   appointment_id: string
   payment_id: string
+  ma_giao_dich: string
+  so_hoa_don: string
+  status: string
+  payment_status: string
+  gia_kham: number
   qr_payload: string | null
 }
 

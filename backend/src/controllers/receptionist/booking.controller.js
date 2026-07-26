@@ -367,6 +367,11 @@ export async function createBooking(req, res) {
     return ok(res, {
       appointment_id: appointment._id,
       payment_id: payment._id,
+      ma_giao_dich: payment.ma_giao_dich,
+      so_hoa_don: invoice.so_hoa_don || appointmentCode,
+      status: appointment.status,
+      payment_status: payment.status,
+      gia_kham: gia_kham,
       qr_payload: payment_method === 'transfer' ? `FAKE_QR_FOR_RECEPTIONIST_BOOKING_${appointmentCode}` : null
     })
 
