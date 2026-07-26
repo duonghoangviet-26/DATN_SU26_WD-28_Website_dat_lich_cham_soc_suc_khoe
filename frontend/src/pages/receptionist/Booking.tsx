@@ -96,7 +96,7 @@ export default function ReceptionistBooking() {
   }, [doctors, selectedSlotId])
 
   // Xử lý Gửi Lịch Hẹn lên hệ thống
-  const handleSubmitBooking = async () => {
+  const handleSubmitBooking = async (paymentMethod: 'cash' | 'transfer') => {
     if (!selectedDate || !selectedSlotId) {
       setToast({ message: 'Vui lòng chọn đầy đủ ngày và khung giờ khám.', type: 'error' })
       return
@@ -112,7 +112,7 @@ export default function ReceptionistBooking() {
         ten_khach: patientName.trim(),
         so_dien_thoai_khach: patientPhone.trim(),
         ly_do_kham: symptoms.trim(),
-        payment_method: 'cash', // Lễ tân mặc định dùng tiền mặt
+        payment_method: paymentMethod, // Sử dụng phương thức Lễ tân đã chọn
       }
 
       if (bookingFor === 'member' && selectedMemberId) {

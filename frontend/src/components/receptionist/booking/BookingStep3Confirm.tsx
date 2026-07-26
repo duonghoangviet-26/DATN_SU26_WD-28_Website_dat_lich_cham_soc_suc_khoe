@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ReceptionistBookingSlot } from '@/services/receptionist-booking.service'
 
 export interface BookingStep3ConfirmProps {
@@ -9,7 +10,7 @@ export interface BookingStep3ConfirmProps {
   symptoms: string
   bookingFor: 'self' | 'member' | 'other'
   onPrev: () => void
-  onSubmit: () => void
+  onSubmit: (paymentMethod: 'cash' | 'transfer') => void
   isSubmitting: boolean
 }
 
@@ -25,6 +26,7 @@ export default function BookingStep3Confirm({
   onSubmit,
   isSubmitting,
 }: BookingStep3ConfirmProps) {
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash')
   return (
     <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
       <div className="border-b border-slate-100 pb-3">
@@ -76,7 +78,54 @@ export default function BookingStep3Confirm({
         </div>
       </div>
 
-      <div className="flex justify-between pt-4 border-t border-slate-100 mt-6">
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-slate-800">Phương thức thanh toán</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <label
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition-all ${
+              paymentMethod === 'cash'
+                ? 'border-brand-500 bg-brand-50 shadow-sm shadow-brand-100 ring-1 ring-brand-500'
+                : 'border-slate-200 bg-white hover:border-slate-300'
+            }`}
+          >
+            <input
+              type="radio"
+              name="paymentMethod"
+              value="cash"
+              checked={paymentMethod === 'cash'}
+              onChange={() => setPaymentMethod('cash')}
+              className="h-4 w-4 text-brand-600 focus:ring-brand-500"
+            />
+            <div>
+              <div className="font-semibold text-slate-800">Tiền mặt</div>
+              <div className="text-xs text-slate-500">Thanh toán trực tiếp tại quầy</div>
+            </div>
+          </label>
+
+          <label
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition-all ${
+              paymentMethod === 'transfer'
+                ? 'border-brand-500 bg-brand-50 shadow-sm shadow-brand-100 ring-1 ring-brand-500'
+                : 'border-slate-200 bg-white hover:border-slate-300'
+            }`}
+          >
+            <input
+              type="radio"
+              name="paymentMethod"
+              value="transfer"
+              checked={paymentMethod === 'transfer'}
+              onChange={() => setPaymentMethod('transfer')}
+              className="h-4 w-4 text-brand-600 focus:ring-brand-500"
+            />
+            <div>
+              <div className="font-semibold text-slate-800">Chuyển khoản (VNPAY)</div>
+              <div className="text-xs text-slate-500">Tạo mã QR để khách thanh toán</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div className="mt-8 flex justify-between border-t border-slate-100 pt-6">
         <button
           type="button"
           onClick={onPrev}
@@ -87,7 +136,7 @@ export default function BookingStep3Confirm({
         </button>
         <button
           type="button"
-          onClick={onSubmit}
+          onClick={() => onSubmit(paymentMethod)}
           disabled={isSubmitting}
           className="rounded-xl bg-brand-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-brand-200 hover:bg-brand-700 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-70"
         >
