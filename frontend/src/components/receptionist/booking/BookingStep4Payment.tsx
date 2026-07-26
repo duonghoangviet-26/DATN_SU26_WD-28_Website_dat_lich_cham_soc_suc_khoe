@@ -139,8 +139,11 @@ export default function BookingStep4Payment({
     try {
       const data = await receptionistBookingService.completeMockVnpayPayment(createdBooking.payment_id)
       setPaymentSnapshot(data)
+      // TODO: có thể gọi onDone() luôn hoặc thông báo thành công
     } catch (error: any) {
       console.error(error)
+      const msg = error.response?.data?.message || 'Không thể mô phỏng thanh toán.'
+      alert(msg) // Tạm dùng alert để dễ debug hoặc bạn có thể pass setToast prop
     } finally {
       setCreatingPaymentSession(false)
     }
@@ -148,7 +151,9 @@ export default function BookingStep4Payment({
 
   if (!createdBooking) return null
 
-  if (paymentMethod === 'cash') {
+  const isPaid = paymentMethod === 'cash' || paymentSnapshot?.appointment_payment_status === 'paid' || createdBooking.payment_status === 'paid'
+
+  if (isPaid) {
     return (
       <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
@@ -157,9 +162,11 @@ export default function BookingStep4Payment({
           </svg>
         </div>
         <div className="space-y-2">
-          <h3 className="text-xl font-extrabold text-slate-800">Đặt lịch thành công!</h3>
+          <h3 className="text-xl font-extrabold text-slate-800">Đặt lịch và Thanh toán thành công!</h3>
           <p className="text-sm text-slate-500">
-            Lịch khám đã được tạo và ghi nhận thanh toán tiền mặt tại quầy.
+            {paymentMethod === 'cash'
+              ? 'Lịch khám đã được tạo và ghi nhận thanh toán tiền mặt tại quầy.'
+              : 'Giao dịch chuyển khoản qua VNPAY đã được xác nhận thành công.'}
           </p>
         </div>
         <div className="mx-auto max-w-sm space-y-2 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl text-left border border-slate-100">
