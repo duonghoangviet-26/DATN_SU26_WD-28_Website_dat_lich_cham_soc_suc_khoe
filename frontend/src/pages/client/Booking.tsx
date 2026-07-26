@@ -19,6 +19,7 @@ import {
   type CreateBookingPayload,
 } from '@/services/patient-booking.service'
 import { specialtyService } from '@/services/specialty.service'
+import DieuKhoanDatLich from '@/components/client/DieuKhoanDatLich'
 
 type BookingStep = 1 | 2 | 3 | 4 | 5
 
@@ -65,6 +66,9 @@ export default function Booking() {
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>(queryDoctorId || '')
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedSlotId, setSelectedSlotId] = useState<string>('')
+  // Bằng chứng đồng ý điều khoản không hoàn tiền — backend từ chối tạo lịch nếu thiếu
+  // (rule mục 5: không có bằng chứng thì không được thu tiền).
+  const [dongYDieuKhoan, setDongYDieuKhoan] = useState(false)
 
   // Booking target states
   const [bookingFor, setBookingFor] = useState<'self' | 'member' | 'other'>('self')
@@ -387,6 +391,12 @@ export default function Booking() {
       setToast('Thiếu thông tin bác sĩ hoặc khung giờ khám.')
       return
     }
+    // Backend cũng chặn (rule mục 5: không có bằng chứng đồng ý thì không được thu tiền).
+    // Chặn ở đây chỉ để khách nhận thông báo ngay thay vì đợi một vòng gọi API.
+    if (!dongYDieuKhoan) {
+      setToast('Vui lòng đọc và tích vào ô đồng ý điều khoản đặt lịch trước khi xác nhận.')
+      return
+    }
 
     setSubmittingBooking(true)
     try {
@@ -400,6 +410,7 @@ export default function Booking() {
         ten_khach: patientName.trim(),
         so_dien_thoai_khach: patientPhone.trim(),
         phuong_thuc: 'chuyen_khoan',
+        dong_y_dieu_khoan: true,
       }
 
       if (bookingFor === 'member' && selectedMemberId) {
@@ -868,6 +879,12 @@ export default function Booking() {
             </div>
           </div>
 
+          <DieuKhoanDatLich
+            daDongY={dongYDieuKhoan}
+            onChange={setDongYDieuKhoan}
+            giaKham={selectedDoctor?.gia_kham ?? null}
+          />
+
           <div className="rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">
             * Sau khi bấm xác nhận, hệ thống sẽ tạo lịch hẹn thật ở trạng thái <strong>pending/unpaid</strong> rồi sinh mã QR VNPAY mock để bạn tiếp tục thanh toán.
           </div>
@@ -990,7 +1007,7 @@ export default function Booking() {
         {step < 4 ? (
           <Button onClick={handleNextStep}>Tiếp tục</Button>
         ) : step === 4 ? (
-          <Button onClick={handleCreateBooking} loading={submittingBooking}>
+          <Button onClick={handleCreateBooking} loading={submittingBooking} disabled={!dongYDieuKhoan}>
             Xác nhận đặt lịch khám
           </Button>
         ) : null}
