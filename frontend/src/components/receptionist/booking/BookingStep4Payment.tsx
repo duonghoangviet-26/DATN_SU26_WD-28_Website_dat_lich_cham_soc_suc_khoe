@@ -247,6 +247,34 @@ export default function BookingStep4Payment({
               <p><span className="font-semibold text-slate-500">Trạng thái gateway:</span> {paymentSnapshot.gateway.mock_status || 'waiting_for_customer'}</p>
             </div>
 
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 shadow-sm">
+              <p className="mb-3 font-semibold text-blue-900">Thông tin Thẻ Test (VNPAY Sandbox):</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between border-b border-blue-100 pb-2">
+                  <span className="text-blue-600">Ngân hàng:</span>
+                  <span className="font-medium">NCB</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-blue-100 pb-2">
+                  <span className="text-blue-600">Số thẻ:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold select-all">9704198526191432198</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-b border-blue-100 pb-2">
+                  <span className="text-blue-600">Tên chủ thẻ:</span>
+                  <span className="font-medium select-all">NGUYEN VAN A</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-blue-100 pb-2">
+                  <span className="text-blue-600">Ngày phát hành:</span>
+                  <span className="font-medium">07/15</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-blue-600">Mã OTP:</span>
+                  <span className="font-medium">123456</span>
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-3">
               <Button variant="secondary" onClick={handleOpenVnpayPage} disabled={!paymentSnapshot.gateway.payment_url}>
                 Mở trang VNPAY

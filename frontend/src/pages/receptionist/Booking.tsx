@@ -210,8 +210,8 @@ export default function ReceptionistBooking() {
     <div className="p-6">
       <Breadcrumb
         items={[
-          { label: 'Bảng điều khiển', href: '/receptionist' },
-          { label: 'Lịch hẹn', href: '/receptionist/appointments' },
+          { label: 'Bảng điều khiển', to: '/receptionist' },
+          { label: 'Lịch hẹn', to: '/receptionist/appointments' },
           { label: 'Đặt lịch mới' },
         ]}
       />
