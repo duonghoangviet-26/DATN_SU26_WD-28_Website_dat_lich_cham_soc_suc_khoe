@@ -175,22 +175,38 @@ export async function getSlots(req, res) {
       )
 
       for (const slot of activeSlots) {
-        const key = `${schedule.doctor_id.toString()}_${slot.gio_bat_dau}`
-        if (bookedMap[key]) continue // Đã bị đặt qua appt
+        const timeKey = slot.gio_bat_dau
+        const docSlotKey = `${schedule.doctor_id.toString()}_${timeKey}`
+        const isBooked = !!bookedMap[docSlotKey]
 
-        if (!slotMap.has(slot.gio_bat_dau)) {
-          slotMap.set(slot.gio_bat_dau, {
+        if (!slotMap.has(timeKey)) {
+          slotMap.set(timeKey, {
             id: slot._id.toString(), // Lấy đại diện ID
             schedule_id: schedule._id.toString(),
             gio_bat_dau: slot.gio_bat_dau,
             gio_ket_thuc: slot.gio_ket_thuc,
             phong_kham: slot.phong_kham,
+            total_capacity: 0,
+            booked_count: 0,
+            is_full: false,
           })
+        }
+
+        const slotInfo = slotMap.get(timeKey)
+        slotInfo.total_capacity += 1
+        if (isBooked) {
+          slotInfo.booked_count += 1
         }
       }
     }
 
-    const availableSlots = Array.from(slotMap.values()).sort((a, b) => a.gio_bat_dau.localeCompare(b.gio_bat_dau))
+    const availableSlots = Array.from(slotMap.values())
+      .map(s => {
+        s.is_full = s.booked_count >= s.total_capacity
+        return s
+      })
+      .sort((a, b) => a.gio_bat_dau.localeCompare(b.gio_bat_dau))
+    
     return ok(res, availableSlots)
   } catch (err) {
     return fail(res, 500, err.message)

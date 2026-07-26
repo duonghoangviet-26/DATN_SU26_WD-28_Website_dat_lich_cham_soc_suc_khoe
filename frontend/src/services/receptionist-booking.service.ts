@@ -20,6 +20,7 @@ export interface ReceptionistBookingSlot {
   gio_bat_dau: string
   gio_ket_thuc: string
   phong_kham?: string | null
+  is_full?: boolean
 }
 
 export interface ReceptionistFamilyMember {

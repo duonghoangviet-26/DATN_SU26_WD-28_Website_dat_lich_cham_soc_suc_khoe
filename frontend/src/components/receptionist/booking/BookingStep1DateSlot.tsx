@@ -167,26 +167,36 @@ export default function BookingStep1DateSlot({
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
             {slots.map((slot) => {
               const isSelected = selectedSlotId === slot.id
+              const isFull = slot.is_full
+              
               return (
                 <button
                   key={slot.id}
                   type="button"
-                  onClick={() => onSlotChange(slot.id)}
-                  className={`flex flex-col items-center justify-center rounded-xl border py-3 px-2 text-center transition-all ${
-                    isSelected
+                  onClick={() => !isFull && onSlotChange(slot.id)}
+                  disabled={isFull}
+                  className={`relative flex flex-col items-center justify-center rounded-xl border py-3 px-2 text-center transition-all overflow-hidden ${
+                    isFull
+                      ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-70'
+                      : isSelected
                       ? 'border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-200 ring-2 ring-brand-500'
                       : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50'
                   }`}
                 >
-                  <span className="text-sm font-extrabold tracking-tight">
+                  <span className={`text-sm font-extrabold tracking-tight ${isFull ? 'line-through' : ''}`}>
                     {slot.gio_bat_dau}
                   </span>
-                  {slot.phong_kham && (
+                  {slot.phong_kham && !isFull && (
                     <span className={`mt-0.5 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
                       isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
                     }`}>
                       {slot.phong_kham}
                     </span>
+                  )}
+                  {isFull && (
+                    <div className="absolute top-0 right-0 rounded-bl-lg bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                      Đầy
+                    </div>
                   )}
                 </button>
               )
