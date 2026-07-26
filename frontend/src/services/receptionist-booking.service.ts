@@ -22,6 +22,23 @@ export interface ReceptionistBookingSlot {
   phong_kham?: string | null
 }
 
+export interface ReceptionistFamilyMember {
+  id: string
+  ho_ten: string
+  ngay_sinh: string
+  gioi_tinh: 'nam' | 'nu' | 'khac'
+  nhom_mau?: string | null
+  di_ung?: string | null
+  benh_nen?: string | null
+  la_chu_ho: boolean
+}
+
+export interface ReceptionistFamilyGroup {
+  id: string
+  ten_nhom: string
+  members: ReceptionistFamilyMember[]
+}
+
 export interface CreateReceptionistBookingPayload {
   doctor_id: string
   schedule_id: string
@@ -32,6 +49,7 @@ export interface CreateReceptionistBookingPayload {
   ly_do_kham?: string
   payment_method: 'cash' | 'transfer'
   user_id?: string
+  member_id?: string
 }
 
 export interface CreatedReceptionistBookingResult {
@@ -110,6 +128,15 @@ export const receptionistBookingService = {
     const res = await axiosInstance.get<ApiResponse<{ found: boolean; user: any | null }>>('/receptionist/users/lookup', {
       params: { phone }
     })
+    return res.data.data
+  },
+
+  /**
+   * Lấy danh sách thành viên gia đình của một user.
+   * @param userId ID của user đã tìm thấy.
+   */
+  async getFamilyGroup(userId: string): Promise<ReceptionistFamilyGroup | null> {
+    const res = await axiosInstance.get<ApiResponse<ReceptionistFamilyGroup>>(`/receptionist/booking/family-group/${userId}`)
     return res.data.data
   }
 }
