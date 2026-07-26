@@ -35,13 +35,33 @@ function getTodayRange() {
   return { start, end }
 }
 
+/**
+ * Đổi TRẠNG THÁI lịch hẹn — chỉ một trường.
+ *
+ * ⚠️ KHÔNG dùng `findById().select('status')` rồi `.save()`. Mongoose sẽ dựng một document
+ * chỉ có mỗi `status`, rồi `pre('validate')` của `LichHen` chạy trên document rỗng đó và
+ * ném lỗi vô nghĩa ("Lich khach (khong co member_id) phai co ten_khach") — dù dữ liệu thật
+ * trong DB hoàn toàn hợp lệ. Lỗi này khiến bác sĩ KHÔNG cho bệnh nhân vào phòng được
+ * (phát hiện qua kiểm thử đầu-cuối 2026-07-26).
+ *
+ * `findByIdAndUpdate` không chạy document middleware nên tránh hẳn cái bẫy đó, đồng thời
+ * trả về bản GHI CŨ để biết trạng thái trước khi đổi (cần cho realtime dashboard).
+ *
+ * @returns {Promise<string|null>} trạng thái cũ, hoặc null nếu không tìm thấy
+ */
+async function doiTrangThaiLichHen(appointmentId, nextStatus, session = null) {
+  if (!appointmentId) return null
+  const truoc = await LichHen.findByIdAndUpdate(
+    appointmentId,
+    { $set: { status: nextStatus } },
+    { new: false, ...(session ? { session } : {}) },
+  ).select('status').lean()
+  return truoc?.status ?? null
+}
+
 async function updateAppointmentStatus(appointmentId, nextStatus) {
-  const appointment = await LichHen.findById(appointmentId).select('status')
-  if (!appointment) return
-  const oldStatus = appointment.status
-  appointment.status = nextStatus
-  await appointment.save()
-  emitDashboardAppointmentChanged(oldStatus, nextStatus)
+  const oldStatus = await doiTrangThaiLichHen(appointmentId, nextStatus)
+  if (oldStatus) emitDashboardAppointmentChanged(oldStatus, nextStatus)
 }
 
 // Sắp xếp theo bậc ưu tiên ĐỘNG (rule mục 6) — KHÔNG dùng `muc_uu_tien` lưu trong DB.
@@ -372,14 +392,8 @@ export async function intoRoom(req, res) {
         room.thoi_diem_doi = new Date()
         await room.save({ session })
 
-        if (entry.appointment_id) {
-          const appt = await LichHen.findById(entry.appointment_id).select('status').session(session)
-          if (appt) {
-            apptOldStatus = appt.status
-            appt.status = 'in_progress'
-            await appt.save({ session })
-          }
-        }
+        // Xem chu thich o `doiTrangThaiLichHen`: KHONG duoc select hep roi save().
+        apptOldStatus = await doiTrangThaiLichHen(entry.appointment_id, 'in_progress', session)
       })
     } finally {
       await session.endSession()
@@ -437,14 +451,8 @@ export async function finish(req, res) {
         }
         await room.save({ session })
 
-        if (entry.appointment_id) {
-          const appt = await LichHen.findById(entry.appointment_id).select('status').session(session)
-          if (appt) {
-            apptOldStatus = appt.status
-            appt.status = 'waiting_record'
-            await appt.save({ session })
-          }
-        }
+        // Xem chu thich o `doiTrangThaiLichHen`: KHONG duoc select hep roi save().
+        apptOldStatus = await doiTrangThaiLichHen(entry.appointment_id, 'waiting_record', session)
       })
     } finally {
       await session.endSession()
