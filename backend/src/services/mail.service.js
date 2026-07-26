@@ -126,3 +126,99 @@ export async function sendResetPasswordEmail({ to, token }) {
     html: renderResetPasswordEmail({ token })
   })
 }
+
+export function renderBookingSuccessEmail({
+  ma_lich_hen,
+  ten_benh_nhan,
+  so_dien_thoai,
+  ten_bac_si,
+  chuyen_khoa,
+  ngay_kham,
+  gio_kham,
+  phong_kham,
+  dia_chi,
+  tong_tien,
+  loai_kham,
+}) {
+  const safeMaLich = escapeHtml(ma_lich_hen)
+  const safeTenBn = escapeHtml(ten_benh_nhan)
+  const safeSdt = escapeHtml(so_dien_thoai || 'Chưa cung cấp')
+  const safeTenBs = escapeHtml(ten_bac_si || 'Bác sĩ chuyên khoa')
+  const safeChuyenKhoa = escapeHtml(chuyen_khoa || 'Đa khoa')
+  const safeNgayKham = escapeHtml(ngay_kham)
+  const safeGioKham = escapeHtml(gio_kham)
+  const safePhongKham = escapeHtml(phong_kham || 'Phòng khám ViteFamily')
+  const safeDiaChi = escapeHtml(dia_chi || 'Phòng 101, Tầng 1, Tòa nhà ViteFamily')
+  const safeTongTien = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tong_tien || 0)
+
+  return `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px; background-color: #ffffff;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h1 style="color: #2563eb; margin: 0; font-size: 24px;">🏥 ViteFamily Health</h1>
+        <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Xác nhận đặt lịch khám thành công</p>
+      </div>
+
+      <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: center;">
+        <span style="color: #166534; font-size: 16px; font-weight: bold;">✅ THANH TOÁN THÀNH CÔNG</span>
+        <p style="margin: 4px 0 0; color: #15803d; font-size: 13px;">Cảm ơn bạn đã tin tưởng dịch vụ chăm sóc sức khỏe của ViteFamily!</p>
+      </div>
+
+      <h3 style="color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 16px;">Thông tin lịch khám</h3>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 24px;">
+        <tr>
+          <td style="padding: 8px 0; color: #64748b; width: 40%;">Mã lịch hẹn:</td>
+          <td style="padding: 8px 0; font-weight: bold; color: #2563eb;">${safeMaLich}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Họ và tên bệnh nhân:</td>
+          <td style="padding: 8px 0; font-weight: bold; color: #0f172a;">${safeTenBn}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Số điện thoại:</td>
+          <td style="padding: 8px 0; color: #0f172a;">${safeSdt}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Bác sĩ phụ trách:</td>
+          <td style="padding: 8px 0; font-weight: bold; color: #0f172a;">${safeTenBs} (${safeChuyenKhoa})</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Thời gian khám:</td>
+          <td style="padding: 8px 0; font-weight: bold; color: #2563eb;">${safeGioKham} - Ngày ${safeNgayKham}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Địa điểm khám:</td>
+          <td style="padding: 8px 0; color: #0f172a;">${safePhongKham} (${safeDiaChi})</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Hình thức khám:</td>
+          <td style="padding: 8px 0; color: #0f172a;">${loai_kham === 'clinic' ? 'Tại phòng khám' : 'Khám tại nhà'}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Số tiền đã thanh toán:</td>
+          <td style="padding: 8px 0; font-weight: bold; color: #16a34a; font-size: 16px;">${safeTongTien}</td>
+        </tr>
+      </table>
+
+      <div style="background-color: #f8fafc; border-radius: 8px; padding: 12px 16px; font-size: 12px; color: #64748b; margin-bottom: 24px;">
+        📌 <strong>Lưu ý:</strong> Vui lòng có mặt tại phòng khám trước 15 phút so với giờ hẹn và mang theo giấy tờ tùy thân để làm thủ tục khám nhanh chóng.
+      </div>
+
+      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #94a3b8; text-align: center; margin: 0;">
+        Email này được gửi tự động từ Hệ thống Đặt lịch Chăm sóc Sức khỏe ViteFamily.
+      </p>
+    </div>
+  `
+}
+
+export async function sendBookingSuccessEmail({ to, bookingData }) {
+  if (!to) return null
+  return sendMail({
+    to,
+    subject: `[ViteFamily] Xác nhận lịch khám thành công - Mã LH: ${bookingData.ma_lich_hen}`,
+    text: `Lịch khám ${bookingData.ma_lich_hen} của bạn đã được thanh toán thành công. Thời gian: ${bookingData.gio_kham} ngày ${bookingData.ngay_kham}.`,
+    html: renderBookingSuccessEmail(bookingData),
+  })
+}
+
