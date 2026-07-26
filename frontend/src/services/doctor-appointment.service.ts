@@ -1,5 +1,21 @@
 import axiosInstance from './axiosInstance'
-import type { ApiResponse, DoctorAppointmentDetail, AppointmentStatus, PaymentStatus, KetQuaKhamStatus, DoctorPendingRecord, ExamResultEditPayload } from '@/types'
+import type {
+  ApiResponse,
+  DoctorAppointmentDetail,
+  AppointmentStatus,
+  PaymentStatus,
+  KetQuaKhamStatus,
+  DoctorPendingRecord,
+  ExamResultEditPayload,
+  DoctorExamQueueRow,
+  QueueEntry,
+  QueueCheckinPayload,
+  QueueCheckinResult,
+  QueueActionResult,
+  HangDoiTrangThai,
+  RoomStatus,
+  PhongKhamTrangThai,
+} from '@/types'
 
 interface Filters {
   status?: AppointmentStatus | ''
@@ -46,7 +62,6 @@ export const doctorAppointmentService = {
   // "Lưu & Xác nhận" hồ sơ khám đang 'cho_xac_nhan' — bác sĩ có thể gửi kèm chỉnh sửa trực tiếp
   // (chẩn đoán/hướng dẫn/ghi chú/ngày tái khám/đơn thuốc) trong cùng thao tác, backend áp dụng
   // trước khi chốt da_xac_nhan (xem confirmResult ở BE). payload tùy chọn — bỏ qua = chỉ xác nhận.
-  // Thay cho luồng "yêu cầu chỉnh sửa" (đẩy về y tá) đã gỡ 2026-07-16.
   async confirmResult(
     id: string | number,
     payload?: ExamResultEditPayload,
@@ -58,12 +73,89 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
+  // Đánh dấu hồ sơ 'cho_xac_nhan' là "cần chỉnh sửa lại" kèm lý do. Đẩy hồ sơ về
+  // yeu_cau_chinh_sua; backend revert LichHen về waiting_record (transaction).
+  async requestRevision(
+    id: string | number,
+    ly_do: string,
+  ): Promise<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }> {
+    const res = await axiosInstance.patch<ApiResponse<{ id: string; status: KetQuaKhamStatus; appointment_status: AppointmentStatus }>>(
+      `/doctor/appointments/${id}/result/request-revision`,
+      { ly_do },
+    )
+    return res.data.data
+  },
+
   // Không truyền status: chỉ hồ sơ 'cho_xac_nhan' (dùng cho thẻ thống kê Dashboard — không đổi).
   // status='all': cả 3 trạng thái liên quan bác sĩ (chờ xác nhận/đã xác nhận/cần chỉnh sửa) —
   // dùng cho trang "Hồ sơ chờ xác nhận" để bác sĩ tra cứu lại hồ sơ đã xử lý.
   async listPendingResults(status?: 'all' | KetQuaKhamStatus): Promise<DoctorPendingRecord[]> {
     const params = status ? { status } : undefined
     const res = await axiosInstance.get<ApiResponse<DoctorPendingRecord[]>>('/doctor/appointments/pending-results', { params })
+    return res.data.data
+  },
+
+  // Hàng đợi khám của bác sĩ (online + offline gộp chung, trang "Hồ sơ chờ khám").
+  async getExamQueue(date?: string): Promise<DoctorExamQueueRow[]> {
+    const res = await axiosInstance.get<ApiResponse<DoctorExamQueueRow[]>>('/doctor/queue', { params: date ? { date } : {} })
+    return Array.isArray(res.data.data) ? res.data.data : []
+  },
+
+  // Xác nhận nhanh hồ sơ vãng lai (offline) theo ket_qua_id — không cần appointment_id.
+  async confirmResultByRecord(ketQuaId: string, body: Record<string, unknown> = {}): Promise<unknown> {
+    const res = await axiosInstance.patch<ApiResponse<unknown>>(`/doctor/appointments/result/${ketQuaId}/confirm-by-record`, body)
+    return res.data.data
+  },
+
+  // ─── Hàng đợi động (trước đây do y tá đảm nhiệm — nay bác sĩ tự thao tác) ───────────────────
+  async getQueueEntries(status?: HangDoiTrangThai): Promise<QueueEntry[]> {
+    const query: Record<string, string> = {}
+    if (status) query.status = status
+    const res = await axiosInstance.get<ApiResponse<QueueEntry[]>>('/doctor/queue-entries', { params: query })
+    return res.data.data
+  },
+
+  async checkinQueue(payload: QueueCheckinPayload): Promise<QueueCheckinResult> {
+    const res = await axiosInstance.post<ApiResponse<QueueCheckinResult>>('/doctor/queue/checkin', payload)
+    return res.data.data
+  },
+
+  async callQueuePatient(id: string): Promise<QueueActionResult> {
+    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/call`)
+    return res.data.data
+  },
+
+  async intoRoomQueue(id: string): Promise<QueueActionResult> {
+    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/into-room`)
+    return res.data.data
+  },
+
+  async finishQueue(id: string): Promise<QueueActionResult> {
+    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/finish`)
+    return res.data.data
+  },
+
+  async skipQueue(id: string): Promise<QueueActionResult> {
+    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/skip`)
+    return res.data.data
+  },
+
+  async cancelQueue(id: string): Promise<QueueActionResult> {
+    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/cancel`)
+    return res.data.data
+  },
+
+  // ─── Trạng thái phòng khám (trước đây do y tá đảm nhiệm — nay bác sĩ tự thao tác) ───────────
+  async getRoomStatus(): Promise<RoomStatus> {
+    const res = await axiosInstance.get<ApiResponse<RoomStatus>>('/doctor/room-status')
+    return res.data.data
+  },
+
+  async updateRoomStatus(trangThai: Exclude<PhongKhamTrangThai, 'dang_kham'>): Promise<{ doctor_id: string; trang_thai: string }> {
+    const res = await axiosInstance.patch<ApiResponse<{ doctor_id: string; trang_thai: string }>>(
+      '/doctor/room-status',
+      { trang_thai: trangThai },
+    )
     return res.data.data
   },
 }

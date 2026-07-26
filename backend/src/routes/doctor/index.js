@@ -5,6 +5,9 @@ import scheduleRoutes     from './schedule.routes.js'
 import appointmentRoutes  from './appointments.routes.js'
 import statsRoutes        from './stats.routes.js'
 import leavesRoutes       from './leaves.routes.js'
+import queueRoutes        from './queue.routes.js'
+import roomStatusRoutes   from './room-status.routes.js'
+import { list as queueEntriesList } from '../../controllers/doctor/queue.controller.js'
 
 // ============================================================
 // Doctor routes — mount tại /api/doctor
@@ -14,6 +17,12 @@ import leavesRoutes       from './leaves.routes.js'
 const router = Router()
 router.use(verifyToken, requireRole('doctor'))
 
+// /api/doctor/queue: GET (Hồ sơ chờ khám, giữ nguyên contract cũ) + check-in/call/into-room/
+// finish/skip/cancel (hàng đợi động — trước đây do y tá đảm nhiệm, nay bác sĩ tự thao tác).
+router.use('/queue',         queueRoutes)
+// Hàng đợi động chi tiết (kèm thời gian chờ ước tính) — dùng cho action gọi/vào phòng/kết thúc.
+router.get('/queue-entries', queueEntriesList)
+router.use('/room-status',   roomStatusRoutes)
 router.use('/profile',       profileRoutes)
 router.use('/schedule',      scheduleRoutes)
 router.use('/appointments',  appointmentRoutes)

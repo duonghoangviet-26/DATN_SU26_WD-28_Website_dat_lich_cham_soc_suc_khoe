@@ -839,8 +839,8 @@ export default function DoctorAppointments() {
             mode="edit"
             onClose={() => setExamAppt(null)}
             onSaved={(result) => {
-              // result.status: 'da_xac_nhan' ngay nếu bác sĩ tự nhập (không qua y tá) — cập
-              // nhật luôn ket_qua_status tại chỗ để badge/nút hành động đúng ngay, không cần tải lại trang.
+              // result.status: 'da_xac_nhan' ngay vì bác sĩ tự nhập — cập nhật luôn ket_qua_status
+              // tại chỗ để badge/nút hành động đúng ngay, không cần tải lại trang.
               updateAppt(examAppt.id, { da_co_ket_qua: true, ket_qua_status: result.status ?? examAppt.ket_qua_status })
               showToast('Đã lưu kết quả khám')
               setExamAppt(null)

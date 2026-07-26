@@ -24,14 +24,13 @@ export default function TopServicesTable({ refreshVersion = 0 }: { refreshVersio
   return (
     <ChartCard
       title="Dịch vụ phổ biến"
-      subtitle="Top 5 hạng mục trên HoaDon.chi_tiet_thu_phi theo số lượt sử dụng trong 30 ngày gần nhất."
+      subtitle="5 dịch vụ có số lượt sử dụng cao nhất trong 30 ngày gần nhất."
       icon="service"
       iconBackgroundClassName="bg-orange-100"
       iconClassName="text-orange-600"
       loading={loading}
       empty={!data.length}
       error={error}
-      pulseKey={refreshVersion}
     >
       <div className="overflow-hidden rounded-lg bg-slate-50/80">
         <div className="hidden grid-cols-[minmax(0,1fr)_120px_150px] gap-6 px-4 py-3 text-xs font-semibold text-slate-500 sm:grid">
@@ -55,7 +54,7 @@ export default function TopServicesTable({ refreshVersion = 0 }: { refreshVersio
                     <span className="truncate text-sm font-medium text-slate-800">{item.ten_dich_vu}</span>
                   </div>
                   <div className="ml-10 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-orange-500 transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${percentage}%` }} />
+                    <div className="h-full rounded-full bg-orange-500" style={{ width: `${percentage}%` }} />
                   </div>
                 </div>
                 <div className="flex items-center justify-between pl-10 text-xs sm:block sm:pl-0 sm:text-right">

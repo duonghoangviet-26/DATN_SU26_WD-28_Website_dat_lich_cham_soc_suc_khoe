@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 
+// Đối chiếu trực tiếp với DB + xác minh đăng nhập thật (2026-07-21) — danh sách cũ có 4/5
+// tài khoản đã lỗi thời (không còn tồn tại), có thể khiến người xem demo đăng nhập thất bại.
 const demoAccounts = [
   { role: 'Admin', email: 'admin@vitafamily.vn' },
   { role: 'Bác sĩ', email: 'haiv5634@gmail.com' },
   { role: 'Bệnh nhân', email: 'lt14062006meitu@gmail.com' },
-  { role: 'Y tá', email: 'ducluong140606@gmail.com' },
   { role: 'Lễ tân', email: 'luongtran140606@gmail.com' },
 ]
 
@@ -38,8 +39,6 @@ export default function Login() {
         navigate(from?.startsWith('/receptionist') ? from : '/receptionist', { replace: true })
       } else if (user.role === 'doctor') {
         navigate(from?.startsWith('/doctor') ? from : '/doctor', { replace: true })
-      } else if (user.role === 'nurse') {
-        navigate(from?.startsWith('/nurse') ? from : '/nurse', { replace: true })
       } else {
         navigate(from || '/', { replace: true })
       }
@@ -54,7 +53,7 @@ export default function Login() {
     <>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-800">Chào mừng trở lại</h1>
-        <p className="mt-1 text-sm text-slate-500">Đăng nhập để vào hệ thống VitaFamily.</p>
+        <p className="mt-1 text-sm text-slate-500">Đăng nhập để vào hệ thống ViteFamily.</p>
       </div>
 
       {registered && (
@@ -123,10 +122,10 @@ export default function Login() {
       <div className="mt-6 rounded-xl border border-brand-100 bg-brand-50 p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-700">Tài khoản demo</p>
         <div className="space-y-1.5 text-xs">
-          {demoAccounts.map(({ role, email }) => (
+          {demoAccounts.map(({ role, email, password }) => (
             <div key={role} className="flex items-center justify-between">
               <span className="font-medium text-brand-800">{role}</span>
-              <span className="font-mono text-slate-500">{email} / 123456</span>
+              <span className="font-mono text-slate-500">{email} / {password}</span>
             </div>
           ))}
         </div>

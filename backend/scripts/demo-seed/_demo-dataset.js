@@ -555,7 +555,6 @@ export async function buildDemoDataset() {
   ]
 
   const services = [
-    { _id: ids.services.homeTai, ma_dich_vu: 'DV001', ten: 'Lay mau tai nha', loai: 'home', mo_ta_ngan: 'Lay mau tai nha demo', mo_ta: 'Dich vu lay mau tai nha phuc vu demo', gia: 250000, thoi_gian_phut: 60, gio_dat_truoc_toi_thieu: 4, ngay_ap_dung: 'T2-T7', gio_bat_dau: '08:00', gio_ket_thuc: '17:00', specialty_id: null, khu_vuc: ['Cau Giay', 'Ha Dong'], nguoi_tao_id: ids.users.admin, status: 'active' },
     { _id: ids.services.relatedMui, ma_dich_vu: 'DV002', ten: 'Rua mui', loai: 'related', mo_ta_ngan: 'Thu thuat rua mui demo', mo_ta: 'Dich vu theo chi dinh bac si', gia: 40000, thoi_gian_phut: null, specialty_id: ids.specialties.mui, chuan_bi_truoc: 'Khong xit mui truoc 2 gio', nguoi_tao_id: ids.users.admin, status: 'active' },
     { _id: ids.services.relatedHong, ma_dich_vu: 'DV003', ten: 'Noi soi hong', loai: 'related', mo_ta_ngan: 'Noi soi hong demo', mo_ta: 'Dich vu theo chi dinh bac si', gia: 50000, thoi_gian_phut: null, specialty_id: ids.specialties.hong, chuan_bi_truoc: 'Nhin an 2 gio truoc khi noi soi', nguoi_tao_id: ids.users.admin, status: 'active' },
     { _id: ids.services.relatedTmh, ma_dich_vu: 'DV004', ten: 'Noi soi tai', loai: 'related', mo_ta_ngan: 'Noi soi tai demo', mo_ta: 'Dich vu ho tro chan doan', gia: 50000, thoi_gian_phut: null, specialty_id: ids.specialties.tmh, chuan_bi_truoc: 'Ve sinh tai truoc khi kham', nguoi_tao_id: ids.users.admin, status: 'active' },

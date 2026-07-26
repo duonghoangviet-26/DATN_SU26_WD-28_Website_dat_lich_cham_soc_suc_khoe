@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
 import Icon from '@/components/admin/icons'
+import { formatAdminActionLabel } from '@/utils/adminDisplay'
 import { formatDateTime } from '@/utils/format'
 
 interface AuditLog {
@@ -29,7 +30,7 @@ function getActionLabel(action: string) {
     SHOW_SPECIALTY: { text: 'Hiện CK', color: 'bg-emerald-100 text-emerald-700', icon: 'eye' },
     HIDE_SPECIALTY: { text: 'Ẩn CK', color: 'bg-orange-100 text-orange-700', icon: 'eye-off' },
   }
-  return map[action] || { text: action, color: 'bg-slate-100 text-slate-700', icon: 'info' }
+  return map[action] || { text: formatAdminActionLabel(action), color: 'bg-slate-100 text-slate-700', icon: 'info' }
 }
 
 export default function ClinicAuditLogModal({ open, onClose, title, logs, loading }: Props) {

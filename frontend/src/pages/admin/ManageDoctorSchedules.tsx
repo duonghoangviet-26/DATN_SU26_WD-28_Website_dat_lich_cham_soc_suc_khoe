@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import Icon from '@/components/admin/icons'
 import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
@@ -9,6 +9,7 @@ import PageHeader from '@/components/common/PageHeader'
 import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { adminDoctorScheduleService } from '@/services/admin-doctor-schedule.service'
 import { appointmentService } from '@/services/appointment.service'
+import { SLOT_LOAI_LABEL, SLOT_LOAI_COLOR } from '@/utils/constants'
 import type {
   AdminAppointmentDoctorOption,
   AdminDoctorScheduleAuditLog,
@@ -16,6 +17,7 @@ import type {
   AdminDoctorScheduleSlot,
   AdminDoctorWorkdayItem,
 } from '@/types'
+import { formatAdminActionLabel, formatAdminFieldLabel, formatAdminValue } from '@/utils/adminDisplay'
 import { formatDateTime, toLocalDateStr } from '@/utils/format'
 
 const MAX_CALENDAR_RANGE_DAYS = 42
@@ -100,16 +102,9 @@ function addDaysToDateString(value: string, amount: number) {
   return toLocalDateStr(date)
 }
 
-function valueToText(value: unknown): string {
-  if (value === null || value === undefined || value === '') return 'Không có'
-  if (Array.isArray(value)) return `${value.length} mục`
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
-}
-
 function diffFields(before?: Record<string, unknown> | null, after?: Record<string, unknown> | null) {
   const keys = Array.from(new Set([...Object.keys(before || {}), ...Object.keys(after || {})]))
-  return keys.filter((key) => valueToText(before?.[key]) !== valueToText(after?.[key]))
+  return keys.filter((key) => JSON.stringify(before?.[key] ?? null) !== JSON.stringify(after?.[key] ?? null))
 }
 
 function translateLogNote(note: string | null | undefined): string | null | undefined {
@@ -132,6 +127,48 @@ function translateLogNote(note: string | null | undefined): string | null | unde
 // MODAL: CHỈNH SLOT LỊCH LÀM VIỆC
 // ============================================================
 
+// Ca sáng 08:00–11:30 / ca chiều 13:30–17:30 (nghỉ trưa ở giữa) — xem
+// .claude/rules/lich-lam-viec-bac-si.md §1. Chỉ dùng gio_bat_dau để tách vì field này luôn có
+// (khung_index có thể null ở dữ liệu cũ trước migration Phase 1A).
+function splitSlotsByCa(slots: AdminDoctorScheduleSlot[]) {
+  return {
+    sang: slots.filter((s) => s.gio_bat_dau < '12:00'),
+    chieu: slots.filter((s) => s.gio_bat_dau >= '12:00'),
+  }
+}
+
+interface AdminKhungGroup {
+  gio_bat_dau: string
+  gio_ket_thuc: string
+  slots: AdminDoctorScheduleSlot[]
+}
+
+// Nhóm slot theo khung giờ 30' — 1 khung có thể có nhiều slot (so_slot_moi_khung > 1).
+function groupSlotsByKhung(slots: AdminDoctorScheduleSlot[]): AdminKhungGroup[] {
+  const groups: AdminKhungGroup[] = []
+  const indexByTime = new Map<string, number>()
+  slots.forEach((slot) => {
+    const key = `${slot.gio_bat_dau}-${slot.gio_ket_thuc}`
+    const existingIndex = indexByTime.get(key)
+    if (existingIndex === undefined) {
+      indexByTime.set(key, groups.length)
+      groups.push({ gio_bat_dau: slot.gio_bat_dau, gio_ket_thuc: slot.gio_ket_thuc, slots: [slot] })
+    } else {
+      groups[existingIndex].slots.push(slot)
+    }
+  })
+  return groups
+}
+
+function bookedByLabel(slot: AdminDoctorScheduleSlot): string {
+  if (slot.ten_benh_nhan) {
+    return slot.la_khach_vang_lai ? `${slot.ten_benh_nhan} (khách vãng lai)` : slot.ten_benh_nhan
+  }
+  if (slot.status === 'booked') return 'Đã có bệnh nhân'
+  if (slot.status === 'pending_payment') return 'Đang chờ thanh toán'
+  return 'Chưa có bệnh nhân'
+}
+
 function SlotEditorModal({
   schedule,
   onClose,
@@ -141,23 +178,17 @@ function SlotEditorModal({
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
-  const itemsPerPage = 8
   const [workingCopy, setWorkingCopy] = useState<AdminDoctorScheduleDetail | null>(schedule)
   const [savingSlotId, setSavingSlotId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
 
   useEffect(() => {
     setWorkingCopy(schedule)
     setError(null)
     setSavingSlotId(null)
-    setPage(1)
   }, [schedule])
 
   if (!workingCopy) return null
-
-  const totalPages = Math.max(1, Math.ceil(workingCopy.slots.length / itemsPerPage))
-  const visibleSlots = workingCopy.slots.slice((page - 1) * itemsPerPage, page * itemsPerPage)
 
   async function saveSlot(slot: AdminDoctorScheduleSlot) {
     setSavingSlotId(slot._id)
@@ -209,106 +240,138 @@ function SlotEditorModal({
             </div>
           )}
 
-          <div className="overflow-x-auto rounded-xl border border-slate-100">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left">
-                <tr>
-                  <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Bắt đầu</th>
-                  <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Kết thúc</th>
-                  <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Phòng khám</th>
-                  <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Trạng thái</th>
-                  <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Đặt lịch</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-500">Lưu</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {visibleSlots.map((slot) => {
-                  const immutableStatus = slot.status === 'booked' || slot.status === 'pending_payment' || slot.co_lich_hen === true
+          {(() => {
+            const { sang, chieu } = splitSlotsByCa(workingCopy.slots)
+            const caSections = [
+              { key: 'sang', label: 'Ca Sáng (08:00 – 11:30)', slots: sang },
+              { key: 'chieu', label: 'Ca Chiều (13:30 – 17:30)', slots: chieu },
+            ].filter((section) => section.slots.length > 0)
 
-                  return (
-                    <tr key={slot._id}>
-                      <td className="px-3 py-3">
-                        <input
-                          type="time"
-                          value={slot.gio_bat_dau}
-                          onChange={(event) => updateSlotField(slot._id, 'gio_bat_dau', event.target.value)}
-                          className="input w-full"
-                          disabled={immutableStatus}
-                          title={immutableStatus ? 'Không thể đổi giờ của khung giờ đã có lịch hẹn' : undefined}
-                        />
-                      </td>
-                      <td className="px-3 py-3">
-                        <input
-                          type="time"
-                          value={slot.gio_ket_thuc}
-                          onChange={(event) => updateSlotField(slot._id, 'gio_ket_thuc', event.target.value)}
-                          className="input w-full"
-                          disabled={immutableStatus}
-                          title={immutableStatus ? 'Không thể đổi giờ của khung giờ đã có lịch hẹn' : undefined}
-                        />
-                      </td>
-                      <td className="px-3 py-3">
-                        <input
-                          type="text"
-                          value={slot.phong_kham || ''}
-                          onChange={(event) => updateSlotField(slot._id, 'phong_kham', event.target.value)}
-                          className="input w-full"
-                          placeholder="Ví dụ: Phòng 101"
-                          disabled={immutableStatus}
-                          title={immutableStatus ? 'Không thể đổi phòng của khung giờ đã có lịch hẹn' : undefined}
-                        />
-                      </td>
-                      <td className="px-3 py-3">
-                        <select
-                          value={slot.status}
-                          onChange={(event) => updateSlotField(slot._id, 'status', event.target.value)}
-                          className={`h-10 w-full rounded-xl border px-3 text-sm font-semibold shadow-sm outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none ${SLOT_STATUS_SELECT_CLASS[slot.status]}`}
-                          disabled={immutableStatus}
-                          title={immutableStatus ? 'Khung giờ đã có lịch hoặc đang chờ thanh toán nên không thể đổi trạng thái tại đây' : 'Chọn trạng thái khung giờ'}
-                        >
-                          {SLOT_STATUS_OPTIONS.map((status) => (
-                            <option key={status} value={status}>
-                              {SLOT_STATUS_LABEL[status]}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-3 text-xs text-slate-500">
-                        {slot.status === 'booked'
-                          ? 'Đã có bệnh nhân'
-                          : slot.status === 'pending_payment'
-                            ? 'Đang chờ thanh toán'
-                            : 'Chưa có bệnh nhân'}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => saveSlot(slot)}
-                          disabled={savingSlotId === slot._id || immutableStatus}
-                          className="btn-primary disabled:opacity-50"
-                          title={immutableStatus ? 'Khung giờ đã có lịch hẹn nên không thể chỉnh sửa' : undefined}
-                        >
-                          {savingSlotId === slot._id ? 'Đang lưu...' : 'Lưu khung giờ'}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+            if (caSections.length === 0) {
+              return <p className="text-sm text-slate-500">Ngày này chưa có khung giờ nào.</p>
+            }
 
-          {workingCopy.slots.length > itemsPerPage && (
-            <TablePaginationFooter
-              currentPage={page}
-              totalPages={totalPages}
-              totalItems={workingCopy.slots.length}
-              currentItemCount={visibleSlots.length}
-              itemLabel="khung giờ"
-              pageSize={itemsPerPage}
-              onPageChange={setPage}
-            />
-          )}
+            return (
+              <div className="space-y-6">
+                {caSections.map((section) => (
+                  <div key={section.key}>
+                    <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                      {section.label}
+                    </h4>
+                    <div className="overflow-x-auto rounded-xl border border-slate-100">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 text-left">
+                          <tr>
+                            <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Bắt đầu</th>
+                            <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Kết thúc</th>
+                            <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Loại slot</th>
+                            <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Phòng khám</th>
+                            <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Trạng thái</th>
+                            <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Đặt lịch</th>
+                            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-slate-500">Lưu</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {groupSlotsByKhung(section.slots).map((khung) => {
+                            const conTrong = khung.slots.filter((s) => s.status === 'active').length
+                            return (
+                              <Fragment key={`khung-${khung.gio_bat_dau}-${khung.gio_ket_thuc}`}>
+                                <tr className="bg-slate-50/70">
+                                  <td colSpan={7} className="px-3 py-1.5 text-xs font-semibold text-slate-600">
+                                    Khung {khung.gio_bat_dau} – {khung.gio_ket_thuc}
+                                    <span className="ml-2 font-normal text-slate-400">
+                                      · Còn trống {conTrong}/{khung.slots.length}
+                                    </span>
+                                  </td>
+                                </tr>
+                                {khung.slots.map((slot) => {
+                                  const immutableStatus = slot.status === 'booked' || slot.status === 'pending_payment' || slot.co_lich_hen === true
+
+                                  return (
+                                    <tr key={slot._id}>
+                                      <td className="px-3 py-3">
+                                        <input
+                                          type="time"
+                                          value={slot.gio_bat_dau}
+                                          onChange={(event) => updateSlotField(slot._id, 'gio_bat_dau', event.target.value)}
+                                          className="input w-full"
+                                          disabled={immutableStatus}
+                                          title={immutableStatus ? 'Không thể đổi giờ của khung giờ đã có lịch hẹn' : undefined}
+                                        />
+                                      </td>
+                                      <td className="px-3 py-3">
+                                        <input
+                                          type="time"
+                                          value={slot.gio_ket_thuc}
+                                          onChange={(event) => updateSlotField(slot._id, 'gio_ket_thuc', event.target.value)}
+                                          className="input w-full"
+                                          disabled={immutableStatus}
+                                          title={immutableStatus ? 'Không thể đổi giờ của khung giờ đã có lịch hẹn' : undefined}
+                                        />
+                                      </td>
+                                      <td className="px-3 py-3">
+                                        <span
+                                          title={slot.khung_index != null ? `Khung giờ số ${slot.khung_index + 1} trong ca` : undefined}
+                                        >
+                                          <Badge color={SLOT_LOAI_COLOR[slot.loai_slot ?? 'online']}>
+                                            {SLOT_LOAI_LABEL[slot.loai_slot ?? 'online']}
+                                          </Badge>
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-3">
+                                        <input
+                                          type="text"
+                                          value={slot.phong_kham || ''}
+                                          onChange={(event) => updateSlotField(slot._id, 'phong_kham', event.target.value)}
+                                          className="input w-full"
+                                          placeholder="Ví dụ: Phòng 101"
+                                          disabled={immutableStatus}
+                                          title={immutableStatus ? 'Không thể đổi phòng của khung giờ đã có lịch hẹn' : undefined}
+                                        />
+                                      </td>
+                                      <td className="px-3 py-3">
+                                        <select
+                                          value={slot.status}
+                                          onChange={(event) => updateSlotField(slot._id, 'status', event.target.value)}
+                                          className={`h-10 w-full rounded-xl border px-3 text-sm font-semibold shadow-sm outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:shadow-none ${SLOT_STATUS_SELECT_CLASS[slot.status]}`}
+                                          disabled={immutableStatus}
+                                          title={immutableStatus ? 'Khung giờ đã có lịch hoặc đang chờ thanh toán nên không thể đổi trạng thái tại đây' : 'Chọn trạng thái khung giờ'}
+                                        >
+                                          {SLOT_STATUS_OPTIONS.map((status) => (
+                                            <option key={status} value={status}>
+                                              {SLOT_STATUS_LABEL[status]}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-3 text-xs text-slate-500">
+                                        {bookedByLabel(slot)}
+                                      </td>
+                                      <td className="px-3 py-3 text-right">
+                                        <button
+                                          type="button"
+                                          onClick={() => saveSlot(slot)}
+                                          disabled={savingSlotId === slot._id || immutableStatus}
+                                          className="btn-primary disabled:opacity-50"
+                                          title={immutableStatus ? 'Khung giờ đã có lịch hẹn nên không thể chỉnh sửa' : undefined}
+                                        >
+                                          {savingSlotId === slot._id ? 'Đang lưu...' : 'Lưu khung giờ'}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </Fragment>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
       </div>
     </div>
@@ -363,7 +426,7 @@ function MarkDayOffModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" style={{ animation: 'fadeInScale 0.18s ease-out' }}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-start gap-4 border-b border-slate-100 px-6 pb-4 pt-6">
           <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl text-2xl ${cfg.iconBg}`}>
@@ -507,12 +570,12 @@ function ScheduleAuditModal({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge color={ACTION_COLOR[log.hanh_dong] || 'gray'}>
-                          {ACTION_LABEL[log.hanh_dong] || log.hanh_dong}
+                          {ACTION_LABEL[log.hanh_dong] || formatAdminActionLabel(log.hanh_dong)}
                         </Badge>
                         <span className="text-xs font-medium text-slate-500">{formatDateTime(log.thoi_diem)}</span>
                       </div>
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
-                        {log.vai_tro === 'system' ? 'Hệ thống' : log.vai_tro}
+                        {formatAdminValue('role', log.vai_tro)}
                       </span>
                     </div>
 
@@ -539,9 +602,9 @@ function ScheduleAuditModal({
                               <tbody className="divide-y divide-slate-100">
                                 {changedFields.slice(0, 8).map((field) => (
                                   <tr key={field}>
-                                    <td className="px-3 py-2 font-medium text-slate-700">{field}</td>
-                                    <td className="max-w-[220px] truncate px-3 py-2 text-slate-500">{valueToText(log.du_lieu_cu?.[field])}</td>
-                                    <td className="max-w-[220px] truncate px-3 py-2 text-slate-800">{valueToText(log.du_lieu_moi?.[field])}</td>
+                                    <td className="px-3 py-2 font-medium text-slate-700">{formatAdminFieldLabel(field)}</td>
+                                    <td className="max-w-[220px] truncate px-3 py-2 text-slate-500">{formatAdminValue(field, log.du_lieu_cu?.[field])}</td>
+                                    <td className="max-w-[220px] truncate px-3 py-2 text-slate-800">{formatAdminValue(field, log.du_lieu_moi?.[field])}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -585,6 +648,7 @@ function ScheduleAuditModal({
 // ============================================================
 
 export default function ManageDoctorSchedules() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const defaultRange = getDefaultRange()
 
@@ -789,6 +853,18 @@ export default function ManageDoctorSchedules() {
     await loadHistory(item, 1)
   }
 
+  function viewBookedAppointments(item: AdminDoctorWorkdayItem) {
+    if (!doctorId || item.slot_da_dat <= 0) return
+
+    const params = new URLSearchParams()
+    params.set('doctor_id', doctorId)
+    if (doctorName) params.set('doctor_name', doctorName)
+    params.set('startDate', item.ngay)
+    params.set('endDate', item.ngay)
+
+    navigate(`/admin/appointments?${params.toString()}`)
+  }
+
   const summary = {
     total: items.length,
     working: items.filter((item) => item.trang_thai_ngay === 'lam_viec').length,
@@ -803,7 +879,7 @@ export default function ManageDoctorSchedules() {
     <AdminAutoStagger className="space-y-6">
       <PageHeader
         title="Lịch làm việc bác sĩ"
-        description="Lịch làm việc được hệ thống tự động sinh và bù theo tuần. Admin theo dõi trạng thái xác nhận, chỉnh khung giờ khi có thay đổi đặc biệt và xem lịch sử để truy vết."
+        description="Lịch làm việc được hệ thống tự động sinh và bù theo tuần. Quản trị viên theo dõi trạng thái xác nhận, chỉnh khung giờ khi có thay đổi đặc biệt và xem lịch sử để truy vết."
       />
 
       <div className="card p-4">
@@ -913,6 +989,7 @@ export default function ManageDoctorSchedules() {
         onOpenHistory={openHistory}
         onUpdateWorkday={updateWorkday}
         onCreateScheduleForDay={createScheduleForDay}
+        onViewBookedAppointments={viewBookedAppointments}
       />
 
       <SlotEditorModal

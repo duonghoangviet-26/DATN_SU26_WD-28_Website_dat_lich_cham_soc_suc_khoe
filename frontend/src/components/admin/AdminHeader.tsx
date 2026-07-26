@@ -47,7 +47,7 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
     navigate('/login')
   }
 
-  const initials = (user?.ho_ten || 'Admin')
+  const initials = (user?.ho_ten || 'Quản trị viên')
     .split(' ')
     .map((w) => w[0])
     .slice(-2)
@@ -149,7 +149,7 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
 
         <div className="hidden text-right sm:block">
           <p className="text-sm font-semibold leading-tight text-slate-800">
-            {user?.ho_ten || 'Admin'}
+            {user?.ho_ten || 'Quản trị viên'}
           </p>
           <p className="text-xs text-slate-400">Quản trị viên</p>
         </div>

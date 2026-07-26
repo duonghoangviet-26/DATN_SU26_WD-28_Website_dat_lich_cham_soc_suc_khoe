@@ -5,6 +5,7 @@ interface Props {
   confirmText?: string
   cancelText?: string
   danger?: boolean
+  confirmDisabled?: boolean
   onConfirm: () => void
   onCancel: () => void
 }
@@ -16,6 +17,7 @@ export default function ConfirmDialog({
   confirmText = 'Đồng ý',
   cancelText = 'Hủy',
   danger = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: Props) {
@@ -32,7 +34,8 @@ export default function ConfirmDialog({
           </button>
           <button
             onClick={onConfirm}
-            className={danger ? 'btn-danger' : 'btn-primary'}
+            disabled={confirmDisabled}
+            className={`${danger ? 'btn-danger' : 'btn-primary'} disabled:opacity-50`}
           >
             {confirmText}
           </button>

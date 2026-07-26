@@ -12,6 +12,7 @@ import axiosInstance from '@/services/axiosInstance'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 
 const mockedPatch = vi.mocked(axiosInstance.patch)
+const mockedGet = vi.mocked(axiosInstance.get)
 
 describe('doctorAppointmentService.confirmResult', () => {
   beforeEach(() => {
@@ -45,5 +46,42 @@ describe('doctorAppointmentService.confirmResult', () => {
     await doctorAppointmentService.confirmResult('apt-1')
 
     expect(mockedPatch).toHaveBeenCalledWith('/doctor/appointments/apt-1/result/confirm', undefined)
+  })
+})
+
+describe('doctorAppointmentService.getExamQueue', () => {
+  beforeEach(() => {
+    mockedGet.mockReset()
+  })
+
+  it('gọi đúng endpoint hàng đợi khám', async () => {
+    mockedGet.mockResolvedValue({ data: { data: [{ id: 'q1' }] } } as never)
+
+    const res = await doctorAppointmentService.getExamQueue()
+
+    expect(mockedGet).toHaveBeenCalledWith('/doctor/queue', { params: {} })
+    expect(res).toEqual([{ id: 'q1' }])
+  })
+
+  it('trả về mảng rỗng nếu backend trả về dữ liệu không hợp lệ', async () => {
+    mockedGet.mockResolvedValue({ data: { data: null } } as never)
+
+    const res = await doctorAppointmentService.getExamQueue()
+
+    expect(res).toEqual([])
+  })
+})
+
+describe('doctorAppointmentService.confirmResultByRecord', () => {
+  beforeEach(() => {
+    mockedPatch.mockReset()
+  })
+
+  it('gọi đúng endpoint confirm-by-record theo ket_qua_id', async () => {
+    mockedPatch.mockResolvedValue({ data: { data: { id: 'r1' } } } as never)
+
+    await doctorAppointmentService.confirmResultByRecord('kq-1')
+
+    expect(mockedPatch).toHaveBeenCalledWith('/doctor/appointments/result/kq-1/confirm-by-record', {})
   })
 })

@@ -1,4 +1,5 @@
 import Icon from '@/components/admin/icons'
+import { formatAdminActionLabel, formatAdminValue } from '@/utils/adminDisplay'
 import { formatDate } from '@/utils/format'
 import type { ReviewHistoryLog } from '@/types/review.type'
 
@@ -49,7 +50,7 @@ export default function ReviewTimeline({ history, loading }: Props) {
           text: 'text-slate-700',
           icon: 'clock',
         }
-        const actionLabel = ACTION_LABEL_MAP[log.hanh_dong] || log.hanh_dong
+        const actionLabel = ACTION_LABEL_MAP[log.hanh_dong] || formatAdminActionLabel(log.hanh_dong)
 
         return (
           <div key={log.id} className="relative group">
@@ -76,7 +77,7 @@ export default function ReviewTimeline({ history, loading }: Props) {
                   {log.nguoi_thuc_hien?.ho_ten || 'Hệ thống'}
                 </span>{' '}
                 <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-200/60 text-slate-600 ml-1">
-                  {log.vai_tro === 'admin' ? 'Quản trị viên' : log.vai_tro}
+                  {formatAdminValue('role', log.vai_tro)}
                 </span>
               </p>
 

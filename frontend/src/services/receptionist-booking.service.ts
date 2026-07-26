@@ -31,6 +31,7 @@ export interface CreateReceptionistBookingPayload {
   so_dien_thoai_khach: string
   ly_do_kham?: string
   payment_method: 'cash' | 'transfer'
+  user_id?: string
 }
 
 export interface CreatedReceptionistBookingResult {
@@ -99,8 +100,16 @@ export const receptionistBookingService = {
   },
 
   async completeMockVnpayPayment(paymentId: string): Promise<ReceptionistPaymentStatusResult> {
-    const res = await axiosInstance.post<ApiResponse<ReceptionistPaymentStatusResult>>(`/receptionist/payments/${paymentId}/vnpay/mock-complete`)
+    const res = await axiosInstance.post<ApiResponse<ReceptionistPaymentStatusResult>>(
+      `/receptionist/payments/${paymentId}/vnpay/mock-complete`
+    )
+    return res.data.data
+  },
+
+  async lookupUserByPhone(phone: string): Promise<{ found: boolean; user: any | null }> {
+    const res = await axiosInstance.get<ApiResponse<{ found: boolean; user: any | null }>>('/receptionist/users/lookup', {
+      params: { phone }
+    })
     return res.data.data
   }
 }
-

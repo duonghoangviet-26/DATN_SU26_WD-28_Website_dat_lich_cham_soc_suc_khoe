@@ -107,7 +107,7 @@ export async function getUserById(req, res) {
  */
 export async function createUser(req, res) {
   try {
-    const { email, mat_khau, ho_ten, so_dien_thoai, role } = req.body
+    const { email, mat_khau, ho_ten, so_dien_thoai, anh_dai_dien, role } = req.body
 
     // 1. Validate dữ liệu
     if (!email || !mat_khau || !ho_ten) {
@@ -130,6 +130,7 @@ export async function createUser(req, res) {
       mat_khau: hashedPassword,
       ho_ten,
       so_dien_thoai,
+      anh_dai_dien: anh_dai_dien || null,
       role: role || 'user'
     })
 
@@ -156,7 +157,7 @@ export async function createUser(req, res) {
 
     // 5. Ghi nhật ký
     await logActivity(req, 'CREATE_USER', newUser._id, null, {
-      email, ho_ten, role: role || 'user'
+      email, ho_ten, anh_dai_dien: anh_dai_dien || null, role: role || 'user'
     })
 
     return res.status(201).json({
@@ -174,12 +175,34 @@ export async function createUser(req, res) {
  */
 export async function updateUser(req, res) {
   try {
-    const { ho_ten, so_dien_thoai, role, status } = req.body
+    const { ho_ten, so_dien_thoai, anh_dai_dien, role, status } = req.body
+
+    const updateData = { ho_ten, so_dien_thoai, role, status }
+    if (anh_dai_dien !== undefined) {
+      updateData.anh_dai_dien = anh_dai_dien || null
+    }
+
+    const oldUser = await NguoiDung.findById(req.params.id).lean()
+    if (!oldUser) {
+      return fail(res, 404, 'Không tìm thấy người dùng để cập nhật')
+    }
+
+    const oldLogData = {}
+    const newLogData = {}
+    for (const [field, newValue] of Object.entries(updateData)) {
+      if (newValue === undefined) continue
+      const oldValue = oldUser[field] ?? null
+      const normalizedNewValue = newValue ?? null
+      if (String(oldValue ?? '') !== String(normalizedNewValue ?? '')) {
+        oldLogData[field] = oldValue
+        newLogData[field] = normalizedNewValue
+      }
+    }
 
     // Tìm và cập nhật (chỉ cập nhật các trường được gửi lên)
     const user = await NguoiDung.findByIdAndUpdate(
       req.params.id,
-      { ho_ten, so_dien_thoai, role, status },
+      updateData,
       { new: true, runValidators: true }
     )
 
@@ -222,7 +245,9 @@ export async function updateUser(req, res) {
     }
 
     // Ghi nhật ký
-    await logActivity(req, 'UPDATE_USER', user._id, null, { ho_ten, so_dien_thoai, role, status })
+    if (Object.keys(newLogData).length > 0) {
+      await logActivity(req, 'UPDATE_USER', user._id, oldLogData, newLogData)
+    }
 
     return ok(res, user, 'Cập nhật thông tin người dùng thành công')
   } catch (error) {

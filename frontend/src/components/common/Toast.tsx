@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 interface ToastProps {
   message: string
-  type: 'success' | 'error'
+  type: 'success' | 'error' | 'warning'
   duration?: number
   onClose: () => void
 }
@@ -25,6 +25,8 @@ export default function Toast({ message, type, duration = 4000, onClose }: Toast
   const colorClass =
     type === 'success'
       ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : type === 'warning'
+      ? 'border-orange-200 bg-orange-50 text-orange-600'
       : 'border-red-200 bg-red-50 text-red-600'
 
   function dismiss() {

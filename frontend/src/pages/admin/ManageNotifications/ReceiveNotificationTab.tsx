@@ -51,12 +51,14 @@ export default function ReceiveNotificationTab() {
         setTotalPages(pagination.totalPages)
         setTotalRecords(pagination.total)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       if (!ignore) setLoading(false)
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let ignore = false
     loadData(ignore)
@@ -79,7 +81,7 @@ export default function ReceiveNotificationTab() {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-800">Hộp thư đến</h2>
-              <p className="text-sm text-slate-500">Các thông báo từ hệ thống và người dùng gửi đến Admin</p>
+              <p className="text-sm text-slate-500">Các thông báo từ hệ thống và người dùng gửi đến quản trị viên</p>
             </div>
           </div>
           <button onClick={() => loadData()} className="btn-secondary px-3 py-2 text-sm">
@@ -136,7 +138,8 @@ export default function ReceiveNotificationTab() {
                             await notificationService.markAsRead(n._id)
                             setNotifications(prev => prev.map(item => item._id === n._id ? { ...item, da_doc: true } : item))
                             window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
-                          } catch {
+                          } catch (err) {
+                            console.error(err)
                           }
                         }
                       }}

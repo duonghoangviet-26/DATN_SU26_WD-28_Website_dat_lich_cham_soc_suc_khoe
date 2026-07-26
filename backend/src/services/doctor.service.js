@@ -446,6 +446,21 @@ export async function updateDoctorInfo(doctorId, updateData, adminId) {
   const duLieuCu = {}
   const duLieuMoi = {}
   let hasChanges = false
+  let hasUserChanges = false
+  const userUpdate = {}
+
+  if (updateData.anh_dai_dien !== undefined) {
+    const user = await NguoiDung.findById(doctor.user_id)
+    if (!user) throw new Error('Khong tim thay tai khoan nguoi dung cua bac si')
+
+    const newAvatar = updateData.anh_dai_dien || null
+    if (String(user.anh_dai_dien ?? '') !== String(newAvatar ?? '')) {
+      duLieuCu.anh_dai_dien = user.anh_dai_dien ?? null
+      duLieuMoi.anh_dai_dien = newAvatar
+      userUpdate.anh_dai_dien = newAvatar
+      hasUserChanges = true
+    }
+  }
 
   for (const field of allowedFields) {
     if (field === 'chi_nhanh_id' && updateData[field] !== undefined && updateData[field] !== null) {
@@ -492,8 +507,14 @@ export async function updateDoctorInfo(doctorId, updateData, adminId) {
     }
   }
 
-  if (hasChanges) {
-    await doctor.save()
+  if (hasChanges || hasUserChanges) {
+    if (hasUserChanges) {
+      await NguoiDung.findByIdAndUpdate(doctor.user_id, userUpdate, { runValidators: true })
+    }
+
+    if (hasChanges) {
+      await doctor.save()
+    }
 
     await ghiLog({
       adminId,

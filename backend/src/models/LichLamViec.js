@@ -29,6 +29,21 @@ const slotSchema = new mongoose.Schema(
       ref: 'ChuyenKhoa',
       default: null,
     },
+    // ── Tầng KHUNG GIỜ (xem .claude/rules/lich-lam-viec-bac-si.md muc 10 / G1) ──
+    // khung_index: vi tri khung 30' trong ngay (0..14, khop DEFAULT_SLOT_TIMES). NHIEU slot
+    // co the chia se cung 1 khung_index (nhieu benh nhan/khung theo chuyen khoa).
+    // null = slot tao TRUOC migration nay (tuong thich nguoc, xem patient/booking.controller.js
+    // getSlots — loc "!== 'walk_in'" thay vi "=== 'online'" de khong loai bo slot cu thieu field).
+    khung_index: {
+      type: Number,
+      default: null,
+      min: [0, 'khung_index khong duoc am'],
+    },
+    loai_slot: {
+      type: String,
+      enum: ['online', 'walk_in'],
+      default: 'online', // giu hanh vi cu: moi slot deu kha dung cho dat online
+    },
     phong_kham: { type: String, default: null },
     status: {
       type: String,
@@ -64,13 +79,6 @@ const doctorScheduleSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'BacSi',
       required: true,
-    },
-    // Y tá phụ trách cả ngày làm việc này (1 y tá/ngày, không tách theo slot/ca) — optional,
-    // gán bởi admin. Ref 'NguoiDung' (không phải model YTa riêng — hệ thống chưa có model đó).
-    nurse_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'NguoiDung',
-      default: null,
     },
     chi_nhanh_id: {
       type: mongoose.Schema.Types.ObjectId,

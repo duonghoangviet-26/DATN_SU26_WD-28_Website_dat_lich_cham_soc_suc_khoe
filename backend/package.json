@@ -5,6 +5,7 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
+    "predev": "node src/scripts/free-dev-port.js",
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",

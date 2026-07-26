@@ -14,6 +14,10 @@ export interface PatientRecordListItem {
   gia_kham: number
   payment_deadline?: string | null
   ly_do_huy?: string | null
+  ten_khach?: string | null
+  so_dien_thoai_khach?: string | null
+  nam_sinh_khach?: number | string | null
+  member_id?: string | null
   bac_si: {
     ho_ten: string
     anh_dai_dien?: string | null

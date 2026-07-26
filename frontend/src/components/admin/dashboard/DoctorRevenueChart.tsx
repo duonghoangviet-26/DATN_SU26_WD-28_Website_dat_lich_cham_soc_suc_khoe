@@ -27,14 +27,13 @@ export default function DoctorRevenueChart({ refreshVersion = 0 }: { refreshVers
   return (
     <ChartCard
       title="Doanh thu theo bác sĩ"
-      subtitle="Tổng ThanhToan đã thu theo bác sĩ phụ trách lịch hẹn trong tháng này."
+      subtitle="Tổng số tiền đã thu theo bác sĩ phụ trách lịch hẹn trong tháng này."
       icon="doctor"
       iconBackgroundClassName="bg-brand-100"
       iconClassName="text-brand-600"
       loading={loading}
       empty={!data.length}
       error={error}
-      pulseKey={refreshVersion}
     >
       <div className="h-80 w-full" aria-label="Biểu đồ doanh thu theo bác sĩ">
         <ResponsiveContainer width="100%" height="100%">

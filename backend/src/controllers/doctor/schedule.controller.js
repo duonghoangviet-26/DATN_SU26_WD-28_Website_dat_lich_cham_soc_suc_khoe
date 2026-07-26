@@ -31,29 +31,55 @@ function localStartOfDay(dateStr) {
   return d
 }
 
+const OCCUPIED_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'no_show']
+
+// Khách vãng lai (nguon='tai_cho') KHÔNG có tài khoản NguoiDung nên slot.benh_nhan_id luôn
+// null với các lượt này — phải join LichHen theo slot_id (fallback schedule_id+gio_kham) mới
+// biết "ai đã đặt" cho slot đó. Trả về 2 map để tra cứu O(1) khi duyệt slots.
+// QUAN TRỌNG: ten_khach được điền cả khi tự đặt lịch bằng chính tài khoản của mình (không có
+// member_id vì không phải hồ sơ thành viên gia đình) — phải kiểm tra CẢ user_id để không gán
+// nhầm nhãn "khách vãng lai" cho người dùng đã đăng nhập tự đặt cho bản thân.
+function buildPatientInfoMaps(appointments) {
+  const bySlotId = new Map()
+  const byScheduleTime = new Map()
+  for (const a of appointments) {
+    const laKhachVangLai = !!a.khach_vang_lai_id || (!a.user_id && !a.member_id && !!a.ten_khach)
+    const info = {
+      ten_benh_nhan: a.member_id?.ho_ten ?? a.ten_khach ?? a.user_id?.ho_ten ?? null,
+      la_khach_vang_lai: laKhachVangLai,
+    }
+    if (a.slot_id) bySlotId.set(String(a.slot_id), info)
+    if (a.schedule_id && a.gio_kham) byScheduleTime.set(`${a.schedule_id}-${a.gio_kham}`, info)
+  }
+  return { bySlotId, byScheduleTime }
+}
+
 // Trải mỗi document lịch (1 ngày) thành mảng slot phẳng cho FE. Bổ sung dữ liệu cấp NGÀY
-// (y tá phụ trách, trạng thái ngày, chi nhánh) vào từng slot — các field này đã có trong DB,
-// trước đây API không trả nên FE phải hardcode "Chưa phân công y tá" (xem docs/doctor-schedule-*).
-function flattenSchedules(schedules) {
+// (trạng thái ngày, chi nhánh) vào từng slot.
+function flattenSchedules(schedules, patientMaps) {
+  const { bySlotId, byScheduleTime } = patientMaps
   return schedules.flatMap((sch) => {
-    const nurse = sch.nurse_id // đã populate 'ho_ten'
-    return sch.slots.map((s) => ({
-      id:          s._id,
-      schedule_id: sch._id,
-      ngay:        localDateStr(sch.ngay),
-      trang_thai_ngay: sch.trang_thai_ngay ?? null,
-      chi_nhanh_id: sch.chi_nhanh_id ?? null,
-      nurse_id:    nurse?._id ?? sch.nurse_id ?? null,
-      nurse:       nurse?.ho_ten ?? null, // null = chưa phân công y tá (dữ liệu thật, không hardcode)
-      gio_bat_dau:  s.gio_bat_dau,
-      gio_ket_thuc: s.gio_ket_thuc,
-      phong_kham:   s.phong_kham,
-      status:       s.status,
-      benh_nhan_id: s.benh_nhan_id?._id ?? s.benh_nhan_id ?? null,
-      benh_nhan:    s.benh_nhan_id?.ho_ten ?? null,
-      lock_expires_at:  s.lock_expires_at ?? null,
-      cancel_requested: s.cancel_requested,
-    }))
+    return sch.slots.map((s) => {
+      const patientInfo = bySlotId.get(String(s._id)) ?? byScheduleTime.get(`${sch._id}-${s.gio_bat_dau}`) ?? null
+      return {
+        id:          s._id,
+        schedule_id: sch._id,
+        ngay:        localDateStr(sch.ngay),
+        trang_thai_ngay: sch.trang_thai_ngay ?? null,
+        chi_nhanh_id: sch.chi_nhanh_id ?? null,
+        gio_bat_dau:  s.gio_bat_dau,
+        gio_ket_thuc: s.gio_ket_thuc,
+        khung_index:  s.khung_index ?? null,
+        loai_slot:    s.loai_slot ?? 'online',
+        phong_kham:   s.phong_kham,
+        status:       s.status,
+        benh_nhan_id: s.benh_nhan_id?._id ?? s.benh_nhan_id ?? null,
+        benh_nhan:    s.benh_nhan_id?.ho_ten ?? patientInfo?.ten_benh_nhan ?? null,
+        la_khach_vang_lai: patientInfo?.la_khach_vang_lai ?? false,
+        lock_expires_at:  s.lock_expires_at ?? null,
+        cancel_requested: s.cancel_requested,
+      }
+    })
   })
 }
 
@@ -73,18 +99,27 @@ export async function getSchedules(req, res) {
 
     const schedules = await LichLamViec.find(filter)
       .populate('slots.benh_nhan_id', 'ho_ten')
-      .populate('nurse_id', 'ho_ten')
       .sort({ ngay: 1 })
       .lean()
 
-    return ok(res, flattenSchedules(schedules))
+    const appointments = schedules.length
+      ? await LichHen.find({
+          schedule_id: { $in: schedules.map((sch) => sch._id) },
+          status: { $in: OCCUPIED_APPOINTMENT_STATUSES },
+        })
+          .select('schedule_id slot_id gio_kham ten_khach khach_vang_lai_id member_id user_id')
+          .populate('member_id', 'ho_ten')
+          .lean()
+      : []
+
+    return ok(res, flattenSchedules(schedules, buildPatientInfoMaps(appointments)))
   } catch (err) {
     return fail(res, 500, err.message)
   }
 }
 
 // ─── GET /api/doctor/schedule/:scheduleId ───────────────────────────────────
-// Chi tiết 1 ca làm việc (1 ngày) của CHÍNH bác sĩ đăng nhập: thông tin ngày, y tá,
+// Chi tiết 1 ca làm việc (1 ngày) của CHÍNH bác sĩ đăng nhập: thông tin ngày,
 // danh sách slot, danh sách lịch hẹn thuộc ca (join tên BN online + khách vãng lai),
 // và số liệu tổng hợp (đếm slot + đếm lịch hẹn theo nhóm). CHỈ ĐỌC — không ghi DB.
 export async function getScheduleDetail(req, res) {
@@ -96,7 +131,6 @@ export async function getScheduleDetail(req, res) {
     // không lộ ca có tồn tại hay không.
     const schedule = await LichLamViec.findOne({ _id: req.params.scheduleId, doctor_id: doc._id })
       .populate('slots.benh_nhan_id', 'ho_ten')
-      .populate('nurse_id', 'ho_ten')
       .lean()
     if (!schedule) return fail(res, 404, 'Không tìm thấy lịch làm việc')
 
@@ -119,32 +153,43 @@ export async function getScheduleDetail(req, res) {
       gio_ket_thuc:   a.gio_ket_thuc ?? null,
       loai_kham:      a.loai_kham,
       hinh_thuc_dat_lich: a.hinh_thuc_dat_lich ?? null,
-      la_khach_vang_lai:  !!a.khach_vang_lai_id || (!a.member_id && !!a.ten_khach),
+      la_khach_vang_lai:  !!a.khach_vang_lai_id || (!a.user_id && !a.member_id && !!a.ten_khach),
       chuyen_khoa:    a.specialty_id?.ten ?? null,
       ten_dich_vu:    a.ten_dich_vu ?? null,
       status:         a.status,
       payment_status: a.payment_status,
     }))
 
-    const slots = (schedule.slots ?? []).map((s) => ({
-      id:           s._id,
-      gio_bat_dau:  s.gio_bat_dau,
-      gio_ket_thuc: s.gio_ket_thuc,
-      phong_kham:   s.phong_kham,
-      status:       s.status,
-      benh_nhan_id: s.benh_nhan_id?._id ?? s.benh_nhan_id ?? null,
-      benh_nhan:    s.benh_nhan_id?.ho_ten ?? null,
-      lock_expires_at:  s.lock_expires_at ?? null,
-      cancel_requested: s.cancel_requested,
-      bi_khoa_boi_nghi_phep: s.bi_khoa_boi_nghi_phep ?? false,
-    }))
+    const { bySlotId, byScheduleTime } = buildPatientInfoMaps(appointments)
+    const slots = (schedule.slots ?? []).map((s) => {
+      const patientInfo = bySlotId.get(String(s._id)) ?? byScheduleTime.get(`${schedule._id}-${s.gio_bat_dau}`) ?? null
+      return {
+        id:           s._id,
+        gio_bat_dau:  s.gio_bat_dau,
+        gio_ket_thuc: s.gio_ket_thuc,
+        khung_index:  s.khung_index ?? null,
+        loai_slot:    s.loai_slot ?? 'online',
+        phong_kham:   s.phong_kham,
+        status:       s.status,
+        benh_nhan_id: s.benh_nhan_id?._id ?? s.benh_nhan_id ?? null,
+        benh_nhan:    s.benh_nhan_id?.ho_ten ?? patientInfo?.ten_benh_nhan ?? null,
+        la_khach_vang_lai: patientInfo?.la_khach_vang_lai ?? false,
+        lock_expires_at:  s.lock_expires_at ?? null,
+        cancel_requested: s.cancel_requested,
+        bi_khoa_boi_nghi_phep: s.bi_khoa_boi_nghi_phep ?? false,
+      }
+    })
 
+    const activeSlots = slots.filter((s) => s.status === 'active')
     const thong_ke = {
       tong_slot:    slots.length,
-      slot_trong:   slots.filter((s) => s.status === 'active').length,
+      slot_trong:   activeSlots.length,
       slot_da_dat:  slots.filter((s) => s.status === 'booked' || s.status === 'pending_payment').length,
       slot_bi_khoa: slots.filter((s) => s.status === 'locked').length,
       slot_da_huy:  slots.filter((s) => s.status === 'cancelled' || s.status === 'expired').length,
+      // loai_slot co the thieu o du lieu cu (truoc migration) -> mac dinh coi la 'online'
+      slot_online_trong: activeSlots.filter((s) => (s.loai_slot ?? 'online') !== 'walk_in').length,
+      slot_walkin_trong:  activeSlots.filter((s) => s.loai_slot === 'walk_in').length,
       ...thongKeLichHen(appointments),
     }
 
@@ -154,8 +199,6 @@ export async function getScheduleDetail(req, res) {
       trang_thai_ngay: schedule.trang_thai_ngay ?? null,
       ghi_chu_ngay:    schedule.ghi_chu_ngay ?? null,
       chi_nhanh_id:    schedule.chi_nhanh_id ?? null,
-      nurse_id:        schedule.nurse_id?._id ?? schedule.nurse_id ?? null,
-      nurse:           schedule.nurse_id?.ho_ten ?? null,
       slots,
       lich_hen:        dsLichHen,
       thong_ke,

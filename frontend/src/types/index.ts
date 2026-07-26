@@ -1,7 +1,7 @@
 // Kiểu dữ liệu dùng chung toàn project.
 // Khớp với cấu trúc bảng trong VitaFamily_Database.sql.
 
-export type Role = "user" | "doctor" | "admin" | "receptionist" | "nurse";
+export type Role = "user" | "doctor" | "admin" | "receptionist";
 export type UserStatus = "active" | "locked";
 export type DoctorApproval = "pending" | "approved" | "rejected" | "suspended";
 export type AppointmentStatus =
@@ -232,9 +232,61 @@ export interface SpecialtyItem {
 // ─── Dịch vụ ─────────────────────────────────────────────────────────────────
 // 'home'    → nhân viên lấy mẫu xét nghiệm đến nhà, đặt được, có thoi_gian_phut
 // 'related' → dịch vụ liên quan theo chuyên khoa (X-quang, MRI...), chỉ hiển thị thông tin
+export interface ClinicRoomDoctor {
+    _id: string;
+    ho_ten: string;
+    email?: string | null;
+    trang_thai_duyet?: DoctorApproval;
+    trang_thai?: "active" | "nghi_phep" | "nghi_viec";
+    phong_kham_mac_dinh?: string | null;
+    specialties?: { _id: string; ten: string }[];
+}
+
+export interface ClinicRoomNurse {
+    _id: string;
+    ho_ten: string;
+    email?: string | null;
+    so_dien_thoai?: string | null;
+    status?: UserStatus;
+}
+
+export interface ClinicRoomItem {
+    _id: string;
+    ten: string;
+    tang: number;
+    toa: string;
+    loai: string;
+    trang_thai: "active" | "inactive";
+    full_name: string;
+    doctor_ids: ClinicRoomDoctor[];
+    nurse_ids: ClinicRoomNurse[];
+    doctor_count: number;
+    nurse_count: number;
+    future_schedule_count: number;
+    active_appointment_count: number;
+    ngay_tao?: string | null;
+    ngay_cap_nhat?: string | null;
+}
+
+export interface ClinicRoomPayload {
+    ten: string;
+    tang: number;
+    toa: string;
+    loai: string;
+    trang_thai: "active" | "inactive";
+    doctor_ids: string[];
+    nurse_ids: string[];
+}
+
+export interface ClinicRoomOptions {
+    doctors: ClinicRoomDoctor[];
+    nurses: ClinicRoomNurse[];
+}
+
 export type ServiceType = "home" | "related";
 export type ServiceStatus = "active" | "inactive";
 export type ServiceTargetAudience = "tre_em" | "nguoi_lon" | "gia_dinh" | "khong_gioi_han";
+export type ServicePackageType = "goi_don" | "goi_gia_dinh";
 
 export interface ServiceChangeLog {
     id: string;
@@ -252,6 +304,7 @@ export interface ServiceItem {
     gia: number; // home: BN trả | related: giá tham khảo
     mo_ta_ngan?: string | null;
     mo_ta?: string | null;
+    hinh_anh?: string | null;
     // home: cố định 60ph, có lịch áp dụng (đặt lịch riêng, chọn BS+slot)
     // related: null — không đặt lịch riêng (đi kèm khám clinic, BS chỉ định), thời lượng/lịch áp dụng vô nghĩa
     thoi_gian_phut?: number | null;
@@ -265,7 +318,11 @@ export interface ServiceItem {
     specialty_id?: string | null;
     specialty_ten?: string | null; // joined — chỉ dùng để hiển thị
     la_goi?: boolean;
+    loai_goi?: ServicePackageType | null; // chỉ có khi la_goi=true
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
+    so_nguoi_ap_dung?: number | null;
+    dich_vu_con?: string[];
+    phan_tram_giam_gia?: number | null;
     khu_vuc?: string[]; // home only
     so_bac_si?: number; // computed từ BacSi.services[]
     so_luot_dat?: number; // computed từ LichHen (home only)
@@ -283,12 +340,17 @@ export interface ServiceFormData {
     gia: number;
     mo_ta_ngan?: string;
     mo_ta?: string;
+    image_url?: string | null;
     chuan_bi_truoc?: string; // related only — hướng dẫn chuẩn bị trước
     gio_dat_truoc_toi_thieu?: number; // home only
     // related: required | home: optional
     specialty_id?: string | null;
     la_goi?: boolean;
     doi_tuong_ap_dung?: ServiceTargetAudience | null;
+    loai_goi?: ServicePackageType | null;
+    so_nguoi_ap_dung?: number | null;
+    dich_vu_con?: string[];
+    phan_tram_giam_gia?: number | null;
     khu_vuc?: string[]; // home only
 }
 
@@ -437,6 +499,8 @@ export interface AdminDoctorWorkdayItem {
     slot_da_dat: number;
     slot_bi_khoa: number;
     slot_da_huy: number;
+    slot_online_trong: number;
+    slot_walkin_trong: number;
     gio_bat_dau?: string | null;
     gio_ket_thuc?: string | null;
     nguon_lich: "stored" | "derived";
@@ -452,6 +516,8 @@ export interface AdminDoctorScheduleSlot {
     _id: string;
     gio_bat_dau: string;
     gio_ket_thuc: string;
+    khung_index?: number | null;
+    loai_slot?: "online" | "walk_in";
     benh_nhan_id?: string | null;
     benh_nhan_tam_giu_id?: string | null;
     specialty_id?: string | null;
@@ -464,6 +530,8 @@ export interface AdminDoctorScheduleSlot {
     bi_khoa_boi_nghi_phep?: boolean;
     nghi_phep_id?: string | null;
     co_lich_hen?: boolean;
+    ten_benh_nhan?: string | null;
+    la_khach_vang_lai?: boolean;
 }
 
 export interface AdminDoctorScheduleDetail {
@@ -525,7 +593,7 @@ export interface ReviewItem {
 }
 
 // Khớp backend ThongBaoHeThong.doi_tuong — dùng tên tiếng Việt để nhất quán (GAP-20)
-export type NotificationTarget = "tat_ca" | "benh_nhan" | "bac_si" | "le_tan" | "y_ta";
+export type NotificationTarget = "tat_ca" | "benh_nhan" | "bac_si" | "le_tan";
 
 export interface NotificationItem {
     id: number;
@@ -607,9 +675,12 @@ export interface DoctorSlot {
     ngay: string; // 'YYYY-MM-DD'
     gio_bat_dau: string; // 'HH:MM'
     gio_ket_thuc: string;
+    khung_index?: number | null; // vị trí khung 30' trong ca (0-based) — null = dữ liệu cũ trước migration
+    loai_slot?: "online" | "walk_in"; // thiếu = 'online' (tương thích dữ liệu cũ)
     phong_kham?: string | null;
     benh_nhan?: string | null;
     benh_nhan_id?: string | null;
+    la_khach_vang_lai?: boolean;
     // pending_payment: slot bị BN giữ 15 phút trong khi thanh toán VNPay (soft-lock)
     status:
         | "active"
@@ -620,12 +691,9 @@ export interface DoctorSlot {
         | "expired";
     lock_expires_at?: string | null; // ISO datetime — set khi pending_payment, null các trạng thái khác
     cancel_requested?: boolean;
-    // Dữ liệu cấp NGÀY, lặp lại trên mỗi slot cùng ngày — backend trả từ Prompt 2
-    // (GET /doctor/schedule). null = chưa phân công y tá (dữ liệu thật, không hardcode).
+    // Dữ liệu cấp NGÀY, lặp lại trên mỗi slot cùng ngày — backend trả từ Prompt 2 (GET /doctor/schedule).
     trang_thai_ngay?: DoctorScheduleDayStatus | null;
     chi_nhanh_id?: string | null;
-    nurse_id?: string | null;
-    nurse?: string | null;
 }
 
 // Yêu cầu nghỉ bác sĩ tự gửi (vd: form "Xin nghỉ" hoặc nút "Gửi yêu cầu nghỉ cho
@@ -668,15 +736,18 @@ export interface DoctorScheduleAppointmentItem {
 }
 
 // 1 slot trong chi tiết ca — tương tự DoctorSlot nhưng KHÔNG lặp lại field cấp ngày
-// (ngay/schedule_id/nurse/trang_thai_ngay đã nằm ở DoctorScheduleDetail cấp cha).
+// (ngay/schedule_id/trang_thai_ngay đã nằm ở DoctorScheduleDetail cấp cha).
 export interface DoctorScheduleDetailSlot {
     id: string;
     gio_bat_dau: string;
     gio_ket_thuc: string;
+    khung_index: number | null;
+    loai_slot: "online" | "walk_in";
     phong_kham: string | null;
     status: DoctorSlot["status"];
     benh_nhan_id: string | null;
     benh_nhan: string | null;
+    la_khach_vang_lai: boolean;
     lock_expires_at: string | null;
     cancel_requested: boolean;
     bi_khoa_boi_nghi_phep: boolean;
@@ -691,6 +762,8 @@ export interface DoctorScheduleStats {
     slot_da_dat: number;
     slot_bi_khoa: number;
     slot_da_huy: number;
+    slot_online_trong: number;
+    slot_walkin_trong: number;
     tong_lich_hen: number;
     cho_kham: number;
     da_den: number;
@@ -711,8 +784,6 @@ export interface DoctorScheduleDetail {
     trang_thai_ngay: DoctorScheduleDayStatus | null;
     ghi_chu_ngay: string | null;
     chi_nhanh_id: string | null;
-    nurse_id: string | null;
-    nurse: string | null;
     slots: DoctorScheduleDetailSlot[];
     lich_hen: DoctorScheduleAppointmentItem[];
     thong_ke: DoctorScheduleStats;
@@ -720,7 +791,7 @@ export interface DoctorScheduleDetail {
 
 // Trạng thái xác nhận hồ sơ khám (KetQuaKham.status) — xem docs/Bác sĩ/Audit - Truong du lieu
 // thieu va thua trong DB. cho_xac_nhan = "WAITING_DOCTOR_CONFIRM" theo yêu cầu nghiệp vụ.
-// ban_nhap = "DRAFT" — chỉ dùng cho luồng y tá nhập hồ sơ (lưu nháp trước khi gửi bác sĩ).
+// ban_nhap = "DRAFT" — hồ sơ lưu nháp trước khi gửi bác sĩ xác nhận.
 export type KetQuaKhamStatus =
     | "ban_nhap"
     | "cho_xac_nhan"
@@ -735,8 +806,114 @@ export interface DoctorPendingRecord {
     ngay_kham: string;
     benh_nhan: string;
     ten_dich_vu: string | null;
-    nguoi_nhap: string | null; // tên người nhập hồ sơ — bác sĩ tự nhập hoặc y tá nhập hộ (xem pages/nurse)
+    nguoi_nhap: string | null; // tên người nhập hồ sơ
     status: KetQuaKhamStatus;
+}
+
+// Trạng thái tổng hợp 1 lượt trong hàng đợi khám (BE tính từ hang_doi + ket_qua_kham) —
+// dùng chung cho trang "Hồ sơ chờ khám" (DoctorExamQueue) hiển thị cả lượt online lẫn offline.
+export type ExamQueueStatus =
+    | "dang_cho"
+    | "da_goi"
+    | "trong_phong"
+    | "cho_nhap_ho_so"
+    | "cho_xac_nhan"
+    | "da_xong"
+    | "bo_luot"
+    | "da_huy";
+
+// 1 dòng trong hàng đợi khám của bác sĩ (GET /api/doctor/queue) — gộp cả bệnh nhân đặt online
+// (có appointment_id) và bệnh nhân vãng lai check-in tại quầy (appointment_id = null).
+export interface DoctorExamQueueRow {
+    id: string; // HangDoiKham._id
+    appointment_id: string | null; // null nếu là lượt vãng lai (offline)
+    nguon: "online" | "offline";
+    ten_benh_nhan: string;
+    tuoi: number | null;
+    gioi_tinh: string | null;
+    phong_kham: string | null;
+    muc_uu_tien: "online_uu_tien" | "online_thuong" | "offline";
+    hang_doi_trang_thai: string;
+    checkin_time: string;
+    ket_qua_id: string | null;
+    ket_qua_status: string | null;
+    trang_thai_tong_hop: ExamQueueStatus;
+}
+
+// ============================================================
+// Hàng đợi động + Trạng thái phòng khám (Bác sĩ) — khớp response
+// backend/src/controllers/doctor/{room-status,queue}.controller.js
+// ============================================================
+
+export type PhongKhamTrangThai = "san_sang" | "tam_nghi" | "dang_don_phong" | "dang_kham";
+
+// GET /doctor/room-status — trạng thái phòng của chính bác sĩ đang đăng nhập
+export interface RoomStatus {
+    doctor_id: string;
+    phong_kham: string | null;
+    trang_thai: PhongKhamTrangThai;
+    benh_nhan_hien_tai_id: string | null;
+    thoi_gian_kham_tb_phut: number;
+    thoi_diem_doi: string | null;
+}
+
+export type HangDoiMucUuTien = "online_uu_tien" | "online_thuong" | "offline";
+export type HangDoiTrangThai = "dang_cho" | "da_goi" | "trong_phong" | "skipped" | "cancelled" | "hoan_thanh";
+
+// GET /doctor/queue-entries — 1 dòng trong hàng đợi động (khác DoctorExamQueueRow — dùng
+// cho danh sách "Hồ sơ chờ khám"; entry này phục vụ các action gọi/vào phòng/kết thúc/bỏ lượt).
+export interface QueueEntry {
+    id: string;
+    nguon: "online" | "offline";
+    ten_benh_nhan: string;
+    tuoi: number | null;
+    gioi_tinh: "nam" | "nu" | "khac" | null;
+    doctor_id: string;
+    phong_kham: string | null;
+    muc_uu_tien: HangDoiMucUuTien;
+    trang_thai: HangDoiTrangThai;
+    checkin_time: string;
+    so_lan_goi: number;
+    thoi_gian_cho_uoc_tinh_phut: number | null;
+}
+
+// POST /doctor/queue/checkin — online cần appointment_id, offline (vãng lai) cần ten_benh_nhan + so_dien_thoai
+export interface QueueCheckinPayload {
+    appointment_id?: string;
+    ten_benh_nhan?: string;
+    so_dien_thoai?: string;
+    tuoi?: number;
+    gioi_tinh?: "nam" | "nu" | "khac";
+    specialty_id?: string;
+}
+
+// entry trả về từ checkin() là doc Mongoose thô (_id, không phải id như list())
+export interface QueueCheckinEntry {
+    _id: string;
+    nguon: "online" | "offline";
+    appointment_id?: string | null;
+    ten_benh_nhan: string;
+    so_dien_thoai: string | null;
+    tuoi: number | null;
+    gioi_tinh: "nam" | "nu" | "khac" | null;
+    doctor_id: string;
+    phong_kham: string | null;
+    muc_uu_tien: HangDoiMucUuTien;
+    trang_thai: HangDoiTrangThai;
+    checkin_time: string;
+    so_lan_goi: number;
+}
+
+export interface QueueCheckinResult {
+    entry: QueueCheckinEntry;
+    canh_bao_qua_tai: string | null;
+}
+
+// PATCH /doctor/queue/:id/{call,into-room,finish,skip,cancel}
+export interface QueueActionResult {
+    id: string;
+    trang_thai: HangDoiTrangThai;
+    so_lan_goi?: number;
 }
 
 export interface DoctorAppointmentDetail {
@@ -786,6 +963,16 @@ export interface ExamResultEditPayload {
     ghi_chu?: string | null;
     ngay_tai_kham?: string | null;
     thuoc?: Omit<PrescriptionDrug, 'id'>[];
+    sinh_hieu?: VitalSigns;
+}
+
+// Sinh hiệu ban đầu — bác sĩ tự đo/nhập ngay khi nhập kết quả khám.
+export interface VitalSigns {
+    can_nang?: number | null;
+    chieu_cao?: number | null;
+    huyet_ap?: string | null;
+    nhiet_do?: number | null;
+    nhip_tim?: number | null;
 }
 
 // 1 mục trong lịch sử thay đổi hồ sơ khám (KetQuaKham.lich_su_sua) — ghi lại mỗi lần
@@ -803,8 +990,8 @@ export interface ExaminationResult {
     chan_doan: string;
     huong_dan_dieu_tri: string;
     ghi_chu?: string | null; // ghi chú bổ sung — field trong DB ket_qua_kham
-    trieu_chung_ban_dau?: string | null; // y tá ghi khi tiếp nhận — bác sĩ tham khảo để chẩn đoán
-    ghi_chu_dieu_duong?: string | null; // ghi chú điều dưỡng (y tá) — tách khỏi ghi chú chuyên môn BS
+    trieu_chung_ban_dau?: string | null; // ghi nhận khi tiếp nhận — bác sĩ tham khảo để chẩn đoán
+    ghi_chu_dieu_duong?: string | null; // ghi chú điều dưỡng — tách khỏi ghi chú chuyên môn BS
     ngay_tai_kham: string;
     co_the_sua: boolean; // dự phòng cho khóa thủ công/tương lai — khóa thật hiện dựa vào status==='da_xac_nhan' (GAP-001)
     thuoc: PrescriptionDrug[]; // joined từ don_thuoc (backend trả gộp)
@@ -841,13 +1028,11 @@ export interface DoctorTodayAppointment {
 }
 
 // Tổng quan công việc "hôm nay" cho Dashboard bác sĩ — khác DoctorStats (tích lũy/tháng).
-// y_ta_ho_tro luôn null ở giai đoạn hiện tại — hệ thống chưa có module gán y tá cho ca làm việc.
 export interface DoctorTodayOverview {
     ho_ten: string;
     chuyen_khoa: string;
     ca_lam_viec: { gio_bat_dau: string; gio_ket_thuc: string } | null;
     phong_kham: string | null;
-    y_ta_ho_tro: string | null;
     tong_lich_hen: number;
     cho_kham: number;
     dang_kham: number;
@@ -914,18 +1099,12 @@ export interface DoctorAuditLog {
     };
     hanh_dong: string;
     ly_do?: string | null;
-    du_lieu_cu?: {
-        trang_thai_duyet?: string;
-        ly_do_tu_choi?: string | null;
-    } | null;
-    du_lieu_moi?: {
-        trang_thai_duyet?: string;
-        ly_do_tu_choi?: string | null;
-    } | null;
+    du_lieu_cu?: Record<string, unknown> | null;
+    du_lieu_moi?: Record<string, unknown> | null;
     ngay_tao: string;
 }
 
-export type NotificationTargetAPI = "tat_ca" | "benh_nhan" | "bac_si" | "le_tan" | "y_ta";
+export type NotificationTargetAPI = "tat_ca" | "benh_nhan" | "bac_si" | "le_tan";
 
 export interface NotificationItemAPI {
     _id: string;
@@ -944,6 +1123,7 @@ export interface DoctorUpdatePayload {
     so_nam_kinh_nghiem?: number;
     phi_kham?: number;
     la_hien?: boolean;
+    anh_dai_dien?: string | null;
     admin_id: string;
 }
 
@@ -974,212 +1154,4 @@ export interface NewsItem {
     nguoi_viet: string;
     luot_xem: number;
     ngay_tao: string;
-}
-
-// ============================================================
-// Trang Y tá (Nurse Portal) — khớp response backend routes/nurse/*
-// ============================================================
-
-export interface NurseDashboardDoctorSupport {
-    doctor_id: string;
-    ten_bac_si: string | null;
-    chuyen_khoa: string | null;
-    phong_kham: string | null;
-}
-
-export interface NurseDashboardQueueItem {
-    id: string;
-    ma_lich_hen: string | null;
-    benh_nhan: string;
-    gio_kham: string;
-    status: AppointmentStatus;
-}
-
-export interface NurseDashboard {
-    ten_y_ta: string | null;
-    ngay_hien_tai: string;
-    bac_si_ho_tro: NurseDashboardDoctorSupport[];
-    tong_check_in: number;
-    dang_cho_kham: number;
-    dang_kham: number;
-    cho_nhap_ho_so: number;
-    ho_so_cho_xac_nhan: number;
-    ho_so_can_sua: number;
-    ho_so_da_xac_nhan: number;
-    hang_doi_gan_nhat: NurseDashboardQueueItem[];
-}
-
-// 1 dòng trong hàng đợi bệnh nhân của y tá (/nurse/appointments)
-export interface NurseQueueItem {
-    id: string;
-    ma_lich_hen: string | null;
-    benh_nhan: string;
-    tuoi?: number;
-    gioi_tinh?: string;
-    ngay_kham: string;
-    gio_kham: string;
-    ly_do_kham?: string | null;
-    ten_dich_vu?: string | null;
-    bac_si: string | null;
-    chuyen_khoa: string | null;
-    phong_kham?: string | null;
-    loai_kham: "clinic" | "home";
-    status: AppointmentStatus;
-    payment_status: PaymentStatus;
-    da_co_ket_qua: boolean;
-    ket_qua_status: KetQuaKhamStatus | null;
-}
-
-// Chi tiết lịch hẹn/bệnh nhân dành cho y tá (/nurse/appointments/:id)
-export interface NurseAppointmentDetail {
-    id: string;
-    ma_lich_hen: string | null;
-    benh_nhan: string;
-    tuoi?: number;
-    gioi_tinh?: string;
-    so_dien_thoai: string | null;
-    benh_nen: string | null;
-    di_ung: string | null;
-    ngay_kham: string;
-    gio_kham: string;
-    bac_si: string | null;
-    chuyen_khoa: string | null;
-    phong_kham?: string | null;
-    dia_chi_kham?: string | null;
-    ten_dich_vu?: string | null;
-    loai_kham: "clinic" | "home";
-    ly_do_kham?: string | null;
-    status: AppointmentStatus;
-    payment_status: PaymentStatus;
-    da_co_ket_qua: boolean;
-    ket_qua: NurseMedicalRecord | null;
-    sinh_hieu: NurseVitalSigns | null;
-}
-
-export interface NurseVitalSigns {
-    can_nang?: number | null;
-    chieu_cao?: number | null;
-    huyet_ap?: string | null;
-    nhiet_do?: number | null;
-    nhip_tim?: number | null;
-}
-
-// Hồ sơ khám do y tá nhập/xem — subset field liên quan tới vai trò y tá (không có field
-// chỉ bác sĩ dùng như nguoi_xac_nhan_id).
-export interface NurseMedicalRecord {
-    id: string;
-    appointment_id?: string;
-    status: KetQuaKhamStatus;
-    chan_doan: string;
-    huong_dan_dieu_tri: string | null;
-    ghi_chu: string | null;
-    trieu_chung_ban_dau: string | null;
-    ghi_chu_dieu_duong: string | null;
-    ngay_tai_kham: string | null;
-    doctor_revision_note: string | null;
-    submitted_at?: string | null;
-    ngay_tao?: string;
-    lich_su_sua?: ExaminationHistoryEntry[];
-}
-
-// 1 dòng trong danh sách hồ sơ cần chỉnh sửa (/nurse/medical-records/revisions)
-export interface NurseRevisionItem {
-    id: string;
-    appointment_id: string;
-    benh_nhan: string;
-    bac_si_yeu_cau: string | null;
-    ngay_kham: string;
-    ly_do_kham?: string | null;
-    doctor_revision_note: string | null;
-    thoi_diem_yeu_cau: string;
-}
-
-export interface NurseMedicalRecordDraftPayload {
-    appointment_id: string;
-    chan_doan: string;
-    huong_dan_dieu_tri?: string | null;
-    ghi_chu?: string | null;
-    trieu_chung_ban_dau?: string | null;
-    ghi_chu_dieu_duong?: string | null;
-    ngay_tai_kham?: string | null;
-    sinh_hieu?: NurseVitalSigns;
-}
-
-// ============================================================
-// Hàng đợi động + Trạng thái phòng (Kế hoạch 2) — khớp response
-// backend/src/controllers/nurse/{room-status,queue}.controller.js
-// ============================================================
-
-export type PhongKhamTrangThai = "san_sang" | "tam_nghi" | "dang_don_phong" | "dang_kham";
-
-// GET /nurse/room-status — 1 dòng / bác sĩ y tá phụ trách hôm nay
-export interface NurseRoomStatus {
-    doctor_id: string;
-    ten_bac_si: string | null;
-    chuyen_khoa: string | null;
-    phong_kham: string | null;
-    trang_thai: PhongKhamTrangThai;
-    benh_nhan_hien_tai_id: string | null;
-    y_ta_co_mat: boolean;
-    thoi_gian_kham_tb_phut: number;
-    thoi_diem_doi: string | null;
-}
-
-export type HangDoiMucUuTien = "online_uu_tien" | "online_thuong" | "offline";
-export type HangDoiTrangThai = "dang_cho" | "da_goi" | "trong_phong" | "skipped" | "cancelled" | "hoan_thanh";
-
-// GET /nurse/queue — 1 dòng trong hàng đợi động (khác NurseQueueItem — đó là /nurse/appointments cũ)
-export interface NurseQueueEntry {
-    id: string;
-    nguon: "online" | "offline";
-    ten_benh_nhan: string;
-    tuoi: number | null;
-    gioi_tinh: "nam" | "nu" | "khac" | null;
-    doctor_id: string;
-    phong_kham: string | null;
-    muc_uu_tien: HangDoiMucUuTien;
-    trang_thai: HangDoiTrangThai;
-    checkin_time: string;
-    so_lan_goi: number;
-    thoi_gian_cho_uoc_tinh_phut: number | null;
-}
-
-// POST /nurse/queue/checkin — body: online cần appointment_id, offline cần ten_benh_nhan + so_dien_thoai
-export interface NurseQueueCheckinPayload {
-    appointment_id?: string;
-    doctor_id?: string;
-    ten_benh_nhan?: string;
-    so_dien_thoai?: string;
-    tuoi?: number;
-    gioi_tinh?: "nam" | "nu" | "khac";
-    specialty_id?: string;
-}
-
-// entry trả về từ checkin() là doc Mongoose thô (_id, không phải id như list())
-export interface NurseQueueCheckinEntry {
-    _id: string;
-    nguon: "online" | "offline";
-    appointment_id?: string | null;
-    ten_benh_nhan: string;
-    so_dien_thoai: string | null;
-    tuoi: number | null;
-    gioi_tinh: "nam" | "nu" | "khac" | null;
-    doctor_id: string;
-    phong_kham: string | null;
-    muc_uu_tien: HangDoiMucUuTien;
-    trang_thai: HangDoiTrangThai;
-    checkin_time: string;
-    so_lan_goi: number;
-}
-
-export interface NurseQueueCheckinResult {
-    entry: NurseQueueCheckinEntry;
-    canh_bao_qua_tai: string | null;
-}
-
-// PATCH /nurse/queue/:id/{call,into-room,finish,skip,cancel}
-export interface NurseQueueActionResult {
-    id: string;
-    trang_thai: HangDoiTrangThai;
-    so_lan_goi?: number;
 }

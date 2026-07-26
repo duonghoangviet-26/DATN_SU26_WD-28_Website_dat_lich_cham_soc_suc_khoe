@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Icon from '@/components/admin/icons'
 import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import ServiceFormModal from '@/components/admin/services/ServiceFormModal'
+import ServiceHistoryModal from '@/components/admin/services/ServiceHistoryModal'
 import ServiceViewModal from '@/components/admin/services/ServiceViewModal'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
@@ -13,7 +14,8 @@ import { clinicService } from '@/services/clinic.service'
 import { serviceService } from '@/services/service.service'
 import { specialtyService } from '@/services/specialty.service'
 import type { SpecialtyBrowseItem } from '@/services/specialty.service'
-import type { ServiceFormData, ServiceItem } from '@/types'
+import type { ServiceFormData, ServiceItem, ServicePackageType } from '@/types'
+import { formatAdminValue } from '@/utils/adminDisplay'
 import { formatPrice } from '@/utils/format'
 
 interface SpecialtyDoctorItem {
@@ -24,12 +26,23 @@ interface SpecialtyDoctorItem {
 }
 
 type ServiceTab = 'all' | 'packages' | 'regular'
+type PackageFilter = 'all' | ServicePackageType
 
 const DOI_TUONG_LABEL: Record<string, string> = {
   tre_em: 'Trẻ em',
   nguoi_lon: 'Người lớn',
   gia_dinh: 'Gia đình',
   khong_gioi_han: 'Không giới hạn',
+}
+
+const PACKAGE_TYPE_LABEL: Record<ServicePackageType, string> = {
+  goi_don: 'Gói đơn',
+  goi_gia_dinh: 'Gói gia đình',
+}
+
+const PACKAGE_TYPE_BADGE: Record<ServicePackageType, 'green' | 'red'> = {
+  goi_don: 'green',
+  goi_gia_dinh: 'red',
 }
 
 export default function ManageServiceSpecialtyDetail() {
@@ -48,10 +61,13 @@ export default function ManageServiceSpecialtyDetail() {
   const [reloadKey, setReloadKey] = useState(0)
   const [doctorPage, setDoctorPage] = useState(1)
   const [servicePage, setServicePage] = useState(1)
+  const [packageFilter, setPackageFilter] = useState<PackageFilter>('all')
 
   const [formTarget, setFormTarget] = useState<ServiceItem | 'new' | null>(null)
   const [viewTarget, setViewTarget] = useState<ServiceItem | null>(null)
   const [viewLoading, setViewLoading] = useState(false)
+  const [historyTarget, setHistoryTarget] = useState<ServiceItem | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [toggleTarget, setToggleTarget] = useState<ServiceItem | null>(null)
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
@@ -158,18 +174,38 @@ export default function ManageServiceSpecialtyDetail() {
     }
   }
 
+  async function handleHistory(service: ServiceItem) {
+    setHistoryTarget(service)
+    setHistoryLoading(true)
+
+    try {
+      const fullService = await serviceService.getById(service.id)
+      setHistoryTarget(fullService)
+    } catch {
+      showToast('KhÃ´ng thá»ƒ táº£i lá»‹ch sá»­ thao tÃ¡c', 'error')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
   function handleEditFromView(service: ServiceItem) {
     setViewTarget(null)
     setFormTarget(service)
   }
 
   const filteredServices = services.filter((service) => {
-    if (activeTab === 'packages') return service.la_goi === true
+    if (activeTab === 'packages') {
+      if (service.la_goi !== true) return false
+      if (packageFilter !== 'all') return service.loai_goi === packageFilter
+      return true
+    }
     if (activeTab === 'regular') return service.la_goi !== true
     return true
   })
 
   const packageCount = services.filter((service) => service.la_goi === true).length
+  const singlePackageCount = services.filter((service) => service.la_goi === true && service.loai_goi === 'goi_don').length
+  const familyPackageCount = services.filter((service) => service.la_goi === true && service.loai_goi === 'goi_gia_dinh').length
   const regularCount = services.filter((service) => service.la_goi !== true).length
   const doctorTotalPages = Math.max(1, Math.ceil(doctors.length / doctorItemsPerPage))
   const serviceTotalPages = Math.max(1, Math.ceil(filteredServices.length / serviceItemsPerPage))
@@ -182,7 +218,13 @@ export default function ManageServiceSpecialtyDetail() {
 
   useEffect(() => {
     setServicePage(1)
-  }, [activeTab, specialty?.id, filteredServices.length])
+  }, [activeTab, packageFilter, specialty?.id, filteredServices.length])
+
+  useEffect(() => {
+    if (activeTab !== 'packages') {
+      setPackageFilter('all')
+    }
+  }, [activeTab])
 
   useEffect(() => {
     if (doctorPage > doctorTotalPages) {
@@ -242,12 +284,20 @@ export default function ManageServiceSpecialtyDetail() {
           ← Quay lại Quản lý dịch vụ
         </button>
 
-        <PageHeader title={`${specialty.icon_url} ${specialty.ten}`} description={specialty.mo_ta}>
-          <button onClick={() => setFormTarget('new')} className="btn-primary flex items-center gap-1.5">
-            <Icon name="plus" className="h-4 w-4" />
-            {activeTab === 'packages' ? 'Thêm gói dịch vụ' : 'Thêm dịch vụ'}
-          </button>
-        </PageHeader>
+        <PageHeader title={specialty.ten} description={specialty.mo_ta} />
+
+        <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          {[
+            { label: 'Gói đơn', value: singlePackageCount, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100' },
+            { label: 'Gói gia đình', value: familyPackageCount, tone: 'bg-rose-50 text-rose-700 ring-rose-100' },
+            { label: 'Dịch vụ lẻ', value: regularCount, tone: 'bg-amber-50 text-amber-700 ring-amber-100' },
+          ].map((item) => (
+            <div key={item.label} className={`rounded-lg px-4 py-3 ring-1 ${item.tone}`}>
+              <div className="font-mono text-2xl font-semibold tabular-nums">{item.value}</div>
+              <div className="mt-1 text-xs font-medium">{item.label}</div>
+            </div>
+          ))}
+        </div>
 
         <div className="card mb-6 overflow-hidden">
           <div className="border-b bg-slate-50 px-4 py-3">
@@ -365,33 +415,64 @@ export default function ManageServiceSpecialtyDetail() {
           ))}
         </div>
 
+        {activeTab === 'packages' && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-white p-2 shadow-sm ring-1 ring-slate-200">
+            {[
+              ['all', `Tất cả gói (${packageCount})`],
+              ['goi_don', `Gói đơn (${singlePackageCount})`],
+              ['goi_gia_dinh', `Gói gia đình (${familyPackageCount})`],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPackageFilter(value as PackageFilter)}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  packageFilter === value
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="card overflow-hidden">
-          <div className="border-b bg-slate-50 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-700">
-              {activeTab === 'packages'
-                ? `Gói dịch vụ (${filteredServices.length})`
-                : activeTab === 'regular'
-                  ? `Dịch vụ lẻ (${filteredServices.length})`
-                  : `Dịch vụ liên quan (${filteredServices.length})`}
-            </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50 px-4 py-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">
+                {activeTab === 'packages'
+                  ? `Gói dịch vụ (${filteredServices.length})`
+                  : activeTab === 'regular'
+                    ? `Dịch vụ lẻ (${filteredServices.length})`
+                    : `Dịch vụ liên quan (${filteredServices.length})`}
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Quản lý nội dung, hình ảnh, giá tham khảo và trạng thái hiển thị của từng dịch vụ.
+              </p>
+            </div>
+            <button onClick={() => setFormTarget('new')} className="btn-primary h-9 px-3 text-xs">
+              <Icon name="plus" className="h-4 w-4" />
+              Thêm dịch vụ
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Mã DV
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="min-w-[380px] px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
                     Tên dịch vụ
                   </th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-500">
                     Giá
                   </th>
                   <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
                     Trạng thái
                   </th>
-                  <th className="px-4 py-3" />
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Thao tác
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -410,26 +491,49 @@ export default function ManageServiceSpecialtyDetail() {
                   const dim = service.status === 'inactive' ? 'opacity-40' : ''
                   return (
                     <tr key={service.id} className="hover:bg-slate-50">
-                      <td className={`px-4 py-3 font-mono text-xs text-slate-500 ${dim}`}>
-                        {service.ma_dich_vu}
-                      </td>
                       <td className={`px-4 py-3 ${dim}`}>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="font-medium text-slate-800">{service.ten}</div>
-                          {service.la_goi && <Badge color="blue">Gói</Badge>}
-                          {service.la_goi && service.doi_tuong_ap_dung && (
-                            <Badge color="yellow">
-                              {DOI_TUONG_LABEL[service.doi_tuong_ap_dung] ?? service.doi_tuong_ap_dung}
-                            </Badge>
-                          )}
-                        </div>
-                        {service.mo_ta_ngan && (
-                          <div className="mt-0.5 line-clamp-1 text-xs text-slate-400">
-                            {service.mo_ta_ngan}
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+                            {service.image_url ? (
+                              <img src={service.image_url} alt={service.ten} className="h-full w-full object-cover" />
+                            ) : (
+                              <Icon name="service" className="h-5 w-5" />
+                            )}
                           </div>
-                        )}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs text-slate-500">{service.ma_dich_vu}</span>
+                              <div className="font-medium text-slate-900">{service.ten}</div>
+                              {service.la_goi && service.loai_goi && (
+                                <Badge color={PACKAGE_TYPE_BADGE[service.loai_goi] ?? 'blue'}>
+                                  {PACKAGE_TYPE_LABEL[service.loai_goi] ?? formatAdminValue('loai_goi', service.loai_goi)}
+                                </Badge>
+                              )}
+                              {service.la_goi && service.doi_tuong_ap_dung && (
+                                <Badge color="yellow">
+                                  {DOI_TUONG_LABEL[service.doi_tuong_ap_dung] ?? formatAdminValue('doi_tuong_ap_dung', service.doi_tuong_ap_dung)}
+                                </Badge>
+                              )}
+                              {service.la_goi && service.so_nguoi_ap_dung && (
+                                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                  {service.so_nguoi_ap_dung} người
+                                </span>
+                              )}
+                            </div>
+                            {service.mo_ta_ngan && (
+                              <div className="mt-1 line-clamp-1 text-xs text-slate-500">
+                                {service.mo_ta_ngan}
+                              </div>
+                            )}
+                            {service.la_goi && service.phan_tram_giam_gia != null && service.phan_tram_giam_gia > 0 && (
+                              <div className="mt-1 text-xs text-emerald-600">
+                                Giảm {service.phan_tram_giam_gia}% so với giá lẻ tương ứng
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </td>
-                      <td className={`px-4 py-3 font-semibold text-slate-800 ${dim}`}>
+                      <td className={`px-4 py-3 text-right font-semibold text-slate-800 ${dim}`}>
                         {formatPrice(service.gia)}
                       </td>
                       <td className={`px-4 py-3 ${dim}`}>
@@ -438,29 +542,35 @@ export default function ManageServiceSpecialtyDetail() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
+                        <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                          <ActionIconButton
+                            label="Xem chi tiết"
+                            icon="eye"
                             onClick={() => handleView(service)}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600"
-                          >
-                            Xem
-                          </button>
-                          <button
+                            className="hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600"
+                          />
+                          <ActionIconButton
+                            label="Lịch sử chỉnh sửa"
+                            icon="clock"
+                            onClick={() => handleHistory(service)}
+                            className="hover:border-violet-300 hover:bg-violet-50 hover:text-violet-600"
+                          />
+                          <ActionIconButton
+                            label="Sửa dịch vụ"
+                            icon="edit"
                             onClick={() => setFormTarget(service)}
-                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
-                          >
-                            Sửa
-                          </button>
-                          <button
+                            className="hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+                          />
+                          <ActionIconButton
+                            label={service.status === 'active' ? 'Ẩn dịch vụ' : 'Hiện dịch vụ'}
+                            icon={service.status === 'active' ? 'eye-off' : 'eye'}
                             onClick={() => setToggleTarget(service)}
-                            className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                            className={
                               service.status === 'active'
-                                ? 'border-slate-200 bg-white text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                                ? 'hover:border-red-200 hover:bg-red-50 hover:text-red-600'
                                 : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
-                            }`}
-                          >
-                            {service.status === 'active' ? 'Ẩn' : 'Hiện'}
-                          </button>
+                            }
+                          />
                         </div>
                       </td>
                     </tr>
@@ -499,6 +609,13 @@ export default function ManageServiceSpecialtyDetail() {
           onEdit={handleEditFromView}
         />
 
+        <ServiceHistoryModal
+          open={historyTarget !== null}
+          service={historyTarget}
+          loading={historyLoading}
+          onClose={() => setHistoryTarget(null)}
+        />
+
         <ConfirmDialog
           open={toggleTarget !== null}
           title={toggleTarget?.status === 'active' ? 'Ẩn dịch vụ?' : 'Hiện dịch vụ?'}
@@ -514,5 +631,29 @@ export default function ManageServiceSpecialtyDetail() {
         />
       </div>
     </AdminAutoStagger>
+  )
+}
+
+function ActionIconButton({
+  label,
+  icon,
+  onClick,
+  className = '',
+}: {
+  label: string
+  icon: string
+  onClick: () => void
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-100 ${className}`}
+    >
+      <Icon name={icon} className="h-4 w-4" />
+    </button>
   )
 }

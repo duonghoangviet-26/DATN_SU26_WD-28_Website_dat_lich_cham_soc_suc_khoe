@@ -6,15 +6,13 @@ import BacSi from '../../models/BacSi.js'
 import DichVu from '../../models/DichVu.js'
 import HoaDon from '../../models/HoaDon.js'
 import ThanhToan from '../../models/ThanhToan.js'
-import HoanTien from '../../models/HoanTien.js'
-import CaiDatThanhToan from '../../models/CaiDatThanhToan.js'
 import { ok, fail } from '../../utils/response.js'
 import { emitAdminRealtime, emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
-const ADMIN_REFUND_SETTING_KEYS = ['hoan_tien_admin_huy', 'hoan_tien_admin_huy_khan_cap']
 const APPOINTMENT_LIST_LIMIT_MAX = 100
 const ACTIVE_OPERATIONAL_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress']
 const CLINIC_TIME_OFFSET_MS = 7 * 60 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
@@ -152,6 +150,7 @@ function buildSortedAppointmentIdsPipeline(query, skip, limit) {
 
 function getQuickFilterConditions(quickFilter) {
   const today = toDateOnly(new Date())
+  const tomorrow = new Date(today.getTime() + DAY_MS)
 
   switch (quickFilter) {
     case 'today':
@@ -161,7 +160,7 @@ function getQuickFilterConditions(quickFilter) {
       }
     case 'upcoming':
       return {
-        ngay_kham: { $gte: today },
+        ngay_kham: { $gte: tomorrow },
         status: { $in: ACTIVE_OPERATIONAL_STATUSES },
       }
     case 'unpaid':
@@ -623,23 +622,6 @@ async function nextCounterCode(session, keyPrefix, codePrefix, date) {
   return `${codePrefix}-${datePart}-${sequence}`
 }
 
-async function getAdminRefundPercent() {
-  const setting = await CaiDatThanhToan.findOne({
-    ten_cai_dat: { $in: ADMIN_REFUND_SETTING_KEYS },
-  }).lean()
-
-  if (!setting) {
-    return 100
-  }
-
-  const percent = Number(setting.gia_tri)
-  if (![0, 50, 80, 100].includes(percent)) {
-    throw new Error('Cau hinh hoan tien cua Admin khong hop le')
-  }
-
-  return percent
-}
-
 async function findInvoiceAndPaymentsForAppointment(appointmentId, session) {
   const invoice = await HoaDon.findOne({ appointment_id: appointmentId }).session(session)
 
@@ -654,8 +636,8 @@ async function findInvoiceAndPaymentsForAppointment(appointmentId, session) {
   return { invoice, payments }
 }
 
-async function syncRefundForCancelledAppointment({ appointment, lyDoHuy, adminUserId, session }) {
-  const { invoice, payments } = await findInvoiceAndPaymentsForAppointment(appointment._id, session)
+async function syncPaymentForCancelledAppointment({ appointment, session }) {
+  const { payments } = await findInvoiceAndPaymentsForAppointment(appointment._id, session)
 
   if (appointment.payment_status !== 'paid') {
     for (const payment of payments) {
@@ -676,61 +658,8 @@ async function syncRefundForCancelledAppointment({ appointment, lyDoHuy, adminUs
     throw new Error('Khong tim thay ban ghi thanh toan da thu cua lich hen')
   }
 
-  const refundPercent = await getAdminRefundPercent()
-  const totalPaid = paidPayments.reduce((sum, payment) => sum + Number(payment.so_tien || 0), 0)
-  const refundAmount = Math.round((totalPaid * refundPercent) / 100)
-
-  for (const payment of paidPayments) {
-    payment.status = 'refunded'
-    payment.ngay_hoan_tien = new Date()
-    await payment.save({ session })
-  }
-
-  const existingRefund = await HoanTien.findOne({ appointment_id: appointment._id }).session(session)
-  if (existingRefund) {
-    existingRefund.payment_id = paidPayments[0]._id
-    existingRefund.so_tien_hoan = refundAmount
-    existingRefund.so_tien_da_thu = totalPaid
-    existingRefund.phi_huy = 0
-    existingRefund.chinh_sach_hoan = 'Hoan tien thu cong boi admin'
-    existingRefund.phan_tram_hoan = refundPercent
-    existingRefund.ly_do = lyDoHuy
-    existingRefund.ly_do_hoan = lyDoHuy
-    existingRefund.status = 'completed'
-    existingRefund.xu_ly_boi = adminUserId
-    existingRefund.nguoi_xu_ly_id = adminUserId
-    existingRefund.ngay_xu_ly = new Date()
-    existingRefund.thoi_diem_hoan_thanh = new Date()
-    await existingRefund.save({ session })
-  } else {
-    await HoanTien.create([{
-      payment_id: paidPayments[0]._id,
-      appointment_id: appointment._id,
-      so_tien_hoan: refundAmount,
-      so_tien_da_thu: totalPaid,
-      phi_huy: 0,
-      chinh_sach_hoan: 'Hoan tien thu cong boi admin',
-      phan_tram_hoan: refundPercent,
-      ly_do: lyDoHuy,
-      ly_do_hoan: lyDoHuy,
-      status: 'completed',
-      xu_ly_boi: adminUserId,
-      nguoi_xu_ly_id: adminUserId,
-      ngay_xu_ly: new Date(),
-      thoi_diem_hoan_thanh: new Date(),
-    }], { session })
-  }
-
-  if (invoice) {
-    invoice.trang_thai_hoa_don = 'chua_thanh_toan'
-    await invoice.save({ session })
-  }
-
-  const oldPaymentStatus = appointment.payment_status
-  appointment.payment_status = 'refunded'
-
   return {
-    oldPaymentStatus,
+    oldPaymentStatus: appointment.payment_status,
     newPaymentStatus: appointment.payment_status,
   }
 }
@@ -934,10 +863,8 @@ export async function cancelAppointment(req, res) {
     appointment.nguoi_huy_id = req.user.id
     appointment.thoi_diem_huy = new Date()
 
-    const { oldPaymentStatus, newPaymentStatus } = await syncRefundForCancelledAppointment({
+    const { oldPaymentStatus, newPaymentStatus } = await syncPaymentForCancelledAppointment({
       appointment,
-      lyDoHuy: appointment.ly_do_huy,
-      adminUserId: req.user.id,
       session,
     })
 
@@ -1262,8 +1189,8 @@ export async function getActiveDoctors(req, res) {
 export async function getActiveServices(req, res) {
   try {
     const { loai } = req.query
-    const filter = { status: 'active' }
-    if (loai) filter.loai = loai
+    if (loai === 'home') return ok(res, [])
+    const filter = { status: 'active', loai: 'related' }
 
     const services = await DichVu.find(filter)
       .sort({ ten: 1 })

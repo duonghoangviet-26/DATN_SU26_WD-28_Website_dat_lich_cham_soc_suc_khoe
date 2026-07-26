@@ -19,6 +19,7 @@ interface ExamResultModalProps {
   onClose: () => void
   onSaved?: (result: ExaminationResult) => void          // sau khi Lưu (mode edit)
   onConfirmed?: (appointmentStatus: AppointmentStatus) => void // sau khi Lưu & Xác nhận (mode confirm)
+  onRevisionRequested?: () => void // sau khi đánh dấu hồ sơ "cần chỉnh sửa" (mode confirm)
 }
 
 // Khối thông tin bệnh nhân — bác sĩ cần đủ dữ liệu lâm sàng (nhất là dị ứng/bệnh nền) để chẩn
@@ -55,7 +56,7 @@ function PatientInfoBlock({ appt, result }: { appt: DoctorAppointmentDetail; res
       </div>
       {result?.trieu_chung_ban_dau && (
         <div className="mt-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Triệu chứng (y tá ghi)</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Triệu chứng ban đầu</p>
           <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{result.trieu_chung_ban_dau}</p>
         </div>
       )}
@@ -63,14 +64,22 @@ function PatientInfoBlock({ appt, result }: { appt: DoctorAppointmentDetail; res
   )
 }
 
-export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved, onConfirmed }: ExamResultModalProps) {
+export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved, onConfirmed, onRevisionRequested }: ExamResultModalProps) {
   const [loading, setLoading] = useState(true)
   const [existing, setExisting] = useState<ExaminationResult | null>(null)
+  const [revisionReason, setRevisionReason] = useState('') // lý do đánh dấu hồ sơ "cần chỉnh sửa"
   const [chan_doan, setChanDoan] = useState('')
   const [huong_dan, setHuongDan] = useState('')
   const [ghi_chu, setGhiChu] = useState('')
   const [ngay_tai_kham, setNgayTaiKham] = useState('')
-  // Đơn thuốc không bắt buộc — mặc định rỗng, bác sĩ/y tá bấm "Thêm thuốc" khi cần (2026-07-16).
+  // Sinh hiệu ban đầu — bác sĩ tự đo/nhập ngay khi khám (không có API đọc lại nên để trống,
+  // gửi lên chỉ khi bác sĩ thực sự điền field nào đó).
+  const [can_nang, setCanNang] = useState('')
+  const [chieu_cao, setChieuCao] = useState('')
+  const [huyet_ap, setHuyetAp] = useState('')
+  const [nhiet_do, setNhietDo] = useState('')
+  const [nhip_tim, setNhipTim] = useState('')
+  // Đơn thuốc không bắt buộc — mặc định rỗng, bác sĩ bấm "Thêm thuốc" khi cần (2026-07-16).
   const [drugs, setDrugs] = useState<Omit<PrescriptionDrug, 'id'>[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,12 +114,22 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
   })()
 
   function buildPayload() {
+    const coSinhHieu = [can_nang, chieu_cao, huyet_ap, nhiet_do, nhip_tim].some((v) => v.trim() !== '')
     return {
       chan_doan,
       huong_dan_dieu_tri: huong_dan || null,
       ghi_chu: ghi_chu || null,
       ngay_tai_kham,
       thuoc: stripEmptyDrugs(drugs), // H2 — loại dòng thuốc rỗng trước khi gửi
+      ...(coSinhHieu ? {
+        sinh_hieu: {
+          can_nang: can_nang.trim() ? Number(can_nang) : null,
+          chieu_cao: chieu_cao.trim() ? Number(chieu_cao) : null,
+          huyet_ap: huyet_ap.trim() || null,
+          nhiet_do: nhiet_do.trim() ? Number(nhiet_do) : null,
+          nhip_tim: nhip_tim.trim() ? Number(nhip_tim) : null,
+        },
+      } : {}),
     }
   }
 
@@ -137,6 +156,24 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
       onConfirmed?.(updated.appointment_status)
     } catch {
       setError('Không thể lưu & xác nhận. Kiểm tra chẩn đoán/đơn thuốc (số ngày 1–90, giờ uống HH:MM) rồi thử lại.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // "Yêu cầu chỉnh sửa" — đánh dấu hồ sơ cần sửa lại kèm lý do (thay vì xác nhận luôn).
+  async function handleRequestRevision() {
+    if (!revisionReason.trim()) {
+      setError('Cần nêu lý do cần chỉnh sửa gì.')
+      return
+    }
+    setError(null)
+    setSaving(true)
+    try {
+      await doctorAppointmentService.requestRevision(appt.id, revisionReason.trim())
+      onRevisionRequested?.()
+    } catch {
+      setError('Không gửi được yêu cầu chỉnh sửa. Vui lòng thử lại.')
     } finally {
       setSaving(false)
     }
@@ -186,6 +223,39 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
               <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 <Icon name="alert-circle" className="h-4 w-4 shrink-0" />
                 {error}
+              </div>
+            )}
+
+            {!isReadOnly && (
+              <div>
+                <label className="input-label mb-2">Sinh hiệu ban đầu <span className="font-normal text-slate-400">(tùy chọn)</span></label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  <div>
+                    <label className="input-label text-[10px]">Cân nặng (kg)</label>
+                    <input type="number" min={0} step="0.1" className="input py-1.5 text-sm"
+                      value={can_nang} onChange={(e) => setCanNang(e.target.value)} placeholder="VD: 60" />
+                  </div>
+                  <div>
+                    <label className="input-label text-[10px]">Chiều cao (cm)</label>
+                    <input type="number" min={0} step="0.1" className="input py-1.5 text-sm"
+                      value={chieu_cao} onChange={(e) => setChieuCao(e.target.value)} placeholder="VD: 165" />
+                  </div>
+                  <div>
+                    <label className="input-label text-[10px]">Huyết áp</label>
+                    <input className="input py-1.5 text-sm"
+                      value={huyet_ap} onChange={(e) => setHuyetAp(e.target.value)} placeholder="VD: 120/80" />
+                  </div>
+                  <div>
+                    <label className="input-label text-[10px]">Nhiệt độ (°C)</label>
+                    <input type="number" min={0} step="0.1" className="input py-1.5 text-sm"
+                      value={nhiet_do} onChange={(e) => setNhietDo(e.target.value)} placeholder="VD: 37" />
+                  </div>
+                  <div>
+                    <label className="input-label text-[10px]">Nhịp tim (bpm)</label>
+                    <input type="number" min={0} className="input py-1.5 text-sm"
+                      value={nhip_tim} onChange={(e) => setNhipTim(e.target.value)} placeholder="VD: 75" />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -293,8 +363,24 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-slate-100 pt-1">
+            {/* Yêu cầu chỉnh sửa: đánh dấu hồ sơ cần sửa lại kèm lý do (song song với "Lưu & Xác nhận"). */}
+            {canConfirm && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+                <label className="input-label text-xs">Lý do cần chỉnh sửa <span className="font-normal text-slate-400">(điền nếu muốn đánh dấu hồ sơ này cần sửa lại)</span></label>
+                <textarea className="input resize-none bg-white" rows={2}
+                  value={revisionReason} onChange={(e) => setRevisionReason(e.target.value)}
+                  placeholder="VD: Bổ sung sinh hiệu, ghi rõ liều thuốc..." />
+              </div>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-3">
               <button type="button" onClick={onClose} className="btn-secondary">Đóng</button>
+              {canConfirm && (
+                <button type="button" onClick={handleRequestRevision} disabled={saving}
+                  className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 transition-colors">
+                  {saving ? 'Đang gửi...' : 'Yêu cầu chỉnh sửa'}
+                </button>
+              )}
               {!isReadOnly && (
                 <button type="submit" className="btn-primary" disabled={saving}>
                   {primaryLabel}

@@ -30,8 +30,8 @@ export default function Sidebar({ open, onClose }: Props) {
             </svg>
           </div>
           <div>
-            <p className="text-sm font-bold leading-tight text-slate-800">VitaFamily</p>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Admin Panel</p>
+            <p className="text-sm font-bold leading-tight text-slate-800">ViteFamily</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Khu vực quản trị</p>
           </div>
         </div>
 
@@ -71,7 +71,7 @@ export default function Sidebar({ open, onClose }: Props) {
 
         {/* Footer */}
         <div className="shrink-0 border-t border-slate-100 px-4 py-3">
-          <p className="text-[10px] text-slate-400">VitaFamily v1.0 · DATN SU26 WD-28</p>
+          <p className="text-[10px] text-slate-400">ViteFamily v1.0 · DATN SU26 WD-28</p>
         </div>
       </aside>
     </>

@@ -151,8 +151,8 @@ export const KET_QUA_KHAM_STATUS_COLOR: Record<string, BadgeColor> = {
 };
 
 // Nhãn trạng thái hồ sơ khám (KetQuaKhamStatus) — nguồn duy nhất, khớp KET_QUA_STATUS_LABEL
-// đang lặp lại độc lập ở NurseAppointmentDetail.tsx/DoctorAppointments.tsx/DoctorPendingRecords.tsx
-// (chưa thay các nơi đó — đó là việc của Kế hoạch 5, ở đây chỉ tạo nguồn dùng chung).
+// đang lặp lại độc lập ở DoctorAppointments.tsx/DoctorExamQueue.tsx (chưa hợp nhất các nơi đó,
+// ở đây chỉ tạo nguồn dùng chung).
 export const KET_QUA_KHAM_STATUS_LABEL: Record<string, string> = {
     ban_nhap: "Nháp",
     cho_xac_nhan: "Chờ bác sĩ xác nhận",
@@ -181,6 +181,18 @@ export const SCHEDULE_DAY_STATUS_COLOR: Record<string, BadgeColor> = {
     lam_viec: "green",
     nghi: "gray",
     nghi_phep: "red",
+};
+
+// Loại slot (LichLamViec.slots.loai_slot) — phân bổ online/walk-in trong mỗi khung 30' theo
+// tỷ lệ cấu hình ở ChuyenKhoa.ty_le_online_phan_tram. Thiếu field (dữ liệu cũ) = 'online'.
+export const SLOT_LOAI_LABEL: Record<"online" | "walk_in", string> = {
+    online: "Online",
+    walk_in: "Tại chỗ",
+};
+
+export const SLOT_LOAI_COLOR: Record<"online" | "walk_in", BadgeColor> = {
+    online: "blue",
+    walk_in: "gray",
 };
 
 // Trạng thái yêu cầu nghỉ (DoctorLeaveRequest.trang_thai) — khớp STATUS_COLOR cũ trong DoctorLeaveRequests.

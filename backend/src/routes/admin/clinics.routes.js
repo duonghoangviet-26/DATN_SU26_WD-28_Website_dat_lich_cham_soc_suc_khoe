@@ -10,6 +10,13 @@ import {
   getClinicLogs,
   getCurrentClinicLogs,
 } from '../../controllers/admin/clinic-info.controller.js'
+import {
+  createRoom,
+  deleteRoom,
+  getRoomOptions,
+  getRooms,
+  updateRoom,
+} from '../../controllers/admin/clinic-room.controller.js'
 import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js'
 
 const router = Router()
@@ -19,6 +26,12 @@ router.use(verifyToken, requireRole('admin'))
 router.get('/current', getCurrentClinic)
 router.get('/current/logs', getCurrentClinicLogs)
 router.put('/current', upsertCurrentClinic)
+
+router.get('/rooms/options', getRoomOptions)
+router.get('/rooms', getRooms)
+router.post('/rooms', createRoom)
+router.put('/rooms/:id', updateRoom)
+router.delete('/rooms/:id', deleteRoom)
 
 router.get('/', getAllClinics)
 router.post('/', createClinic)

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 
 import Icon from '@/components/admin/icons'
+import { clinicService } from '@/services/clinic.service'
 import { specialtyService } from '@/services/specialty.service'
-import type { ServiceFormData, ServiceItem, ServiceTargetAudience } from '@/types'
+import type { ServiceFormData, ServiceItem, ServicePackageType, ServiceTargetAudience } from '@/types'
 
 const EMPTY_FORM: ServiceFormData = {
   ten: '',
@@ -10,10 +11,15 @@ const EMPTY_FORM: ServiceFormData = {
   gia: 0,
   mo_ta_ngan: '',
   mo_ta: '',
+  image_url: '',
   chuan_bi_truoc: '',
   specialty_id: null,
   la_goi: false,
   doi_tuong_ap_dung: null,
+  loai_goi: null,
+  so_nguoi_ap_dung: null,
+  dich_vu_con: [],
+  phan_tram_giam_gia: null,
   khu_vuc: [],
 }
 
@@ -22,6 +28,11 @@ const DOI_TUONG_OPTIONS: { value: ServiceTargetAudience; label: string }[] = [
   { value: 'nguoi_lon', label: 'Người lớn' },
   { value: 'gia_dinh', label: 'Gia đình' },
   { value: 'khong_gioi_han', label: 'Không giới hạn' },
+]
+
+const LOAI_GOI_OPTIONS: { value: ServicePackageType; label: string; hint: string }[] = [
+  { value: 'goi_don', label: 'Gói đơn', hint: 'Áp dụng cho một người, phù hợp gói cá nhân.' },
+  { value: 'goi_gia_dinh', label: 'Gói gia đình', hint: 'Áp dụng cho nhiều thành viên, có mức giảm theo nhóm.' },
 ]
 
 function validate(data: ServiceFormData): Record<string, string> {
@@ -43,12 +54,31 @@ function validate(data: ServiceFormData): Record<string, string> {
     errors.chuan_bi_truoc = 'Hướng dẫn chuẩn bị không vượt quá 1000 ký tự'
   }
 
+  if (data.la_goi) {
+    if (!data.loai_goi) errors.loai_goi = 'Vui lòng chọn loại gói'
+    if (data.loai_goi === 'goi_gia_dinh') {
+      if (!data.so_nguoi_ap_dung || data.so_nguoi_ap_dung < 2) {
+        errors.so_nguoi_ap_dung = 'Gói gia đình cần ít nhất 2 người'
+      }
+    }
+    if (data.loai_goi === 'goi_don' && data.so_nguoi_ap_dung && data.so_nguoi_ap_dung !== 1) {
+      errors.so_nguoi_ap_dung = 'Gói đơn chỉ áp dụng cho 1 người'
+    }
+    if (data.phan_tram_giam_gia != null && (data.phan_tram_giam_gia < 0 || data.phan_tram_giam_gia > 90)) {
+      errors.phan_tram_giam_gia = 'Phần trăm giảm giá phải từ 0 đến 90'
+    }
+  }
+
   if (data.mo_ta_ngan && data.mo_ta_ngan.length > 500) {
     errors.mo_ta_ngan = 'Mô tả ngắn không vượt quá 500 ký tự'
   }
 
   if (data.mo_ta && data.mo_ta.length > 5000) {
     errors.mo_ta = 'Mô tả không vượt quá 5000 ký tự'
+  }
+
+  if (data.image_url && data.image_url.trim().length > 500) {
+    errors.image_url = 'Đường dẫn ảnh không vượt quá 500 ký tự'
   }
 
   return errors
@@ -74,6 +104,7 @@ export default function ServiceFormModal({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [changeNote, setChangeNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [specialties, setSpecialties] = useState<{ id: string; ten: string }[]>([])
 
   useEffect(() => {
@@ -90,10 +121,15 @@ export default function ServiceFormModal({
         gia: service.gia,
         mo_ta_ngan: service.mo_ta_ngan ?? '',
         mo_ta: service.mo_ta ?? '',
+        image_url: service.image_url ?? '',
         chuan_bi_truoc: service.chuan_bi_truoc ?? '',
         specialty_id: service.specialty_id ?? null,
         la_goi: service.la_goi ?? false,
         doi_tuong_ap_dung: service.doi_tuong_ap_dung ?? null,
+        loai_goi: service.loai_goi ?? null,
+        so_nguoi_ap_dung: service.so_nguoi_ap_dung ?? null,
+        dich_vu_con: service.dich_vu_con ?? [],
+        phan_tram_giam_gia: service.phan_tram_giam_gia ?? null,
         khu_vuc: [],
       })
     } else {
@@ -105,6 +141,7 @@ export default function ServiceFormModal({
 
     setErrors({})
     setChangeNote('')
+    setUploadingImage(false)
   }, [open, service, initialSpecialtyId])
 
   function setField(field: keyof ServiceFormData, value: unknown) {
@@ -115,6 +152,22 @@ export default function ServiceFormModal({
         delete next[field]
         return next
       })
+    }
+  }
+
+  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setUploadingImage(true)
+    try {
+      const url = await clinicService.uploadImage(file)
+      setField('image_url', url)
+    } catch {
+      setErrors((current) => ({ ...current, image_url: 'Không thể tải ảnh lên. Vui lòng thử lại.' }))
+    } finally {
+      setUploadingImage(false)
     }
   }
 
@@ -178,17 +231,49 @@ export default function ServiceFormModal({
             />
           </FormField>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-              Phạm vi giao diện hiện tại
-            </p>
-            <p className="text-slate-700">
-              Admin hiện chỉ tạo và sửa <span className="font-semibold">dịch vụ liên quan theo chuyên khoa</span>.
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Tùy chọn dịch vụ khám tại nhà đã được tạm ẩn khỏi UI để không ảnh hưởng luồng đặt lịch phòng khám.
-            </p>
-          </div>
+          <FormField label="Hình ảnh dịch vụ" error={errors.image_url}>
+            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-400">
+                {form.image_url ? (
+                  <img src={form.image_url} alt={form.ten || 'Hình ảnh dịch vụ'} className="h-full w-full object-cover" />
+                ) : (
+                  <Icon name="image" className="h-7 w-7" />
+                )}
+              </div>
+              <div className="min-w-0 space-y-2">
+                <input
+                  type="url"
+                  value={form.image_url ?? ''}
+                  onChange={(event) => setField('image_url', event.target.value)}
+                  placeholder="https://..."
+                  maxLength={500}
+                  className={`input w-full ${errors.image_url ? 'border-red-300' : ''}`}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-100">
+                    <Icon name="image" className="h-3.5 w-3.5" />
+                    {uploadingImage ? 'Đang tải...' : 'Chọn ảnh'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      disabled={uploadingImage}
+                    />
+                  </label>
+                  {form.image_url && (
+                    <button
+                      type="button"
+                      onClick={() => setField('image_url', '')}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
+                    >
+                      Bỏ ảnh
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </FormField>
 
           <FormField label="Chuyên khoa liên quan" required error={errors.specialty_id}>
             <select
@@ -216,6 +301,10 @@ export default function ServiceFormModal({
                     ...current,
                     la_goi: checked,
                     doi_tuong_ap_dung: checked ? current.doi_tuong_ap_dung : null,
+                    loai_goi: checked ? current.loai_goi ?? 'goi_don' : null,
+                    so_nguoi_ap_dung: checked ? current.so_nguoi_ap_dung ?? 1 : null,
+                    phan_tram_giam_gia: checked ? current.phan_tram_giam_gia ?? 0 : null,
+                    dich_vu_con: checked ? current.dich_vu_con ?? [] : [],
                   }))
                 }}
                 className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-200"
@@ -228,6 +317,71 @@ export default function ServiceFormModal({
               </span>
             </label>
           </div>
+
+          {form.la_goi && (
+            <div className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2">
+              <FormField label="Loại gói" required error={errors.loai_goi}>
+                <div className="grid gap-2">
+                  {LOAI_GOI_OPTIONS.map((option) => (
+                    <label
+                      key={option.value}
+                      className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        form.loai_goi === option.value
+                          ? 'border-brand-300 bg-brand-50 text-brand-700'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        value={option.value}
+                        checked={form.loai_goi === option.value}
+                        onChange={() => {
+                          const nextType = option.value
+                          setForm((current) => ({
+                            ...current,
+                            loai_goi: nextType,
+                            so_nguoi_ap_dung: nextType === 'goi_don' ? 1 : Math.max(current.so_nguoi_ap_dung ?? 3, 2),
+                            doi_tuong_ap_dung: nextType === 'goi_gia_dinh' ? 'gia_dinh' : current.doi_tuong_ap_dung,
+                            phan_tram_giam_gia: nextType === 'goi_gia_dinh'
+                              ? current.phan_tram_giam_gia ?? 15
+                              : current.phan_tram_giam_gia ?? 0,
+                          }))
+                        }}
+                        className="sr-only"
+                      />
+                      <span className="block font-semibold">{option.label}</span>
+                      <span className="mt-0.5 block text-xs opacity-75">{option.hint}</span>
+                    </label>
+                  ))}
+                </div>
+              </FormField>
+
+              <div className="grid gap-4">
+                <FormField label="Số người áp dụng" required error={errors.so_nguoi_ap_dung}>
+                  <input
+                    type="number"
+                    value={form.so_nguoi_ap_dung ?? ''}
+                    onChange={(event) => setField('so_nguoi_ap_dung', Math.floor(Number(event.target.value)))}
+                    min={form.loai_goi === 'goi_gia_dinh' ? 2 : 1}
+                    max={12}
+                    disabled={form.loai_goi === 'goi_don'}
+                    className={`input w-full ${errors.so_nguoi_ap_dung ? 'border-red-300' : ''}`}
+                  />
+                </FormField>
+
+                <FormField label="Phần trăm giảm giá" error={errors.phan_tram_giam_gia}>
+                  <input
+                    type="number"
+                    value={form.phan_tram_giam_gia ?? ''}
+                    onChange={(event) => setField('phan_tram_giam_gia', Math.floor(Number(event.target.value)))}
+                    min={0}
+                    max={90}
+                    className={`input w-full ${errors.phan_tram_giam_gia ? 'border-red-300' : ''}`}
+                  />
+                </FormField>
+              </div>
+            </div>
+          )}
 
           <FormField label="Đối tượng áp dụng">
             <select

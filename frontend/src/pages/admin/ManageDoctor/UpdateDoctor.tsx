@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { doctorService } from '@/services/doctor.service'
+import { clinicService } from '@/services/clinic.service'
 import type { DoctorProfileAPI, DoctorDetailAPI, DoctorUpdatePayload } from '@/types'
 import Icon from '@/components/admin/icons'
 
@@ -24,6 +25,8 @@ export default function UpdateDoctor({ doctor, onClose, onSuccess }: Props) {
   const [soNam, setSoNam] = useState(0)
   const [phiTuVan, setPhiTuVan] = useState(0)
   const [laHien, setLaHien] = useState(true)
+  const [anhDaiDien, setAnhDaiDien] = useState<string | null>(doctor.user_id.anh_dai_dien || null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   // Fetch full details first to populate form accurately
   useEffect(() => {
@@ -37,6 +40,7 @@ export default function UpdateDoctor({ doctor, onClose, onSuccess }: Props) {
           setSoNam(detail.so_nam_kinh_nghiem || 0)
           setPhiTuVan(detail.phi_kham || 0)
           setLaHien(detail.la_hien ?? true)
+          setAnhDaiDien(detail.user_id.anh_dai_dien || null)
           setFetching(false)
         }
       })
@@ -48,6 +52,23 @@ export default function UpdateDoctor({ doctor, onClose, onSuccess }: Props) {
       })
     return () => { ignore = true }
   }, [doctor._id])
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    setUploadingAvatar(true)
+    setError('')
+    try {
+      const url = await clinicService.uploadImage(file)
+      setAnhDaiDien(url)
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err.message || 'Tải ảnh đại diện thất bại')
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -61,6 +82,7 @@ export default function UpdateDoctor({ doctor, onClose, onSuccess }: Props) {
       so_nam_kinh_nghiem: Number(soNam),
       phi_kham: Number(phiTuVan),
       la_hien: laHien,
+      anh_dai_dien: anhDaiDien,
       admin_id: CURRENT_ADMIN_ID
     }
 
@@ -98,6 +120,33 @@ export default function UpdateDoctor({ doctor, onClose, onSuccess }: Props) {
             )}
 
             <div className="space-y-4">
+              <div className="flex items-center gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-white">
+                  {anhDaiDien ? (
+                    <img src={anhDaiDien} alt={doctor.user_id.ho_ten} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-brand-600">
+                      {(doctor.user_id.ho_ten || 'B').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Ảnh đại diện</label>
+                  <div className="flex flex-wrap gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                      <Icon name="image" className="h-4 w-4" />
+                      {uploadingAvatar ? 'Đang tải...' : 'Chọn ảnh'}
+                      <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={uploadingAvatar} />
+                    </label>
+                    {anhDaiDien && (
+                      <button type="button" onClick={() => setAnhDaiDien(null)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">
+                        Xóa ảnh
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Số năm kinh nghiệm</label>

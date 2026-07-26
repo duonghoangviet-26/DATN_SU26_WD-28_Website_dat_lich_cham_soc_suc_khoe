@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { doctorService } from '@/services/doctor.service'
 import type { DoctorDetailAPI, DoctorAuditLog, DoctorApproval, DoctorAppointmentHistory } from '@/types'
 import { DOCTOR_APPROVAL_LABEL, APPOINTMENT_STATUS_LABEL } from '@/utils/constants'
+import { formatAdminActionLabel, formatAdminFieldLabel, formatAdminValue } from '@/utils/adminDisplay'
 import { formatPrice, formatDateTime, formatDate } from '@/utils/format'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
@@ -20,6 +21,40 @@ const ACTION_LABEL_MAP: Record<string, string> = {
   REJECT_DOCTOR: 'Từ chối hồ sơ',
   SUSPEND_DOCTOR: 'Tạm ngưng tài khoản',
   UPDATE_INFO: 'Cập nhật thông tin',
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  anh_dai_dien: 'Ảnh đại diện',
+  tieu_su: 'Tiểu sử',
+  bang_cap: 'Bằng cấp',
+  kinh_nghiem: 'Kinh nghiệm',
+  so_nam_kinh_nghiem: 'Số năm kinh nghiệm',
+  phi_tu_van: 'Phí tư vấn',
+  phi_kham: 'Phí khám',
+  la_hien: 'Hiển thị công khai',
+  phong_kham_mac_dinh: 'Phòng khám mặc định',
+  chi_nhanh_id: 'Chi nhánh',
+  trang_thai: 'Trạng thái làm việc',
+  trang_thai_duyet: 'Trạng thái duyệt',
+  ly_do_tu_choi: 'Lý do từ chối',
+  specialties: 'Chuyên khoa',
+  services: 'Dịch vụ',
+}
+
+const formatLogValue = (field: string, value: unknown) => {
+  if (value === null || value === undefined || value === '') return 'Trống'
+  if (field === 'anh_dai_dien') return value ? 'Có ảnh' : 'Không có ảnh'
+  if (field === 'phi_kham' || field === 'phi_tu_van') return formatPrice(Number(value))
+  if (field === 'trang_thai_duyet') return DOCTOR_APPROVAL_LABEL[value as DoctorApproval] || formatAdminValue(field, value)
+  if (field === 'la_hien' || typeof value === 'boolean') return value ? 'Có' : 'Không'
+  return formatAdminValue(field, value)
+}
+
+const getChangedFields = (log: DoctorAuditLog) => {
+  const oldData = log.du_lieu_cu || {}
+  const newData = log.du_lieu_moi || {}
+  const keys = Array.from(new Set([...Object.keys(oldData), ...Object.keys(newData)]))
+  return keys.filter((key) => JSON.stringify(oldData[key] ?? null) !== JSON.stringify(newData[key] ?? null))
 }
 
 interface Props {
@@ -269,6 +304,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                         const isApprove = log.hanh_dong === 'APPROVE_DOCTOR' || log.hanh_dong === 'RESTORE_DOCTOR'
                         const isReject = log.hanh_dong === 'REJECT_DOCTOR'
                         const isSuspend = log.hanh_dong === 'SUSPEND_DOCTOR'
+                        const changedFields = getChangedFields(log)
                         
                         let icon = 'check'
                         let bg = 'bg-green-100 text-green-600'
@@ -284,15 +320,37 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                               <div className="flex justify-between items-start mb-2">
                                 <div>
                                   <p className="font-semibold text-slate-800 text-sm">
-                                    {ACTION_LABEL_MAP[log.hanh_dong] || log.hanh_dong}
+                                    {ACTION_LABEL_MAP[log.hanh_dong] || formatAdminActionLabel(log.hanh_dong)}
                                   </p>
-                                  <p className="text-xs text-slate-500 mt-0.5">Bởi: {log.nguoi_thuc_hien_id?.ho_ten || 'Admin ẩn'}</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">Bởi: {log.nguoi_thuc_hien_id?.ho_ten || 'Quản trị viên ẩn danh'}</p>
                                 </div>
                                 <span className="text-xs text-slate-400 whitespace-nowrap">{formatDateTime(log.ngay_tao)}</span>
                               </div>
                               {log.ly_do && (
                                 <div className="mt-2 text-sm bg-slate-50 p-2.5 rounded text-slate-700 border border-slate-100">
                                   <strong>Lý do:</strong> {log.ly_do}
+                                </div>
+                              )}
+                              {changedFields.length > 0 && (
+                                <div className="mt-3 overflow-hidden rounded-lg border border-slate-100">
+                                  <table className="w-full text-xs">
+                                    <thead className="bg-slate-50 text-slate-500">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left font-semibold">Trường</th>
+                                        <th className="px-3 py-2 text-left font-semibold">Trước</th>
+                                        <th className="px-3 py-2 text-left font-semibold">Sau</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 bg-white">
+                                      {changedFields.map((field) => (
+                                        <tr key={field}>
+                                          <td className="px-3 py-2 font-semibold text-slate-600">{FIELD_LABELS[field] || formatAdminFieldLabel(field)}</td>
+                                          <td className="max-w-[180px] break-words px-3 py-2 text-red-500 line-through">{formatLogValue(field, log.du_lieu_cu?.[field])}</td>
+                                          <td className="max-w-[180px] break-words px-3 py-2 font-semibold text-emerald-600">{formatLogValue(field, log.du_lieu_moi?.[field])}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
                                 </div>
                               )}
                             </div>
@@ -359,7 +417,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                                   </td>
                                   <td className="px-5 py-3 whitespace-nowrap">
                                     <Badge color={STATUS_COLOR[apt.status] || 'gray'}>
-                                      {APPOINTMENT_STATUS_LABEL[apt.status] || apt.status}
+                                      {APPOINTMENT_STATUS_LABEL[apt.status] || formatAdminValue('status', apt.status)}
                                     </Badge>
                                   </td>
                                   <td className="px-5 py-3 whitespace-nowrap text-right font-medium text-slate-700">

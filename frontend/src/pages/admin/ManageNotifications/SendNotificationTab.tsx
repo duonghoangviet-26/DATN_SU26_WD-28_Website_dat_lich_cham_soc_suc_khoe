@@ -13,7 +13,6 @@ const TARGET_COLOR: Record<NotificationTargetAPI, 'gray' | 'blue' | 'green' | 'y
   benh_nhan: 'blue',
   bac_si: 'green',
   le_tan: 'yellow',
-  y_ta: 'green',
 }
 
 const TARGET_LABEL: Record<NotificationTargetAPI, string> = {
@@ -21,14 +20,12 @@ const TARGET_LABEL: Record<NotificationTargetAPI, string> = {
   benh_nhan: 'Bệnh nhân',
   bac_si: 'Bác sĩ',
   le_tan: 'Lễ tân',
-  y_ta: 'Y tá',
 }
 
 const TARGET_ROLE: Partial<Record<NotificationTargetAPI, string>> = {
   benh_nhan: 'user',
   bac_si: 'doctor',
   le_tan: 'receptionist',
-  y_ta: 'nurse',
 }
 
 interface RecipientOption {
@@ -99,12 +96,14 @@ export default function SendNotificationTab() {
         setTotalPages(pagination.totalPages)
         setTotalRecords(pagination.total)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       if (!ignore) setLoading(false)
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let ignore = false
     loadData(ignore)
@@ -251,11 +250,11 @@ export default function SendNotificationTab() {
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-                {sendMethod === 'email' ? 'Tiêu đề Email (Subject)' : 'Tiêu đề thông báo'}
+                {sendMethod === 'email' ? 'Tiêu đề email' : 'Tiêu đề thông báo'}
               </label>
               <input
                 className="input bg-slate-50 border-slate-200 focus:bg-white transition-colors"
-                placeholder={sendMethod === 'email' ? "Nhập tiêu đề Email..." : "Nhập tiêu đề ngắn gọn..."}
+                placeholder={sendMethod === 'email' ? "Nhập tiêu đề email..." : "Nhập tiêu đề ngắn gọn..."}
                 value={tieu_de}
                 onChange={(e) => setTieuDe(e.target.value)}
               />
@@ -267,11 +266,10 @@ export default function SendNotificationTab() {
                 value={doi_tuong} 
                 onChange={(e) => setDoiTuong(e.target.value as NotificationTargetAPI)}
               >
-                <option value="tat_ca">Tất cả (Bệnh nhân, Bác sĩ, Lễ tân & Y tá)</option>
+                <option value="tat_ca">Tất cả (Bệnh nhân, Bác sĩ & Lễ tân)</option>
                 <option value="benh_nhan">Chỉ Bệnh nhân</option>
                 <option value="bac_si">Chỉ Bác sĩ</option>
                 <option value="le_tan">Chỉ Lễ tân</option>
-                <option value="y_ta">Chỉ Y tá</option>
               </select>
             </div>
           </div>
@@ -306,7 +304,7 @@ export default function SendNotificationTab() {
                   {loadingRecipients ? (
                     <p className="text-sm text-slate-500">Đang tải danh sách người nhận...</p>
                   ) : recipientOptions.length === 0 ? (
-                    <p className="text-sm text-slate-500">Không có người nhận active cho nhóm này.</p>
+                    <p className="text-sm text-slate-500">Không có người nhận đang hoạt động trong nhóm này.</p>
                   ) : (
                     <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white">
                       {recipientOptions.map((recipient) => {
@@ -345,14 +343,14 @@ export default function SendNotificationTab() {
                 onClick={() => setSendMethod('web')}
                 className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-all ${sendMethod === 'web' ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
               >
-                <Icon name="bell" className="w-4 h-4" /> Gửi qua Website
+                <Icon name="bell" className="w-4 h-4" /> Gửi qua website
               </button>
               <button
                 type="button"
                 onClick={() => setSendMethod('email')}
                 className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-all ${sendMethod === 'email' ? 'bg-white text-brand-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}
               >
-                <Icon name="mail" className="w-4 h-4" /> Gửi qua Email
+                <Icon name="mail" className="w-4 h-4" /> Gửi qua email
               </button>
             </div>
           </div>
@@ -361,19 +359,19 @@ export default function SendNotificationTab() {
             <div className="flex items-start gap-3 rounded-lg bg-green-50 border border-green-200 p-4 text-sm text-green-800">
               <Icon name="mail" className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold">Email sẽ được gửi thật qua Gmail đã cấu hình trong máy chủ.</p>
+                <p className="font-semibold">Email sẽ được gửi qua Gmail đã cấu hình trong máy chủ.</p>
               </div>
             </div>
           )}
 
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-              {sendMethod === 'email' ? 'Nội dung Email (Body)' : 'Nội dung chi tiết'}
+              {sendMethod === 'email' ? 'Nội dung email' : 'Nội dung chi tiết'}
             </label>
             <textarea
               className="input resize-none bg-slate-50 border-slate-200 focus:bg-white transition-colors"
               rows={4}
-              placeholder={sendMethod === 'email' ? "Nhập nội dung đầy đủ của Email..." : "Nhập nội dung đầy đủ của thông báo..."}
+              placeholder={sendMethod === 'email' ? "Nhập nội dung đầy đủ của email..." : "Nhập nội dung đầy đủ của thông báo..."}
               value={noi_dung}
               onChange={(e) => setNoiDung(e.target.value)}
             />
@@ -383,7 +381,7 @@ export default function SendNotificationTab() {
               {sendMethod === 'email' ? (
                 <>
                   <Icon name="mail" className="h-4 w-4 mr-2" />
-                  Gửi Email
+                  Gửi email
                 </>
               ) : (
                 <>
@@ -554,7 +552,7 @@ export default function SendNotificationTab() {
 
       {/* Modal Lịch sử sửa đổi */}
       {targetLogs && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl flex flex-col max-h-[85vh]">
             <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl shrink-0">
               <h3 className="text-lg font-bold text-slate-800">Lịch sử chỉnh sửa</h3>
@@ -580,7 +578,7 @@ export default function SendNotificationTab() {
                       </div>
                       <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-slate-200 bg-white shadow-sm">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-slate-800">{log.nguoi_thuc_hien_id?.ho_ten || 'Admin'}</span>
+                          <span className="font-bold text-slate-800">{log.nguoi_thuc_hien_id?.ho_ten || 'Quản trị viên'}</span>
                           <span className="text-xs font-medium text-slate-500">{formatDateTime(log.ngay_tao)}</span>
                         </div>
                         <div className="text-sm text-slate-600 mt-2 space-y-2">
