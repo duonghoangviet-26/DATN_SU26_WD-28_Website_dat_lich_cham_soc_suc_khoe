@@ -11,10 +11,35 @@ import {
 } from '../../realtime/socket.js'
 
 const VNPAY_SESSION_MINUTES = Number(process.env.VNPAY_SESSION_MINUTES || process.env.PAYMENT_HOLD_MINUTES || 15)
-const DEFAULT_CLIENT_BASE_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
+const DEFAULT_CLIENT_BASE_URL =
+  process.env.VNPAY_RETURN_CLIENT_URL ||
+  process.env.FRONTEND_URL ||
+  process.env.CLIENT_URL ||
+  'http://localhost:5173'
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
+}
+
+function buildClientUrl(path, params = {}) {
+  const url = new URL(path, DEFAULT_CLIENT_BASE_URL)
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value))
+    }
+  })
+  return url.toString()
+}
+
+function buildPaymentResultUrl({ status, payment = null, appointment = null, reason = null }) {
+  return buildClientUrl('/payment/vnpay-result', {
+    payment_status: status,
+    booked: status === 'success' ? 'true' : undefined,
+    id: appointment?._id || payment?.appointment_id,
+    appointment_id: appointment?._id || payment?.appointment_id,
+    payment_id: payment?._id,
+    reason,
+  })
 }
 
 function getGatewayResponseObject(payment) {
@@ -620,7 +645,7 @@ export async function vnpayReturn(req, res) {
     if (secureHash !== signed) {
       await session.abortTransaction()
       session.endSession()
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed&reason=checksum`)
+      return res.redirect(buildPaymentResultUrl({ status: 'failed', reason: 'checksum' }))
     }
 
     const vnp_TxnRef = vnp_Params['vnp_TxnRef']
@@ -630,19 +655,19 @@ export async function vnpayReturn(req, res) {
     if (!payment) {
       await session.abortTransaction()
       session.endSession()
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed&reason=not_found`)
+      return res.redirect(buildPaymentResultUrl({ status: 'failed', reason: 'not_found' }))
     }
 
     if (rspCode !== '00') {
       await session.abortTransaction()
       session.endSession()
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed&reason=payment_failed`)
+      return res.redirect(buildPaymentResultUrl({ status: 'failed', payment, reason: 'payment_failed' }))
     }
 
     if (payment.status === 'paid') {
       await session.abortTransaction()
       session.endSession()
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=success&payment_id=${payment._id}`)
+      return res.redirect(buildPaymentResultUrl({ status: 'success', payment }))
     }
 
     if (payment.status === 'pending') {
@@ -695,15 +720,15 @@ export async function vnpayReturn(req, res) {
         await tinhTrangThaiHoaDon(invoice._id)
       }
 
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=success&payment_id=${payment._id}`)
+      return res.redirect(buildPaymentResultUrl({ status: 'success', payment, appointment }))
     }
 
     await session.abortTransaction()
     session.endSession()
-    return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed`)
+    return res.redirect(buildPaymentResultUrl({ status: 'failed', payment }))
   } catch (err) {
     await session.abortTransaction()
     session.endSession()
-    return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=error`)
+    return res.redirect(buildPaymentResultUrl({ status: 'error', reason: 'server_error' }))
   }
 }
