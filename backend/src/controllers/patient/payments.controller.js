@@ -1,8 +1,9 @@
 import crypto from 'crypto'
 import mongoose from 'mongoose'
 
-import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen } from '../../models/index.js'
+import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen, NguoiDung, BacSi } from '../../models/index.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
+import { sendBookingSuccessEmail } from '../../services/mail.service.js'
 import { ok, fail } from '../../utils/response.js'
 import {
   emitAdminRealtime,
@@ -193,6 +194,50 @@ function serializePaymentStatus({ payment, appointment, invoice }) {
       mock_status: gateway.mock_status ?? null,
       is_expired: isGatewaySessionExpired(gateway),
     },
+  }
+}
+
+async function triggerBookingSuccessEmail(appointment, payment) {
+  try {
+    if (!appointment || !payment) return
+    const user = await NguoiDung.findById(appointment.user_id).lean()
+    if (!user || !user.email) return
+
+    let docName = 'Bác sĩ chuyên khoa'
+    let specialtyName = 'Đa khoa'
+
+    if (appointment.doctor_id) {
+      const doc = await BacSi.findById(appointment.doctor_id).populate('specialties', 'ten').lean()
+      if (doc) {
+        docName = doc.ho_ten || docName
+        if (doc.specialties && doc.specialties.length > 0) {
+          specialtyName = doc.specialties[0].ten
+        }
+      }
+    }
+
+    const ngayKhamStr = appointment.ngay_kham
+      ? new Date(appointment.ngay_kham).toLocaleDateString('vi-VN')
+      : ''
+
+    const bookingData = {
+      ma_lich_hen: appointment.ma_lich_hen,
+      ten_benh_nhan: appointment.ten_khach || user.ho_ten,
+      so_dien_thoai: appointment.so_dien_thoai_khach || user.so_dien_thoai,
+      ten_bac_si: docName,
+      chuyen_khoa: specialtyName,
+      ngay_kham: ngayKhamStr,
+      gio_kham: appointment.gio_kham || '',
+      phong_kham: appointment.phong_kham || 'Phòng khám ViteFamily',
+      dia_chi: appointment.dia_chi_kham || 'Phòng 101, Tầng 1, Tòa nhà ViteFamily',
+      tong_tien: payment.so_tien || appointment.gia_kham || 0,
+      loai_kham: appointment.loai_kham,
+    }
+
+    await sendBookingSuccessEmail({ to: user.email, bookingData })
+    console.log(`[EMAIL SENT SUCCESS] Sent booking confirmation email to ${user.email} (Appointment: ${appointment.ma_lich_hen})`)
+  } catch (err) {
+    console.error('[EMAIL ERROR] Failed to send booking confirmation email:', err.message)
   }
 }
 
@@ -416,6 +461,7 @@ export async function completeMockVnpayPayment(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    triggerBookingSuccessEmail(appointment, payment)
     emitAdminRealtime('admin:payment_updated', {
       payment_id: payment._id,
       appointment_id: appointment._id,
@@ -488,6 +534,7 @@ export async function confirmPayment(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    triggerBookingSuccessEmail(appointment, payment)
     emitDashboardRevenueChanged({
       ngay: payment.ngay_thanh_toan,
       so_tien: payment.so_tien,
@@ -585,6 +632,7 @@ export async function vnpayIpn(req, res) {
 
       await session.commitTransaction()
       session.endSession()
+      triggerBookingSuccessEmail(appointment, payment)
 
       emitAdminRealtime('admin:payment_updated', {
         payment_id: payment._id,
@@ -696,6 +744,7 @@ export async function vnpayReturn(req, res) {
 
       await session.commitTransaction()
       session.endSession()
+      triggerBookingSuccessEmail(appointment, payment)
 
       emitAdminRealtime('admin:payment_updated', {
         payment_id: payment._id,
