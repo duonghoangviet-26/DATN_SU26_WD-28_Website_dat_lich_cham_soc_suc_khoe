@@ -38,6 +38,7 @@ export default function BookingStep2PatientInfo({
 }: BookingStep2PatientInfoProps) {
   const [isLookingUp, setIsLookingUp] = useState(false)
   const [foundUserId, setFoundUserId] = useState<string | null>(null)
+  const [foundUserName, setFoundUserName] = useState<string>('')
   const [familyMembers, setFamilyMembers] = useState<ReceptionistFamilyMember[]>([])
   const [error, setError] = useState<string | null>(null)
   const searchTimeoutRef = useRef<number | null>(null)
@@ -56,11 +57,13 @@ export default function BookingStep2PatientInfo({
           .then((res) => {
             if (res.found && res.user) {
               setFoundUserId(res.user._id)
+              setFoundUserName(res.user.ho_ten || '')
               // Tự động load family members của người này
               return receptionistBookingService.getFamilyGroup(res.user._id)
             } else {
               // Không tìm thấy user, đặt về mặc định là 'other'
               setFoundUserId(null)
+              setFoundUserName('')
               setFamilyMembers([])
               setBookingFor('other')
               setSelectedMemberId('')
@@ -75,9 +78,10 @@ export default function BookingStep2PatientInfo({
               if (bookingFor === 'other') {
                 setBookingFor('self')
                 const chuHo = familyGroup.members.find(m => m.la_chu_ho)
-                if (chuHo) {
-                  setPatientName(chuHo.ho_ten)
-                }
+                setPatientName(chuHo?.ho_ten || foundUserName || '')
+              } else if (bookingFor === 'self') {
+                const chuHo = familyGroup.members.find(m => m.la_chu_ho)
+                setPatientName(chuHo?.ho_ten || foundUserName || '')
               }
             }
           })
@@ -90,6 +94,7 @@ export default function BookingStep2PatientInfo({
       }, 500)
     } else {
       setFoundUserId(null)
+      setFoundUserName('')
       setFamilyMembers([])
       setBookingFor('other')
     }
@@ -187,7 +192,7 @@ export default function BookingStep2PatientInfo({
                 setBookingFor('self')
                 setSelectedMemberId('')
                 const chuHo = familyMembers.find(m => m.la_chu_ho)
-                if (chuHo) setPatientName(chuHo.ho_ten)
+                setPatientName(chuHo?.ho_ten || foundUserName || '')
               }}
               className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
                 bookingFor === 'self'
