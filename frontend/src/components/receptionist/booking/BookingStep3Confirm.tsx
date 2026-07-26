@@ -3,6 +3,7 @@ import { ReceptionistBookingSlot } from '@/services/receptionist-booking.service
 export interface BookingStep3ConfirmProps {
   selectedDate: string
   selectedSlot: ReceptionistBookingSlot | null
+  selectedDoctor: any | null
   patientName: string
   patientPhone: string
   symptoms: string
@@ -15,6 +16,7 @@ export interface BookingStep3ConfirmProps {
 export default function BookingStep3Confirm({
   selectedDate,
   selectedSlot,
+  selectedDoctor,
   patientName,
   patientPhone,
   symptoms,
@@ -33,7 +35,9 @@ export default function BookingStep3Confirm({
       <div className="space-y-4 text-sm bg-slate-50 p-5 rounded-xl border border-slate-200">
         <div className="grid grid-cols-3 gap-2 border-b border-slate-200 pb-3">
           <div className="font-semibold text-slate-500 text-xs uppercase tracking-wider">Bác sĩ:</div>
-          <div className="col-span-2 font-bold text-emerald-600">Bác sĩ chuyên khoa</div>
+          <div className="col-span-2 font-bold text-slate-800">
+            {selectedDoctor ? `BS. ${selectedDoctor.ho_ten}` : 'Bác sĩ chuyên khoa'}
+          </div>
         </div>
         <div className="grid grid-cols-3 gap-2 border-b border-slate-200 pb-3">
           <div className="font-semibold text-slate-500 text-xs uppercase tracking-wider">Ngày khám:</div>

@@ -102,6 +102,7 @@ export const receptionistBookingService = {
     return Array.isArray(res.data.data) ? res.data.data : []
   },
 
+
   async createBooking(payload: CreateReceptionistBookingPayload): Promise<CreatedReceptionistBookingResult> {
     const res = await axiosInstance.post<ApiResponse<CreatedReceptionistBookingResult>>('/receptionist/booking', payload)
     return res.data.data as CreatedReceptionistBookingResult

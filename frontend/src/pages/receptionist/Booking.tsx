@@ -8,6 +8,7 @@ import {
   CreatedReceptionistBookingResult,
   ReceptionistBookingSlot,
   ReceptionistPaymentStatusResult,
+  ReceptionistBookingDoctor,
 } from '@/services/receptionist-booking.service'
 
 // Import các Component con đã được chia nhỏ
@@ -68,11 +69,17 @@ export default function ReceptionistBooking() {
     }
   }, [])
 
+  // Fetch danh sách bác sĩ (giống client để faking tên bác sĩ khi chọn tự động)
+  const [doctors, setDoctors] = useState<ReceptionistBookingDoctor[]>([])
+  useEffect(() => {
+    receptionistBookingService.getDoctors()
+      .then(setDoctors)
+      .catch(() => {})
+  }, [])
+
   // Dùng để lấy chi tiết slot đang được chọn
   useEffect(() => {
     if (selectedDate) {
-      // Khi component BookingStep1 fetch slots, ta cũng có thể gọi 1 API tương tự ở đây
-      // hoặc lấy dữ liệu truyền lên từ Step1. Để đơn giản, ta sẽ gọi lại 1 lần ngầm.
       receptionistBookingService.getSlots('all', selectedDate).then(setCurrentSlots).catch(() => {})
     }
   }, [selectedDate])
@@ -80,6 +87,10 @@ export default function ReceptionistBooking() {
   const selectedSlot = useMemo(() => {
     return currentSlots.find(s => s.id === selectedSlotId) || null
   }, [currentSlots, selectedSlotId])
+
+  const selectedDoctor = useMemo(() => {
+    return doctors.length > 0 ? doctors[0] : null
+  }, [doctors])
 
   // Xử lý Gửi Lịch Hẹn lên hệ thống
   const handleSubmitBooking = async () => {
@@ -237,6 +248,7 @@ export default function ReceptionistBooking() {
             <BookingStep3Confirm
               selectedDate={selectedDate}
               selectedSlot={selectedSlot}
+              selectedDoctor={selectedDoctor}
               patientName={patientName}
               patientPhone={patientPhone}
               symptoms={symptoms}
