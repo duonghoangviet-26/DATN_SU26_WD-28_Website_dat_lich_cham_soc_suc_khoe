@@ -277,65 +277,97 @@ export async function getDoctorById(req, res) {
 // ─── GET /api/patient/booking/doctors/:id/slots?date=YYYY-MM-DD ─────────────
 export async function getSlots(req, res) {
   try {
-    const { date } = req.query
+    const { date, specialty_id } = req.query
     if (!date) return fail(res, 400, 'Tham số date là bắt buộc (YYYY-MM-DD)')
 
-    const doc = await BacSi.findOne({ _id: req.params.id, trang_thai_duyet: 'approved', la_hien: true })
-      .select('_id').lean()
-    if (!doc) return fail(res, 404, 'Không tìm thấy bác sĩ')
-
     const ngayDate = parseDateOnly(date)
-    if (!ngayDate) return fail(res, 400, 'Ngay khong hop le')
+    if (!ngayDate) return fail(res, 400, 'Ngày không hợp lệ')
     if (ngayDate.getTime() < getTodayDateOnly().getTime()) return ok(res, [])
-    if (isNaN(ngayDate)) return fail(res, 400, 'Ngày không hợp lệ')
 
-    // KHONG .lean() — can document that de nhaSlotQuaHanTrongLich() cap nhat duoc ban in-memory.
-    const schedule = await LichLamViec.findOne({
-      doctor_id: doc._id,
+    // `:id` nhận ĐÍCH DANH một bác sĩ, hoặc 'all'/'auto' để gộp mọi bác sĩ khả dụng
+    // (hợp đồng do nhánh client đặt ra — giữ nguyên để FE của họ không vỡ).
+    const doctorIdParam = req.params.id
+    const gopNhieuBacSi = !doctorIdParam || doctorIdParam === 'all' || doctorIdParam === 'auto'
+
+    const doctorFilter = { trang_thai_duyet: 'approved', la_hien: true }
+    if (!gopNhieuBacSi) {
+      if (!mongoose.Types.ObjectId.isValid(doctorIdParam)) return fail(res, 400, 'ID bác sĩ không hợp lệ')
+      doctorFilter._id = doctorIdParam
+    }
+    // Gộp nhiều bác sĩ mà KHÔNG lọc chuyên khoa thì khách chọn Tai Mũi Họng có thể bị xếp
+    // bác sĩ Nhi khoa. Cho phép thu hẹp bằng `?specialty_id=`.
+    if (specialty_id && mongoose.Types.ObjectId.isValid(specialty_id)) {
+      doctorFilter.specialties = specialty_id
+    }
+
+    const doctors = await BacSi.find(doctorFilter).select('_id phong_kham_mac_dinh').lean()
+    if (doctors.length === 0) {
+      return gopNhieuBacSi ? ok(res, []) : fail(res, 404, 'Không tìm thấy bác sĩ')
+    }
+    const phongMacDinhTheoBacSi = new Map(doctors.map((d) => [String(d._id), d.phong_kham_mac_dinh ?? null]))
+
+    // KHÔNG .lean() — cần document thật để `donDepSlotTruocKhiDoc()` cập nhật bản in-memory.
+    const schedules = await LichLamViec.find({
+      doctor_id: { $in: doctors.map((d) => d._id) },
       ngay: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
       trang_thai_ngay: 'lam_viec',
       trang_thai_xac_nhan: { $ne: 'tu_choi' },
     })
+    if (schedules.length === 0) return ok(res, [])
 
-    if (!schedule) return ok(res, [])
+    // QUÉT LAZY ngay TRƯỚC KHI đọc: (1) nhả giữ chỗ quá hạn — người đang tìm chỗ thấy luôn
+    // chỗ vừa được giải phóng; (2) chuyển slot online đã qua mốc T-30' sang walk-in.
+    // Cron 5' chỉ là lưới an toàn cho lịch không ai đọc tới. (rule mục 11)
+    for (const schedule of schedules) await donDepSlotTruocKhiDoc(schedule)
 
-    // QUET LAZY ngay TRUOC KHI doc: (1) nha giu cho qua han — nguoi dang tim cho thay luon
-    // cho vua duoc giai phong; (2) chuyen slot online da qua moc T-30' sang walk-in.
-    // Cron 5' chi la luoi an toan cho lich khong ai doc toi.
-    await donDepSlotTruocKhiDoc(schedule)
-
-    // Lấy các lịch hẹn hợp lệ (chưa bị hủy) của bác sĩ trong ngày này
-    const bookedAppointments = await LichHen.find({
-      doctor_id: doc._id,
-      ngay_kham: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
-      status: { $ne: 'cancelled' },
-    }).select('slot_id').lean()
-
+    // Slot đã có LichHen còn hiệu lực -> không còn trống, dù `status` trong lịch có lệch.
     const bookedSlotIds = new Set(
-      bookedAppointments
+      (await LichHen.find({
+        doctor_id: { $in: schedules.map((s) => s.doctor_id) },
+        ngay_kham: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
+        status: { $ne: 'cancelled' },
+      }).select('slot_id').lean())
         .filter((app) => app.slot_id)
         .map((app) => app.slot_id.toString())
     )
 
-    const slots = schedule.slots
-      .filter((s) => s.status === 'active' && !s.benh_nhan_id && !bookedSlotIds.has(s._id.toString()))
-      // Slot bi khoa boi nghi phep da duyet: createBooking DA chan (xem duoi), nhung getSlots
-      // truoc day KHONG loc -> van chao ban roi bam dat moi bao 409. Hai test bat loi nay:
-      // doctor.leave-sync.test.js "Duyet nghi theo khung gio..." va "getSlots va createBooking
-      // loai slot co bi_khoa_boi_nghi_phep=true du status con active".
-      .filter((s) => !s.bi_khoa_boi_nghi_phep)
-      .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
-      // Chi hien slot ONLINE cho benh nhan tu dat (muc 5.1 dac ta). Dung "!== 'walk_in'" thay vi
-      // "=== 'online'" de tuong thich nguoc voi slot tao TRUOC migration (thieu loai_slot -> undefined).
-      .filter((s) => s.loai_slot !== 'walk_in')
-      .map((s) => ({
-        id:          s._id,
-        schedule_id: schedule._id,
-        gio_bat_dau:  s.gio_bat_dau,
-        gio_ket_thuc: s.gio_ket_thuc,
-        phong_kham:   s.phong_kham,
-      }))
+    // Gộp theo GIỜ và đếm `available_count`: một khung có nhiều slot (TMH 2 slot/khung) và
+    // nhiều bác sĩ cùng trực, nên trả từng slot sẽ hiện cùng một giờ nhiều lần.
+    const theoGio = new Map()
+    for (const schedule of schedules) {
+      for (const s of schedule.slots) {
+        if (s.status !== 'active' || s.benh_nhan_id) continue
+        // Slot bị khoá bởi nghỉ phép đã duyệt: createBooking ĐÃ chặn, nhưng getSlots trước
+        // đây KHÔNG lọc -> vẫn chào bán rồi bấm đặt mới báo 409.
+        if (s.bi_khoa_boi_nghi_phep) continue
+        // Chỉ hiện slot ONLINE cho bệnh nhân tự đặt. Dùng "!== 'walk_in'" thay vì
+        // "=== 'online'" để tương thích ngược với slot tạo TRƯỚC migration (thiếu loai_slot).
+        if (s.loai_slot === 'walk_in') continue
+        if (bookedSlotIds.has(s._id.toString())) continue
+        if (isSlotInPast(ngayDate, s.gio_bat_dau)) continue
+        // Cutoff T-30' (rule mục 11): quá mốc thì không chào bán online nữa.
+        if (daQuaCutoffOnline(ngayDate, s.gio_bat_dau)) continue
 
+        const hienCo = theoGio.get(s.gio_bat_dau)
+        if (hienCo) {
+          hienCo.available_count += 1
+          continue
+        }
+        theoGio.set(s.gio_bat_dau, {
+          id:          s._id,
+          schedule_id: schedule._id,
+          doctor_id:   schedule.doctor_id,
+          gio_bat_dau:  s.gio_bat_dau,
+          gio_ket_thuc: s.gio_ket_thuc,
+          // Slot cũ chưa có phòng -> lấy phòng mặc định của bác sĩ. Không bịa tên phòng:
+          // thà để null còn hơn cho bệnh nhân một số phòng không tồn tại.
+          phong_kham:   s.phong_kham ?? phongMacDinhTheoBacSi.get(String(schedule.doctor_id)) ?? null,
+          available_count: 1,
+        })
+      }
+    }
+
+    const slots = [...theoGio.values()].sort((a, b) => a.gio_bat_dau.localeCompare(b.gio_bat_dau))
     return ok(res, slots)
   } catch (err) {
     return fail(res, 500, err.message)
@@ -383,12 +415,14 @@ export async function createBooking(req, res) {
       ngay_kham, ly_do_kham,
       member_id, ten_khach, so_dien_thoai_khach, nam_sinh_khach,
       // Đường TỰ GÁN (rule mục 12): khách chỉ chọn chuyên khoa + khung giờ.
-      specialty_id: specialtyYeuCau, gio_bat_dau,
+      // `gio_kham` là tên cũ do nhánh client dùng — nhận cả hai để FE của họ không vỡ.
+      specialty_id: specialtyYeuCau, gio_bat_dau, gio_kham,
     } = req.body
     let { doctor_id, schedule_id, slot_id } = req.body
+    const gioYeuCau = gio_bat_dau ?? gio_kham
 
     if (!loai_kham)  return rollbackFail(400, 'Loại khám là bắt buộc')
-    if (loai_kham !== 'clinic') return rollbackFail(400, 'Dich vu tai nha da ngung ho tro dat lich moi')
+    if (loai_kham !== 'clinic') return rollbackFail(400, 'Dịch vụ tại nhà đã ngừng hỗ trợ đặt lịch mới')
     if (!ngay_kham)  return rollbackFail(400, 'Ngày khám là bắt buộc')
     if (!member_id && !ten_khach) return rollbackFail(400, 'Phải có member_id hoặc ten_khach')
 
@@ -403,23 +437,45 @@ export async function createBooking(req, res) {
     }
 
     const appointmentDate = parseDateOnly(ngay_kham)
-    if (!appointmentDate) return rollbackFail(400, 'Ngay kham khong hop le')
+    if (!appointmentDate) return rollbackFail(400, 'Ngày khám không hợp lệ')
 
     // ── Tự gán bác sĩ (rule mục 12) ─────────────────────────────────────────
     // Chạy TRƯỚC mọi kiểm tra khác để phần dưới không phải biết khách đã đi đường nào:
     // sau bước này luôn có đủ doctor_id + schedule_id + slot_id như đường chọn đích danh.
-    if (!doctor_id && specialtyYeuCau) {
-      if (!gio_bat_dau) return rollbackFail(400, 'Thiếu khung giờ khám (gio_bat_dau)')
+    //
+    // Nhận CẢ HAI hợp đồng: `specialty_id` (bản này) và `doctor_id='auto'|'all'` (nhánh
+    // client). Cả hai đều đi qua `chonBacSiChoKhung()` để có LỌC CHUYÊN KHOA + thứ tự gán
+    // xác định — bản tự gán của nhánh client gộp mọi bác sĩ đã duyệt bất kể chuyên khoa,
+    // nên khách chọn Tai Mũi Họng có thể bị xếp bác sĩ Nhi khoa.
+    const yeuCauTuGan = !doctor_id || doctor_id === 'auto' || doctor_id === 'all'
+    if (yeuCauTuGan) {
+      if (!gioYeuCau) return rollbackFail(400, 'Thiếu khung giờ khám (gio_bat_dau)')
+
+      // Không truyền chuyên khoa thì suy từ chính slot khách đã chọn trên lưới.
+      let specialtyToAssign = specialtyYeuCau
+      if (!specialtyToAssign && schedule_id && slot_id) {
+        const lichGoc = await LichLamViec.findById(schedule_id).select('slots doctor_id').session(session).lean()
+        const slotGoc = lichGoc?.slots?.find((x) => String(x._id) === String(slot_id))
+        specialtyToAssign = slotGoc?.specialty_id ?? null
+        if (!specialtyToAssign && lichGoc?.doctor_id) {
+          const bsGoc = await BacSi.findById(lichGoc.doctor_id).select('specialties').session(session).lean()
+          specialtyToAssign = bsGoc?.specialties?.[0] ?? null
+        }
+      }
+      if (!specialtyToAssign) {
+        return rollbackFail(400, 'Thiếu chuyên khoa nên chưa xếp được bác sĩ. Vui lòng chọn lại khung giờ.')
+      }
+
       const daChon = await chonBacSiChoKhung({
-        specialtyId: specialtyYeuCau,
+        specialtyId: specialtyToAssign,
         ngay: appointmentDate,
-        gioBatDau: gio_bat_dau,
+        gioBatDau: gioYeuCau,
         userId: req.user.id,
         memberId: member_id || null,
         session,
       })
       if (!daChon) {
-        return rollbackFail(409, `Khung ${gio_bat_dau} đã hết chỗ. Vui lòng chọn khung giờ khác.`)
+        return rollbackFail(409, `Khung ${gioYeuCau} đã hết chỗ. Vui lòng chọn khung giờ khác.`)
       }
       doctor_id = daChon.doctorId
       schedule_id = daChon.scheduleId
@@ -443,14 +499,99 @@ export async function createBooking(req, res) {
       if (!member) return rollbackFail(404, 'Không tìm thấy thành viên trong gia đình')
     }
 
-    // Han giu cho: mac dinh 15', nhung CO GIAN theo khung (rule muc 11) — gan dat sau khi
-    // biet gio khung, ngay truoc khi claim slot.
+    // Hạn giữ chỗ: mặc định 15', nhưng CO GIÃN theo khung (rule mục 11) — gán đặt sau khi
+    // biết giờ khung, ngay trước khi claim slot.
+    // `schedule_id`/`slot_id` của nhánh client không còn cần: khối tự gán phía
+    // trên đã ghi thẳng vào `schedule_id`/`slot_id`.
     let paymentDeadline = getPaymentDeadline()
     let gia_kham, ten_dich_vu, phong_kham = null, gio_dat
     let chi_nhanh_id = null
     let specialty_id = null
 
     if (loai_kham === 'clinic') {
+      const isAutoAllocated = !doctor_id || doctor_id === 'auto' || doctor_id === 'all'
+
+      if (isAutoAllocated) {
+        // Tự động phân bổ bác sĩ ít tải nhất (Least Load Allocation)
+        const approvedDoctors = await BacSi.find({ trang_thai_duyet: 'approved', la_hien: true })
+          .populate('specialties', 'ten')
+          .session(session)
+        const approvedDocMap = Object.fromEntries(approvedDoctors.map((d) => [d._id.toString(), d]))
+
+        if (approvedDoctors.length === 0) {
+          return rollbackFail(404, 'Không có bác sĩ khả dụng trên hệ thống')
+        }
+
+        const candidateSchedules = await LichLamViec.find({
+          doctor_id: { $in: approvedDoctors.map((d) => d._id) },
+          ngay: { $gte: appointmentDate, $lt: addDays(appointmentDate, 1) },
+          trang_thai_ngay: 'lam_viec',
+          trang_thai_xac_nhan: { $ne: 'tu_choi' },
+        }).session(session)
+
+        let matchingCandidates = []
+
+        for (const schedule of candidateSchedules) {
+          const doctorObj = approvedDocMap[schedule.doctor_id.toString()]
+          if (!doctorObj) continue
+
+          for (const slot of schedule.slots) {
+            const isMatch = (slot_id && slot._id.toString() === slot_id.toString()) ||
+                            (gio_kham && slot.gio_bat_dau === gio_kham) ||
+                            (!slot_id && !gio_kham)
+            if (
+              isMatch &&
+              slot.status === 'active' &&
+              !slot.benh_nhan_id &&
+              !slot.bi_khoa_boi_nghi_phep &&
+              slot.loai_slot !== 'walk_in' &&
+              !isSlotInPast(appointmentDate, slot.gio_bat_dau)
+            ) {
+              matchingCandidates.push({
+                doctor: doctorObj,
+                schedule,
+                slot,
+              })
+            }
+          }
+        }
+
+        if (matchingCandidates.length === 0) {
+          return rollbackFail(409, 'Khung giờ này đã được đặt hết, vui lòng chọn khung giờ khác')
+        }
+
+        // Đếm số lịch hẹn hiện tại của từng bác sĩ ứng viên trong ngày để chọn người ít tải nhất (Least Load)
+        const candidateDocIds = matchingCandidates.map((c) => c.doctor._id)
+        const apptCounts = await LichHen.aggregate([
+          {
+            $match: {
+              doctor_id: { $in: candidateDocIds },
+              ngay_kham: { $gte: appointmentDate, $lt: addDays(appointmentDate, 1) },
+              status: { $ne: 'cancelled' },
+            },
+          },
+          { $group: { _id: '$doctor_id', count: { $sum: 1 } } },
+        ]).session(session)
+
+        const countMap = Object.fromEntries(apptCounts.map((a) => [a._id.toString(), a.count]))
+
+        matchingCandidates.sort((a, b) => {
+          const countA = countMap[a.doctor._id.toString()] || 0
+          const countB = countMap[b.doctor._id.toString()] || 0
+          return countA - countB
+        })
+
+        const selectedCandidate = matchingCandidates[0]
+        doc = selectedCandidate.doctor
+        schedule_id = selectedCandidate.schedule._id
+        slot_id = selectedCandidate.slot._id
+      } else {
+        doc = await BacSi.findOne({ _id: doctor_id, trang_thai_duyet: 'approved', la_hien: true })
+          .populate('specialties', 'ten')
+          .session(session)
+        if (!doc) return rollbackFail(404, 'Bác sĩ không tồn tại hoặc chưa được duyệt')
+      }
+
       if (!schedule_id || !slot_id) {
         return rollbackFail(400, 'Khám tại phòng khám yêu cầu schedule_id và slot_id')
       }
@@ -465,21 +606,21 @@ export async function createBooking(req, res) {
       }).session(session)
 
       if (!scheduleForValidation) {
-        return rollbackFail(400, 'Lich lam viec khong hop le cho ngay kham da chon')
+        return rollbackFail(400, 'Lịch làm việc không hợp lệ cho ngày khám đã chọn')
       }
 
       const slotForValidation = scheduleForValidation.slots.id(slot_id)
       if (!slotForValidation) {
-        return rollbackFail(400, 'Khung gio khong thuoc lich lam viec da chon')
+        return rollbackFail(400, 'Khung giờ không thuộc lịch làm việc đã chọn')
       }
       if (slotForValidation.status !== 'active' || slotForValidation.benh_nhan_id || slotForValidation.bi_khoa_boi_nghi_phep) {
-        return rollbackFail(409, 'Slot da duoc dat, vui long chon khung gio khac')
+        return rollbackFail(409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
       }
       if (slotForValidation.loai_slot === 'walk_in') {
-        return rollbackFail(409, 'Slot nay danh cho tiep nhan tai cho, khong the dat online')
+        return rollbackFail(409, 'Slot này dành cho tiếp nhận tại chỗ, không thể đặt online')
       }
       if (isSlotInPast(appointmentDate, slotForValidation.gio_bat_dau)) {
-        return rollbackFail(400, 'Khung gio da qua, vui long chon khung gio khac')
+        return rollbackFail(400, 'Khung giờ đã qua, vui lòng chọn khung giờ khác')
       }
       // Cutoff T-30' (rule muc 11). Quet lazy o getSlots da doi slot nay sang walk_in nen
       // dieu kien 'loai_slot' phia tren thuong da chan roi — nhung khach co the bam dat tu
@@ -576,7 +717,10 @@ export async function createBooking(req, res) {
       if (!updated) return rollbackFail(409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
 
       const claimedSlot = updated.slots.id(slot_id)
-      phong_kham = claimedSlot.phong_kham
+      // Slot cũ (sinh trước khi có `phong_id` từ mẫu ca) chưa có phòng -> lấy phòng mặc
+      // định của bác sĩ. KHÔNG hardcode tên phòng: thà để null còn hơn in cho bệnh nhân
+      // một phòng không tồn tại rồi họ đi tìm không thấy.
+      phong_kham = claimedSlot.phong_kham || doc.phong_kham_mac_dinh || null
       gio_dat    = claimedSlot.gio_bat_dau
       chi_nhanh_id = updated.chi_nhanh_id ?? doc.chi_nhanh_id ?? null
       specialty_id = claimedSlot.specialty_id ?? doc.specialties?.[0]?._id ?? null
