@@ -359,6 +359,18 @@ if (!apptHomNay) {
   // ══ 9. GOI -> VAO PHONG -> KET QUA ══════════════════════════════════════
   muc('9. THAO TAC KHAM: goi -> vao phong -> ket qua -> hoan thanh')
 
+  // Sau ca kham truoc, phong o trang thai 'dang_don_phong'. Benh nhan tiep theo chi vao
+  // duoc khi bac si bam "san sang" — kiem luon chuc nang do o day.
+  const phongTruoc = await api('/doctor/room-status', { auth: ctx.tokenBSNhan })
+  kt('GET trang thai phong -> 200', phongTruoc.status === 200, `HTTP ${phongTruoc.status}`)
+  console.log(`  Trang thai phong hien tai: ${phongTruoc.body?.data?.trang_thai ?? '(chua co)'}`)
+
+  const datSanSang = await api('/doctor/room-status', {
+    method: 'PATCH', auth: ctx.tokenBSNhan, body: { trang_thai: 'san_sang' },
+  })
+  kt('Dat phong ve "san sang" -> 200', datSanSang.status === 200,
+    `HTTP ${datSanSang.status}: ${datSanSang.body?.message ?? ''}`)
+
   const goi = await api(`/doctor/queue/${entryId}/call`, { method: 'PATCH', auth: ctx.tokenBSNhan })
   kt('Goi benh nhan', goi.status === 200 || goi.status === 409,
     `HTTP ${goi.status}: ${goi.body?.message ?? ''}`)
@@ -380,6 +392,13 @@ if (!apptHomNay) {
 
     const ketThuc = await api(`/doctor/queue/${entryId}/finish`, { method: 'PATCH', auth: ctx.tokenBSNhan })
     kt('Ket thuc kham -> 200', ketThuc.status === 200, `HTTP ${ketThuc.status}: ${ketThuc.body?.message ?? ''}`)
+
+    const phongSau = await api('/doctor/room-status', { auth: ctx.tokenBSNhan })
+    kt('Kham xong -> phong chuyen "dang_don_phong"',
+      phongSau.body?.data?.trang_thai === 'dang_don_phong',
+      `= ${phongSau.body?.data?.trang_thai}`)
+    // Tra phong ve san sang de lan chay sau khong bi ket.
+    await api('/doctor/room-status', { method: 'PATCH', auth: ctx.tokenBSNhan, body: { trang_thai: 'san_sang' } })
   }
 }
 

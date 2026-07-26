@@ -5,7 +5,7 @@ Chạy như **một khách thật**: gọi API qua HTTP, không gọi hàm nội
 
 Script: `backend/src/scripts/e2e-luong-dat-lich.js` (tự chặn nếu tên DB không chứa `TEST`).
 
-**Kết quả cuối: 82/82 đạt.**
+**Kết quả cuối: 85/85 đạt** (đã chạy lại sau khi merge `main` — không có gì vỡ).
 
 ---
 
@@ -147,6 +147,20 @@ Hàng đợi trả đủ ba trường của mục 6: `muc_uu_tien` (**động**)
 ## 7. Vòng đời khám
 
 `gọi → vào phòng → tạo kết quả → đọc lại → kết thúc` — **tất cả 200** sau khi vá lỗi ở mục 1. Kết quả khám lưu đúng chẩn đoán.
+
+### Trạng thái phòng phải được dọn thủ công
+
+Lần chạy thứ hai lộ ra một mắt xích dễ bỏ sót: khám xong, phòng chuyển `dang_don_phong`, và bệnh nhân tiếp theo **không vào phòng được** (409 *"Phòng chưa sẵn sàng"*) cho tới khi bác sĩ bấm "sẵn sàng".
+
+Đây là **hành vi đúng** — dọn phòng giữa hai ca là quy trình y tế thật, và `PATCH /doctor/room-status` tồn tại đúng cho việc đó. Nhưng nó là một bước **bắt buộc mà giao diện phải làm rõ**: nếu bác sĩ không thấy nút này, hàng đợi sẽ đứng im mà không rõ lý do.
+
+Đã bổ sung vào kịch bản kiểm thử:
+
+```
+GET  /doctor/room-status                     → 200 ✓
+PATCH /doctor/room-status {san_sang}         → 200 ✓
+sau khi kết thúc khám → phòng = dang_don_phong ✓
+```
 
 ---
 
