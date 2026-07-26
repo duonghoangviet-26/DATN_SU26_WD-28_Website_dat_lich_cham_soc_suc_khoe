@@ -154,7 +154,7 @@ export function renderBookingSuccessEmail({
   return `
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px; background-color: #ffffff;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <h1 style="color: #2563eb; margin: 0; font-size: 24px;">🏥 ViteFamily Health</h1>
+        <h1 style="color: #2563eb; margin: 0; font-size: 24px;">🏥 ViteFamily</h1>
         <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Xác nhận đặt lịch khám thành công</p>
       </div>
 

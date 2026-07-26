@@ -206,14 +206,37 @@ async function triggerBookingSuccessEmail(appointment, payment) {
     let docName = 'Bác sĩ chuyên khoa'
     let specialtyName = 'Đa khoa'
 
-    if (appointment.doctor_id) {
-      const doc = await BacSi.findById(appointment.doctor_id).populate('specialties', 'ten').lean()
+    let doctorId = appointment.doctor_id
+    if (!doctorId && appointment.schedule_id) {
+      const schedule = await LichLamViec.findById(appointment.schedule_id).lean()
+      if (schedule && schedule.doctor_id) {
+        doctorId = schedule.doctor_id
+      }
+    }
+
+    if (doctorId) {
+      const doc = await BacSi.findById(doctorId)
+        .populate('user_id', 'ho_ten')
+        .populate('specialties', 'ten')
+        .lean()
+
       if (doc) {
-        docName = doc.ho_ten || docName
+        const rawName = doc.user_id?.ho_ten || doc.ho_ten
+        if (rawName) {
+          docName = /^BS\.?\s*/i.test(rawName) ? rawName : `BS. ${rawName}`
+        }
         if (doc.specialties && doc.specialties.length > 0) {
-          specialtyName = doc.specialties[0].ten
+          specialtyName = doc.specialties[0].ten || specialtyName
         }
       }
+    }
+
+    if (specialtyName === 'Đa khoa' && appointment.specialty_id) {
+      try {
+        const ChuyenKhoa = mongoose.model('ChuyenKhoa')
+        const sk = await ChuyenKhoa.findById(appointment.specialty_id).lean()
+        if (sk && sk.ten) specialtyName = sk.ten
+      } catch (_) {}
     }
 
     const ngayKhamStr = appointment.ngay_kham
