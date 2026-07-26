@@ -123,7 +123,7 @@ export default function Booking() {
             setFamilyMembers(group.members || [])
           }
         })
-        .catch(() => {})
+        .catch(() => { })
 
       return () => {
         ignore = true
@@ -248,7 +248,7 @@ export default function Booking() {
         .then((data) => {
           if (!cancelled) setPaymentSnapshot(data)
         })
-        .catch(() => {})
+        .catch(() => { })
     }, 5000)
 
     return () => {
@@ -352,6 +352,7 @@ export default function Booking() {
         schedule_id: selectedSlot.schedule_id,
         slot_id: selectedSlot.id,
         ngay_kham: selectedDate,
+        gio_kham: selectedSlot.gio_bat_dau,
         ly_do_kham: symptoms.trim(),
         ten_khach: patientName.trim(),
         so_dien_thoai_khach: patientPhone.trim(),
@@ -439,9 +440,8 @@ export default function Booking() {
         ].map((item) => (
           <div key={item.num} className="space-y-2">
             <div
-              className={`mx-auto grid h-9 w-9 place-items-center rounded-full text-xs font-bold transition-all ${
-                step >= item.num ? 'bg-brand-600 text-white shadow-md shadow-brand-100' : 'bg-slate-100 text-slate-400'
-              }`}
+              className={`mx-auto grid h-9 w-9 place-items-center rounded-full text-xs font-bold transition-all ${step >= item.num ? 'bg-brand-600 text-white shadow-md shadow-brand-100' : 'bg-slate-100 text-slate-400'
+                }`}
             >
               {item.num}
             </div>
@@ -479,11 +479,10 @@ export default function Booking() {
                   key={date.value}
                   type="button"
                   onClick={() => setSelectedDate(date.value)}
-                  className={`flex w-28 shrink-0 flex-col items-center justify-center rounded-xl border py-3 text-center transition-all ${
-                    selectedDate === date.value
+                  className={`flex w-28 shrink-0 flex-col items-center justify-center rounded-xl border py-3 text-center transition-all ${selectedDate === date.value
                       ? 'border-brand-500 bg-brand-50/30 font-bold text-brand-700 ring-2 ring-brand-500 shadow-sm'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
+                    }`}
                 >
                   <span className="text-[11px] font-semibold uppercase leading-tight">{date.label.split(',')[0]}</span>
                   <span className="mt-0.5 text-base font-extrabold leading-normal">{date.label.split(',')[1].trim()}</span>
@@ -510,11 +509,10 @@ export default function Booking() {
                       key={slot.id}
                       type="button"
                       onClick={() => setSelectedSlotId(slot.id)}
-                      className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
-                        isSelected
+                      className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${isSelected
                           ? 'border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-100 ring-2 ring-brand-500'
                           : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-slate-50'
-                      }`}
+                        }`}
                     >
                       <span className="text-base font-bold tracking-tight">{slot.gio_bat_dau}</span>
                     </button>
@@ -542,11 +540,10 @@ export default function Booking() {
                   setPatientPhone(user?.so_dien_thoai || '')
                   setSelectedMemberId('')
                 }}
-                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
-                  bookingFor === 'self'
+                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${bookingFor === 'self'
                     ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <span className="text-xs font-bold">🙋‍♂️ Tự khám</span>
                 <span className="mt-1 text-[10px] font-normal text-slate-400">Đặt lịch cho bản thân</span>
@@ -566,11 +563,10 @@ export default function Booking() {
                   }
                   setPatientPhone(user?.so_dien_thoai || '')
                 }}
-                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
-                  bookingFor === 'member'
+                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${bookingFor === 'member'
                     ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <span className="text-xs font-bold">👨‍👩‍👧 Đặt hộ gia đình</span>
                 <span className="mt-1 text-[10px] font-normal text-slate-400">Chọn thành viên đã lưu</span>
@@ -584,11 +580,10 @@ export default function Booking() {
                   setPatientPhone('')
                   setSelectedMemberId('')
                 }}
-                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
-                  bookingFor === 'other'
+                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${bookingFor === 'other'
                     ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <span className="text-xs font-bold">👥 Đặt hộ người khác</span>
                 <span className="mt-1 text-[10px] font-normal text-slate-400">Nhập thủ công thông tin</span>
@@ -631,11 +626,10 @@ export default function Booking() {
                           setSelectedMemberId(member.id)
                           setPatientName(member.ho_ten)
                         }}
-                        className={`rounded-xl border p-3 text-left transition-all ${
-                          selectedMemberId === member.id
+                        className={`rounded-xl border p-3 text-left transition-all ${selectedMemberId === member.id
                             ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
                             : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
+                          }`}
                       >
                         <h4 className="text-xs font-bold leading-snug">{member.ho_ten}</h4>
                         <p className="mt-1 text-[10px] text-slate-400 uppercase">
@@ -706,7 +700,7 @@ export default function Booking() {
               <p>
                 <span className="font-semibold text-slate-500">Bác sĩ phụ trách:</span>{' '}
                 <span className="font-bold text-slate-800">
-                  {selectedDoctor?.ho_ten || 'Bác sĩ chuyên khoa'}
+                  {selectedDoctorId && selectedDoctor ? selectedDoctor.ho_ten : 'Tự động phân bổ (Bác sĩ sẵn sàng)'}
                 </span>
               </p>
             </div>
@@ -760,9 +754,8 @@ export default function Booking() {
                     <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Mã tham chiếu VNPAY</p>
                     <p className="mt-1 font-mono text-sm font-semibold text-slate-800">{paymentSnapshot.gateway.vnp_txn_ref || '--'}</p>
                   </div>
-                  <div className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    paymentSnapshot.gateway.is_expired ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
-                  }`}>
+                  <div className={`rounded-full px-3 py-1 text-xs font-semibold ${paymentSnapshot.gateway.is_expired ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
                     {countdownLabel || 'Sẵn sàng'}
                   </div>
                 </div>

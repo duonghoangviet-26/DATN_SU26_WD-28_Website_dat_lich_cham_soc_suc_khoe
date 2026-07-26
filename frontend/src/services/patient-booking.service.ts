@@ -154,7 +154,7 @@ export const patientBookingService = {
 
 
 
-  
+
 
   async getFamilyGroup(): Promise<FamilyGroup | null> {
     const res = await axiosInstance.get<ApiResponse<FamilyGroup | null>>('/patient/family')
