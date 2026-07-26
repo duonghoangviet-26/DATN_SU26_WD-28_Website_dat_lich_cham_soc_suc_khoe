@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import {
   BacSi, LichLamViec, LichHen, NguoiDung,
-  ChuyenKhoa, DichVu, HoaDon, ThanhToan,
+  ChuyenKhoa, DichVu, HoaDon, ThanhToan, GiaDinh, ThanhVien
 } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { emitDashboardRevenueChanged } from '../../realtime/socket.js'
@@ -127,30 +127,87 @@ export async function getSlots(req, res) {
   try {
     const { date } = req.query
     if (!date) return fail(res, 400, 'Tham số date là bắt buộc (YYYY-MM-DD)')
-    const doc = await BacSi.findOne({ _id: req.params.id }).select('_id').lean()
-    if (!doc) return fail(res, 404, 'Không tìm thấy bác sĩ')
 
     const ngayDate = parseDateOnly(date)
-    if (!ngayDate) return fail(res, 400, 'Ngay khong hop le')
+    if (!ngayDate) return fail(res, 400, 'Ngày không hợp lệ')
     if (ngayDate.getTime() < getTodayDateOnly().getTime()) return ok(res, [])
+    if (isNaN(ngayDate.getTime())) return fail(res, 400, 'Ngày không hợp lệ')
 
-    const schedule = await LichLamViec.findOne({
-      doctor_id: doc._id,
+    const doctorIdParam = req.params.id
+
+    let doctorFilter = { trang_thai_duyet: 'approved', la_hien: true }
+    if (doctorIdParam && doctorIdParam !== 'all' && doctorIdParam !== 'auto' && mongoose.Types.ObjectId.isValid(doctorIdParam)) {
+      doctorFilter._id = doctorIdParam
+    }
+
+    const approvedDoctors = await BacSi.find(doctorFilter).select('_id').lean()
+    const approvedDocIds = approvedDoctors.map((d) => d._id)
+
+    if (approvedDocIds.length === 0) return ok(res, [])
+
+    const schedules = await LichLamViec.find({
+      doctor_id: { $in: approvedDocIds },
       ngay: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
       trang_thai_ngay: 'lam_viec',
       trang_thai_xac_nhan: { $ne: 'tu_choi' },
     }).lean()
 
-    if (!schedule) return ok(res, [])
+    if (!schedules.length) return ok(res, [])
 
-    const slots = schedule.slots
-      .filter((s) => s.status === 'active')
-      .filter((s) => !isSlotInPast(ngayDate, s.gio_bat_dau))
-      .map((s) => ({
-        id: s._id, schedule_id: schedule._id,
-        gio_bat_dau: s.gio_bat_dau, gio_ket_thuc: s.gio_ket_thuc,
-      }))
-    return ok(res, slots)
+    const scheduleDocIds = [...new Set(schedules.map((s) => s.doctor_id.toString()))]
+    const bookedAppointments = await LichHen.find({
+      doctor_id: { $in: scheduleDocIds },
+      ngay_kham: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
+      status: { $in: ['pending', 'confirmed', 'completed'] },
+    }).select('doctor_id gio_kham').lean()
+
+    const bookedMap = bookedAppointments.reduce((acc, appt) => {
+      const key = `${appt.doctor_id.toString()}_${appt.gio_kham}`
+      acc[key] = true
+      return acc
+    }, {})
+
+    const slotMap = new Map()
+
+    for (const schedule of schedules) {
+      const activeSlots = (schedule.slots || []).filter(
+        (s) => s.status === 'active' && !isSlotInPast(ngayDate, s.gio_bat_dau)
+      )
+
+      for (const slot of activeSlots) {
+        const timeKey = slot.gio_bat_dau
+        const docSlotKey = `${schedule.doctor_id.toString()}_${timeKey}`
+        const isBooked = !!bookedMap[docSlotKey]
+
+        if (!slotMap.has(timeKey)) {
+          slotMap.set(timeKey, {
+            id: slot._id.toString(), // Lấy đại diện ID
+            schedule_id: schedule._id.toString(),
+            gio_bat_dau: slot.gio_bat_dau,
+            gio_ket_thuc: slot.gio_ket_thuc,
+            phong_kham: slot.phong_kham,
+            total_capacity: 0,
+            booked_count: 0,
+            is_full: false,
+          })
+        }
+
+        const slotInfo = slotMap.get(timeKey)
+        slotInfo.total_capacity += 1
+        if (isBooked) {
+          slotInfo.booked_count += 1
+        }
+      }
+    }
+
+    const availableSlots = Array.from(slotMap.values())
+      .map(s => {
+        s.is_full = s.booked_count >= s.total_capacity
+        return s
+      })
+      .sort((a, b) => a.gio_bat_dau.localeCompare(b.gio_bat_dau))
+    
+    return ok(res, availableSlots)
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -166,7 +223,7 @@ export async function createBooking(req, res) {
       return fail(res, statusCode, message)
     }
 
-    const { doctor_id, schedule_id, slot_id, ngay_kham, ten_khach, so_dien_thoai_khach, ly_do_kham, payment_method, user_id } = req.body
+    const { doctor_id, schedule_id, slot_id, ngay_kham, ten_khach, so_dien_thoai_khach, ly_do_kham, payment_method, user_id, member_id } = req.body
     if (!doctor_id || !schedule_id || !slot_id || !ngay_kham || !ten_khach || !so_dien_thoai_khach || !payment_method) {
       return rollbackFail(400, 'Thiếu thông tin bắt buộc')
     }
@@ -184,22 +241,85 @@ export async function createBooking(req, res) {
     }
 
     const appointmentDate = parseDateOnly(ngay_kham)
-    const doc = await BacSi.findOne({ _id: doctor_id }).populate('specialties', 'ten').session(session)
-    if (!doc) return rollbackFail(404, 'Bác sĩ không tồn tại')
+    if (!appointmentDate) return rollbackFail(400, 'Ngày khám không hợp lệ')
 
-    const schedule = await LichLamViec.findOne({ _id: schedule_id, doctor_id: doc._id }).session(session)
-    if (!schedule) return rollbackFail(400, 'Lịch làm việc không hợp lệ')
+    // ---- HỖ TRỢ RANDOM BÁC SĨ (doctor_id === 'auto') ----
+    let doc = null
+    let schedule = null
+    let slot = null
 
-    const slot = schedule.slots.id(slot_id)
-    if (!slot || slot.status !== 'active') return rollbackFail(409, 'Slot đã được đặt, vui lòng chọn khung giờ khác')
-    
+    if (doctor_id === 'auto' || doctor_id === 'all') {
+      // 1. Dùng tạm schedule_id truyền từ frontend để tra cứu khung giờ mong muốn
+      const tempSchedule = await LichLamViec.findOne({ _id: schedule_id }).lean()
+      if (!tempSchedule) return rollbackFail(400, 'Khung giờ khám không tồn tại')
+      const targetSlot = tempSchedule.slots.find((s) => s._id.toString() === slot_id)
+      if (!targetSlot) return rollbackFail(400, 'Khung giờ khám không hợp lệ')
+
+      const gioKhamRequest = targetSlot.gio_bat_dau
+
+      // 2. Tìm tất cả các bác sĩ có lịch làm việc trong ngày đó và có slot active ở khung giờ đó
+      const schedules = await LichLamViec.find({
+        ngay: { $gte: appointmentDate, $lt: addDays(appointmentDate, 1) },
+        trang_thai_ngay: 'lam_viec',
+        trang_thai_xac_nhan: { $ne: 'tu_choi' },
+        'slots.gio_bat_dau': gioKhamRequest,
+        'slots.status': 'active',
+      }).lean()
+
+      if (!schedules.length) return rollbackFail(409, 'Không còn bác sĩ nào trống lịch vào khung giờ này')
+
+      // Lấy danh sách bác sĩ hợp lệ
+      const scheduleDocIds = [...new Set(schedules.map((s) => s.doctor_id.toString()))]
+      const validDoctors = await BacSi.find({
+        _id: { $in: scheduleDocIds },
+        trang_thai_duyet: 'approved',
+        la_hien: true
+      }).lean()
+      const validDocIds = new Set(validDoctors.map(d => d._id.toString()))
+
+      // 3. Loại trừ các bác sĩ đã có lịch hẹn ở khung giờ đó & chỉ lấy bác sĩ hợp lệ
+      const availableSchedules = []
+      for (const s of schedules) {
+        if (!validDocIds.has(s.doctor_id.toString())) continue
+
+        const hasAppointment = await LichHen.exists({
+          doctor_id: s.doctor_id,
+          ngay_kham: { $gte: appointmentDate, $lt: addDays(appointmentDate, 1) },
+          gio_kham: gioKhamRequest,
+          status: { $in: ['pending', 'confirmed', 'completed'] },
+        })
+        if (!hasAppointment) {
+          availableSchedules.push(s)
+        }
+      }
+
+      if (!availableSchedules.length) return rollbackFail(409, 'Tất cả các bác sĩ đều đã có lịch hẹn hoặc không hợp lệ vào khung giờ này')
+
+      // 4. Random bác sĩ (có thể thay đổi bằng thuật toán ưu tiên)
+      const randomIndex = Math.floor(Math.random() * availableSchedules.length)
+      const selectedSchedule = availableSchedules[randomIndex]
+
+      schedule = await LichLamViec.findOne({ _id: selectedSchedule._id }).session(session)
+      slot = schedule.slots.find((s) => s.gio_bat_dau === gioKhamRequest)
+      doc = await BacSi.findOne({ _id: selectedSchedule.doctor_id }).populate('specialties', 'ten').session(session)
+    } else {
+      // Chọn thủ công như cũ
+      doc = await BacSi.findOne({ _id: doctor_id }).populate('specialties', 'ten').session(session)
+      if (!doc) return rollbackFail(404, 'Bác sĩ không tồn tại')
+      schedule = await LichLamViec.findOne({ _id: schedule_id, doctor_id: doc._id }).session(session)
+      if (!schedule) return rollbackFail(400, 'Lịch làm việc không hợp lệ')
+      slot = schedule.slots.id(slot_id)
+    }
+
+    if (!slot || slot.status !== 'active') return rollbackFail(409, 'Khung giờ này đã được đặt, vui lòng tải lại trang và chọn lại.')
+
     // Lễ tân đặt luôn nên slot booked
     const updated = await LichLamViec.findOneAndUpdate(
-      { _id: schedule_id, 'slots._id': slot_id, 'slots.status': 'active' },
+      { _id: schedule._id, 'slots._id': slot._id, 'slots.status': 'active' },
       { $set: { 'slots.$.status': 'booked' } },
       { new: true, session }
     )
-    if (!updated) return rollbackFail(409, 'Slot đã được đặt')
+    if (!updated) return rollbackFail(409, 'Khung giờ này vừa mới được người khác đặt. Vui lòng chọn khung giờ khác.')
 
     const appointmentCode = await nextAppointmentCode(session, appointmentDate)
     const gia_kham = doc.phi_kham ?? doc.gia_kham ?? 0
@@ -210,7 +330,8 @@ export async function createBooking(req, res) {
 
     const isPaid = payment_method === 'cash'
     const [appointment] = await LichHen.create([{
-      doctor_id: doc._id, schedule_id, slot_id, user_id: finalUserId || null,
+      doctor_id: doc._id, schedule_id: schedule._id, slot_id: slot._id, user_id: finalUserId || null,
+      member_id: member_id || null, // Lưu ID thành viên gia đình (nếu có)
       chi_nhanh_id: doc.chi_nhanh_id ?? null,
       specialty_id: doc.specialties?.[0]?._id ?? null,
       ma_lich_hen: appointmentCode,
@@ -262,12 +383,68 @@ export async function createBooking(req, res) {
     return ok(res, {
       appointment_id: appointment._id,
       payment_id: payment._id,
+      ma_giao_dich: payment.ma_giao_dich,
+      so_hoa_don: invoice.so_hoa_don || appointmentCode,
+      status: appointment.status,
+      payment_status: payment.status,
+      gia_kham: gia_kham,
       qr_payload: payment_method === 'transfer' ? `FAKE_QR_FOR_RECEPTIONIST_BOOKING_${appointmentCode}` : null
     })
 
   } catch (err) {
     await session.abortTransaction()
     session.endSession()
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── GET /api/receptionist/booking/family-group/:userId ───────────────────
+export async function getFamilyGroup(req, res) {
+  try {
+    const { userId } = req.params
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return fail(res, 400, 'ID người dùng không hợp lệ')
+    }
+
+    const family = await GiaDinh.findOne({ user_id: userId })
+      .populate('members', 'ho_ten ngay_sinh gioi_tinh nhom_mau di_ung benh_nen la_chu_ho status')
+      .lean()
+
+    if (!family) {
+      // Nếu chưa có nhóm, trả về người dùng hiện tại (chủ hộ ảo)
+      const user = await NguoiDung.findById(userId).select('ho_ten ngay_sinh gioi_tinh').lean()
+      if (!user) return fail(res, 404, 'Người dùng không tồn tại')
+
+      return ok(res, {
+        id: 'virtual-group',
+        ten_nhom: 'Gia đình của ' + user.ho_ten,
+        members: [{
+          id: user._id,
+          ho_ten: user.ho_ten,
+          ngay_sinh: user.ngay_sinh,
+          gioi_tinh: user.gioi_tinh || 'khac',
+          la_chu_ho: true,
+        }],
+      })
+    }
+
+    const activeMembers = (family.members || []).filter(m => m.status === 'active')
+
+    return ok(res, {
+      id: family._id,
+      ten_nhom: family.ten_nhom,
+      members: activeMembers.map((m) => ({
+        id: m._id,
+        ho_ten: m.ho_ten,
+        ngay_sinh: m.ngay_sinh,
+        gioi_tinh: m.gioi_tinh,
+        nhom_mau: m.nhom_mau,
+        di_ung: m.di_ung,
+        benh_nen: m.benh_nen,
+        la_chu_ho: m.la_chu_ho,
+      })),
+    })
+  } catch (err) {
     return fail(res, 500, err.message)
   }
 }
