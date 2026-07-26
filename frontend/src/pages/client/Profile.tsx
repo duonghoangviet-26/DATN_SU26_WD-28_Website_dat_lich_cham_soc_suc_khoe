@@ -123,9 +123,23 @@ export default function Profile() {
 
   useEffect(() => {
     const bookedId = searchParams.get('id')
-    if (justBooked && bookedId) {
+    const paymentId = searchParams.get('payment_id')
+    const isPaymentSuccess = searchParams.get('payment_status') === 'success'
+
+    if (isPaymentSuccess && paymentId) {
+      patientBookingService.confirmPayment(paymentId)
+        .then(() => {
+          patientRecordsService.getAppointments().then((res) => {
+            setAppointments(Array.isArray(res?.data) ? res.data : [])
+          })
+        })
+        .catch(() => {})
+    }
+
+    const targetId = bookedId || paymentId
+    if (targetId && (justBooked || isPaymentSuccess || paymentId)) {
       setDetailLoading(true)
-      patientRecordsService.getAppointmentDetail(bookedId)
+      patientRecordsService.getAppointmentDetail(targetId)
         .then((detail) => {
           setSelectedAppointment(detail)
           setDetailModalOpen(true)
@@ -350,7 +364,7 @@ export default function Profile() {
 
           <div className="flex flex-col gap-1 border-t border-slate-50 pt-3">
             {[
-              { key: 'appointments', label: '📅 Lịch hẹn của tôi' },
+              { key: 'appointments', label: '📅 Lịch hẹn' },
               { key: 'ehr', label: '📄 Bệnh án & Đơn thuốc' },
               { key: 'family', label: '👨‍👩‍👧 Thành viên gia đình' },
               { key: 'account', label: '👤 Thông tin cá nhân' },
@@ -408,6 +422,22 @@ export default function Profile() {
                           <h4 className="text-sm font-bold text-slate-800">
                             {appointment.ten_dich_vu || 'Khám lâm sàng Tai Mũi Họng'}
                           </h4>
+                          <p className="text-xs text-slate-600 font-medium">
+                            👤 Bệnh nhân: <span className="font-bold text-slate-800">{appointment.ten_khach || user?.ho_ten}</span>{' '}
+                            {appointment.member_id ? (
+                              <span className="inline-flex items-center rounded bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 ml-1">
+                                Thành viên gia đình
+                              </span>
+                            ) : appointment.ten_khach && appointment.ten_khach !== user?.ho_ten ? (
+                              <span className="inline-flex items-center rounded bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ml-1">
+                                Đặt hộ người thân
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ml-1">
+                                Bản thân
+                              </span>
+                            )}
+                          </p>
                           <p className="text-xs text-slate-500">
                             Bác sĩ phụ trách: <span className="font-semibold text-slate-700">{appointment.bac_si.ho_ten}</span>
                           </p>
@@ -826,6 +856,36 @@ export default function Profile() {
               </div>
             </div>
 
+            {/* Thông tin bệnh nhân được đặt khám */}
+            <div className="bg-blue-50/60 p-4 rounded-xl border border-blue-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">Thông tin bệnh nhân khám</p>
+                <span className="text-[11px] font-semibold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
+                  {selectedAppointment.member_id
+                    ? 'Thành viên gia đình'
+                    : selectedAppointment.ten_khach && selectedAppointment.ten_khach !== user?.ho_ten
+                    ? 'Đặt hộ người thân'
+                    : 'Tài khoản chính (Bản thân)'}
+                </span>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3 text-sm pt-1">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Họ và tên bệnh nhân:</p>
+                  <p className="font-bold text-slate-800">{selectedAppointment.ten_khach || user?.ho_ten}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Số điện thoại liên hệ:</p>
+                  <p className="font-bold text-slate-800">{selectedAppointment.so_dien_thoai_khach || user?.so_dien_thoai || 'Chưa cập nhật'}</p>
+                </div>
+                {selectedAppointment.nam_sinh_khach && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Năm sinh:</p>
+                    <p className="font-semibold text-slate-700">{selectedAppointment.nam_sinh_khach}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2 text-sm">
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Bác sĩ phụ trách</p>
@@ -843,7 +903,7 @@ export default function Profile() {
             <div className="space-y-3 text-sm">
               <div className="border-b border-slate-100 pb-2">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Địa điểm khám</p>
-                <p className="font-semibold text-slate-800 mt-1">🏠 {selectedAppointment.phong_kham || 'Phòng khám Tai Mũi Họng ViteFamily'}</p>
+                <p className="font-semibold text-slate-800 mt-1">🏠 {selectedAppointment.phong_kham ? `${selectedAppointment.phong_kham} - Phòng khám Tai Mũi Họng ViteFamily` : 'Phòng 102 - Tầng 1 - Phòng khám Tai Mũi Họng ViteFamily'}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{selectedAppointment.dia_chi_kham || 'Thành phố Hà Nội'}</p>
               </div>
 

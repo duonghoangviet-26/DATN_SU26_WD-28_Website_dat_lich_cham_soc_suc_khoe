@@ -18,9 +18,8 @@ import {
   type FamilyMember,
   type CreateBookingPayload,
 } from '@/services/patient-booking.service'
-import { specialtyService } from '@/services/specialty.service'
 
-type BookingStep = 1 | 2 | 3 | 4 | 5
+type BookingStep = 1 | 2 | 3 | 4
 
 function formatSlotLabel(slot: PatientBookingSlot) {
   return `${slot.gio_bat_dau} - ${slot.gio_ket_thuc}`
@@ -79,14 +78,8 @@ export default function Booking() {
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
 
-  // Specialty filters
-  const [specialties, setSpecialties] = useState<{ id: string; ten: string }[]>([])
-  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('all')
-  const [loadingSpecialties, setLoadingSpecialties] = useState(false)
-
   const [dates, setDates] = useState<{ value: string; label: string }[]>([])
   const [doctors, setDoctors] = useState<PatientBookingDoctor[]>([])
-  const [doctorSearch, setDoctorSearch] = useState('')
   const [slots, setSlots] = useState<PatientBookingSlot[]>([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [loadingSlots, setLoadingSlots] = useState(false)
@@ -95,6 +88,7 @@ export default function Booking() {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
   const [nowMs, setNowMs] = useState(() => Date.now())
 
+  // Khởi tạo danh sách 7 ngày tiếp theo
   useEffect(() => {
     const datesList = []
     const today = new Date()
@@ -116,15 +110,6 @@ export default function Booking() {
       setSelectedDate(datesList[0].value)
     }
   }, [])
-
-  const filteredDoctors = doctors.filter((doc) => {
-    const matchesSearch = doc.ho_ten.toLowerCase().includes(doctorSearch.toLowerCase()) ||
-      doc.specialties.some((s) => s.ten.toLowerCase().includes(doctorSearch.toLowerCase()))
-    const matchesSpecialty = selectedSpecialtyId === 'all' || doc.specialties.some((s) => s.id === selectedSpecialtyId)
-    return matchesSearch && matchesSpecialty
-  })
-
-  const isDefaultAll = selectedSpecialtyId === 'all' && doctorSearch.trim() === ''
 
   useEffect(() => {
     if (user) {
@@ -155,7 +140,8 @@ export default function Booking() {
         setDoctors(data)
         if (queryDoctorId && data.some((doctor) => doctor.id === queryDoctorId)) {
           setSelectedDoctorId(queryDoctorId)
-          setStep(2)
+        } else if (data.length > 0) {
+          setSelectedDoctorId(data[0].id)
         }
       })
       .catch((error: any) => {
@@ -173,27 +159,7 @@ export default function Booking() {
   }, [queryDoctorId])
 
   useEffect(() => {
-    let ignore = false
-    setLoadingSpecialties(true)
-    specialtyService.getAllActive()
-      .then((data) => {
-        if (!ignore) {
-          setSpecialties(data)
-        }
-      })
-      .catch((err) => {
-        console.error('Không tải được danh sách chuyên khoa:', err)
-      })
-      .finally(() => {
-        if (!ignore) setLoadingSpecialties(false)
-      })
-    return () => {
-      ignore = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!selectedDoctorId || !selectedDate) {
+    if (!selectedDate) {
       setSlots([])
       return
     }
@@ -201,7 +167,7 @@ export default function Booking() {
     let ignore = false
     setLoadingSlots(true)
     setSelectedSlotId('')
-    patientBookingService.getSlots(selectedDoctorId, selectedDate)
+    patientBookingService.getSlots('all', selectedDate)
       .then((data) => {
         if (!ignore) setSlots(data)
       })
@@ -218,10 +184,11 @@ export default function Booking() {
     return () => {
       ignore = true
     }
-  }, [selectedDoctorId, selectedDate])
+  }, [selectedDate])
 
+  // Lắng nghe tạo VNPAY Payment Session ở Bước 4
   useEffect(() => {
-    if (step !== 5 || !createdBooking?.payment_id) return
+    if (step !== 4 || !createdBooking?.payment_id) return
 
     let ignore = false
     setCreatingPaymentSession(true)
@@ -243,6 +210,7 @@ export default function Booking() {
     }
   }, [step, createdBooking?.payment_id])
 
+  // Render QR Code từ payload
   useEffect(() => {
     if (!paymentSnapshot?.gateway.qr_payload) {
       setQrCodeDataUrl('')
@@ -270,8 +238,9 @@ export default function Booking() {
     }
   }, [paymentSnapshot?.gateway.qr_payload])
 
+  // Polling trạng thái thanh toán
   useEffect(() => {
-    if (step !== 5 || !createdBooking?.payment_id || paymentSnapshot?.payment_status !== 'pending') return
+    if (step !== 4 || !createdBooking?.payment_id || paymentSnapshot?.payment_status !== 'pending') return
 
     let cancelled = false
     const intervalId = window.setInterval(() => {
@@ -279,9 +248,7 @@ export default function Booking() {
         .then((data) => {
           if (!cancelled) setPaymentSnapshot(data)
         })
-        .catch(() => {
-          // Keep the existing snapshot if polling fails transiently.
-        })
+        .catch(() => {})
     }, 5000)
 
     return () => {
@@ -290,8 +257,9 @@ export default function Booking() {
     }
   }, [step, createdBooking?.payment_id, paymentSnapshot?.payment_status])
 
+  // Countdown timer 15 phút
   useEffect(() => {
-    if (step !== 5 || paymentSnapshot?.payment_status !== 'pending' || paymentSnapshot.gateway.is_expired) return
+    if (step !== 4 || paymentSnapshot?.payment_status !== 'pending' || paymentSnapshot.gateway.is_expired) return
 
     const intervalId = window.setInterval(() => {
       setNowMs(Date.now())
@@ -302,20 +270,21 @@ export default function Booking() {
     }
   }, [step, paymentSnapshot?.payment_status, paymentSnapshot?.gateway.is_expired])
 
+  // Khi thanh toán thành công ➔ Chuyển sang Hồ sơ bệnh nhân
   useEffect(() => {
-    if (step === 5 && paymentSnapshot?.payment_status === 'paid' && paymentSnapshot.appointment_status === 'confirmed') {
+    if (step === 4 && paymentSnapshot?.payment_status === 'paid' && paymentSnapshot.appointment_status === 'confirmed') {
       navigate(`/profile?booked=true&id=${createdBooking?.id || createdBooking?.appointment_id || ''}`, { replace: true })
     }
   }, [step, paymentSnapshot?.payment_status, paymentSnapshot?.appointment_status, createdBooking, navigate])
 
-  const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) || null
+  const selectedDoctor = doctors.find((doctor) => doctor.id === selectedDoctorId) || doctors[0] || null
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) || null
   const countdownLabel = getCountdownLabel(paymentSnapshot?.gateway.expires_at || null, nowMs)
 
   function handleNextStep() {
     if (step === 1) {
-      if (!selectedDoctorId) {
-        setToast('Vui lòng chọn bác sĩ khám chuyên khoa.')
+      if (!selectedDate || !selectedSlotId) {
+        setToast('Vui lòng chọn ngày khám và khung giờ còn trống.')
         return
       }
       setStep(2)
@@ -323,15 +292,6 @@ export default function Booking() {
     }
 
     if (step === 2) {
-      if (!selectedDate || !selectedSlotId) {
-        setToast('Vui lòng chọn ngày khám và khung giờ còn trống.')
-        return
-      }
-      setStep(3)
-      return
-    }
-
-    if (step === 3) {
       if (bookingFor === 'member' && !selectedMemberId) {
         setToast('Vui lòng chọn một thành viên trong gia đình.')
         return
@@ -345,17 +305,15 @@ export default function Booking() {
         return
       }
 
-      // Kiểm tra định dạng Họ tên (chữ cái Tiếng Việt có dấu, khoảng trắng)
       const nameRegex = /^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂÂÊÔƠƯưăâêôơưẠ-ỹđĐ\s']{2,100}$/
       if (!nameRegex.test(nameTrimmed)) {
-        setToast('Họ tên bệnh nhân không hợp lệ (phải từ 2 ký tự trở lên và chỉ chứa chữ cái).')
+        setToast('Họ tên bệnh nhân không hợp lệ (phải từ 2 ký tự trở lên).')
         return
       }
 
-      // Kiểm tra định dạng Số điện thoại (10 chữ số, bắt đầu bằng 0)
       const phoneRegex = /^0\d{9}$/
       if (!phoneRegex.test(phoneTrimmed)) {
-        setToast('Số điện thoại liên hệ không hợp lệ (phải gồm 10 chữ số và bắt đầu bằng số 0).')
+        setToast('Số điện thoại liên hệ không hợp lệ (phải gồm 10 chữ số bắt đầu bằng 0).')
         return
       }
 
@@ -365,26 +323,24 @@ export default function Booking() {
       }
 
       if (symptoms.trim().length < 5) {
-        setToast('Mô tả triệu chứng quá ngắn (vui lòng nhập tối thiểu 5 ký tự để bác sĩ nắm thông tin).')
+        setToast('Mô tả triệu chứng quá ngắn (vui lòng nhập tối thiểu 5 ký tự).')
         return
       }
 
-      setStep(4)
+      setStep(3)
     }
   }
 
   function handlePrevStep() {
-    if (step === 5) {
-      return
-    }
+    if (step === 4) return
     if (step > 1) {
       setStep((prev) => (prev - 1) as BookingStep)
     }
   }
 
   async function handleCreateBooking() {
-    if (!selectedDoctor || !selectedSlot) {
-      setToast('Thiếu thông tin bác sĩ hoặc khung giờ khám.')
+    if (!selectedSlot) {
+      setToast('Thiếu thông tin khung giờ khám.')
       return
     }
 
@@ -392,7 +348,7 @@ export default function Booking() {
     try {
       const payload: CreateBookingPayload = {
         loai_kham: 'clinic',
-        doctor_id: selectedDoctor.id,
+        doctor_id: 'auto',
         schedule_id: selectedSlot.schedule_id,
         slot_id: selectedSlot.id,
         ngay_kham: selectedDate,
@@ -410,8 +366,8 @@ export default function Booking() {
       setCreatedBooking(created)
       setPaymentSnapshot(null)
       setQrCodeDataUrl('')
-      setStep(5)
-      setToast('Đã tạo lịch hẹn chờ thanh toán. Hệ thống đang tạo mã QR VNPAY mock.')
+      setStep(4)
+      setToast('Đã tạo lịch hẹn thành công. Đang tải mã QR VNPAY...')
     } catch (error: any) {
       setToast(error.response?.data?.message || error.message || 'Tạo lịch hẹn thất bại')
     } finally {
@@ -464,161 +420,46 @@ export default function Booking() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 pb-16">
       <Breadcrumb items={[{ label: 'Đặt lịch khám' }]} />
+      {toast && <Toast message={toast} type="warning" onClose={() => setToast(null)} />}
 
       <div className="space-y-2 text-left">
-        <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Đặt Lịch Khám Tai Mũi Họng</h1>
+        <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Đặt Lịch Khám Bệnh</h1>
         <p className="text-sm text-slate-500">
-          Đăng ký lịch khám trực tiếp với bác sĩ chuyên khoa và thanh toán qua màn QR VNPAY mô phỏng của hệ thống.
+          Chọn ngày và khung giờ mong muốn. Hệ thống sẽ tự động phân bổ bác sĩ và chuyển tới bước thanh toán.
         </p>
       </div>
 
-      <div className="grid grid-cols-5 gap-2 border-b border-slate-200 pb-6 text-center">
+      {/* Thanh tiến trình 4 bước (Wizard Steps) */}
+      <div className="grid grid-cols-4 gap-2 border-b border-slate-200 pb-6 text-center">
         {[
-          { num: 1, label: 'Chọn Bác sĩ' },
-          { num: 2, label: 'Thời gian' },
-          { num: 3, label: 'Triệu chứng' },
-          { num: 4, label: 'Xác nhận lịch' },
-          { num: 5, label: 'Thanh toán' },
+          { num: 1, label: 'Bước 1: Ngày & Khung giờ' },
+          { num: 2, label: 'Bước 2: Triệu chứng' },
+          { num: 3, label: 'Bước 3: Xác nhận lịch' },
+          { num: 4, label: 'Bước 4: Thanh toán VNPAY' },
         ].map((item) => (
           <div key={item.num} className="space-y-2">
             <div
-              className={`mx-auto grid h-8 w-8 place-items-center rounded-full text-xs font-bold transition-colors ${
-                step >= item.num ? 'bg-brand-600 text-white shadow-md' : 'bg-slate-100 text-slate-400'
+              className={`mx-auto grid h-9 w-9 place-items-center rounded-full text-xs font-bold transition-all ${
+                step >= item.num ? 'bg-brand-600 text-white shadow-md shadow-brand-100' : 'bg-slate-100 text-slate-400'
               }`}
             >
               {item.num}
             </div>
-            <p className={`hidden text-xs font-semibold sm:block ${step >= item.num ? 'text-slate-800' : 'text-slate-400'}`}>
+            <p className={`text-xs font-semibold ${step >= item.num ? 'text-slate-800' : 'text-slate-400'}`}>
               {item.label}
             </p>
           </div>
         ))}
       </div>
 
+      {/* ─── BƯỚC 1: CHỌN NGÀY VÀ KHUNG GIỜ KHÁM ─────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn bác sĩ phụ trách</label>
-              
-              {/* Ô tìm kiếm bác sĩ */}
-              {doctors.length > 0 && (
-                <div className="relative w-full sm:w-72">
-                  <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
-                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Tìm theo tên bác sĩ"
-                    value={doctorSearch}
-                    onChange={(e) => setDoctorSearch(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 pl-9 pr-4 py-1.5 text-xs focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none bg-white transition"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Bộ lọc chuyên khoa */}
-            {!loadingSpecialties && specialties.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-100 scrollbar-thin">
-                <button
-                  type="button"
-                  onClick={() => setSelectedSpecialtyId('all')}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-all ${
-                    selectedSpecialtyId === 'all'
-                      ? 'bg-brand-600 text-white shadow-sm shadow-brand-100'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Tất cả chuyên khoa
-                </button>
-                {specialties.map((spec) => (
-                  <button
-                    key={spec.id}
-                    type="button"
-                    onClick={() => setSelectedSpecialtyId(spec.id)}
-                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-all ${
-                      selectedSpecialtyId === spec.id
-                        ? 'bg-brand-600 text-white shadow-sm shadow-brand-100'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {spec.ten}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {doctors.length === 0 ? (
-              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Hiện chưa có bác sĩ khả dụng để đặt lịch.</p>
-            ) : isDefaultAll ? (
-              <div className="space-y-6">
-                {/* Banner hướng dẫn chọn chuyên khoa */}
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center">
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600 text-lg">
-                    🩺
-                  </div>
-                  <h4 className="mt-3 text-sm font-bold text-slate-800">Tìm kiếm bác sĩ theo chuyên khoa</h4>
-                  <p className="mx-auto mt-1 max-w-sm text-xs text-slate-500 leading-relaxed">
-                    Vui lòng chọn một chuyên khoa cụ thể từ danh mục phía trên hoặc nhập tên bác sĩ vào ô tìm kiếm để tiến hành đặt lịch khám.
-                  </p>
-                </div>
-              </div>
-            ) : filteredDoctors.length === 0 ? (
-              <p className="rounded-xl bg-slate-50 px-4 py-6 text-xs text-slate-400 text-center">Không tìm thấy bác sĩ phù hợp với bộ lọc.</p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
-                {filteredDoctors.map((doctor) => (
-                  <button
-                    key={doctor.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDoctorId(doctor.id)
-                      setStep(2)
-                    }}
-                    className={`flex items-start gap-3 rounded-xl border p-3 text-left transition-all ${
-                      selectedDoctorId === doctor.id
-                        ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 shadow-sm'
-                        : 'border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-slate-100">
-                      {doctor.anh_dai_dien ? (
-                        <img src={doctor.anh_dai_dien} alt={doctor.ho_ten} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="grid h-full w-full place-items-center bg-brand-100 text-lg font-extrabold text-brand-600">
-                          {doctor.ho_ten.split(' ').pop()?.charAt(0)}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold leading-snug text-slate-800">{doctor.ho_ten}</h4>
-                      <p className="mt-0.5 text-[10px] font-medium uppercase text-slate-400">
-                        {doctor.specialties.map((specialty) => specialty.ten).join(', ')}
-                      </p>
-                      <p className="mt-1 text-[10px] font-semibold text-brand-600">
-                        {formatCurrency(doctor.gia_kham)} • {doctor.so_nam_kinh_nghiem} năm kinh nghiệm
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn ngày khám</label>
-              
-              {/* Chọn ngày từ lịch */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">1. Chọn ngày khám</label>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-semibold">Hoặc chọn ngày khác:</span>
+                <span className="text-xs text-slate-500 font-semibold">Ngày khác:</span>
                 <input
                   type="date"
                   value={selectedDate}
@@ -632,58 +473,64 @@ export default function Booking() {
               </div>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
               {dates.map((date) => (
                 <button
                   key={date.value}
                   type="button"
                   onClick={() => setSelectedDate(date.value)}
-                  className={`flex w-24 shrink-0 flex-col items-center justify-center rounded-xl border py-2.5 text-center transition-all ${
+                  className={`flex w-28 shrink-0 flex-col items-center justify-center rounded-xl border py-3 text-center transition-all ${
                     selectedDate === date.value
-                      ? 'border-brand-500 bg-brand-50/20 font-bold text-brand-700'
+                      ? 'border-brand-500 bg-brand-50/30 font-bold text-brand-700 ring-2 ring-brand-500 shadow-sm'
                       : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                   }`}
                 >
-                  <span className="text-[10px] font-semibold uppercase leading-tight">{date.label.split(',')[0]}</span>
-                  <span className="mt-0.5 text-base font-bold leading-normal">{date.label.split(',')[1].trim()}</span>
+                  <span className="text-[11px] font-semibold uppercase leading-tight">{date.label.split(',')[0]}</span>
+                  <span className="mt-0.5 text-base font-extrabold leading-normal">{date.label.split(',')[1].trim()}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="space-y-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn khung giờ khám</label>
+          <div className="space-y-3 pt-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-700">2. Chọn khung giờ khám</label>
             {loadingSlots ? (
-              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Đang tải khung giờ còn trống...</p>
+              <p className="rounded-xl bg-slate-50 px-4 py-4 text-sm text-slate-500">Đang tải khung giờ còn trống...</p>
             ) : slots.length === 0 ? (
-              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Không có slot trống cho ngày đã chọn.</p>
+              <div className="rounded-xl bg-slate-50 p-6 text-center">
+                <p className="text-sm font-semibold text-slate-600">Không có khung giờ khám còn trống cho ngày đã chọn.</p>
+                <p className="mt-1 text-xs text-slate-400">Vui lòng chọn một ngày khác phía trên.</p>
+              </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {slots.map((slot) => (
-                  <button
-                    key={slot.id}
-                    type="button"
-                    onClick={() => setSelectedSlotId(slot.id)}
-                    className={`rounded-lg border py-2 text-xs font-semibold transition-all ${
-                      selectedSlotId === slot.id
-                        ? 'border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-100'
-                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {slot.gio_bat_dau}
-                  </button>
-                ))}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {slots.map((slot) => {
+                  const isSelected = selectedSlotId === slot.id
+                  return (
+                    <button
+                      key={slot.id}
+                      type="button"
+                      onClick={() => setSelectedSlotId(slot.id)}
+                      className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
+                        isSelected
+                          ? 'border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-100 ring-2 ring-brand-500'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="text-base font-bold tracking-tight">{slot.gio_bat_dau}</span>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {step === 3 && (
+      {/* ─── BƯỚC 2: NHẬP TRIỆU CHỨNG & THÔNG TIN BỆNH NHÂN ──────────────────── */}
+      {step === 2 && (
         <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
-          <h3 className="border-b border-slate-50 pb-2 text-sm font-bold text-slate-800">Thông tin người khám bệnh</h3>
+          <h3 className="border-b border-slate-100 pb-3 text-sm font-bold text-slate-800">Thông tin người khám & triệu chứng</h3>
 
-          {/* Chọn đối tượng khám */}
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Đối tượng khám bệnh</label>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -749,18 +596,15 @@ export default function Booking() {
             </div>
           </div>
 
-          {/* Hiển thị chi tiết theo đối tượng */}
           {bookingFor === 'self' && (
             <div className="space-y-4">
-              <div className="rounded-xl bg-slate-50 p-4 border border-slate-100 space-y-2">
-                <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Thông tin của bạn</p>
-                <div className="text-sm">
-                  <p><span className="font-semibold text-slate-500">Họ và tên:</span> <span className="font-bold text-slate-800">{user?.ho_ten}</span></p>
-                </div>
+              <div className="rounded-xl bg-slate-50 p-4 border border-slate-100 space-y-1">
+                <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Thông tin người đăng ký</p>
+                <p className="text-sm font-bold text-slate-800">{user?.ho_ten}</p>
               </div>
               <Input
-                label="Số điện thoại liên hệ nhận SMS/Zalo"
-                placeholder="Nhập số di động liên hệ..."
+                label="Số điện thoại liên hệ"
+                placeholder="Nhập số di động..."
                 value={patientPhone}
                 onChange={(event) => setPatientPhone(event.target.value)}
                 required
@@ -771,9 +615,9 @@ export default function Booking() {
           {bookingFor === 'member' && (
             <div className="space-y-4">
               {familyMembers.length === 0 ? (
-                <div className="rounded-xl bg-amber-50 p-4 border border-amber-100 text-sm text-amber-800 space-y-2">
+                <div className="rounded-xl bg-amber-50 p-4 border border-amber-100 text-sm text-amber-800 space-y-1">
                   <p className="font-bold">⚠️ Chưa có thành viên gia đình</p>
-                  <p className="text-xs">Bạn chưa thêm thành viên nào vào nhóm gia đình. Vui lòng truy cập trang **Hồ sơ bệnh nhân** để thiết lập nhóm và thêm thành viên trước, hoặc chọn hình thức "Đặt hộ người khác" để nhập thủ công.</p>
+                  <p className="text-xs">Vui lòng truy cập Hồ sơ bệnh nhân để thêm thành viên hoặc chọn Đặt hộ người khác.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -790,12 +634,12 @@ export default function Booking() {
                         className={`rounded-xl border p-3 text-left transition-all ${
                           selectedMemberId === member.id
                             ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
-                            : 'border-slate-200 text-slate-650 hover:bg-slate-50'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
                       >
                         <h4 className="text-xs font-bold leading-snug">{member.ho_ten}</h4>
                         <p className="mt-1 text-[10px] text-slate-400 uppercase">
-                          {member.gioi_tinh === 'nam' ? 'Nam' : member.gioi_tinh === 'nu' ? 'Nữ' : 'Khác'} • {new Date(member.ngay_sinh).getFullYear()}
+                          {member.gioi_tinh === 'nam' ? 'Nam' : member.gioi_tinh === 'nu' ? 'Nữ' : 'Khác'}
                         </p>
                       </button>
                     ))}
@@ -803,14 +647,14 @@ export default function Booking() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Input
-                      label="Họ và tên bệnh nhân (Tự động điền)"
+                      label="Họ và tên bệnh nhân"
                       value={patientName}
                       disabled
                       required
                     />
                     <Input
-                      label="Số điện thoại liên hệ nhận SMS/Zalo"
-                      placeholder="Nhập số di động liên hệ..."
+                      label="Số điện thoại liên hệ"
+                      placeholder="Nhập số di động..."
                       value={patientPhone}
                       onChange={(event) => setPatientPhone(event.target.value)}
                       required
@@ -842,7 +686,7 @@ export default function Booking() {
 
           <Textarea
             label="Mô tả triệu chứng bệnh"
-            placeholder="Ví dụ: Đau họng rát buốt khi nuốt, nghẹt mũi kéo dài, đau buốt vùng tai..."
+            placeholder="Ví dụ: Đau rát họng khi nuốt, sốt nhẹ, ho đờm kéo dài..."
             value={symptoms}
             onChange={(event) => setSymptoms(event.target.value)}
             required
@@ -850,31 +694,38 @@ export default function Booking() {
         </div>
       )}
 
-      {step === 4 && (
+      {/* ─── BƯỚC 3: XÁC NHẬN THÔNG TIN LỊCH HẸN ─────────────────────────────── */}
+      {step === 3 && (
         <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
-          <h3 className="border-b border-slate-50 pb-2 text-sm font-bold text-slate-800">Tóm tắt lịch hẹn khám</h3>
+          <h3 className="border-b border-slate-100 pb-3 text-sm font-bold text-slate-800">Xác nhận thông tin đặt lịch</h3>
 
           <div className="grid gap-4 text-sm text-slate-600 sm:grid-cols-2">
             <div className="space-y-2">
-              <p><span className="font-semibold text-slate-500">Hình thức:</span> Khám chuyên khoa tại phòng khám</p>
-              <p><span className="font-semibold text-slate-500">Bác sĩ phụ trách:</span> <span className="font-bold text-slate-800">{selectedDoctor?.ho_ten}</span></p>
-              <p><span className="font-semibold text-slate-500">Thời gian:</span> <span className="font-semibold text-brand-600">{selectedSlot ? formatSlotLabel(selectedSlot) : '--'}</span>, ngày {selectedDate}</p>
+              <p><span className="font-semibold text-slate-500">Ngày khám:</span> <span className="font-bold text-slate-800">{selectedDate}</span></p>
+              <p><span className="font-semibold text-slate-500">Khung giờ:</span> <span className="font-extrabold text-brand-600">{selectedSlot ? formatSlotLabel(selectedSlot) : '--'}</span></p>
+              <p>
+                <span className="font-semibold text-slate-500">Bác sĩ phụ trách:</span>{' '}
+                <span className="font-bold text-slate-800">
+                  {selectedDoctor?.ho_ten || 'Bác sĩ chuyên khoa'}
+                </span>
+              </p>
             </div>
 
             <div className="space-y-2">
-              <p><span className="font-semibold text-slate-500">Người khám:</span> <span className="font-bold text-slate-800">{patientName}</span></p>
-              <p><span className="font-semibold text-slate-500">Điện thoại:</span> {patientPhone}</p>
+              <p><span className="font-semibold text-slate-500">Bệnh nhân:</span> <span className="font-bold text-slate-800">{patientName}</span></p>
+              <p><span className="font-semibold text-slate-500">Số điện thoại:</span> {patientPhone}</p>
               <p><span className="font-semibold text-slate-500">Triệu chứng:</span> {symptoms}</p>
             </div>
           </div>
 
           <div className="rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">
-            * Sau khi bấm xác nhận, hệ thống sẽ tạo lịch hẹn thật ở trạng thái <strong>pending/unpaid</strong> rồi sinh mã QR VNPAY mock để bạn tiếp tục thanh toán.
+            * Sau khi bấm <strong>"Xác nhận & Thanh toán"</strong>, hệ thống sẽ tạo lịch hẹn thật và mở màn hình thanh toán VNPAY qua mã QR.
           </div>
         </div>
       )}
 
-      {step === 5 && createdBooking && (
+      {/* ─── BƯỚC 4: MÀN HÌNH THANH TOÁN VNPAY VIA MÃ QR ──────────────────────── */}
+      {step === 4 && createdBooking && (
         <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-brand-600">Thanh toán VNPAY</p>
@@ -978,25 +829,30 @@ export default function Booking() {
         </div>
       )}
 
+      {/* Thao tác nút chuyển bước */}
       <div className="flex items-center justify-between pt-4">
-        {step > 1 && step < 5 ? (
-          <Button variant="secondary" onClick={handlePrevStep}>
-            Quay lại
+        {step > 1 && step < 4 ? (
+          <Button variant="secondary" onClick={handlePrevStep} disabled={submittingBooking}>
+            ← Quay lại
           </Button>
         ) : (
           <div />
         )}
 
-        {step < 4 ? (
-          <Button onClick={handleNextStep}>Tiếp tục</Button>
-        ) : step === 4 ? (
-          <Button onClick={handleCreateBooking} loading={submittingBooking}>
-            Xác nhận đặt lịch khám
+        {step < 3 ? (
+          <Button onClick={handleNextStep}>
+            Tiếp tục →
+          </Button>
+        ) : step === 3 ? (
+          <Button
+            className="bg-brand-600 hover:bg-brand-700 shadow-md shadow-brand-200"
+            onClick={handleCreateBooking}
+            loading={submittingBooking}
+          >
+            ✓ Xác nhận & Thanh toán
           </Button>
         ) : null}
       </div>
-
-      {toast && <Toast message={toast} type="success" onClose={() => setToast(null)} />}
     </div>
   )
 }
