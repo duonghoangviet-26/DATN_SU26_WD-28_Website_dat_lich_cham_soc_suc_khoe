@@ -89,8 +89,11 @@ export default function ReceptionistBooking() {
   }, [currentSlots, selectedSlotId])
 
   const selectedDoctor = useMemo(() => {
-    return doctors.length > 0 ? doctors[0] : null
-  }, [doctors])
+    if (doctors.length === 0) return null
+    // Random 1 bác sĩ trong danh sách để giả lập việc phân bổ
+    const randomIndex = Math.floor(Math.random() * doctors.length)
+    return doctors[randomIndex]
+  }, [doctors, selectedSlotId])
 
   // Xử lý Gửi Lịch Hẹn lên hệ thống
   const handleSubmitBooking = async () => {
