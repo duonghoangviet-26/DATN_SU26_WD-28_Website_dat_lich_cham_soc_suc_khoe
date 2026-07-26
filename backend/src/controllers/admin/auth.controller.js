@@ -287,7 +287,7 @@ export async function resetPassword(req, res) {
     // Tìm người dùng chưa bị xóa mềm, khớp token và còn hạn sử dụng
     const user = await NguoiDung.findOne({
       reset_password_token: hashedToken,
-      reset_password_expire: { $gt: Date.now() },
+      reset_password_expire: { $gt: new Date() },
       ngay_xoa: null
     })
 
