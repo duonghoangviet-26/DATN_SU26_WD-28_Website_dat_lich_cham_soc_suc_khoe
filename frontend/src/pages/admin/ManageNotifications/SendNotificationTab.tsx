@@ -13,7 +13,6 @@ const TARGET_COLOR: Record<NotificationTargetAPI, 'gray' | 'blue' | 'green' | 'y
   benh_nhan: 'blue',
   bac_si: 'green',
   le_tan: 'yellow',
-  y_ta: 'green',
 }
 
 const TARGET_LABEL: Record<NotificationTargetAPI, string> = {
@@ -21,14 +20,12 @@ const TARGET_LABEL: Record<NotificationTargetAPI, string> = {
   benh_nhan: 'Bệnh nhân',
   bac_si: 'Bác sĩ',
   le_tan: 'Lễ tân',
-  y_ta: 'Y tá',
 }
 
 const TARGET_ROLE: Partial<Record<NotificationTargetAPI, string>> = {
   benh_nhan: 'user',
   bac_si: 'doctor',
   le_tan: 'receptionist',
-  y_ta: 'nurse',
 }
 
 interface RecipientOption {
@@ -269,11 +266,10 @@ export default function SendNotificationTab() {
                 value={doi_tuong} 
                 onChange={(e) => setDoiTuong(e.target.value as NotificationTargetAPI)}
               >
-                <option value="tat_ca">Tất cả (Bệnh nhân, Bác sĩ, Lễ tân & Y tá)</option>
+                <option value="tat_ca">Tất cả (Bệnh nhân, Bác sĩ & Lễ tân)</option>
                 <option value="benh_nhan">Chỉ Bệnh nhân</option>
                 <option value="bac_si">Chỉ Bác sĩ</option>
                 <option value="le_tan">Chỉ Lễ tân</option>
-                <option value="y_ta">Chỉ Y tá</option>
               </select>
             </div>
           </div>

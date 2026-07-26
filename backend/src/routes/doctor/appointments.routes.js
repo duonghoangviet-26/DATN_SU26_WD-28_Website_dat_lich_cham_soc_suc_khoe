@@ -13,8 +13,8 @@ router.get('/:id/result',        appointments.getResult)
 router.post('/:id/result',       appointments.createResult)
 router.put('/:id/result',        appointments.updateResult)
 router.patch('/:id/result/confirm',          appointments.confirmResult)
-// KHÔI PHỤC 2026-07-19 (QĐ-1/A, PROMPT 28): bác sĩ đẩy hồ sơ về y tá chỉnh sửa (song song với
-// confirmResult "Lưu & Xác nhận"). Xem requestRevision trong controller.
+// Bác sĩ đánh dấu hồ sơ "cần chỉnh sửa lại" (song song với confirmResult "Lưu & Xác nhận").
+// Xem requestRevision trong controller.
 router.patch('/:id/result/request-revision', appointments.requestRevision)
 
 // Xác nhận hồ sơ theo ket_qua_id — dùng cho lượt khám offline (không có LichHen, xem

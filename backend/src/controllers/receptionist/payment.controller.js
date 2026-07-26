@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import mongoose from 'mongoose'
 import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen } from '../../models/index.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
@@ -21,13 +22,32 @@ function getGatewayResponseObject(payment) {
 }
 
 function formatVnpDate(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  return `${year}${month}${day}${hours}${minutes}${seconds}`
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+
+  const parts = formatter.formatToParts(date)
+  let y = '', m = '', d = '', h = '', min = '', s = ''
+
+  parts.forEach(part => {
+    if (part.type === 'year') y = part.value
+    if (part.type === 'month') m = part.value
+    if (part.type === 'day') d = part.value
+    if (part.type === 'hour') h = part.value
+    if (part.type === 'minute') min = part.value
+    if (part.type === 'second') s = part.value
+  })
+
+  if (h === '24') h = '00'
+
+  return `${y}${m}${d}${h}${min}${s}`
 }
 
 function toDateOrNull(value) {
@@ -43,28 +63,40 @@ function isGatewaySessionExpired(gateway) {
 }
 
 function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt }) {
-  const params = new URLSearchParams({
+  const tmnCode = process.env.VNP_TMNCODE || 'WVZUTWIX'
+  const secretKey = process.env.VNP_HASHSECRET || 'MPCYVPEZAQLIXFLZLGWBKOIXOPTHNWVA'
+  const vnpUrl = process.env.VNP_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
+
+  const rawParams = {
     vnp_Version: '2.1.0',
     vnp_Command: 'pay',
-    vnp_TmnCode: 'VITAFAMILY',
+    vnp_TmnCode: tmnCode,
     vnp_Amount: String(Math.round((payment.so_tien || 0) * 100)),
     vnp_CurrCode: 'VND',
     vnp_TxnRef: vnpTxnRef,
-    vnp_OrderInfo: `Thanh toan lich hen ${appointment.ma_lich_hen || payment.ma_giao_dich}`,
+    vnp_OrderInfo: invoice?.so_hoa_don ? `Thanh toan ${invoice.so_hoa_don}` : `Thanh toan lich hen ${appointment.ma_lich_hen || payment.ma_giao_dich}`,
     vnp_OrderType: 'other',
     vnp_Locale: 'vn',
-    vnp_BankCode: 'VNBANK',
+    vnp_BankCode: 'NCB',
     vnp_IpAddr: '127.0.0.1',
     vnp_CreateDate: formatVnpDate(new Date()),
     vnp_ExpireDate: formatVnpDate(expiresAt),
-    vnp_ReturnUrl: `${DEFAULT_CLIENT_BASE_URL}/receptionist/booking?payment_id=${payment._id}&gateway=vnpay`, // just mock
-  })
-
-  if (invoice?.so_hoa_don) {
-    params.set('vnp_OrderInfo', `Thanh toan ${invoice.so_hoa_don}`)
+    vnp_ReturnUrl: `${DEFAULT_CLIENT_BASE_URL}/receptionist/booking?payment_id=${payment._id}&gateway=vnpay`,
   }
 
-  return `https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?${params.toString()}`
+  const sortedKeys = Object.keys(rawParams).sort()
+  const sortedParams = new URLSearchParams()
+  sortedKeys.forEach((key) => {
+    sortedParams.append(key, rawParams[key])
+  })
+
+  if (secretKey) {
+    const hmac = crypto.createHmac('sha512', secretKey)
+    const signed = hmac.update(Buffer.from(sortedParams.toString(), 'utf-8')).digest('hex')
+    sortedParams.append('vnp_SecureHash', signed)
+  }
+
+  return `${vnpUrl}?${sortedParams.toString()}`
 }
 
 async function loadPaymentBundle(paymentId, session = null) {

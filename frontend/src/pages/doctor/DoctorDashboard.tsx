@@ -122,7 +122,7 @@ export default function DoctorDashboard() {
           </div>
         ) : (
           <>
-            {/* Ca làm việc / phòng / y tá */}
+            {/* Ca làm việc / phòng */}
             <div className="mb-4 flex flex-wrap gap-x-8 gap-y-3 border-b border-slate-100 pb-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ca làm việc</p>
@@ -136,12 +136,6 @@ export default function DoctorDashboard() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Phòng khám</p>
                 <p className="mt-0.5 text-sm font-medium text-slate-700">
                   {overview!.phong_kham ?? 'Chưa có phòng khám hôm nay'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Y tá hỗ trợ</p>
-                <p className="mt-0.5 text-sm font-medium text-slate-700">
-                  {overview!.y_ta_ho_tro?.ho_ten ?? 'Chưa phân công y tá'}
                 </p>
               </div>
             </div>

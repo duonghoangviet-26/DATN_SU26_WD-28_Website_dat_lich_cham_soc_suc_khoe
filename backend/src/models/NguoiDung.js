@@ -5,10 +5,10 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: [true, 'Email la bat buoc'],
-      unique: true,
       lowercase: true,
       trim: true,
       maxlength: 255,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Email khong dung dinh dang'],
     },
     mat_khau: {
       type: String,
@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema(
     anh_dai_dien: { type: String, default: null, maxlength: 500 },
     role: {
       type: String,
-      enum: ['user', 'patient', 'doctor', 'admin', 'receptionist', 'nurse'],
+      enum: ['user', 'patient', 'doctor', 'admin', 'receptionist'],
       default: 'user',
     },
     status: {
@@ -78,5 +78,12 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ role: 1 })
 userSchema.index({ status: 1 })
+userSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { ngay_xoa: null },
+  }
+)
 
 export default mongoose.model('NguoiDung', userSchema)

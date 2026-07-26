@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 
 import AdminLayout from '@/layouts/AdminLayout'
 import DoctorLayout from '@/layouts/DoctorLayout'
-import NurseLayout from '@/layouts/NurseLayout'
 import AuthLayout from '@/layouts/AuthLayout'
 import ClientLayout from '@/layouts/ClientLayout'
 import ProtectedRoute from '@/routes/ProtectedRoute'
@@ -24,11 +23,13 @@ import ServiceList from '@/pages/client/ServiceList'
 import ServiceDetail from '@/pages/client/ServiceDetail'
 import Booking from '@/pages/client/Booking'
 import Profile from '@/pages/client/Profile'
+import VnpayResult from '@/pages/client/VnpayResult'
 import NewsList from '@/pages/client/NewsList'
 import NewsDetail from '@/pages/client/NewsDetail'
 
 import Dashboard from '@/pages/admin/Dashboard'
 import ManageUsers from '@/pages/admin/ManageUsers'
+import ManagePatients from '@/pages/admin/ManagePatients'
 import ManageDoctors from '@/pages/admin/ManageDoctors'
 import ManageClinics from '@/pages/admin/ManageClinics/ManageClinics'
 import ManageServices from '@/pages/admin/ManageServices'
@@ -46,13 +47,6 @@ import DoctorAppointments from '@/pages/doctor/DoctorAppointments'
 import DoctorExamQueue from '@/pages/doctor/DoctorExamQueue'
 import DoctorLeaveRequests from '@/pages/doctor/DoctorLeaveRequests'
 
-import NurseDashboard from '@/pages/nurse/NurseDashboard'
-import NurseSchedule from '@/pages/nurse/NurseSchedule'
-import NurseQueue from '@/pages/nurse/NurseQueue'
-import NursePendingRecords from '@/pages/nurse/NursePendingRecords'
-import NurseAppointmentDetail from '@/pages/nurse/NurseAppointmentDetail'
-import NurseRevisions from '@/pages/nurse/NurseRevisions'
-
 import NotFound from '@/pages/NotFound'
 
 export default function AppRoutes() {
@@ -65,6 +59,7 @@ export default function AppRoutes() {
         <Route path="/bac-si/:id" element={<DoctorDetail />} />
         <Route path="/dich-vu" element={<ServiceList />} />
         <Route path="/dich-vu/:id" element={<ServiceDetail />} />
+        <Route path="/payment/vnpay-result" element={<VnpayResult />} />
         <Route
           path="/booking"
           element={
@@ -104,6 +99,7 @@ export default function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="users" element={<ManageUsers />} />           {/* C1 */}
+        <Route path="patients" element={<ManagePatients />} />
         <Route path="doctors" element={<ManageDoctors />} />       {/* C2 */}
         <Route path="clinics" element={<ManageClinics />} />       {/* C3 */}
         <Route path="hospitals" element={<Navigate to="/admin/clinics" replace />} />
@@ -146,23 +142,6 @@ export default function AppRoutes() {
         <Route path="schedule" element={<DoctorSchedule />} />         {/* B2 */}
         <Route path="leave-requests" element={<DoctorLeaveRequests />} /> {/* B8 — xin nghỉ */}
         <Route path="profile" element={<DoctorProfile />} />           {/* B1 */}
-      </Route>
-
-      {/* Khu vực Nurse — yêu cầu role = nurse */}
-      <Route
-        path="/nurse"
-        element={
-          <ProtectedRoute roles={['nurse']}>
-            <NurseLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<NurseDashboard />} />
-        <Route path="schedule" element={<NurseSchedule />} />
-        <Route path="queue" element={<NurseQueue />} />
-        <Route path="pending-records" element={<NursePendingRecords />} />
-        <Route path="appointments/:id" element={<NurseAppointmentDetail />} />
-        <Route path="revisions" element={<NurseRevisions />} />
       </Route>
 
       <Route path="/404" element={<NotFound />} />

@@ -61,14 +61,26 @@ export default function ServiceViewModal({ open, service, loadingLog, onClose, o
 
           {/* ── Thông tin dịch vụ ── */}
           <section>
-            <div className="mb-3 flex flex-wrap items-start gap-2">
-              <h3 className="text-base font-semibold text-slate-800">{service.ten}</h3>
-              <Badge color="blue">
-                {SERVICE_TYPE_LABEL[service.loai] || formatAdminValue('loai', service.loai)}
-              </Badge>
-              <Badge color={service.status === 'active' ? 'green' : 'gray'}>
-                {service.status === 'active' ? 'Hoạt động' : 'Đã ẩn'}
-              </Badge>
+            <div className="mb-4 flex items-start gap-4">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-slate-400">
+                {service.image_url ? (
+                  <img src={service.image_url} alt={service.ten} className="h-full w-full object-cover" />
+                ) : (
+                  <Icon name="service" className="h-7 w-7" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-start gap-2">
+                  <h3 className="text-base font-semibold text-slate-800">{service.ten}</h3>
+                  <Badge color="blue">
+                    {SERVICE_TYPE_LABEL[service.loai] || formatAdminValue('loai', service.loai)}
+                  </Badge>
+                  <Badge color={service.status === 'active' ? 'green' : 'gray'}>
+                    {service.status === 'active' ? 'Hoạt động' : 'Đã ẩn'}
+                  </Badge>
+                </div>
+                <p className="font-mono text-xs text-slate-500">{service.ma_dich_vu}</p>
+              </div>
             </div>
 
             {/* Grid thông số chính */}

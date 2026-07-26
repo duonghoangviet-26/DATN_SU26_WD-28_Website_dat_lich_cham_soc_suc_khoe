@@ -8,7 +8,6 @@ const demoAccounts = [
   { role: 'Admin', email: 'admin@vitafamily.vn' },
   { role: 'Bác sĩ', email: 'haiv5634@gmail.com' },
   { role: 'Bệnh nhân', email: 'lt14062006meitu@gmail.com' },
-  { role: 'Y tá', email: 'ducluong140606@gmail.com' },
   { role: 'Lễ tân', email: 'luongtran140606@gmail.com' },
 ]
 
@@ -41,8 +40,6 @@ export default function Login() {
         navigate(from?.startsWith('/receptionist') ? from : '/receptionist', { replace: true })
       } else if (user.role === 'doctor') {
         navigate(from?.startsWith('/doctor') ? from : '/doctor', { replace: true })
-      } else if (user.role === 'nurse') {
-        navigate(from?.startsWith('/nurse') ? from : '/nurse', { replace: true })
       } else {
         navigate(from || '/', { replace: true })
       }
@@ -57,7 +54,7 @@ export default function Login() {
     <>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-800">Chào mừng trở lại</h1>
-        <p className="mt-1 text-sm text-slate-500">Đăng nhập để vào hệ thống VitaFamily.</p>
+        <p className="mt-1 text-sm text-slate-500">Đăng nhập để vào hệ thống ViteFamily.</p>
       </div>
 
       {registered && (

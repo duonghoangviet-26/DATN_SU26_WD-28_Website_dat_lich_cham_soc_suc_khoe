@@ -1,8 +1,29 @@
 import mongoose from 'mongoose'
-import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi } from '../../models/index.js'
+import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi, SinhHieuKham } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
+
+// Upsert sinh hiệu — gắn theo appointment_id (lượt online) hoặc hang_doi_id (lượt offline,
+// không có LichHen). Bác sĩ tự đo/nhập ngay khi nhập kết quả khám.
+async function upsertVitals({ appointmentId, hangDoiId, memberId, doctorUserId, sinhHieu }) {
+  if (!sinhHieu) return
+  const { can_nang, chieu_cao, huyet_ap, nhiet_do, nhip_tim } = sinhHieu
+  const filter = appointmentId ? { appointment_id: appointmentId } : { hang_doi_id: hangDoiId }
+  const setFields = {
+    member_id: memberId ?? null,
+    can_nang,
+    chieu_cao,
+    huyet_ap,
+    nhiet_do,
+    nhip_tim,
+    nguoi_do_id: doctorUserId,
+    thoi_diem_do: new Date(),
+  }
+  if (appointmentId) setFields.appointment_id = appointmentId
+  if (hangDoiId) setFields.hang_doi_id = hangDoiId
+  await SinhHieuKham.findOneAndUpdate(filter, { $set: setFields }, { upsert: true })
+}
 
 // ============================================================
 // B3 + B4 — Lịch hẹn & Kết quả khám (Bác sĩ)
@@ -250,9 +271,9 @@ export async function complete(req, res) {
     const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId })
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
     // Cho phép complete() từ 'in_progress'/'waiting_record' — 2 trạng thái này giờ đạt được qua
-    // hàng đợi động của y tá (Kế hoạch 2: queue.controller.js intoRoom()/finish()), KHÔNG chỉ qua
-    // luồng xác nhận cũ ('confirmed'). Bác sĩ vẫn có thể tự đánh dấu hoàn thành bất kể y tá đã
-    // nhập hồ sơ hay chưa (giữ nguyên hành vi "không bắt buộc đã nhập kết quả" đã có từ trước).
+    // hàng đợi động (queue.controller.js intoRoom()/finish()), KHÔNG chỉ qua luồng xác nhận cũ
+    // ('confirmed'). Bác sĩ vẫn có thể tự đánh dấu hoàn thành bất kể đã nhập hồ sơ hay chưa (giữ
+    // nguyên hành vi "không bắt buộc đã nhập kết quả" đã có từ trước).
     if (!['confirmed', 'in_progress', 'waiting_record'].includes(a.status)) {
       return fail(res, 409, 'Chỉ đánh dấu hoàn thành cho lịch hẹn đã xác nhận, đang khám, hoặc đang chờ nhập hồ sơ')
     }
@@ -297,8 +318,8 @@ export async function getResult(req, res) {
 // CHUNG cho updateResult (sửa) và confirmResult (Lưu & Xác nhận) → 1 nguồn logic duy nhất.
 // Trả { ok: true, prescription } hoặc { ok: false, status, message } khi validate thất bại.
 // Lỗi schema đơn thuốc (so_ngay/gio_uong/ten_thuoc...) ném ValidationError để caller trả 400.
-async function applyResultEdits(result, body, appt, docId) {
-  const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc } = body
+async function applyResultEdits(result, body, appt, docId, doctorUserId) {
+  const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc, sinh_hieu } = body
 
   if (chan_doan !== undefined) {
     if (!chan_doan?.trim()) return { ok: false, status: 400, message: 'Chẩn đoán là bắt buộc' }
@@ -311,6 +332,16 @@ async function applyResultEdits(result, body, appt, docId) {
       return { ok: false, status: 400, message: 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám' }
     }
     result.ngay_tai_kham = ngay_tai_kham ? new Date(ngay_tai_kham) : null
+  }
+
+  if (sinh_hieu) {
+    await upsertVitals({
+      appointmentId: appt?._id ?? null,
+      hangDoiId: appt?._id ? null : result.hang_doi_id ?? null,
+      memberId: appt?.member_id ?? null,
+      doctorUserId,
+      sinhHieu: sinh_hieu,
+    })
   }
 
   // Đơn thuốc: cập nhật đơn đã có, tạo mới nếu bác sĩ thêm, hoặc xóa hẳn khi gửi mảng rỗng
@@ -347,8 +378,8 @@ export async function createResult(req, res) {
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
     // Cho phép cả 'completed' — bác sĩ có thể đã bấm "Hoàn thành" (complete()) trước
     // khi nhập kết quả khám, xem comment tại complete() ở trên.
-    // Cho phép cả 'in_progress'/'waiting_record' — bác sĩ có thể tự nhập kết quả trực tiếp (bỏ
-    // qua luồng nháp của y tá) ngay sau khi bệnh nhân đã vào phòng qua hàng đợi động (Kế hoạch 2).
+    // Cho phép cả 'in_progress'/'waiting_record' — bác sĩ có thể tự nhập kết quả trực tiếp ngay
+    // sau khi bệnh nhân đã vào phòng qua hàng đợi động.
     if (!['confirmed', 'in_progress', 'waiting_record', 'completed'].includes(a.status)) {
       return fail(res, 409, 'Chỉ nhập kết quả khi lịch hẹn đã xác nhận, đang khám, chờ nhập hồ sơ, hoặc đã hoàn thành')
     }
@@ -356,7 +387,7 @@ export async function createResult(req, res) {
     const exists = await KetQuaKham.exists({ appointment_id: a._id })
     if (exists) return fail(res, 409, 'Kết quả khám đã tồn tại, hãy dùng PUT để cập nhật')
 
-    const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc } = req.body
+    const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc, sinh_hieu } = req.body
     if (!chan_doan?.trim()) return fail(res, 400, 'Chẩn đoán là bắt buộc')
 
     // Ngày tái khám phải sau ngày khám hiện tại — không cho chọn trùng ngày khám hoặc quá khứ.
@@ -364,9 +395,8 @@ export async function createResult(req, res) {
       return fail(res, 400, 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám')
     }
 
-    // Bác sĩ tự nhập hồ sơ (không qua y tá) → coi như đã xác nhận ngay, không bắt bác sĩ
-    // tự xác nhận lại hồ sơ do chính mình viết (quyết định 2026-07-11 — khác luồng y tá
-    // nhập, vốn luôn bắt đầu 'ban_nhap' và bắt buộc qua bước bác sĩ xác nhận ở createDraft()).
+    // Bác sĩ tự nhập hồ sơ → coi như đã xác nhận ngay, không bắt bác sĩ tự xác nhận lại hồ sơ
+    // do chính mình viết (quyết định 2026-07-11).
     const result = await KetQuaKham.create({
       appointment_id:      a._id,
       nguoi_nhap_id:        req.user.id,
@@ -384,6 +414,10 @@ export async function createResult(req, res) {
         noi_dung: 'Bác sĩ tự nhập và xác nhận hồ sơ khám',
       }],
     })
+
+    if (sinh_hieu) {
+      await upsertVitals({ appointmentId: a._id, memberId: a.member_id, doctorUserId: req.user.id, sinhHieu: sinh_hieu })
+    }
 
     // Kê đơn thuốc nếu có
     let prescription = null
@@ -437,14 +471,14 @@ export async function updateResult(req, res) {
     // Hồ sơ đã xác nhận là CHỐT — khóa ngay lập tức, không chờ mốc 24h nào cả (trước đây chỉ
     // dựa vào co_the_sua, nhưng field này chưa từng được cron nào set false trong thực tế nên
     // hồ sơ đã xác nhận vẫn sửa được vô thời hạn — xem docs/Bác sĩ/Audit tong the, GAP-001).
-    // Muốn sửa hồ sơ đã xác nhận phải qua luồng "yêu cầu chỉnh sửa" (nurse) đã có sẵn.
+    // Muốn sửa hồ sơ đã xác nhận phải qua luồng "yêu cầu chỉnh sửa" đã có sẵn.
     if (result.status === 'da_xac_nhan') return fail(res, 403, 'Hồ sơ đã xác nhận, không thể sửa trực tiếp')
     if (!result.co_the_sua) return fail(res, 403, 'Kết quả đã khóa, không thể sửa')
 
     // Áp dụng chỉnh sửa (dùng chung applyResultEdits với confirmResult) — validate ngày tái
     // khám + upsert/xóa đơn thuốc. Trước đây updateResult() không đọc `thuoc` nên sửa đơn
     // (kể cả so_ngay) bị bỏ qua — xem docs/Bác sĩ (2026-07-16).
-    const edit = await applyResultEdits(result, req.body, a, docId)
+    const edit = await applyResultEdits(result, req.body, a, docId, req.user.id)
     if (!edit.ok) return fail(res, edit.status, edit.message)
 
     // Sửa xong hồ sơ đang "cần chỉnh sửa" → tự động quay lại "chờ xác nhận" (trước đây không có
@@ -469,8 +503,7 @@ export async function updateResult(req, res) {
 }
 
 // ─── PATCH /api/doctor/appointments/:id/result/confirm ──────────────────────
-// Bác sĩ xác nhận hồ sơ khám đang 'cho_xac_nhan' (vd hồ sơ do y tá nhập — module y tá
-// chưa triển khai, nhưng field/luồng xác nhận này dùng chung bất kể ai nhập).
+// Bác sĩ xác nhận hồ sơ khám đang 'cho_xac_nhan' — dùng chung bất kể lịch sử ai đã nhập.
 export async function confirmResult(req, res) {
   try {
     const docId = await getDocId(req.user.id)
@@ -483,11 +516,11 @@ export async function confirmResult(req, res) {
       return fail(res, 409, 'Chỉ xác nhận được hồ sơ đang chờ xác nhận')
     }
 
-    // "Lưu & Xác nhận" một thao tác: bác sĩ xem hồ sơ, sửa trực tiếp (nếu cần) rồi chốt luôn —
-    // thay cho luồng "yêu cầu chỉnh sửa" đẩy ngược về y tá (đã gỡ). Body chỉnh sửa là tùy chọn:
+    // "Lưu & Xác nhận" một thao tác: bác sĩ xem hồ sơ, sửa trực tiếp (nếu cần) rồi chốt luôn.
+    // Body chỉnh sửa là tùy chọn:
     // gửi kèm thì áp dụng qua applyResultEdits (dùng chung logic với updateResult) trước khi
     // set da_xac_nhan, tất cả trong cùng một save() — không để trạng thái nửa vời.
-    const edit = await applyResultEdits(result, req.body ?? {}, a, docId)
+    const edit = await applyResultEdits(result, req.body ?? {}, a, docId, req.user.id)
     if (!edit.ok) return fail(res, edit.status, edit.message)
 
     // Ghi rõ có sửa hay không để đối chiếu lịch sử sau này.
@@ -503,8 +536,7 @@ export async function confirmResult(req, res) {
     })
     await result.save()
 
-    // Hồ sơ đã có nghĩa là ca khám coi như xong — đề phòng trường hợp appointment
-    // chưa ở 'completed' (vd sau này luồng y tá nhập không tự complete như createResult hiện tại).
+    // Hồ sơ đã có nghĩa là ca khám coi như xong — đề phòng trường hợp appointment chưa ở 'completed'.
     // Không tự complete nếu còn dịch vụ phát sinh chưa xử lý thanh toán — appointment
     // giữ nguyên trạng thái hiện tại cho tới khi lễ tân/thu ngân xác nhận xong phần phát sinh.
     if (a.status !== 'completed' && result.dich_vu_phat_sinh.length === 0) {
@@ -545,7 +577,7 @@ export async function confirmResultByRecord(req, res) {
       const entry = await HangDoi.findById(result.hang_doi_id).lean()
       fallback = { ngay_kham: entry?.checkin_time ?? null, member_id: entry?.member_id ?? null, ten_khach: entry?.ten_benh_nhan ?? null }
     }
-    const edit = await applyResultEdits(result, req.body ?? {}, appt ?? fallback, docId)
+    const edit = await applyResultEdits(result, req.body ?? {}, appt ?? fallback, docId, req.user.id)
     if (!edit.ok) return fail(res, edit.status, edit.message)
 
     const coSua = ['chan_doan', 'huong_dan_dieu_tri', 'ghi_chu', 'ngay_tai_kham', 'thuoc'].some((k) => req.body?.[k] !== undefined)
@@ -569,12 +601,11 @@ export async function confirmResultByRecord(req, res) {
 }
 
 // ─── PATCH /api/doctor/appointments/:id/result/request-revision ──────────────
-// KHÔI PHỤC 2026-07-19 (QĐ-1/A, PROMPT 28): bác sĩ đẩy hồ sơ 'cho_xac_nhan' ngược về y tá để
-// chỉnh sửa, thay vì tự sửa trực tiếp. Đây là điểm tích hợp doctor–nurse bắt buộc cho luồng
-// revision (test #5/#6). "Lưu & Xác nhận" (confirmResult) VẪN giữ — bác sĩ chọn 1 trong 2.
-// KetQuaKham -> yeu_cau_chinh_sua kèm lý do; LichHen -> waiting_record (đối xứng với submit của
-// y tá -> waiting_doctor_confirm) để y tá thấy việc cần làm. Hai cập nhật NGUYÊN TỬ (transaction)
-// tránh lệch trạng thái giữa hồ sơ và lịch hẹn. Chỉ từ 'cho_xac_nhan'; chỉ bác sĩ phụ trách.
+// Bác sĩ đánh dấu hồ sơ 'cho_xac_nhan' của chính mình là "cần chỉnh sửa lại" kèm lý do, thay vì
+// xác nhận luôn — dùng khi muốn tự sửa sau thay vì chốt ngay. "Lưu & Xác nhận" (confirmResult)
+// VẪN giữ — bác sĩ chọn 1 trong 2. KetQuaKham -> yeu_cau_chinh_sua kèm lý do; LichHen ->
+// waiting_record để hồ sơ hiện lại ở "Hồ sơ chờ khám" chờ nhập lại. Hai cập nhật NGUYÊN TỬ
+// (transaction) tránh lệch trạng thái giữa hồ sơ và lịch hẹn. Chỉ từ 'cho_xac_nhan'; chỉ bác sĩ phụ trách.
 export async function requestRevision(req, res) {
   const ly_do = (req.body?.ly_do ?? '').trim()
   if (!ly_do) return fail(res, 400, 'Cần nêu lý do yêu cầu chỉnh sửa')
@@ -606,7 +637,7 @@ export async function requestRevision(req, res) {
       }
       payload = { id: result._id, status: result.status, appointment_status: a.status }
     })
-    return ok(res, payload, 'Đã gửi yêu cầu chỉnh sửa cho y tá')
+    return ok(res, payload, 'Đã đánh dấu hồ sơ cần chỉnh sửa lại')
   } catch (err) {
     if (err.httpStatus) return fail(res, err.httpStatus, err.message)
     return fail(res, 500, err.message)
@@ -621,8 +652,8 @@ export async function requestRevision(req, res) {
 // được gán sẵn khi tạo (xem createResult).
 // - Không truyền status: giữ nguyên hành vi cũ, chỉ trả 'cho_xac_nhan' (Dashboard đang
 //   dùng gọi không tham số để đếm số hồ sơ CẦN xử lý — không được đổi mặc định).
-// - status='all': trả cả 3 trạng thái liên quan tới bác sĩ (không gồm 'ban_nhap' — đó là
-//   nháp của y tá, chưa gửi bác sĩ) để bác sĩ tra cứu lại hồ sơ đã xử lý.
+// - status='all': trả cả 3 trạng thái liên quan tới bác sĩ (không gồm 'ban_nhap' — hồ sơ nháp
+//   chưa gửi xác nhận) để bác sĩ tra cứu lại hồ sơ đã xử lý.
 // - status=<giá trị cụ thể>: lọc đúng 1 trạng thái đó.
 const DOCTOR_VISIBLE_RECORD_STATUSES = ['cho_xac_nhan', 'da_xac_nhan', 'yeu_cau_chinh_sua']
 

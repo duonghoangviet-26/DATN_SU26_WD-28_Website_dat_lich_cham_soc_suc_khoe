@@ -180,8 +180,8 @@ export default function Appointments() {
   const handleReschedule = async (apt: Appointment) => {
     setSelectedAppointmentId(apt._id);
     
-    // Nếu đã dời lịch >= 3 lần, bật form Lịch sử
-    if ((apt.so_lan_thay_doi || 0) >= 3) {
+    // Nếu đã dời lịch >= 1 lần, bật form Lịch sử
+    if ((apt.so_lan_thay_doi || 0) >= 1) {
       try {
         const res = await axiosInstance.get(`/receptionist/appointments/${apt._id}/reschedule-history`);
         if (res.data.success) {
@@ -397,10 +397,16 @@ export default function Appointments() {
                         <div className="flex items-center gap-2">
                           {activeTab !== 'past' && !isPendingAndOverdue && (
                             <>
-                              {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
+                              {(activeTab === 'today' || activeTab === 'tomorrow') && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                                 <button
                                   title="Đã đến"
-                                  onClick={() => handleArrived(apt._id)}
+                                  onClick={() => {
+                                    if (activeTab === 'tomorrow') {
+                                      alert('Chưa đến ngày checkin');
+                                      return;
+                                    }
+                                    handleArrived(apt._id);
+                                  }}
                                   className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors"
                                 >
                                   <Icon name="check" className="w-4 h-4" />
@@ -456,13 +462,13 @@ export default function Appointments() {
         </div>
       </div>
 
-      {/* Modal Lịch sử Dời Lịch (Quá giới hạn 3 lần) */}
+      {/* Modal Lịch sử Dời Lịch (Quá giới hạn 1 lần) */}
       {rescheduleLimitModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-red-600 mb-2">Đạt giới hạn dời lịch!</h3>
             <p className="text-sm text-slate-600 mb-4">
-              Khách hàng này đã thay đổi lịch hẹn <strong className="text-red-500">3 lần</strong>. Hệ thống không cho phép dời lịch thêm nữa để tránh xáo trộn công việc của bác sĩ. Dưới đây là lịch sử dời lịch:
+              Khách hàng này đã thay đổi lịch hẹn <strong className="text-red-500">1 lần</strong>. Hệ thống không cho phép dời lịch thêm nữa để tránh xáo trộn công việc của bác sĩ. Dưới đây là lịch sử dời lịch:
             </p>
             
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 max-h-60 overflow-y-auto space-y-4">
@@ -536,7 +542,7 @@ export default function Appointments() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Ngày khám mới</label>
                 <input
                   type="date"
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
                   value={newDate}
                   onChange={(e) => setNewDate(e.target.value)}
                 />
@@ -544,7 +550,7 @@ export default function Appointments() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Giờ khám mới</label>
                 <select
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
                 >
@@ -561,7 +567,7 @@ export default function Appointments() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Lý do dời lịch</label>
                 <textarea
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none resize-none"
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none resize-none"
                   rows={3}
                   placeholder="Nhập lý do dời lịch..."
                   value={rescheduleReason}
@@ -579,7 +585,7 @@ export default function Appointments() {
               </button>
               <button
                 onClick={confirmReschedule}
-                className="px-4 py-2 bg-amber-500 text-white hover:bg-amber-600 rounded-lg text-sm font-medium transition-colors"
+                className="px-4 py-2 bg-brand-600 text-white hover:bg-brand-700 rounded-lg text-sm font-medium transition-colors"
               >
                 Lưu thay đổi
               </button>
@@ -718,7 +724,7 @@ export default function Appointments() {
 
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Lý do khám / Triệu chứng</h4>
-                    <div className="bg-amber-50/50 p-4 rounded-lg border border-amber-100 text-sm text-slate-700 leading-relaxed min-h-[80px]">
+                    <div className="bg-brand-50/50 p-4 rounded-lg border border-brand-100 text-sm text-slate-700 leading-relaxed min-h-[80px]">
                       {selectedDetailAppointment.ly_do_kham || <span className="text-slate-400 italic">Bệnh nhân không ghi chú gì thêm.</span>}
                     </div>
                   </div>

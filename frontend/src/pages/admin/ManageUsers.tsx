@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { userService } from '@/services/user.service'
 import { clinicService } from '@/services/clinic.service'
@@ -7,7 +7,6 @@ import type { User, Role } from '@/types'
 import {
   ROLE_LABEL,
   USER_STATUS_LABEL,
-  ROLES,
   USER_STATUS,
 } from '@/utils/constants'
 import { formatDate } from '@/utils/format'
@@ -49,6 +48,22 @@ const LOG_CONFIG: Record<string, { label: string; color: 'green' | 'red' | 'blue
   },
 }
 
+const ROLE_OPTIONS: { value: Role; label: string }[] = [
+  { value: 'user', label: ROLE_LABEL.user },
+  { value: 'doctor', label: ROLE_LABEL.doctor },
+  { value: 'receptionist', label: ROLE_LABEL.receptionist },
+  { value: 'admin', label: ROLE_LABEL.admin },
+]
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function getRoleBadgeColor(role: Role | 'patient'): 'green' | 'red' | 'blue' | 'yellow' | 'gray' {
+  if (role === 'admin') return 'yellow'
+  if (role === 'doctor') return 'blue'
+  if (role === 'receptionist') return 'green'
+  return 'gray'
+}
+
 // ============================================================
 // TRANG: QUẢN LÝ NGƯỜI DÙNG (ADMIN) - HOÀN THIỆN 100%
 // ============================================================
@@ -79,7 +94,7 @@ export default function ManageUsers() {
   // State thống kê ở đầu trang
   const [stats, setStats] = useState({
     total: 0,
-    roles: { admin: 0, doctor: 0, user: 0 },
+    roles: { admin: 0, doctor: 0, receptionist: 0, user: 0 },
     status: { active: 0, locked: 0 },
     deleted: 0,
   })
@@ -97,7 +112,7 @@ export default function ManageUsers() {
   const [formError, setFormError] = useState('')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -113,12 +128,12 @@ export default function ManageUsers() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [keyword, role, status, page, isDeleted])
 
   useEffect(() => {
     loadUsers()
     setSelectedIds([]) // Reset chọn nhiều khi đổi bộ lọc
-  }, [keyword, role, status, page, isDeleted])
+  }, [loadUsers])
 
   useEffect(() => {
     if (selectedUser) {
@@ -177,9 +192,30 @@ export default function ManageUsers() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingUser) return
+
+    const normalizedEmail = editingUser.email.trim().toLowerCase()
+    if (!normalizedEmail) {
+      setFormError('Vui lòng nhập email')
+      return
+    }
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      setFormError('Email không đúng định dạng')
+      return
+    }
+
+    const payload: Partial<User> = {
+      email: normalizedEmail,
+      ho_ten: editingUser.ho_ten,
+      so_dien_thoai: editingUser.so_dien_thoai,
+      anh_dai_dien: editingUser.anh_dai_dien ?? null,
+      role: editingUser.role,
+      status: editingUser.status,
+    }
+
     setSubmitting(true)
+    setFormError('')
     try {
-      await userService.update(editingUser.id, editingUser)
+      await userService.update(editingUser.id, payload)
       setEditingUser(null)
       loadUsers()
       window.dispatchEvent(new Event('RELOAD_NOTIFICATIONS'))
@@ -313,7 +349,7 @@ export default function ManageUsers() {
       </PageHeader>
 
       {/* Thẻ thống kê tổng quan (Dashboard mini) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {/* Tổng tài khoản */}
         <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
           <div className="space-y-1">
@@ -350,6 +386,18 @@ export default function ManageUsers() {
           </div>
         </div>
 
+        {/* Lễ tân */}
+        <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-slate-500">Lễ tân</p>
+            <p className="text-2xl font-bold text-slate-800">{stats.roles.receptionist}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Tiếp nhận đặt lịch</p>
+          </div>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-50 text-cyan-500 shadow-sm border border-cyan-100/50">
+            <Icon name="users" className="h-6 w-6" />
+          </div>
+        </div>
+
         {/* Đã khóa */}
         <div className="card p-5 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
           <div className="space-y-1">
@@ -373,7 +421,7 @@ export default function ManageUsers() {
           <div className="w-full md:w-48">
             <select className="input w-full" value={role} onChange={e => { setRole(e.target.value); setPage(1); }}>
               <option value="">Tất cả vai trò</option>
-              {Object.entries(ROLES).map(([key, val]) => <option key={val} value={val}>{ROLE_LABEL[val]}</option>)}
+              {ROLE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </div>
           <div className="w-full md:w-48">
@@ -541,7 +589,7 @@ export default function ManageUsers() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4"><Badge color={u.role === 'admin' ? 'yellow' : u.role === 'doctor' ? 'blue' : 'gray'}>{ROLE_LABEL[u.role]}</Badge></td>
+                    <td className="px-4 py-4"><Badge color={getRoleBadgeColor(u.role)}>{ROLE_LABEL[u.role] || formatAdminValue('role', u.role)}</Badge></td>
                     <td className="px-4 py-4"><Badge color={u.status === 'active' ? 'green' : 'red'}>{USER_STATUS_LABEL[u.status]}</Badge></td>
                     <td className="px-4 py-4 text-slate-500">
                       <div className="text-xs font-medium text-slate-900">{formatDate(isDeleted ? u.ngay_xoa : u.ngay_tao)}</div>
@@ -651,7 +699,7 @@ export default function ManageUsers() {
 
               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl">
                 <div><label className="text-xs text-slate-400 font-bold uppercase">Điện thoại</label><p className="text-sm font-bold text-slate-800">{selectedUser.so_dien_thoai || '—'}</p></div>
-                <div><label className="text-xs text-slate-400 font-bold uppercase">Vai trò</label><div><Badge color={selectedUser.role === 'admin' ? 'yellow' : selectedUser.role === 'doctor' ? 'blue' : 'gray'}>{ROLE_LABEL[selectedUser.role]}</Badge></div></div>
+                <div><label className="text-xs text-slate-400 font-bold uppercase">Vai trò</label><div><Badge color={getRoleBadgeColor(selectedUser.role)}>{ROLE_LABEL[selectedUser.role] || formatAdminValue('role', selectedUser.role)}</Badge></div></div>
                 <div><label className="text-xs text-slate-400 font-bold uppercase">Trạng thái</label><div><Badge color={selectedUser.status === 'active' ? 'green' : 'red'}>{USER_STATUS_LABEL[selectedUser.status]}</Badge></div></div>
                 <div><label className="text-xs text-slate-400 font-bold uppercase">Ngày tham gia</label><p className="text-sm font-bold text-slate-800">{formatDate(selectedUser.ngay_tao)}</p></div>
               </div>
@@ -759,7 +807,14 @@ export default function ManageUsers() {
               <div><label className="text-xs font-bold mb-1 block">Mật khẩu *</label><input required type="password" className="input" value={formData.mat_khau} onChange={e => setFormData({ ...formData, mat_khau: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={formData.so_dien_thoai} onChange={e => setFormData({ ...formData, so_dien_thoai: e.target.value })} /></div>
-              <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as Role })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Quản trị viên</option></select></div>
+              <div>
+                <label className="text-xs font-bold mb-1 block">Vai trò</label>
+                <select className="input" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as Role })}>
+                  {ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
               </div>
             </div>
             <div className="flex gap-3 mt-8">
@@ -811,11 +866,18 @@ export default function ManageUsers() {
                   </div>
                 </div>
               </div>
-              <div><label className="text-xs font-bold mb-1 block text-slate-400">Email (Không thể sửa)</label><input disabled className="input bg-slate-50" value={editingUser.email} /></div>
+              <div><label className="text-xs font-bold mb-1 block">Email *</label><input required type="email" className="input" value={editingUser.email} onChange={e => setEditingUser({ ...editingUser, email: e.target.value })} /></div>
               <div><label className="text-xs font-bold mb-1 block">Họ tên *</label><input required className="input" value={editingUser.ho_ten} onChange={e => setEditingUser({ ...editingUser, ho_ten: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-bold mb-1 block">Điện thoại</label><input className="input" value={editingUser.so_dien_thoai || ''} onChange={e => setEditingUser({ ...editingUser, so_dien_thoai: e.target.value })} /></div>
-                <div><label className="text-xs font-bold mb-1 block">Vai trò</label><select className="input" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="user">Bệnh nhân</option><option value="doctor">Bác sĩ</option><option value="admin">Quản trị viên</option></select></div>
+                <div>
+                  <label className="text-xs font-bold mb-1 block">Vai trò</label>
+                  <select className="input" value={editingUser.role} onChange={e => setEditingUser({ ...editingUser, role: e.target.value as Role })}>
+                    {ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div><label className="text-xs font-bold mb-1 block">Trạng thái</label><select className="input" value={editingUser.status} onChange={e => setEditingUser({ ...editingUser, status: e.target.value as any })}><option value="active">Hoạt động</option><option value="locked">Đang khóa</option></select></div>
             </div>

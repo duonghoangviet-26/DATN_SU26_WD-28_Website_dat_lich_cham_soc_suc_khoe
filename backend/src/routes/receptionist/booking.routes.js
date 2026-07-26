@@ -10,5 +10,6 @@ router.get('/doctors/:id', bookingController.getDoctorById)
 router.get('/doctors/:id/slots', bookingController.getSlots)
 
 router.post('/', bookingController.createBooking)
+router.get('/family-group/:userId', bookingController.getFamilyGroup)
 
 export default router

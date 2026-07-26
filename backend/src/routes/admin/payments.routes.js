@@ -9,6 +9,5 @@ router.get('/',              payments.list)
 router.post('/',             payments.create)
 router.get('/:id',           payments.getById)
 router.patch('/:id',         payments.update)
-router.patch('/:id/refund',  payments.refund)
 
 export default router

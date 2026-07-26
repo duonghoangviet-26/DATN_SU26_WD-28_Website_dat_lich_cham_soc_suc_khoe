@@ -95,6 +95,7 @@ export async function register(req, res) {
     const exists =
       await NguoiDung.findOne({
         email,
+        ngay_xoa: null,
       })
 
     if (exists) {

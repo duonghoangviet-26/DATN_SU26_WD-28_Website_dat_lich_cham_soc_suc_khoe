@@ -57,7 +57,7 @@ export default function ManageAppointments() {
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [status, setStatus] = useState<AppointmentStatus | ''>('')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | ''>('')
-  const [loaiKham, setLoaiKham] = useState<'clinic' | ''>('')
+  const [dateFilter, setDateFilter] = useState('')
   const [bookingScope, setBookingScope] = useState<BookingScope>('')
   const [startDate, setStartDate] = useState(filterStartDate)
   const [endDate, setEndDate] = useState(filterEndDate)
@@ -93,7 +93,6 @@ export default function ManageAppointments() {
         keyword: debouncedKeyword,
         status,
         payment_status: paymentStatus || undefined,
-        loai_kham: loaiKham || undefined,
         booking_scope: bookingScope || undefined,
         startDate,
         endDate,
@@ -114,7 +113,50 @@ export default function ManageAppointments() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedKeyword, status, paymentStatus, loaiKham, bookingScope, startDate, endDate, page, filterDoctorId, quickFilter])
+  }, [debouncedKeyword, status, paymentStatus, bookingScope, startDate, endDate, page, filterDoctorId, quickFilter])
+
+  const setDateRange = (type: string) => {
+    setDateFilter(type)
+    const today = new Date()
+    
+    const formatDate = (date: Date) => {
+      const yyyy = date.getFullYear()
+      const mm = String(date.getMonth() + 1).padStart(2, '0')
+      const dd = String(date.getDate()).padStart(2, '0')
+      return `${yyyy}-${mm}-${dd}`
+    }
+
+    if (type === '') {
+      setStartDate('')
+      setEndDate('')
+    } else if (type === 'today') {
+      const d = formatDate(today)
+      setStartDate(d)
+      setEndDate(d)
+    } else if (type === 'tomorrow') {
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const d = formatDate(tomorrow)
+      setStartDate(d)
+      setEndDate(d)
+    } else if (type === '3days') {
+      const end = new Date(today)
+      end.setDate(end.getDate() + 3)
+      setStartDate(formatDate(today))
+      setEndDate(formatDate(end))
+    } else if (type === '1week') {
+      const end = new Date(today)
+      end.setDate(end.getDate() + 7)
+      setStartDate(formatDate(today))
+      setEndDate(formatDate(end))
+    } else if (type === '1month') {
+      const end = new Date(today)
+      end.setMonth(end.getMonth() + 1)
+      setStartDate(formatDate(today))
+      setEndDate(formatDate(end))
+    }
+    setPage(1)
+  }
 
   useEffect(() => {
     fetchAppointments()
@@ -270,6 +312,7 @@ export default function ManageAppointments() {
                 value={startDate}
                 onChange={(event) => {
                   setStartDate(event.target.value)
+                  setDateFilter('')
                   setPage(1)
                 }}
                 title="Từ ngày"
@@ -280,6 +323,7 @@ export default function ManageAppointments() {
                 value={endDate}
                 onChange={(event) => {
                   setEndDate(event.target.value)
+                  setDateFilter('')
                   setPage(1)
                 }}
                 title="Đến ngày"
@@ -313,18 +357,18 @@ export default function ManageAppointments() {
                 <option value="unpaid">Chưa thanh toán</option>
                 <option value="partial">Thanh toán một phần</option>
                 <option value="paid">Đã thanh toán</option>
-                <option value="refunded">Đã hoàn tiền</option>
               </select>
               <select
                 className="input"
-                value={loaiKham}
-                onChange={(event) => {
-                  setLoaiKham(event.target.value as 'clinic' | '')
-                  setPage(1)
-                }}
+                value={dateFilter}
+                onChange={(event) => setDateRange(event.target.value)}
               >
-                <option value="">Tất cả loại khám</option>
-                <option value="clinic">Phòng khám</option>
+                <option value="">Tất cả thời gian</option>
+                <option value="today">Hôm nay</option>
+                <option value="tomorrow">Ngày mai</option>
+                <option value="3days">3 ngày nữa</option>
+                <option value="1week">1 tuần nữa</option>
+                <option value="1month">1 tháng nữa</option>
               </select>
               <select
                 className="input"

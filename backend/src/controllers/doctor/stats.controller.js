@@ -96,7 +96,6 @@ export async function getTodayOverview(req, res) {
 
     const [schedule, appointments] = await Promise.all([
       LichLamViec.findOne({ doctor_id: doc._id, ngay: { $gte: todayStart, $lt: todayEnd } })
-        .populate('nurse_id', 'ho_ten')
         .lean(),
       LichHen.find({ doctor_id: doc._id, ngay_kham: { $gte: todayStart, $lt: todayEnd } })
         .sort({ gio_kham: 1 })
@@ -122,14 +121,11 @@ export async function getTodayOverview(req, res) {
       chuyen_khoa: (doc.specialties ?? []).map((s) => s.ten).join(', ') || 'Chưa rõ',
       ca_lam_viec,
       phong_kham,
-      // Module gán y tá cho ca làm việc đã có từ Kế hoạch 1 (LichLamViec.nurse_id) — trước đây
-      // hardcode null vì module chưa tồn tại, giờ trả đúng dữ liệu thật.
-      y_ta_ho_tro: schedule?.nurse_id ? { id: schedule.nurse_id._id, ho_ten: schedule.nurse_id.ho_ten } : null,
       // Loại cancelled — lịch đã hủy không còn tính là "lịch hẹn hôm nay" (khớp cách
       // lich_hen_gan_nhat bên dưới đã lọc), tránh card "Tổng" trông vênh so với các card khác
       // khi có lịch bị hủy trong ngày (xem docs/Bác sĩ/Audit tong the, GAP-008).
       tong_lich_hen: appointments.filter((a) => a.status !== 'cancelled').length,
-      // checked_in cũng là "chờ khám" — khớp cách đếm dang_cho_kham bên nurse/dashboard.controller.js
+      // checked_in cũng là "chờ khám"
       cho_kham: appointments.filter((a) => ['confirmed', 'checked_in'].includes(a.status)).length,
       dang_kham: appointments.filter((a) => a.status === 'in_progress').length,
       hoan_thanh: appointments.filter((a) => a.status === 'completed').length,

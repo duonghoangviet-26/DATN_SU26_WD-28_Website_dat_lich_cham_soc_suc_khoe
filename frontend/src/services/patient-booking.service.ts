@@ -136,11 +136,6 @@ export const patientBookingService = {
     return res.data.data
   },
 
-  async completeMockVnpayPayment(paymentId: string): Promise<PatientPaymentStatusResult> {
-    const res = await axiosInstance.post<ApiResponse<PatientPaymentStatusResult>>(`/patient/payments/${paymentId}/vnpay/mock-complete`)
-    return res.data.data
-  },
-
   async getDoctorReviews(doctorId: string): Promise<any[]> {
     const res = await axiosInstance.get<ApiResponse<any[]>>(`/patient/booking/doctors/${doctorId}/reviews`)
     return res.data.data
@@ -159,7 +154,7 @@ export const patientBookingService = {
 
 
 
-  
+
 
   async getFamilyGroup(): Promise<FamilyGroup | null> {
     const res = await axiosInstance.get<ApiResponse<FamilyGroup | null>>('/patient/family')

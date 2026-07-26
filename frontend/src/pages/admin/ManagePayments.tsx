@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import Icon from '@/components/admin/icons'
 import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import Badge from '@/components/common/Badge'
-import ConfirmDialog from '@/components/common/ConfirmDialog'
 import PageHeader from '@/components/common/PageHeader'
 import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { paymentService } from '@/services/payment.service'
@@ -155,8 +154,7 @@ export default function ManagePayments() {
   const [toDate, setToDate] = useState('')
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
-  const [summary, setSummary] = useState({ paidAmount: 0, pendingCount: 0, refundedAmount: 0 })
-  const [confirm, setConfirm] = useState<PaymentItem | null>(null)
+  const [summary, setSummary] = useState({ paidAmount: 0, pendingCount: 0 })
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detail, setDetail] = useState<PaymentItem | null>(null)
@@ -172,7 +170,7 @@ export default function ManagePayments() {
 
       if (fromDate && toDate && fromDate > toDate) {
         setPayments([])
-        setSummary({ paidAmount: 0, pendingCount: 0, refundedAmount: 0 })
+        setSummary({ paidAmount: 0, pendingCount: 0 })
         setPagination({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
         setError('Ngày kết thúc phải từ ngày bắt đầu trở đi.')
         setLoading(false)
@@ -197,7 +195,7 @@ export default function ManagePayments() {
       } catch (nextError: any) {
         if (!ignore && nextError?.code !== 'ERR_CANCELED') {
           setPayments([])
-          setSummary({ paidAmount: 0, pendingCount: 0, refundedAmount: 0 })
+          setSummary({ paidAmount: 0, pendingCount: 0 })
           setPagination({ total: 0, totalPages: 1, page: 1, limit: itemsPerPage })
           setError(nextError?.response?.data?.message || nextError?.message || 'Không tải được danh sách giao dịch.')
         }
@@ -232,25 +230,6 @@ export default function ManagePayments() {
     }
   }, [page, pagination.totalPages])
 
-  async function handleRefund() {
-    if (!confirm) return
-
-    const id = confirm.id
-    setConfirm(null)
-
-    try {
-      const updated = await paymentService.refund(id)
-      setPayments((prev) => prev.map((payment) => (payment.id === updated.id ? updated : payment)))
-      setRealtimeTick((tick) => tick + 1)
-      if (detail?.id === updated.id) {
-        const refreshed = await paymentService.getById(updated.id)
-        setDetail(refreshed)
-      }
-    } catch (nextError: any) {
-      setError(nextError?.response?.data?.message || nextError?.message || 'Không thể hoàn tiền giao dịch.')
-    }
-  }
-
   async function handleOpenDetail(payment: PaymentItem) {
     setDetailOpen(true)
     setDetailLoading(true)
@@ -272,11 +251,11 @@ export default function ManagePayments() {
       <AdminMotionItem>
         <PageHeader
           title="Quản lý thanh toán"
-          description="Theo dõi đầy đủ giao dịch, mốc thời gian thanh toán và xử lý hoàn tiền từ dữ liệu thật của hệ thống."
+          description="Theo dõi giao dịch, hóa đơn và mốc thời gian thanh toán từ dữ liệu thật của hệ thống."
         />
       </AdminMotionItem>
 
-      <AdminMotionGroup className="mb-5 grid gap-4 lg:grid-cols-3">
+      <AdminMotionGroup className="mb-5 grid gap-4 lg:grid-cols-2">
         <AdminMotionItem className="card p-5">
           <div className="flex items-start justify-between">
             <div className="flex-1">
@@ -301,19 +280,6 @@ export default function ManagePayments() {
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">Các giao dịch đang chờ thanh toán và cần tiếp tục đối soát.</p>
-        </AdminMotionItem>
-
-        <AdminMotionItem className="card p-5">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-slate-500">Đã hoàn tiền</p>
-              <p className="mt-1.5 text-2xl font-bold text-slate-900">{formatPrice(summary.refundedAmount)}</p>
-            </div>
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100">
-              <Icon name="rotate-ccw" className="h-6 w-6 text-slate-600" />
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-slate-500">Tổng số tiền đã được admin xử lý hoàn trả.</p>
         </AdminMotionItem>
       </AdminMotionGroup>
 
@@ -340,7 +306,6 @@ export default function ManagePayments() {
             <option value="paid">Đã thanh toán</option>
             <option value="pending">Chờ thanh toán</option>
             <option value="failed">Thất bại</option>
-            <option value="refunded">Đã hoàn tiền</option>
           </select>
 
           <input
@@ -383,7 +348,7 @@ export default function ManagePayments() {
                 <th className="px-4 py-3 font-medium">Thời gian</th>
                 <th className="px-4 py-3 font-medium">Số tiền</th>
                 <th className="px-4 py-3 font-medium">Thanh toán</th>
-                <th className="w-[112px] px-4 py-3 text-right font-medium">Thao tác</th>
+                <th className="w-[72px] px-4 py-3 text-right font-medium">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -455,8 +420,8 @@ export default function ManagePayments() {
                     </div>
                   </td>
 
-                  <td className="w-[112px] px-4 py-3">
-                    <div className="ml-auto flex w-[96px] flex-wrap justify-end gap-2">
+                  <td className="w-[72px] px-4 py-3">
+                    <div className="ml-auto flex justify-end">
                       <ActionIconButton
                         label="Xem chi tiết"
                         title="Xem chi tiết"
@@ -464,15 +429,6 @@ export default function ManagePayments() {
                         onClick={() => handleOpenDetail(payment)}
                         className="border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 focus:ring-slate-200"
                       />
-                      {payment.status === 'paid' && (
-                        <ActionIconButton
-                          label="Hoàn tiền"
-                          title="Hoàn tiền"
-                          icon="rotate-ccw"
-                          onClick={() => setConfirm(payment)}
-                          className="border-orange-200 bg-orange-50 text-orange-600 hover:border-orange-300 hover:bg-orange-100 focus:ring-orange-200"
-                        />
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -506,15 +462,6 @@ export default function ManagePayments() {
         />
       )}
 
-      <ConfirmDialog
-        open={!!confirm}
-        danger
-        title="Xác nhận hoàn tiền"
-        message={`Hoàn ${formatPrice(confirm?.so_tien ?? 0)} cho "${confirm?.benh_nhan}"? Thao tác này không thể hoàn tác.`}
-        confirmText="Xác nhận hoàn tiền"
-        onConfirm={handleRefund}
-        onCancel={() => setConfirm(null)}
-      />
     </AdminMotionGroup>
   )
 }

@@ -6,6 +6,7 @@ export const adminMenu: AdminMenuItem[] = [
   { type: 'item', path: '/admin', label: 'Tổng quan', icon: 'dashboard', end: true },
   { type: 'section', label: 'Quản lý' },
   { type: 'item', path: '/admin/users', label: 'Người dùng', icon: 'users' },
+  { type: 'item', path: '/admin/patients', label: 'Bệnh nhân', icon: 'user' },
   { type: 'item', path: '/admin/doctors', label: 'Hồ sơ bác sĩ', icon: 'doctor' },
   { type: 'item', path: '/admin/clinics', label: 'Phòng khám & Chuyên khoa', icon: 'hospital' },
   { type: 'item', path: '/admin/services', label: 'Dịch vụ', icon: 'service' },
