@@ -54,7 +54,7 @@ notificationSchema.index({ ngay_tao: 1 })
 
 notificationSchema.pre('validate', function () {
   if (this.isNew && !this.ngay_gui_du_kien) {
-    throw new Error('Thong bao moi bat buoc co ngay_gui_du_kien')
+    this.ngay_gui_du_kien = new Date()
   }
 })
 

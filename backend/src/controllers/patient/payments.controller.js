@@ -1,8 +1,9 @@
 import crypto from 'crypto'
 import mongoose from 'mongoose'
 
-import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen } from '../../models/index.js'
+import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen, NguoiDung, BacSi } from '../../models/index.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
+import { sendBookingSuccessEmail } from '../../services/mail.service.js'
 import { ok, fail } from '../../utils/response.js'
 import {
   emitAdminRealtime,
@@ -11,10 +12,35 @@ import {
 } from '../../realtime/socket.js'
 
 const VNPAY_SESSION_MINUTES = Number(process.env.VNPAY_SESSION_MINUTES || process.env.PAYMENT_HOLD_MINUTES || 15)
-const DEFAULT_CLIENT_BASE_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
+const DEFAULT_CLIENT_BASE_URL =
+  process.env.VNPAY_RETURN_CLIENT_URL ||
+  process.env.FRONTEND_URL ||
+  process.env.CLIENT_URL ||
+  'http://localhost:5173'
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
+}
+
+function buildClientUrl(path, params = {}) {
+  const url = new URL(path, DEFAULT_CLIENT_BASE_URL)
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value))
+    }
+  })
+  return url.toString()
+}
+
+function buildPaymentResultUrl({ status, payment = null, appointment = null, reason = null }) {
+  return buildClientUrl('/payment/vnpay-result', {
+    payment_status: status,
+    booked: status === 'success' ? 'true' : undefined,
+    id: appointment?._id || payment?.appointment_id,
+    appointment_id: appointment?._id || payment?.appointment_id,
+    payment_id: payment?._id,
+    reason,
+  })
 }
 
 function getGatewayResponseObject(payment) {
@@ -168,6 +194,73 @@ function serializePaymentStatus({ payment, appointment, invoice }) {
       mock_status: gateway.mock_status ?? null,
       is_expired: isGatewaySessionExpired(gateway),
     },
+  }
+}
+
+async function triggerBookingSuccessEmail(appointment, payment) {
+  try {
+    if (!appointment || !payment) return
+    const user = await NguoiDung.findById(appointment.user_id).lean()
+    if (!user || !user.email) return
+
+    let docName = 'Bác sĩ chuyên khoa'
+    let specialtyName = 'Đa khoa'
+
+    let doctorId = appointment.doctor_id
+    if (!doctorId && appointment.schedule_id) {
+      const schedule = await LichLamViec.findById(appointment.schedule_id).lean()
+      if (schedule && schedule.doctor_id) {
+        doctorId = schedule.doctor_id
+      }
+    }
+
+    if (doctorId) {
+      const doc = await BacSi.findById(doctorId)
+        .populate('user_id', 'ho_ten')
+        .populate('specialties', 'ten')
+        .lean()
+
+      if (doc) {
+        const rawName = doc.user_id?.ho_ten || doc.ho_ten
+        if (rawName) {
+          docName = /^BS\.?\s*/i.test(rawName) ? rawName : `BS. ${rawName}`
+        }
+        if (doc.specialties && doc.specialties.length > 0) {
+          specialtyName = doc.specialties[0].ten || specialtyName
+        }
+      }
+    }
+
+    if (specialtyName === 'Đa khoa' && appointment.specialty_id) {
+      try {
+        const ChuyenKhoa = mongoose.model('ChuyenKhoa')
+        const sk = await ChuyenKhoa.findById(appointment.specialty_id).lean()
+        if (sk && sk.ten) specialtyName = sk.ten
+      } catch (_) {}
+    }
+
+    const ngayKhamStr = appointment.ngay_kham
+      ? new Date(appointment.ngay_kham).toLocaleDateString('vi-VN')
+      : ''
+
+    const bookingData = {
+      ma_lich_hen: appointment.ma_lich_hen,
+      ten_benh_nhan: appointment.ten_khach || user.ho_ten,
+      so_dien_thoai: appointment.so_dien_thoai_khach || user.so_dien_thoai,
+      ten_bac_si: docName,
+      chuyen_khoa: specialtyName,
+      ngay_kham: ngayKhamStr,
+      gio_kham: appointment.gio_kham || '',
+      phong_kham: appointment.phong_kham || 'Phòng khám ViteFamily',
+      dia_chi: appointment.dia_chi_kham || 'Phòng 101, Tầng 1, Tòa nhà ViteFamily',
+      tong_tien: payment.so_tien || appointment.gia_kham || 0,
+      loai_kham: appointment.loai_kham,
+    }
+
+    await sendBookingSuccessEmail({ to: user.email, bookingData })
+    console.log(`[EMAIL SENT SUCCESS] Sent booking confirmation email to ${user.email} (Appointment: ${appointment.ma_lich_hen})`)
+  } catch (err) {
+    console.error('[EMAIL ERROR] Failed to send booking confirmation email:', err.message)
   }
 }
 
@@ -391,6 +484,7 @@ export async function completeMockVnpayPayment(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    triggerBookingSuccessEmail(appointment, payment)
     emitAdminRealtime('admin:payment_updated', {
       payment_id: payment._id,
       appointment_id: appointment._id,
@@ -463,6 +557,7 @@ export async function confirmPayment(req, res) {
 
     await session.commitTransaction()
     session.endSession()
+    triggerBookingSuccessEmail(appointment, payment)
     emitDashboardRevenueChanged({
       ngay: payment.ngay_thanh_toan,
       so_tien: payment.so_tien,
@@ -560,6 +655,7 @@ export async function vnpayIpn(req, res) {
 
       await session.commitTransaction()
       session.endSession()
+      triggerBookingSuccessEmail(appointment, payment)
 
       emitAdminRealtime('admin:payment_updated', {
         payment_id: payment._id,
@@ -620,7 +716,7 @@ export async function vnpayReturn(req, res) {
     if (secureHash !== signed) {
       await session.abortTransaction()
       session.endSession()
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed&reason=checksum`)
+      return res.redirect(buildPaymentResultUrl({ status: 'failed', reason: 'checksum' }))
     }
 
     const vnp_TxnRef = vnp_Params['vnp_TxnRef']
@@ -630,19 +726,19 @@ export async function vnpayReturn(req, res) {
     if (!payment) {
       await session.abortTransaction()
       session.endSession()
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed&reason=not_found`)
+      return res.redirect(buildPaymentResultUrl({ status: 'failed', reason: 'not_found' }))
     }
 
     if (rspCode !== '00') {
       await session.abortTransaction()
       session.endSession()
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed&reason=payment_failed`)
+      return res.redirect(buildPaymentResultUrl({ status: 'failed', payment, reason: 'payment_failed' }))
     }
 
     if (payment.status === 'paid') {
       await session.abortTransaction()
       session.endSession()
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=success&payment_id=${payment._id}`)
+      return res.redirect(buildPaymentResultUrl({ status: 'success', payment }))
     }
 
     if (payment.status === 'pending') {
@@ -671,6 +767,7 @@ export async function vnpayReturn(req, res) {
 
       await session.commitTransaction()
       session.endSession()
+      triggerBookingSuccessEmail(appointment, payment)
 
       emitAdminRealtime('admin:payment_updated', {
         payment_id: payment._id,
@@ -695,15 +792,15 @@ export async function vnpayReturn(req, res) {
         await tinhTrangThaiHoaDon(invoice._id)
       }
 
-      return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=success&payment_id=${payment._id}`)
+      return res.redirect(buildPaymentResultUrl({ status: 'success', payment, appointment }))
     }
 
     await session.abortTransaction()
     session.endSession()
-    return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=failed`)
+    return res.redirect(buildPaymentResultUrl({ status: 'failed', payment }))
   } catch (err) {
     await session.abortTransaction()
     session.endSession()
-    return res.redirect(`${DEFAULT_CLIENT_BASE_URL}/profile?payment_status=error`)
+    return res.redirect(buildPaymentResultUrl({ status: 'error', reason: 'server_error' }))
   }
 }

@@ -12,5 +12,6 @@ router.get('/doctors/:id/slots', bookingController.getSlots)
 router.get('/availability', bookingController.getAvailability)
 
 router.post('/', bookingController.createBooking)
+router.get('/family-group/:userId', bookingController.getFamilyGroup)
 
 export default router

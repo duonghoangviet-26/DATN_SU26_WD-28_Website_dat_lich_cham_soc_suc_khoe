@@ -45,4 +45,25 @@ export const authService = {
       so_dien_thoai: data.so_dien_thoai,
     })
   },
+
+  /**
+   * Quên mật khẩu - Yêu cầu cấp mã reset
+   */
+  async forgotPassword(email: string): Promise<any> {
+    const res = await axiosInstance.post<ApiResponse<any>>('/auth/forgot-password', {
+      email,
+    })
+    return res.data
+  },
+
+  /**
+   * Đặt lại mật khẩu mới với token
+   */
+  async resetPassword(token: string, matKhauMoi: string): Promise<any> {
+    const res = await axiosInstance.post<ApiResponse<any>>('/auth/reset-password', {
+      token,
+      mat_khau_moi: matKhauMoi,
+    })
+    return res.data
+  },
 }

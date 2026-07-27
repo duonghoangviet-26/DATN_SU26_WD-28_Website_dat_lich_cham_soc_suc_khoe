@@ -5,12 +5,15 @@
 export const ROLES = {
     USER: "user", // bệnh nhân
     DOCTOR: "doctor", // bác sĩ đã được duyệt
+    RECEPTIONIST: "receptionist", // lễ tân
     ADMIN: "admin", // quản trị viên
 };
 
 export const ROLE_LABEL = {
     user: "Bệnh nhân",
+    patient: "Bệnh nhân",
     doctor: "Bác sĩ",
+    receptionist: "Lễ tân",
     admin: "Quản trị viên",
 };
 

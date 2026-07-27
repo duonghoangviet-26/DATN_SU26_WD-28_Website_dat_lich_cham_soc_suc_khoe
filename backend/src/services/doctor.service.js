@@ -168,7 +168,10 @@ export async function createDoctorByAdmin(payload) {
     }
   }
 
-  const existingUser = await NguoiDung.findOne({ email: String(email).trim().toLowerCase() }).lean()
+  const existingUser = await NguoiDung.findOne({
+    email: String(email).trim().toLowerCase(),
+    ngay_xoa: null,
+  }).lean()
   if (existingUser) {
     throw new Error('email da ton tai')
   }

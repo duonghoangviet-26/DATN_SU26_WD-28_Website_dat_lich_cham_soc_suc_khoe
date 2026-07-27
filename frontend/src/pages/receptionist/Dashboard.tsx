@@ -106,15 +106,15 @@ export default function Dashboard() {
       <div className="grid grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
           <p className="text-slate-500 text-sm font-medium">Ca khám hôm nay</p>
-          <p className="text-3xl font-bold text-amber-600 mt-2">{totalToday}</p>
+          <p className="text-3xl font-bold text-brand-600 mt-2">{totalToday}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
           <p className="text-slate-500 text-sm font-medium">Đang chờ khám</p>
-          <p className="text-3xl font-bold text-amber-600 mt-2">{waiting}</p>
+          <p className="text-3xl font-bold text-brand-600 mt-2">{waiting}</p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow opacity-60">
           <p className="text-slate-500 text-sm font-medium">Doanh thu tại quầy</p>
-          <p className="text-3xl font-bold text-amber-600 mt-2">0 đ</p>
+          <p className="text-3xl font-bold text-brand-600 mt-2">0 đ</p>
           <p className="text-xs text-slate-400 mt-1">(Sắp ra mắt)</p>
         </div>
       </div>
@@ -125,7 +125,7 @@ export default function Dashboard() {
         {/* Khung 1: Thông báo */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-[400px]">
           <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-            <Icon name="bell" className="w-5 h-5 text-amber-500" />
+            <Icon name="bell" className="w-5 h-5 text-brand-500" />
             <h3 className="font-bold text-slate-800">Thông báo mới</h3>
           </div>
           <div className="p-4 overflow-y-auto flex-1 space-y-3">
