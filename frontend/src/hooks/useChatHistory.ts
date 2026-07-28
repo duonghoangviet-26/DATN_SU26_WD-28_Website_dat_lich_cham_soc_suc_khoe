@@ -9,6 +9,7 @@ export interface ChatMessage {
     label: string
     onClickRoute: string
   }
+  doctorCards?: any[]
 }
 
 const STORAGE_KEY = 'vf_chat_history_enc'

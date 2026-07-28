@@ -66,11 +66,12 @@ export default function AIChatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading, isOpen])
 
-  const addBotMessage = (text: string, actionRoute?: { label: string; route: string }) => {
+  const addBotMessage = (text: string, actionRoute?: { label: string; route: string }, doctorCards?: any[]) => {
     addMessage({
       text,
       sender: 'bot',
-      action: actionRoute ? { label: actionRoute.label, onClickRoute: actionRoute.route } : undefined
+      action: actionRoute ? { label: actionRoute.label, onClickRoute: actionRoute.route } : undefined,
+      doctorCards
     })
   }
 
@@ -112,10 +113,7 @@ export default function AIChatbot() {
           const slots = await patientBookingService.getSlots(doc.id, format(targetDate, 'yyyy-MM-dd'))
           
           if (slots.length > 0) {
-             addBotMessage(`👨‍⚕️ Bác sĩ **${doc.ho_ten}** có ${slots.length} lịch trống vào ${dateIntent?.date === 'tomorrow' ? 'ngày mai' : 'hôm nay'}. Giá khám là ${formatCurrency(doc.gia_kham)}.`, {
-               label: 'Đặt lịch ngay',
-               route: `/booking`
-             })
+             addBotMessage(`👨‍⚕️ Bác sĩ **${doc.ho_ten}** có ${slots.length} lịch trống vào ${dateIntent?.date === 'tomorrow' ? 'ngày mai' : 'hôm nay'}.`, undefined, [doc])
              return
           } else {
              addBotMessage(`👨‍⚕️ Rất tiếc, Bác sĩ **${doc.ho_ten}** không có lịch trống vào ${dateIntent?.date === 'tomorrow' ? 'ngày mai' : 'hôm nay'}. Bạn có muốn xem bác sĩ khác không?`)
@@ -128,10 +126,7 @@ export default function AIChatbot() {
       if (priceIntent?.maxPrice) {
         const affordableDocs = doctorList.filter(d => d.gia_kham <= priceIntent.maxPrice!)
         if (affordableDocs.length > 0) {
-          addBotMessage(`Tôi tìm thấy ${affordableDocs.length} bác sĩ có giá khám dưới ${formatCurrency(priceIntent.maxPrice!)}: \n${affordableDocs.map(d => `- BS ${d.ho_ten} (${formatCurrency(d.gia_kham)})`).join('\n')}`, {
-            label: 'Xem danh sách',
-            route: '/bac-si'
-          })
+          addBotMessage(`Tôi tìm thấy ${affordableDocs.length} bác sĩ có giá khám dưới ${formatCurrency(priceIntent.maxPrice!)}:`, undefined, affordableDocs)
           return
         } else {
           addBotMessage(`Không tìm thấy bác sĩ nào có mức giá dưới ${formatCurrency(priceIntent.maxPrice!)} cả.`)
@@ -301,6 +296,33 @@ export default function AIChatbot() {
                         >
                           {msg.action.label}
                         </button>
+                      )}
+                      
+                      {msg.doctorCards && msg.doctorCards.length > 0 && (
+                        <div className="flex gap-3 overflow-x-auto w-full py-2 max-w-[260px] no-scrollbar">
+                          {msg.doctorCards.map((doc, idx) => (
+                            <div key={idx} className="flex-shrink-0 w-[200px] bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
+                              <div className="h-20 bg-gradient-to-r from-emerald-400 to-teal-500 flex items-center justify-center relative">
+                                <div className="absolute -bottom-6 w-12 h-12 bg-white rounded-full p-1 shadow-md">
+                                  <div className="w-full h-full bg-slate-100 rounded-full flex items-center justify-center text-emerald-600">
+                                    <UserIcon className="w-6 h-6" />
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="pt-8 pb-3 px-3 flex flex-col items-center text-center">
+                                <h4 className="font-bold text-slate-800 text-sm line-clamp-1">{doc.ho_ten}</h4>
+                                <p className="text-[10px] text-slate-500 mt-0.5">{doc.chuyen_khoa || 'Chuyên khoa'}</p>
+                                <p className="text-sm font-bold text-orange-600 mt-2">{formatCurrency(doc.gia_kham)}</p>
+                                <button 
+                                  onClick={() => { navigate(`/client/booking?doctorId=${doc.id}`); setIsOpen(false) }}
+                                  className="mt-3 w-full bg-emerald-50 hover:bg-emerald-600 text-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-600 transition-colors py-1.5 rounded-lg text-xs font-medium"
+                                >
+                                  Đặt lịch ngay
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       )}
                       <span className="text-[9px] text-slate-400 mt-0.5 px-1">
                         {new Date(msg.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
