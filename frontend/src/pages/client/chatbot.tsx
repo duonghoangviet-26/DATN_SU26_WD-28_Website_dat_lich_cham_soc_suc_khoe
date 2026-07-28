@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2 } from 'lucide-react'
+import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Trash2, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { fallbackLLM } from '@/services/chatbot.service'
 import { patientBookingService } from '@/services/patient-booking.service'
 import { thongKeService } from '@/services/thong-ke.service'
+import { useChatHistory } from '@/hooks/useChatHistory'
 import {
   parseDoctorIntent,
   parseDateTimeIntent,
@@ -16,26 +17,18 @@ import {
 } from '@/utils/chatbotIntent'
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns'
 
-interface Message {
-  id: string
-  text: string
-  sender: 'bot' | 'user'
-  action?: {
-    label: string
-    onClick: () => void
-  }
-}
-
 export default function AIChatbot() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   
   const [isOpen, setIsOpen] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const { messages, addMessage, clearHistory, groupedMessages, isLoaded } = useChatHistory()
 
   // Chỉ lấy bác sĩ 1 lần để parse intent
   const [doctorList, setDoctorList] = useState<any[]>([])
@@ -43,22 +36,27 @@ export default function AIChatbot() {
   useEffect(() => {
     if (isOpen && doctorList.length === 0) {
       patientBookingService.getDoctors().then(docs => setDoctorList(docs)).catch(() => {})
-      
-      const welcomeMsg: Message = {
-        id: Date.now().toString(),
+    }
+    
+    // Khởi tạo tin nhắn chào mừng nếu lịch sử trống
+    if (isOpen && isLoaded && messages.length === 0) {
+      addMessage({
         text: '👋 Chào bạn, tôi là Bot Tư Vấn Đặt Lịch của VitaFamily. Bạn cần hỗ trợ tìm bác sĩ, xem giá khám hay đặt lịch?',
         sender: 'bot'
-      }
-      setMessages([welcomeMsg])
+      })
     }
-  }, [isOpen, doctorList.length, user?.role])
+  }, [isOpen, doctorList.length, isLoaded, messages.length, addMessage])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isLoading])
+  }, [messages, isLoading, isOpen])
 
-  const addBotMessage = (text: string, action?: { label: string; onClick: () => void }) => {
-    setMessages(prev => [...prev, { id: Date.now().toString(), text, sender: 'bot', action }])
+  const addBotMessage = (text: string, actionRoute?: { label: string; route: string }) => {
+    addMessage({
+      text,
+      sender: 'bot',
+      action: actionRoute ? { label: actionRoute.label, onClickRoute: actionRoute.route } : undefined
+    })
   }
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)
@@ -101,7 +99,7 @@ export default function AIChatbot() {
           if (slots.length > 0) {
              addBotMessage(`👨‍⚕️ Bác sĩ **${doc.ho_ten}** có ${slots.length} lịch trống vào ${dateIntent?.date === 'tomorrow' ? 'ngày mai' : 'hôm nay'}. Giá khám là ${formatCurrency(doc.gia_kham)}.`, {
                label: 'Đặt lịch ngay',
-               onClick: () => { navigate(`/client/booking?doctorId=${doc.id}`); setIsOpen(false) }
+               route: `/booking`
              })
              return
           } else {
@@ -117,7 +115,7 @@ export default function AIChatbot() {
         if (affordableDocs.length > 0) {
           addBotMessage(`Tôi tìm thấy ${affordableDocs.length} bác sĩ có giá khám dưới ${formatCurrency(priceIntent.maxPrice!)}: \n${affordableDocs.map(d => `- BS ${d.ho_ten} (${formatCurrency(d.gia_kham)})`).join('\n')}`, {
             label: 'Xem danh sách',
-            onClick: () => { navigate('/client/doctors'); setIsOpen(false) }
+            route: '/bac-si'
           })
           return
         } else {
@@ -130,7 +128,7 @@ export default function AIChatbot() {
       if (parseGeneralAvailabilityIntent(text)) {
         addBotMessage('Hôm nay chúng tôi có các bác sĩ đang trực hoặc nhận đặt lịch. Xin vui lòng xem danh sách bác sĩ để chọn giờ khám phù hợp.', {
           label: 'Xem danh sách Bác sĩ',
-          onClick: () => { navigate('/bac-si'); setIsOpen(false) }
+          route: '/bac-si'
         })
         return
       }
@@ -141,7 +139,7 @@ export default function AIChatbot() {
       if (isHealthIssue) {
          addBotMessage(`🩺 Có vẻ bạn đang gặp vấn đề về sức khỏe. Bạn nên đặt lịch khám sớm để bác sĩ kiểm tra trực tiếp. (Lưu ý: Tư vấn này không thay thế chẩn đoán y khoa)`, {
            label: 'Đặt lịch khám ngay',
-           onClick: () => { navigate('/client/booking'); setIsOpen(false) }
+           route: '/booking'
          })
          // Vẫn gửi LLM nhưng nhắc nhở
          contextStr = 'Người dùng đang nêu triệu chứng bệnh, hãy khuyên họ đến khám trực tiếp.'
@@ -161,7 +159,7 @@ export default function AIChatbot() {
   const handleSend = () => {
     if (!inputValue.trim()) return
     const text = inputValue.trim()
-    setMessages(prev => [...prev, { id: Date.now().toString(), text, sender: 'user' }])
+    addMessage({ text, sender: 'user' })
     setInputValue('')
     processMessage(text)
   }
@@ -194,7 +192,7 @@ export default function AIChatbot() {
       <div className={`fixed bottom-6 right-6 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 transition-all duration-300 transform origin-bottom-right flex flex-col overflow-hidden ${isOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`} style={{ height: '500px', maxHeight: 'calc(100vh - 48px)' }}>
         
         {/* Header */}
-        <div className="bg-emerald-600 text-white p-4 flex items-center justify-between shadow-md z-10">
+        <div className="bg-emerald-600 text-white p-4 flex items-center justify-between shadow-md z-20">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
               <Bot className="w-6 h-6" />
@@ -204,36 +202,98 @@ export default function AIChatbot() {
               <p className="text-xs text-emerald-100 opacity-90">Tư Vấn Đặt Lịch</p>
             </div>
           </div>
-          <button onClick={() => setIsOpen(false)} className="text-emerald-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setShowClearConfirm(true)} 
+              className="text-emerald-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors"
+              title="Xóa lịch sử trò chuyện"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button onClick={() => setIsOpen(false)} className="text-emerald-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`flex gap-2 max-w-[85%] ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                
-                <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.sender === 'user' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                  {msg.sender === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                </div>
-
-                <div className={`flex flex-col gap-1 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`px-4 py-2 text-sm rounded-2xl whitespace-pre-wrap ${msg.sender === 'user' ? 'bg-emerald-600 text-white rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-sm'}`}>
-                    {/* Simplified markdown parsing for bold */}
-                    {msg.text.split(/(\*\*.*?\*\*)/).map((part, i) => 
-                      part.startsWith('**') && part.endsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong> : part
-                    )}
-                  </div>
-                  
-                  {msg.action && (
-                    <button onClick={msg.action.onClick} className="mt-1 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 px-4 py-1.5 rounded-full text-xs font-medium shadow-sm transition-colors">
-                      {msg.action.label}
-                    </button>
-                  )}
-                </div>
+        {/* Clear History Modal */}
+        {showClearConfirm && (
+          <div className="absolute inset-0 bg-slate-900/40 z-30 flex items-center justify-center backdrop-blur-[1px]">
+            <div className="bg-white rounded-xl shadow-2xl p-5 m-4 max-w-[280px] w-full transform transition-all">
+              <div className="flex items-center gap-3 text-red-600 mb-2">
+                <AlertCircle className="w-5 h-5" />
+                <h4 className="font-bold">Xóa lịch sử?</h4>
               </div>
+              <p className="text-sm text-slate-600 mb-5">Toàn bộ cuộc trò chuyện sẽ bị xóa vĩnh viễn khỏi thiết bị này.</p>
+              <div className="flex justify-end gap-2">
+                <button 
+                  onClick={() => setShowClearConfirm(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Hủy
+                </button>
+                <button 
+                  onClick={() => {
+                    clearHistory()
+                    setShowClearConfirm(false)
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                >
+                  Đồng ý xóa
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50/50">
+          {!isLoaded ? (
+            <div className="flex justify-center p-4">
+              <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+            </div>
+          ) : groupedMessages.map((group, groupIdx) => (
+            <div key={groupIdx} className="space-y-4">
+              <div className="flex justify-center">
+                <span className="text-[10px] font-medium text-slate-400 bg-white border border-slate-100 px-3 py-1 rounded-full shadow-sm">
+                  {group.dateLabel}
+                </span>
+              </div>
+              
+              {group.messages.map((msg) => (
+                <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`flex gap-2 max-w-[85%] ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                    
+                    <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.sender === 'user' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                      {msg.sender === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                    </div>
+
+                    <div className={`flex flex-col gap-1 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                      <div className={`px-4 py-2 text-sm rounded-2xl whitespace-pre-wrap ${msg.sender === 'user' ? 'bg-emerald-600 text-white rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-sm'}`}>
+                        {/* Simplified markdown parsing for bold */}
+                        {msg.text.split(/(\*\*.*?\*\*)/).map((part, i) => 
+                          part.startsWith('**') && part.endsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong> : part
+                        )}
+                      </div>
+                      
+                      {msg.action && (
+                        <button 
+                          onClick={() => {
+                            navigate(msg.action!.onClickRoute)
+                            setIsOpen(false)
+                          }} 
+                          className="mt-1 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 px-4 py-1.5 rounded-full text-xs font-medium shadow-sm transition-colors"
+                        >
+                          {msg.action.label}
+                        </button>
+                      )}
+                      <span className="text-[9px] text-slate-400 mt-0.5 px-1">
+                        {new Date(msg.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
 
