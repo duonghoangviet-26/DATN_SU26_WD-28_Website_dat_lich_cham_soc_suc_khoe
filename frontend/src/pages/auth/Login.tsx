@@ -160,7 +160,6 @@ export default function Login() {
         <GoogleLogin
           onSuccess={handleGoogleSuccess}
           onError={() => setError('Xác thực với Google thất bại. Vui lòng thử lại.')}
-          useOneTap
           shape="circle"
           text="signin_with"
           locale="vi"
