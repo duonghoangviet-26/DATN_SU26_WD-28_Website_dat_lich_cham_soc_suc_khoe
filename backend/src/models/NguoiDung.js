@@ -5,10 +5,10 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: [true, 'Email la bat buoc'],
-      unique: true,
       lowercase: true,
       trim: true,
       maxlength: 255,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Email khong dung dinh dang'],
     },
     mat_khau: {
       type: String,
@@ -57,6 +57,8 @@ const userSchema = new mongoose.Schema(
       min: 0,
     },
     ngay_xoa: { type: Date, default: null },
+    reset_password_token: { type: String, default: null },
+    reset_password_expire: { type: Date, default: null },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
@@ -76,5 +78,12 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ role: 1 })
 userSchema.index({ status: 1 })
+userSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { ngay_xoa: null },
+  }
+)
 
 export default mongoose.model('NguoiDung', userSchema)

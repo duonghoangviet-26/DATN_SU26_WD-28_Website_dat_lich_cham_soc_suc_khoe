@@ -865,16 +865,6 @@ export default function ManageDoctorSchedules() {
     navigate(`/admin/appointments?${params.toString()}`)
   }
 
-  const summary = {
-    total: items.length,
-    working: items.filter((item) => item.trang_thai_ngay === 'lam_viec').length,
-    dayOff: items.filter((item) => item.trang_thai_ngay === 'nghi').length,
-    leave: items.filter((item) => item.trang_thai_ngay === 'nghi_phep').length,
-    missing: items.filter((item) => item.trang_thai_ngay === 'chua_tao').length,
-    confirmed: items.filter((item) => item.trang_thai_xac_nhan === 'da_xac_nhan').length,
-    conflicts: items.filter((item) => item.canh_bao_xung_dot_xac_nhan).length,
-  }
-
   return (
     <AdminAutoStagger className="space-y-6">
       <PageHeader
@@ -946,23 +936,6 @@ export default function ManageDoctorSchedules() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-7">
-        {[
-          { label: 'Tổng ngày', value: summary.total, color: 'text-slate-700' },
-          { label: 'Đi làm', value: summary.working, color: 'text-green-600' },
-          { label: 'Nghỉ', value: summary.dayOff, color: 'text-slate-500' },
-          { label: 'Nghỉ phép', value: summary.leave, color: 'text-amber-600' },
-          { label: 'Chưa tạo lịch', value: summary.missing, color: 'text-red-600' },
-          { label: 'Đã xác nhận', value: summary.confirmed, color: 'text-emerald-600' },
-          { label: 'Cảnh báo', value: summary.conflicts, color: 'text-red-600' },
-        ].map((item) => (
-          <div key={item.label} className="card p-4 text-center">
-            <div className={`text-2xl font-bold ${item.color}`}>{item.value}</div>
-            <div className="mt-1 text-xs text-slate-500">{item.label}</div>
-          </div>
-        ))}
-      </div>
-
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -990,6 +963,7 @@ export default function ManageDoctorSchedules() {
         onUpdateWorkday={updateWorkday}
         onCreateScheduleForDay={createScheduleForDay}
         onViewBookedAppointments={viewBookedAppointments}
+        onRetry={() => void loadWorkdays(doctorId, fromDate, toDate)}
       />
 
       <SlotEditorModal

@@ -14,6 +14,8 @@ import ReceptionistBooking from '@/pages/receptionist/Booking'
 
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
+import ForgotPassword from '@/pages/auth/ForgotPassword'
+import ResetPassword from '@/pages/auth/ResetPassword'
 import Home from '@/pages/client/Home'
 import DoctorList from '@/pages/client/DoctorList'
 import DoctorDetail from '@/pages/client/DoctorDetail'
@@ -21,6 +23,7 @@ import ServiceList from '@/pages/client/ServiceList'
 import ServiceDetail from '@/pages/client/ServiceDetail'
 import Booking from '@/pages/client/Booking'
 import Profile from '@/pages/client/Profile'
+import VnpayResult from '@/pages/client/VnpayResult'
 import NewsList from '@/pages/client/NewsList'
 import NewsDetail from '@/pages/client/NewsDetail'
 
@@ -56,6 +59,7 @@ export default function AppRoutes() {
         <Route path="/bac-si/:id" element={<DoctorDetail />} />
         <Route path="/dich-vu" element={<ServiceList />} />
         <Route path="/dich-vu/:id" element={<ServiceDetail />} />
+        <Route path="/payment/vnpay-result" element={<VnpayResult />} />
         <Route
           path="/booking"
           element={
@@ -80,6 +84,8 @@ export default function AppRoutes() {
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
       </Route>
 
       {/* Khu vực Admin — yêu cầu role = admin */}
