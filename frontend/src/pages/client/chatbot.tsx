@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Trash2, AlertCircle } from 'lucide-react'
+import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Trash2, AlertCircle, Mic, MicOff } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { fallbackLLM } from '@/services/chatbot.service'
 import { patientBookingService } from '@/services/patient-booking.service'
 import { thongKeService } from '@/services/thong-ke.service'
 import { useChatHistory } from '@/hooks/useChatHistory'
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import {
   parseDoctorIntent,
   parseDateTimeIntent,
@@ -29,6 +30,20 @@ export default function AIChatbot() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { messages, addMessage, clearHistory, groupedMessages, isLoaded } = useChatHistory()
+  const { text: speechText, state: speechState, startListening, stopListening, resetSpeech, errorMsg: speechError } = useSpeechRecognition()
+
+  useEffect(() => {
+    if (speechText) {
+      setInputValue(prev => prev ? prev + ' ' + speechText : speechText)
+    }
+  }, [speechText])
+
+  useEffect(() => {
+    if (speechError) {
+      addMessage({ text: `❌ Lỗi Micro: ${speechError}`, sender: 'bot' })
+      resetSpeech()
+    }
+  }, [speechError, addMessage, resetSpeech])
 
   // Chỉ lấy bác sĩ 1 lần để parse intent
   const [doctorList, setDoctorList] = useState<any[]>([])
@@ -318,6 +333,24 @@ export default function AIChatbot() {
         <div className="border-t border-slate-200 bg-white shadow-sm z-10">
           {renderSuggestions()}
           <div className="p-3 flex items-end gap-2">
+            <button
+              onClick={speechState === 'listening' ? stopListening : startListening}
+              className={`p-3 rounded-xl transition-all relative ${
+                speechState === 'listening' 
+                  ? 'bg-red-50 text-red-600 hover:bg-red-100' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+              title={speechState === 'listening' ? 'Tắt thu âm' : 'Bật thu âm'}
+            >
+              {speechState === 'listening' ? (
+                <>
+                  <MicOff className="w-5 h-5 relative z-10" />
+                  <span className="absolute inset-0 rounded-xl bg-red-400 animate-ping opacity-20"></span>
+                </>
+              ) : (
+                <Mic className="w-5 h-5" />
+              )}
+            </button>
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
@@ -327,7 +360,7 @@ export default function AIChatbot() {
                   handleSend()
                 }
               }}
-              placeholder="Nhập tin nhắn..."
+              placeholder={speechState === 'listening' ? 'Đang nghe...' : 'Nhập tin nhắn...'}
               className="flex-1 max-h-32 min-h-[44px] bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
               rows={1}
             />
