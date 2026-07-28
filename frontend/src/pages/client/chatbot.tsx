@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Trash2, AlertCircle, Mic, MicOff } from 'lucide-react'
+import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Trash2, AlertCircle, Mic, MicOff, Sun, Moon, Move } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { fallbackLLM } from '@/services/chatbot.service'
 import { patientBookingService } from '@/services/patient-booking.service'
 import { thongKeService } from '@/services/thong-ke.service'
 import { useChatHistory } from '@/hooks/useChatHistory'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
+import { useChatTheme } from '@/hooks/useChatTheme'
+import { useDraggable } from '@/hooks/useDraggable'
 import {
   parseDoctorIntent,
   parseDateTimeIntent,
@@ -20,7 +22,7 @@ import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns
 import { parseMarkdownToHTML } from '@/utils/markdownParser'
 import { useTypewriter } from '@/hooks/useTypewriter'
 
-const AnimatedMarkdownText = ({ text, isNewMessage }: { text: string, isNewMessage?: boolean }) => {
+const AnimatedMarkdownText = ({ text, isNewMessage, isDark }: { text: string, isNewMessage?: boolean, isDark: boolean }) => {
   const { displayedText, isTyping } = useTypewriter(text, !!isNewMessage, { speed: 15 })
   
   // Dùng parseMarkdownToHTML tự viết
@@ -28,7 +30,7 @@ const AnimatedMarkdownText = ({ text, isNewMessage }: { text: string, isNewMessa
 
   return (
     <div 
-      className="prose prose-sm prose-emerald max-w-none text-sm"
+      className={`prose prose-sm prose-emerald max-w-none text-sm ${isDark ? 'prose-invert' : ''}`}
       dangerouslySetInnerHTML={{ __html: htmlContent + (isTyping ? '<span className="inline-block w-1.5 h-4 ml-0.5 bg-emerald-500 animate-pulse align-middle"></span>' : '') }}
     />
   )
@@ -47,6 +49,8 @@ export default function AIChatbot() {
 
   const { messages, addMessage, clearHistory, groupedMessages, isLoaded } = useChatHistory()
   const { text: speechText, state: speechState, startListening, stopListening, resetSpeech, errorMsg: speechError } = useSpeechRecognition()
+  const { isDark, toggleTheme } = useChatTheme()
+  const { position, isDragging, handleMouseDown } = useDraggable()
 
   useEffect(() => {
     if (speechText) {
@@ -215,11 +219,18 @@ export default function AIChatbot() {
         <MessageCircle className="w-6 h-6" />
       </button>
 
-      <div className={`fixed bottom-6 right-6 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 transition-all duration-300 transform origin-bottom-right flex flex-col overflow-hidden ${isOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`} style={{ height: '500px', maxHeight: 'calc(100vh - 48px)' }}>
+      <div 
+        className={`fixed bottom-6 right-6 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 origin-bottom-right flex flex-col overflow-hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${isDragging ? 'transition-none opacity-90' : 'transition-all duration-300'}`} 
+        style={{ height: '500px', maxHeight: 'calc(100vh - 48px)', transform: `translate(${position.x}px, ${position.y}px) scale(${isOpen ? 1 : 0})` }}
+      >
         
         {/* Header */}
-        <div className="bg-emerald-600 text-white p-4 flex items-center justify-between shadow-md z-20">
-          <div className="flex items-center gap-3">
+        <div 
+          className="bg-emerald-600 text-white p-4 flex items-center justify-between shadow-md z-20 cursor-move select-none active:bg-emerald-700 transition-colors"
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleMouseDown}
+        >
+          <div className="flex items-center gap-3 pointer-events-none">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
               <Bot className="w-6 h-6" />
             </div>
@@ -229,6 +240,16 @@ export default function AIChatbot() {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <div className="text-emerald-300 mx-1 hidden sm:block pointer-events-none">
+              <Move className="w-4 h-4 opacity-50" />
+            </div>
+            <button 
+              onClick={toggleTheme} 
+              className="text-emerald-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-all"
+              title="Giao diện"
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
             <button 
               onClick={() => setShowClearConfirm(true)} 
               className="text-emerald-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors"
@@ -244,8 +265,8 @@ export default function AIChatbot() {
 
         {/* Clear History Modal */}
         {showClearConfirm && (
-          <div className="absolute inset-0 bg-slate-900/40 z-30 flex items-center justify-center backdrop-blur-[1px]">
-            <div className="bg-white rounded-xl shadow-2xl p-5 m-4 max-w-[280px] w-full transform transition-all">
+          <div className="absolute inset-0 bg-slate-900/60 z-30 flex items-center justify-center backdrop-blur-sm transition-all">
+            <div className={`rounded-xl shadow-2xl p-5 m-4 max-w-[280px] w-full transform transition-all ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
               <div className="flex items-center gap-3 text-red-600 mb-2">
                 <AlertCircle className="w-5 h-5" />
                 <h4 className="font-bold">Xóa lịch sử?</h4>
@@ -273,7 +294,7 @@ export default function AIChatbot() {
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50/50">
+        <div className={`flex-1 overflow-y-auto p-4 space-y-5 transition-colors ${isDark ? 'bg-slate-900' : 'bg-slate-50/50'}`}>
           {!isLoaded ? (
             <div className="flex justify-center p-4">
               <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
@@ -281,7 +302,7 @@ export default function AIChatbot() {
           ) : groupedMessages.map((group, groupIdx) => (
             <div key={groupIdx} className="space-y-4">
               <div className="flex justify-center">
-                <span className="text-[10px] font-medium text-slate-400 bg-white border border-slate-100 px-3 py-1 rounded-full shadow-sm">
+                <span className={`text-[10px] font-medium px-3 py-1 rounded-full shadow-sm border transition-colors ${isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-white border-slate-100 text-slate-400'}`}>
                   {group.dateLabel}
                 </span>
               </div>
@@ -295,11 +316,11 @@ export default function AIChatbot() {
                     </div>
 
                     <div className={`flex flex-col gap-1 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                      <div className={`px-4 py-2 text-sm rounded-2xl whitespace-pre-wrap ${msg.sender === 'user' ? 'bg-emerald-600 text-white rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-sm'}`}>
+                      <div className={`px-4 py-2 text-sm rounded-2xl whitespace-pre-wrap transition-colors ${msg.sender === 'user' ? 'bg-emerald-600 text-white rounded-tr-sm' : isDark ? 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-sm' : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-sm'}`}>
                         {msg.sender === 'user' ? (
                           msg.text
                         ) : (
-                          <AnimatedMarkdownText text={msg.text} isNewMessage={msg.isNew} />
+                          <AnimatedMarkdownText text={msg.text} isNewMessage={msg.isNew} isDark={isDark} />
                         )}
                       </div>
                       
@@ -309,7 +330,7 @@ export default function AIChatbot() {
                             navigate(msg.action!.onClickRoute)
                             setIsOpen(false)
                           }} 
-                          className="mt-1 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 px-4 py-1.5 rounded-full text-xs font-medium shadow-sm transition-colors"
+                          className={`mt-1 px-4 py-1.5 rounded-full text-xs font-medium shadow-sm transition-colors border ${isDark ? 'bg-slate-800 border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/30' : 'bg-white border-emerald-200 text-emerald-600 hover:bg-emerald-50'}`}
                         >
                           {msg.action.label}
                         </button>
@@ -318,16 +339,16 @@ export default function AIChatbot() {
                       {msg.doctorCards && msg.doctorCards.length > 0 && (
                         <div className="flex gap-3 overflow-x-auto w-full py-2 max-w-[260px] no-scrollbar">
                           {msg.doctorCards.map((doc, idx) => (
-                            <div key={idx} className="flex-shrink-0 w-[200px] bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col">
+                            <div key={idx} className={`flex-shrink-0 w-[200px] border rounded-xl overflow-hidden shadow-sm flex flex-col transition-colors ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                               <div className="h-20 bg-gradient-to-r from-emerald-400 to-teal-500 flex items-center justify-center relative">
-                                <div className="absolute -bottom-6 w-12 h-12 bg-white rounded-full p-1 shadow-md">
-                                  <div className="w-full h-full bg-slate-100 rounded-full flex items-center justify-center text-emerald-600">
+                                <div className={`absolute -bottom-6 w-12 h-12 rounded-full p-1 shadow-md ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
+                                  <div className={`w-full h-full rounded-full flex items-center justify-center text-emerald-600 ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>
                                     <UserIcon className="w-6 h-6" />
                                   </div>
                                 </div>
                               </div>
                               <div className="pt-8 pb-3 px-3 flex flex-col items-center text-center">
-                                <h4 className="font-bold text-slate-800 text-sm line-clamp-1">{doc.ho_ten}</h4>
+                                <h4 className={`font-bold text-sm line-clamp-1 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{doc.ho_ten}</h4>
                                 <p className="text-[10px] text-slate-500 mt-0.5">{doc.chuyen_khoa || 'Chuyên khoa'}</p>
                                 <p className="text-sm font-bold text-orange-600 mt-2">{formatCurrency(doc.gia_kham)}</p>
                                 <button 
@@ -369,7 +390,7 @@ export default function AIChatbot() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-slate-200 bg-white shadow-sm z-10">
+        <div className={`border-t shadow-sm z-10 transition-colors ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
           {renderSuggestions()}
           <div className="p-3 flex items-end gap-2">
             <button
@@ -377,7 +398,7 @@ export default function AIChatbot() {
               className={`p-3 rounded-xl transition-all relative ${
                 speechState === 'listening' 
                   ? 'bg-red-50 text-red-600 hover:bg-red-100' 
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
               title={speechState === 'listening' ? 'Tắt thu âm' : 'Bật thu âm'}
             >
@@ -400,7 +421,7 @@ export default function AIChatbot() {
                 }
               }}
               placeholder={speechState === 'listening' ? 'Đang nghe...' : 'Nhập tin nhắn...'}
-              className="flex-1 max-h-32 min-h-[44px] bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+              className={`flex-1 max-h-32 min-h-[44px] border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none transition-colors ${isDark ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
               rows={1}
             />
             <button

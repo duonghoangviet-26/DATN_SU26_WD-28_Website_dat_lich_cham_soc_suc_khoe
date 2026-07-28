@@ -22,6 +22,21 @@ export const parseMarkdownToHTML = (markdown: string): string => {
   // 4. Links ([text](url))
   html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline">$1</a>')
 
+  // 4.5 Nhấn mạnh từ khoá Y khoa (Medical Keywords Highlight)
+  // Xử lý trước khi bọc thẻ p để tránh dính HTML
+  const medicalKeywords = [
+    'bác sĩ', 'khám', 'bệnh', 'tai', 'mũi', 'họng', 'đau', 'nhức', 
+    'sốt', 'nội soi', 'dạ dày', 'thuốc', 'toa', 'đặt lịch', 'giá'
+  ]
+  
+  // Tạo pattern case-insensitive, bọc bởi boundary (\b hoặc space)
+  // Dùng biểu thức chính quy (Regex) để bẫy từ khóa
+  medicalKeywords.forEach(keyword => {
+    // Lưu ý: \b trong tiếng Việt có thể không hoàn hảo, ta dùng \b hoặc khoảng trắng
+    const regex = new RegExp(`(?<!<[^>]*)(?<!&\\w*;)(?<!\\w)(${keyword})(?!\\w)`, 'gi')
+    html = html.replace(regex, '<mark className="bg-emerald-500/20 text-emerald-700 px-1 rounded font-medium">$1</mark>')
+  })
+
   // 5. Unordered Lists (- item)
   // Xử lý các dòng bắt đầu bằng dấu trừ
   html = html.replace(/^\s*-\s+(.*$)/gim, '<li className="ml-4 list-disc marker:text-emerald-500">$1</li>')
