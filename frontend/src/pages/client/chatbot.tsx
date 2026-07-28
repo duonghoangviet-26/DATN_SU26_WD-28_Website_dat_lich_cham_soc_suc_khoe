@@ -158,21 +158,43 @@ export default function AIChatbot() {
       if (parseGeneralAvailabilityIntent(text)) {
         const dateIntent = parseDateTimeIntent(text)
         let timeStr = 'Hiện tại'
+        const targetDate = dateIntent?.date === 'tomorrow' ? new Date(Date.now() + 86400000) : new Date()
+
         if (dateIntent) {
            const d = dateIntent.date === 'tomorrow' ? 'ngày mai' : 'hôm nay'
            const h = dateIntent.hour ? ` lúc ${dateIntent.hour}h` : ''
            timeStr = `Vào ${d}${h}`
         }
 
+        const availableDocs = []
+        // Chỉ quét 5 bác sĩ đầu tiên để tăng tốc độ phản hồi
+        for (const doc of doctorList.slice(0, 5)) {
+           try {
+             const slots = await patientBookingService.getSlots(doc.id, format(targetDate, 'yyyy-MM-dd'))
+             const matchedSlots = dateIntent?.hour 
+               ? slots.filter(s => s.gio_bat_dau.startsWith(dateIntent.hour!.padStart(2, '0') + ':'))
+               : slots
+               
+             if (matchedSlots.length > 0) {
+                availableDocs.push(doc)
+             }
+           } catch(e) {}
+        }
+
+        if (availableDocs.length === 0) {
+           addBotMessage(`Rất tiếc, ${timeStr.toLowerCase()} không còn lịch trống nào. Bạn có muốn đổi sang giờ khác hoặc ngày mai không?`)
+           return
+        }
+
         let docListText = ''
-        doctorList.slice(0, 3).forEach(doc => {
+        availableDocs.slice(0, 3).forEach(doc => {
           docListText += `\n- Bác sĩ **${doc.ho_ten}** - Phí khám: ${formatCurrency(doc.gia_kham)}`
         })
         
-        addBotMessage(`${timeStr} có ${doctorList.length} bác sĩ đang có lịch trống. Dưới đây là một số bác sĩ nổi bật:${docListText}`, {
+        addBotMessage(`${timeStr} có ${availableDocs.length} bác sĩ đang có lịch trống. Dưới đây là các bác sĩ nổi bật:${docListText}`, {
           label: 'Xem tất cả Bác sĩ',
           route: '/bac-si'
-        }, doctorList.slice(0, 3))
+        }, availableDocs.slice(0, 3))
         return
       }
 
