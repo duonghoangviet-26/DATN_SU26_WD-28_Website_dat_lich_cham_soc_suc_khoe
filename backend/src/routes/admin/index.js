@@ -4,6 +4,7 @@ import specialtiesRoutes   from './specialties.routes.js'
 import userRoutes          from './user.routes.js'
 import reviewRoutes        from './review.routes.js'
 import paymentsRoutes      from './payments.routes.js'
+import refundsRoutes       from './refunds.routes.js'
 import slotsRoutes         from './slots.routes.js'
 import invoicesRoutes      from './invoices.routes.js'
 import clinicConfigRoutes  from './clinic-config.routes.js'
@@ -31,6 +32,7 @@ router.use('/users',         userRoutes)            // C1
 router.use('/patients',      patientRoutes)
 router.use('/reviews',       reviewRoutes)          // C6
 router.use('/payments',      paymentsRoutes)        // C8
+router.use('/refunds',       refundsRoutes)
 router.use('/slots',         slotsRoutes)           // B2 — sinh lịch thủ công (fallback cron)
 router.use('/invoices',      invoicesRoutes)
 router.use('/clinic-config', clinicConfigRoutes)

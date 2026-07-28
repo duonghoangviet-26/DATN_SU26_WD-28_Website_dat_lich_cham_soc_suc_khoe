@@ -49,7 +49,7 @@ function mapServiceItem(item: Partial<ServiceItem> & { id?: string; _id?: string
     gia: Number(item.gia ?? 0),
     mo_ta_ngan: item.mo_ta_ngan ?? null,
     mo_ta: item.mo_ta ?? null,
-    image_url: item.image_url ?? null,
+    image_url: item.image_url ?? item.hinh_anh ?? null,
     thoi_gian_phut: item.thoi_gian_phut ?? null,
     gio_dat_truoc_toi_thieu: item.gio_dat_truoc_toi_thieu ?? undefined,
     ngay_ap_dung: item.ngay_ap_dung ?? null,

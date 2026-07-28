@@ -305,6 +305,7 @@ export interface ServiceItem {
     mo_ta_ngan?: string | null;
     mo_ta?: string | null;
     hinh_anh?: string | null;
+    image_url?: string | null;
     // home: cố định 60ph, có lịch áp dụng (đặt lịch riêng, chọn BS+slot)
     // related: null — không đặt lịch riêng (đi kèm khám clinic, BS chỉ định), thời lượng/lịch áp dụng vô nghĩa
     thoi_gian_phut?: number | null;
@@ -1124,7 +1125,6 @@ export interface DoctorUpdatePayload {
     phi_kham?: number;
     la_hien?: boolean;
     anh_dai_dien?: string | null;
-    admin_id: string;
 }
 
 export interface NotificationUpdatePayload {

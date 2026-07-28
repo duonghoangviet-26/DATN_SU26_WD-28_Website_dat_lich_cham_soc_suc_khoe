@@ -1,6 +1,9 @@
 import { ok, fail } from '../utils/response.js'
 import * as doctorService from '../services/doctor.service.js'
 
+function getAdminId(req) {
+  return req.user?.id || req.user?._id || req.user?.sub
+}
 
 // ============================================================
 // DOCTOR CONTROLLER — Quản lý bác sĩ (Admin)
@@ -36,7 +39,13 @@ export async function listDoctors(req, res) {
 // POST /api/admin/doctors
 export async function createDoctor(req, res) {
   try {
-    const doctor = await doctorService.createDoctorByAdmin(req.body)
+    const adminId = getAdminId(req)
+    if (!adminId) return fail(res, 401, 'Khong xac dinh duoc tai khoan Admin')
+
+    const doctor = await doctorService.createDoctorByAdmin({
+      ...req.body,
+      admin_id: adminId,
+    })
     return res.status(201).json({
       success: true,
       message: 'Tao bac si thanh cong',
@@ -66,15 +75,16 @@ export async function getDoctorById(req, res) {
 }
 
 // PUT /api/admin/doctors/:id/approve
-// Body: { admin_id, phong_kham_mac_dinh? } — (tạm thời truyền manual, sau này lấy từ req.user khi có JWT)
+// Body: { phong_kham_mac_dinh? } — actor Admin lấy từ JWT
 export async function approveDoctor(req, res) {
   try {
     const { id } = req.params
-    const { admin_id, phong_kham_mac_dinh } = req.body
+    const { phong_kham_mac_dinh } = req.body
+    const adminId = getAdminId(req)
 
-    if (!admin_id) return fail(res, 400, 'admin_id là bắt buộc')
+    if (!adminId) return fail(res, 401, 'Khong xac dinh duoc tai khoan Admin')
 
-    const doctor = await doctorService.approveDoctor(id, admin_id, phong_kham_mac_dinh)
+    const doctor = await doctorService.approveDoctor(id, adminId, phong_kham_mac_dinh)
     return ok(res, doctor, 'Duyệt bác sĩ thành công')
   } catch (err) {
     if (err.message === 'Không tìm thấy bác sĩ') return fail(res, 404, err.message)
@@ -85,16 +95,17 @@ export async function approveDoctor(req, res) {
 }
 
 // PUT /api/admin/doctors/:id/reject
-// Body: { admin_id, ly_do }
+// Body: { ly_do } — actor Admin lấy từ JWT
 export async function rejectDoctor(req, res) {
   try {
     const { id } = req.params
-    const { admin_id, ly_do } = req.body
+    const { ly_do } = req.body
+    const adminId = getAdminId(req)
 
-    if (!admin_id) return fail(res, 400, 'admin_id là bắt buộc')
+    if (!adminId) return fail(res, 401, 'Khong xac dinh duoc tai khoan Admin')
     if (!ly_do || !ly_do.trim()) return fail(res, 400, 'ly_do là bắt buộc khi từ chối')
 
-    const doctor = await doctorService.rejectDoctor(id, admin_id, ly_do)
+    const doctor = await doctorService.rejectDoctor(id, adminId, ly_do)
     return ok(res, doctor, 'Từ chối hồ sơ bác sĩ thành công')
   } catch (err) {
     if (err.message === 'Không tìm thấy bác sĩ') return fail(res, 404, err.message)
@@ -105,16 +116,17 @@ export async function rejectDoctor(req, res) {
 }
 
 // PUT /api/admin/doctors/:id/suspend
-// Body: { admin_id, ly_do }
+// Body: { ly_do } — actor Admin lấy từ JWT
 export async function suspendDoctor(req, res) {
   try {
     const { id } = req.params
-    const { admin_id, ly_do } = req.body
+    const { ly_do } = req.body
+    const adminId = getAdminId(req)
 
-    if (!admin_id) return fail(res, 400, 'admin_id là bắt buộc')
+    if (!adminId) return fail(res, 401, 'Khong xac dinh duoc tai khoan Admin')
     if (!ly_do || !ly_do.trim()) return fail(res, 400, 'ly_do là bắt buộc khi đình chỉ')
 
-    const result = await doctorService.suspendDoctor(id, admin_id, ly_do)
+    const result = await doctorService.suspendDoctor(id, adminId, ly_do)
     return ok(res, result, 'Đình chỉ bác sĩ thành công')
   } catch (err) {
     if (err.message === 'Không tìm thấy bác sĩ') return fail(res, 404, err.message)
@@ -125,7 +137,7 @@ export async function suspendDoctor(req, res) {
 }
 
 // PUT /api/admin/doctors/:id/restore
-// Body: { admin_id }
+// Body: {} — actor Admin lấy từ JWT
 // GET /api/admin/doctors/:id/logs
 export async function getDoctorLogs(req, res) {
   try {
@@ -142,11 +154,11 @@ export async function getDoctorLogs(req, res) {
 export async function restoreDoctor(req, res) {
   try {
     const { id } = req.params
-    const { admin_id } = req.body
+    const adminId = getAdminId(req)
 
-    if (!admin_id) return fail(res, 400, 'admin_id là bắt buộc')
+    if (!adminId) return fail(res, 401, 'Khong xac dinh duoc tai khoan Admin')
 
-    const doctor = await doctorService.restoreDoctor(id, admin_id)
+    const doctor = await doctorService.restoreDoctor(id, adminId)
     return ok(res, doctor, 'Khôi phục bác sĩ thành công')
   } catch (err) {
     if (err.message === 'Không tìm thấy bác sĩ') return fail(res, 404, err.message)
@@ -157,15 +169,16 @@ export async function restoreDoctor(req, res) {
 }
 
 // PUT /api/admin/doctors/:id
-// Body: { admin_id, tieu_su, bang_cap, kinh_nghiem, so_nam_kinh_nghiem, phi_tu_van, la_hien }
+// Body: { tieu_su, bang_cap, kinh_nghiem, so_nam_kinh_nghiem, phi_kham, la_hien }
 export async function updateDoctor(req, res) {
   try {
     const { id } = req.params
-    const { admin_id, ...updateData } = req.body
+    const { admin_id: _ignoredAdminId, ...updateData } = req.body
+    const adminId = getAdminId(req)
 
-    if (!admin_id) return fail(res, 400, 'admin_id là bắt buộc để ghi log thao tác')
+    if (!adminId) return fail(res, 401, 'Khong xac dinh duoc tai khoan Admin')
 
-    const doctor = await doctorService.updateDoctorInfo(id, updateData, admin_id)
+    const doctor = await doctorService.updateDoctorInfo(id, updateData, adminId)
     return ok(res, doctor, 'Cập nhật thông tin bác sĩ thành công')
   } catch (err) {
     if (err.message === 'Không tìm thấy bác sĩ') return fail(res, 404, err.message)
