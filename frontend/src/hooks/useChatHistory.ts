@@ -5,6 +5,7 @@ export interface ChatMessage {
   text: string
   sender: 'bot' | 'user'
   timestamp: number
+  isNew?: boolean
   action?: {
     label: string
     onClickRoute: string
@@ -79,13 +80,14 @@ export function useChatHistory() {
     }
   }, [messages, isLoaded])
 
-  const addMessage = useCallback((msg: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+  const addMessage = useCallback((msg: Omit<ChatMessage, 'id' | 'timestamp' | 'isNew'>) => {
     setMessages((prev) => [
       ...prev,
       {
         ...msg,
         id: Date.now().toString() + Math.random().toString(36).substring(7),
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        isNew: true
       }
     ])
   }, [])

@@ -17,6 +17,22 @@ import {
   parseGeneralAvailabilityIntent,
 } from '@/utils/chatbotIntent'
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns'
+import { parseMarkdownToHTML } from '@/utils/markdownParser'
+import { useTypewriter } from '@/hooks/useTypewriter'
+
+const AnimatedMarkdownText = ({ text, isNewMessage }: { text: string, isNewMessage?: boolean }) => {
+  const { displayedText, isTyping } = useTypewriter(text, !!isNewMessage, { speed: 15 })
+  
+  // Dùng parseMarkdownToHTML tự viết
+  const htmlContent = parseMarkdownToHTML(displayedText)
+
+  return (
+    <div 
+      className="prose prose-sm prose-emerald max-w-none text-sm"
+      dangerouslySetInnerHTML={{ __html: htmlContent + (isTyping ? '<span className="inline-block w-1.5 h-4 ml-0.5 bg-emerald-500 animate-pulse align-middle"></span>' : '') }}
+    />
+  )
+}
 
 export default function AIChatbot() {
   const { user } = useAuth()
@@ -280,9 +296,10 @@ export default function AIChatbot() {
 
                     <div className={`flex flex-col gap-1 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
                       <div className={`px-4 py-2 text-sm rounded-2xl whitespace-pre-wrap ${msg.sender === 'user' ? 'bg-emerald-600 text-white rounded-tr-sm' : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-sm'}`}>
-                        {/* Simplified markdown parsing for bold */}
-                        {msg.text.split(/(\*\*.*?\*\*)/).map((part, i) => 
-                          part.startsWith('**') && part.endsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong> : part
+                        {msg.sender === 'user' ? (
+                          msg.text
+                        ) : (
+                          <AnimatedMarkdownText text={msg.text} isNewMessage={msg.isNew} />
                         )}
                       </div>
                       
