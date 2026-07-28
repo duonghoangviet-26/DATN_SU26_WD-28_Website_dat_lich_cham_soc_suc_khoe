@@ -3,7 +3,6 @@ import type { FormEvent, ReactNode } from 'react'
 import type {
   ClinicRoomDoctor,
   ClinicRoomItem,
-  ClinicRoomNurse,
   ClinicRoomOptions,
   ClinicRoomPayload,
 } from '@/types'
@@ -31,7 +30,6 @@ const emptyForm: ClinicRoomPayload = {
   loai: '',
   trang_thai: 'active',
   doctor_ids: [],
-  nurse_ids: [],
 }
 
 export default function ClinicRoomsTab({ rooms, options, loading, loadError, onRetry, onChanged }: Props) {
@@ -115,7 +113,7 @@ export default function ClinicRoomsTab({ rooms, options, loading, loadError, onR
           <div>
             <h3 className="font-semibold text-slate-800">Danh sách phòng khám nhỏ ({rooms.length})</h3>
             <p className="mt-0.5 text-xs text-slate-400">
-              Quản lý phòng vật lý, bác sĩ và y tá phụ trách trong từng phòng.
+              Quản lý phòng vật lý và bác sĩ phụ trách trong từng phòng.
             </p>
           </div>
 
@@ -164,7 +162,6 @@ export default function ClinicRoomsTab({ rooms, options, loading, loadError, onR
                 <th className="px-5 py-3 font-medium">Phòng</th>
                 <th className="px-5 py-3 font-medium">Vị trí</th>
                 <th className="px-5 py-3 font-medium">Bác sĩ</th>
-                <th className="px-5 py-3 font-medium">Y tá</th>
                 <th className="px-5 py-3 font-medium">Lịch tương lai</th>
                 <th className="px-5 py-3 font-medium">Trạng thái</th>
                 <th className="px-5 py-3 text-right font-medium">Thao tác</th>
@@ -173,19 +170,19 @@ export default function ClinicRoomsTab({ rooms, options, loading, loadError, onR
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                     Đang tải dữ liệu phòng...
                   </td>
                 </tr>
               ) : loadError ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-red-500">
+                  <td colSpan={7} className="px-5 py-12 text-center text-red-500">
                     Không tải được danh sách phòng khám nhỏ.
                   </td>
                 </tr>
               ) : visibleRooms.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
+                  <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                     Chưa có phòng nào phù hợp với bộ lọc hiện tại.
                   </td>
                 </tr>
@@ -203,9 +200,6 @@ export default function ClinicRoomsTab({ rooms, options, loading, loadError, onR
                     </td>
                     <td className="min-w-56 px-5 py-4">
                       <StaffPreview people={room.doctor_ids} fallback="Chưa gán bác sĩ" />
-                    </td>
-                    <td className="min-w-52 px-5 py-4">
-                      <StaffPreview people={room.nurse_ids} fallback="Chưa gán y tá" />
                     </td>
                     <td className="px-5 py-4">
                       <p className="font-semibold text-slate-800">{room.future_schedule_count} ca</p>
@@ -229,7 +223,7 @@ export default function ClinicRoomsTab({ rooms, options, loading, loadError, onR
                             setEditingRoom(room)
                           }}
                           className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600"
-                          title="Sửa phòng và chuyển nhân sự"
+                          title="Sửa phòng và bác sĩ phụ trách"
                         >
                           <Icon name="edit" className="h-4 w-4" />
                         </button>
@@ -293,7 +287,7 @@ function StatusTab({ active, label, onClick }: { active: boolean; label: string;
   )
 }
 
-function StaffPreview({ people, fallback }: { people: Array<ClinicRoomDoctor | ClinicRoomNurse>; fallback: string }) {
+function StaffPreview({ people, fallback }: { people: ClinicRoomDoctor[]; fallback: string }) {
   if (!people.length) return <span className="text-xs italic text-slate-400">{fallback}</span>
 
   const first = people.slice(0, 2)
@@ -339,7 +333,7 @@ function RoomEditorModal({
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  function toggleId(field: 'doctor_ids' | 'nurse_ids', id: string) {
+  function toggleId(field: 'doctor_ids', id: string) {
     setForm((current) => {
       const exists = current[field].includes(id)
       return {
@@ -375,14 +369,14 @@ function RoomEditorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm">
-      <form onSubmit={handleSubmit} className="flex max-h-[92vh] w-full max-w-5xl flex-col rounded-xl bg-white shadow-xl">
+      <form onSubmit={handleSubmit} className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">
               {room ? 'Sửa phòng khám nhỏ' : 'Thêm phòng khám nhỏ'}
             </h3>
             <p className="mt-1 text-sm text-slate-500">
-              Thay đổi bác sĩ sẽ cập nhật phòng mặc định và các lịch tương lai còn trống.
+              Thay đổi bác sĩ phụ trách sẽ cập nhật phòng mặc định và các lịch tương lai còn trống.
             </p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
@@ -439,7 +433,7 @@ function RoomEditorModal({
             </Field>
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div className="mt-5">
             <StaffPicker
               title="Bác sĩ trong phòng"
               icon="doctor"
@@ -448,15 +442,6 @@ function RoomEditorModal({
               emptyText="Chưa có bác sĩ đủ điều kiện để gán phòng."
               onToggle={(id) => toggleId('doctor_ids', id)}
               describe={(doctor) => doctor.specialties?.map((item) => item.ten).join(', ') || doctor.email || 'Chưa có chuyên khoa'}
-            />
-            <StaffPicker
-              title="Y tá trong phòng"
-              icon="user"
-              items={options.nurses}
-              selectedIds={form.nurse_ids}
-              emptyText="Chưa có tài khoản y tá đang hoạt động."
-              onToggle={(id) => toggleId('nurse_ids', id)}
-              describe={(nurse) => nurse.so_dien_thoai || nurse.email || 'Chưa có số điện thoại'}
             />
           </div>
         </div>
@@ -483,7 +468,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function StaffPicker<T extends ClinicRoomDoctor | ClinicRoomNurse>({
+function StaffPicker<T extends ClinicRoomDoctor>({
   title,
   icon,
   items,
@@ -550,6 +535,5 @@ function roomToForm(room: ClinicRoomItem | null): ClinicRoomPayload {
     loai: room.loai,
     trang_thai: room.trang_thai,
     doctor_ids: room.doctor_ids.map((doctor) => doctor._id),
-    nurse_ids: room.nurse_ids.map((nurse) => nurse._id),
   }
 }

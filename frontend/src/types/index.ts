@@ -242,14 +242,6 @@ export interface ClinicRoomDoctor {
     specialties?: { _id: string; ten: string }[];
 }
 
-export interface ClinicRoomNurse {
-    _id: string;
-    ho_ten: string;
-    email?: string | null;
-    so_dien_thoai?: string | null;
-    status?: UserStatus;
-}
-
 export interface ClinicRoomItem {
     _id: string;
     ten: string;
@@ -259,9 +251,7 @@ export interface ClinicRoomItem {
     trang_thai: "active" | "inactive";
     full_name: string;
     doctor_ids: ClinicRoomDoctor[];
-    nurse_ids: ClinicRoomNurse[];
     doctor_count: number;
-    nurse_count: number;
     future_schedule_count: number;
     active_appointment_count: number;
     ngay_tao?: string | null;
@@ -275,12 +265,10 @@ export interface ClinicRoomPayload {
     loai: string;
     trang_thai: "active" | "inactive";
     doctor_ids: string[];
-    nurse_ids: string[];
 }
 
 export interface ClinicRoomOptions {
     doctors: ClinicRoomDoctor[];
-    nurses: ClinicRoomNurse[];
 }
 
 export type ServiceType = "home" | "related";
