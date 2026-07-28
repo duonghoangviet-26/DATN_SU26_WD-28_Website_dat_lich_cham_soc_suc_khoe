@@ -16,5 +16,14 @@
     "status": "success",
     "rollbackable": false,
     "error_message": null
+  },
+  {
+    "name": "012-news-short-title-url-slug",
+    "started_at": "2026-07-28T17:36:12.081Z",
+    "finished_at": "2026-07-28T17:36:12.916Z",
+    "affected_documents": 2,
+    "status": "success",
+    "rollbackable": false,
+    "error_message": null
   }
 ]

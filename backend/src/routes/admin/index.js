@@ -13,6 +13,7 @@ import doctorLeavesRoutes  from './doctor-leaves.routes.js'
 import medicalReadRoutes   from './medical-read.routes.js'
 import dashboardRoutes     from './dashboard.routes.js'
 import patientRoutes       from './patient.routes.js'
+import newsRoutes          from './news.routes.js'
 
 // ============================================================
 // Admin routes — mount tại /api/admin
@@ -40,5 +41,6 @@ router.use('/guest-patients', guestPatientsRoutes)
 router.use('/doctor-leaves', doctorLeavesRoutes)
 router.use('/medical-read', medicalReadRoutes)
 router.use('/dashboard', dashboardRoutes)
+router.use('/news', newsRoutes)
 
 export default router

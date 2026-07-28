@@ -1136,10 +1136,66 @@ export interface NewsItem {
     id: string;
     tieu_de: string;
     slug: string;
+    url_slug?: string | null;
     noi_dung_ngan: string;
     noi_dung: string;
     anh_dai_dien: string;
     nguoi_viet: string;
     luot_xem: number;
     ngay_tao: string;
+}
+
+export type NewsStatus = "draft" | "published" | "hidden";
+
+export interface NewsArticle {
+    id: string;
+    _id?: string;
+    title: string;
+    slug: string;
+    url_slug?: string | null;
+    image: string;
+    content: string;
+    excerpt: string;
+    status: NewsStatus;
+    author_id?: string | null;
+    author_name?: string | null;
+    view_count: number;
+    created_at: string;
+    updated_at?: string | null;
+    // Legacy aliases returned by the backend while old client code is being phased out.
+    tieu_de?: string;
+    noi_dung_ngan?: string;
+    noi_dung?: string;
+    anh_dai_dien?: string;
+    nguoi_viet?: string;
+    luot_xem?: number;
+    ngay_tao?: string;
+}
+
+export interface NewsPayload {
+    title: string;
+    slug: string;
+    author_name: string;
+    image: string;
+    content: string;
+    status?: NewsStatus;
+}
+
+export interface NewsListResult {
+    items: NewsArticle[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    };
+}
+
+export interface AdminNewsListResult extends NewsListResult {
+    statistics: {
+        total: number;
+        published: number;
+        draft: number;
+        hidden: number;
+    };
 }

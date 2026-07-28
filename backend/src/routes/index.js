@@ -11,6 +11,7 @@ import adminDoctorRoutes  from './doctor.routes.js'
 import receptionistRoutes from './receptionist/index.js'
 import patientRoutes      from './patient/index.js'
 import thongKeRoutes      from './thong-ke.routes.js'
+import newsRoutes         from './news.routes.js'
 
 const router = Router()
 
@@ -21,6 +22,7 @@ router.get('/health', (req, res) => {
 router.use('/auth', authRoutes)
 router.use('/doctor', doctorRoutes)
 router.use('/patient', patientRoutes)
+router.use('/news', newsRoutes)
 router.use('/admin', adminRoutes)
 router.use('/thong-ke', thongKeRoutes)
 router.use('/admin/upload', uploadRoutes)

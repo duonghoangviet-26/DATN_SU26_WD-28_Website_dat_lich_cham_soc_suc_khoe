@@ -2,6 +2,7 @@ import { Router } from 'express'
 import appointmentRoutes from './appointment.routes.js'
 import paymentRoutes from './payment.routes.js'
 import bookingRoutes from './booking.routes.js'
+import newsRoutes from './news.routes.js'
 
 import notificationRoutes from './notification.routes.js'
 
@@ -15,5 +16,6 @@ router.use('/payments', paymentRoutes)
 router.use('/booking', bookingRoutes)
 router.use('/notifications', notificationRoutes)
 router.use('/users', userRoutes)
+router.use('/news', newsRoutes)
 
 export default router

@@ -11,6 +11,9 @@ import ReceptionistDashboard from '@/pages/receptionist/Dashboard'
 import ReceptionistAppointments from '@/pages/receptionist/Appointments'
 import ReceptionistPayments from '@/pages/receptionist/Payments'
 import ReceptionistBooking from '@/pages/receptionist/Booking'
+import ReceptionistNewsList from '@/pages/receptionist/NewsList'
+import ReceptionistNewsCreate from '@/pages/receptionist/NewsCreate'
+import ReceptionistNewsEdit from '@/pages/receptionist/NewsEdit'
 
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
@@ -37,6 +40,7 @@ import ManageServiceSpecialtyDetail from '@/pages/admin/ManageServiceSpecialtyDe
 import ManageAppointments from '@/pages/admin/ManageAppointments/ManageAppointments'
 import ManageDoctorSchedules from '@/pages/admin/ManageDoctorSchedules'
 import ManageReviews from '@/pages/admin/ManageReviews'
+import ManageNews from '@/pages/admin/ManageNews'
 import ManageNotifications from '@/pages/admin/ManageNotifications/ManageNotifications'
 import ManagePayments from '@/pages/admin/ManagePayments'
 
@@ -108,6 +112,7 @@ export default function AppRoutes() {
         <Route path="appointments" element={<ManageAppointments />} /> {/* C5 */}
         <Route path="doctor-schedules" element={<ManageDoctorSchedules />} />
         <Route path="reviews" element={<ManageReviews />} />       {/* C6 */}
+        <Route path="news" element={<ManageNews />} />
         <Route path="notifications" element={<ManageNotifications />} /> {/* C7 */}
         <Route path="payments" element={<ManagePayments />} />     {/* C8 */}
       </Route>
@@ -125,6 +130,9 @@ export default function AppRoutes() {
         <Route path="appointments" element={<ReceptionistAppointments />} />
         <Route path="payments" element={<ReceptionistPayments />} />
         <Route path="booking" element={<ReceptionistBooking />} />
+        <Route path="news" element={<ReceptionistNewsList />} />
+        <Route path="news/create" element={<ReceptionistNewsCreate />} />
+        <Route path="news/:id/edit" element={<ReceptionistNewsEdit />} />
       </Route>
 
       {/* Khu vực Doctor — yêu cầu role = doctor */}
