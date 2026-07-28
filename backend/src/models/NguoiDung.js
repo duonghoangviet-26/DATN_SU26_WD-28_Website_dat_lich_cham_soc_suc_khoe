@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema(
     },
     mat_khau: {
       type: String,
-      required: [true, 'Mat khau la bat buoc'],
+      default: null,
       maxlength: 255,
       select: false,
     },
@@ -24,6 +24,24 @@ const userSchema = new mongoose.Schema(
     },
     so_dien_thoai: { type: String, default: null, maxlength: 20 },
     anh_dai_dien: { type: String, default: null, maxlength: 500 },
+    anh_dai_dien_google: { type: String, default: null, maxlength: 500 },
+    google_id: {
+      type: String,
+      default: null,
+      sparse: true,
+    },
+    providers: {
+      type: [String],
+      enum: ['local', 'google'],
+      default: ['local'],
+    },
+    email_verified: {
+      type: Boolean,
+      default: false,
+    },
+    last_login_at: { type: Date, default: null },
+    last_login_provider: { type: String, default: null },
+    requires_onboarding: { type: Boolean, default: false },
     role: {
       type: String,
       enum: ['user', 'patient', 'doctor', 'admin', 'receptionist'],
@@ -78,6 +96,13 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ role: 1 })
 userSchema.index({ status: 1 })
+userSchema.index(
+  { google_id: 1 },
+  {
+    sparse: true,
+    partialFilterExpression: { ngay_xoa: null },
+  }
+)
 userSchema.index(
   { email: 1 },
   {
