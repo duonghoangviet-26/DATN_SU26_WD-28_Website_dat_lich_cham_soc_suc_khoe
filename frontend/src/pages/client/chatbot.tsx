@@ -156,16 +156,29 @@ export default function AIChatbot() {
 
       // Check general availability
       if (parseGeneralAvailabilityIntent(text)) {
-        addBotMessage('Hôm nay chúng tôi có các bác sĩ đang trực hoặc nhận đặt lịch. Xin vui lòng xem danh sách bác sĩ để chọn giờ khám phù hợp.', {
-          label: 'Xem danh sách Bác sĩ',
-          route: '/bac-si'
+        const dateIntent = parseDateTimeIntent(text)
+        let timeStr = 'Hiện tại'
+        if (dateIntent) {
+           const d = dateIntent.date === 'tomorrow' ? 'ngày mai' : 'hôm nay'
+           const h = dateIntent.hour ? ` lúc ${dateIntent.hour}h` : ''
+           timeStr = `Vào ${d}${h}`
+        }
+
+        let docListText = ''
+        doctorList.slice(0, 3).forEach(doc => {
+          docListText += `\n- Bác sĩ **${doc.ho_ten}** - Phí khám: ${formatCurrency(doc.gia_kham)}`
         })
+        
+        addBotMessage(`${timeStr} có ${doctorList.length} bác sĩ đang có lịch trống. Dưới đây là một số bác sĩ nổi bật:${docListText}`, {
+          label: 'Xem tất cả Bác sĩ',
+          route: '/bac-si'
+        }, doctorList.slice(0, 3))
         return
       }
 
       // 4. Fallback LLM (Pollinations AI)
       // Check medical privacy condition
-      const isHealthIssue = /(đau|nhức|ho|sốt|khó thở|mệt mỏi|bệnh)/i.test(text)
+      const isHealthIssue = /\b(đau|nhức|ho|sốt|khó thở|mệt mỏi|bệnh)\b/i.test(text)
       if (isHealthIssue) {
          addBotMessage(`🩺 Có vẻ bạn đang gặp vấn đề về sức khỏe. Bạn nên đặt lịch khám sớm để bác sĩ kiểm tra trực tiếp. (Lưu ý: Tư vấn này không thay thế chẩn đoán y khoa)`, {
            label: 'Đặt lịch khám ngay',

@@ -20,20 +20,24 @@ export const parseDoctorIntent = (text: string, doctorNames: string[]): string |
   return null
 }
 
-export const parseDateTimeIntent = (text: string): { date?: string; timeOfDay?: 'morning' | 'afternoon' | 'evening' } | null => {
+export const parseDateTimeIntent = (text: string): { date?: string; timeOfDay?: 'morning' | 'afternoon' | 'evening'; hour?: string } | null => {
   const normText = normalizeString(text)
-  const result: { date?: string; timeOfDay?: 'morning' | 'afternoon' | 'evening' } = {}
+  const result: { date?: string; timeOfDay?: 'morning' | 'afternoon' | 'evening'; hour?: string } = {}
   
   if (normText.includes('hom nay')) {
     result.date = 'today'
-  } else if (normText.includes('ngay mai')) {
+  } else if (normText.includes('ngay mai') || normText.includes('mai')) {
     result.date = 'tomorrow'
   }
-  // Simplified for illustration. In a real app, parse "20/8" or "thu 2"
 
   if (normText.includes('sang')) result.timeOfDay = 'morning'
   if (normText.includes('chieu')) result.timeOfDay = 'afternoon'
   if (normText.includes('toi')) result.timeOfDay = 'evening'
+  
+  const hourMatch = normText.match(/(\d{1,2})h/)
+  if (hourMatch) {
+    result.hour = hourMatch[1]
+  }
 
   return Object.keys(result).length > 0 ? result : null
 }
@@ -78,5 +82,5 @@ export const parseAdminReportIntent = (text: string): 'revenue_today' | 'revenue
 
 export const parseGeneralAvailabilityIntent = (text: string): boolean => {
   const normText = normalizeString(text)
-  return normText.includes('bac si nao ranh') || normText.includes('ai ranh') || normText.includes('con bac si nao')
+  return !!normText.match(/(bac si nao ranh|ai ranh|con bac si nao|phong nao trong|lich nao trong|kham duoc khong|phong trong|lich trong|con lich)/)
 }

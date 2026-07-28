@@ -1,29 +1,33 @@
-import axios from 'axios'
+// Chế độ Offline (Mock Engine) - Tránh hoàn toàn lỗi API cho Đồ án sinh viên
+
+// Hàm loại bỏ dấu tiếng Việt để dễ so sánh
+const removeAccents = (str: string) => {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase().trim();
+}
 
 export const fallbackLLM = async (prompt: string, contextData?: string): Promise<string> => {
-  try {
-    const systemPrompt = `Bạn là trợ lý ảo y tế của phòng khám VitaFamily. 
-Hãy trả lời ngắn gọn, thân thiện, dùng định dạng Markdown.
-Nếu người dùng hỏi thông tin cụ thể mà không có trong dữ liệu, hãy hướng dẫn họ liên hệ trực tiếp số hotline 0365 747888.
-Tuyệt đối KHÔNG yêu cầu thông tin cá nhân (SĐT, tên, bệnh lý) của người dùng.
-Thông tin tham khảo (nếu có): ${contextData || 'Không có thêm thông tin'}`
-
-    const res = await axios.post('https://text.pollinations.ai/', {
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
-      ],
-      model: 'openai'
-    }, {
-      headers: { 'Content-Type': 'application/json' }
-    })
-    
-    if (res.data) {
-      return typeof res.data === 'string' ? res.data : (res.data.choices?.[0]?.message?.content || JSON.stringify(res.data))
-    }
-    return "Xin lỗi, hiện tại tôi không thể kết nối tới máy chủ xử lý ngôn ngữ."
-  } catch (error) {
-    console.error("LLM Error:", error)
-    return "Xin lỗi, tôi đang gặp sự cố kết nối. Vui lòng thử lại sau."
+  const text = removeAccents(prompt)
+  
+  // Rule 1: Xin chào
+  if (text.match(/^(hello|hi|xin chao|chao|helo|alo)/i)) {
+    return "Xin chào! 👋 Tôi là trợ lý ảo y tế của phòng khám VitaFamily. Tôi có thể giúp bạn xem danh sách bác sĩ, xem giá hoặc đặt lịch khám. Bạn cần tôi giúp gì nào?"
   }
+
+  // Rule 2: Hỏi tên/chức năng
+  if (text.match(/(ban la ai|ten gi|ban lam duoc gi|nghiep vu|chuc nang)/i)) {
+    return "Tôi là AI Chatbot độc quyền của hệ thống **VitaFamily**. Nhiệm vụ của tôi là tự động hóa các nghiệp vụ của phòng khám như:\n- Tư vấn chọn bác sĩ\n- Báo giá dịch vụ khám\n- Hỗ trợ bệnh nhân đặt lịch\nBạn muốn trải nghiệm chức năng nào?"
+  }
+
+  // Rule 3: Hỏi thời tiết/linh tinh
+  if (text.match(/(thoi tiet|an com chua|khoe khong)/i)) {
+    return "Haha, tôi là một con Bot nên không biết đói và cũng không quan tâm thời tiết lắm đâu! 😂 Chuyên môn của tôi là Y tế cơ, bạn hãy hỏi tôi về các dịch vụ khám chữa bệnh nhé!"
+  }
+  
+  // Rule 4: Hỏi về sức khỏe chung chung (bệnh lý)
+  if (text.match(/\b(dau|nhuc|ho|sot|kho tho|met moi|benh|thuoc)\b/i)) {
+    return "🩺 Nghe có vẻ bạn đang gặp vấn đề về sức khỏe. Lời khuyên tốt nhất là bạn nên **đặt lịch khám** để bác sĩ của chúng tôi kiểm tra trực tiếp nhé. Tuyệt đối không tự ý mua thuốc uống ở nhà!"
+  }
+
+  // Default Fallback (Không hiểu)
+  return "Tôi chưa hiểu rõ câu hỏi này lắm. Nhưng nếu bạn đang cần tư vấn y tế gấp, vui lòng gọi trực tiếp vào số Hotline **0365 747888** để đội ngũ chuyên gia của chúng tôi hỗ trợ ngay lập tức nhé!"
 }
