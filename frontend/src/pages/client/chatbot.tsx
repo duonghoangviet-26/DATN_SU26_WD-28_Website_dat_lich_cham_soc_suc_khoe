@@ -17,6 +17,8 @@ import {
   parseNavigationIntent,
   parseAdminReportIntent,
   parseGeneralAvailabilityIntent,
+  parseHowToBookIntent,
+  parseListServicesIntent
 } from '@/utils/chatbotIntent'
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns'
 import { parseMarkdownToHTML } from '@/utils/markdownParser'
@@ -30,8 +32,8 @@ const AnimatedMarkdownText = ({ text, isNewMessage, isDark }: { text: string, is
 
   return (
     <div 
-      className={`prose prose-sm prose-emerald max-w-none text-sm ${isDark ? 'prose-invert' : ''}`}
-      dangerouslySetInnerHTML={{ __html: htmlContent + (isTyping ? '<span className="inline-block w-1.5 h-4 ml-0.5 bg-emerald-500 animate-pulse align-middle"></span>' : '') }}
+      className={`prose prose-sm prose-blue max-w-none text-sm ${isDark ? 'prose-invert' : ''}`}
+      dangerouslySetInnerHTML={{ __html: htmlContent + (isTyping ? '<span className="inline-block w-1.5 h-4 ml-0.5 bg-blue-500 animate-pulse align-middle"></span>' : '') }}
     />
   )
 }
@@ -86,11 +88,11 @@ export default function AIChatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading, isOpen])
 
-  const addBotMessage = (text: string, actionRoute?: { label: string; route: string }, doctorCards?: any[]) => {
+  const addBotMessage = (text: string, actionData?: { label: string; route?: string; send?: string }, doctorCards?: any[]) => {
     addMessage({
       text,
       sender: 'bot',
-      action: actionRoute ? { label: actionRoute.label, onClickRoute: actionRoute.route } : undefined,
+      action: actionData ? { label: actionData.label, onClickRoute: actionData.route, onClickSend: actionData.send } : undefined,
       doctorCards
     })
   }
@@ -100,14 +102,47 @@ export default function AIChatbot() {
   const processMessage = async (text: string) => {
     setIsLoading(true)
     try {
+      // 0. Phân tích How to book
+      if (parseHowToBookIntent(text)) {
+        addBotMessage(`Để đặt lịch khám, bạn làm theo 3 bước sau nhé:\n1. Chọn Bác sĩ bạn muốn khám ở phía dưới.\n2. Bấm vào nút **Đặt lịch khám** trên thẻ của bác sĩ.\n3. Chọn ngày, giờ khám, điền thông tin và thanh toán.\n\nBạn có muốn xem danh sách bác sĩ luôn không?`, {
+          label: 'Xem danh sách Bác sĩ',
+          send: 'xem bác sĩ'
+        })
+        return
+      }
+
+      // 0.5. Phân tích List Services
+      if (parseListServicesIntent(text)) {
+        addBotMessage(`VitaFamily hiện đang cung cấp các dịch vụ chuyên khoa chính:\n- Khám Tai\n- Khám Mũi\n- Khám Họng\n- Nội soi Tai Mũi Họng\n- Xét nghiệm và Nội tiết\n\nBạn quan tâm đến dịch vụ nào? Bạn có thể yêu cầu đặt lịch khám ngay!`, {
+          label: 'Xem bảng giá dịch vụ',
+          route: '/dich-vu'
+        })
+        return
+      }
+
       // 1. Phân tích Navigation Intent
       const navIntent = parseNavigationIntent(text)
       if (navIntent) {
-        addBotMessage(`Tôi sẽ chuyển bạn đến trang bạn yêu cầu trong giây lát...`)
-        setTimeout(() => {
-          navigate(navIntent)
-          setIsOpen(false)
-        }, 1800)
+        if (navIntent === 'booking' || navIntent === 'doctors') {
+          let docListText = ''
+          doctorList.slice(0, 3).forEach(doc => {
+            docListText += `\n- Bác sĩ **${doc.ho_ten}** - Phí khám: ${formatCurrency(doc.gia_kham)}`
+          })
+          addBotMessage(`Dưới đây là danh sách các bác sĩ chuyên khoa của chúng tôi. Vui lòng chọn một bác sĩ để xem chi tiết hoặc tiến hành đặt lịch:${docListText}`, {
+            label: 'Xem tất cả Bác sĩ',
+            route: '/bac-si'
+          }, doctorList.slice(0, 3))
+        } else if (navIntent === 'profile') {
+          addBotMessage(`Bạn có thể xem chi tiết hồ sơ bệnh án và lịch sử khám bệnh của mình bằng cách truy cập vào trang Hồ Sơ bên dưới.`, {
+            label: 'Xem Hồ Sơ',
+            route: '/profile'
+          })
+        } else if (navIntent === 'admin') {
+          addBotMessage(`Bạn đang yêu cầu truy cập hệ thống Quản trị nội bộ. Vui lòng nhấn vào nút bên dưới nếu bạn có quyền truy cập:`, {
+            label: 'Vào trang Admin',
+            route: '/admin'
+          })
+        }
         return
       }
 
@@ -237,7 +272,7 @@ export default function AIChatbot() {
         {suggestions.map((s, i) => (
           <button key={i} onClick={() => {
             setInputValue(s)
-          }} className="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-colors">
+          }} className="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors">
             {s}
           </button>
         ))}
@@ -249,7 +284,7 @@ export default function AIChatbot() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-50 p-4 bg-emerald-600 text-white rounded-full shadow-xl hover:bg-emerald-700 transition-transform ${isOpen ? 'scale-0' : 'scale-100'} hover:scale-110 flex items-center justify-center`}
+        className={`fixed bottom-6 right-6 z-50 p-4 bg-blue-600 text-white rounded-full shadow-xl hover:bg-blue-700 transition-transform ${isOpen ? 'scale-0' : 'scale-100'} hover:scale-110 flex items-center justify-center`}
       >
         <MessageCircle className="w-6 h-6" />
       </button>
@@ -261,7 +296,7 @@ export default function AIChatbot() {
         
         {/* Header */}
         <div 
-          className="bg-emerald-600 text-white p-4 flex items-center justify-between shadow-md z-20 cursor-move select-none active:bg-emerald-700 transition-colors"
+          className="bg-blue-600 text-white p-4 flex items-center justify-between shadow-md z-20 cursor-move select-none active:bg-blue-700 transition-colors"
           onMouseDown={handleMouseDown}
           onTouchStart={handleMouseDown}
         >
@@ -271,28 +306,28 @@ export default function AIChatbot() {
             </div>
             <div>
               <h3 className="font-semibold text-sm">VitaFamily Bot</h3>
-              <p className="text-xs text-emerald-100 opacity-90">Tư Vấn Đặt Lịch</p>
+              <p className="text-xs text-blue-100 opacity-90">Tư Vấn Đặt Lịch</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <div className="text-emerald-300 mx-1 hidden sm:block pointer-events-none">
+            <div className="text-blue-300 mx-1 hidden sm:block pointer-events-none">
               <Move className="w-4 h-4 opacity-50" />
             </div>
             <button 
               onClick={toggleTheme} 
-              className="text-emerald-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-all"
+              className="text-blue-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-all"
               title="Giao diện"
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
             <button 
               onClick={() => setShowClearConfirm(true)} 
-              className="text-emerald-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors"
+              className="text-blue-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors"
               title="Xóa lịch sử trò chuyện"
             >
               <Trash2 className="w-4 h-4" />
             </button>
-            <button onClick={() => setIsOpen(false)} className="text-emerald-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors">
+            <button onClick={() => setIsOpen(false)} className="text-blue-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -332,7 +367,7 @@ export default function AIChatbot() {
         <div className={`flex-1 overflow-y-auto p-4 space-y-5 transition-colors ${isDark ? 'bg-slate-900' : 'bg-slate-50/50'}`}>
           {!isLoaded ? (
             <div className="flex justify-center p-4">
-              <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
             </div>
           ) : groupedMessages.map((group, groupIdx) => (
             <div key={groupIdx} className="space-y-4">
@@ -346,12 +381,12 @@ export default function AIChatbot() {
                 <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`flex gap-2 max-w-[85%] ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     
-                    <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.sender === 'user' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                    <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.sender === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-blue-100 text-blue-600'}`}>
                       {msg.sender === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                     </div>
 
                     <div className={`flex flex-col gap-1 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                      <div className={`px-4 py-2 text-sm rounded-2xl whitespace-pre-wrap transition-colors ${msg.sender === 'user' ? 'bg-emerald-600 text-white rounded-tr-sm' : isDark ? 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-sm' : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-sm'}`}>
+                      <div className={`px-4 py-2 text-sm rounded-2xl whitespace-pre-wrap transition-colors ${msg.sender === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : isDark ? 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-sm' : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-sm'}`}>
                         {msg.sender === 'user' ? (
                           msg.text
                         ) : (
@@ -362,10 +397,16 @@ export default function AIChatbot() {
                       {msg.action && (
                         <button 
                           onClick={() => {
-                            navigate(msg.action!.onClickRoute)
-                            setIsOpen(false)
+                            if (msg.action?.onClickSend) {
+                              const text = msg.action.onClickSend
+                              addMessage({ text, sender: 'user' })
+                              processMessage(text)
+                            } else if (msg.action?.onClickRoute) {
+                              navigate(msg.action.onClickRoute)
+                              setIsOpen(false)
+                            }
                           }} 
-                          className={`mt-1 px-4 py-1.5 rounded-full text-xs font-medium shadow-sm transition-colors border ${isDark ? 'bg-slate-800 border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/30' : 'bg-white border-emerald-200 text-emerald-600 hover:bg-emerald-50'}`}
+                          className={`mt-1 px-4 py-1.5 rounded-full text-xs font-medium shadow-sm transition-colors border ${isDark ? 'bg-slate-800 border-blue-500/30 text-blue-400 hover:bg-blue-900/30' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-50'}`}
                         >
                           {msg.action.label}
                         </button>
@@ -375,10 +416,18 @@ export default function AIChatbot() {
                         <div className="flex gap-3 overflow-x-auto w-full py-2 max-w-[260px] no-scrollbar">
                           {msg.doctorCards.map((doc, idx) => (
                             <div key={idx} className={`flex-shrink-0 w-[200px] border rounded-xl overflow-hidden shadow-sm flex flex-col transition-colors ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                              <div className="h-20 bg-gradient-to-r from-emerald-400 to-teal-500 flex items-center justify-center relative">
+                              <div className="h-20 bg-gradient-to-r from-blue-400 to-teal-500 flex items-center justify-center relative">
                                 <div className={`absolute -bottom-6 w-12 h-12 rounded-full p-1 shadow-md ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
-                                  <div className={`w-full h-full rounded-full flex items-center justify-center text-emerald-600 ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>
-                                    <UserIcon className="w-6 h-6" />
+                                  <div className={`w-full h-full rounded-full flex items-center justify-center text-blue-600 ${isDark ? 'bg-slate-700' : 'bg-slate-100'} overflow-hidden`}>
+                                    {doc.anh_dai_dien ? (
+                                      <img 
+                                        src={doc.anh_dai_dien.startsWith('http') ? doc.anh_dai_dien : `http://localhost:5000${doc.anh_dai_dien.startsWith('/') ? '' : '/'}${doc.anh_dai_dien}`} 
+                                        alt={doc.ho_ten} 
+                                        className="w-full h-full object-cover" 
+                                      />
+                                    ) : (
+                                      <UserIcon className="w-6 h-6" />
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -388,7 +437,7 @@ export default function AIChatbot() {
                                 <p className="text-sm font-bold text-orange-600 mt-2">{formatCurrency(doc.gia_kham)}</p>
                                 <button 
                                   onClick={() => { navigate(`/client/booking?doctorId=${doc.id}`); setIsOpen(false) }}
-                                  className="mt-3 w-full bg-emerald-50 hover:bg-emerald-600 text-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-600 transition-colors py-1.5 rounded-lg text-xs font-medium"
+                                  className="mt-3 w-full bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white border border-blue-200 hover:border-blue-600 transition-colors py-1.5 rounded-lg text-xs font-medium"
                                 >
                                   Đặt lịch ngay
                                 </button>
@@ -456,13 +505,13 @@ export default function AIChatbot() {
                 }
               }}
               placeholder={speechState === 'listening' ? 'Đang nghe...' : 'Nhập tin nhắn...'}
-              className={`flex-1 max-h-32 min-h-[44px] border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none transition-colors ${isDark ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+              className={`flex-1 max-h-32 min-h-[44px] border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none transition-colors ${isDark ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
               rows={1}
             />
             <button
               onClick={handleSend}
               disabled={!inputValue.trim() || isLoading}
-              className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </button>

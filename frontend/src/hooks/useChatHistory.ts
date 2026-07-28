@@ -8,13 +8,14 @@ export interface ChatMessage {
   isNew?: boolean
   action?: {
     label: string
-    onClickRoute: string
+    onClickRoute?: string
+    onClickSend?: string
   }
   doctorCards?: any[]
 }
 
 const STORAGE_KEY = 'vf_chat_history_enc'
-const MAX_HISTORY_DAYS = 7
+const SESSION_TIMEOUT_MINUTES = 10
 
 // Mã hóa đơn giản: dịch chuyển ký tự (Caesar cipher cơ bản)
 // Trong môi trường thực tế, nên dùng Crypto API hoặc thư viện chuyên dụng
@@ -53,11 +54,16 @@ export function useChatHistory() {
         const decoded = decryptData(rawData)
         const parsed: ChatMessage[] = JSON.parse(decoded)
         
-        // Lọc bỏ tin nhắn quá 7 ngày
+        // Xóa lịch sử nếu phiên chat cuối cùng cách đây hơn 10 phút
         const now = Date.now()
-        const filtered = parsed.filter(
-          (m) => now - m.timestamp < MAX_HISTORY_DAYS * 24 * 60 * 60 * 1000
-        )
+        if (parsed.length > 0 && (now - parsed[parsed.length - 1].timestamp > SESSION_TIMEOUT_MINUTES * 60 * 1000)) {
+           localStorage.removeItem(STORAGE_KEY)
+           setMessages([])
+           setIsLoaded(true)
+           return
+        }
+
+        const filtered = parsed
         
         setMessages(filtered)
       }

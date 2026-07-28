@@ -54,6 +54,11 @@ export const parsePriceIntent = (text: string): { maxPrice?: number; exactPrice?
   return null
 }
 
+export const parseListServicesIntent = (text: string): boolean => {
+  const normText = normalizeString(text)
+  return normText.includes('dich vu') || normText.includes('kham gi')
+}
+
 export const parseServiceIntent = (text: string): string | null => {
   const normText = normalizeString(text)
   const services = ['kham tai', 'kham mui', 'kham hong', 'noi soi', 'xet nghiem']
@@ -63,13 +68,20 @@ export const parseServiceIntent = (text: string): string | null => {
   return null
 }
 
-export const parseNavigationIntent = (text: string): string | null => {
+export const parseNavigationIntent = (text: string): 'booking' | 'doctors' | 'profile' | 'admin' | null => {
   const normText = normalizeString(text)
-  if (normText.includes('dat lich') || normText.includes('kham benh')) return '/booking'
-  if (normText.includes('xem bac si')) return '/bac-si'
-  if (normText.includes('ho so benh an')) return '/profile'
-  if (normText.includes('trang quan tri')) return '/admin'
+  if (normText.includes('dat lich') || normText.includes('kham benh')) return 'booking'
+  if (normText.includes('xem bac si')) return 'doctors'
+  if (normText.includes('ho so benh an')) return 'profile'
+  if (normText.includes('trang quan tri')) return 'admin'
   return null
+}
+
+export const parseHowToBookIntent = (text: string): boolean => {
+  const normText = normalizeString(text)
+  const isAskingHow = normText.includes('lam the nao') || normText.includes('lam sao') || normText.includes('lam nhu nao') || normText.includes('cach') || normText.includes('huong dan')
+  const isBooking = normText.includes('dat lich') || normText.includes('kham benh')
+  return isAskingHow && isBooking
 }
 
 export const parseAdminReportIntent = (text: string): 'revenue_today' | 'revenue_month' | 'appointments_status' | null => {
