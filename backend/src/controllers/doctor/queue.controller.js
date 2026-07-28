@@ -11,6 +11,7 @@ import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { buildSlotDateTime } from '../../utils/clinicTime.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 import { checkInLichHen, checkInVangLai, layLichChoTiepNhan } from '../../services/checkIn.service.js'
+import { traSlotVePool } from '../../services/offlineIntake.service.js'
 
 // ============================================================
 // Hàng đợi động (Bác sĩ) — Routes: /api/doctor/queue
@@ -431,6 +432,7 @@ export async function skip(req, res) {
     const tu = entry.trang_thai
     entry.trang_thai = 'skipped'
     await entry.save()
+    if (!entry.appointment_id) await traSlotVePool(entry)
 
     if (entry.appointment_id) {
       await updateAppointmentStatus(entry.appointment_id, 'skipped')
@@ -458,6 +460,7 @@ export async function cancel(req, res) {
     const tu = entry.trang_thai
     entry.trang_thai = 'cancelled'
     await entry.save()
+    if (!entry.appointment_id) await traSlotVePool(entry)
 
     if (entry.appointment_id) {
       await updateAppointmentStatus(entry.appointment_id, 'cancelled')

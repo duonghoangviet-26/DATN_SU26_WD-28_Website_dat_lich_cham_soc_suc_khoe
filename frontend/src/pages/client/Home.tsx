@@ -17,7 +17,7 @@ function AutoSlider({ children, cardWidthClass = 'w-[85%] sm:w-[48%] lg:w-[31%]'
   const [startX, setStartX] = useState(0)
   const [scrollLeft, setScrollLeft] = useState(0)
   const [isAutoplayPaused, setIsAutoplayPaused] = useState(false)
-  const autoplayTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const autoplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Dragging handlers (Mouse)
   const handleMouseDown = (e: React.MouseEvent) => {

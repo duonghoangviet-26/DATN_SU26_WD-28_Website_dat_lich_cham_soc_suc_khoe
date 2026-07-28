@@ -312,6 +312,8 @@ export interface ServiceItem {
     mo_ta_ngan?: string | null;
     mo_ta?: string | null;
     hinh_anh?: string | null;
+    // API cũ và màn hình public dùng image_url; giữ alias khi dữ liệu chưa đổi tên.
+    image_url?: string | null;
     // home: cố định 60ph, có lịch áp dụng (đặt lịch riêng, chọn BS+slot)
     // related: null — không đặt lịch riêng (đi kèm khám clinic, BS chỉ định), thời lượng/lịch áp dụng vô nghĩa
     thoi_gian_phut?: number | null;
@@ -817,7 +819,9 @@ export type KetQuaKhamStatus =
 // như DoctorAppointmentDetail (màn này chỉ để lọc nhanh hồ sơ cần xử lý).
 export interface DoctorPendingRecord {
     id: string; // KetQuaKham._id
-    appointment_id: string;
+    appointment_id: string | null;
+    hang_doi_id?: string | null;
+    ho_so_benh_nhan_id?: string | null;
     ngay_kham: string;
     benh_nhan: string;
     ten_dich_vu: string | null;
@@ -842,6 +846,7 @@ export type ExamQueueStatus =
 export interface DoctorExamQueueRow {
     id: string; // HangDoiKham._id
     appointment_id: string | null; // null nếu là lượt vãng lai (offline)
+    ho_so_benh_nhan_id?: string | null;
     nguon: "online" | "offline";
     ten_benh_nhan: string;
     tuoi: number | null;
@@ -959,10 +964,11 @@ export interface QueueActionResult {
 }
 
 export interface DoctorAppointmentDetail {
-    id: string; // Mongo ObjectId — backend trả về string, không phải number
+    id: string | number; // Mongo ObjectId từ API; mock cũ có thể dùng number
     ma_lich_hen?: string | null;
     benh_nhan: string;
-    benh_nhan_id: string;
+    benh_nhan_id: string | number;
+    ho_so_benh_nhan_id?: string | null;
     so_dien_thoai: string;
     ngay_kham: string;
     gio_kham: string;

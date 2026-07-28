@@ -3,6 +3,7 @@ import { HangDoi, LichHen, LichLamViec, NguoiDung, ThanhVien } from '../models/i
 import { tinhMucUuTien } from '../models/HangDoi.js'
 import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../utils/clinicTime.js'
 import { kiemTraQuaTai } from './queueOverflow.service.js'
+import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
 
 // ============================================================
 // CHECK-IN — MỘT service dùng chung cho MỌI vai trò (rule mục 7)
@@ -209,6 +210,12 @@ export async function checkInLichHen({
   const quaTai = await kiemTraQuaTai(appt.doctor_id)
   if (quaTai.canhBao) canhBao.push(quaTai.canhBao)
 
+  await notifyDoctorQueueUpdated(appt.doctor_id, {
+    action: 'checkin',
+    queue_id: entry._id,
+    nguon: entry.nguon,
+  })
+
   return { entry, appointment: appt, trang_thai_cu: trangThaiCu, canh_bao: canhBao }
 }
 
@@ -260,6 +267,12 @@ export async function checkInVangLai({
   const canhBao = []
   const quaTai = await kiemTraQuaTai(doctorId)
   if (quaTai.canhBao) canhBao.push(quaTai.canhBao)
+
+  await notifyDoctorQueueUpdated(doctorId, {
+    action: 'checkin',
+    queue_id: entry._id,
+    nguon: entry.nguon,
+  })
 
   return { entry, canh_bao: canhBao }
 }

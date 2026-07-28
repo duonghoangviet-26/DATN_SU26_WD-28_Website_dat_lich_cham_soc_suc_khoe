@@ -7,6 +7,11 @@ const chiTietThuPhiSchema = new mongoose.Schema(
       enum: ['phi_kham', 'dich_vu', 'thu_thuat', 'giam_tru_bao_hiem'],
       required: true,
     },
+    service_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'DichVu',
+      default: null,
+    },
     ten: { type: String, default: null },
     so_tien: {
       type: Number,
@@ -37,8 +42,15 @@ const hoaDonSchema = new mongoose.Schema(
     appointment_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'LichHen',
-      unique: true,
-      required: true,
+    },
+    hang_doi_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HangDoi',
+    },
+    ho_so_benh_nhan_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HoSoBenhNhan',
+      default: null,
     },
     so_hoa_don: {
       type: String,
@@ -90,5 +102,20 @@ const hoaDonSchema = new mongoose.Schema(
     collection: 'hoa_don',
   }
 )
+
+hoaDonSchema.index(
+  { appointment_id: 1 },
+  { unique: true, name: 'uniq_hoa_don_theo_appointment', partialFilterExpression: { appointment_id: { $type: 'objectId' } } },
+)
+hoaDonSchema.index(
+  { hang_doi_id: 1 },
+  { unique: true, name: 'uniq_hoa_don_theo_hang_doi', partialFilterExpression: { hang_doi_id: { $type: 'objectId' } } },
+)
+
+hoaDonSchema.pre('validate', function () {
+  if (!this.appointment_id && !this.hang_doi_id) {
+    throw new Error('Hoa don phai gan appointment_id hoac hang_doi_id')
+  }
+})
 
 export default mongoose.model('HoaDon', hoaDonSchema)

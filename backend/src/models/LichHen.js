@@ -12,6 +12,7 @@ const appointmentSchema = new mongoose.Schema(
     chi_nhanh_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ThongTinPhongKham', default: null },
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', default: null },
     khach_vang_lai_id: { type: mongoose.Schema.Types.ObjectId, ref: 'KhachVangLai', default: null },
+    ho_so_benh_nhan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'HoSoBenhNhan', default: null },
     loai_benh_nhan: { type: String, default: null },
     nguoi_tao_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     nguoi_dat_ho_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },

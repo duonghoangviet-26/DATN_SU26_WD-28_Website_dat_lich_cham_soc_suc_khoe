@@ -14,6 +14,11 @@ const memberSchema = new mongoose.Schema(
       ref: 'NguoiDung',
       default: null,
     },
+    ho_so_benh_nhan_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HoSoBenhNhan',
+      default: null,
+    },
     ho_ten: {
       type: String,
       required: [true, 'Ho ten thanh vien la bat buoc'],

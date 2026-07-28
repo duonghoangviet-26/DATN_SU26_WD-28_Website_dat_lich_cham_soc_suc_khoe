@@ -5,6 +5,9 @@ const router = Router()
 
 router.get('/',                  appointments.list)
 router.get('/pending-results',   appointments.listPendingResults) // phải đứng trước '/:id'
+router.get('/patient-profiles/:id/history', appointments.getPatientProfileHistory)
+router.get('/records/:hangDoiId/result', appointments.getResultByQueue)
+router.post('/records/:hangDoiId/result', appointments.createResultByQueue)
 router.get('/:id',               appointments.getById)
 router.patch('/:id/confirm',     appointments.confirm)
 router.patch('/:id/cancel',      appointments.cancel)

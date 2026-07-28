@@ -44,6 +44,11 @@ const examinationResultSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'HangDoi',
     },
+    ho_so_benh_nhan_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HoSoBenhNhan',
+      default: null,
+    },
     nguoi_nhap_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'NguoiDung',

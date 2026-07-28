@@ -96,6 +96,13 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
+  async getPatientProfileHistory(profileId: string): Promise<{ profile: unknown; visits: unknown[] }> {
+    const res = await axiosInstance.get<ApiResponse<{ profile: unknown; visits: unknown[] }>>(
+      `/doctor/appointments/patient-profiles/${profileId}/history`,
+    )
+    return res.data.data
+  },
+
   // Hàng đợi khám của bác sĩ (online + offline gộp chung, trang "Hồ sơ chờ khám").
   async getExamQueue(date?: string): Promise<DoctorExamQueueRow[]> {
     const res = await axiosInstance.get<ApiResponse<DoctorExamQueueRow[]>>('/doctor/queue', { params: date ? { date } : {} })

@@ -16,6 +16,7 @@ export { default as CaiDatThanhToan }    from './CaiDatThanhToan.js'
 export { default as GiaDinh }            from './GiaDinh.js'
 export { default as ThanhVien }          from './ThanhVien.js'
 export { default as KhachVangLai }       from './KhachVangLai.js'
+export { default as HoSoBenhNhan }       from './HoSoBenhNhan.js'
 
 export { default as BacSi }              from './BacSi.js'
 export { default as NghiPhepBacSi }      from './NghiPhepBacSi.js'

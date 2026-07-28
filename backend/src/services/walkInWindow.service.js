@@ -78,6 +78,8 @@ export function locSlotBanTaiQuay(schedule, now = new Date()) {
   return schedule.slots.filter(
     (s) => s.status === 'active'
       && s.loai_slot === 'walk_in'
+      && !s.benh_nhan_id
+      && !s.benh_nhan_tam_giu_id
       && !s.bi_khoa_boi_nghi_phep
       && duocBan.has(s.khung_index),
   )

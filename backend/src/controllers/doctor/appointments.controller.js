@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi, SinhHieuKham } from '../../models/index.js'
+import { BacSi, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi, SinhHieuKham, HoSoBenhNhan } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
@@ -56,6 +56,7 @@ async function formatAppointment(a) {
     ma_lich_hen:      a.ma_lich_hen ?? null,
     benh_nhan:        benh_nhan_ho_ten,
     benh_nhan_id:     a.user_id,
+    ho_so_benh_nhan_id: a.ho_so_benh_nhan_id ?? null,
     so_dien_thoai:    a.so_dien_thoai_khach ?? user?.so_dien_thoai ?? null,
     ngay_kham:        a.ngay_kham,
     gio_kham:         a.gio_kham,
@@ -151,6 +152,7 @@ export async function examQueue(req, res) {
         return {
           id: e._id,
           appointment_id: e.appointment_id ?? null,
+          ho_so_benh_nhan_id: e.ho_so_benh_nhan_id ?? null,
           nguon: e.nguon,
           ten_benh_nhan: e.ten_benh_nhan,
           tuoi: e.tuoi ?? null,
@@ -403,6 +405,7 @@ export async function createResult(req, res) {
     // do chính mình viết (quyết định 2026-07-11).
     const result = await KetQuaKham.create({
       appointment_id:      a._id,
+      ho_so_benh_nhan_id:  a.ho_so_benh_nhan_id ?? null,
       nguoi_nhap_id:        req.user.id,
       bac_si_phu_trach_id:  docId,
       status:               'da_xac_nhan',
@@ -464,6 +467,101 @@ export async function createResult(req, res) {
 }
 
 // ─── PUT /api/doctor/appointments/:id/result ────────────────────────────────
+async function getOwnedOfflineQueue(queueId, docId) {
+  if (!mongoose.Types.ObjectId.isValid(queueId)) {
+    throw Object.assign(new Error('Ma luot kham khong hop le'), { httpStatus: 400 })
+  }
+  const entry = await HangDoi.findOne({ _id: queueId, doctor_id: docId, nguon: 'offline' }).lean()
+  if (!entry) throw Object.assign(new Error('Khong tim thay luot kham offline'), { httpStatus: 404 })
+  if (!['trong_phong', 'hoan_thanh', 'cho_dich_vu'].includes(entry.trang_thai)) {
+    throw Object.assign(new Error('Chi nhap ket qua khi benh nhan dang kham hoac da ket thuc kham'), { httpStatus: 409 })
+  }
+  return entry
+}
+
+export async function getResultByQueue(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Khong tim thay ho so bac si')
+    const entry = await getOwnedOfflineQueue(req.params.hangDoiId, docId)
+    const result = await KetQuaKham.findOne({ hang_doi_id: entry._id }).lean()
+    if (!result) return fail(res, 404, 'Chua co ket qua kham')
+    const prescription = await DonThuoc.findOne({ medical_record_id: result._id }).lean()
+    return ok(res, { ...result, id: result._id, thuoc: prescription?.items ?? [] })
+  } catch (err) {
+    if (err.httpStatus) return fail(res, err.httpStatus, err.message)
+    return fail(res, 500, err.message)
+  }
+}
+
+export async function createResultByQueue(req, res) {
+  let result = null
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Khong tim thay ho so bac si')
+    const entry = await getOwnedOfflineQueue(req.params.hangDoiId, docId)
+    if (await KetQuaKham.exists({ hang_doi_id: entry._id })) {
+      return fail(res, 409, 'Ket qua kham da ton tai, hay dung chuc nang xem ket qua')
+    }
+
+    const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc, sinh_hieu } = req.body
+    if (!chan_doan?.trim()) return fail(res, 400, 'Chan doan la bat buoc')
+    if (ngay_tai_kham && !isNgayTaiKhamHopLe(ngay_tai_kham, entry.checkin_time)) {
+      return fail(res, 400, 'Ngay tai kham phai tu ngay tiep theo sau ngay kham')
+    }
+
+    result = await KetQuaKham.create({
+      hang_doi_id: entry._id,
+      ho_so_benh_nhan_id: entry.ho_so_benh_nhan_id,
+      nguoi_nhap_id: req.user.id,
+      bac_si_phu_trach_id: docId,
+      status: 'da_xac_nhan',
+      nguoi_xac_nhan_id: req.user.id,
+      thoi_diem_xac_nhan: new Date(),
+      chan_doan: chan_doan.trim(),
+      huong_dan_dieu_tri: huong_dan_dieu_tri?.trim() || null,
+      ghi_chu: ghi_chu?.trim() || null,
+      ngay_tai_kham: ngay_tai_kham ? new Date(ngay_tai_kham) : null,
+      lich_su_sua: [{
+        nguoi_sua_id: req.user.id,
+        thoi_diem_sua: new Date(),
+        noi_dung: 'Bac si nhap va xac nhan ho so kham offline',
+      }],
+    })
+
+    if (sinh_hieu) {
+      await upsertVitals({ hangDoiId: entry._id, memberId: entry.member_id, doctorUserId: req.user.id, sinhHieu: sinh_hieu })
+    }
+
+    let prescription = null
+    if (Array.isArray(thuoc) && thuoc.length) {
+      prescription = await DonThuoc.create({
+        ket_qua_kham_id: result._id,
+        medical_record_id: result._id,
+        member_id: entry.member_id ?? null,
+        ten_khach: entry.ten_benh_nhan,
+        doctor_id: docId,
+        nguon: 'bac_si',
+        items: thuoc,
+      })
+    }
+
+    return created(res, { ...result.toObject(), id: result._id, thuoc: prescription?.items ?? [] }, 'Da luu ket qua kham offline')
+  } catch (err) {
+    if (result?._id) {
+      await Promise.all([
+        DonThuoc.deleteMany({ medical_record_id: result._id }),
+        SinhHieuKham.deleteMany({ hang_doi_id: result.hang_doi_id }),
+        KetQuaKham.deleteOne({ _id: result._id }),
+      ]).catch(() => {})
+    }
+    if (err.code === 11000) return fail(res, 409, 'Ket qua kham da ton tai, hay dung chuc nang xem ket qua')
+    if (err.httpStatus) return fail(res, err.httpStatus, err.message)
+    if (err.name === 'ValidationError') return fail(res, 400, err.message)
+    return fail(res, 500, err.message)
+  }
+}
+
 export async function updateResult(req, res) {
   try {
     const docId = await getDocId(req.user.id)
@@ -685,7 +783,7 @@ export async function listPendingResults(req, res) {
       .populate('nguoi_nhap_id', 'ho_ten')
       .populate({ path: 'appointment_id', select: 'ngay_kham ten_dich_vu user_id member_id ten_khach',
         populate: [{ path: 'user_id', select: 'ho_ten' }, { path: 'member_id', select: 'ho_ten' }] })
-      .populate({ path: 'hang_doi_id', select: 'ten_benh_nhan checkin_time nguon' })
+      .populate({ path: 'hang_doi_id', select: 'ten_benh_nhan checkin_time nguon ho_so_benh_nhan_id' })
       .sort({ ngay_tao: sortOrder })
       .lean()
 
@@ -696,6 +794,7 @@ export async function listPendingResults(req, res) {
         id: r._id,
         appointment_id: a?._id ?? null,
         hang_doi_id: hd?._id ?? null,
+        ho_so_benh_nhan_id: r.ho_so_benh_nhan_id ?? hd?.ho_so_benh_nhan_id ?? a?.ho_so_benh_nhan_id ?? null,
         ngay_kham: a?.ngay_kham ?? hd?.checkin_time ?? r.ngay_tao,
         benh_nhan: a?.member_id?.ho_ten ?? a?.ten_khach ?? a?.user_id?.ho_ten ?? hd?.ten_benh_nhan ?? 'Không rõ',
         ten_dich_vu: a?.ten_dich_vu ?? null,
@@ -705,6 +804,76 @@ export async function listPendingResults(req, res) {
       }
     })
     return ok(res, data)
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// GET /api/doctor/appointments/patient-profiles/:id/history
+// Lich su dung chung cua mot nguoi, gom ca lich hen online va luot offline.
+export async function getPatientProfileHistory(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return fail(res, 400, 'Mã hồ sơ bệnh nhân không hợp lệ')
+
+    const profile = await HoSoBenhNhan.findOne({ _id: req.params.id, trang_thai: 'active' })
+      .select('ho_ten so_dien_thoai ngay_sinh gioi_tinh dia_chi')
+      .lean()
+    if (!profile) return fail(res, 404, 'Không tìm thấy hồ sơ bệnh nhân')
+
+    const [appointments, queueEntries] = await Promise.all([
+      LichHen.find({ doctor_id: docId, ho_so_benh_nhan_id: profile._id })
+        .select('ngay_kham gio_kham status payment_status ten_dich_vu gia_kham ma_lich_hen')
+        .sort({ ngay_kham: -1, gio_kham: -1 })
+        .lean(),
+      HangDoi.find({ doctor_id: docId, ho_so_benh_nhan_id: profile._id })
+        .select('checkin_time trang_thai nguon schedule_id slot_id')
+        .sort({ checkin_time: -1 })
+        .lean(),
+    ])
+
+    const appointmentIds = appointments.map((appointment) => appointment._id)
+    const queueIds = queueEntries.map((entry) => entry._id)
+    const results = await KetQuaKham.find({
+      $or: [
+        ...(appointmentIds.length ? [{ appointment_id: { $in: appointmentIds } }] : []),
+        ...(queueIds.length ? [{ hang_doi_id: { $in: queueIds } }] : []),
+      ],
+    }).select('appointment_id hang_doi_id status chan_doan huong_dan_dieu_tri ghi_chu ngay_tai_kham ngay_tao').lean()
+    const resultByAppointment = new Map(results.filter((result) => result.appointment_id).map((result) => [String(result.appointment_id), result]))
+    const resultByQueue = new Map(results.filter((result) => result.hang_doi_id).map((result) => [String(result.hang_doi_id), result]))
+
+    const visits = [
+      ...appointments.map((appointment) => ({
+        source: 'online',
+        appointment_id: appointment._id,
+        hang_doi_id: null,
+        ngay_kham: appointment.ngay_kham,
+        gio_kham: appointment.gio_kham,
+        status: appointment.status,
+        payment_status: appointment.payment_status,
+        ten_dich_vu: appointment.ten_dich_vu,
+        gia_kham: appointment.gia_kham,
+        ma_lich_hen: appointment.ma_lich_hen,
+        ket_qua: resultByAppointment.get(String(appointment._id)) ?? null,
+      })),
+      ...queueEntries.map((entry) => ({
+        source: 'offline',
+        appointment_id: null,
+        hang_doi_id: entry._id,
+        ngay_kham: entry.checkin_time,
+        gio_kham: null,
+        status: entry.trang_thai,
+        payment_status: null,
+        ten_dich_vu: null,
+        gia_kham: null,
+        ma_lich_hen: null,
+        ket_qua: resultByQueue.get(String(entry._id)) ?? null,
+      })),
+    ].sort((a, b) => new Date(b.ngay_kham).getTime() - new Date(a.ngay_kham).getTime())
+
+    return ok(res, { profile, visits })
   } catch (err) {
     return fail(res, 500, err.message)
   }

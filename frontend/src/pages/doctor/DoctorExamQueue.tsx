@@ -5,6 +5,7 @@ import Button from '@/components/common/Button'
 import Icon from '@/components/admin/icons'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
+import { subscribeDoctorQueueRealtime } from '@/services/realtime.service'
 import type { DoctorExamQueueRow, ExamQueueStatus, DoctorAppointmentDetail, RoomStatus, PhongKhamTrangThai, LichChoTiepNhan } from '@/types'
 import { formatDate } from '@/utils/format'
 
@@ -64,6 +65,26 @@ const TH = 'px-4 py-3 text-xs font-semibold text-slate-600'
 
 // Tình trạng thời gian của một lượt chờ tiếp nhận, theo mốc rule mục 11.
 // Người trễ vẫn được khám và KHÔNG mất tiền — nhãn nói rõ để không ai hiểu thành "từ chối".
+function taoLichKhamAoChoLuotOffline(row: DoctorExamQueueRow): DoctorAppointmentDetail {
+  return {
+    id: row.id,
+    ma_lich_hen: null,
+    benh_nhan: row.ten_benh_nhan,
+    benh_nhan_id: row.ho_so_benh_nhan_id ?? row.id,
+    ho_so_benh_nhan_id: row.ho_so_benh_nhan_id ?? null,
+    so_dien_thoai: '',
+    ngay_kham: row.checkin_time,
+    gio_kham: '',
+    loai_kham: 'clinic',
+    chuyen_khoa: null,
+    status: 'waiting_record',
+    payment_status: 'unpaid',
+    gia_kham: 0,
+    da_co_ket_qua: !!row.ket_qua_id,
+    ket_qua_status: row.ket_qua_status as DoctorAppointmentDetail['ket_qua_status'],
+  }
+}
+
 function nhanThoiDiem(row: LichChoTiepNhan): { text: string; color: 'green' | 'yellow' | 'gray' } {
   if (row.tre_qua_grace) return { text: `Trễ sau ${row.gio_kham} — vẫn khám, xếp sau`, color: 'yellow' }
   if (row.con_trong_grace) return { text: 'Đúng giờ', color: 'green' }
@@ -179,7 +200,16 @@ export default function DoctorExamQueue() {
     doctorAppointmentService.getPendingCheckin()
       .then(setChoTiepNhan).catch(() => setChoTiepNhan([])).finally(() => setChoTiepNhanLoading(false))
   }
-  useEffect(load, [])
+  useEffect(() => {
+    load()
+    const unsubscribe = subscribeDoctorQueueRealtime(() => load())
+    const fallbackRefresh = window.setInterval(load, 15000)
+
+    return () => {
+      unsubscribe()
+      window.clearInterval(fallbackRefresh)
+    }
+  }, [])
 
   // Tiếp nhận khách đã đặt lịch: tạo lượt trong hàng đợi (rule mục 6 — hàng đợi chỉ sinh ra
   // khi check-in). Cảnh báo trả về từ server (chưa thanh toán / trễ / ca quá tải) hiện nguyên văn.
@@ -222,7 +252,12 @@ export default function DoctorExamQueue() {
   // Mở modal nhập hồ sơ (mode="edit") cho lượt đang chờ nhập hồ sơ — chỉ hỗ trợ lượt online
   // (có appointment_id); lượt vãng lai (offline) chưa có luồng nhập hồ sơ đầy đủ ở đợt này.
   async function openEnterRecord(r: DoctorExamQueueRow) {
-    if (!r.appointment_id) return
+    if (!r.appointment_id) {
+      setModalMode('edit')
+      setActive(r)
+      setActiveAppt(taoLichKhamAoChoLuotOffline(r))
+      return
+    }
     setModalMode('edit')
     setActive(r); setActiveAppt(null)
     try {
@@ -381,7 +416,8 @@ export default function DoctorExamQueue() {
                           r.appointment_id
                             ? <Button size="sm" onClick={() => openEnterRecord(r)}
                                 icon={<Icon name="file-text" className="h-3.5 w-3.5" />}>Nhập hồ sơ</Button>
-                            : <span className="text-xs text-slate-400">Chưa hỗ trợ nhập hồ sơ vãng lai</span>
+                            : <Button size="sm" onClick={() => openEnterRecord(r)}
+                                icon={<Icon name="file-text" className="h-3.5 w-3.5" />}>Nhập hồ sơ</Button>
                         )}
                         {r.trang_thai_tong_hop === 'cho_xac_nhan' && (
                           <Button variant="success" size="sm" onClick={() => openConfirm(r)}
@@ -402,6 +438,7 @@ export default function DoctorExamQueue() {
 
       {active && activeAppt && (
         <ExamResultModal appt={activeAppt} mode={modalMode} onClose={closeModal}
+          queueId={active.appointment_id ? undefined : active.id}
           onConfirmed={() => { closeModal(); load() }} onSaved={() => { closeModal(); load() }}
           onRevisionRequested={() => { closeModal(); load() }} />
       )}

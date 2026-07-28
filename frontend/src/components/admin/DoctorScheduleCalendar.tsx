@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import Icon from '@/components/admin/icons'
 import Badge from '@/components/common/Badge'
-import ScheduleCalendarGrid, { STATUS_META, formatFullDate } from '@/components/common/ScheduleCalendarGrid'
 import type { AdminDoctorWorkdayItem } from '@/types'
+import { toLocalDateStr } from '@/utils/format'
 
 // Lưới lịch (chuyển tuần/tháng, ô ngày, chú thích) nằm ở ScheduleCalendarGrid — dùng chung
 // với trang Lịch làm việc của bác sĩ. File này chỉ còn phần drawer quản trị của Admin.
 
 type WorkdayStatus = 'lam_viec' | 'nghi' | 'nghi_phep'
+type CalendarView = 'week' | 'month'
 
 interface DoctorScheduleCalendarProps {
   items: AdminDoctorWorkdayItem[]
@@ -502,8 +503,17 @@ export default function DoctorScheduleCalendar({
   onRetry,
 }: DoctorScheduleCalendarProps) {
   const [selectedDay, setSelectedDay] = useState<AdminDoctorWorkdayItem | null>(null)
+  const [view, setView] = useState<CalendarView>('week')
+  const [anchorDate, setAnchorDate] = useState(() => parseDate(fromDate))
+  const [focusedDate, setFocusedDate] = useState(fromDate)
   const drawerRef = useRef<HTMLElement | null>(null)
   const drawerTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const dayButtonRefs = useRef(new Map<string, HTMLButtonElement>())
+
+  useEffect(() => {
+    setAnchorDate(parseDate(fromDate))
+    setFocusedDate(fromDate)
+  }, [fromDate])
 
   useEffect(() => {
     if (!selectedDay) return

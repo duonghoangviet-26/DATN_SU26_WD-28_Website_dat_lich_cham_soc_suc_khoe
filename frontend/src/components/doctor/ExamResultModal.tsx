@@ -13,6 +13,7 @@ const EMPTY_DRUG: Omit<PrescriptionDrug, 'id'> = {
 
 interface ExamResultModalProps {
   appt: DoctorAppointmentDetail
+  queueId?: string
   // 'edit'   — trang Lịch hẹn: nhập/sửa kết quả (Lưu/Cập nhật).
   // 'confirm'— trang Hồ sơ chờ xác nhận: bác sĩ sửa trực tiếp rồi "Lưu & Xác nhận" 1 thao tác.
   mode?: 'edit' | 'confirm'
@@ -64,7 +65,7 @@ function PatientInfoBlock({ appt, result }: { appt: DoctorAppointmentDetail; res
   )
 }
 
-export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved, onConfirmed, onRevisionRequested }: ExamResultModalProps) {
+export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose, onSaved, onConfirmed, onRevisionRequested }: ExamResultModalProps) {
   const [loading, setLoading] = useState(true)
   const [existing, setExisting] = useState<ExaminationResult | null>(null)
   const [revisionReason, setRevisionReason] = useState('') // lý do đánh dấu hồ sơ "cần chỉnh sửa"
@@ -86,7 +87,10 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
   const topRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    examinationService.getByAppointment(appt.id).then((res) => {
+    const loadResult = queueId
+      ? examinationService.getByQueue(queueId)
+      : examinationService.getByAppointment(appt.id)
+    loadResult.then((res) => {
       if (res) {
         setExisting(res)
         setChanDoan(res.chan_doan)
@@ -99,7 +103,7 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
         })))
       }
     }).finally(() => setLoading(false))
-  }, [appt.id])
+  }, [appt.id, queueId])
 
   // Hồ sơ đã xác nhận là CHỐT — khóa ngay lập tức (khớp backend updateResult, GAP-001).
   const isReadOnly = existing !== null && (existing.status === 'da_xac_nhan' || !existing.co_the_sua)
@@ -138,7 +142,10 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
     setError(null)
     setSaving(true)
     try {
-      const result = await examinationService.save({ appointment_id: appt.id, ...buildPayload() })
+      const result = await examinationService.save({
+        ...(queueId ? { queue_id: queueId } : { appointment_id: appt.id }),
+        ...buildPayload(),
+      })
       onSaved?.(result)
     } catch {
       setError('Không lưu được kết quả khám. Vui lòng kiểm tra lại đơn thuốc và thử lại.')

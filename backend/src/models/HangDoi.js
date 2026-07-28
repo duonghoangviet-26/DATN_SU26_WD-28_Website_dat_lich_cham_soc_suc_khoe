@@ -100,6 +100,7 @@ const queueSchema = new mongoose.Schema(
     appointment_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichHen' },
     khach_vang_lai_id: { type: mongoose.Schema.Types.ObjectId, ref: 'KhachVangLai', default: null },
     member_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ThanhVien', default: null },
+    ho_so_benh_nhan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'HoSoBenhNhan', default: null },
     ten_benh_nhan: { type: String, required: true, trim: true, maxlength: 255 },
     so_dien_thoai: { type: String, default: null, maxlength: 20 },
     tuoi: { type: Number, default: null, min: 0 },
@@ -109,6 +110,9 @@ const queueSchema = new mongoose.Schema(
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', required: true },
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
     phong_kham: { type: String, default: null },
+    schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', default: null },
+    slot_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+    khung_index: { type: Number, default: null, min: 0 },
 
     // ⚠️ SNAPSHOT lúc check-in, KHÔNG phải bậc ưu tiên đang có hiệu lực.
     // Bậc thật tính động lúc query bằng `tinhBacUuTienDong()` — lưu cứng sẽ phạt oan

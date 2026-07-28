@@ -1,5 +1,6 @@
-import { HangDoi } from '../models/index.js'
+import { ChuyenKhoa, HangDoi } from '../models/index.js'
 import { startOfDayUtc } from '../utils/clinicTime.js'
+import { MAC_DINH_THOI_GIAN_KHAM_PHUT } from '../utils/slotConfig.js'
 
 // ============================================================
 // OVERFLOW CONTROL — ngừng bán khi ca đã trễ (rule mục 6)
@@ -25,31 +26,85 @@ export const NGUONG_CHAN_DAT_ONLINE_PHUT = Number(process.env.OVERFLOW_CHAN_ONLI
  *
  * Người đến sớm cho ra số âm -> kẹp về 0: chưa tới khung của họ thì chưa ai trễ cả.
  */
-export async function tinhDoTreCa(doctorId, now = new Date()) {
-  if (!doctorId) return 0
+function ganSession(query, session) {
+  return session ? query.session(session) : query
+}
 
-  const dangCho = await HangDoi.find({
+async function tinhChiTietDoTreCa(doctorId, now = new Date(), session = null) {
+  if (!doctorId) {
+    return {
+      doTrePhut: 0,
+      nguyenNhanDoTre: 'khong_tre',
+      soNguoiDangCho: 0,
+      soNguoiDangXuLy: 0,
+      thoiDiemKhungSomNhat: null,
+      thoiGianKhamVuotChuanPhut: 0,
+    }
+  }
+
+  const dayStart = startOfDayUtc(now)
+  const dayEnd = new Date(dayStart)
+  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1)
+
+  const entriesQuery = HangDoi.find({
     doctor_id: doctorId,
-    trang_thai: 'dang_cho',
-    gio_hen_goc: { $ne: null },
-    checkin_time: { $gte: startOfDayUtc(now) },
-  })
-    .select('gio_hen_goc')
-    .sort({ gio_hen_goc: 1 })
-    .limit(1)
-    .lean()
+    checkin_time: { $gte: dayStart, $lt: dayEnd },
+    trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu'] },
+  }).select('trang_thai gio_hen_goc thoi_diem_vao_phong specialty_id')
+  const entries = await ganSession(entriesQuery, session).lean()
 
-  if (dangCho.length === 0) return 0
-  const treMs = now.getTime() - new Date(dangCho[0].gio_hen_goc).getTime()
-  return Math.max(0, Math.round(treMs / 60_000))
+  const waitingEntries = entries
+    .filter((entry) => entry.trang_thai === 'dang_cho' && entry.gio_hen_goc)
+    .sort((a, b) => new Date(a.gio_hen_goc) - new Date(b.gio_hen_goc))
+  const earliestWaiting = waitingEntries[0] ?? null
+  const queueDelay = earliestWaiting
+    ? Math.max(0, Math.round((now.getTime() - new Date(earliestWaiting.gio_hen_goc).getTime()) / 60_000))
+    : 0
+
+  const inRoomEntries = entries.filter((entry) => entry.trang_thai === 'trong_phong' && entry.thoi_diem_vao_phong)
+  const specialtyIds = [...new Set(inRoomEntries.map((entry) => entry.specialty_id ? String(entry.specialty_id) : null).filter(Boolean))]
+  const specialtiesQuery = ChuyenKhoa.find({ _id: { $in: specialtyIds } })
+    .select('_id thoi_gian_kham_trung_binh_phut')
+  const specialties = specialtyIds.length ? await ganSession(specialtiesQuery, session).lean() : []
+  const averageBySpecialty = new Map(specialties.map((specialty) => [
+    String(specialty._id), Number(specialty.thoi_gian_kham_trung_binh_phut) || MAC_DINH_THOI_GIAN_KHAM_PHUT,
+  ]))
+
+  const inRoomOverrun = inRoomEntries.reduce((max, entry) => {
+    const average = averageBySpecialty.get(String(entry.specialty_id)) || MAC_DINH_THOI_GIAN_KHAM_PHUT
+    const elapsed = Math.max(0, Math.round((now.getTime() - new Date(entry.thoi_diem_vao_phong).getTime()) / 60_000))
+    return Math.max(max, Math.max(0, elapsed - average))
+  }, 0)
+
+  const doTrePhut = Math.max(queueDelay, inRoomOverrun)
+  const nguyenNhanDoTre = doTrePhut === 0
+    ? 'khong_tre'
+    : queueDelay >= inRoomOverrun
+      ? 'hang_doi'
+      : 'trong_phong'
+
+  return {
+    doTrePhut,
+    nguyenNhanDoTre,
+    soNguoiDangCho: entries.filter((entry) => entry.trang_thai === 'dang_cho').length,
+    soNguoiDangXuLy: entries.length,
+    thoiDiemKhungSomNhat: earliestWaiting?.gio_hen_goc ?? null,
+    thoiGianKhamVuotChuanPhut: inRoomOverrun,
+  }
+}
+
+export async function tinhDoTreCa(doctorId, now = new Date(), session = null) {
+  const detail = await tinhChiTietDoTreCa(doctorId, now, session)
+  return detail.doTrePhut ?? 0
 }
 
 /**
  * Tình trạng quá tải của một bác sĩ trong ngày.
  * @returns {Promise<{doTrePhut: number, ngungBanWalkIn: boolean, chanDatOnline: boolean, canhBao: string|null}>}
  */
-export async function kiemTraQuaTai(doctorId, now = new Date()) {
-  const doTrePhut = await tinhDoTreCa(doctorId, now)
+export async function kiemTraQuaTai(doctorId, now = new Date(), session = null) {
+  const detail = await tinhChiTietDoTreCa(doctorId, now, session)
+  const doTrePhut = detail.doTrePhut
   const chanDatOnline = doTrePhut >= NGUONG_CHAN_DAT_ONLINE_PHUT
   const ngungBanWalkIn = doTrePhut >= NGUONG_NGUNG_BAN_WALKIN_PHUT
 
@@ -62,5 +117,15 @@ export async function kiemTraQuaTai(doctorId, now = new Date()) {
       + 'lượt đã đặt online vẫn nhận bình thường.'
   }
 
-  return { doTrePhut, ngungBanWalkIn, chanDatOnline, canhBao }
+  return {
+    doTrePhut,
+    nguyenNhanDoTre: detail.nguyenNhanDoTre,
+    soNguoiDangCho: detail.soNguoiDangCho,
+    soNguoiDangXuLy: detail.soNguoiDangXuLy,
+    thoiDiemKhungSomNhat: detail.thoiDiemKhungSomNhat,
+    thoiGianKhamVuotChuanPhut: detail.thoiGianKhamVuotChuanPhut,
+    ngungBanWalkIn,
+    chanDatOnline,
+    canhBao,
+  }
 }

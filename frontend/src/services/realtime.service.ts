@@ -25,6 +25,7 @@ type RealtimeEvent =
   | 'thongke:doanh_thu_thay_doi'
   | 'thongke:lich_hen_thay_doi'
   | 'thongke:benh_nhan_moi'
+  | 'doctor:queue_updated'
 
 type RealtimeHandler = (payload: any) => void
 
@@ -62,6 +63,13 @@ export function subscribeAdminRealtime(handlers: Partial<Record<RealtimeEvent, R
       if (handler) activeSocket.off(event, handler)
     })
   }
+}
+
+export function subscribeDoctorQueueRealtime(handler: RealtimeHandler) {
+  const activeSocket = getSocket()
+  activeSocket.on('doctor:queue_updated', handler)
+
+  return () => activeSocket.off('doctor:queue_updated', handler)
 }
 
 export function subscribeRealtimeConnection({

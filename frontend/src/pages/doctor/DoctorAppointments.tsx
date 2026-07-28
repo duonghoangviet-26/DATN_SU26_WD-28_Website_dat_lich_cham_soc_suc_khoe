@@ -122,10 +122,10 @@ export default function DoctorAppointments() {
   const [filterDate, setFilterDate] = useState('')
 
   // ── UI state ──────────────────────────────────────────────────────────────────
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [rejectId, setRejectId] = useState<string | null>(null)
-  const [cancelId, setCancelId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | number | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | number | null>(null)
+  const [rejectId, setRejectId] = useState<string | number | null>(null)
+  const [cancelId, setCancelId] = useState<string | number | null>(null)
   const [examAppt, setExamAppt] = useState<DoctorAppointmentDetail | null>(null)
 
   // ── Toast ────────────────────────────────────────────────────────────────────
@@ -227,14 +227,14 @@ export default function DoctorAppointments() {
   // ─────────────────────────────────────────────────────────────────────────────
   // Cập nhật 1 record trong state
   // ─────────────────────────────────────────────────────────────────────────────
-  function updateAppt(id: string, data: Partial<DoctorAppointmentDetail>) {
+  function updateAppt(id: string | number, data: Partial<DoctorAppointmentDetail>) {
     setAll((prev) => prev.map((a) => a.id === id ? { ...a, ...data } : a))
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Actions
   // ─────────────────────────────────────────────────────────────────────────────
-  async function handleConfirm(id: string) {
+  async function handleConfirm(id: string | number) {
     if (actionLoading !== null) return
     setActionLoading(id)
     try {
@@ -248,7 +248,7 @@ export default function DoctorAppointments() {
     }
   }
 
-  async function handleReject(id: string, ly_do: string) {
+  async function handleReject(id: string | number, ly_do: string) {
     try {
       const updated = await doctorAppointmentService.reject(id, ly_do)
       updateAppt(id, {
@@ -263,7 +263,7 @@ export default function DoctorAppointments() {
     setRejectId(null)
   }
 
-  async function handleComplete(id: string) {
+  async function handleComplete(id: string | number) {
     if (actionLoading !== null) return
     setActionLoading(id)
     try {
@@ -277,7 +277,7 @@ export default function DoctorAppointments() {
     }
   }
 
-  async function handleCancelConfirmed(id: string, ly_do: string) {
+  async function handleCancelConfirmed(id: string | number, ly_do: string) {
     try {
       const updated = await doctorAppointmentService.cancelConfirmed(id, ly_do)
       updateAppt(id, { status: 'cancelled', payment_status: updated.payment_status, ly_do_huy: ly_do, payment_deadline: null })

@@ -7,6 +7,8 @@ import bookingRoutes from './booking.routes.js'
 import notificationRoutes from './notification.routes.js'
 
 import userRoutes from './user.routes.js'
+import patientIntakeRoutes from './patient-intake.routes.js'
+import offlinePaymentRoutes from './offline-payment.routes.js'
 
 const router = Router()
 
@@ -29,5 +31,7 @@ router.use('/payments', paymentRoutes)
 router.use('/booking', bookingRoutes)
 router.use('/notifications', notificationRoutes)
 router.use('/users', userRoutes)
+router.use('/patient-intake', patientIntakeRoutes)
+router.use('/payments/offline', offlinePaymentRoutes)
 
 export default router
