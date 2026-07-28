@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Trash2, AlertCircle, Mic, MicOff, Sun, Moon, Move } from 'lucide-react'
+import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Mic, MicOff, Sun, Moon, Move } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { fallbackLLM } from '@/services/chatbot.service'
 import { patientBookingService } from '@/services/patient-booking.service'
@@ -46,7 +46,6 @@ export default function AIChatbot() {
   const [isOpen, setIsOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { messages, addMessage, clearHistory, groupedMessages, isLoaded } = useChatHistory()
@@ -168,7 +167,8 @@ export default function AIChatbot() {
           const slots = await patientBookingService.getSlots(doc.id, format(targetDate, 'yyyy-MM-dd'))
           
           if (slots.length > 0) {
-             addBotMessage(`👨‍⚕️ Bác sĩ **${doc.ho_ten}** có ${slots.length} lịch trống vào ${dateIntent?.date === 'tomorrow' ? 'ngày mai' : 'hôm nay'}.`, undefined, [doc])
+             const timeStr = slots.map(s => s.gio_bat_dau.slice(0, 5)).join(', ')
+             addBotMessage(`👨‍⚕️ Bác sĩ **${doc.ho_ten}** có ${slots.length} lịch trống vào ${dateIntent?.date === 'tomorrow' ? 'ngày mai' : 'hôm nay'} (Các giờ: ${timeStr}).`, undefined, [doc])
              return
           } else {
              addBotMessage(`👨‍⚕️ Rất tiếc, Bác sĩ **${doc.ho_ten}** không có lịch trống vào ${dateIntent?.date === 'tomorrow' ? 'ngày mai' : 'hôm nay'}. Bạn có muốn xem bác sĩ khác không?`)
@@ -201,7 +201,7 @@ export default function AIChatbot() {
            timeStr = `Vào ${d}${h}`
         }
 
-        const availableDocs = []
+        const availableDocs: { doc: Doctor, times: string }[] = []
         // Chỉ quét 5 bác sĩ đầu tiên để tăng tốc độ phản hồi
         for (const doc of doctorList.slice(0, 5)) {
            try {
@@ -211,7 +211,8 @@ export default function AIChatbot() {
                : slots
                
              if (matchedSlots.length > 0) {
-                availableDocs.push(doc)
+                const times = matchedSlots.map(s => s.gio_bat_dau.slice(0, 5)).join(', ')
+                availableDocs.push({ doc, times })
              }
            } catch(e) {}
         }
@@ -222,14 +223,14 @@ export default function AIChatbot() {
         }
 
         let docListText = ''
-        availableDocs.slice(0, 3).forEach(doc => {
-          docListText += `\n- Bác sĩ **${doc.ho_ten}** - Phí khám: ${formatCurrency(doc.gia_kham)}`
+        availableDocs.slice(0, 3).forEach(item => {
+          docListText += `\n- Bác sĩ **${item.doc.ho_ten}** (Giờ trống: ${item.times})`
         })
         
         addBotMessage(`${timeStr} có ${availableDocs.length} bác sĩ đang có lịch trống. Dưới đây là các bác sĩ nổi bật:${docListText}`, {
           label: 'Xem tất cả Bác sĩ',
-          route: '/bac-si'
-        }, availableDocs.slice(0, 3))
+          send: 'xem bác sĩ'
+        }, availableDocs.slice(0, 3).map(item => item.doc))
         return
       }
 
@@ -268,11 +269,11 @@ export default function AIChatbot() {
     const suggestions = ['Tôi muốn đặt lịch', 'Bác sĩ nào rảnh hôm nay?', 'Khám tai giá dưới 300k', 'Hồ sơ bệnh án của tôi']
     
     return (
-      <div className="flex flex-wrap gap-2 p-3 border-t border-slate-100 bg-slate-50">
+      <div className={`flex flex-wrap gap-2 p-3 border-t transition-colors ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
         {suggestions.map((s, i) => (
           <button key={i} onClick={() => {
             setInputValue(s)
-          }} className="text-xs bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors">
+          }} className={`text-xs px-3 py-1.5 rounded-full transition-colors border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-blue-900/30 hover:text-blue-400 hover:border-blue-500/30' : 'bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200'}`}>
             {s}
           </button>
         ))}
@@ -320,48 +321,12 @@ export default function AIChatbot() {
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
-            <button 
-              onClick={() => setShowClearConfirm(true)} 
-              className="text-blue-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors"
-              title="Xóa lịch sử trò chuyện"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
             <button onClick={() => setIsOpen(false)} className="text-blue-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Clear History Modal */}
-        {showClearConfirm && (
-          <div className="absolute inset-0 bg-slate-900/60 z-30 flex items-center justify-center backdrop-blur-sm transition-all">
-            <div className={`rounded-xl shadow-2xl p-5 m-4 max-w-[280px] w-full transform transition-all ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
-              <div className="flex items-center gap-3 text-red-600 mb-2">
-                <AlertCircle className="w-5 h-5" />
-                <h4 className="font-bold">Xóa lịch sử?</h4>
-              </div>
-              <p className="text-sm text-slate-600 mb-5">Toàn bộ cuộc trò chuyện sẽ bị xóa vĩnh viễn khỏi thiết bị này.</p>
-              <div className="flex justify-end gap-2">
-                <button 
-                  onClick={() => setShowClearConfirm(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  Hủy
-                </button>
-                <button 
-                  onClick={() => {
-                    clearHistory()
-                    setShowClearConfirm(false)
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                >
-                  Đồng ý xóa
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Messages */}
         <div className={`flex-1 overflow-y-auto p-4 space-y-5 transition-colors ${isDark ? 'bg-slate-900' : 'bg-slate-50/50'}`}>

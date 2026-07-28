@@ -94,5 +94,5 @@ export const parseAdminReportIntent = (text: string): 'revenue_today' | 'revenue
 
 export const parseGeneralAvailabilityIntent = (text: string): boolean => {
   const normText = normalizeString(text)
-  return !!normText.match(/(bac si nao ranh|ai ranh|con bac si nao|phong nao trong|lich nao trong|kham duoc khong|phong trong|lich trong|con lich)/)
+  return !!normText.match(/(bac si nao ranh|ai ranh|con bac si nao|phong nao trong|lich nao trong|kham duoc khong|phong trong|lich trong|con lich|gio trong|khung gio trong)/)
 }
