@@ -62,7 +62,7 @@ export const parseServiceIntent = (text: string): string | null => {
 export const parseNavigationIntent = (text: string): string | null => {
   const normText = normalizeString(text)
   if (normText.includes('dat lich') || normText.includes('kham benh')) return '/booking'
-  if (normText.includes('xem bac si')) return '/doctors'
+  if (normText.includes('xem bac si')) return '/bac-si'
   if (normText.includes('ho so benh an')) return '/profile'
   if (normText.includes('trang quan tri')) return '/admin'
   return null
@@ -74,4 +74,9 @@ export const parseAdminReportIntent = (text: string): 'revenue_today' | 'revenue
   if (normText.includes('doanh thu') && normText.includes('thang')) return 'revenue_month'
   if (normText.includes('lich kham') && (normText.includes('trang thai') || normText.includes('chua xac nhan'))) return 'appointments_status'
   return null
+}
+
+export const parseGeneralAvailabilityIntent = (text: string): boolean => {
+  const normText = normalizeString(text)
+  return normText.includes('bac si nao ranh') || normText.includes('ai ranh') || normText.includes('con bac si nao')
 }

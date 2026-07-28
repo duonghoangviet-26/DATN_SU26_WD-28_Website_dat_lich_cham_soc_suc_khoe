@@ -12,6 +12,7 @@ import {
   parseServiceIntent,
   parseNavigationIntent,
   parseAdminReportIntent,
+  parseGeneralAvailabilityIntent,
 } from '@/utils/chatbotIntent'
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns'
 
@@ -123,6 +124,15 @@ export default function AIChatbot() {
           addBotMessage(`Không tìm thấy bác sĩ nào có mức giá dưới ${formatCurrency(priceIntent.maxPrice!)} cả.`)
           return
         }
+      }
+
+      // Check general availability
+      if (parseGeneralAvailabilityIntent(text)) {
+        addBotMessage('Hôm nay chúng tôi có các bác sĩ đang trực hoặc nhận đặt lịch. Xin vui lòng xem danh sách bác sĩ để chọn giờ khám phù hợp.', {
+          label: 'Xem danh sách Bác sĩ',
+          onClick: () => { navigate('/bac-si'); setIsOpen(false) }
+        })
+        return
       }
 
       // 4. Fallback LLM (Pollinations AI)
