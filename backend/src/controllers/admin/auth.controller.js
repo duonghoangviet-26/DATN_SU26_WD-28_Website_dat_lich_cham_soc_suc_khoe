@@ -180,6 +180,10 @@ export async function login(req, res) {
     if (!user) return fail(res, 401, 'Email hoặc mật khẩu không đúng')
     if (user.status === 'locked') return fail(res, 403, 'Tài khoản đã bị khóa')
 
+    if (!user.mat_khau) {
+      return fail(res, 400, 'Tài khoản này được đăng ký bằng Google. Vui lòng đăng nhập bằng Google hoặc bấm "Quên mật khẩu" để tạo mật khẩu.')
+    }
+
     const match = await bcrypt.compare(mat_khau, user.mat_khau)
     if (!match) return fail(res, 401, 'Email hoặc mật khẩu không đúng')
 
@@ -304,6 +308,9 @@ export async function resetPassword(req, res) {
 
     // Cập nhật mật khẩu và xóa các trường token
     user.mat_khau = hash
+    if (!user.providers.includes('local')) {
+      user.providers.push('local')
+    }
     user.reset_password_token = null
     user.reset_password_expire = null
     await user.save()
