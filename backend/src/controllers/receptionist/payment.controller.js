@@ -374,17 +374,38 @@ export const getPayments = async (req, res) => {
     }
     
     if (from || to) {
-      filter.ngay_tao = {}
+      let startDate, endDate
       if (from) {
-        const fromDate = new Date(from)
-        if (!isNaN(fromDate.getTime())) {
-          filter.ngay_tao.$gte = fromDate
-        }
+        startDate = new Date(`${from}T00:00:00.000Z`)
       }
       if (to) {
-        const toDate = new Date(to)
-        if (!isNaN(toDate.getTime())) {
-          filter.ngay_tao.$lt = new Date(toDate.getTime() + 24 * 60 * 60 * 1000)
+        const toBase = new Date(`${to}T00:00:00.000Z`)
+        endDate = new Date(toBase.getTime() + 24 * 60 * 60 * 1000)
+      }
+
+      if (startDate || endDate) {
+        const queryTime = {}
+        if (startDate) queryTime.$gte = startDate
+        if (endDate) queryTime.$lt = endDate
+
+        // Find appointments that fall in this date range
+        const appointmentsInDate = await LichHen.find({ ngay_kham: queryTime }).select('_id')
+        const appointmentIds = appointmentsInDate.map(a => a._id)
+
+        filter.$or = [
+          { ngay_tao: queryTime },
+          { ngay_thanh_toan: queryTime },
+          { appointment_id: { $in: appointmentIds } }
+        ]
+
+        // Keep the original search filter logic if present
+        if (search?.trim()) {
+          const searchRegex = { $regex: search.trim(), $options: 'i' }
+          filter.$and = [
+            { $or: filter.$or },
+            { $or: [ { ma_giao_dich: searchRegex } ] }
+          ]
+          delete filter.$or
         }
       }
     }

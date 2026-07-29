@@ -3,6 +3,7 @@ import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
 import LichSuLichHen from '../../models/LichSuLichHen.js'
+import ThanhToan from '../../models/ThanhToan.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
 export const getAppointments = async (req, res) => {
@@ -100,6 +101,22 @@ export const markAsArrived = async (req, res) => {
     const oldStatus = appointment.status
     appointment.status = 'checked_in'
     appointment.gio_den_thuc_te = new Date()
+    
+    // Create ThanhToan record if it doesn't exist
+    const existingPayment = await ThanhToan.findOne({ appointment_id: appointment._id })
+    if (!existingPayment && appointment.payment_status === 'unpaid') {
+      await ThanhToan.create({
+        appointment_id: appointment._id,
+        benh_nhan_id: appointment.user_id,
+        ma_giao_dich: `TXN${Date.now().toString().slice(-6)}`,
+        so_tien: appointment.gia_kham || 200000,
+        loai_thanh_toan: 'phi_dat_lich',
+        phuong_thuc: 'tien_mat',
+        status: 'pending',
+        ngay_tao: new Date()
+      })
+    }
+
     await appointment.save()
     emitDashboardAppointmentChanged(oldStatus, appointment.status)
     
