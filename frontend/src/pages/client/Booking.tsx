@@ -264,6 +264,8 @@ export default function Booking() {
   }, [step, paymentSnapshot?.payment_status, paymentSnapshot?.appointment_status, createdBooking, navigate])
 
   const countdownLabel = getCountdownLabel(paymentSnapshot?.gateway.expires_at || null, nowMs)
+  const selectedSpecialty = specialties.find((specialty) => specialty.id === selectedSpecialtyId)
+  const selectedDateLabel = dates.find((date) => date.value === selectedDate)?.label || selectedDate
 
   function handleNextStep() {
     if (step === 1) {
@@ -430,17 +432,29 @@ export default function Booking() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 pb-16">
+    <div className="mx-auto max-w-4xl space-y-5 px-4 pb-16 sm:space-y-6">
       <Breadcrumb items={[{ label: 'Đặt lịch khám' }]} />
 
-      <div className="space-y-2 text-left">
-        <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Đặt lịch khám</h1>
-        <p className="text-sm text-slate-500">
-          Chọn chuyên khoa và khung giờ phù hợp. Hệ thống sẽ phân công bác sĩ còn suất và giữ chỗ khi bạn xác nhận.
-        </p>
+      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-6 text-left sm:px-7">
+        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+          <div className="max-w-2xl space-y-2">
+            <p className="text-sm font-semibold text-brand-700">Lịch khám tại phòng khám</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Đặt lịch khám</h1>
+            <p className="text-sm leading-6 text-slate-600">
+              Chọn chuyên khoa và khung giờ phù hợp. Bác sĩ sẽ được phân công tự động theo suất thực tế.
+            </p>
+          </div>
+          <div className="flex max-w-sm items-start gap-2 rounded-xl bg-brand-50 px-3 py-2.5 text-xs leading-5 text-brand-800">
+            <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M12 9v4m0 4h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.74 3h15.72A2 2 0 0 0 21.6 18L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+            </svg>
+            Suất trống được xác nhận lại khi bạn hoàn tất đặt lịch.
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-2 border-b border-slate-200 pb-6 text-center">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3">
+        <div className="flex min-w-[560px] items-center text-center">
         {[
           { num: 1, label: 'Chuyên khoa' },
           { num: 2, label: 'Thời gian' },
@@ -448,55 +462,60 @@ export default function Booking() {
           { num: 4, label: 'Xác nhận lịch' },
           { num: 5, label: 'Thanh toán' },
         ].map((item) => (
-          <div key={item.num} className="space-y-2">
+          <div key={item.num} className="relative flex min-w-28 flex-1 flex-col items-center gap-2">
+            {item.num < 5 && (
+              <span className={`absolute left-[calc(50%+18px)] top-4 h-px w-[calc(100%-36px)] ${step > item.num ? 'bg-brand-500' : 'bg-slate-200'}`} />
+            )}
             <div
-              className={`mx-auto grid h-8 w-8 place-items-center rounded-full text-xs font-bold transition-colors ${
-                step >= item.num ? 'bg-brand-600 text-white shadow-md' : 'bg-slate-100 text-slate-400'
+              className={`relative z-10 grid h-8 w-8 place-items-center rounded-full text-xs font-bold transition-colors ${
+                step > item.num ? 'bg-brand-600 text-white' : step === item.num ? 'bg-brand-600 text-white ring-4 ring-brand-100' : 'bg-slate-100 text-slate-400'
               }`}
             >
-              {item.num}
+              {step > item.num ? '✓' : item.num}
             </div>
-            <p className={`hidden text-xs font-semibold sm:block ${step >= item.num ? 'text-slate-800' : 'text-slate-400'}`}>
+            <p className={`text-xs font-semibold ${step >= item.num ? 'text-slate-800' : 'text-slate-400'}`}>
               {item.label}
             </p>
           </div>
         ))}
+        </div>
       </div>
 
       {step === 1 && (
-        <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
+        <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 text-left sm:p-6">
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-3">
+            <div className="border-b border-slate-100 pb-4">
               <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn chuyên khoa</label>
-                <p className="mt-1 text-xs text-slate-500">Hệ thống tổng hợp suất trống của mọi bác sĩ thuộc chuyên khoa này.</p>
+                <h2 className="text-lg font-bold text-slate-900">Chọn chuyên khoa</h2>
+                <p className="mt-1 text-sm text-slate-600">Chúng tôi tổng hợp suất trống của tất cả bác sĩ thuộc chuyên khoa bạn chọn.</p>
               </div>
             </div>
 
-            {/* Bộ lọc chuyên khoa */}
             {!loadingSpecialties && specialties.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-100 scrollbar-thin">
+              <div className="flex flex-wrap gap-2" aria-label="Danh sách chuyên khoa">
                 <button
                   type="button"
                   onClick={() => setSelectedSpecialtyId('all')}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-all ${
+                  aria-pressed={selectedSpecialtyId === 'all'}
+                  className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                     selectedSpecialtyId === 'all'
-                      ? 'bg-brand-600 text-white shadow-sm shadow-brand-100'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'border-slate-300 bg-slate-100 text-slate-600'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   Tất cả chuyên khoa
                 </button>
                 {specialties.map((spec) => (
                   <button
-                    key={spec.id}
-                    type="button"
-                    onClick={() => setSelectedSpecialtyId(spec.id)}
-                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-all ${
-                      selectedSpecialtyId === spec.id
-                        ? 'bg-brand-600 text-white shadow-sm shadow-brand-100'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
+                  key={spec.id}
+                  type="button"
+                  onClick={() => setSelectedSpecialtyId(spec.id)}
+                  aria-pressed={selectedSpecialtyId === spec.id}
+                  className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+                    selectedSpecialtyId === spec.id
+                      ? 'border-brand-600 bg-brand-600 text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-brand-200 hover:bg-brand-50/50'
+                  }`}
                   >
                     {spec.ten}
                   </button>
@@ -505,28 +524,32 @@ export default function Booking() {
             )}
 
             {selectedSpecialtyId === 'all' ? (
-              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
                 Chọn một chuyên khoa để hệ thống hiển thị các khung giờ còn chỗ.
               </p>
             ) : (
-              <p className="rounded-xl border border-brand-100 bg-brand-50/40 px-4 py-3 text-sm text-brand-800">
-                Đã chọn <strong>{specialties.find((sp) => sp.id === selectedSpecialtyId)?.ten}</strong>. Ở bước kế tiếp, bạn chỉ cần chọn thời gian; hệ thống sẽ phân công bác sĩ còn suất.
-              </p>
+              <div className="flex gap-3 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm leading-6 text-brand-900">
+                <svg className="mt-1 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
+                <p>Đã chọn <strong>{selectedSpecialty?.ten}</strong>. Ở bước tiếp theo, bạn chỉ cần chọn thời gian; hệ thống sẽ phân công bác sĩ còn suất.</p>
+              </div>
             )}
           </div>
         </div>
       )}
 
       {step === 2 && (
-        <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
+        <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 text-left sm:p-6">
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn ngày khám</label>
+            <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Chọn thời gian khám</h2>
+                <p className="mt-1 text-sm text-slate-600">Các thời điểm hiển thị đều còn ít nhất một bác sĩ có thể tiếp nhận.</p>
+              </div>
               
-              {/* Chọn ngày từ lịch */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-semibold">Hoặc chọn ngày khác:</span>
+              <div className="flex items-center gap-2 text-xs">
+                <label htmlFor="booking-date" className="font-medium text-slate-600">Ngày khác</label>
                 <input
+                  id="booking-date"
                   type="date"
                   value={selectedDate}
                   min={(() => {
@@ -534,21 +557,22 @@ export default function Booking() {
                     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
                   })()}
                   onChange={(e) => handleDateChange(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none bg-white transition cursor-pointer"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 />
               </div>
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Ngày khám gợi ý">
               {dates.map((date) => (
                 <button
                   key={date.value}
                   type="button"
                   onClick={() => setSelectedDate(date.value)}
-                  className={`flex w-24 shrink-0 flex-col items-center justify-center rounded-xl border py-2.5 text-center transition-all ${
+                  aria-pressed={selectedDate === date.value}
+                  className={`flex w-24 shrink-0 flex-col items-center justify-center rounded-xl border py-2.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                     selectedDate === date.value
-                      ? 'border-brand-500 bg-brand-50/20 font-bold text-brand-700'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      ? 'border-brand-600 bg-brand-50 font-bold text-brand-800'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
                   <span className="text-[10px] font-semibold uppercase leading-tight">{date.label.split(',')[0]}</span>
@@ -560,11 +584,14 @@ export default function Booking() {
 
           <div className="space-y-3">
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Chọn khung giờ khám</label>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-5">
+                <div>
+                  <h3 className="font-semibold text-slate-900">Khung giờ còn chỗ</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Ngày {selectedDateLabel}</p>
+                </div>
                 {khungTheoChuyenKhoa && (
-                  <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-                    Phí khám: {formatCurrency(khungTheoChuyenKhoa.gia_kham)}
+                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                    Phí dự kiến: {formatCurrency(khungTheoChuyenKhoa.gia_kham)}
                   </span>
                 )}
               </div>
@@ -580,8 +607,8 @@ export default function Booking() {
                   const dsKhung = khungTheoChuyenKhoa.khung_gio.filter((k) => k.ca === ca)
                   if (dsKhung.length === 0) return null
                   return (
-                    <div key={ca} className="space-y-2">
-                      <p className="text-xs font-semibold text-slate-500">
+                    <div key={ca} className="space-y-2 border-t border-slate-100 pt-4 first:border-t-0 first:pt-0">
+                      <p className="text-xs font-semibold text-slate-600">
                         {ca === 'sang' ? 'Ca sáng · 08:00 – 11:30' : 'Ca chiều · 13:30 – 17:30'}
                       </p>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -590,17 +617,18 @@ export default function Booking() {
                             key={khung.gio_bat_dau}
                             type="button"
                             onClick={() => setKhungGioDaChon(khung.gio_bat_dau)}
-                            className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-all ${
+                            aria-pressed={khungGioDaChon === khung.gio_bat_dau}
+                            className={`min-h-[68px] rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                               khungGioDaChon === khung.gio_bat_dau
-                                ? 'border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-100'
-                                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                                ? 'border-brand-600 bg-brand-600 text-white'
+                                : 'border-slate-200 bg-white text-slate-800 hover:border-brand-200 hover:bg-brand-50/40'
                             }`}
                           >
                             <span className="block">{khung.gio_bat_dau}</span>
-                            <span className={`block text-[10px] font-normal ${
+                            <span className={`mt-0.5 block text-[11px] font-medium ${
                               khungGioDaChon === khung.gio_bat_dau ? 'text-white/80' : 'text-slate-400'
                             }`}>
-                              còn {khung.so_cho_trong} chỗ
+                              Còn {khung.so_cho_trong} chỗ
                             </span>
                           </button>
                         ))}
@@ -610,9 +638,8 @@ export default function Booking() {
                 })
               )}
 
-              <p className="text-xs leading-relaxed text-slate-400">
-                Khi bạn xác nhận đặt lịch, hệ thống sẽ phân công bác sĩ còn suất trong khung giờ đã chọn.
-                Đặt lịch online đóng trước giờ khám 30 phút.
+              <p className="text-xs leading-5 text-slate-500">
+                Bác sĩ được phân công theo suất thực tế khi xác nhận. Đặt lịch trực tuyến đóng trước giờ khám 30 phút.
               </p>
             </div>
           </div>
@@ -620,12 +647,15 @@ export default function Booking() {
       )}
 
       {step === 3 && (
-        <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
-          <h3 className="border-b border-slate-50 pb-2 text-sm font-bold text-slate-800">Thông tin người khám bệnh</h3>
+        <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 text-left sm:p-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-bold text-slate-900">Thông tin người khám</h2>
+            <p className="mt-1 text-sm text-slate-600">Thông tin này được sử dụng để xác nhận lịch hẹn và liên hệ khi cần.</p>
+          </div>
 
           {/* Chọn đối tượng khám */}
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Đối tượng khám bệnh</label>
+            <label className="text-sm font-semibold text-slate-900">Đặt lịch cho</label>
             <div className="grid gap-3 sm:grid-cols-3">
               <button
                 type="button"
@@ -635,14 +665,15 @@ export default function Booking() {
                   setPatientPhone(user?.so_dien_thoai || '')
                   setSelectedMemberId('')
                 }}
-                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
+                aria-pressed={bookingFor === 'self'}
+                className={`flex min-h-[96px] flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                   bookingFor === 'self'
-                    ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'border-brand-600 bg-brand-50 font-bold text-brand-800'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
-                <span className="text-xs font-bold">🙋‍♂️ Tự khám</span>
-                <span className="mt-1 text-[10px] font-normal text-slate-400">Đặt lịch cho bản thân</span>
+                <span className="text-sm font-bold">Bản thân</span>
+                <span className="mt-1 text-xs font-normal text-slate-500">Dùng thông tin tài khoản</span>
               </button>
 
               <button
@@ -659,14 +690,15 @@ export default function Booking() {
                   }
                   setPatientPhone(user?.so_dien_thoai || '')
                 }}
-                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
+                aria-pressed={bookingFor === 'member'}
+                className={`flex min-h-[96px] flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                   bookingFor === 'member'
-                    ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'border-brand-600 bg-brand-50 font-bold text-brand-800'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
-                <span className="text-xs font-bold">👨‍👩‍👧 Đặt hộ gia đình</span>
-                <span className="mt-1 text-[10px] font-normal text-slate-400">Chọn thành viên đã lưu</span>
+                <span className="text-sm font-bold">Thành viên gia đình</span>
+                <span className="mt-1 text-xs font-normal text-slate-500">Chọn từ hồ sơ đã lưu</span>
               </button>
 
               <button
@@ -677,14 +709,15 @@ export default function Booking() {
                   setPatientPhone('')
                   setSelectedMemberId('')
                 }}
-                className={`flex flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-all ${
+                aria-pressed={bookingFor === 'other'}
+                className={`flex min-h-[96px] flex-col items-center justify-center rounded-xl border p-3.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                   bookingFor === 'other'
-                    ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
-                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    ? 'border-brand-600 bg-brand-50 font-bold text-brand-800'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
-                <span className="text-xs font-bold">👥 Đặt hộ người khác</span>
-                <span className="mt-1 text-[10px] font-normal text-slate-400">Nhập thủ công thông tin</span>
+                <span className="text-sm font-bold">Người khác</span>
+                <span className="mt-1 text-xs font-normal text-slate-500">Nhập thông tin mới</span>
               </button>
             </div>
           </div>
@@ -727,10 +760,11 @@ export default function Booking() {
                           setSelectedMemberId(member.id)
                           setPatientName(member.ho_ten)
                         }}
-                        className={`rounded-xl border p-3 text-left transition-all ${
+                        aria-pressed={selectedMemberId === member.id}
+                        className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                           selectedMemberId === member.id
-                            ? 'border-brand-500 bg-brand-50/10 ring-1 ring-brand-500 font-bold text-brand-700'
-                            : 'border-slate-200 text-slate-650 hover:bg-slate-50'
+                            ? 'border-brand-600 bg-brand-50 font-bold text-brand-800'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                         }`}
                       >
                         <h4 className="text-xs font-bold leading-snug">{member.ho_ten}</h4>
@@ -791,21 +825,24 @@ export default function Booking() {
       )}
 
       {step === 4 && (
-        <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
-          <h3 className="border-b border-slate-50 pb-2 text-sm font-bold text-slate-800">Tóm tắt lịch hẹn khám</h3>
+        <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 text-left sm:p-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-bold text-slate-900">Xác nhận thông tin đặt lịch</h2>
+            <p className="mt-1 text-sm text-slate-600">Vui lòng kiểm tra kỹ trước khi chuyển sang thanh toán.</p>
+          </div>
 
-          <div className="grid gap-4 text-sm text-slate-600 sm:grid-cols-2">
-            <div className="space-y-2">
+          <div className="grid gap-5 text-sm leading-6 text-slate-700 sm:grid-cols-2">
+            <div className="space-y-2 border-b border-slate-100 pb-5 sm:border-b-0 sm:border-r sm:pr-5 sm:pb-0">
               <p><span className="font-semibold text-slate-500">Hình thức:</span> Khám chuyên khoa tại phòng khám</p>
               <p>
                 <span className="font-semibold text-slate-500">Bác sĩ phụ trách:</span>{' '}
-                <span className="font-semibold text-slate-600">Hệ thống sẽ phân công bác sĩ còn suất trong khung giờ đã chọn</span>
+                <span className="font-medium text-slate-700">Phân công tự động theo suất trống</span>
               </p>
               <p>
                 <span className="font-semibold text-slate-500">Thời gian:</span>{' '}
                 <span className="font-semibold text-brand-600">
                   {khungGioDaChon || '--'}
-                </span>, ngày {selectedDate}
+                </span>, ngày {selectedDateLabel}
               </p>
               <p>
                 <span className="font-semibold text-slate-500">Phí khám:</span>{' '}
@@ -830,18 +867,18 @@ export default function Booking() {
             giaKham={khungTheoChuyenKhoa?.gia_kham ?? null}
           />
 
-          <div className="rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">
-            * Sau khi bấm xác nhận, hệ thống sẽ tạo lịch hẹn thật ở trạng thái <strong>pending/unpaid</strong> rồi sinh mã QR VNPAY mock để bạn tiếp tục thanh toán.
+          <div className="rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600">
+            Sau khi xác nhận, hệ thống tạo lịch hẹn ở trạng thái chờ thanh toán và hiển thị mã QR để bạn tiếp tục.
           </div>
         </div>
       )}
 
       {step === 5 && createdBooking && (
-        <div className="space-y-6 rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
+        <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 text-left sm:p-6">
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wider text-brand-600">Thanh toán VNPAY</p>
-            <h3 className="text-xl font-extrabold text-slate-800">Thanh toán qua mã QR</h3>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm font-semibold text-brand-700">Thanh toán VNPAY</p>
+            <h2 className="text-xl font-bold text-slate-900">Thanh toán qua mã QR</h2>
+            <p className="text-sm leading-6 text-slate-600">
               Hệ thống đã tạo lịch hẹn. Vui lòng quét mã QR VNPAY để hoàn tất thanh toán.
             </p>
           </div>

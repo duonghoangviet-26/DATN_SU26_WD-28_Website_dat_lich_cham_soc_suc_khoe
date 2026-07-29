@@ -92,7 +92,7 @@ test('patient books a specialty time slot without choosing a doctor', async ({ p
   await specialtyButtons.nth(1).click()
   await page.getByRole('button', { name: 'Tiếp tục' }).click()
 
-  const availableSlot = page.getByRole('button', { name: /còn\s+\d+\s+chỗ/ }).first()
+  const availableSlot = page.getByRole('button', { name: /còn\s+\d+\s+chỗ/i }).first()
   await expect(availableSlot).toBeVisible({ timeout: 20_000 })
   await availableSlot.click()
   await page.getByRole('button', { name: 'Tiếp tục' }).click()
