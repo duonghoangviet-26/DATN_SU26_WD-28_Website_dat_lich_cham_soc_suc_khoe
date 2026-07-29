@@ -7,6 +7,7 @@ import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import Toast from '@/components/common/Toast'
 import Modal from '@/components/common/Modal'
+import Pagination from '@/components/common/Pagination'
 import { format } from 'date-fns'
 
 const formatCurrency = (amount: number) => {
@@ -48,6 +49,7 @@ export default function ReceptionistPayments() {
     limit: 10
   })
   
+  const [totalPages, setTotalPages] = useState(1)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [confirmModal, setConfirmModal] = useState<PaymentItem | null>(null)
   const [confirming, setConfirming] = useState(false)
@@ -57,6 +59,7 @@ export default function ReceptionistPayments() {
       setLoading(true)
       const res = await receptionistPaymentService.getAll(filters)
       setPayments(res.data)
+      setTotalPages(res.pagination.totalPages)
     } catch (error: any) {
       setToast({ message: error.message || 'Lỗi khi tải danh sách thanh toán', type: 'error' })
     } finally {
@@ -222,6 +225,15 @@ export default function ReceptionistPayments() {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-slate-200 flex justify-center bg-slate-50">
+            <Pagination
+              currentPage={filters.page || 1}
+              totalPages={totalPages}
+              onPageChange={(page) => setFilters(prev => ({ ...prev, page }))}
+            />
+          </div>
+        )}
       </div>
 
       {/* Confirm Modal */}
