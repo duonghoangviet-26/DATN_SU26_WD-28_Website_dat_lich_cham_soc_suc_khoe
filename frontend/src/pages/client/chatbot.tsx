@@ -96,6 +96,7 @@ export default function AIChatbot() {
     })
   }
 
+  
   const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)
 
   const processMessage = async (text: string) => {
