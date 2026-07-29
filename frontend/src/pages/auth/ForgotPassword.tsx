@@ -38,20 +38,20 @@ export default function ForgotPassword() {
   return (
     <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl font-bold text-slate-800">Quen mat khau</h1>
+        <h1 className="text-2xl font-bold text-slate-800">Quên Mật Khẩu</h1>
         <p className="mt-1.5 text-sm text-slate-500">
-          Nhap email da dang ky de nhan lien ket khoi phuc mat khau.
+          Nhập email đã đăng ký để nhận liên kết khôi phục mật khẩu.
         </p>
       </div>
 
       {success ? (
         <div className="space-y-4">
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
-            He thong da nhan yeu cau khoi phuc mat khau. Vui long kiem tra hop thu den va thu rac.
+            Hệ thống đã nhận yêu cầu khôi phục mật khẩu. Vui lòng kiểm tra hộp thư đến và thư rác.
           </div>
           <div className="text-center pt-2">
             <Link to="/login" className="text-sm font-semibold text-brand-600 hover:text-brand-800">
-              Quay lai dang nhap
+              Quay lại đăng nhập
             </Link>
           </div>
         </div>
@@ -64,7 +64,7 @@ export default function ForgotPassword() {
           )}
 
           <div>
-            <label className="input-label">Dia chi email</label>
+            <label className="input-label">Địa chỉ email</label>
             <input
               type="email"
               className="input"
@@ -80,17 +80,17 @@ export default function ForgotPassword() {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="spinner h-4 w-4" />
-                Dang gui...
+                Đang gửi...
               </span>
             ) : 'Gui yeu cau dat lai mat khau'}
           </button>
 
           <div className="flex items-center justify-between border-t border-slate-50 pt-4 text-xs">
             <Link to="/login" className="font-semibold text-brand-600 hover:text-brand-800">
-              Quay lai dang nhap
+              Quay lại đăng nhập
             </Link>
             <Link to="/register" className="font-semibold text-slate-500 hover:text-slate-800">
-              Dang ky tai khoan
+              Đăng ký tài khoản
             </Link>
           </div>
         </form>
