@@ -738,7 +738,7 @@ export default function Profile() {
                     <li key={index} className="text-slate-700">
                       {typeof thuoc === 'string'
                         ? thuoc
-                        : `${thuoc.ten_thuoc}${thuoc.lieu_luong ? ` (Liều lượng: ${thuoc.lieu_luong})` : ''} - ${thuoc.tan_suat || ''}${thuoc.so_ngay ? ` (Uống trong ${thuoc.so_ngay} ngày)` : ''}${thuoc.ghi_chu ? ` [Lưu ý: ${thuoc.ghi_chu}]` : ''}`}
+                        : `${thuoc.ten_thuoc}${thuoc.lieu_luong ? ` (Liều lượng: ${thuoc.lieu_luong})` : ''} - ${thuoc.tan_suat || ''}${thuoc.ghi_chu ? ` [Lưu ý: ${thuoc.ghi_chu}]` : ''}`}
                     </li>
                   ))}
                 </ul>
