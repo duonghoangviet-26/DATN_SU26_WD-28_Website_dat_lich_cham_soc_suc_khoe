@@ -503,10 +503,10 @@ export async function createResult(req, res) {
       })
     }
 
-    // Đánh dấu lịch hẹn hoàn thành (nếu chưa — có thể đã completed từ trước).
-    // Không tự complete nếu hồ sơ có dịch vụ phát sinh — phải chờ thanh toán phần
-    // phát sinh đó trước (xem nhánh tương ứng trong confirmResult()).
-    if (a.status !== 'completed' && result.dich_vu_phat_sinh.length === 0) {
+    // Hoàn tất khám và hoàn tất thanh toán là hai trạng thái độc lập. Ngay khi
+    // bác sĩ xác nhận hồ sơ, ca khám đã hoàn tất về mặt lâm sàng; lễ tân sẽ thu
+    // khoản còn phải thu dựa trên snapshot dịch vụ trong hồ sơ ở bước sau.
+    if (a.status !== 'completed') {
       const oldStatus = a.status
       a.status = 'completed'
       await a.save()
@@ -794,10 +794,13 @@ export async function confirmResultByRecord(req, res) {
       noi_dung: coSua ? 'Bác sĩ chỉnh sửa và xác nhận hồ sơ khám' : 'Bác sĩ xác nhận hồ sơ khám' })
     await result.save()
 
-    // Online: đánh dấu LichHen completed (offline: không có LichHen — lượt khám đã hoan_thanh ở HangDoi).
-    if (appt && appt.status !== 'completed' && result.dich_vu_phat_sinh.length === 0) {
+    // Xác nhận hồ sơ là mốc kết thúc khám lâm sàng. Không giữ ca ở trạng thái
+    // "chờ nhập hồ sơ" chỉ vì còn khoản phải thu; công nợ nằm ở hóa đơn.
+    if (appt && appt.status !== 'completed') {
+      const oldStatus = appt.status
       appt.status = 'completed'
       await appt.save()
+      emitDashboardAppointmentChanged(oldStatus, appt.status)
     }
     return ok(res, { id: result._id, status: result.status }, 'Đã xác nhận hồ sơ khám')
   } catch (err) {

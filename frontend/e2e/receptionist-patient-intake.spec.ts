@@ -152,24 +152,38 @@ test('receptionist checks in a booked appointment without using walk-in capacity
   await expect(page.getByText(/Đã check-in lịch hẹn LH-E2E-001/)).toBeVisible()
 })
 
-test('receptionist can add an offline service and collect payment', async ({ page }) => {
+test('receptionist reviews the doctor-approved billing preview before collecting cash', async ({ page }) => {
   let invoiceCreated = false
+  const pendingCase = {
+    id: 'queue-1', source: 'offline', ten_benh_nhan: 'E2E Cashier Patient', so_dien_thoai: '0907770000', specialty_id: 'specialty-tnh', invoice: null, pending_payment: null, payments: [],
+    billing_summary: {
+      tong_tien_kham: 200000, chi_tiet_thu_phi: [
+        { loai: 'phi_kham', ten: 'Phí khám', so_tien: 200000, so_luong: 1, thanh_tien: 200000 },
+        { loai: 'dich_vu', service_id: 'service-1', ten: 'Nội soi tai mũi họng', so_tien: 150000, so_luong: 1, thanh_tien: 150000 },
+      ], tong_tien_phat_sinh: 150000, tong_thanh_toan: 350000, tong_da_thu: 0, con_phai_thu: 350000, trang_thai_hoa_don: 'chua_thanh_toan', source: 'medical_record',
+    },
+    dich_vu_chi_dinh: [{ service_id: 'service-1', ten: 'Nội soi tai mũi họng', so_luong: 1, thanh_tien: 150000 }],
+  }
+  const paidCase = {
+    ...pendingCase,
+    invoice: { id: 'invoice-1', hang_doi_id: 'queue-1', ho_so_benh_nhan_id: 'profile-a', so_hoa_don: 'HD-E2E', tong_tien_kham: 200000, chi_tiet_thu_phi: pendingCase.billing_summary.chi_tiet_thu_phi, tong_tien_phat_sinh: 150000, tong_thanh_toan: 350000, tong_da_thu: 350000, con_phai_thu: 0, trang_thai_hoa_don: 'da_thanh_toan_du' },
+    payments: [{ id: 'payment-1', so_tien: 350000, phuong_thuc: 'tien_mat', status: 'paid', ma_giao_dich: 'TXN-E2E-1', ngay_tao: '2026-07-28T08:00:00.000Z', ngay_thanh_toan: '2026-07-28T08:02:00.000Z' }],
+    billing_summary: { ...pendingCase.billing_summary, tong_da_thu: 350000, con_phai_thu: 0, trang_thai_hoa_don: 'da_thanh_toan_du', source: 'invoice' },
+  }
   await page.route('**/api/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
     if (url.pathname.endsWith('/receptionist/notifications/recent')) return route.fulfill({ json: { success: true, data: [] } })
-    if (url.pathname.endsWith('/receptionist/payments/offline/services')) {
-      return route.fulfill({ json: { success: true, data: [{ _id: 'service-1', ten: 'Noi soi tai mui hong', gia: 150000, specialty_id: 'specialty-tnh' }] } })
+    if (url.pathname.endsWith('/receptionist/payments/cases') && request.method() === 'GET') {
+      const currentView = url.searchParams.get('view')
+      return route.fulfill({ json: { success: true, data: currentView === 'paid' ? (invoiceCreated ? [paidCase] : []) : (invoiceCreated ? [] : [pendingCase]) } })
     }
-    if (url.pathname.endsWith('/receptionist/payments/offline') && request.method() === 'GET') {
-      return route.fulfill({ json: { success: true, data: [{ id: 'queue-1', ho_so_benh_nhan_id: 'profile-a', ten_benh_nhan: 'E2E Cashier Patient', so_dien_thoai: '0907770000', trang_thai: 'hoan_thanh', checkin_time: '2026-07-28T08:00:00.000Z', specialty_id: 'specialty-tnh', invoice: invoiceCreated ? { so_hoa_don: 'HD-E2E', tong_thanh_toan: 350000, trang_thai_hoa_don: 'da_thanh_toan_du' } : null }] } })
+    if (url.pathname.endsWith('/receptionist/payments/cases/queue-1') && request.method() === 'GET') {
+      return route.fulfill({ json: { success: true, data: invoiceCreated ? paidCase : pendingCase } })
     }
-    if (url.pathname.endsWith('/receptionist/payments/offline/queue-1/invoice') && request.method() === 'GET') {
-      return route.fulfill({ json: { success: true, data: { invoice: invoiceCreated ? { id: 'invoice-1', hang_doi_id: 'queue-1', ho_so_benh_nhan_id: 'profile-a', so_hoa_don: 'HD-E2E', tong_tien_kham: 200000, chi_tiet_thu_phi: [], tong_tien_phat_sinh: 150000, tong_thanh_toan: 350000, tong_da_thu: 350000, con_phai_thu: 0, trang_thai_hoa_don: 'da_thanh_toan_du' } : null, hang_doi: {} } } })
-    }
-    if (url.pathname.endsWith('/receptionist/payments/offline/queue-1/invoice') && request.method() === 'POST') {
+    if (url.pathname.endsWith('/receptionist/payments/cases/queue-1/invoice') && request.method() === 'POST') {
       invoiceCreated = true
-      return route.fulfill({ status: 201, json: { success: true, data: { invoice: { id: 'invoice-1', hang_doi_id: 'queue-1', ho_so_benh_nhan_id: 'profile-a', so_hoa_don: 'HD-E2E', tong_tien_kham: 200000, chi_tiet_thu_phi: [], tong_tien_phat_sinh: 150000, tong_thanh_toan: 350000, tong_da_thu: 350000, con_phai_thu: 0, trang_thai_hoa_don: 'da_thanh_toan_du' }, payment: { status: 'paid' } } } })
+      return route.fulfill({ status: 201, json: { success: true, data: paidCase } })
     }
     return route.fulfill({ json: { success: true, data: [] } })
   })
@@ -177,12 +191,15 @@ test('receptionist can add an offline service and collect payment', async ({ pag
   await page.addInitScript(() => localStorage.setItem('token', 'browser-e2e-token'))
   await page.goto('/receptionist/payments')
   await page.getByRole('button').filter({ hasText: 'E2E Cashier Patient' }).click()
-  await page.getByRole('checkbox').check()
-  await page.getByRole('button', { name: /Lap hoa don/ }).click()
-  await expect(page.getByText('Da lap hoa don va thu tien mat')).toBeVisible()
+  await expect(page.getByText(/số tiền xem trước từ hồ sơ bệnh án/i)).toBeVisible()
+  await expect(page.getByText('Nội soi tai mũi họng')).toBeVisible()
+  await page.getByRole('button', { name: /Xác nhận thu tiền mặt 350.000 đ/ }).click()
+  await expect(page.getByText(/Đã ghi nhận thu tiền mặt/i)).toBeVisible()
+  await page.getByRole('tab', { name: 'Đã thanh toán' }).click()
+  await expect(page.getByText('HD-E2E')).toBeVisible()
 })
 
-test('receptionist can confirm a pending offline transfer', async ({ page }) => {
+test('receptionist can confirm a pending transfer and review it in payment history', async ({ page }) => {
   const invoice = {
     id: 'invoice-2',
     hang_doi_id: 'queue-2',
@@ -196,21 +213,35 @@ test('receptionist can confirm a pending offline transfer', async ({ page }) => 
     con_phai_thu: 200000,
     trang_thai_hoa_don: 'chua_thanh_toan',
   }
-  const pendingPayment = { id: 'payment-2', hoa_don_id: 'invoice-2', hang_doi_id: 'queue-2', so_tien: 200000, phuong_thuc: 'chuyen_khoan', status: 'pending', ma_giao_dich: 'TXN-E2E-2' }
+  const pendingPayment = { id: 'payment-2', hoa_don_id: 'invoice-2', hang_doi_id: 'queue-2', so_tien: 200000, phuong_thuc: 'chuyen_khoan', status: 'pending', ma_giao_dich: 'TXN-E2E-2', ngay_tao: '2026-07-28T08:00:00.000Z' }
+  let transferConfirmed = false
+  const pendingCase = {
+    id: 'queue-2', source: 'offline', ten_benh_nhan: 'E2E Transfer Patient', so_dien_thoai: '0907770001', specialty_id: 'specialty-tnh', invoice, pending_payment: pendingPayment, payments: [pendingPayment],
+    billing_summary: { tong_tien_kham: 200000, chi_tiet_thu_phi: [{ loai: 'phi_kham', ten: 'Phí khám', so_tien: 200000, so_luong: 1, thanh_tien: 200000 }], tong_tien_phat_sinh: 0, tong_thanh_toan: 200000, tong_da_thu: 0, con_phai_thu: 200000, trang_thai_hoa_don: 'chua_thanh_toan', source: 'invoice' },
+    dich_vu_chi_dinh: [],
+  }
+  const paidCase = {
+    ...pendingCase,
+    invoice: { ...invoice, tong_da_thu: 200000, con_phai_thu: 0, trang_thai_hoa_don: 'da_thanh_toan_du' },
+    pending_payment: null,
+    payments: [{ ...pendingPayment, status: 'paid', ngay_thanh_toan: '2026-07-28T08:03:00.000Z' }],
+    billing_summary: { ...pendingCase.billing_summary, tong_da_thu: 200000, con_phai_thu: 0, trang_thai_hoa_don: 'da_thanh_toan_du' },
+  }
 
   await page.route('**/api/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
     if (url.pathname.endsWith('/receptionist/notifications/recent')) return route.fulfill({ json: { success: true, data: [] } })
-    if (url.pathname.endsWith('/receptionist/payments/offline/services')) return route.fulfill({ json: { success: true, data: [] } })
-    if (url.pathname.endsWith('/receptionist/payments/offline') && request.method() === 'GET') {
-      return route.fulfill({ json: { success: true, data: [{ id: 'queue-2', ho_so_benh_nhan_id: 'profile-b', ten_benh_nhan: 'E2E Transfer Patient', so_dien_thoai: '0907770001', trang_thai: 'hoan_thanh', checkin_time: '2026-07-28T08:00:00.000Z', specialty_id: 'specialty-tnh', invoice: { so_hoa_don: 'HD-E2E-2', tong_thanh_toan: 200000, trang_thai_hoa_don: 'chua_thanh_toan' } }] } })
+    if (url.pathname.endsWith('/receptionist/payments/cases') && request.method() === 'GET') {
+      const currentView = url.searchParams.get('view')
+      return route.fulfill({ json: { success: true, data: currentView === 'paid' ? (transferConfirmed ? [paidCase] : []) : (transferConfirmed ? [] : [pendingCase]) } })
     }
-    if (url.pathname.endsWith('/receptionist/payments/offline/queue-2/invoice') && request.method() === 'GET') {
-      return route.fulfill({ json: { success: true, data: { invoice, pending_payment: pendingPayment, hang_doi: {} } } })
+    if (url.pathname.endsWith('/receptionist/payments/cases/queue-2') && request.method() === 'GET') {
+      return route.fulfill({ json: { success: true, data: transferConfirmed ? paidCase : pendingCase } })
     }
-    if (url.pathname.endsWith('/receptionist/payments/offline/queue-2/payments/payment-2/confirm') && request.method() === 'PATCH') {
-      return route.fulfill({ json: { success: true, data: { invoice: { ...invoice, tong_da_thu: 200000, con_phai_thu: 0, trang_thai_hoa_don: 'da_thanh_toan_du' }, payment: { ...pendingPayment, status: 'paid' } } } })
+    if (url.pathname.endsWith('/receptionist/payments/cases/queue-2/payments/payment-2/confirm') && request.method() === 'PATCH') {
+      transferConfirmed = true
+      return route.fulfill({ json: { success: true, data: paidCase } })
     }
     return route.fulfill({ json: { success: true, data: [] } })
   })
@@ -218,9 +249,11 @@ test('receptionist can confirm a pending offline transfer', async ({ page }) => 
   await page.addInitScript(() => localStorage.setItem('token', 'browser-e2e-token'))
   await page.goto('/receptionist/payments')
   await page.getByRole('button').filter({ hasText: 'E2E Transfer Patient' }).click()
-  await expect(page.getByText('Dang cho xac nhan chuyen khoan')).toBeVisible()
-  await page.getByRole('button', { name: 'Xac nhan da nhan tien' }).click()
-  await expect(page.getByText('Da xac nhan chuyen khoan')).toBeVisible()
+  await expect(page.getByText('Chờ xác nhận chuyển khoản')).toBeVisible()
+  await page.getByRole('button', { name: 'Xác nhận đã nhận tiền' }).click()
+  await expect(page.getByText(/Đã xác nhận tiền chuyển khoản/i)).toBeVisible()
+  await expect(page.getByText('Tiền mặt')).not.toBeVisible()
+  await expect(page.getByText(/Chuyển khoản · Đã thanh toán/)).toBeVisible()
 })
 
 test('doctor can open and save an offline examination result', async ({ page }) => {

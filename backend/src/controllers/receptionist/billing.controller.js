@@ -43,6 +43,13 @@ async function pendingPayment(invoiceId) {
   return ThanhToan.findOne({ hoa_don_id: invoiceId, status: 'pending' }).sort({ ngay_tao: -1 }).lean()
 }
 
+async function paymentHistory(invoiceId) {
+  return ThanhToan.find({ hoa_don_id: invoiceId })
+    .select('so_tien phuong_thuc status ma_giao_dich ngay_tao ngay_thanh_toan')
+    .sort({ ngay_tao: -1 })
+    .lean()
+}
+
 function serializePendingPayment(payment) {
   if (!payment) return null
   return {
@@ -56,6 +63,18 @@ function serializePendingPayment(payment) {
     ngay_tao: payment.ngay_tao,
     ngay_thanh_toan: payment.ngay_thanh_toan,
   }
+}
+
+function serializePaymentHistory(payments) {
+  return payments.map((payment) => ({
+    id: String(payment._id),
+    so_tien: Number(payment.so_tien || 0),
+    phuong_thuc: payment.phuong_thuc,
+    status: payment.status,
+    ma_giao_dich: payment.ma_giao_dich ?? null,
+    ngay_tao: payment.ngay_tao,
+    ngay_thanh_toan: payment.ngay_thanh_toan ?? null,
+  }))
 }
 
 async function hoanTatLuotKhamOnlineNeuDaThuDu(caseItem, trangThaiHoaDon) {
@@ -154,6 +173,46 @@ async function serializeCase(caseItem) {
   const invoice = await HoaDon.findOne(invoiceFilter(caseItem)).lean()
   const paid = invoice ? await paidTotal(invoice._id) : 0
   const pending = invoice ? await pendingPayment(invoice._id) : null
+  const payments = invoice ? await paymentHistory(invoice._id) : []
+  const preview = invoice
+    ? {
+      tong_tien_kham: Number(invoice.tong_tien_kham || 0),
+      chi_tiet_thu_phi: invoice.chi_tiet_thu_phi,
+      tong_tien_phat_sinh: Number(invoice.tong_tien_phat_sinh || 0),
+      tong_thanh_toan: Number(invoice.tong_thanh_toan || 0),
+      tong_da_thu: paid,
+      con_phai_thu: Math.max(0, Number(invoice.tong_thanh_toan || 0) - paid),
+      trang_thai_hoa_don: invoice.trang_thai_hoa_don,
+      source: 'invoice',
+    }
+    : (() => {
+      const fee = Number(caseItem.appointment?.gia_kham ?? 0)
+      const { lines, serviceTotal } = invoiceLines(caseItem, fee)
+      const total = fee + serviceTotal
+      return {
+        tong_tien_kham: fee,
+        chi_tiet_thu_phi: lines,
+        tong_tien_phat_sinh: serviceTotal,
+        tong_thanh_toan: total,
+        tong_da_thu: 0,
+        con_phai_thu: total,
+        trang_thai_hoa_don: 'chua_thanh_toan',
+        source: 'medical_record',
+      }
+    })()
+
+  // Walk-in does not have an appointment price snapshot, so derive its preview
+  // from the specialty rate before any invoice is persisted.
+  if (!invoice && caseItem.source === 'offline') {
+    const fee = await getFee(caseItem)
+    const { lines, serviceTotal } = invoiceLines(caseItem, fee)
+    preview.tong_tien_kham = fee
+    preview.chi_tiet_thu_phi = lines
+    preview.tong_tien_phat_sinh = serviceTotal
+    preview.tong_thanh_toan = fee + serviceTotal
+    preview.con_phai_thu = fee + serviceTotal
+  }
+
   return {
     id: String(caseItem.reference_id),
     source: caseItem.source,
@@ -170,13 +229,17 @@ async function serializeCase(caseItem) {
       con_phai_thu: Math.max(0, invoice.tong_thanh_toan - paid),
       trang_thai_hoa_don: invoice.trang_thai_hoa_don,
     } : null,
+    billing_summary: preview,
     pending_payment: serializePendingPayment(pending),
+    payments: serializePaymentHistory(payments),
     dich_vu_chi_dinh: caseItem.result.dich_vu_phat_sinh ?? [],
   }
 }
 
 export async function listBillingCases(req, res) {
   try {
+    const view = req.query.view ?? 'pending'
+    if (!['pending', 'paid'].includes(view)) return fail(res, 400, 'Bộ lọc thanh toán không hợp lệ')
     const [offlineEntries, onlineResults] = await Promise.all([
       HangDoi.find({ nguon: 'offline', trang_thai: { $in: OFFLINE_ELIGIBLE } }).sort({ checkin_time: -1 }).limit(100).lean(),
       KetQuaKham.find({ status: 'da_xac_nhan', appointment_id: { $exists: true } }).sort({ ngay_cap_nhat: -1 }).limit(100).select('appointment_id').lean(),
@@ -189,7 +252,12 @@ export async function listBillingCases(req, res) {
       try { return await resolveBillingCase(candidate.id, candidate.source) } catch { return null }
     }))
     const rows = await Promise.all(resolved.filter(Boolean).map(serializeCase))
-    return ok(res, rows.filter((row) => row.invoice?.trang_thai_hoa_don !== 'da_thanh_toan_du'))
+    const filteredRows = rows.filter((row) => (
+      view === 'paid'
+        ? row.billing_summary.trang_thai_hoa_don === 'da_thanh_toan_du'
+        : row.billing_summary.trang_thai_hoa_don !== 'da_thanh_toan_du'
+    ))
+    return ok(res, filteredRows)
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }

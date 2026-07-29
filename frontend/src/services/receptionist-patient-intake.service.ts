@@ -153,6 +153,7 @@ export interface OfflineQueueSummary {
 }
 
 export interface BillingServiceLine {
+  loai?: string
   service_id?: string | null
   ten: string
   so_luong: number
@@ -168,7 +169,26 @@ export interface BillingCase {
   so_dien_thoai?: string | null
   specialty_id?: string | null
   invoice: OfflineInvoice | null
+  billing_summary: {
+    tong_tien_kham: number
+    chi_tiet_thu_phi: BillingServiceLine[]
+    tong_tien_phat_sinh: number
+    tong_thanh_toan: number
+    tong_da_thu: number
+    con_phai_thu: number
+    trang_thai_hoa_don: string
+    source: 'invoice' | 'medical_record'
+  }
   pending_payment: OfflinePendingPayment | null
+  payments: Array<{
+    id: string
+    so_tien: number
+    phuong_thuc: 'tien_mat' | 'chuyen_khoan'
+    status: 'pending' | 'paid' | 'failed' | 'refunded'
+    ma_giao_dich?: string | null
+    ngay_tao?: string
+    ngay_thanh_toan?: string | null
+  }>
   dich_vu_chi_dinh: BillingServiceLine[]
 }
 
@@ -252,8 +272,8 @@ export const receptionistPatientIntakeService = {
     return response.data.data
   },
 
-  async listBillingCases(): Promise<BillingCase[]> {
-    const response = await axiosInstance.get<ApiResponse<BillingCase[]>>('/receptionist/payments/cases')
+  async listBillingCases(view: 'pending' | 'paid' = 'pending'): Promise<BillingCase[]> {
+    const response = await axiosInstance.get<ApiResponse<BillingCase[]>>('/receptionist/payments/cases', { params: { view } })
     return response.data.data ?? []
   },
 
