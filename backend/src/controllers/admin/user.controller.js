@@ -6,6 +6,7 @@ import { emitDashboardNewPatient } from '../../realtime/socket.js'
 
 const ADMIN_ID = "000000000000000000000099"
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const ADMIN_MANAGED_ROLES = ['user', 'patient', 'doctor', 'admin', 'receptionist']
 
 function buildDefaultDoctorProfile(userId) {
   return {
@@ -65,7 +66,14 @@ export async function getAllUsers(req, res) {
       ]
     }
 
-    if (role) query.role = role
+    if (role) {
+      if (!ADMIN_MANAGED_ROLES.includes(role)) {
+        return fail(res, 400, 'Vai trò không hợp lệ')
+      }
+      query.role = role
+    } else {
+      query.role = { $in: ADMIN_MANAGED_ROLES }
+    }
     if (status) query.status = status
 
     // Tính toán phân trang
@@ -145,13 +153,18 @@ export async function createUser(req, res) {
     const hashedPassword = await bcrypt.hash(mat_khau, salt)
 
     // 4. Tạo user
+    const normalizedRole = role || 'user'
+    if (!ADMIN_MANAGED_ROLES.includes(normalizedRole)) {
+      return fail(res, 400, 'Vai trò không hợp lệ')
+    }
+
     const newUser = await NguoiDung.create({
       email,
       mat_khau: hashedPassword,
       ho_ten,
       so_dien_thoai,
       anh_dai_dien: anh_dai_dien || null,
-      role: role || 'user'
+      role: normalizedRole
     })
 
     if (['user', 'patient'].includes(newUser.role)) {
@@ -174,7 +187,7 @@ export async function createUser(req, res) {
 
     // 5. Ghi nhật ký
     await logActivity(req, 'CREATE_USER', newUser._id, null, {
-      email, ho_ten, anh_dai_dien: anh_dai_dien || null, role: role || 'user'
+      email, ho_ten, anh_dai_dien: anh_dai_dien || null, role: normalizedRole
     })
 
     return res.status(201).json({
@@ -222,7 +235,12 @@ export async function updateUser(req, res) {
     }
     if (ho_ten !== undefined) updateData.ho_ten = ho_ten
     if (so_dien_thoai !== undefined) updateData.so_dien_thoai = so_dien_thoai
-    if (role !== undefined) updateData.role = role
+    if (role !== undefined) {
+      if (!ADMIN_MANAGED_ROLES.includes(role)) {
+        return fail(res, 400, 'Vai trò không hợp lệ')
+      }
+      updateData.role = role
+    }
     if (status !== undefined) updateData.status = status
     if (anh_dai_dien !== undefined) {
       updateData.anh_dai_dien = anh_dai_dien || null
@@ -395,7 +413,7 @@ export async function getUserStatistics(req, res) {
       locked,
       deleted
     ] = await Promise.all([
-      NguoiDung.countDocuments({ ngay_xoa: null }),
+      NguoiDung.countDocuments({ role: { $in: ADMIN_MANAGED_ROLES }, ngay_xoa: null }),
       NguoiDung.countDocuments({ role: 'admin', ngay_xoa: null }),
       NguoiDung.countDocuments({ role: 'doctor', ngay_xoa: null }),
       NguoiDung.countDocuments({ role: 'receptionist', ngay_xoa: null }),

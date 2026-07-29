@@ -101,6 +101,17 @@ export function startCronJobs() {
   }, { timezone: CLINIC_TIMEZONE }))
 
   console.log('Da khoi dong cron jobs (auto fill lich khi startup, sinh/bu lich 00:00 Chu nhat, moi 5 phut: auto-cancel + nha slot ket + cutoff walk-in + de xuat doi qua han + quet no_show)')
+  // 08:00 and 20:00 every Wednesday: remind receptionists to add a new article.
+  tasks.push(cron.schedule('0 8,20 * * 3', async () => {
+    try {
+      const result = await sendWeeklyNewsArticleReminder()
+      console.log('[cron] Nhac le tan them bai viet tin tuc:', result)
+    } catch (err) {
+      console.error('[cron] Loi nhac le tan them bai viet tin tuc:', err.message)
+    }
+  }, { timezone: CLINIC_TIMEZONE }))
+
+  console.log('Da khoi dong cron jobs (auto fill lich khi startup, sinh/bu lich 00:00 Chu nhat, auto-cancel moi 15 phut, nhac tin tuc thu 4 08:00/20:00)')
 
   return {
     stop() {

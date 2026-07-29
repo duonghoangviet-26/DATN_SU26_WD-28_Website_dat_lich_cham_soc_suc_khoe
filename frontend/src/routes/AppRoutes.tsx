@@ -12,6 +12,13 @@ const ReceptionistDashboard = lazy(() => import('@/pages/receptionist/Dashboard'
 const ReceptionistAppointments = lazy(() => import('@/pages/receptionist/Appointments'))
 const ReceptionistPayments = lazy(() => import('@/pages/receptionist/Payments'))
 const ReceptionistPatientIntake = lazy(() => import('@/pages/receptionist/PatientIntake'))
+import ReceptionistDashboard from '@/pages/receptionist/Dashboard'
+import ReceptionistAppointments from '@/pages/receptionist/Appointments'
+import ReceptionistPayments from '@/pages/receptionist/Payments'
+import ReceptionistBooking from '@/pages/receptionist/Booking'
+import ReceptionistNewsList from '@/pages/receptionist/NewsList'
+import ReceptionistNewsCreate from '@/pages/receptionist/NewsCreate'
+import ReceptionistNewsEdit from '@/pages/receptionist/NewsEdit'
 
 const Login = lazy(() => import('@/pages/auth/Login'))
 const Register = lazy(() => import('@/pages/auth/Register'))
@@ -114,6 +121,7 @@ export default function AppRoutes() {
         <Route path="appointments" element={<ManageAppointments />} /> {/* C5 */}
         <Route path="doctor-schedules" element={<ManageDoctorSchedules />} />
         <Route path="reviews" element={<ManageReviews />} />       {/* C6 */}
+        <Route path="news" element={<ManageNews />} />
         <Route path="notifications" element={<ManageNotifications />} /> {/* C7 */}
         <Route path="payments" element={<ManagePayments />} />     {/* C8 */}
       </Route>
@@ -131,6 +139,10 @@ export default function AppRoutes() {
         <Route path="appointments" element={<ReceptionistAppointments />} />
         <Route path="payments" element={<ReceptionistPayments />} />
         <Route path="patient-intake" element={<ReceptionistPatientIntake />} />
+        <Route path="booking" element={<ReceptionistBooking />} />
+        <Route path="news" element={<ReceptionistNewsList />} />
+        <Route path="news/create" element={<ReceptionistNewsCreate />} />
+        <Route path="news/:id/edit" element={<ReceptionistNewsEdit />} />
       </Route>
 
       {/* Khu vực Doctor — yêu cầu role = doctor */}

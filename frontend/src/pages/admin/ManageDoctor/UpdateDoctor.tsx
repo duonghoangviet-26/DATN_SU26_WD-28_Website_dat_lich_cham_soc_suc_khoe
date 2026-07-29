@@ -10,9 +10,6 @@ interface Props {
   onSuccess: () => void
 }
 
-// Giả lập admin_id cho đến khi có auth thực sự
-const CURRENT_ADMIN_ID = "000000000000000000000099"
-
 export default function UpdateDoctor({ doctor, onClose, onSuccess }: Props) {
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
@@ -83,7 +80,6 @@ export default function UpdateDoctor({ doctor, onClose, onSuccess }: Props) {
       phi_kham: Number(phiTuVan),
       la_hien: laHien,
       anh_dai_dien: anhDaiDien,
-      admin_id: CURRENT_ADMIN_ID
     }
 
     try {

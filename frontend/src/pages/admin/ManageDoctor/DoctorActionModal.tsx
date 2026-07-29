@@ -3,9 +3,6 @@ import { doctorService } from '@/services/doctor.service'
 import type { DoctorProfileAPI, DoctorDetailAPI } from '@/types'
 import Icon from '@/components/admin/icons'
 
-// HARDCODED ADMIN ID FOR NOW
-const CURRENT_ADMIN_ID = "000000000000000000000099"
-
 export type ActionType = 'approve' | 'reject' | 'suspend' | 'restore' | 'delete'
 
 interface Props {
@@ -24,10 +21,10 @@ export default function DoctorActionModal({ target, action, onClose, onSuccess }
     setLoading(true)
     try {
       const id = target._id
-      if (action === 'approve') await doctorService.approve(id, CURRENT_ADMIN_ID)
-      else if (action === 'reject') await doctorService.reject(id, CURRENT_ADMIN_ID, reason)
-      else if (action === 'suspend') await doctorService.suspend(id, CURRENT_ADMIN_ID, reason)
-      else if (action === 'restore') await doctorService.restore(id, CURRENT_ADMIN_ID)
+      if (action === 'approve') await doctorService.approve(id)
+      else if (action === 'reject') await doctorService.reject(id, reason)
+      else if (action === 'suspend') await doctorService.suspend(id, reason)
+      else if (action === 'restore') await doctorService.restore(id)
       else if (action === 'delete') await doctorService.delete(id)
       
       onSuccess()

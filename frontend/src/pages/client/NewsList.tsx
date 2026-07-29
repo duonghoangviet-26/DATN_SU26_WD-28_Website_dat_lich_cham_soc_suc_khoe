@@ -1,28 +1,43 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { mockNews } from '@/mock/news'
+import { newsService } from '@/services/news.service'
 import Breadcrumb from '@/components/common/Breadcrumb'
 import Empty from '@/components/common/Empty'
 import Skeleton from '@/components/common/Skeleton'
-import type { NewsItem } from '@/types'
+import type { NewsArticle } from '@/types'
 
 export default function NewsList() {
   const [loading, setLoading] = useState(true)
-  const [news, setNews] = useState<NewsItem[]>([])
+  const [news, setNews] = useState<NewsArticle[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setNews(mockNews)
-      setLoading(false)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [])
+    let ignore = false
+    setLoading(true)
+    setError('')
+    newsService
+      .getPublished({ keyword: searchTerm, page: 1, limit: 12 })
+      .then((res) => {
+        if (!ignore) setNews(res.items)
+      })
+      .catch((nextError: any) => {
+        if (ignore) return
+        setNews([])
+        setError(nextError?.response?.data?.message || 'Không thể tải danh sách tin tức.')
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
 
-  // Filter based on Search query
+    return () => {
+      ignore = true
+    }
+  }, [searchTerm])
+
   const filteredNews = news.filter((n) => {
-    return n.tieu_de.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      n.noi_dung_ngan.toLowerCase().includes(searchTerm.toLowerCase())
+    const keyword = searchTerm.toLowerCase()
+    return n.title.toLowerCase().includes(keyword) || n.excerpt.toLowerCase().includes(keyword)
   })
 
   const featuredItem = filteredNews[0]
@@ -79,6 +94,10 @@ export default function NewsList() {
             ))}
           </div>
         </div>
+      ) : error ? (
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-8">
+          <Empty title="Không tải được tin tức" description={error} icon="box" />
+        </div>
       ) : filteredNews.length === 0 ? (
         <div className="rounded-2xl border border-slate-100 bg-white p-8">
           <Empty title="Không tìm thấy bài viết" description="Vui lòng thử tìm kiếm bằng từ khóa khác." icon="search" />
@@ -88,30 +107,30 @@ export default function NewsList() {
           {/* FEATURED ARTICLE CARD */}
           {featuredItem && (
             <Link
-              to={`/tin-tuc/${featuredItem.slug}`}
+              to={`/tin-tuc/${featuredItem.url_slug || featuredItem.id}`}
               className="group grid gap-6 md:grid-cols-2 items-center rounded-3xl border border-slate-100 bg-white p-6 shadow-sm hover:shadow-md transition-all duration-300"
             >
               <div className="aspect-[16/10] w-full bg-slate-100 rounded-2xl overflow-hidden">
                 <img
-                  src={featuredItem.anh_dai_dien}
-                  alt={featuredItem.tieu_de}
+                  src={featuredItem.image}
+                  alt={featuredItem.title}
                   className="h-full w-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
                 />
               </div>
               <div className="text-left space-y-4 pr-4">
                 <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-600">
-                  📌 Nổi bật
+                  Nổi bật
                 </span>
                 <h2 className="text-xl font-bold text-slate-800 group-hover:text-brand-600 transition-colors sm:text-2xl leading-tight">
-                  {featuredItem.tieu_de}
+                  {featuredItem.title}
                 </h2>
                 <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">
-                  {featuredItem.noi_dung_ngan}
+                  {featuredItem.excerpt}
                 </p>
                 <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold uppercase pt-2">
-                  <span>{featuredItem.nguoi_viet}</span>
+                  <span>{featuredItem.author_name || 'VitaFamily'}</span>
                   <span>•</span>
-                  <span>{new Date(featuredItem.ngay_tao).toLocaleDateString('vi-VN')}</span>
+                  <span>{new Date(featuredItem.created_at).toLocaleDateString('vi-VN')}</span>
                 </div>
               </div>
             </Link>
@@ -123,28 +142,28 @@ export default function NewsList() {
               {regularItems.map((n) => (
                 <Link
                   key={n.id}
-                  to={`/tin-tuc/${n.slug}`}
+                  to={`/tin-tuc/${n.url_slug || n.id}`}
                   className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300"
                 >
                   <div>
                     <div className="aspect-video w-full bg-slate-100 overflow-hidden">
                       <img
-                        src={n.anh_dai_dien}
-                        alt={n.tieu_de}
+                        src={n.image}
+                        alt={n.title}
                         className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     </div>
                     <div className="p-5 space-y-3 text-left">
                       <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold uppercase">
-                        <span>{n.nguoi_viet}</span>
+                        <span>{n.author_name || 'VitaFamily'}</span>
                         <span>•</span>
-                        <span>{new Date(n.ngay_tao).toLocaleDateString('vi-VN')}</span>
+                        <span>{new Date(n.created_at).toLocaleDateString('vi-VN')}</span>
                       </div>
                       <h3 className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors line-clamp-2 leading-snug">
-                        {n.tieu_de}
+                        {n.title}
                       </h3>
                       <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                        {n.noi_dung_ngan}
+                        {n.excerpt}
                       </p>
                     </div>
                   </div>

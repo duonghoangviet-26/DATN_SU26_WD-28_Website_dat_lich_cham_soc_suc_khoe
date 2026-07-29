@@ -3,6 +3,7 @@ import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js'
 import appointmentRoutes from './appointment.routes.js'
 import paymentRoutes from './payment.routes.js'
 import bookingRoutes from './booking.routes.js'
+import newsRoutes from './news.routes.js'
 
 import notificationRoutes from './notification.routes.js'
 
@@ -35,5 +36,6 @@ router.use('/notifications', notificationRoutes)
 router.use('/users', userRoutes)
 router.use('/patient-intake', patientIntakeRoutes)
 router.use('/payments/offline', offlinePaymentRoutes)
+router.use('/news', newsRoutes)
 
 export default router

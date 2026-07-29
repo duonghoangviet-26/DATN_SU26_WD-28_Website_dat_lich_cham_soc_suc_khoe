@@ -6,6 +6,8 @@
 
 export { default as NguoiDung }          from './NguoiDung.js'
 export { default as DatLaiMatKhau }      from './DatLaiMatKhau.js'
+export { default as UserSession }        from './UserSession.js'
+export { default as LichSuDangNhap }     from './LichSuDangNhap.js'
 
 export { default as ThongTinPhongKham }  from './ThongTinPhongKham.js'
 export { default as CauHinhPhongKham }   from './CauHinhPhongKham.js'
@@ -44,6 +46,7 @@ export { default as DonThuoc }           from './DonThuoc.js'
 export { default as NhacNho }            from './NhacNho.js'
 
 export { default as DanhGia }            from './DanhGia.js'
+export { default as TinTuc }             from './TinTuc.js'
 
 export { default as ThongBao }           from './ThongBao.js'
 export { default as ThongBaoHeThong }    from './ThongBaoHeThong.js'

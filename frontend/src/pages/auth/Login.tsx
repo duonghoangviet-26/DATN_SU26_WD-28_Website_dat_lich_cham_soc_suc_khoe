@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google'
 import { useAuth } from '@/context/AuthContext'
 
 // Đối chiếu trực tiếp với DB (2026-07-25). LƯU Ý khi sửa danh sách này: phải kiểm tra
@@ -14,7 +15,7 @@ const demoAccounts = [
 ]
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, loginGoogle } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -25,6 +26,23 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  async function handleGoogleSuccess(credentialResponse: CredentialResponse) {
+    if (!credentialResponse.credential) return
+    setError('')
+    setLoading(true)
+
+    try {
+      const user = await loginGoogle(credentialResponse.credential)
+      const fromLocation = (location.state as { from?: { pathname?: string; search?: string } })?.from
+      const from = fromLocation?.pathname ? `${fromLocation.pathname}${fromLocation.search || ''}` : undefined
+      navigate(from || '/', { replace: true })
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Đăng nhập Google thất bại')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -133,6 +151,22 @@ export default function Login() {
           ) : 'Đăng nhập'}
         </button>
       </form>
+
+      <div className="my-6 flex items-center gap-3">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span className="text-xs font-semibold uppercase text-slate-400">Hoặc</span>
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
+
+      <div className="flex justify-center">
+        <GoogleLogin
+          onSuccess={handleGoogleSuccess}
+          onError={() => setError('Xác thực với Google thất bại. Vui lòng thử lại.')}
+          shape="circle"
+          text="signin_with"
+          locale="vi"
+        />
+      </div>
 
       <p className="mt-6 text-center text-sm text-slate-500">
         Chưa có tài khoản?{' '}

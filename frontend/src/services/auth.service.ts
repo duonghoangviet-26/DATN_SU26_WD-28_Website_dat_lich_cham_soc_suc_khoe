@@ -66,4 +66,29 @@ export const authService = {
     })
     return res.data
   },
+
+  /**
+   * Đăng nhập / Đăng ký bằng Google OAuth 2.0
+   */
+  async loginWithGoogle(credential: string): Promise<LoginResult> {
+    const res = await axiosInstance.post<ApiResponse<LoginResult>>('/auth/google', {
+      credential,
+    })
+    return res.data.data
+  },
+
+  /**
+   * Cập nhật thông tin Onboarding (Bổ sung SĐT cho tài khoản Google)
+   */
+  async updateOnboarding(data: { so_dien_thoai: string; ho_ten?: string }): Promise<User> {
+    const res = await axiosInstance.post<ApiResponse<User>>('/auth/update-onboarding', data)
+    return res.data.data
+  },
+
+  /**
+   * Đăng xuất hệ thống & thu hồi session
+   */
+  async logout(): Promise<void> {
+    await axiosInstance.post<ApiResponse<void>>('/auth/logout')
+  },
 }

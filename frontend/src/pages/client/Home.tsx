@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { mockNews } from '@/mock/news'
+import { newsService } from '@/services/news.service'
 import { patientBookingService, type PatientBookingDoctor } from '@/services/patient-booking.service'
 import { serviceService } from '@/services/service.service'
-import type { ServiceItem } from '@/types'
+import type { NewsArticle, ServiceItem } from '@/types'
 import Skeleton from '@/components/common/Skeleton'
 
 interface AutoSliderProps {
@@ -125,10 +125,9 @@ function AutoSlider({ children, cardWidthClass = 'w-[85%] sm:w-[48%] lg:w-[31%]'
 export default function Home() {
   const [specialists, setSpecialists] = useState<PatientBookingDoctor[]>([])
   const [clinicServices, setClinicServices] = useState<ServiceItem[]>([])
+  const [latestNews, setLatestNews] = useState<NewsArticle[]>([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [loadingServices, setLoadingServices] = useState(true)
-
-  const latestNews = mockNews.slice(0, 3)
 
   useEffect(() => {
     let ignore = false
@@ -156,6 +155,14 @@ export default function Home() {
       })
       .finally(() => {
         if (!ignore) setLoadingServices(false)
+      })
+
+    newsService.getPublished({ page: 1, limit: 3 })
+      .then((res) => {
+        if (!ignore) setLatestNews(res.items)
+      })
+      .catch((err) => {
+        console.error('Không tải được tin tức mới nhất:', err)
       })
 
     return () => {
@@ -405,28 +412,33 @@ export default function Home() {
             </svg>
           </Link>
         </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {latestNews.map((n) => (
-            <Link key={n.id} to={`/tin-tuc/${n.slug}`} className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300">
+        {latestNews.length === 0 ? (
+          <div className="rounded-2xl border border-slate-100 bg-white py-8 text-center text-sm text-slate-400">
+            Chưa có tin tức được xuất bản.
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {latestNews.map((n) => (
+            <Link key={n.id} to={`/tin-tuc/${n.url_slug || n.id}`} className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300">
               <div>
                 <div className="aspect-video w-full bg-slate-100 overflow-hidden">
                   <img
-                    src={n.anh_dai_dien}
-                    alt={n.tieu_de}
+                    src={n.image}
+                    alt={n.title}
                     className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
                 <div className="p-5 space-y-3">
                   <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold uppercase">
-                    <span>{n.nguoi_viet}</span>
+                    <span>{n.author_name || 'VitaFamily'}</span>
                     <span>•</span>
-                    <span>{new Date(n.ngay_tao).toLocaleDateString('vi-VN')}</span>
+                    <span>{new Date(n.created_at).toLocaleDateString('vi-VN')}</span>
                   </div>
                   <h3 className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors line-clamp-2 leading-snug">
-                    {n.tieu_de}
+                    {n.title}
                   </h3>
                   <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                    {n.noi_dung_ngan}
+                    {n.excerpt}
                   </p>
                 </div>
               </div>
@@ -437,8 +449,9 @@ export default function Home() {
                 </svg>
               </div>
             </Link>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   )

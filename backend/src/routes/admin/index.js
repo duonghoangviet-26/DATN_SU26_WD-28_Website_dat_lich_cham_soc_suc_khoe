@@ -4,6 +4,7 @@ import specialtiesRoutes   from './specialties.routes.js'
 import userRoutes          from './user.routes.js'
 import reviewRoutes        from './review.routes.js'
 import paymentsRoutes      from './payments.routes.js'
+import refundsRoutes       from './refunds.routes.js'
 import slotsRoutes         from './slots.routes.js'
 import invoicesRoutes      from './invoices.routes.js'
 import clinicConfigRoutes  from './clinic-config.routes.js'
@@ -14,6 +15,7 @@ import dashboardRoutes     from './dashboard.routes.js'
 import patientRoutes       from './patient.routes.js'
 import scheduleTemplatesRoutes from './schedule-templates.routes.js'
 import rescheduleApprovalsRoutes from './reschedule-approvals.routes.js'
+import newsRoutes          from './news.routes.js'
 
 // ============================================================
 // Admin routes — mount tại /api/admin
@@ -33,6 +35,7 @@ router.use('/users',         userRoutes)            // C1
 router.use('/patients',      patientRoutes)
 router.use('/reviews',       reviewRoutes)          // C6
 router.use('/payments',      paymentsRoutes)        // C8
+router.use('/refunds',       refundsRoutes)
 router.use('/slots',         slotsRoutes)           // B2 — sinh lịch thủ công (fallback cron)
 router.use('/schedule-templates', scheduleTemplatesRoutes) // Mẫu đăng ký ca của bác sĩ (rule mục 3)
 router.use('/reschedule-approvals', rescheduleApprovalsRoutes) // Duyệt phương án dời lịch (rule mục 15)
@@ -42,5 +45,6 @@ router.use('/guest-patients', guestPatientsRoutes)
 router.use('/doctor-leaves', doctorLeavesRoutes)
 router.use('/medical-read', medicalReadRoutes)
 router.use('/dashboard', dashboardRoutes)
+router.use('/news', newsRoutes)
 
 export default router

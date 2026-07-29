@@ -1,31 +1,30 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { mockNews } from '@/mock/news'
+import { newsService } from '@/services/news.service'
 import Breadcrumb from '@/components/common/Breadcrumb'
 import Loading from '@/components/common/Loading'
-import type { NewsItem } from '@/types'
+import type { NewsArticle } from '@/types'
 
 export default function NewsDetail() {
   const { slug } = useParams<{ slug: string }>()
   const [loading, setLoading] = useState(true)
-  const [article, setArticle] = useState<NewsItem | null>(null)
-  const [relatedArticles, setRelatedArticles] = useState<NewsItem[]>([])
+  const [article, setArticle] = useState<NewsArticle | null>(null)
+  const [relatedArticles, setRelatedArticles] = useState<NewsArticle[]>([])
 
   useEffect(() => {
+    if (!slug) return
     setLoading(true)
-    const timer = setTimeout(() => {
-      const found = mockNews.find((n) => n.slug === slug)
-      if (found) {
-        setArticle(found)
-        // Load other news as related articles
-        const related = mockNews.filter((n) => n.slug !== slug).slice(0, 3)
-        setRelatedArticles(related)
-      } else {
+    newsService
+      .getPublishedDetail(slug)
+      .then((res) => {
+        setArticle(res.article)
+        setRelatedArticles(res.related)
+      })
+      .catch(() => {
         setArticle(null)
-      }
-      setLoading(false)
-    }, 200)
-    return () => clearTimeout(timer)
+        setRelatedArticles([])
+      })
+      .finally(() => setLoading(false))
   }, [slug])
 
   if (loading) {
@@ -46,7 +45,7 @@ export default function NewsDetail() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 space-y-6">
-      <Breadcrumb items={[{ label: 'Tin tức', to: '/tin-tuc' }, { label: article.tieu_de }]} />
+      <Breadcrumb items={[{ label: 'Tin tức', to: '/tin-tuc' }, { label: article.title }]} />
 
       <div className="grid gap-8 lg:grid-cols-3 items-start">
         {/* LEFT COLUMN: ARTICLE CONTENT */}
@@ -54,31 +53,33 @@ export default function NewsDetail() {
           {/* Article Header */}
           <div className="space-y-3">
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-600">
-              💡 Cẩm nang sức khỏe
+              Cẩm nang sức khỏe
             </span>
             <h1 className="text-2xl font-extrabold text-slate-850 sm:text-3xl leading-tight">
-              {article.tieu_de}
+              {article.title}
             </h1>
             <div className="flex items-center gap-3 text-xs text-slate-400 font-medium">
-              <span>Tác giả: <strong className="text-slate-600 font-semibold">{article.nguoi_viet}</strong></span>
+              <span>Tác giả: <strong className="text-slate-600 font-semibold">{article.author_name || 'VitaFamily'}</strong></span>
               <span>•</span>
-              <span>{new Date(article.ngay_tao).toLocaleDateString('vi-VN')}</span>
+              <span>{new Date(article.created_at).toLocaleDateString('vi-VN')}</span>
+              <span>•</span>
+              <span>{article.view_count.toLocaleString('vi-VN')} lượt xem</span>
             </div>
           </div>
 
           {/* Featured Image */}
           <div className="aspect-[16/9] w-full rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
-            <img src={article.anh_dai_dien} alt={article.tieu_de} className="w-full h-full object-cover" />
+            <img src={article.image} alt={article.title} className="w-full h-full object-cover" />
           </div>
 
           {/* Article Body */}
           <div className="prose prose-slate max-w-none text-sm text-slate-650 space-y-4 leading-relaxed">
             <p className="font-semibold text-slate-800 text-base italic border-l-4 border-brand-500 pl-4 py-1.5 bg-slate-50 rounded-r-md">
-              "{article.noi_dung_ngan}"
+              "{article.excerpt}"
             </p>
             <div 
-              className="space-y-4 text-slate-600"
-              dangerouslySetInnerHTML={{ __html: article.noi_dung }}
+              className="space-y-4 text-slate-600 [&_a]:font-semibold [&_a]:text-brand-600 [&_blockquote]:rounded-r-lg [&_blockquote]:border-l-4 [&_blockquote]:border-brand-300 [&_blockquote]:bg-slate-50 [&_blockquote]:py-2 [&_blockquote]:pl-4 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-slate-800 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:text-slate-800 [&_img]:max-h-[420px] [&_img]:w-full [&_img]:rounded-xl [&_img]:object-cover [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc"
+              dangerouslySetInnerHTML={{ __html: article.content }}
             />
           </div>
         </div>
@@ -94,18 +95,18 @@ export default function NewsDetail() {
               {relatedArticles.map((n) => (
                 <Link
                   key={n.id}
-                  to={`/tin-tuc/${n.slug}`}
+                  to={`/tin-tuc/${n.url_slug || n.id}`}
                   className="group flex gap-3 items-start border-b border-slate-50 pb-3 last:border-0 last:pb-0"
                 >
                   <div className="h-16 w-16 bg-slate-100 rounded-lg overflow-hidden shrink-0">
-                    <img src={n.anh_dai_dien} alt={n.tieu_de} className="w-full h-full object-cover" />
+                    <img src={n.image} alt={n.title} className="w-full h-full object-cover" />
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-700 group-hover:text-brand-600 transition-colors line-clamp-2 leading-snug">
-                      {n.tieu_de}
+                      {n.title}
                     </h4>
                     <p className="text-[10px] text-slate-400 mt-1">
-                      {new Date(n.ngay_tao).toLocaleDateString('vi-VN')}
+                      {new Date(n.created_at).toLocaleDateString('vi-VN')}
                     </p>
                   </div>
                 </Link>
