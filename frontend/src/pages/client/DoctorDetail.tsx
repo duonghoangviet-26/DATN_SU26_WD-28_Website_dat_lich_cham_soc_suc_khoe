@@ -134,7 +134,7 @@ export default function DoctorDetail() {
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            <Link to={`/booking?doctor_id=${doctor.id}`} className="btn-primary px-6 py-2.5 text-sm font-bold shadow-md shadow-brand-100">
+            <Link to="/booking" className="btn-primary px-6 py-2.5 text-sm font-bold shadow-md shadow-brand-100">
               Đặt lịch khám ngay
             </Link>
           </div>

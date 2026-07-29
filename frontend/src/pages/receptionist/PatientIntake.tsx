@@ -29,16 +29,16 @@ function paymentLabel(status: string) {
 }
 
 function appointmentStatusLabel(status: string) {
-  return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã check-in', in_progress: 'Đang khám', completed: 'Hoàn thành' } as Record<string, string>)[status] ?? status
+  return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã tiếp nhận', in_progress: 'Đang khám', completed: 'Hoàn thành' } as Record<string, string>)[status] ?? status
 }
 
 function capacityLabel(row: CapacityEvidence) {
   return ({
-    co_the_tiep_nhan: 'Có thể nhận',
-    tam_dung_qua_tai: 'Tạm dừng walk-in',
-    da_day_walk_in: 'Đã đầy walk-in',
+    co_the_tiep_nhan: 'Có thể tiếp nhận',
+    tam_dung_qua_tai: 'Tạm ngưng tiếp nhận',
+    da_day_walk_in: 'Đã hết suất tiếp nhận',
     khong_co_lich_bac_si: 'Không có lịch bác sĩ',
-    khong_co_khung_gan: 'Chưa tới khung gần',
+    khong_co_khung_gan: 'Ngoài giờ tiếp nhận',
   } as Record<string, string>)[row.ket_luan] ?? row.ket_luan
 }
 
@@ -50,12 +50,12 @@ function capacityTone(row: CapacityEvidence) {
 
 function availabilityLabel(status: OfflineAvailability['trang_thai_kiem_tra']) {
   return ({
-    co_the_tiep_nhan: 'Có thể tiếp nhận walk-in',
-    tam_dung_qua_tai: 'Tạm dừng walk-in vì ca đang trễ',
-    da_day_walk_in: 'Đã đầy slot walk-in',
+    co_the_tiep_nhan: 'Có thể tiếp nhận',
+    tam_dung_qua_tai: 'Tạm ngưng tiếp nhận do ca khám đang trễ',
+    da_day_walk_in: 'Đã hết suất tiếp nhận trong khung khám',
     khong_co_lich_bac_si: 'Không có lịch bác sĩ hợp lệ',
-    khong_co_khung_gan: 'Chưa tới khung walk-in gần nhất',
-  } as Record<string, string>)[status] ?? 'Chưa thể kết luận sức chứa'
+    khong_co_khung_gan: 'Hiện không trong giờ tiếp nhận',
+  } as Record<string, string>)[status] ?? 'Chưa thể đánh giá khả năng tiếp nhận'
 }
 
 function availabilityTone(status: OfflineAvailability['trang_thai_kiem_tra']) {
@@ -121,7 +121,7 @@ export default function PatientIntake() {
       const result = await receptionistPatientIntakeService.searchByPhone(phone)
       setProfiles(result.profiles)
       setAmbiguousAppointments(result.ambiguous_appointments || [])
-      setMessage(result.total ? `Tìm thấy ${result.total} hồ sơ. Hãy xác nhận đúng người trước khi check-in.` : 'Chưa có hồ sơ, có thể tạo mới tại quầy.')
+      setMessage(result.total ? `Tìm thấy ${result.total} hồ sơ. Hãy xác nhận đúng người bệnh trước khi tiếp nhận.` : 'Chưa có hồ sơ, có thể tạo mới tại quầy.')
     } catch (requestError: any) {
       setProfiles([])
       setError(requestError?.response?.data?.message || 'Không thể tra cứu hồ sơ')
@@ -160,7 +160,7 @@ export default function PatientIntake() {
       setSelectedId(normalizedProfile.id)
       setPhone(normalizedProfile.so_dien_thoai || phone)
       setForm(emptyForm)
-      setMessage('Đã tạo hồ sơ. Vì chưa có lịch hẹn, bước tiếp theo là kiểm tra sức chứa walk-in.')
+      setMessage('Đã tạo hồ sơ. Vì người bệnh chưa có lịch hẹn, hãy kiểm tra khả năng tiếp nhận trước khi xếp hàng chờ khám.')
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Không thể tạo hồ sơ bệnh nhân')
     } finally {
@@ -177,7 +177,7 @@ export default function PatientIntake() {
       const result = await receptionistPatientIntakeService.getAvailability()
       setAvailability(result)
       setSelectedSlotId(result.slot_de_xuat?.slot_id || result.slots[0]?.slot_id || null)
-      if (!result.slots.length) setMessage(result.thong_bao || 'Hiện chưa thể tiếp nhận khách walk-in')
+      if (!result.slots.length) setMessage(result.thong_bao || 'Hiện chưa thể tiếp nhận người bệnh chưa có lịch hẹn')
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Không thể xác minh sức chứa. Chưa thể kết luận phòng khám đã hết chỗ.')
     }
@@ -190,12 +190,12 @@ export default function PatientIntake() {
     try {
       const response = await receptionistPatientIntakeService.checkInAppointment(selectedAppointment.id)
       const warnings = response.data?.canh_bao || []
-      setMessage(`Đã check-in lịch hẹn ${selectedAppointment.ma_lich_hen || selectedAppointment.id} của ${selectedProfile.ho_ten}. ${warnings.length ? `Lưu ý: ${warnings.join(' ')}` : 'Bệnh nhân đã được đưa vào hàng đợi bác sĩ.'}`)
+      setMessage(`Đã ghi nhận người bệnh đến khám theo lịch hẹn ${selectedAppointment.ma_lich_hen || selectedAppointment.id}. ${warnings.length ? `Lưu ý: ${warnings.join(' ')}` : 'Người bệnh đã được đưa vào hàng đợi của bác sĩ.'}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
         ? { ...profile, luot_dang_cho_hom_nay: { id: response.data.hang_doi.id, trang_thai: 'dang_cho', doctor_id: response.data.hang_doi.doctor_id, phong_kham: response.data.hang_doi.phong_kham, checkin_time: response.data.hang_doi.checkin_time } }
         : profile))
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Không thể check-in lịch hẹn. Vui lòng tải lại dữ liệu.')
+      setError(requestError?.response?.data?.message || 'Chưa thể ghi nhận người bệnh đến khám. Vui lòng tải lại dữ liệu.')
     } finally {
       setCheckingIn(false)
     }
@@ -213,16 +213,16 @@ export default function PatientIntake() {
       })
       setAvailability(null)
       setSelectedSlotId(null)
-      setMessage(`Đã tiếp nhận walk-in ${selectedProfile.ho_ten} vào hàng đợi. Mã lượt: ${result.entry._id}`)
+      setMessage(`Đã tiếp nhận ${selectedProfile.ho_ten} vào hàng đợi khám. Mã lượt: ${result.entry._id}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
         ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'dang_cho', doctor_id: String(result.slot.doctor_id), phong_kham: result.slot.phong_kham, checkin_time: new Date().toISOString() } }
         : profile))
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Sức chứa vừa thay đổi. Vui lòng kiểm tra lại minh chứng lịch bác sĩ.')
+      setError(requestError?.response?.data?.message || 'Khả năng tiếp nhận vừa thay đổi. Vui lòng kiểm tra lại lịch làm việc và suất khám còn trống.')
       const isConflict = requestError?.response?.status === 409
       await loadAvailability()
       if (isConflict) {
-        setError('Dá»¯ liá»‡u vá»«a thay Ä‘á»•i. Minh chá»©ng Ä‘Ã£ Ä‘Æ°á»£c táº£i láº¡i; hÃ£y chá»n slot cÃ²n hiá»‡u lá»±c.')
+        setError('Dữ liệu vừa thay đổi. Thông tin đã được tải lại; hãy chọn khung khám còn hiệu lực.')
       }
     } finally {
       setCheckingIn(false)
@@ -232,10 +232,10 @@ export default function PatientIntake() {
   return (
     <div className="min-h-full bg-slate-50 p-4 lg:p-6">
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Check-in · Online + Walk-in</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Tiếp đón người bệnh · Có lịch hẹn và chưa có lịch hẹn</p>
         <h2 className="mt-2 text-2xl font-bold text-slate-800">Tiếp nhận tại quầy</h2>
         <p className="mt-1 max-w-4xl text-sm text-slate-500">
-          Tra cứu để xác định người bệnh và lịch hẹn. Người đã đặt trước được đưa vào đúng hàng đợi bác sĩ đã gán; khách chưa đặt chỉ được nhận khi hệ thống xác minh còn sức chứa.
+          Tra cứu để xác định đúng người bệnh và lịch hẹn. Người bệnh có lịch hẹn được đưa vào hàng đợi của bác sĩ đã phân công; người bệnh chưa có lịch hẹn chỉ được tiếp nhận khi còn khả năng phục vụ.
         </p>
       </div>
 
@@ -303,7 +303,7 @@ export default function PatientIntake() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <h4 className="font-semibold text-slate-800">2A. Lịch hẹn đã đặt</h4>
-                      <p className="mt-1 text-sm text-slate-500">Chọn đúng lịch hẹn. Không cần kiểm tra slot walk-in.</p>
+                      <p className="mt-1 text-sm text-slate-500">Chọn đúng lịch hẹn để ghi nhận người bệnh đến khám. Không cần kiểm tra khung khám còn trống.</p>
                     </div>
                     <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">ĐÃ ĐẶT TRƯỚC</span>
                   </div>
@@ -322,7 +322,7 @@ export default function PatientIntake() {
                   </div>
                   {selectedAppointment && (
                     <button type="button" onClick={checkInBooked} disabled={checkingIn || hasActiveQueue || !appointmentIsCheckinable(selectedAppointment)} className="mt-3 min-h-11 w-full rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60">
-                      {hasActiveQueue ? 'Hồ sơ đã có lượt trong hàng đợi' : !appointmentIsCheckinable(selectedAppointment) ? `Không thể check-in ở trạng thái ${appointmentStatusLabel(selectedAppointment.status)}` : checkingIn ? 'Đang check-in lịch hẹn...' : `Check-in lịch hẹn ${selectedAppointment.ma_lich_hen || ''}`}
+                      {hasActiveQueue ? 'Hồ sơ đã có lượt trong hàng đợi' : !appointmentIsCheckinable(selectedAppointment) ? `Chưa thể tiếp nhận ở trạng thái ${appointmentStatusLabel(selectedAppointment.status)}` : checkingIn ? 'Đang ghi nhận người bệnh đến khám...' : `Xác nhận người bệnh đến khám ${selectedAppointment.ma_lich_hen || ''}`}
                     </button>
                   )}
                 </div>
@@ -332,13 +332,13 @@ export default function PatientIntake() {
                 <div className="mt-5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h4 className="font-semibold text-slate-800">2B. Khách chưa đặt trước</h4>
-                      <p className="mt-1 text-sm text-slate-500">Chỉ tiếp nhận sau khi có minh chứng sức chứa của bác sĩ.</p>
+                      <h4 className="font-semibold text-slate-800">2B. Người bệnh chưa có lịch hẹn</h4>
+                      <p className="mt-1 text-sm text-slate-500">Chỉ tiếp nhận sau khi hệ thống xác nhận bác sĩ còn khả năng phục vụ.</p>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">WALK-IN</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">CHƯA CÓ LỊCH HẸN</span>
                   </div>
                   <button type="button" onClick={loadAvailability} disabled={hasActiveQueue} className="mt-4 min-h-11 w-full rounded-xl border border-brand-300 px-4 text-sm font-semibold text-brand-800 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60">
-                    {availability ? 'Cập nhật minh chứng sức chứa' : 'Kiểm tra lịch bác sĩ và sức chứa'}
+                    {availability ? 'Kiểm tra lại khả năng tiếp nhận' : 'Kiểm tra khả năng tiếp nhận'}
                   </button>
                 </div>
               )}
@@ -351,25 +351,25 @@ export default function PatientIntake() {
             <>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">3. Minh chứng tiếp nhận walk-in</h3>
-                  <p className="mt-1 text-sm text-slate-500">Quyết định dựa trên lịch bác sĩ, slot đã đặt, hàng đợi và độ trễ thực tế.</p>
+                  <h3 className="text-base font-bold text-slate-800">3. Đánh giá khả năng tiếp nhận</h3>
+                  <p className="mt-1 text-sm text-slate-500">Căn cứ lịch làm việc của bác sĩ, suất khám đã sử dụng, hàng đợi và độ trễ thực tế.</p>
                 </div>
                 {availability && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Cập nhật {formatDateTime(availability.checked_at)}</span>}
               </div>
 
-              {!availability && <div className="mt-8 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">Chưa kiểm tra sức chứa. Bấm “Kiểm tra lịch bác sĩ và sức chứa” để xem căn cứ trước khi tiếp nhận.</div>}
+              {!availability && <div className="mt-8 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">Chưa đánh giá khả năng tiếp nhận. Bấm “Kiểm tra khả năng tiếp nhận” để xem thông tin trước khi xếp hàng chờ khám.</div>}
 
               {availability && (
                 <>
                   <div className={`mt-5 rounded-xl border p-4 ${availabilityTone(availability.trang_thai_kiem_tra)}`}>
-                    <p className="font-semibold">{availability.trang_thai_kiem_tra === 'co_the_tiep_nhan' ? `${availabilityLabel(availability.trang_thai_kiem_tra)} · ${capacitySummary?.availableSlots || 0} slot walk-in còn lại` : availabilityLabel(availability.trang_thai_kiem_tra)}</p>
+                    <p className="font-semibold">{availability.trang_thai_kiem_tra === 'co_the_tiep_nhan' ? `${availabilityLabel(availability.trang_thai_kiem_tra)} · còn ${capacitySummary?.availableSlots || 0} suất tiếp nhận` : availabilityLabel(availability.trang_thai_kiem_tra)}</p>
                     {availability.thong_bao && availability.trang_thai_kiem_tra !== 'co_the_tiep_nhan' && <p className="mt-1 text-sm">{availability.thong_bao}</p>}
-                    <p className="mt-1 text-xs opacity-80">Phạm vi: khung hiện tại/kế tiếp · Kiểm tra lúc {formatDateTime(availability.checked_at)}</p>
+                    <p className="mt-1 text-xs opacity-80">Phạm vi: khung khám đang phục vụ · Kiểm tra lúc {formatDateTime(availability.checked_at)}</p>
                   </div>
 
                   {availability.slot_de_xuat && (
                     <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4 text-sm text-brand-950">
-                      <p className="font-semibold">Đề xuất tiếp nhận</p>
+                      <p className="font-semibold">Phương án tiếp nhận đề xuất</p>
                       <p className="mt-1 font-medium">Bác sĩ {availability.minh_chung_suc_chua.find((row) => row.doctor_id === availability.slot_de_xuat?.doctor_id)?.bac_si || 'đang trực'} · {availability.slot_de_xuat.gio_bat_dau}–{availability.slot_de_xuat.gio_ket_thuc} · {availability.slot_de_xuat.phong_kham || 'chưa có phòng'}</p>
                       <p className="mt-1 text-xs text-brand-800">{availability.ly_do_de_xuat}</p>
                     </div>
@@ -379,7 +379,7 @@ export default function PatientIntake() {
                     <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
                       <table className="min-w-full text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500">
-                          <tr><th className="px-3 py-3 font-semibold">Bác sĩ / khung</th><th className="px-3 py-3 font-semibold">Online</th><th className="px-3 py-3 font-semibold">Walk-in</th><th className="px-3 py-3 font-semibold">Hàng đợi</th><th className="px-3 py-3 font-semibold">Kết luận</th></tr>
+                          <tr><th className="px-3 py-3 font-semibold">Bác sĩ / khung khám</th><th className="px-3 py-3 font-semibold">Có lịch hẹn</th><th className="px-3 py-3 font-semibold">Chưa có lịch hẹn</th><th className="px-3 py-3 font-semibold">Hàng đợi</th><th className="px-3 py-3 font-semibold">Đánh giá</th></tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {availability.minh_chung_suc_chua.map((row) => <tr key={`${row.schedule_id}-${row.doctor_id}`}>
@@ -392,26 +392,26 @@ export default function PatientIntake() {
                         </tbody>
                       </table>
                     </div>
-                  ) : <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Không tìm thấy lịch bác sĩ đang làm việc hôm nay. Đây là trạng thái “không có lịch”, không phải lỗi “hết slot”.</div>}
+                  ) : <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Không tìm thấy lịch làm việc của bác sĩ hôm nay. Đây là trạng thái “không có lịch”, không phải tình trạng “hết suất khám”.</div>}
 
-                  {availability.goi_y_quay_lai && <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">Khung gần nhất có thể quay lại: <strong>{availability.goi_y_quay_lai.gio_bat_dau}–{availability.goi_y_quay_lai.gio_ket_thuc}</strong>. Hệ thống sẽ kiểm tra lại khi khách quay lại.</p>}
+                  {availability.goi_y_quay_lai && <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">Thời điểm có thể tiếp nhận trở lại: <strong>{availability.goi_y_quay_lai.gio_bat_dau}–{availability.goi_y_quay_lai.gio_ket_thuc}</strong>. Hệ thống sẽ kiểm tra lại khi người bệnh quay lại.</p>}
 
                   {availability.slots.length > 0 && !hasActiveQueue && (
                     <>
-                      <h4 className="mt-5 font-semibold text-slate-800">Chọn slot walk-in</h4>
+                      <h4 className="mt-5 font-semibold text-slate-800">Chọn khung khám còn chỗ</h4>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {availability.slots.map((slot) => <button key={slot.slot_id} type="button" onClick={() => setSelectedSlotId(slot.slot_id)} className={`rounded-xl border p-3 text-left ${selectedSlotId === slot.slot_id ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300'}`}><p className="font-semibold text-slate-800">{slot.gio_bat_dau}–{slot.gio_ket_thuc}</p><p className="mt-1 text-xs text-slate-500">{slot.phong_kham || 'Phòng sẽ được điều phối'} · Bác sĩ {availability.minh_chung_suc_chua.find((row) => row.doctor_id === slot.doctor_id)?.bac_si || 'đang trực'}</p></button>)}
                       </div>
-                      {selectedSlot && <button type="button" onClick={checkInWalkIn} disabled={checkingIn} className="mt-4 min-h-11 w-full rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60">{checkingIn ? 'Đang giữ slot và tạo lượt...' : `Xác nhận tiếp nhận ${selectedProfile.ho_ten}`}</button>}
+                      {selectedSlot && <button type="button" onClick={checkInWalkIn} disabled={checkingIn} className="mt-4 min-h-11 w-full rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60">{checkingIn ? 'Đang giữ suất khám và tạo lượt...' : `Xác nhận tiếp nhận ${selectedProfile.ho_ten}`}</button>}
                     </>
                   )}
                 </>
               )}
             </>
           ) : selectedProfile && hasAppointmentToday ? (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900"><p className="font-semibold">Đây là khách đã đặt lịch.</p><p className="mt-1">Hãy chọn lịch hẹn ở cột bên trái. Không dùng kiểm tra slot walk-in cho trường hợp này.</p></div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900"><p className="font-semibold">Người bệnh đã có lịch hẹn.</p><p className="mt-1">Hãy chọn lịch hẹn ở cột bên trái để ghi nhận đến khám. Không cần kiểm tra khả năng tiếp nhận.</p></div>
           ) : (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">Chọn đúng hồ sơ để bắt đầu nhánh check-in phù hợp.</div>
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">Chọn đúng hồ sơ để bắt đầu quy trình tiếp nhận phù hợp.</div>
           )}
         </section>
 

@@ -1,6 +1,7 @@
 import { BacSi, ChuyenKhoa, LichHen, LichLamViec } from '../models/index.js'
 import { caTheoGio } from '../models/MauLichLamViec.js'
 import { daQuaCutoffOnline, isSlotInPast } from '../utils/clinicTime.js'
+import { donDepSlotTruocKhiDoc } from './slotRelease.service.js'
 
 // ============================================================
 // TỰ GÁN BÁC SĨ + GIÁ THEO CHUYÊN KHOA — rule mục 12
@@ -14,6 +15,13 @@ import { daQuaCutoffOnline, isSlotInPast } from '../utils/clinicTime.js'
 
 function addDays(date, days) {
   return new Date(date.getTime() + days * 86400000)
+}
+
+// Lịch của bác sĩ có thể dùng chung cho nhiều chuyên khoa. Nếu slot đã được cấu hình
+// chuyên khoa cụ thể thì chỉ được đưa vào đúng chuyên khoa đó; dữ liệu cũ không có field
+// này vẫn hợp lệ vì bác sĩ đã được lọc theo chuyên khoa ở truy vấn bên ngoài.
+function slotPhucVuChuyenKhoa(slot, specialtyId) {
+  return !slot.specialty_id || String(slot.specialty_id) === String(specialtyId)
 }
 
 /**
@@ -54,12 +62,17 @@ export async function layKhungTrongCuaChuyenKhoa(specialtyId, ngay, now = new Da
 
   if (doctors.length === 0) return []
 
+  // Không dùng `.lean()` ở đây: mỗi lần đọc lịch cho khách phải nhả giữ chỗ đã hết hạn
+  // và áp dụng cutoff online trước khi đếm. Nếu không, một slot đã được trả về pool vẫn
+  // có thể bị giao diện hiểu nhầm là đã kín.
   const schedules = await LichLamViec.find({
     doctor_id: { $in: doctors.map((d) => d._id) },
     ngay: { $gte: ngay, $lt: addDays(ngay, 1) },
     trang_thai_ngay: 'lam_viec',
     trang_thai_xac_nhan: { $ne: 'tu_choi' },
-  }).lean()
+  })
+
+  for (const schedule of schedules) await donDepSlotTruocKhiDoc(schedule, now)
 
   // Slot đã có LichHen còn hiệu lực -> không còn trống, dù `status` trong lịch có lệch.
   const daDat = new Set(
@@ -77,6 +90,7 @@ export async function layKhungTrongCuaChuyenKhoa(specialtyId, ngay, now = new Da
       if (slot.status !== 'active' || slot.benh_nhan_id) continue
       if (slot.bi_khoa_boi_nghi_phep) continue
       if (slot.loai_slot === 'walk_in') continue
+      if (!slotPhucVuChuyenKhoa(slot, specialtyId)) continue
       if (daDat.has(String(slot._id))) continue
       if (isSlotInPast(ngay, slot.gio_bat_dau, now)) continue
       if (daQuaCutoffOnline(ngay, slot.gio_bat_dau, now)) continue
@@ -155,6 +169,7 @@ export async function chonBacSiChoKhung({
         && !s.benh_nhan_id
         && !s.bi_khoa_boi_nghi_phep
         && s.loai_slot !== 'walk_in'
+        && slotPhucVuChuyenKhoa(s, specialtyId)
         && !slotDaDat.has(String(s._id)),
     )
     if (!slot) continue
