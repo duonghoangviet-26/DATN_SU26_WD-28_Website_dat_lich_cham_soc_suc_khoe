@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 
 import AdminLayout from '@/layouts/AdminLayout'
@@ -7,6 +8,10 @@ import ClientLayout from '@/layouts/ClientLayout'
 import ProtectedRoute from '@/routes/ProtectedRoute'
 
 import ReceptionistLayout from '@/pages/receptionist/Layout'
+const ReceptionistDashboard = lazy(() => import('@/pages/receptionist/Dashboard'))
+const ReceptionistAppointments = lazy(() => import('@/pages/receptionist/Appointments'))
+const ReceptionistPayments = lazy(() => import('@/pages/receptionist/Payments'))
+const ReceptionistPatientIntake = lazy(() => import('@/pages/receptionist/PatientIntake'))
 import ReceptionistDashboard from '@/pages/receptionist/Dashboard'
 import ReceptionistAppointments from '@/pages/receptionist/Appointments'
 import ReceptionistPayments from '@/pages/receptionist/Payments'
@@ -15,47 +20,51 @@ import ReceptionistNewsList from '@/pages/receptionist/NewsList'
 import ReceptionistNewsCreate from '@/pages/receptionist/NewsCreate'
 import ReceptionistNewsEdit from '@/pages/receptionist/NewsEdit'
 
-import Login from '@/pages/auth/Login'
-import Register from '@/pages/auth/Register'
-import ForgotPassword from '@/pages/auth/ForgotPassword'
-import ResetPassword from '@/pages/auth/ResetPassword'
-import Home from '@/pages/client/Home'
-import DoctorList from '@/pages/client/DoctorList'
-import DoctorDetail from '@/pages/client/DoctorDetail'
-import ServiceList from '@/pages/client/ServiceList'
-import ServiceDetail from '@/pages/client/ServiceDetail'
-import Booking from '@/pages/client/Booking'
-import Profile from '@/pages/client/Profile'
-import VnpayResult from '@/pages/client/VnpayResult'
-import NewsList from '@/pages/client/NewsList'
-import NewsDetail from '@/pages/client/NewsDetail'
+const Login = lazy(() => import('@/pages/auth/Login'))
+const Register = lazy(() => import('@/pages/auth/Register'))
+const ForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'))
+const ResetPassword = lazy(() => import('@/pages/auth/ResetPassword'))
+const Home = lazy(() => import('@/pages/client/Home'))
+const DoctorList = lazy(() => import('@/pages/client/DoctorList'))
+const DoctorDetail = lazy(() => import('@/pages/client/DoctorDetail'))
+const ServiceList = lazy(() => import('@/pages/client/ServiceList'))
+const ServiceDetail = lazy(() => import('@/pages/client/ServiceDetail'))
+const Booking = lazy(() => import('@/pages/client/Booking'))
+const Profile = lazy(() => import('@/pages/client/Profile'))
+const VnpayResult = lazy(() => import('@/pages/client/VnpayResult'))
+const NewsList = lazy(() => import('@/pages/client/NewsList'))
+const NewsDetail = lazy(() => import('@/pages/client/NewsDetail'))
 
-import Dashboard from '@/pages/admin/Dashboard'
-import ManageUsers from '@/pages/admin/ManageUsers'
-import ManagePatients from '@/pages/admin/ManagePatients'
-import ManageDoctors from '@/pages/admin/ManageDoctors'
-import ManageClinics from '@/pages/admin/ManageClinics/ManageClinics'
-import ManageServices from '@/pages/admin/ManageServices'
-import ManageServiceSpecialtyDetail from '@/pages/admin/ManageServiceSpecialtyDetail'
-import ManageAppointments from '@/pages/admin/ManageAppointments/ManageAppointments'
-import ManageDoctorSchedules from '@/pages/admin/ManageDoctorSchedules'
-import ManageReviews from '@/pages/admin/ManageReviews'
-import ManageNews from '@/pages/admin/ManageNews'
-import ManageNotifications from '@/pages/admin/ManageNotifications/ManageNotifications'
-import ManagePayments from '@/pages/admin/ManagePayments'
+const Dashboard = lazy(() => import('@/pages/admin/Dashboard'))
+const ManageUsers = lazy(() => import('@/pages/admin/ManageUsers'))
+const ManagePatients = lazy(() => import('@/pages/admin/ManagePatients'))
+const ManageDoctors = lazy(() => import('@/pages/admin/ManageDoctors'))
+const ManageClinics = lazy(() => import('@/pages/admin/ManageClinics/ManageClinics'))
+const ManageServices = lazy(() => import('@/pages/admin/ManageServices'))
+const ManageServiceSpecialtyDetail = lazy(() => import('@/pages/admin/ManageServiceSpecialtyDetail'))
+const ManageAppointments = lazy(() => import('@/pages/admin/ManageAppointments/ManageAppointments'))
+const ManageDoctorSchedules = lazy(() => import('@/pages/admin/ManageDoctorSchedules'))
+const ManageReviews = lazy(() => import('@/pages/admin/ManageReviews'))
+const ManageNotifications = lazy(() => import('@/pages/admin/ManageNotifications/ManageNotifications'))
+const ManagePayments = lazy(() => import('@/pages/admin/ManagePayments'))
 
-import DoctorDashboard from '@/pages/doctor/DoctorDashboard'
-import DoctorProfile from '@/pages/doctor/DoctorProfile'
-import DoctorSchedule from '@/pages/doctor/DoctorSchedule'
-import DoctorAppointments from '@/pages/doctor/DoctorAppointments'
-import DoctorExamQueue from '@/pages/doctor/DoctorExamQueue'
-import DoctorLeaveRequests from '@/pages/doctor/DoctorLeaveRequests'
+const DoctorDashboard = lazy(() => import('@/pages/doctor/DoctorDashboard'))
+const DoctorProfile = lazy(() => import('@/pages/doctor/DoctorProfile'))
+const DoctorSchedule = lazy(() => import('@/pages/doctor/DoctorSchedule'))
+const DoctorAppointments = lazy(() => import('@/pages/doctor/DoctorAppointments'))
+const DoctorExamQueue = lazy(() => import('@/pages/doctor/DoctorExamQueue'))
+const DoctorLeaveRequests = lazy(() => import('@/pages/doctor/DoctorLeaveRequests'))
 
-import NotFound from '@/pages/NotFound'
+const NotFound = lazy(() => import('@/pages/NotFound'))
+
+function RouteFallback() {
+  return <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500">Dang tai...</div>
+}
 
 export default function AppRoutes() {
   return (
-    <Routes>
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
       {/* Khu vực khách (client) */}
       <Route element={<ClientLayout />}>
         <Route path="/" element={<Home />} />
@@ -129,6 +138,7 @@ export default function AppRoutes() {
         <Route index element={<ReceptionistDashboard />} />
         <Route path="appointments" element={<ReceptionistAppointments />} />
         <Route path="payments" element={<ReceptionistPayments />} />
+        <Route path="patient-intake" element={<ReceptionistPatientIntake />} />
         <Route path="booking" element={<ReceptionistBooking />} />
         <Route path="news" element={<ReceptionistNewsList />} />
         <Route path="news/create" element={<ReceptionistNewsCreate />} />
@@ -154,7 +164,8 @@ export default function AppRoutes() {
 
       <Route path="/404" element={<NotFound />} />
       <Route path="*" element={<Navigate to="/404" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   )
 }
 

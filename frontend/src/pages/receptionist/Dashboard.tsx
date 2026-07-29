@@ -17,19 +17,22 @@ interface Appointment {
   hinh_thuc_dat_lich?: string;
 }
 
-const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
-  const appointmentDate = new Date(ngay_kham);
-  const [hours, minutes] = gio_kham.split(':').map(Number);
-  appointmentDate.setHours(hours, minutes, 0, 0);
-  const now = new Date();
-  return appointmentDate < now;
-};
+interface PendingCheckin {
+  appointment_id: string;
+  ma_lich_hen?: string | null;
+  ten_benh_nhan: string;
+  gio_kham: string;
+  phong_kham?: string | null;
+  payment_status?: string | null;
+  tre_qua_grace?: boolean;
+}
 
 export default function Dashboard() {
   const [totalToday, setTotalToday] = useState(0);
   const [waiting, setWaiting] = useState(0);
-  
+
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
+  const [pendingCheckins, setPendingCheckins] = useState<PendingCheckin[]>([]);
   const [notifications, setNotifications] = useState<VirtualNotification[]>([]);
   
   // Trạng thái cho Tooltip
@@ -41,13 +44,24 @@ export default function Dashboard() {
       if (res.data.success) {
         const appointments: Appointment[] = res.data.data;
         setAllAppointments(appointments);
-        setTotalToday(appointments.length);
+        setTotalToday(
+          appointments.filter((appointment) => !['cancelled', 'no_show', 'skipped'].includes(appointment.status)).length,
+        );
         setWaiting(
           appointments.filter((a) => a.status === 'checked_in').length
         );
       }
     } catch (err) {
       console.error('Lỗi khi lấy dữ liệu tổng quan:', err);
+    }
+  };
+
+  const fetchPendingCheckins = async () => {
+    try {
+      const res = await axiosInstance.get('/receptionist/appointments/pending-checkin');
+      if (res.data.success) setPendingCheckins(res.data.data ?? []);
+    } catch (err) {
+      console.error('Lỗi khi lấy danh sách chờ tiếp nhận:', err);
     }
   };
 
@@ -62,13 +76,28 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchStats();
+    fetchPendingCheckins();
     fetchNotifications();
+
+    const intervalId = window.setInterval(() => {
+      fetchStats();
+      fetchPendingCheckins();
+    }, 30000);
+
+    return () => window.clearInterval(intervalId);
   }, []);
 
+  // Check-in đưa bệnh nhân vào hàng đợi bác sĩ (rule mục 6) — xem chú thích ở Appointments.tsx.
   const handleArrived = async (id: string) => {
     try {
-      await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
-      fetchStats(); // Cập nhật lại danh sách và số lượng
+      const res = await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
+      const canhBao: string[] = res.data?.canh_bao ?? [];
+      const phong = res.data?.hang_doi?.phong_kham;
+      if (canhBao.length > 0) {
+        alert(`Đã đưa vào hàng đợi${phong ? ` — phòng ${phong}` : ''}.\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`);
+      }
+      fetchStats();
+      fetchPendingCheckins();
     } catch (err: any) {
       alert(err.response?.data?.message || 'Lỗi khi check-in');
     }
@@ -76,11 +105,6 @@ export default function Dashboard() {
 
   // --- Logic Lọc Dữ liệu cho Khung 2 & 3 ---
   
-  // Khung 2: Lịch đặt trực tiếp (walk-in) - Tạm tính bằng cách user_id === null hoặc hinh_thuc_dat_lich === 'receptionist'
-  const walkinAppointments = allAppointments.filter(
-    (a) => (!a.user_id || a.hinh_thuc_dat_lich === 'receptionist') && (a.status === 'pending' || a.status === 'confirmed')
-  );
-
   // Khung 3: Lịch hẹn 4h tới
   const upcomingAppointments = allAppointments.filter((a) => {
     if (a.status !== 'pending' && a.status !== 'confirmed') return false;
@@ -137,24 +161,25 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Khung 2: Lịch đặt trực tiếp (Walk-in) */}
+        {/* Khung 2: Lịch đã đặt, chờ tiếp nhận */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-[400px]">
           <div className="p-4 border-b border-slate-100 flex items-center gap-2">
             <Icon name="users" className="w-5 h-5 text-blue-500" />
-            <h3 className="font-bold text-slate-800">Khách đặt trực tiếp</h3>
+            <h3 className="font-bold text-slate-800">Chờ tiếp nhận</h3>
           </div>
           <div className="p-4 overflow-y-auto flex-1 space-y-3">
-            {walkinAppointments.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Không có lịch chờ.</p>
+            {pendingCheckins.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">Không có lịch đang chờ tiếp nhận.</p>
             ) : (
-              walkinAppointments.map(apt => (
-                <div key={apt._id} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between hover:bg-slate-50">
+              pendingCheckins.map((apt) => (
+                <div key={apt.appointment_id} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between hover:bg-slate-50">
                   <div>
-                    <p className="text-sm font-bold text-slate-700">{apt.ten_khach || 'Khách vãng lai'}</p>
-                    <p className="text-xs text-slate-500 font-medium">{apt.gio_kham}</p>
+                    <p className="text-sm font-bold text-slate-700">{apt.ten_benh_nhan}</p>
+                    <p className="text-xs text-slate-500 font-medium">{apt.gio_kham}{apt.phong_kham ? ` · ${apt.phong_kham}` : ''}</p>
+                    {apt.tre_qua_grace && <p className="text-[10px] font-semibold text-amber-600">Trễ hơn 15 phút · vẫn được tiếp nhận</p>}
                   </div>
                   <button 
-                    onClick={() => handleArrived(apt._id)}
+                    onClick={() => handleArrived(apt.appointment_id)}
                     className="flex items-center gap-1 bg-brand-500 hover:bg-brand-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
                   >
                     <Icon name="check" className="w-3.5 h-3.5" />

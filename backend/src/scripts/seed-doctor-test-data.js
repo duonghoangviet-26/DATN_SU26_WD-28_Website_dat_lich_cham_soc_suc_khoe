@@ -127,14 +127,32 @@ async function findOrCreateSchedule(doctorId, ngay, slotDefs) {
 
 async function findOrCreateAppointment(maLichHen, buildFn) {
   let appt = await LichHen.findOne({ ma_lich_hen: maLichHen })
-  if (appt) return { appt, created: false }
+  if (appt) {
+    // Test fixtures are deliberately repairable: a previous test may have moved
+    // TESTAPT003/004 to another status and made the next run order-dependent.
+    if (maLichHen.startsWith('TESTAPT')) {
+      Object.assign(appt, await buildFn())
+      if (appt.status !== 'cancelled') {
+        appt.ly_do_huy = null
+        appt.huy_boi = null
+        appt.nguoi_huy_id = null
+        appt.thoi_diem_huy = null
+      }
+      await appt.save()
+    }
+    return { appt, created: false }
+  }
   appt = await LichHen.create(await buildFn())
   return { appt, created: true }
 }
 
 async function findOrCreateResult(appointmentId, buildFn) {
   let result = await KetQuaKham.findOne({ appointment_id: appointmentId })
-  if (result) return { result, created: false }
+  if (result) {
+    Object.assign(result, await buildFn())
+    await result.save()
+    return { result, created: false }
+  }
   result = await KetQuaKham.create(await buildFn())
   return { result, created: true }
 }
@@ -525,10 +543,18 @@ async function main() {
       bump('created', 'prescription')
     } else {
       // Vá dữ liệu cũ (nếu chạy lại seed sau khi đã tồn tại nhưng thiếu medical_record_id)
-      if (!existingRx.medical_record_id) {
-        existingRx.medical_record_id = result._id
-        await existingRx.save()
-      }
+      existingRx.medical_record_id = result._id
+      existingRx.ten_khach = appt.ten_khach ?? null
+      existingRx.doctor_id = docId
+      existingRx.items = [{
+        ten_thuoc: '(TEST) Paracetamol 500mg',
+        lieu_luong: '1 viÃªn',
+        tan_suat: '3 láº§n/ngÃ y',
+        gio_uong: ['07:00', '12:00', '19:00'],
+        so_ngay: 5,
+        ghi_chu: 'Uá»‘ng sau Äƒn (dá»¯ liá»‡u test)',
+      }]
+      await existingRx.save()
       bump('existed', 'prescription')
     }
   }

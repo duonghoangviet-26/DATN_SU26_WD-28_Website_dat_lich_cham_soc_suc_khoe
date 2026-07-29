@@ -16,6 +16,7 @@ export default defineConfig({
     globals: true,
     alias,
     setupFiles: [],
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
     // Isolate modules giữa các test file để reset module-level state
     isolate: true,
   },

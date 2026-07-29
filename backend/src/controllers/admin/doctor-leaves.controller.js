@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 import { NghiPhepBacSi, BacSi, LichLamViec, LichHen } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { AFFECTED_BY_LEAVE_STATUSES } from '../../utils/appointmentStatus.js'
+import { taoDeXuatDoiChoDonNghi } from '../../services/appointmentReschedule.service.js'
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
@@ -172,6 +173,22 @@ export async function listDoctorLeaves(req, res) {
   }
 }
 
+// Nói rõ admin còn phải làm gì, thay vì chỉ báo "duyệt thành công".
+function moTaKetQuaDuyet(soLichAnhHuong, deXuat) {
+  if (soLichAnhHuong === 0) return 'Duyet don nghi phep thanh cong'
+
+  const phan = [`Duyet don nghi phep thanh cong. ${soLichAnhHuong} lich hen bi anh huong.`]
+  const choDuyet = deXuat.filter((d) => d.cho_admin_duyet).length
+  const khongCo = deXuat.filter((d) => d.so_phuong_an === 0).length
+
+  if (choDuyet > 0) phan.push(`${choDuyet} lich DA THANH TOAN dang cho Admin duyet phuong an doi.`)
+  if (khongCo > 0) phan.push(`${khongCo} lich KHONG tim duoc phuong an trong ngay — phai lien he khach.`)
+  const daBaoKhach = deXuat.length - choDuyet - khongCo
+  if (daBaoKhach > 0) phan.push(`${daBaoKhach} lich da gui phuong an cho khach chon.`)
+
+  return phan.join(' ')
+}
+
 export async function approveDoctorLeave(req, res) {
   const session = await mongoose.startSession()
   session.startTransaction()
@@ -206,6 +223,12 @@ export async function approveDoctorLeave(req, res) {
     const { slotsLocked } = await lockSlotsForLeave(leave, session)
     const affectedAppointments = await findAffectedAppointments(leave, session)
 
+    // Rule mục 14/15: KHÔNG HOÀN TIỀN, nên phòng khám phải tự tìm chỗ thay cho khách.
+    // Trước đây chỗ này chỉ LIỆT KÊ lịch bị ảnh hưởng rồi để admin gọi điện thủ công —
+    // khách vừa mất chỗ vừa không lấy lại được tiền. Nay hệ thống sinh phương án và giữ
+    // sẵn chỗ ngay tại đây.
+    const deXuat = await taoDeXuatDoiChoDonNghi(leave, { session })
+
     await session.commitTransaction()
     session.endSession()
 
@@ -223,10 +246,11 @@ export async function approveDoctorLeave(req, res) {
           status: a.status,
           ten_khach: a.ten_khach ?? null,
         })),
+        de_xuat_doi: deXuat,
+        so_lich_cho_admin_duyet: deXuat.filter((d) => d.cho_admin_duyet).length,
+        so_lich_khong_co_phuong_an: deXuat.filter((d) => d.so_phuong_an === 0).length,
       },
-      affectedAppointments.length > 0
-        ? `Duyet don nghi phep thanh cong. Co ${affectedAppointments.length} lich hen can Admin lien he xu ly.`
-        : 'Duyet don nghi phep thanh cong',
+      moTaKetQuaDuyet(affectedAppointments.length, deXuat),
     )
   } catch (error) {
     await session.abortTransaction().catch(() => {})

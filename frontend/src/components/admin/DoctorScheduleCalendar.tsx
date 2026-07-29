@@ -5,8 +5,11 @@ import Badge from '@/components/common/Badge'
 import type { AdminDoctorWorkdayItem } from '@/types'
 import { toLocalDateStr } from '@/utils/format'
 
-type CalendarView = 'week' | 'month'
+// Lưới lịch (chuyển tuần/tháng, ô ngày, chú thích) nằm ở ScheduleCalendarGrid — dùng chung
+// với trang Lịch làm việc của bác sĩ. File này chỉ còn phần drawer quản trị của Admin.
+
 type WorkdayStatus = 'lam_viec' | 'nghi' | 'nghi_phep'
+type CalendarView = 'week' | 'month'
 
 interface DoctorScheduleCalendarProps {
   items: AdminDoctorWorkdayItem[]
@@ -424,17 +427,15 @@ function CalendarDayCell({
       onKeyDown={onKeyDown}
       onClick={onClick}
       disabled={disabled}
-      className={`group relative m-px flex min-h-[164px] flex-col overflow-hidden bg-white p-3 text-left transition duration-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 motion-reduce:transition-none ${
-        disabled ? 'cursor-default' : 'cursor-pointer hover:z-10 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70'
-      } ${outsideMonth ? 'bg-slate-50/80 text-slate-400' : ''} ${isSelected ? 'z-20 bg-brand-50/50 ring-2 ring-inset ring-brand-500 shadow-md shadow-brand-100' : ''} ${isToday && !isSelected ? 'ring-2 ring-inset ring-blue-400' : ''}`}
+      className={`group relative m-px flex min-h-[164px] flex-col overflow-hidden bg-white p-3 text-left transition duration-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 motion-reduce:transition-none ${disabled ? 'cursor-default' : 'cursor-pointer hover:z-10 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/70'
+        } ${outsideMonth ? 'bg-slate-50/80 text-slate-400' : ''} ${isSelected ? 'z-20 bg-brand-50/50 ring-2 ring-inset ring-brand-500 shadow-md shadow-brand-100' : ''} ${isToday && !isSelected ? 'ring-2 ring-inset ring-blue-400' : ''}`}
       aria-selected={isSelected}
       aria-label={item ? `${formatFullDate(dateKey)}, ${status?.label}, ${item.slot_da_dat}/${item.tong_slot} lượt đã đặt` : formatFullDate(dateKey)}
     >
       {status && <span className={`absolute inset-x-0 top-0 h-1 ${status.accent}`} aria-hidden="true" />}
       <div className="flex items-start justify-between gap-2 pt-1">
-        <span className={`flex h-8 min-w-8 items-center justify-center rounded-lg px-1 text-sm font-bold tabular-nums ${
-          isToday ? 'bg-blue-600 text-white shadow-sm shadow-blue-100' : outsideMonth ? 'text-slate-400' : 'text-slate-950'
-        }`}>
+        <span className={`flex h-8 min-w-8 items-center justify-center rounded-lg px-1 text-sm font-bold tabular-nums ${isToday ? 'bg-blue-600 text-white shadow-sm shadow-blue-100' : outsideMonth ? 'text-slate-400' : 'text-slate-950'
+          }`}>
           {date.getDate()}
         </span>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -501,9 +502,9 @@ export default function DoctorScheduleCalendar({
   onViewBookedAppointments,
   onRetry,
 }: DoctorScheduleCalendarProps) {
+  const [selectedDay, setSelectedDay] = useState<AdminDoctorWorkdayItem | null>(null)
   const [view, setView] = useState<CalendarView>('week')
   const [anchorDate, setAnchorDate] = useState(() => parseDate(fromDate))
-  const [selectedDay, setSelectedDay] = useState<AdminDoctorWorkdayItem | null>(null)
   const [focusedDate, setFocusedDate] = useState(fromDate)
   const drawerRef = useRef<HTMLElement | null>(null)
   const drawerTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -694,9 +695,8 @@ export default function DoctorScheduleCalendar({
                   key={mode}
                   type="button"
                   onClick={() => applyRange(mode, anchorDate)}
-                  className={`min-h-10 rounded-md px-4 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-brand-300 motion-reduce:transition-none ${
-                    view === mode ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:bg-white/70 hover:text-slate-950'
-                  }`}
+                  className={`min-h-10 rounded-md px-4 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-brand-300 motion-reduce:transition-none ${view === mode ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:bg-white/70 hover:text-slate-950'
+                    }`}
                   aria-pressed={view === mode}
                 >
                   {mode === 'week' ? 'Tuần' : 'Tháng'}

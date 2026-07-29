@@ -8,6 +8,8 @@ router.get('/services', bookingController.getServices)
 router.get('/doctors', bookingController.getDoctors)
 router.get('/doctors/:id', bookingController.getDoctorById)
 router.get('/doctors/:id/slots', bookingController.getSlots)
+// Tra cứu mức độ còn trống cho khách gọi điện — KHÔNG giữ chỗ (rule mục 13).
+router.get('/availability', bookingController.getAvailability)
 
 router.post('/', bookingController.createBooking)
 router.get('/family-group/:userId', bookingController.getFamilyGroup)

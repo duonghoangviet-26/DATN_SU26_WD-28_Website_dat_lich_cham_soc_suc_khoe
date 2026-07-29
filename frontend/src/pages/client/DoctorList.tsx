@@ -166,7 +166,7 @@ export default function DoctorList() {
                   <Link to={`/bac-si/${d.id}`} className="btn-secondary w-full text-center py-2 text-xs font-bold">
                     Chi tiết
                   </Link>
-                  <Link to={`/booking?doctor_id=${d.id}`} className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100">
+                  <Link to="/booking" className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100">
                     Đặt lịch
                   </Link>
                 </div>

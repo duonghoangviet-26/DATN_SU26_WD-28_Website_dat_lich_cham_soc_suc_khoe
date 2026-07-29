@@ -1,4 +1,4 @@
-import { BacSi, LichLamViec, LichHen, NhatKyThaoTac } from '../../models/index.js'
+import { BacSi, HangDoi, LichLamViec, LichHen, NhatKyThaoTac } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { thongKeLichHen } from '../../utils/appointmentStatus.js'
 
@@ -32,6 +32,7 @@ function localStartOfDay(dateStr) {
 }
 
 const OCCUPIED_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress', 'completed', 'no_show']
+const OCCUPIED_OFFLINE_QUEUE_STATUSES = ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu', 'hoan_thanh']
 
 // Khách vãng lai (nguon='tai_cho') KHÔNG có tài khoản NguoiDung nên slot.benh_nhan_id luôn
 // null với các lượt này — phải join LichHen theo slot_id (fallback schedule_id+gio_kham) mới
@@ -39,7 +40,7 @@ const OCCUPIED_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in
 // QUAN TRỌNG: ten_khach được điền cả khi tự đặt lịch bằng chính tài khoản của mình (không có
 // member_id vì không phải hồ sơ thành viên gia đình) — phải kiểm tra CẢ user_id để không gán
 // nhầm nhãn "khách vãng lai" cho người dùng đã đăng nhập tự đặt cho bản thân.
-function buildPatientInfoMaps(appointments) {
+function buildPatientInfoMaps(appointments, offlineQueues = []) {
   const bySlotId = new Map()
   const byScheduleTime = new Map()
   for (const a of appointments) {
@@ -47,9 +48,18 @@ function buildPatientInfoMaps(appointments) {
     const info = {
       ten_benh_nhan: a.member_id?.ho_ten ?? a.ten_khach ?? a.user_id?.ho_ten ?? null,
       la_khach_vang_lai: laKhachVangLai,
+      nguon_chiem_cho: 'dat_truoc',
     }
     if (a.slot_id) bySlotId.set(String(a.slot_id), info)
     if (a.schedule_id && a.gio_kham) byScheduleTime.set(`${a.schedule_id}-${a.gio_kham}`, info)
+  }
+  for (const queue of offlineQueues) {
+    if (!queue.slot_id) continue
+    bySlotId.set(String(queue.slot_id), {
+      ten_benh_nhan: queue.ten_benh_nhan,
+      la_khach_vang_lai: true,
+      nguon_chiem_cho: 'tai_quay',
+    })
   }
   return { bySlotId, byScheduleTime }
 }
@@ -76,6 +86,7 @@ function flattenSchedules(schedules, patientMaps) {
         benh_nhan_id: s.benh_nhan_id?._id ?? s.benh_nhan_id ?? null,
         benh_nhan:    s.benh_nhan_id?.ho_ten ?? patientInfo?.ten_benh_nhan ?? null,
         la_khach_vang_lai: patientInfo?.la_khach_vang_lai ?? false,
+        nguon_chiem_cho: patientInfo?.nguon_chiem_cho ?? null,
         lock_expires_at:  s.lock_expires_at ?? null,
         cancel_requested: s.cancel_requested,
       }
@@ -102,17 +113,25 @@ export async function getSchedules(req, res) {
       .sort({ ngay: 1 })
       .lean()
 
-    const appointments = schedules.length
-      ? await LichHen.find({
+    const [appointments, offlineQueues] = schedules.length
+      ? await Promise.all([
+        LichHen.find({
           schedule_id: { $in: schedules.map((sch) => sch._id) },
           status: { $in: OCCUPIED_APPOINTMENT_STATUSES },
         })
           .select('schedule_id slot_id gio_kham ten_khach khach_vang_lai_id member_id user_id')
           .populate('member_id', 'ho_ten')
-          .lean()
-      : []
+          .lean(),
+        HangDoi.find({
+          schedule_id: { $in: schedules.map((sch) => sch._id) },
+          slot_id: { $ne: null },
+          nguon: 'offline',
+          trang_thai: { $in: OCCUPIED_OFFLINE_QUEUE_STATUSES },
+        }).select('slot_id ten_benh_nhan').lean(),
+      ])
+      : [[], []]
 
-    return ok(res, flattenSchedules(schedules, buildPatientInfoMaps(appointments)))
+    return ok(res, flattenSchedules(schedules, buildPatientInfoMaps(appointments, offlineQueues)))
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -135,12 +154,20 @@ export async function getScheduleDetail(req, res) {
     if (!schedule) return fail(res, 404, 'Không tìm thấy lịch làm việc')
 
     // Lịch hẹn thuộc ca này — dùng liên kết THẬT schedule_id (không suy luận theo giờ).
-    const appointments = await LichHen.find({ schedule_id: schedule._id })
-      .populate('user_id', 'ho_ten')
-      .populate('member_id', 'ho_ten')
-      .populate('specialty_id', 'ten')
-      .sort({ gio_kham: 1 })
-      .lean()
+    const [appointments, offlineQueues] = await Promise.all([
+      LichHen.find({ schedule_id: schedule._id })
+        .populate('user_id', 'ho_ten')
+        .populate('member_id', 'ho_ten')
+        .populate('specialty_id', 'ten')
+        .sort({ gio_kham: 1 })
+        .lean(),
+      HangDoi.find({
+        schedule_id: schedule._id,
+        slot_id: { $ne: null },
+        nguon: 'offline',
+        trang_thai: { $in: OCCUPIED_OFFLINE_QUEUE_STATUSES },
+      }).select('slot_id ten_benh_nhan').lean(),
+    ])
 
     const dsLichHen = appointments.map((a) => ({
       id:             a._id,
@@ -160,7 +187,7 @@ export async function getScheduleDetail(req, res) {
       payment_status: a.payment_status,
     }))
 
-    const { bySlotId, byScheduleTime } = buildPatientInfoMaps(appointments)
+    const { bySlotId, byScheduleTime } = buildPatientInfoMaps(appointments, offlineQueues)
     const slots = (schedule.slots ?? []).map((s) => {
       const patientInfo = bySlotId.get(String(s._id)) ?? byScheduleTime.get(`${schedule._id}-${s.gio_bat_dau}`) ?? null
       return {
@@ -174,6 +201,7 @@ export async function getScheduleDetail(req, res) {
         benh_nhan_id: s.benh_nhan_id?._id ?? s.benh_nhan_id ?? null,
         benh_nhan:    s.benh_nhan_id?.ho_ten ?? patientInfo?.ten_benh_nhan ?? null,
         la_khach_vang_lai: patientInfo?.la_khach_vang_lai ?? false,
+        nguon_chiem_cho: patientInfo?.nguon_chiem_cho ?? null,
         lock_expires_at:  s.lock_expires_at ?? null,
         cancel_requested: s.cancel_requested,
         bi_khoa_boi_nghi_phep: s.bi_khoa_boi_nghi_phep ?? false,

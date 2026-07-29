@@ -21,7 +21,11 @@ const socketMocks = vi.hoisted(() => {
 
 vi.mock('socket.io-client', () => ({ io: socketMocks.io }))
 
-import { subscribeAdminRealtime, subscribeRealtimeConnection } from '@/services/realtime.service'
+import {
+  subscribeAdminRealtime,
+  subscribeDoctorQueueRealtime,
+  subscribeRealtimeConnection,
+} from '@/services/realtime.service'
 
 describe('realtime singleton subscriptions', () => {
   beforeAll(() => {
@@ -47,5 +51,17 @@ describe('realtime singleton subscriptions', () => {
     expect(socketMocks.handlers.get('disconnect')?.size).toBe(0)
     expect(socketMocks.socket.off).toHaveBeenCalledWith('thongke:doanh_thu_thay_doi', onRevenue)
     expect(socketMocks.socket.off).toHaveBeenCalledWith('disconnect', onDisconnect)
+  })
+
+  it('subscribes and unsubscribes the doctor queue event', () => {
+    const onQueueUpdated = vi.fn()
+    const unsubscribe = subscribeDoctorQueueRealtime(onQueueUpdated)
+
+    expect(socketMocks.handlers.get('doctor:queue_updated')?.has(onQueueUpdated)).toBe(true)
+
+    unsubscribe()
+
+    expect(socketMocks.handlers.get('doctor:queue_updated')?.size).toBe(0)
+    expect(socketMocks.socket.off).toHaveBeenCalledWith('doctor:queue_updated', onQueueUpdated)
   })
 })

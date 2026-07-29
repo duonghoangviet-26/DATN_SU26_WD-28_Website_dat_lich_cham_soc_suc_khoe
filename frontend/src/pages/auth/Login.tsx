@@ -3,13 +3,15 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google'
 import { useAuth } from '@/context/AuthContext'
 
-// Đối chiếu trực tiếp với DB + xác minh đăng nhập thật (2026-07-21) — danh sách cũ có 4/5
-// tài khoản đã lỗi thời (không còn tồn tại), có thể khiến người xem demo đăng nhập thất bại.
+// Đối chiếu trực tiếp với DB (2026-07-25). LƯU Ý khi sửa danh sách này: phải kiểm tra
+// truong `role` trong nguoi_dung, KHÔNG chỉ dựa vào họ tên. Mục "Bác sĩ" trước đây trỏ vào
+// haiv5634@gmail.com — tài khoản tên "BS. Trần Minh Khang" nhưng role='user', nên đăng nhập
+// xong bị Login.tsx đẩy về trang client (`/`) thay vì `/doctor`, gây tưởng nhầm là lỗi routing.
 const demoAccounts = [
-  { role: 'Admin', email: 'admin@vitafamily.vn', password: '123456' },
-  { role: 'Bác sĩ', email: 'haiv5634@gmail.com', password: '123456' },
-  { role: 'Bệnh nhân', email: 'lt14062006meitu@gmail.com', password: '123456' },
-  { role: 'Lễ tân', email: 'luongtran140606@gmail.com', password: '123456' },
+  { role: 'Admin', email: 'admin@vitafamily.vn' },
+  { role: 'Bác sĩ', email: 'doctor.bao@vitafamily.vn' },
+  { role: 'Bệnh nhân', email: 'lt14062006meitu@gmail.com' },
+  { role: 'Lễ tân', email: 'luongtran140606@gmail.com' },
 ]
 
 export default function Login() {
@@ -176,10 +178,12 @@ export default function Login() {
       <div className="mt-6 rounded-xl border border-brand-100 bg-brand-50 p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-700">Tài khoản demo</p>
         <div className="space-y-1.5 text-xs">
-          {demoAccounts.map(({ role, email, password }) => (
+          {demoAccounts.map(({ role, email }) => (
             <div key={role} className="flex items-center justify-between">
               <span className="font-medium text-brand-800">{role}</span>
-              <span className="font-mono text-slate-500">{email} / {password}</span>
+              {/* Chi hien email — demoAccounts khong co truong `password`, truoc day render
+                  {password} nen luon ra "email / " cut duoi. Khong hardcode mat khau doan mo. */}
+              <span className="font-mono text-slate-500">{email}</span>
             </div>
           ))}
         </div>

@@ -5,6 +5,9 @@ import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js'
 const router = Router()
 
 router.get('/specialties',              booking.getSpecialties)
+// Luồng MẶC ĐỊNH (rule mục 12): chọn chuyên khoa + khung giờ, hệ thống tự gán bác sĩ.
+// Trả kèm giá vì giá phải hiển thị TRƯỚC khi giữ chỗ.
+router.get('/specialties/:id/slots',    booking.getSpecialtySlots)
 router.get('/services',                 booking.getServices)
 router.get('/doctors',                  booking.getDoctors)
 router.get('/doctors/:id',              booking.getDoctorById)

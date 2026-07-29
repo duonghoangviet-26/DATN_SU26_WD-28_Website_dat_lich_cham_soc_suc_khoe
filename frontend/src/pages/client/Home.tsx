@@ -347,7 +347,7 @@ export default function Home() {
                 {/* Booking Actions */}
                 <div className="p-4 pt-3 border-t border-slate-50 flex items-center justify-center mt-2">
                   <Link
-                    to={`/booking?doctor_id=${d.id}`}
+                    to="/booking"
                     className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100 pointer-events-auto select-none"
                   >
                     Đặt lịch khám

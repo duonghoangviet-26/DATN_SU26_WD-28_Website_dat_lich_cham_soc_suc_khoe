@@ -13,6 +13,8 @@ import doctorLeavesRoutes  from './doctor-leaves.routes.js'
 import medicalReadRoutes   from './medical-read.routes.js'
 import dashboardRoutes     from './dashboard.routes.js'
 import patientRoutes       from './patient.routes.js'
+import scheduleTemplatesRoutes from './schedule-templates.routes.js'
+import rescheduleApprovalsRoutes from './reschedule-approvals.routes.js'
 import newsRoutes          from './news.routes.js'
 
 // ============================================================
@@ -35,6 +37,8 @@ router.use('/reviews',       reviewRoutes)          // C6
 router.use('/payments',      paymentsRoutes)        // C8
 router.use('/refunds',       refundsRoutes)
 router.use('/slots',         slotsRoutes)           // B2 — sinh lịch thủ công (fallback cron)
+router.use('/schedule-templates', scheduleTemplatesRoutes) // Mẫu đăng ký ca của bác sĩ (rule mục 3)
+router.use('/reschedule-approvals', rescheduleApprovalsRoutes) // Duyệt phương án dời lịch (rule mục 15)
 router.use('/invoices',      invoicesRoutes)
 router.use('/clinic-config', clinicConfigRoutes)
 router.use('/guest-patients', guestPatientsRoutes)

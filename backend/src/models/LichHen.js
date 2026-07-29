@@ -12,6 +12,7 @@ const appointmentSchema = new mongoose.Schema(
     chi_nhanh_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ThongTinPhongKham', default: null },
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', default: null },
     khach_vang_lai_id: { type: mongoose.Schema.Types.ObjectId, ref: 'KhachVangLai', default: null },
+    ho_so_benh_nhan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'HoSoBenhNhan', default: null },
     loai_benh_nhan: { type: String, default: null },
     nguoi_tao_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
     nguoi_dat_ho_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
@@ -82,6 +83,62 @@ const appointmentSchema = new mongoose.Schema(
     payment_deadline: { type: Date, default: null },
     pending_booking_id: { type: String, default: null },
     ket_qua_url: { type: String, default: null, maxlength: 2000 },
+
+    // ── Dời lịch & điều khoản (rule mục 5, 10.D, 14, 15) ─────────────────────
+    // Nguồn của lượt khám. `hinh_thuc_dat_lich` là kênh tạo (patient/receptionist/admin),
+    // còn đây là bản chất nghiệp vụ: đặt trước qua mạng hay tới quầy.
+    nguon: {
+      type: String,
+      enum: ['online', 'tai_cho'],
+      default: null,
+    },
+    // BẮT BUỘC khi dời. Hai loại đếm hạn mức RIÊNG: khách tự xin dời chỉ được 1 lần,
+    // còn lỗi phòng khám thì dời bao nhiêu lần cũng không tính vào hạn mức của khách.
+    ly_do_doi: {
+      type: String,
+      enum: ['khach_yeu_cau', 'phong_kham'],
+      default: null,
+    },
+    so_lan_doi_khach_yeu_cau: { type: Number, default: 0, min: 0 },
+
+    // Bằng chứng khách đồng ý điều khoản KHÔNG HOÀN TIỀN. Không có thì KHÔNG được thu tiền
+    // (rule mục 5) — thu rồi mới tranh cãi là phòng khám thua.
+    dieu_khoan_version: { type: String, default: null, maxlength: 50 },
+    dieu_khoan_dong_y_luc: { type: Date, default: null },
+
+    // Đề xuất dời do PHÒNG KHÁM khởi xướng (bác sĩ nghỉ / bận một khung — mục 14, 15).
+    // Nhúng vào lịch hẹn thay vì tạo bảng mới: mỗi lịch hẹn có tối đa một đề xuất đang mở,
+    // và đề xuất chết theo lịch hẹn.
+    de_xuat_doi: {
+      type: new mongoose.Schema({
+        nghi_phep_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NghiPhepBacSi', default: null },
+        trang_thai: {
+          type: String,
+          enum: ['cho_khach_chon', 'cho_admin_duyet', 'da_ap_dung', 'da_huy'],
+          default: 'cho_khach_chon',
+        },
+        han_phan_hoi: { type: Date, default: null },
+        // Phương án đầu tiên luôn là phương án đã GIỮ SẴN chỗ: quá hạn không phản hồi thì
+        // áp dụng nó, khách không bao giờ mất chỗ (rule mục 15).
+        phuong_an: [{
+          loai: { type: String, enum: ['doi_bac_si', 'doi_khung'], required: true },
+          doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi' },
+          schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec' },
+          slot_id: { type: mongoose.Schema.Types.ObjectId },
+          ngay: Date,
+          gio_bat_dau: String,
+          bac_si_ten: String,
+          mo_ta: String,
+          da_giu_cho: { type: Boolean, default: false },
+          lan_walk_in: { type: Boolean, default: false },
+        }],
+        phuong_an_khach_chon: { type: Number, default: null },
+        nguoi_duyet_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
+        thoi_diem_duyet: { type: Date, default: null },
+        ghi_chu: { type: String, default: null, maxlength: 500 },
+      }, { _id: false }),
+      default: null,
+    },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
@@ -100,6 +157,35 @@ appointmentSchema.index({ doctor_id: 1, status: 1, ngay_kham: 1 })
 appointmentSchema.index({ ngay_kham: 1, status: 1 })
 appointmentSchema.index({ ngay_kham: 1, payment_status: 1 })
 appointmentSchema.index({ ngay_kham: 1, doctor_id: 1 })
+
+// ── Rang buoc BAT BIEN: 1 slot <-> toi da 1 LichHen (rule muc 7) ─────────────
+// Truoc day rang buoc nay CHI ton tai trong code (check + findOneAndUpdate), nen moi lo
+// hong claim slot deu de lai du lieu trung ma khong ai phat hien. Day la luoi cuoi cung
+// o tang DB: du controller co sai, Mongo van tu choi ban ghi thu hai.
+//
+// $type: 'objectId' thay vi $ne: null — partialFilterExpression KHONG ho tro $ne, va lich
+// kham tai nha cu co schedule_id/slot_id = null se dung chung khoa (null, null) neu khong loc.
+// `cancelled` co y KHONG nam trong danh sach: lich da huy nha slot ra, cho phep ban lai.
+//
+// ⚠️ Index nay chi build duoc khi du lieu da sach. Chay truoc:
+//    node src/scripts/dedupe-slot-appointments.js --apply
+appointmentSchema.index(
+  { schedule_id: 1, slot_id: 1 },
+  {
+    unique: true,
+    name: 'uniq_lich_hen_theo_slot',
+    partialFilterExpression: {
+      schedule_id: { $type: 'objectId' },
+      slot_id: { $type: 'objectId' },
+      status: {
+        $in: [
+          'pending', 'confirmed', 'checked_in', 'in_progress',
+          'waiting_record', 'waiting_doctor_confirm', 'completed', 'no_show', 'skipped',
+        ],
+      },
+    },
+  }
+)
 
 appointmentSchema.pre('validate', function () {
   if (this.loai_kham === 'home') {
