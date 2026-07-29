@@ -9,6 +9,7 @@ import notificationRoutes from './notification.routes.js'
 import userRoutes from './user.routes.js'
 import patientIntakeRoutes from './patient-intake.routes.js'
 import offlinePaymentRoutes from './offline-payment.routes.js'
+import billingRoutes from './billing.routes.js'
 
 const router = Router()
 
@@ -27,6 +28,7 @@ const router = Router()
 router.use(verifyToken, requireRole('receptionist', 'admin'))
 
 router.use('/appointments', appointmentRoutes)
+router.use('/payments/cases', billingRoutes)
 router.use('/payments', paymentRoutes)
 router.use('/booking', bookingRoutes)
 router.use('/notifications', notificationRoutes)

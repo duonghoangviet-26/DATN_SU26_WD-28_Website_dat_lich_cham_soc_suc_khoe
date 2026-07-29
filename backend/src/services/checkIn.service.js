@@ -28,6 +28,9 @@ import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
 // các trạng thái sau đó (`in_progress`, `waiting_record`…) đã có HangDoi nên bị chặn bởi
 // ràng buộc "mỗi lịch hẹn tối đa 1 lượt" bên dưới, không cần liệt kê lại.
 const TRANG_THAI_KHONG_CHECKIN = ['cancelled', 'no_show', 'completed', 'skipped']
+// Chỉ lịch đã được chốt mới được biến thành lượt khám thực tế. Không dùng điều
+// kiện "không bị hủy" vì lịch pending vẫn có thể đang chờ thanh toán/xác nhận.
+const TRANG_THAI_DUOC_CHECKIN = ['confirmed']
 
 function loi(statusCode, message) {
   return Object.assign(new Error(message), { statusCode })
@@ -134,8 +137,8 @@ export async function checkInLichHen({
   if (appt.ngay_kham < start || appt.ngay_kham >= end) {
     throw loi(409, 'Lịch hẹn không phải của hôm nay')
   }
-  if (TRANG_THAI_KHONG_CHECKIN.includes(appt.status)) {
-    throw loi(409, `Không thể check-in lịch hẹn đang ở trạng thái ${appt.status}`)
+  if (TRANG_THAI_KHONG_CHECKIN.includes(appt.status) || !TRANG_THAI_DUOC_CHECKIN.includes(appt.status)) {
+    throw loi(409, `Chỉ check-in được lịch đã xác nhận (hiện tại: ${appt.status})`)
   }
 
   // Rule mục 7: mỗi LichHen ↔ tối đa 1 HangDoi đang hoạt động. Index unique sparse trên

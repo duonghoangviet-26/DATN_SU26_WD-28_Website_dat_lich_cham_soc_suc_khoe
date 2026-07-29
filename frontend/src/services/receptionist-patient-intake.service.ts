@@ -152,6 +152,26 @@ export interface OfflineQueueSummary {
   invoice?: { so_hoa_don: string; tong_thanh_toan: number; trang_thai_hoa_don: string } | null
 }
 
+export interface BillingServiceLine {
+  service_id?: string | null
+  ten: string
+  so_luong: number
+  so_tien?: number
+  don_gia?: number
+  thanh_tien: number
+}
+
+export interface BillingCase {
+  id: string
+  source: 'online' | 'offline'
+  ten_benh_nhan: string
+  so_dien_thoai?: string | null
+  specialty_id?: string | null
+  invoice: OfflineInvoice | null
+  pending_payment: OfflinePendingPayment | null
+  dich_vu_chi_dinh: BillingServiceLine[]
+}
+
 export const receptionistPatientIntakeService = {
   async searchByPhone(phone: string): Promise<PatientSearchResult> {
     const response = await axiosInstance.get<ApiResponse<PatientSearchResult>>('/receptionist/patient-intake/search', {
@@ -229,6 +249,36 @@ export const receptionistPatientIntakeService = {
       `/receptionist/payments/offline/${queueId}/payments/${paymentId}/cancel`,
       { ly_do },
     )
+    return response.data.data
+  },
+
+  async listBillingCases(): Promise<BillingCase[]> {
+    const response = await axiosInstance.get<ApiResponse<BillingCase[]>>('/receptionist/payments/cases')
+    return response.data.data ?? []
+  },
+
+  async getBillingCase(referenceId: string, source: BillingCase['source']): Promise<BillingCase> {
+    const response = await axiosInstance.get<ApiResponse<BillingCase>>(`/receptionist/payments/cases/${referenceId}`, { params: { source } })
+    return response.data.data
+  },
+
+  async createBillingInvoice(referenceId: string, source: BillingCase['source'], phuong_thuc: 'tien_mat' | 'chuyen_khoan'): Promise<BillingCase> {
+    const response = await axiosInstance.post<ApiResponse<BillingCase>>(`/receptionist/payments/cases/${referenceId}/invoice`, { source, phuong_thuc })
+    return response.data.data
+  },
+
+  async confirmBillingPayment(referenceId: string, source: BillingCase['source'], paymentId: string): Promise<BillingCase> {
+    const response = await axiosInstance.patch<ApiResponse<BillingCase>>(`/receptionist/payments/cases/${referenceId}/payments/${paymentId}/confirm`, { source })
+    return response.data.data
+  },
+
+  async cancelBillingPayment(referenceId: string, source: BillingCase['source'], paymentId: string): Promise<BillingCase> {
+    const response = await axiosInstance.patch<ApiResponse<BillingCase>>(`/receptionist/payments/cases/${referenceId}/payments/${paymentId}/cancel`, { source })
+    return response.data.data
+  },
+
+  async markBillingReceiptPrinted(referenceId: string, source: BillingCase['source']): Promise<BillingCase> {
+    const response = await axiosInstance.post<ApiResponse<BillingCase>>(`/receptionist/payments/cases/${referenceId}/receipt-print`, { source })
     return response.data.data
   },
 }

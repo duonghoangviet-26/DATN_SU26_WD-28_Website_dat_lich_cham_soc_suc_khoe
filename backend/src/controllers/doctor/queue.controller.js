@@ -5,12 +5,12 @@ import {
   soSanhThuTuHangDoi,
   tinhBacUuTienDong,
 } from '../../models/HangDoi.js'
-import { ok, created, fail } from '../../utils/response.js'
+import { ok, fail } from '../../utils/response.js'
 import { findOrCreateRoomStatus } from './room-status.controller.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
-import { buildSlotDateTime } from '../../utils/clinicTime.js'
+import { buildSlotDateTime, startOfDayUtc } from '../../utils/clinicTime.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
-import { checkInLichHen, checkInVangLai, layLichChoTiepNhan } from '../../services/checkIn.service.js'
+import { layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { traSlotVePool } from '../../services/offlineIntake.service.js'
 
 // ============================================================
@@ -28,12 +28,27 @@ async function getDocId(userId) {
   return d?._id ?? null
 }
 
-function getTodayRange() {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
+function getTodayRange(now = new Date()) {
+  const start = startOfDayUtc(now)
   const end = new Date(start)
-  end.setDate(end.getDate() + 1)
+  end.setUTCDate(end.getUTCDate() + 1)
   return { start, end }
+}
+
+async function bacSiDangTrongCaLamViec(doctorId, now = new Date()) {
+  const { start, end } = getTodayRange(now)
+  const schedules = await LichLamViec.find({
+    doctor_id: doctorId,
+    ngay: { $gte: start, $lt: end },
+    trang_thai_ngay: 'lam_viec',
+    trang_thai_xac_nhan: { $ne: 'tu_choi' },
+  }).select('ngay slots').lean()
+
+  return schedules.some((schedule) => schedule.slots.some((slot) => {
+    const batDau = buildSlotDateTime(schedule.ngay, slot.gio_bat_dau)
+    const ketThuc = buildSlotDateTime(schedule.ngay, slot.gio_ket_thuc)
+    return batDau && ketThuc && now >= batDau && now < ketThuc
+  }))
 }
 
 /**
@@ -84,11 +99,17 @@ async function ghiAuditQueue(doctorUserId, hanhDong, entryId, duLieuCu, duLieuMo
   })
 }
 
-async function timEntryCuaMinh(entryId, docId) {
+async function timEntryCuaMinh(entryId, docId, now = new Date()) {
   const entry = await HangDoi.findById(entryId)
   if (!entry) return { entry: null, error: [404, 'Không tìm thấy hàng đợi'] }
   if (String(entry.doctor_id) !== String(docId)) {
     return { entry: null, error: [403, 'Hàng đợi này không thuộc lịch của bạn'] }
+  }
+  if (CON_HIEN_DIEN.includes(entry.trang_thai)) {
+    const { start, end } = getTodayRange(now)
+    if (entry.checkin_time < start || entry.checkin_time >= end) {
+      return { entry: null, error: [409, 'Lượt chờ này thuộc ngày trước, không thể gọi hoặc cho vào phòng trong ca hôm nay'] }
+    }
   }
   return { entry, error: null }
 }
@@ -103,7 +124,12 @@ async function tinhCanhBaoQuaTai(doctorId, todayStart) {
 
   const room = await TrangThaiPhongKham.findOne({ doctor_id: doctorId, ngay: todayStart }).lean()
   const tbPhut = room?.thoi_gian_kham_tb_phut ?? 20
-  const soDangPhucVu = await HangDoi.countDocuments({ doctor_id: doctorId, trang_thai: { $in: DANG_XU_LY } })
+  const { start, end } = getTodayRange()
+  const soDangPhucVu = await HangDoi.countDocuments({
+    doctor_id: doctorId,
+    checkin_time: { $gte: start, $lt: end },
+    trang_thai: { $in: DANG_XU_LY },
+  })
   const duKienXong = new Date(Date.now() + (soDangPhucVu + 1) * tbPhut * 60000)
 
   // Hai loại cảnh báo khác nhau, gộp lại cho người dùng thấy đủ:
@@ -121,58 +147,38 @@ async function tinhCanhBaoQuaTai(doctorId, todayStart) {
   return canhBao.length > 0 ? canhBao.join(' ') : null
 }
 
+export async function layLuotDaToiCungNgay(entry, docId, now = new Date()) {
+  const { start, end } = getTodayRange(now)
+  const dsChoKhac = await HangDoi.find({
+    doctor_id: docId,
+    trang_thai: 'dang_cho',
+    checkin_time: { $gte: start, $lt: end },
+    _id: { $ne: entry._id },
+  }).select('nguon gio_hen_goc checkin_time trang_thai').lean()
+
+  return dsChoKhac.filter((e) => daToiKhungCuaMinh(e, now))
+}
+
+async function lyDoChuaDuocPhucVu(entry, docId, now = new Date()) {
+  if (entry.so_lan_goi > 0 || daToiKhungCuaMinh(entry, now)) return null
+
+  const daToiLuot = await layLuotDaToiCungNgay(entry, docId, now)
+  if (daToiLuot.length === 0) return null
+
+  const gioKhung = new Date(entry.gio_hen_goc).toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  })
+  return `Bệnh nhân này đến sớm, khung ${gioKhung} chưa tới. Còn ${daToiLuot.length} người đã tới lượt đang chờ — `
+    + 'gọi họ trước, hoặc chờ tới khung của bệnh nhân này.'
+}
+
 // ─── POST /api/doctor/queue/checkin ──────────────────────────────────────────
 // Nghiệp vụ check-in nằm ở `services/checkIn.service.js` — DÙNG CHUNG với lễ tân (rule mục 7:
 // "không mỗi vai trò một luồng"). Controller chỉ chuyển tham số + dịch lỗi.
 export async function checkin(req, res) {
-  try {
-    const docId = await getDocId(req.user.id)
-    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
-
-    const { appointment_id, ten_benh_nhan, so_dien_thoai, tuoi, gioi_tinh, specialty_id } = req.body
-    const { start: todayStart } = getTodayRange()
-
-    let entry
-    let canhBao = []
-    if (appointment_id) {
-      // Bác sĩ chỉ check-in được bệnh nhân của CHÍNH MÌNH — lễ tân thì không bị giới hạn này.
-      const kq = await checkInLichHen({
-        appointmentId: appointment_id,
-        actorUserId: req.user.id,
-        actorRole: 'doctor',
-        restrictToDoctorId: docId,
-      })
-      entry = kq.entry
-      canhBao = kq.canh_bao
-      emitDashboardAppointmentChanged(kq.trang_thai_cu, kq.appointment.status)
-    } else {
-      const kq = await checkInVangLai({
-        doctorId: docId,
-        tenBenhNhan: ten_benh_nhan,
-        soDienThoai: so_dien_thoai,
-        tuoi: tuoi ?? null,
-        gioiTinh: gioi_tinh ?? null,
-        specialtyId: specialty_id ?? null,
-        actorUserId: req.user.id,
-        actorRole: 'doctor',
-      })
-      entry = kq.entry
-      canhBao = kq.canh_bao
-    }
-
-    // Cảnh báo riêng của bác sĩ: ước lượng "dự kiến xong sau giờ đóng ca" — cần trạng thái
-    // phòng khám nên giữ ở đây, không đẩy vào service dùng chung.
-    const canhBaoCa = await tinhCanhBaoQuaTai(entry.doctor_id, todayStart)
-    if (canhBaoCa) canhBao = [...canhBao, canhBaoCa]
-
-    return created(
-      res,
-      { entry, canh_bao: canhBao, canh_bao_qua_tai: canhBao.length > 0 ? canhBao.join(' ') : null },
-      'Đã check-in vào hàng đợi',
-    )
-  } catch (err) {
-    return fail(res, err.statusCode ?? 500, err.message)
-  }
+  return fail(res, 403, 'Bác sĩ không tạo check-in tại quầy. Lễ tân cần tiếp nhận bệnh nhân trước khi ca khám xuất hiện trong hàng đợi.')
 }
 
 // ─── GET /api/doctor/queue/pending-checkin ───────────────────────────────────
@@ -252,26 +258,11 @@ export async function call(req, res) {
     // ngoại lệ duy nhất là bác sĩ đang rảnh và không còn ai thuộc khung hiện tại
     // (rule mục 6). `so_lan_goi > 0` = đã gọi rồi, gọi lại luôn được.
     const now = new Date()
-    if (entry.so_lan_goi === 0 && !daToiKhungCuaMinh(entry, now)) {
-      const dsChoKhac = await HangDoi.find({
-        doctor_id: docId,
-        trang_thai: 'dang_cho',
-        _id: { $ne: entry._id },
-      }).select('nguon gio_hen_goc checkin_time trang_thai').lean()
-
-      const daToiLuot = dsChoKhac.filter((e) => daToiKhungCuaMinh(e, now))
-      if (daToiLuot.length > 0) {
-        const gioKhung = new Date(entry.gio_hen_goc).toLocaleTimeString('vi-VN', {
-          hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh',
-        })
-        return fail(
-          res,
-          409,
-          `Bệnh nhân này đến sớm, khung ${gioKhung} chưa tới. Còn ${daToiLuot.length} người đã tới lượt đang chờ — `
-          + 'gọi họ trước, hoặc chờ tới khung của bệnh nhân này.',
-        )
-      }
+    if (!await bacSiDangTrongCaLamViec(docId, now)) {
+      return fail(res, 409, 'Bác sĩ đang ngoài ca hoặc trong giờ nghỉ; chưa thể gọi bệnh nhân vào khám')
     }
+    const lyDoBiChan = await lyDoChuaDuocPhucVu(entry, docId, now)
+    if (lyDoBiChan) return fail(res, 409, lyDoBiChan)
 
     const tu = entry.trang_thai
     entry.trang_thai = 'da_goi'
@@ -313,9 +304,26 @@ export async function intoRoom(req, res) {
       return fail(res, 409, 'Bệnh nhân phải đang có mặt (chờ hoặc đã gọi) mới vào được phòng')
     }
 
+    const now = new Date()
+    if (!await bacSiDangTrongCaLamViec(docId, now)) {
+      return fail(res, 409, 'Bác sĩ đang ngoài ca hoặc trong giờ nghỉ; chưa thể cho bệnh nhân vào phòng')
+    }
+    const lyDoBiChan = await lyDoChuaDuocPhucVu(entry, docId, now)
+    if (lyDoBiChan) return fail(res, 409, lyDoBiChan)
+
     const room = await findOrCreateRoomStatus(entry.doctor_id)
     if (room.trang_thai !== 'san_sang') {
       return fail(res, 409, `Phòng chưa sẵn sàng (đang: ${room.trang_thai})`)
+    }
+
+    // Khách đặt trước có thể check-in để giữ thứ tự, nhưng không được vào phòng khi
+    // phí lịch hẹn chưa thanh toán. Walk-in được thu sau khám nên không áp dụng gate này.
+    if (entry.appointment_id) {
+      const appointment = await LichHen.findById(entry.appointment_id).select('payment_status').lean()
+      if (!appointment) return fail(res, 409, 'Lịch hẹn của lượt này không còn tồn tại, không thể cho vào phòng')
+      if (appointment.payment_status !== 'paid') {
+        return fail(res, 409, 'Lịch hẹn chưa thanh toán đủ. Mời thu ngân xác nhận thanh toán trước khi vào phòng.')
+      }
     }
 
     const tuRoom = room.trang_thai // chụp trước khi đổi — dùng cho nhật ký

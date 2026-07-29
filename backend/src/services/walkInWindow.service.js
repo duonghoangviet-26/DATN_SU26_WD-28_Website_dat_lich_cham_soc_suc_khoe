@@ -1,5 +1,5 @@
 import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
-import { caCuaKhung } from '../models/MauLichLamViec.js'
+import { caTheoGio } from '../models/MauLichLamViec.js'
 
 // ============================================================
 // CỬA SỔ TIẾP NHẬN TẠI QUẦY — rule mục 13
@@ -34,7 +34,6 @@ export function cacKhungDuocBanTaiQuay(slots, ngay, now = new Date()) {
   if (!slots?.length) return duocBan
 
   let caHienTai = null
-  let khungGanNhat = null
 
   for (const slot of slots) {
     const T = buildSlotDateTime(ngay, slot.gio_bat_dau)
@@ -42,26 +41,20 @@ export function cacKhungDuocBanTaiQuay(slots, ngay, now = new Date()) {
     const ketThuc = T.getTime() + DO_DAI_KHUNG_PHUT * 60_000
 
     if (now.getTime() >= T.getTime() && now.getTime() < ketThuc) {
-      caHienTai = caCuaKhung(slot.khung_index)
+      caHienTai = caTheoGio(slot.gio_bat_dau)
       break
-    }
-    if (T.getTime() > now.getTime() && (khungGanNhat === null || T.getTime() < khungGanNhat.thoiDiem)) {
-      khungGanNhat = { thoiDiem: T.getTime(), khung_index: slot.khung_index }
     }
   }
 
-  // NGOÀI giờ khám (chưa mở cửa / đang nghỉ trưa): không có khung nào "đang diễn ra".
-  // Khách vẫn đang đứng ở quầy, nên vẫn nhận — vào ĐÚNG khung sắp tới gần nhất, không
-  // mở rộng thêm. Đây không phải đặt hộ: người ta có mặt tại chỗ.
+  // Ngoài giờ khám, sau khi kết thúc ca hoặc trong giờ nghỉ trưa: không giữ slot walk-in.
   if (caHienTai === null) {
-    if (khungGanNhat) duocBan.add(khungGanNhat.khung_index)
     return duocBan
   }
 
   // TRONG giờ khám: khung đang diễn ra + khung kế tiếp, giới hạn trong cùng một ca
   // (11:00 không được bán sang 13:30).
   for (const slot of slots) {
-    if (caCuaKhung(slot.khung_index) !== caHienTai) continue
+    if (caTheoGio(slot.gio_bat_dau) !== caHienTai) continue
     const T = buildSlotDateTime(ngay, slot.gio_bat_dau)
     if (!T) continue
     const chuaKetThuc = now.getTime() < T.getTime() + DO_DAI_KHUNG_PHUT * 60_000

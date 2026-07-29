@@ -698,6 +698,8 @@ export interface DoctorSlot {
     benh_nhan?: string | null;
     benh_nhan_id?: string | null;
     la_khach_vang_lai?: boolean;
+    // Nguon dang chiem slot: lich dat truoc hoac luot tai quay trong HangDoi.
+    nguon_chiem_cho?: "dat_truoc" | "tai_quay" | null;
     // pending_payment: slot bị BN giữ 15 phút trong khi thanh toán VNPay (soft-lock)
     status:
         | "active"
@@ -765,6 +767,7 @@ export interface DoctorScheduleDetailSlot {
     benh_nhan_id: string | null;
     benh_nhan: string | null;
     la_khach_vang_lai: boolean;
+    nguon_chiem_cho: "dat_truoc" | "tai_quay" | null;
     lock_expires_at: string | null;
     cancel_requested: boolean;
     bi_khoa_boi_nghi_phep: boolean;
@@ -1011,7 +1014,23 @@ export interface ExamResultEditPayload {
     ghi_chu?: string | null;
     ngay_tai_kham?: string | null;
     thuoc?: Omit<PrescriptionDrug, 'id'>[];
+    dich_vu_phat_sinh?: Array<{ service_id: string; so_luong: number }>;
     sinh_hieu?: VitalSigns;
+}
+
+export interface ExamRelatedService {
+    _id: string;
+    ten: string;
+    gia: number;
+    specialty_id?: string | null;
+}
+
+export interface ExaminationServiceOrder {
+    service_id: string;
+    ten: string;
+    so_luong: number;
+    don_gia: number;
+    thanh_tien: number;
 }
 
 // Sinh hiệu ban đầu — bác sĩ tự đo/nhập ngay khi nhập kết quả khám.
@@ -1043,6 +1062,7 @@ export interface ExaminationResult {
     ngay_tai_kham: string;
     co_the_sua: boolean; // dự phòng cho khóa thủ công/tương lai — khóa thật hiện dựa vào status==='da_xac_nhan' (GAP-001)
     thuoc: PrescriptionDrug[]; // joined từ don_thuoc (backend trả gộp)
+    dich_vu_phat_sinh?: ExaminationServiceOrder[];
     ngay_tao: string;
     lich_su_sua?: ExaminationHistoryEntry[];
 }

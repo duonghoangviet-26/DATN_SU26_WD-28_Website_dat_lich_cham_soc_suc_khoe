@@ -247,6 +247,8 @@ export async function layKhaNangTiepNhanTaiQuay({ specialtyId = null, now = new 
   const minhChungDeXuat = slotDeXuat
     ? minhChung.find((row) => row.doctor_id === id(slotDeXuat.doctor_id))
     : null
+  const khongCoKhungGan = minhChung.length > 0 && minhChung.every((row) => row.ket_luan === 'khong_co_khung_gan')
+  const goiYQuayLai = taoDeXuatQuayLai(schedules, slotDaGiu, now, specialtyId)
   const lyDoDeXuat = slotDeXuat && minhChungDeXuat
     ? `Chọn ${minhChungDeXuat.bac_si} vì có khung gần nhất ${slotDeXuat.gio_bat_dau}–${slotDeXuat.gio_ket_thuc}, còn ${minhChungDeXuat.walk_in_con_lai} slot walk-in, đang chờ ${minhChungDeXuat.dang_cho} người và độ trễ ${minhChungDeXuat.do_tre_phut} phút.`
     : null
@@ -265,12 +267,14 @@ export async function layKhaNangTiepNhanTaiQuay({ specialtyId = null, now = new 
         ? 'co_the_tiep_nhan'
         : biChanQuaTai
           ? 'tam_dung_qua_tai'
-          : minhChung.length > 0 && minhChung.every((row) => row.ket_luan === 'khong_co_khung_gan')
+          : khongCoKhungGan
             ? 'khong_co_khung_gan'
             : 'da_day_walk_in',
-    goi_y_quay_lai: taoDeXuatQuayLai(schedules, slotDaGiu, now, specialtyId),
+    goi_y_quay_lai: goiYQuayLai,
     bi_chan_qua_tai: biChanQuaTai,
-    thong_bao: biChanQuaTai
+    thong_bao: khongCoKhungGan
+      ? `Hiện đang ngoài khung tiếp nhận. Mời khách quay lại từ ${goiYQuayLai?.gio_bat_dau ?? 'ca làm việc tiếp theo'}.`
+      : biChanQuaTai
       ? 'Ca đang trễ, tạm dừng nhận thêm khách tại quầy.'
       : schedules.length === 0
         ? 'Không có lịch bác sĩ hợp lệ đang làm việc hôm nay.'

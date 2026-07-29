@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance'
-import type { ApiResponse, ExaminationResult, PrescriptionDrug } from '@/types'
+import type { ApiResponse, ExamRelatedService, ExaminationResult, PrescriptionDrug } from '@/types'
 
 interface ExamPayload {
   appointment_id?: string | number
@@ -9,9 +9,15 @@ interface ExamPayload {
   ghi_chu?: string | null
   ngay_tai_kham?: string | null
   thuoc?: Omit<PrescriptionDrug, 'id'>[]
+  dich_vu_phat_sinh?: Array<{ service_id: string; so_luong: number }>
 }
 
 export const examinationService = {
+  async getRelatedServices(params: { appointment_id?: string | number; queue_id?: string }): Promise<ExamRelatedService[]> {
+    const res = await axiosInstance.get<ApiResponse<ExamRelatedService[]>>('/doctor/appointments/services/related', { params })
+    return Array.isArray(res.data.data) ? res.data.data : []
+  },
+
   async getByAppointment(appointmentId: string | number): Promise<ExaminationResult | null> {
     try {
       const res = await axiosInstance.get<ApiResponse<ExaminationResult>>(`/doctor/appointments/${appointmentId}/result`)

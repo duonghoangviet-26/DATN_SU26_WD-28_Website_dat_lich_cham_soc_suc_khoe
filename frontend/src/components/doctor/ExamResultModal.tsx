@@ -4,7 +4,7 @@ import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import { examinationService } from '@/services/examination.service'
 import { stripEmptyDrugs } from '@/utils/prescription'
 import { formatDate, toLocalDateStr } from '@/utils/format'
-import type { DoctorAppointmentDetail, ExaminationResult, PrescriptionDrug, AppointmentStatus } from '@/types'
+import type { DoctorAppointmentDetail, ExaminationResult, PrescriptionDrug, AppointmentStatus, ExamRelatedService } from '@/types'
 
 const EMPTY_DRUG: Omit<PrescriptionDrug, 'id'> = {
   ten_thuoc: '', lieu_luong: '', tan_suat: '2 lần/ngày',
@@ -82,6 +82,8 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
   const [nhip_tim, setNhipTim] = useState('')
   // Đơn thuốc không bắt buộc — mặc định rỗng, bác sĩ bấm "Thêm thuốc" khi cần (2026-07-16).
   const [drugs, setDrugs] = useState<Omit<PrescriptionDrug, 'id'>[]>([])
+  const [relatedServices, setRelatedServices] = useState<ExamRelatedService[]>([])
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const topRef = useRef<HTMLDivElement>(null)
@@ -90,7 +92,11 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
     const loadResult = queueId
       ? examinationService.getByQueue(queueId)
       : examinationService.getByAppointment(appt.id)
-    loadResult.then((res) => {
+    Promise.all([
+      loadResult,
+      examinationService.getRelatedServices(queueId ? { queue_id: queueId } : { appointment_id: appt.id }),
+    ]).then(([res, services]) => {
+      setRelatedServices(services)
       if (res) {
         setExisting(res)
         setChanDoan(res.chan_doan)
@@ -101,8 +107,10 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
         setDrugs(res.thuoc.map(({ ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu }) => ({
           ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu,
         })))
+        setSelectedServiceIds((res.dich_vu_phat_sinh ?? []).map((service) => String(service.service_id)))
       }
-    }).finally(() => setLoading(false))
+    }).catch(() => setError('Không tải được danh mục dịch vụ chỉ định. Vui lòng thử lại.'))
+      .finally(() => setLoading(false))
   }, [appt.id, queueId])
 
   // Hồ sơ đã xác nhận là CHỐT — khóa ngay lập tức (khớp backend updateResult, GAP-001).
@@ -125,6 +133,7 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
       ghi_chu: ghi_chu || null,
       ngay_tai_kham,
       thuoc: stripEmptyDrugs(drugs), // H2 — loại dòng thuốc rỗng trước khi gửi
+      dich_vu_phat_sinh: selectedServiceIds.map((service_id) => ({ service_id, so_luong: 1 })),
       ...(coSinhHieu ? {
         sinh_hieu: {
           can_nang: can_nang.trim() ? Number(can_nang) : null,
@@ -192,6 +201,11 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
     i: number, key: K, val: Omit<PrescriptionDrug, 'id'>[K],
   ) {
     setDrugs((prev) => prev.map((d, idx) => idx === i ? { ...d, [key]: val } : d))
+  }
+  function toggleService(id: string) {
+    setSelectedServiceIds((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id])
   }
 
   const primaryLabel = canConfirm
@@ -368,6 +382,29 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="input-label mb-0">Dịch vụ phát sinh <span className="font-normal text-slate-400">(chỉ định thu phí)</span></label>
+                <span className="text-xs text-slate-500">Thu ngân chỉ nhận các mục bác sĩ chọn</span>
+              </div>
+              {relatedServices.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">Chưa có dịch vụ phát sinh đang hoạt động cho chuyên khoa này.</p>
+              ) : (
+                <div className="space-y-2">
+                  {relatedServices.map((service) => (
+                    <label key={service._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm hover:border-brand-300">
+                      <span className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" disabled={isReadOnly} checked={selectedServiceIds.includes(service._id)}
+                          onChange={() => toggleService(service._id)} />
+                        {service.ten}
+                      </span>
+                      <strong className="text-slate-800">{new Intl.NumberFormat('vi-VN').format(service.gia)} đ</strong>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Yêu cầu chỉnh sửa: đánh dấu hồ sơ cần sửa lại kèm lý do (song song với "Lưu & Xác nhận"). */}

@@ -25,6 +25,7 @@ import {
   HoaDon,
   HoSoBenhNhan,
   KetQuaKham,
+  LichHen,
   DonThuoc,
   SinhHieuKham,
   LichLamViec,
@@ -40,6 +41,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') })
 
 const TAG = `E2E-OFFLINE-${Date.now()}`
 const created = {
+  appointments: [],
   profiles: [],
   queues: [],
   invoices: [],
@@ -86,14 +88,27 @@ function check(label, condition, detail = '') {
 }
 
 async function cleanup() {
+  const resultIds = [
+    ...await KetQuaKham.find({ hang_doi_id: { $in: created.queues } }).distinct('_id'),
+    ...await KetQuaKham.find({ appointment_id: { $in: created.appointments } }).distinct('_id'),
+  ]
+  if (created.invoices.length) {
+    await NhatKyThaoTac.deleteMany({ doi_tuong_id: { $in: created.invoices } })
+    await ThanhToan.deleteMany({ hoa_don_id: { $in: created.invoices } })
+    await HoaDon.deleteMany({ _id: { $in: created.invoices } })
+  }
   if (created.payments.length) await ThanhToan.deleteMany({ _id: { $in: created.payments } })
-  if (created.invoices.length) await HoaDon.deleteMany({ _id: { $in: created.invoices } })
+  if (created.appointments.length) await ThanhToan.deleteMany({ appointment_id: { $in: created.appointments } })
   if (created.queues.length) {
-    await DonThuoc.deleteMany({ medical_record_id: { $in: await KetQuaKham.find({ hang_doi_id: { $in: created.queues } }).distinct('_id') } })
+    await DonThuoc.deleteMany({ medical_record_id: { $in: resultIds } })
     await KetQuaKham.deleteMany({ hang_doi_id: { $in: created.queues } })
     await SinhHieuKham.deleteMany({ hang_doi_id: { $in: created.queues } })
     await NhatKyThaoTac.deleteMany({ doi_tuong_id: { $in: created.queues } })
     await HangDoi.deleteMany({ _id: { $in: created.queues } })
+  }
+  if (created.appointments.length) {
+    await KetQuaKham.deleteMany({ appointment_id: { $in: created.appointments } })
+    await LichHen.deleteMany({ _id: { $in: created.appointments } })
   }
   if (created.services.length) await DichVu.deleteMany({ _id: { $in: created.services } })
   if (created.profiles.length) await HoSoBenhNhan.deleteMany({ _id: { $in: created.profiles } })
@@ -204,6 +219,19 @@ async function main() {
   check('slot has a doctor account for the next stage', !!doctorUser)
   const doctorToken = tokenFor(doctorUser)
 
+  const doctorCheckin = await request(base, 'POST', '/doctor/queue/checkin', {
+    token: doctorToken,
+    body: { ho_so_benh_nhan_id: profileB.id, schedule_id: availableSlot.schedule_id, slot_id: availableSlot.slot_id },
+  })
+  check('doctor cannot bypass receptionist check-in', doctorCheckin.status === 403, String(doctorCheckin.status))
+
+  const doctorSchedule = await request(base, 'GET', '/doctor/schedule', { token: doctorToken })
+  const offlineSlotOnBoard = (doctorSchedule.payload?.data ?? []).find((slot) => String(slot.id) === String(availableSlot.slot_id))
+  check('doctor schedule resolves the offline patient from the queue entry',
+    doctorSchedule.status === 200
+      && offlineSlotOnBoard?.benh_nhan === `${TAG} A`
+      && offlineSlotOnBoard?.nguon_chiem_cho === 'tai_quay')
+
   await HangDoi.updateOne({ _id: queueId }, { $set: { gio_hen_goc: new Date(Date.now() - 60000), so_lan_goi: 1 } })
   const queueList = await request(base, 'GET', '/doctor/queue', { token: doctorToken })
   const queueRow = (queueList.payload?.data ?? []).find((row) => String(row.id ?? row._id) === String(queueId))
@@ -229,21 +257,6 @@ async function main() {
   const finished = await request(base, 'PATCH', `/doctor/queue/${queueId}/finish`, { token: doctorToken })
   check('doctor can finish the offline visit', finished.status === 200, finished.payload?.message)
 
-  const resultResponse = await request(base, 'POST', `/doctor/appointments/records/${queueId}/result`, {
-    token: doctorToken,
-    body: {
-      chan_doan: 'Viem mui hong cap',
-      huong_dan_dieu_tri: 'Uong thuoc theo don',
-      sinh_hieu: { nhiet_do: 37.2, nhip_tim: 78 },
-    },
-  })
-  check('doctor can create an offline examination result', resultResponse.status === 201, resultResponse.payload?.message)
-  check('offline result is linked to the queue', String(resultResponse.payload?.data?.hang_doi_id) === String(queueId))
-
-  const historyAfterResult = await request(base, 'GET', `/doctor/appointments/patient-profiles/${profileA.id}/history`, { token: doctorToken })
-  const offlineVisit = historyAfterResult.payload?.data?.visits?.find((visit) => String(visit.hang_doi_id) === String(queueId))
-  check('patient history includes the offline examination result', offlineVisit?.ket_qua?.chan_doan === 'Viem mui hong cap')
-
   const relatedService = await DichVu.findOne({
     status: 'active',
     loai: 'related',
@@ -261,26 +274,156 @@ async function main() {
     created.services.push(service._id)
   }
 
-  const invoiceResponse = await request(base, 'POST', `/receptionist/payments/offline/${queueId}/invoice`, {
-    token: receptionistToken,
+  const doctorServices = await request(base, 'GET', `/doctor/appointments/services/related?queue_id=${queueId}`, { token: doctorToken })
+  check('doctor can only load related services for the owned queue', doctorServices.status === 200 && doctorServices.payload?.data?.some((item) => String(item._id) === String(service._id)))
+
+  const resultResponse = await request(base, 'POST', `/doctor/appointments/records/${queueId}/result`, {
+    token: doctorToken,
     body: {
+      chan_doan: 'Viem mui hong cap',
+      huong_dan_dieu_tri: 'Uong thuoc theo don',
+      sinh_hieu: { nhiet_do: 37.2, nhip_tim: 78 },
       dich_vu_phat_sinh: [{ service_id: String(service._id), so_luong: 1 }],
-      phuong_thuc: 'tien_mat',
     },
   })
-  check('cashier creates offline invoice with extra service', invoiceResponse.status === 201, invoiceResponse.payload?.message)
-  const invoice = invoiceResponse.payload?.data?.invoice
-  const payment = invoiceResponse.payload?.data?.payment
-  check('invoice links the queue and profile', String(invoice?.hang_doi_id) === String(queueId) && String(invoice?.ho_so_benh_nhan_id) === String(profileA.id))
-  check('extra service is included in invoice total', invoice?.tong_tien_phat_sinh === service.gia)
-  check('cash payment is marked paid', payment?.status === 'paid' && invoice?.con_phai_thu === 0)
-  created.invoices.push(invoice.id)
-  if (payment?._id) created.payments.push(payment._id)
+  check('doctor can create an offline examination result', resultResponse.status === 201, resultResponse.payload?.message)
+  check('offline result is linked to the queue', String(resultResponse.payload?.data?.hang_doi_id) === String(queueId))
+  check('doctor service order is saved as an immutable billing snapshot', resultResponse.payload?.data?.dich_vu_phat_sinh?.[0]?.thanh_tien === service.gia)
 
-  const invoiceRead = await request(base, 'GET', `/receptionist/payments/offline/${queueId}/invoice`, { token: receptionistToken })
+  const historyAfterResult = await request(base, 'GET', `/doctor/appointments/patient-profiles/${profileA.id}/history`, { token: doctorToken })
+  const offlineVisit = historyAfterResult.payload?.data?.visits?.find((visit) => String(visit.hang_doi_id) === String(queueId))
+  check('patient history includes the offline examination result', offlineVisit?.ket_qua?.chan_doan === 'Viem mui hong cap')
+
+  const billingCases = await request(base, 'GET', '/receptionist/payments/cases', { token: receptionistToken })
+  check('cashier only sees the confirmed offline record as billable', billingCases.status === 200 && billingCases.payload?.data?.some((item) => item.source === 'offline' && String(item.id) === String(queueId)))
+
+  const invoiceResponse = await request(base, 'POST', `/receptionist/payments/cases/${queueId}/invoice`, {
+    token: receptionistToken,
+    body: {
+      source: 'offline',
+      phuong_thuc: 'chuyen_khoan',
+    },
+  })
+  check('cashier creates invoice only from doctor-ordered service', invoiceResponse.status === 201, invoiceResponse.payload?.message)
+  const invoice = invoiceResponse.payload?.data?.invoice
+  const pendingPayment = invoiceResponse.payload?.data?.pending_payment
+  check('invoice contains the doctor service snapshot', invoice?.tong_tien_phat_sinh === service.gia)
+  check('transfer invoice stays pending until cashier confirms receipt', pendingPayment?.status === 'pending' && invoice?.con_phai_thu > 0)
+  created.invoices.push(invoice.id)
+  if (pendingPayment?.id) created.payments.push(pendingPayment.id)
+
+  const beforePaidPrint = await request(base, 'POST', `/receptionist/payments/cases/${queueId}/receipt-print`, {
+    token: receptionistToken,
+    body: { source: 'offline' },
+  })
+  check('receipt cannot be printed before full payment', beforePaidPrint.status === 409, String(beforePaidPrint.status))
+
+  const confirmedTransfer = await request(base, 'PATCH', `/receptionist/payments/cases/${queueId}/payments/${pendingPayment.id}/confirm`, {
+    token: receptionistToken,
+    body: { source: 'offline' },
+  })
+  check('cashier can confirm the pending transfer exactly once', confirmedTransfer.status === 200 && confirmedTransfer.payload?.data?.invoice?.con_phai_thu === 0)
+
+  const receipt = await request(base, 'POST', `/receptionist/payments/cases/${queueId}/receipt-print`, {
+    token: receptionistToken,
+    body: { source: 'offline' },
+  })
+  check('paid invoice can be marked printed and handed to patient', receipt.status === 200, receipt.payload?.message)
+
+  const invoiceRead = await request(base, 'GET', `/receptionist/payments/cases/${queueId}?source=offline`, { token: receptionistToken })
   check('cashier can reload the completed invoice', invoiceRead.status === 200 && invoiceRead.payload?.data?.invoice?.so_hoa_don === invoice.so_hoa_don)
 
-  console.log(`[${TAG}] ALL OFFLINE E2E CHECKS PASSED`)
+  const onlineFee = 180000
+  const onlineAppointment = await LichHen.create({
+    user_id: receptionist._id,
+    doctor_id: doctor._id,
+    specialty_id: availableSlot.specialty_id,
+    ho_so_benh_nhan_id: profileA.id,
+    loai_kham: 'clinic',
+    ngay_kham: new Date(),
+    gio_kham: '20:00',
+    gio_ket_thuc: '20:30',
+    status: 'checked_in',
+    payment_status: 'unpaid',
+    gia_kham: onlineFee,
+    ten_khach: `${TAG} online`,
+    so_dien_thoai_khach: phone,
+    nguon: 'online',
+  })
+  created.appointments.push(onlineAppointment._id)
+
+  const onlineQueue = await HangDoi.create({
+    nguon: 'online',
+    appointment_id: onlineAppointment._id,
+    ho_so_benh_nhan_id: profileA.id,
+    ten_benh_nhan: `${TAG} online`,
+    so_dien_thoai: phone,
+    specialty_id: availableSlot.specialty_id,
+    doctor_id: doctor._id,
+    muc_uu_tien: 'online_uu_tien',
+    gio_hen_goc: new Date(Date.now() - 60000),
+    checkin_time: new Date(),
+    trang_thai: 'da_goi',
+    so_lan_goi: 1,
+  })
+  created.queues.push(onlineQueue._id)
+
+  await TrangThaiPhongKham.updateOne(
+    { doctor_id: doctor._id, ngay: startOfDayUtc(new Date()) },
+    { $set: { trang_thai: 'san_sang', benh_nhan_hien_tai_id: null } },
+    { upsert: true },
+  )
+  const onlineBlocked = await request(base, 'PATCH', `/doctor/queue/${onlineQueue._id}/into-room`, { token: doctorToken })
+  check('online patient cannot enter room before appointment fee is paid', onlineBlocked.status === 409, String(onlineBlocked.status))
+
+  const onlinePrepayment = await ThanhToan.create({
+    appointment_id: onlineAppointment._id,
+    ho_so_benh_nhan_id: profileA.id,
+    so_tien: onlineFee,
+    loai_thanh_toan: 'phi_dat_lich',
+    phuong_thuc: 'chuyen_khoan',
+    status: 'paid',
+    ngay_thanh_toan: new Date(),
+    thoi_diem_thanh_toan: new Date(),
+    nguoi_thu_id: receptionist._id,
+  })
+  created.payments.push(onlinePrepayment._id)
+  await LichHen.updateOne({ _id: onlineAppointment._id }, { $set: { payment_status: 'paid' } })
+
+  const onlineIntoRoom = await request(base, 'PATCH', `/doctor/queue/${onlineQueue._id}/into-room`, { token: doctorToken })
+  check('paid online patient can enter room', onlineIntoRoom.status === 200, onlineIntoRoom.payload?.message)
+  const onlineFinish = await request(base, 'PATCH', `/doctor/queue/${onlineQueue._id}/finish`, { token: doctorToken })
+  check('doctor can finish the paid online visit', onlineFinish.status === 200, onlineFinish.payload?.message)
+
+  const onlineResult = await request(base, 'POST', `/doctor/appointments/${onlineAppointment._id}/result`, {
+    token: doctorToken,
+    body: {
+      chan_doan: 'Ket qua online co chi dinh dich vu',
+      dich_vu_phat_sinh: [{ service_id: String(service._id), so_luong: 1 }],
+    },
+  })
+  check('doctor result keeps online visit open when an extra service is ordered', onlineResult.status === 201, onlineResult.payload?.message)
+
+  const onlineInvoiceResponse = await request(base, 'POST', `/receptionist/payments/cases/${onlineAppointment._id}/invoice`, {
+    token: receptionistToken,
+    body: { source: 'online', phuong_thuc: 'chuyen_khoan' },
+  })
+  check('cashier links the online prepayment to its clinical invoice', onlineInvoiceResponse.status === 201, onlineInvoiceResponse.payload?.message)
+  const onlineInvoice = onlineInvoiceResponse.payload?.data?.invoice
+  const onlinePending = onlineInvoiceResponse.payload?.data?.pending_payment
+  check('online invoice charges only the additional doctor service', onlineInvoice?.tong_da_thu === onlineFee && onlineInvoice?.con_phai_thu === service.gia)
+  created.invoices.push(onlineInvoice.id)
+  if (onlinePending?.id) created.payments.push(onlinePending.id)
+
+  const onlinePaid = await request(base, 'PATCH', `/receptionist/payments/cases/${onlineAppointment._id}/payments/${onlinePending.id}/confirm`, {
+    token: receptionistToken,
+    body: { source: 'online' },
+  })
+  check('cashier can settle the online additional charge', onlinePaid.status === 200 && onlinePaid.payload?.data?.invoice?.con_phai_thu === 0)
+  const completedOnlineAppointment = await LichHen.findById(onlineAppointment._id).select('status payment_status').lean()
+  check('online visit closes only after the additional charge is fully paid', completedOnlineAppointment?.status === 'completed' && completedOnlineAppointment.payment_status === 'paid')
+
+  console.log(`[${TAG}] ALL CHECK-IN TO INVOICE E2E CHECKS PASSED`)
 }
 
 try {

@@ -138,7 +138,10 @@ function KhungRow({ khung, leaves, daQua, chiXem, onXinNghi, onYeuCauHuy }: Khun
             >
               <Icon name="user" className="h-3.5 w-3.5 shrink-0 text-brand-500" />
               {s.benh_nhan ? (
-                <span className="min-w-0 truncate">{s.benh_nhan}</span>
+                <>
+                  <span className="min-w-0 truncate">{s.benh_nhan}</span>
+                  {s.nguon_chiem_cho === 'tai_quay' && <span className="shrink-0 text-[11px] text-brand-600">tại quầy</span>}
+                </>
               ) : (
                 // Slot 'booked' KHONG tra ve ten = khong join duoc LichHen (DB that co 86 ca
                 // nhu vay). Noi that la du lieu loi, KHONG bia placeholder "Benh nhan".

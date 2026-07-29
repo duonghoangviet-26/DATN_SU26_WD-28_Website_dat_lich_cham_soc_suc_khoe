@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
@@ -16,14 +16,14 @@ const ROOM_STATUS_COLOR: Record<PhongKhamTrangThai, 'green' | 'yellow' | 'gray' 
   san_sang: 'green', tam_nghi: 'gray', dang_don_phong: 'yellow', dang_kham: 'blue',
 }
 
-function RoomStatusWidget() {
+function RoomStatusWidget({ refreshKey = 0 }: { refreshKey?: number }) {
   const [room, setRoom] = useState<RoomStatus | null>(null)
   const [saving, setSaving] = useState(false)
 
   function load() {
     doctorAppointmentService.getRoomStatus().then(setRoom).catch(() => {})
   }
-  useEffect(load, [])
+  useEffect(load, [refreshKey])
 
   async function change(trang_thai: Exclude<PhongKhamTrangThai, 'dang_kham'>) {
     setSaving(true)
@@ -63,6 +63,11 @@ const STATUS_COLOR: Record<ExamQueueStatus, 'green' | 'red' | 'blue' | 'yellow' 
 }
 const TH = 'px-4 py-3 text-xs font-semibold text-slate-600'
 
+function extractApiMessage(err: unknown, fallback: string) {
+  const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+  return message?.trim() || fallback
+}
+
 // Tình trạng thời gian của một lượt chờ tiếp nhận, theo mốc rule mục 11.
 // Người trễ vẫn được khám và KHÔNG mất tiền — nhãn nói rõ để không ai hiểu thành "từ chối".
 function taoLichKhamAoChoLuotOffline(row: DoctorExamQueueRow): DoctorAppointmentDetail {
@@ -94,12 +99,10 @@ function nhanThoiDiem(row: LichChoTiepNhan): { text: string; color: 'green' | 'y
 // Bảng "Chờ tiếp nhận": khách đã đặt lịch hôm nay nhưng chưa có ai bấm tiếp nhận.
 // Không có bảng này thì lượt đã thanh toán không có đường nào vào hàng đợi của bác sĩ.
 function BangChoTiepNhan({
-  rows, loading, checkingId, onCheckin,
+  rows, loading,
 }: {
   rows: LichChoTiepNhan[]
   loading: boolean
-  checkingId: string | null
-  onCheckin: (row: LichChoTiepNhan) => void
 }) {
   if (loading) return null
   if (rows.length === 0) return null
@@ -110,7 +113,7 @@ function BangChoTiepNhan({
         <Icon name="clock" className="h-4 w-4 text-amber-600" />
         <span className="text-sm font-semibold text-slate-800">Chờ tiếp nhận</span>
         <span className="text-xs text-slate-500">
-          Khách đã đặt lịch hôm nay, chưa vào hàng đợi. Bấm “Tiếp nhận” khi bệnh nhân có mặt.
+          Khách đã đặt lịch hôm nay, chưa vào hàng đợi. Lễ tân tiếp nhận tại quầy trước khi bác sĩ thao tác.
         </span>
         <span className="ml-auto text-xs font-semibold text-amber-700">{rows.length} lượt</span>
       </div>
@@ -151,11 +154,7 @@ function BangChoTiepNhan({
                     <Badge color={thoiDiem.color}>{thoiDiem.text}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Button size="sm" disabled={checkingId === r.appointment_id}
-                      onClick={() => onCheckin(r)}
-                      icon={<Icon name="check" className="h-3.5 w-3.5" />}>
-                      {checkingId === r.appointment_id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}
-                    </Button>
+                    <span className="text-xs font-medium text-amber-700">Chờ lễ tân tiếp nhận</span>
                   </td>
                 </tr>
               )
@@ -178,13 +177,9 @@ export default function DoctorExamQueue() {
   const [modalMode, setModalMode] = useState<'edit' | 'confirm'>('confirm')
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  const [showCheckin, setShowCheckin] = useState(false)
-  const [checkinName, setCheckinName] = useState('')
-  const [checkinPhone, setCheckinPhone] = useState('')
-  const [checkinSaving, setCheckinSaving] = useState(false)
   const [choTiepNhan, setChoTiepNhan] = useState<LichChoTiepNhan[]>([])
   const [choTiepNhanLoading, setChoTiepNhanLoading] = useState(true)
-  const [tiepNhanId, setTiepNhanId] = useState<string | null>(null)
+  const [roomRefreshKey, setRoomRefreshKey] = useState(0)
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
@@ -210,28 +205,6 @@ export default function DoctorExamQueue() {
       window.clearInterval(fallbackRefresh)
     }
   }, [])
-
-  // Tiếp nhận khách đã đặt lịch: tạo lượt trong hàng đợi (rule mục 6 — hàng đợi chỉ sinh ra
-  // khi check-in). Cảnh báo trả về từ server (chưa thanh toán / trễ / ca quá tải) hiện nguyên văn.
-  async function handleTiepNhan(row: LichChoTiepNhan) {
-    setTiepNhanId(row.appointment_id)
-    try {
-      const kq = await doctorAppointmentService.checkinQueue({ appointment_id: row.appointment_id })
-      const canhBao = kq.canh_bao ?? []
-      showToast(
-        canhBao.length > 0
-          ? `Đã tiếp nhận ${row.ten_benh_nhan}. ${canhBao.join(' ')}`
-          : `Đã tiếp nhận ${row.ten_benh_nhan} vào hàng đợi`,
-        canhBao.length > 0 ? 'error' : 'success',
-      )
-      load()
-    } catch (e) {
-      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-      showToast(message ?? 'Không tiếp nhận được, vui lòng thử lại', 'error')
-    } finally {
-      setTiepNhanId(null)
-    }
-  }
 
   // Chỉ mở modal xác nhận khi tới bước của bác sĩ (đã có ket_qua_id + đang chờ xác nhận).
   async function openConfirm(r: DoctorExamQueueRow) {
@@ -274,26 +247,11 @@ export default function DoctorExamQueue() {
       await action(id)
       showToast(successMsg)
       load()
-    } catch {
-      showToast('Thao tác thất bại, vui lòng thử lại', 'error')
+    } catch (e) {
+      showToast(extractApiMessage(e, 'Thao tác thất bại, vui lòng thử lại'), 'error')
     } finally {
+      setRoomRefreshKey((value) => value + 1)
       setActionLoadingId(null)
-    }
-  }
-
-  async function handleCheckin(e: FormEvent) {
-    e.preventDefault()
-    if (!checkinName.trim() || !checkinPhone.trim()) return
-    setCheckinSaving(true)
-    try {
-      await doctorAppointmentService.checkinQueue({ ten_benh_nhan: checkinName.trim(), so_dien_thoai: checkinPhone.trim() })
-      showToast('Đã check-in bệnh nhân')
-      setShowCheckin(false); setCheckinName(''); setCheckinPhone('')
-      load()
-    } catch {
-      showToast('Không check-in được, vui lòng thử lại', 'error')
-    } finally {
-      setCheckinSaving(false)
     }
   }
 
@@ -311,10 +269,9 @@ export default function DoctorExamQueue() {
       <PageHeader title="Hồ sơ chờ khám"
         description="Toàn bộ bệnh nhân (đặt online + vãng lai) đã check-in được gán cho bạn — check-in, gọi, vào phòng, kết thúc khám và nhập hồ sơ." />
 
-      <RoomStatusWidget />
+      <RoomStatusWidget refreshKey={roomRefreshKey} />
 
-      <BangChoTiepNhan rows={choTiepNhan} loading={choTiepNhanLoading}
-        checkingId={tiepNhanId} onCheckin={handleTiepNhan} />
+      <BangChoTiepNhan rows={choTiepNhan} loading={choTiepNhanLoading} />
 
       <div className="card mb-4 flex flex-wrap items-end gap-4 p-4">
         <div className="min-w-[220px] flex-1">
@@ -328,25 +285,8 @@ export default function DoctorExamQueue() {
             {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => setShowCheckin((v) => !v)}
-          icon={<Icon name="plus" className="h-3.5 w-3.5" />}>Check-in vãng lai</Button>
         {!loading && !error && <span className="ml-auto text-xs text-slate-400">{filtered.length} lượt</span>}
       </div>
-
-      {showCheckin && (
-        <form onSubmit={handleCheckin} className="card mb-4 flex flex-wrap items-end gap-3 p-4">
-          <div className="min-w-[180px] flex-1">
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Tên bệnh nhân</label>
-            <input value={checkinName} onChange={(e) => setCheckinName(e.target.value)} required className="input w-full" />
-          </div>
-          <div className="min-w-[160px]">
-            <label className="mb-1 block text-xs font-semibold text-slate-500">Số điện thoại</label>
-            <input value={checkinPhone} onChange={(e) => setCheckinPhone(e.target.value)} required className="input w-full" />
-          </div>
-          <Button type="submit" size="sm" disabled={checkinSaving}>{checkinSaving ? 'Đang check-in...' : 'Check-in'}</Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => setShowCheckin(false)}>Hủy</Button>
-        </form>
-      )}
 
       {loading ? (
         <div className="flex h-48 items-center justify-center text-slate-400">Đang tải...</div>
@@ -394,9 +334,16 @@ export default function DoctorExamQueue() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         {r.trang_thai_tong_hop === 'dang_cho' && (
-                          <Button size="sm" disabled={actionLoadingId === r.id}
-                            onClick={() => runQueueAction(r.id, doctorAppointmentService.callQueuePatient, 'Đã gọi bệnh nhân')}
-                            icon={<Icon name="bell" className="h-3.5 w-3.5" />}>Gọi bệnh nhân</Button>
+                          <>
+                            <Button size="sm" disabled={actionLoadingId === r.id}
+                              onClick={() => runQueueAction(r.id, doctorAppointmentService.intoRoomQueue, 'Bệnh nhân đã vào phòng')}
+                              icon={<Icon name="send" className="h-3.5 w-3.5" />}>Vào khám ngay</Button>
+                            <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
+                              onClick={() => runQueueAction(r.id, doctorAppointmentService.callQueuePatient, 'Đã gọi bệnh nhân')}
+                              icon={<Icon name="bell" className="h-3.5 w-3.5" />}>Gọi bệnh nhân</Button>
+                            <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
+                              onClick={() => runQueueAction(r.id, doctorAppointmentService.skipQueue, 'Đã bỏ lượt')}>Bỏ lượt</Button>
+                          </>
                         )}
                         {r.trang_thai_tong_hop === 'da_goi' && (
                           <>
