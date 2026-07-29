@@ -10,6 +10,7 @@ const receptionistMenu = [
   { path: '/receptionist/appointments', label: 'Lịch hẹn (Phòng khám)', icon: 'calendar' },
   { path: '/receptionist/booking', label: 'Tạo lịch khám', icon: 'add' },
   { path: '/receptionist/payments', label: 'Thanh toán & Thu ngân', icon: 'payment' },
+  { path: '/receptionist/news', label: 'Tin tức', icon: 'file-text' },
 ];
 
 export default function Sidebar({ open, onClose }: Props) {

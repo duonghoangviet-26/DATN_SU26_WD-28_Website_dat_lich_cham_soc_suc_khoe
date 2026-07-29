@@ -16,7 +16,7 @@ const systemNotificationSchema = new mongoose.Schema(
       enum: ['tat_ca', 'benh_nhan', 'bac_si', 'le_tan', 'y_ta'],
       required: true,
     },
-    tao_boi: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', required: true }, // Admin
+    tao_boi: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null }, // null khi hệ thống tự động gửi
     ngay_gui: { type: Date, default: null },
     so_nguoi_nhan: { type: Number, default: 0, min: 0 },
     status: {

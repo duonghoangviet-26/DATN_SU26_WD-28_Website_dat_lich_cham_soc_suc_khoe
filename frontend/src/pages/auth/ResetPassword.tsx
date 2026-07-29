@@ -1,28 +1,47 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Form, Input, Button, message } from 'antd'
 import { authService } from '@/services/auth.service'
+
+const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 
 export default function ResetPassword() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
+
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const onFinish = async (values: { mat_khau_moi: string }) => {
-    if (!token) {
-      message.error('Mã token xác thực không tìm thấy hoặc đã hết hạn!')
+  function validateForm() {
+    if (!token) return 'Ma token xac thuc khong tim thay hoac da het han'
+    if (!password.trim()) return 'Vui long nhap mat khau moi'
+    if (!PASSWORD_PATTERN.test(password)) {
+      return 'Mat khau phai toi thieu 8 ky tu, gom chu hoa, chu thuong va so'
+    }
+    if (password !== confirmPassword) return 'Mat khau nhap lai khong trung khop'
+    return ''
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
       return
     }
 
+    setError('')
     setLoading(true)
     try {
-      await authService.resetPassword(token, values.mat_khau_moi)
-      message.success('Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại.')
-      navigate('/login', { replace: true })
+      await authService.resetPassword(token!, password)
+      navigate('/login', {
+        replace: true,
+        state: { message: 'Dat lai mat khau thanh cong. Vui long dang nhap lai.' },
+      })
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || err.message || 'Đặt lại mật khẩu thất bại'
-      message.error(errorMsg)
+      setError(err.response?.data?.message || err.message || 'Dat lai mat khau that bai')
     } finally {
       setLoading(false)
     }
@@ -30,14 +49,14 @@ export default function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="w-full max-w-md mx-auto p-6 bg-white rounded-2xl border border-slate-100 shadow-sm text-center">
-        <h1 className="text-2xl font-bold text-slate-800">Liên kết không hợp lệ</h1>
+      <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm">
+        <h1 className="text-2xl font-bold text-slate-800">Lien ket khong hop le</h1>
         <p className="mt-2 text-sm text-red-500">
-          Đường dẫn đặt lại mật khẩu của bạn bị thiếu hoặc không chính xác. Vui lòng kiểm tra kỹ hòm thư hoặc gửi lại yêu cầu quên mật khẩu.
+          Duong dan dat lai mat khau bi thieu hoac khong chinh xac. Vui long gui lai yeu cau quen mat khau.
         </p>
-        <div className="mt-6 pt-4 border-t border-slate-50">
+        <div className="mt-6 border-t border-slate-50 pt-4">
           <Link to="/forgot-password" className="text-sm font-semibold text-brand-600 hover:text-brand-800">
-            Yêu cầu lại liên kết mới
+            Yeu cau lien ket moi
           </Link>
         </div>
       </div>
@@ -45,83 +64,65 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto p-6 bg-white rounded-2xl border border-slate-100 shadow-sm text-left">
+    <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl font-bold text-slate-800">Đặt lại mật khẩu</h1>
+        <h1 className="text-2xl font-bold text-slate-800">Dat lai mat khau</h1>
         <p className="mt-1.5 text-sm text-slate-500">
-          Tạo mật khẩu mới cho tài khoản của bạn. Mật khẩu phải dài tối thiểu 8 ký tự, bao gồm chữ hoa, chữ thường và chữ số.
+          Tao mat khau moi toi thieu 8 ky tu, bao gom chu hoa, chu thuong va chu so.
         </p>
       </div>
 
-      <Form
-        name="reset_password"
-        layout="vertical"
-        onFinish={onFinish}
-        requiredMark={false}
-        className="space-y-4"
-      >
-        <Form.Item
-          label={<span className="text-slate-700 font-semibold text-sm">Mật khẩu mới</span>}
-          name="mat_khau_moi"
-          rules={[
-            { required: true, message: 'Vui lòng nhập mật khẩu mới!' },
-            { min: 8, message: 'Mật khẩu phải tối thiểu 8 ký tự!' },
-            {
-              pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
-              message: 'Mật khẩu phải gồm chữ hoa, chữ thường và số!',
-            },
-          ]}
-        >
-          <Input.Password
-            placeholder="Nhập mật khẩu mới"
-            className="rounded-lg h-11 border-slate-200 focus:border-brand-500"
+      {error && (
+        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="input-label">Mat khau moi</label>
+          <input
+            type="password"
+            className="input"
+            placeholder="Nhap mat khau moi"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
             disabled={loading}
+            required
           />
-        </Form.Item>
+        </div>
 
-        <Form.Item
-          label={<span className="text-slate-700 font-semibold text-sm">Xác nhận mật khẩu</span>}
-          name="xac_nhan_mat_khau"
-          dependencies={['mat_khau_moi']}
-          rules={[
-            { required: true, message: 'Vui lòng nhập lại mật khẩu!' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value || getFieldValue('mat_khau_moi') === value) {
-                  return Promise.resolve()
-                }
-                return Promise.reject(new Error('Mật khẩu nhập lại không trùng khớp!'))
-              },
-            }),
-          ]}
-        >
-          <Input.Password
-            placeholder="Nhập lại mật khẩu mới"
-            className="rounded-lg h-11 border-slate-200 focus:border-brand-500"
+        <div>
+          <label className="input-label">Xac nhan mat khau</label>
+          <input
+            type="password"
+            className="input"
+            placeholder="Nhap lai mat khau moi"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
             disabled={loading}
+            required
           />
-        </Form.Item>
+        </div>
 
-        <Form.Item className="mb-0">
-          <Button
-            type="primary"
-            htmlType="submit"
-            loading={loading}
-            className="w-full h-11 bg-brand-600 hover:bg-brand-700 border-none rounded-lg text-sm font-extrabold text-white shadow-md shadow-brand-100 transition-colors"
-          >
-            Đặt lại mật khẩu
-          </Button>
-        </Form.Item>
+        <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={loading}>
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="spinner h-4 w-4" />
+              Dang xu ly...
+            </span>
+          ) : 'Dat lai mat khau'}
+        </button>
 
-        <div className="text-center pt-4 border-t border-slate-50 flex justify-between items-center text-xs">
+        <div className="flex items-center justify-between border-t border-slate-50 pt-4 text-xs">
           <Link to="/login" className="font-semibold text-brand-600 hover:text-brand-800">
-            Quay lại đăng nhập
+            Quay lai dang nhap
           </Link>
           <Link to="/forgot-password" className="font-semibold text-slate-500 hover:text-slate-800">
-            Gửi lại yêu cầu khác
+            Gui lai yeu cau
           </Link>
         </div>
-      </Form>
+      </form>
     </div>
   )
 }

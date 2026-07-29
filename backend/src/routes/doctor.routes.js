@@ -1,15 +1,17 @@
 import { Router } from 'express'
 import * as doctorController from '../controllers/doctor.controller.js'
+import { verifyToken, requireRole } from '../middlewares/auth.middleware.js'
 
 // ============================================================
 // DOCTOR ROUTES — Quản lý bác sĩ (Admin)
 // Mount tại: /api/admin/doctors  (khai báo trong routes/index.js)
 // ============================================================
-// Middleware JWT chưa áp dụng — sẽ thêm vào đây khi hoàn thiện auth.
-// Ví dụ thêm sau: router.use(verifyToken, requireRole('admin'))
+// Tất cả route dưới đây yêu cầu JWT role admin.
 // ============================================================
 
 const router = Router()
+
+router.use(verifyToken, requireRole('admin'))
 
 // Danh sách bác sĩ (filter + phân trang)
 router.get('/', doctorController.listDoctors)

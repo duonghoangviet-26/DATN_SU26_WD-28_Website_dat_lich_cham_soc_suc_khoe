@@ -1,90 +1,99 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Form, Input, Button, message } from 'antd'
 import { authService } from '@/services/auth.service'
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export default function ForgotPassword() {
+  const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [error, setError] = useState('')
 
-  const onFinish = async (values: { email: string }) => {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const normalizedEmail = email.trim()
+    if (!normalizedEmail) {
+      setError('Vui long nhap dia chi email')
+      return
+    }
+    if (!EMAIL_PATTERN.test(normalizedEmail)) {
+      setError('Email khong dung dinh dang')
+      return
+    }
+
     setLoading(true)
+    setError('')
     try {
-      await authService.forgotPassword(values.email)
-      message.success('Liên kết đặt lại mật khẩu đã được gửi đến email của bạn!')
+      await authService.forgotPassword(normalizedEmail)
       setSuccess(true)
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || err.message || 'Gửi yêu cầu thất bại'
-      message.error(errorMsg)
+      setError(err.response?.data?.message || err.message || 'Gui yeu cau that bai')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="w-full max-w-md mx-auto p-6 bg-white rounded-2xl border border-slate-100 shadow-sm text-left">
+    <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-100 bg-white p-6 text-left shadow-sm">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl font-bold text-slate-800">Quên mật khẩu</h1>
+        <h1 className="text-2xl font-bold text-slate-800">Quen mat khau</h1>
         <p className="mt-1.5 text-sm text-slate-500">
-          Nhập địa chỉ email đã đăng ký của bạn để nhận liên kết khôi phục mật khẩu.
+          Nhap email da dang ky de nhan lien ket khoi phuc mat khau.
         </p>
       </div>
 
       {success ? (
         <div className="space-y-4">
-          <div className="p-4 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-700">
-            Hệ thống đã nhận được yêu cầu khôi phục mật khẩu. Vui lòng kiểm tra hộp thư đến (và thư rác) của bạn để nhấp vào đường liên kết hướng dẫn.
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
+            He thong da nhan yeu cau khoi phuc mat khau. Vui long kiem tra hop thu den va thu rac.
           </div>
           <div className="text-center pt-2">
             <Link to="/login" className="text-sm font-semibold text-brand-600 hover:text-brand-800">
-              Quay lại đăng nhập
+              Quay lai dang nhap
             </Link>
           </div>
         </div>
       ) : (
-        <Form
-          name="forgot_password"
-          layout="vertical"
-          onFinish={onFinish}
-          requiredMark={false}
-          className="space-y-4"
-        >
-          <Form.Item
-            label={<span className="text-slate-700 font-semibold text-sm">Địa chỉ Email</span>}
-            name="email"
-            rules={[
-              { required: true, message: 'Vui lòng nhập địa chỉ Email!' },
-              { type: 'email', message: 'Email không đúng định dạng!' },
-            ]}
-          >
-            <Input
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="input-label">Dia chi email</label>
+            <input
               type="email"
+              className="input"
               placeholder="example@gmail.com"
-              className="rounded-lg h-11 border-slate-200 focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               disabled={loading}
+              required
             />
-          </Form.Item>
+          </div>
 
-          <Form.Item className="mb-0">
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={loading}
-              className="w-full h-11 bg-brand-600 hover:bg-brand-700 border-none rounded-lg text-sm font-extrabold text-white shadow-md shadow-brand-100 transition-colors"
-            >
-              Gửi yêu cầu đặt lại mật khẩu
-            </Button>
-          </Form.Item>
+          <button type="submit" className="btn-primary w-full py-2.5 text-base" disabled={loading}>
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="spinner h-4 w-4" />
+                Dang gui...
+              </span>
+            ) : 'Gui yeu cau dat lai mat khau'}
+          </button>
 
-          <div className="text-center pt-4 border-t border-slate-50 flex justify-between items-center text-xs">
+          <div className="flex items-center justify-between border-t border-slate-50 pt-4 text-xs">
             <Link to="/login" className="font-semibold text-brand-600 hover:text-brand-800">
-              Quay lại đăng nhập
+              Quay lai dang nhap
             </Link>
             <Link to="/register" className="font-semibold text-slate-500 hover:text-slate-800">
-              Đăng ký tài khoản
+              Dang ky tai khoan
             </Link>
           </div>
-        </Form>
+        </form>
       )}
     </div>
   )
