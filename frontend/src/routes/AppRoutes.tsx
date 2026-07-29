@@ -11,7 +11,6 @@ import ReceptionistLayout from '@/pages/receptionist/Layout'
 const ReceptionistDashboard = lazy(() => import('@/pages/receptionist/Dashboard'))
 const ReceptionistAppointments = lazy(() => import('@/pages/receptionist/Appointments'))
 const ReceptionistPayments = lazy(() => import('@/pages/receptionist/Payments'))
-const ReceptionistBooking = lazy(() => import('@/pages/receptionist/Booking'))
 const ReceptionistPatientIntake = lazy(() => import('@/pages/receptionist/PatientIntake'))
 
 const Login = lazy(() => import('@/pages/auth/Login'))
@@ -38,7 +37,6 @@ const ManageServices = lazy(() => import('@/pages/admin/ManageServices'))
 const ManageServiceSpecialtyDetail = lazy(() => import('@/pages/admin/ManageServiceSpecialtyDetail'))
 const ManageAppointments = lazy(() => import('@/pages/admin/ManageAppointments/ManageAppointments'))
 const ManageDoctorSchedules = lazy(() => import('@/pages/admin/ManageDoctorSchedules'))
-const ManageShiftTemplates = lazy(() => import('@/pages/admin/ManageShiftTemplates'))
 const ManageReviews = lazy(() => import('@/pages/admin/ManageReviews'))
 const ManageNotifications = lazy(() => import('@/pages/admin/ManageNotifications/ManageNotifications'))
 const ManagePayments = lazy(() => import('@/pages/admin/ManagePayments'))
@@ -115,7 +113,6 @@ export default function AppRoutes() {
         <Route path="services/chuyen-khoa/:slug" element={<ManageServiceSpecialtyDetail />} />
         <Route path="appointments" element={<ManageAppointments />} /> {/* C5 */}
         <Route path="doctor-schedules" element={<ManageDoctorSchedules />} />
-        <Route path="shift-templates" element={<ManageShiftTemplates />} />
         <Route path="reviews" element={<ManageReviews />} />       {/* C6 */}
         <Route path="notifications" element={<ManageNotifications />} /> {/* C7 */}
         <Route path="payments" element={<ManagePayments />} />     {/* C8 */}
@@ -133,7 +130,6 @@ export default function AppRoutes() {
         <Route index element={<ReceptionistDashboard />} />
         <Route path="appointments" element={<ReceptionistAppointments />} />
         <Route path="payments" element={<ReceptionistPayments />} />
-        <Route path="booking" element={<ReceptionistBooking />} />
         <Route path="patient-intake" element={<ReceptionistPatientIntake />} />
       </Route>
 
