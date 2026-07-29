@@ -164,7 +164,6 @@ export default function Login() {
           onError={() => setError('Xác thực với Google thất bại. Vui lòng thử lại.')}
           shape="circle"
           text="signin_with"
-          locale="vi"
         />
       </div>
 

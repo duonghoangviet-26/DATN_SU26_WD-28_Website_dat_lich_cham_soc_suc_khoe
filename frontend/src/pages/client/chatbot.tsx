@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Mic, MicOff, Sun, Moon, Move } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import type { DoctorProfile } from '@/types'
 import { fallbackLLM } from '@/services/chatbot.service'
 import { patientBookingService } from '@/services/patient-booking.service'
 import { thongKeService } from '@/services/thong-ke.service'
@@ -202,7 +203,7 @@ export default function AIChatbot() {
            timeStr = `Vào ${d}${h}`
         }
 
-        const availableDocs: { doc: Doctor, times: string }[] = []
+        const availableDocs: { doc: DoctorProfile, times: string }[] = []
         // Chỉ quét 5 bác sĩ đầu tiên để tăng tốc độ phản hồi
         for (const doc of doctorList.slice(0, 5)) {
            try {
