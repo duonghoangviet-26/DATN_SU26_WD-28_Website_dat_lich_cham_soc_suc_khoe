@@ -50,6 +50,21 @@ export function startOfDayUtc(value = new Date()) {
   return date
 }
 
+/**
+ * Đầu ngày theo lịch phòng khám (Asia/Ho_Chi_Minh), trả về mốc UTC.
+ * Dùng cho dữ liệu có thời điểm tuyệt đối như `HangDoi.checkin_time`.
+ */
+export function startOfClinicDayUtc(value = new Date()) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const clinicDate = new Date(date.getTime() + CLINIC_UTC_OFFSET_HOURS * 60 * 60 * 1000)
+  return new Date(Date.UTC(
+    clinicDate.getUTCFullYear(),
+    clinicDate.getUTCMonth(),
+    clinicDate.getUTCDate(),
+  ))
+}
+
 // ============================================================
 // MỐC THỜI GIAN CỦA MỘT KHUNG — rule mục 11 (BẤT BIẾN)
 // ============================================================

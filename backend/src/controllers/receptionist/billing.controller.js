@@ -12,6 +12,7 @@ import {
 import { layGiaKhamChuyenKhoa } from '../../services/doctorAssignment.service.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
+import { CLINIC_UTC_OFFSET_HOURS, startOfClinicDayUtc } from '../../utils/clinicTime.js'
 import { created, fail, ok } from '../../utils/response.js'
 
 const SOURCES = ['online', 'offline']
@@ -219,6 +220,8 @@ async function serializeCase(caseItem) {
     ten_benh_nhan: caseItem.patient_name,
     so_dien_thoai: caseItem.phone,
     specialty_id: caseItem.specialty_id,
+    ngay_kham: caseItem.appointment?.ngay_kham ?? caseItem.queue?.checkin_time ?? null,
+    gio_kham: caseItem.appointment?.gio_kham ?? null,
     invoice: invoice ? {
       id: String(invoice._id), so_hoa_don: invoice.so_hoa_don,
       tong_tien_kham: invoice.tong_tien_kham,
@@ -240,9 +243,31 @@ export async function listBillingCases(req, res) {
   try {
     const view = req.query.view ?? 'pending'
     if (!['pending', 'paid'].includes(view)) return fail(res, 400, 'Bộ lọc thanh toán không hợp lệ')
+    const scope = req.query.scope ?? (view === 'pending' ? 'today' : 'all')
+    if (!['today', 'all'].includes(scope)) return fail(res, 400, 'Phạm vi ngày thanh toán không hợp lệ')
+
+    const filterToday = view === 'pending' && scope === 'today'
+    const todayDateStart = filterToday ? startOfClinicDayUtc() : null
+    const todayDateEnd = todayDateStart ? new Date(todayDateStart) : null
+    if (todayDateEnd) todayDateEnd.setUTCDate(todayDateEnd.getUTCDate() + 1)
+    const clinicOffsetMs = CLINIC_UTC_OFFSET_HOURS * 60 * 60 * 1000
+    const todayInstantStart = todayDateStart ? new Date(todayDateStart.getTime() - clinicOffsetMs) : null
+    const todayInstantEnd = todayDateEnd ? new Date(todayDateEnd.getTime() - clinicOffsetMs) : null
+    const offlineQuery = { nguon: 'offline', trang_thai: { $in: OFFLINE_ELIGIBLE } }
+    if (todayInstantStart && todayInstantEnd) offlineQuery.checkin_time = { $gte: todayInstantStart, $lt: todayInstantEnd }
+    const todayAppointmentIds = todayDateStart && todayDateEnd
+      ? await LichHen.find({
+        loai_kham: 'clinic',
+        status: { $in: ONLINE_ELIGIBLE },
+        ngay_kham: { $gte: todayDateStart, $lt: todayDateEnd },
+      }).distinct('_id')
+      : null
+    const onlineQuery = { status: 'da_xac_nhan', appointment_id: { $exists: true } }
+    if (todayAppointmentIds) onlineQuery.appointment_id = { $in: todayAppointmentIds }
+
     const [offlineEntries, onlineResults] = await Promise.all([
-      HangDoi.find({ nguon: 'offline', trang_thai: { $in: OFFLINE_ELIGIBLE } }).sort({ checkin_time: -1 }).limit(100).lean(),
-      KetQuaKham.find({ status: 'da_xac_nhan', appointment_id: { $exists: true } }).sort({ ngay_cap_nhat: -1 }).limit(100).select('appointment_id').lean(),
+      HangDoi.find(offlineQuery).sort({ checkin_time: -1 }).limit(100).lean(),
+      KetQuaKham.find(onlineQuery).sort({ ngay_cap_nhat: -1 }).limit(100).select('appointment_id').lean(),
     ])
     const candidates = [
       ...offlineEntries.map((entry) => ({ source: 'offline', id: entry._id })),
@@ -251,7 +276,16 @@ export async function listBillingCases(req, res) {
     const resolved = await Promise.all(candidates.map(async (candidate) => {
       try { return await resolveBillingCase(candidate.id, candidate.source) } catch { return null }
     }))
-    const rows = await Promise.all(resolved.filter(Boolean).map(serializeCase))
+    const scopedCases = resolved.filter(Boolean).filter((caseItem) => {
+      if (!todayDateStart || !todayDateEnd || !todayInstantStart || !todayInstantEnd) return true
+      const caseDate = caseItem.source === 'offline' ? caseItem.queue?.checkin_time : caseItem.appointment?.ngay_kham
+      if (!caseDate) return false
+      const timestamp = new Date(caseDate).getTime()
+      return caseItem.source === 'offline'
+        ? timestamp >= todayInstantStart.getTime() && timestamp < todayInstantEnd.getTime()
+        : timestamp >= todayDateStart.getTime() && timestamp < todayDateEnd.getTime()
+    })
+    const rows = await Promise.all(scopedCases.map(serializeCase))
     const filteredRows = rows.filter((row) => (
       view === 'paid'
         ? row.billing_summary.trang_thai_hoa_don === 'da_thanh_toan_du'

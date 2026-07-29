@@ -142,6 +142,7 @@ export default function Appointments() {
 
   useEffect(() => {
     fetchAppointments(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, filterDate]); // Re-fetch when tab or date changes
 
   // Thêm một useEffect để fetch với debounce cho search
@@ -154,6 +155,7 @@ export default function Appointments() {
       fetchAppointments(1);
     }, 500); // 500ms delay for typing
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   const handlePageChange = (newPage: number) => {
@@ -223,7 +225,7 @@ export default function Appointments() {
           setAptDangDoi(apt);
           setRescheduleLimitModalOpen(true);
         }
-      } catch (err) {
+      } catch {
         alert('Lỗi khi tải lịch sử dời lịch');
       }
       return;
@@ -392,7 +394,7 @@ export default function Appointments() {
                   const isPendingAndOverdue = (apt.status === 'pending' || apt.status === 'confirmed') && isOverdue;
 
                   return (
-                    <tr key={apt._id} className={`hover:bg-slate-50 transition-colors ${isPendingAndOverdue ? 'opacity-60 bg-slate-50/50' : ''}`}>
+                    <tr key={apt._id} className={`hover:bg-slate-50 transition-colors ${isPendingAndOverdue ? 'bg-amber-50/50' : ''}`}>
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-800">{apt.gio_kham}</div>
                         <div className="text-xs text-slate-500">{format(new Date(apt.ngay_kham), 'dd/MM/yyyy')}</div>
@@ -424,18 +426,12 @@ export default function Appointments() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          {activeTab !== 'past' && !isPendingAndOverdue && (
+                          {activeTab !== 'past' && (
                             <>
-                              {(activeTab === 'today' || activeTab === 'tomorrow') && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
+                              {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                                 <button
                                   title="Đã đến"
-                                  onClick={() => {
-                                    if (activeTab === 'tomorrow') {
-                                      alert('Chưa đến ngày checkin');
-                                      return;
-                                    }
-                                    handleArrived(apt._id);
-                                  }}
+                                  onClick={() => handleArrived(apt._id)}
                                   className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors"
                                 >
                                   <Icon name="check" className="w-4 h-4" />

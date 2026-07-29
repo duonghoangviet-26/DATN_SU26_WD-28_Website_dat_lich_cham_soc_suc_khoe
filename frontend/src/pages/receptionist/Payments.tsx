@@ -5,6 +5,7 @@ import {
 } from '@/services/receptionist-patient-intake.service'
 
 type PaymentView = 'pending' | 'paid'
+type PendingScope = 'today' | 'all'
 
 function money(value: number) {
   return `${new Intl.NumberFormat('vi-VN').format(value)} đ`
@@ -34,8 +35,14 @@ function lineLabel(type: string) {
   return type === 'phi_kham' ? 'Phí khám' : 'Dịch vụ chỉ định'
 }
 
+function formatCaseDate(value?: string | null) {
+  if (!value) return 'Chưa rõ ngày'
+  return new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 export default function Payments() {
   const [view, setView] = useState<PaymentView>('pending')
+  const [pendingScope, setPendingScope] = useState<PendingScope>('today')
   const [cases, setCases] = useState<BillingCase[]>([])
   const [selected, setSelected] = useState<BillingCase | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'tien_mat' | 'chuyen_khoan'>('tien_mat')
@@ -44,10 +51,10 @@ export default function Payments() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
-  async function loadCases(targetView = view) {
+  async function loadCases(targetView = view, targetScope = pendingScope) {
     setLoading(true)
     try {
-      setCases(await receptionistPatientIntakeService.listBillingCases(targetView))
+      setCases(await receptionistPatientIntakeService.listBillingCases(targetView, targetView === 'pending' ? targetScope : 'all'))
       setError('')
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Không thể tải danh sách thu ngân')
@@ -56,6 +63,8 @@ export default function Payments() {
     }
   }
 
+  // loadCases dùng state phạm vi hiện tại; chỉ tải dữ liệu một lần khi mở màn hình.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadCases() }, [])
 
   async function changeView(nextView: PaymentView) {
@@ -64,6 +73,14 @@ export default function Payments() {
     setSelected(null)
     setMessage('')
     await loadCases(nextView)
+  }
+
+  async function changePendingScope(nextScope: PendingScope) {
+    if (nextScope === pendingScope) return
+    setPendingScope(nextScope)
+    setSelected(null)
+    setMessage('')
+    await loadCases('pending', nextScope)
   }
 
   async function selectCase(caseItem: BillingCase) {
@@ -155,6 +172,16 @@ export default function Payments() {
       </div>
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 print:hidden">
+        {view === 'pending' && (
+          <div className="flex rounded-lg border border-slate-200 p-1" role="group" aria-label="Phạm vi ca chờ thu">
+            <button type="button" aria-pressed={pendingScope === 'today'} onClick={() => void changePendingScope('today')} className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors ${pendingScope === 'today' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+              Hôm nay
+            </button>
+            <button type="button" aria-pressed={pendingScope === 'all'} onClick={() => void changePendingScope('all')} className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors ${pendingScope === 'all' ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+              Tất cả còn phải thu
+            </button>
+          </div>
+        )}
         <div className="flex rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Danh sách hóa đơn">
           <button
             type="button"
@@ -213,7 +240,7 @@ export default function Payments() {
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-slate-900">{caseItem.ten_benh_nhan}</p>
                         <p className="mt-1 truncate text-xs text-slate-600">{caseItem.so_dien_thoai || 'Không có số liên hệ'} · {sourceLabel(caseItem.source)}</p>
-                        <p className="mt-2 text-xs text-slate-500">{caseItem.invoice?.so_hoa_don || 'Chưa lập hóa đơn'}</p>
+                        <p className="mt-2 text-xs text-slate-500">{formatCaseDate(caseItem.ngay_kham)}{caseItem.gio_kham ? ` · ${caseItem.gio_kham}` : ''} · {caseItem.invoice?.so_hoa_don || 'Chưa lập hóa đơn'}</p>
                       </div>
                       <div className="shrink-0 text-right">
                         <p className={`text-sm font-bold ${view === 'paid' ? 'text-emerald-700' : 'text-slate-900'}`}>
