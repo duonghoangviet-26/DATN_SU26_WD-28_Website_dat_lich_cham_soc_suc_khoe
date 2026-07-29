@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { serviceService } from '@/services/service.service'
 import type { ServiceItem } from '@/types'
+import AIChatbot from '@/pages/client/chatbot'
 
 export default function ClientLayout() {
   const { user, logout } = useAuth()
@@ -324,6 +325,7 @@ export default function ClientLayout() {
           </div>
         </div>
       </footer>
+      <AIChatbot />
     </div>
   )
 }

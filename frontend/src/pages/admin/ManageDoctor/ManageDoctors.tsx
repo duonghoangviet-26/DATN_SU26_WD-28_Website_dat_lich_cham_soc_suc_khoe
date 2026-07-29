@@ -23,9 +23,6 @@ const STATUS_TABS: { value: DoctorApproval | ''; label: string; color: string }[
   { value: 'suspended', label: 'Tạm ngưng', color: 'text-slate-500' },
 ]
 
-// HARDCODED ADMIN ID FOR NOW (Dùng tạm cho tới khi có JWT auth hoàn chỉnh)
-const CURRENT_ADMIN_ID = "000000000000000000000099"
-
 export default function ManageDoctors() {
   const [doctors, setDoctors] = useState<DoctorProfileAPI[]>([])
   const [loading, setLoading] = useState(true)

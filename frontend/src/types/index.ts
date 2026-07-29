@@ -242,14 +242,6 @@ export interface ClinicRoomDoctor {
     specialties?: { _id: string; ten: string }[];
 }
 
-export interface ClinicRoomNurse {
-    _id: string;
-    ho_ten: string;
-    email?: string | null;
-    so_dien_thoai?: string | null;
-    status?: UserStatus;
-}
-
 export interface ClinicRoomItem {
     _id: string;
     ten: string;
@@ -259,9 +251,7 @@ export interface ClinicRoomItem {
     trang_thai: "active" | "inactive";
     full_name: string;
     doctor_ids: ClinicRoomDoctor[];
-    nurse_ids: ClinicRoomNurse[];
     doctor_count: number;
-    nurse_count: number;
     future_schedule_count: number;
     active_appointment_count: number;
     ngay_tao?: string | null;
@@ -275,12 +265,10 @@ export interface ClinicRoomPayload {
     loai: string;
     trang_thai: "active" | "inactive";
     doctor_ids: string[];
-    nurse_ids: string[];
 }
 
 export interface ClinicRoomOptions {
     doctors: ClinicRoomDoctor[];
-    nurses: ClinicRoomNurse[];
 }
 
 export type ServiceType = "home" | "related";
@@ -305,6 +293,7 @@ export interface ServiceItem {
     mo_ta_ngan?: string | null;
     mo_ta?: string | null;
     hinh_anh?: string | null;
+    image_url?: string | null;
     // home: cố định 60ph, có lịch áp dụng (đặt lịch riêng, chọn BS+slot)
     // related: null — không đặt lịch riêng (đi kèm khám clinic, BS chỉ định), thời lượng/lịch áp dụng vô nghĩa
     thoi_gian_phut?: number | null;
@@ -1124,7 +1113,6 @@ export interface DoctorUpdatePayload {
     phi_kham?: number;
     la_hien?: boolean;
     anh_dai_dien?: string | null;
-    admin_id: string;
 }
 
 export interface NotificationUpdatePayload {
@@ -1148,10 +1136,66 @@ export interface NewsItem {
     id: string;
     tieu_de: string;
     slug: string;
+    url_slug?: string | null;
     noi_dung_ngan: string;
     noi_dung: string;
     anh_dai_dien: string;
     nguoi_viet: string;
     luot_xem: number;
     ngay_tao: string;
+}
+
+export type NewsStatus = "draft" | "published" | "hidden";
+
+export interface NewsArticle {
+    id: string;
+    _id?: string;
+    title: string;
+    slug: string;
+    url_slug?: string | null;
+    image: string;
+    content: string;
+    excerpt: string;
+    status: NewsStatus;
+    author_id?: string | null;
+    author_name?: string | null;
+    view_count: number;
+    created_at: string;
+    updated_at?: string | null;
+    // Legacy aliases returned by the backend while old client code is being phased out.
+    tieu_de?: string;
+    noi_dung_ngan?: string;
+    noi_dung?: string;
+    anh_dai_dien?: string;
+    nguoi_viet?: string;
+    luot_xem?: number;
+    ngay_tao?: string;
+}
+
+export interface NewsPayload {
+    title: string;
+    slug: string;
+    author_name: string;
+    image: string;
+    content: string;
+    status?: NewsStatus;
+}
+
+export interface NewsListResult {
+    items: NewsArticle[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    };
+}
+
+export interface AdminNewsListResult extends NewsListResult {
+    statistics: {
+        total: number;
+        published: number;
+        draft: number;
+        hidden: number;
+    };
 }

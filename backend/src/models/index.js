@@ -44,6 +44,7 @@ export { default as DonThuoc }           from './DonThuoc.js'
 export { default as NhacNho }            from './NhacNho.js'
 
 export { default as DanhGia }            from './DanhGia.js'
+export { default as TinTuc }             from './TinTuc.js'
 
 export { default as ThongBao }           from './ThongBao.js'
 export { default as ThongBaoHeThong }    from './ThongBaoHeThong.js'
