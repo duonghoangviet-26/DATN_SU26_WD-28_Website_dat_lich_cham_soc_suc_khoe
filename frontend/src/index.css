@@ -45,8 +45,60 @@ select {
   }
 }
 
+@keyframes hero-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hero-caption-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-rise-in {
   animation: rise-in 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero-copy-in {
+  animation: hero-copy-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero-caption-in {
+  animation: hero-caption-in 500ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero-slide-image {
+  opacity: 0;
+  transform: scale(1.06);
+  transition: opacity 900ms cubic-bezier(0.16, 1, 0.3, 1), transform 6800ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hero-slide-image.is-active {
+  opacity: 1;
+  transform: scale(1.015);
+}
+
+.reveal-on-scroll {
+  opacity: 0.72;
+  transform: translateY(18px);
+  transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1), transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -54,8 +106,23 @@ select {
     scroll-behavior: auto;
   }
 
-  .animate-rise-in {
+  .animate-rise-in,
+  .hero-copy-in,
+  .hero-caption-in {
     animation: none;
+  }
+
+  .hero-slide-image,
+  .hero-slide-image.is-active {
+    transition: none;
+    transform: none;
+  }
+
+  .reveal-on-scroll,
+  .reveal-on-scroll.is-visible {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
 
@@ -78,6 +145,10 @@ select {
   }
   .btn-icon {
     @apply inline-flex items-center justify-center rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 active:bg-slate-200;
+  }
+
+  .hero-control {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/40 bg-slate-950/25 text-white backdrop-blur-sm transition-colors duration-200 hover:bg-slate-950/50 focus:outline-none focus:ring-2 focus:ring-white/80;
   }
 
   /* Inputs */

@@ -3,10 +3,40 @@ import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
 import LichSuLichHen from '../../models/LichSuLichHen.js'
+import HoSoBenhNhan from '../../models/HoSoBenhNhan.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
 import { cacMocCuaKhung } from '../../utils/clinicTime.js'
+
+function normalizePhone(value) {
+  const digits = String(value ?? '').replace(/\D/g, '')
+  if (!digits) return ''
+  return digits.startsWith('84') ? `0${digits.slice(2)}` : digits
+}
+
+function normalizeName(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function appointmentBelongsToProfile(appointment, profile) {
+  const profileId = String(profile._id)
+  const exactProfile = appointment.ho_so_benh_nhan_id && String(appointment.ho_so_benh_nhan_id) === profileId
+  const memberMatch = appointment.member_id && profile.member_id
+    && String(appointment.member_id) === String(profile.member_id)
+  const accountMatch = appointment.user_id && profile.tai_khoan_id
+    && String(appointment.user_id) === String(profile.tai_khoan_id)
+
+  if (exactProfile || memberMatch || accountMatch) return true
+
+  // Lịch đặt hộ người chưa có hồ sơ liên kết: chỉ nhận khi cả tên và số điện thoại
+  // trên lịch khớp với hồ sơ mà lễ tân vừa xác nhận.
+  return Boolean(
+    appointment.ten_khach
+      && normalizeName(appointment.ten_khach) === normalizeName(profile.ho_ten)
+      && normalizePhone(appointment.so_dien_thoai_khach) === normalizePhone(profile.so_dien_thoai_tim_kiem || profile.so_dien_thoai),
+  )
+}
 
 export const getAppointments = async (req, res) => {
   try {
@@ -104,10 +134,33 @@ export const getAppointments = async (req, res) => {
 // cho cả phòng khám nên không truyền `restrictToDoctorId`.
 export const markAsArrived = async (req, res) => {
   try {
+    const { ho_so_benh_nhan_id, so_dien_thoai, ho_ten } = req.body ?? {}
+    if (!ho_so_benh_nhan_id || !so_dien_thoai || !ho_ten) {
+      return res.status(400).json({
+        success: false,
+        message: 'Check-in phải tra cứu và xác nhận hồ sơ bằng số điện thoại, họ tên bệnh nhân trước.',
+      })
+    }
+
+    const profile = await HoSoBenhNhan.findOne({ _id: ho_so_benh_nhan_id, trang_thai: 'active' }).lean()
+    if (!profile) return res.status(404).json({ success: false, message: 'Không tìm thấy hồ sơ bệnh nhân đã xác nhận.' })
+    if (normalizePhone(so_dien_thoai) !== normalizePhone(profile.so_dien_thoai_tim_kiem || profile.so_dien_thoai)
+      || normalizeName(ho_ten) !== normalizeName(profile.ho_ten)) {
+      return res.status(409).json({ success: false, message: 'Thông tin check-in không khớp với hồ sơ bệnh nhân đã tra cứu.' })
+    }
+
+    const checkedAppointment = await LichHen.findById(req.params.id)
+      .select('ho_so_benh_nhan_id member_id user_id nguoi_dat_ho_id ten_khach so_dien_thoai_khach')
+      .lean()
+    if (!checkedAppointment || !appointmentBelongsToProfile(checkedAppointment, profile)) {
+      return res.status(409).json({ success: false, message: 'Lịch hẹn không thuộc đúng bệnh nhân vừa được xác nhận.' })
+    }
+
     const { entry, appointment, trang_thai_cu, canh_bao } = await checkInLichHen({
       appointmentId: req.params.id,
       actorUserId: req.user?._id ?? req.user?.id ?? null,
       actorRole: 'receptionist',
+      patientProfileId: profile._id,
     })
 
     emitDashboardAppointmentChanged(trang_thai_cu, appointment.status)

@@ -373,6 +373,7 @@ export default function Booking() {
         ly_do_kham: symptoms.trim(),
         ten_khach: patientName.trim(),
         so_dien_thoai_khach: patientPhone.trim(),
+        booking_for: bookingFor,
         phuong_thuc: 'chuyen_khoan',
         dong_y_dieu_khoan: true,
       }

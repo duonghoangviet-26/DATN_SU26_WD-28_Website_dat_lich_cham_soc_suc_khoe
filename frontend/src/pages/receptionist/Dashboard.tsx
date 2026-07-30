@@ -88,21 +88,6 @@ export default function Dashboard() {
   }, []);
 
   // Check-in đưa bệnh nhân vào hàng đợi bác sĩ (rule mục 6) — xem chú thích ở Appointments.tsx.
-  const handleArrived = async (id: string) => {
-    try {
-      const res = await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
-      const canhBao: string[] = res.data?.canh_bao ?? [];
-      const phong = res.data?.hang_doi?.phong_kham;
-      if (canhBao.length > 0) {
-        alert(`Đã đưa vào hàng đợi${phong ? ` — phòng ${phong}` : ''}.\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`);
-      }
-      fetchStats();
-      fetchPendingCheckins();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Lỗi khi check-in');
-    }
-  };
-
   // --- Logic Lọc Dữ liệu cho Khung 2 & 3 ---
   
   // Khung 3: Lịch hẹn 4h tới
@@ -178,13 +163,9 @@ export default function Dashboard() {
                     <p className="text-xs text-slate-500 font-medium">{apt.gio_kham}{apt.phong_kham ? ` · ${apt.phong_kham}` : ''}</p>
                     {apt.tre_qua_grace && <p className="text-[10px] font-semibold text-amber-600">Trễ hơn 15 phút · vẫn được tiếp nhận</p>}
                   </div>
-                  <button 
-                    onClick={() => handleArrived(apt.appointment_id)}
-                    className="flex items-center gap-1 bg-brand-500 hover:bg-brand-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                  >
-                    <Icon name="check" className="w-3.5 h-3.5" />
-                    Đã đến
-                  </button>
+                  <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                    Tra cứu tại Tiếp nhận
+                  </span>
                 </div>
               ))
             )}

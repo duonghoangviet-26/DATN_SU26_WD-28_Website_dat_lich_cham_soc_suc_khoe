@@ -92,6 +92,12 @@ const hoaDonSchema = new mongoose.Schema(
       enum: ['chua_thanh_toan', 'da_dat_coc', 'da_thanh_toan_du', 'qua_han'],
       default: 'chua_thanh_toan',
     },
+    // Trạng thái tài chính và trạng thái quy trình thu ngân là hai việc khác nhau:
+    // lịch online có thể đã thu phí khám, nhưng vẫn phải chờ lễ tân đối chiếu
+    // dịch vụ phát sinh sau khi bác sĩ hoàn tất hồ sơ.
+    da_xac_nhan_thu_ngan: { type: Boolean, default: false },
+    nguoi_xac_nhan_thu_ngan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
+    thoi_diem_xac_nhan_thu_ngan: { type: Date, default: null },
     ghi_chu_ke_toan: {
       type: String,
       default: null,

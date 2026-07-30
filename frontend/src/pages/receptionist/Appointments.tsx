@@ -164,20 +164,6 @@ export default function Appointments() {
 
   // Check-in đưa bệnh nhân vào HÀNG ĐỢI của bác sĩ (rule mục 6), không chỉ đổi trạng thái lịch.
   // Server trả kèm cảnh báo cần xử lý ngay tại quầy: chưa thanh toán, đến sớm/trễ, ca quá tải.
-  const handleArrived = async (id: string) => {
-    try {
-      const res = await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
-      const canhBao: string[] = res.data?.canh_bao ?? [];
-      const phong = res.data?.hang_doi?.phong_kham;
-      if (canhBao.length > 0) {
-        alert(`Đã đưa vào hàng đợi${phong ? ` — phòng ${phong}` : ''}.\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`);
-      }
-      fetchAppointments();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Lỗi khi check-in');
-    }
-  };
-
   const handleCancel = (id: string) => {
     setSelectedAppointmentId(id);
     setCancelReason('');
@@ -429,13 +415,9 @@ export default function Appointments() {
                           {activeTab !== 'past' && (
                             <>
                               {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
-                                <button
-                                  title="Đã đến"
-                                  onClick={() => handleArrived(apt._id)}
-                                  className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors"
-                                >
-                                  <Icon name="check" className="w-4 h-4" />
-                                </button>
+                                <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                                  Tra cứu tại Tiếp nhận
+                                </span>
                               )}
                               {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                                 <button

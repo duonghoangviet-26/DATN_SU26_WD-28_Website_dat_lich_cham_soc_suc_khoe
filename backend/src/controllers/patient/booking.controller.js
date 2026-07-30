@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import {
   BacSi, LichLamViec, LichHen,
-  ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan, DanhGia,
+  ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan, DanhGia, NguoiDung,
 } from '../../models/index.js'
 import {
   cancelAppointmentWithPaymentSync,
@@ -75,11 +75,37 @@ function dinhDanhNguoiDuocKham(userId, memberId) {
   return memberId ? { member_id: memberId } : { user_id: userId, member_id: null }
 }
 
+function normalizeBookingPhone(value) {
+  const digits = String(value ?? '').replace(/\D/g, '')
+  if (!digits) return ''
+  return digits.startsWith('84') ? `0${digits.slice(2)}` : digits
+}
+
+function normalizeBookingName(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function dinhDanhNguoiDuocKhamTrongPayload({ userId, memberId, tenKhach, soDienThoaiKhach, bookingFor = 'other' }) {
+  if (bookingFor === 'self') return [dinhDanhNguoiDuocKham(userId, null)]
+  if (memberId || bookingFor === 'member') return [{ member_id: memberId }]
+  if (tenKhach && soDienThoaiKhach) {
+    const phone = normalizeBookingPhone(soDienThoaiKhach)
+    const escapedName = normalizeBookingName(tenKhach).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return [{
+      ten_khach: { $regex: `^${escapedName}$`, $options: 'i' },
+      so_dien_thoai_khach: { $in: [soDienThoaiKhach, phone] },
+      member_id: null,
+    }]
+  }
+  return [dinhDanhNguoiDuocKham(userId, null)]
+}
+
 // Rule muc 5: toi da 1 slot `pending_payment` dang hoat dong / nguoi duoc kham.
 // Dat moi thi NHA giu cho cu ngay, khong de khach om nhieu cho cung luc.
-async function nhaGiuChoCuCuaNguoiKham({ userId, memberId, session }) {
+async function nhaGiuChoCuCuaNguoiKham({ userId, memberId, tenKhach, soDienThoaiKhach, bookingFor, session }) {
+  const identityFilters = dinhDanhNguoiDuocKhamTrongPayload({ userId, memberId, tenKhach, soDienThoaiKhach, bookingFor })
   const dangGiu = await LichHen.find({
-    ...dinhDanhNguoiDuocKham(userId, memberId),
+    $or: identityFilters,
     status: 'pending',
     payment_status: 'unpaid',
   }).select('_id').session(session).lean()
@@ -98,14 +124,13 @@ async function nhaGiuChoCuCuaNguoiKham({ userId, memberId, session }) {
   return dangGiu.length
 }
 
-// Rule muc 5: 1 luot / CHUYEN KHOA / ngay / nguoi duoc kham.
+// Rule dat ho: 1 lich dang hieu luc / ngay / nguoi duoc kham.
 // Gioi han theo BAC SI (ban cu) vo nghia khi he thong tu gan bac si (muc 12) — khach
 // khong chon nguoi thi khong the lay nguoi lam don vi dem.
-async function timLuotTrungTrongNgay({ userId, memberId, specialtyId, ngay, session }) {
-  if (!specialtyId) return null
+async function timLuotTrungTrongNgay({ userId, memberId, tenKhach, soDienThoaiKhach, bookingFor, ngay, session }) {
+  const identityFilters = dinhDanhNguoiDuocKhamTrongPayload({ userId, memberId, tenKhach, soDienThoaiKhach, bookingFor })
   return LichHen.findOne({
-    ...dinhDanhNguoiDuocKham(userId, memberId),
-    specialty_id: specialtyId,
+    $or: identityFilters,
     ngay_kham: { $gte: ngay, $lt: addDays(ngay, 1) },
     status: { $in: TRANG_THAI_CHIEM_LUOT },
   }).select('ma_lich_hen gio_kham status').session(session).lean()
@@ -413,6 +438,7 @@ export async function createBooking(req, res) {
       loai_kham,
       ngay_kham, ly_do_kham,
       member_id, ten_khach, so_dien_thoai_khach, nam_sinh_khach,
+      booking_for = member_id ? 'member' : 'self',
       // Đường TỰ GÁN (rule mục 12): khách chỉ chọn chuyên khoa + khung giờ.
       // `gio_kham` là tên cũ do nhánh client dùng — nhận cả hai để FE của họ không vỡ.
       specialty_id: specialtyYeuCau, gio_bat_dau, gio_kham,
@@ -424,6 +450,15 @@ export async function createBooking(req, res) {
     if (loai_kham !== 'clinic') return rollbackFail(400, 'Dịch vụ tại nhà đã ngừng hỗ trợ đặt lịch mới')
     if (!ngay_kham)  return rollbackFail(400, 'Ngày khám là bắt buộc')
     if (!member_id && !ten_khach) return rollbackFail(400, 'Phải có member_id hoặc ten_khach')
+    if (!['self', 'member', 'other'].includes(booking_for)) {
+      return rollbackFail(400, 'Hình thức đặt hộ không hợp lệ')
+    }
+    if (booking_for === 'member' && !member_id) {
+      return rollbackFail(400, 'Đặt cho thành viên phải có member_id')
+    }
+    if (booking_for === 'other' && (!ten_khach || !so_dien_thoai_khach)) {
+      return rollbackFail(400, 'Đặt cho người khác phải có họ tên và số điện thoại người được khám')
+    }
 
     // ⛔ Không có bằng chứng khách đồng ý điều khoản KHÔNG HOÀN TIỀN thì KHÔNG được thu
     // tiền (rule mục 5). Thu trước rồi mới tranh cãi là phòng khám thua — phải chặn ở đây,
@@ -650,25 +685,29 @@ export async function createBooking(req, res) {
       // Thu tu QUAN TRONG: nha giu cho cu TRUOC, roi moi dem luot con lai. Nguoc lai thi
       // chinh giu cho bo do cua khach se chan khach dat lai — day dung la tinh huong da
       // sinh ra 2 lich hen trung slot tren DB that (do 2026-07-26, slot ...83c3e8).
-      const specialtyDuKien = slotForValidation.specialty_id ?? doc.specialties?.[0]?._id ?? null
       await nhaGiuChoCuCuaNguoiKham({
         userId: req.user.id,
         memberId: member_id || null,
+        tenKhach: ten_khach,
+        soDienThoaiKhach: so_dien_thoai_khach,
+        bookingFor: booking_for,
         session,
       })
 
       const luotTrung = await timLuotTrungTrongNgay({
         userId: req.user.id,
         memberId: member_id || null,
-        specialtyId: specialtyDuKien,
+        tenKhach: ten_khach,
+        soDienThoaiKhach: so_dien_thoai_khach,
+        bookingFor: booking_for,
         ngay: appointmentDate,
         session,
       })
       if (luotTrung) {
         return rollbackFail(
           409,
-          `Người được khám đã có lịch ${luotTrung.ma_lich_hen ?? ''} lúc ${luotTrung.gio_kham} cùng chuyên khoa trong ngày này. `
-          + 'Mỗi người chỉ đặt 1 lượt / chuyên khoa / ngày — vui lòng chọn ngày khác hoặc hủy lịch cũ.',
+          `Người được khám đã có lịch ${luotTrung.ma_lich_hen ?? ''} lúc ${luotTrung.gio_kham} trong ngày này. `
+          + 'Mỗi người chỉ được đặt 1 lịch khám / ngày — vui lòng chọn ngày khác hoặc hủy lịch cũ.',
         )
       }
 
@@ -726,6 +765,9 @@ export async function createBooking(req, res) {
       }
     }
 
+    const booker = booking_for !== 'self'
+      ? await NguoiDung.findById(req.user.id).select('ho_ten so_dien_thoai').session(session).lean()
+      : null
     const appointmentCode = await nextAppointmentCode(session, new Date(ngay_kham))
 
     const [appointment] = await LichHen.create([{
@@ -750,9 +792,13 @@ export async function createBooking(req, res) {
       payment_deadline: paymentDeadline,
       gia_kham,
       ten_dich_vu,
-      ten_khach:           ten_khach           || null,
-      so_dien_thoai_khach: so_dien_thoai_khach || null,
+      ten_khach:           ten_khach?.trim().replace(/\s+/g, ' ') || null,
+      so_dien_thoai_khach: normalizeBookingPhone(so_dien_thoai_khach) || null,
       nam_sinh_khach:      nam_sinh_khach       || null,
+      dat_ho:              booking_for !== 'self',
+      nguoi_dat_ho_id:     booking_for !== 'self' ? req.user.id : null,
+      nguoi_dat_ho_ten:    booking_for !== 'self' ? (booker?.ho_ten ?? null) : null,
+      nguoi_dat_sdt:       booking_for !== 'self' ? (booker?.so_dien_thoai ?? null) : null,
       nguon: 'online',
       // Bằng chứng đồng ý điều khoản không hoàn tiền (rule mục 5) — lưu cùng lịch hẹn để
       // sau này đối chiếu được đúng bản điều khoản khách đã thấy.

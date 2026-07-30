@@ -179,6 +179,7 @@ export interface BillingCase {
     tong_da_thu: number
     con_phai_thu: number
     trang_thai_hoa_don: string
+    da_xac_nhan_thu_ngan: boolean
     source: 'invoice' | 'medical_record'
   }
   pending_payment: OfflinePendingPayment | null
@@ -192,6 +193,7 @@ export interface BillingCase {
     ngay_thanh_toan?: string | null
   }>
   dich_vu_chi_dinh: BillingServiceLine[]
+  da_xac_nhan_thu_ngan: boolean
 }
 
 export const receptionistPatientIntakeService = {
@@ -223,12 +225,12 @@ export const receptionistPatientIntakeService = {
     return response.data.data
   },
 
-  async checkInAppointment(appointmentId: string) {
+  async checkInAppointment(appointmentId: string, patient: { ho_so_benh_nhan_id: string; so_dien_thoai: string; ho_ten: string }) {
     const response = await axiosInstance.patch<ApiResponse<{
       appointment: TodayAppointment
       hang_doi: { id: string; doctor_id: string; phong_kham?: string | null; gio_hen_goc?: string | null; checkin_time: string }
       canh_bao?: string[]
-    }>>(`/receptionist/appointments/${appointmentId}/arrived`)
+    }>>(`/receptionist/appointments/${appointmentId}/arrived`, patient)
     return response.data
   },
 

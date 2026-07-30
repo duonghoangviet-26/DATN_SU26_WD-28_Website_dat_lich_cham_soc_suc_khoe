@@ -57,6 +57,7 @@ export interface CreateBookingPayload {
   ten_khach: string
   so_dien_thoai_khach: string
   member_id?: string | null
+  booking_for?: 'self' | 'member' | 'other'
   phuong_thuc?: 'chuyen_khoan' | 'vi_dien_tu' | 'the_ngan_hang' | 'tien_mat'
   // BẮT BUỘC. Backend trả 400 nếu thiếu — không có bằng chứng khách đồng ý điều khoản
   // không hoàn tiền thì không được thu tiền (rule mục 5).

@@ -115,6 +115,7 @@ export async function checkInLichHen({
   actorUserId = null,
   actorRole = null,
   restrictToDoctorId = null,
+  patientProfileId = null,
   now = new Date(),
 }) {
   if (!appointmentId) throw loi(400, 'Thiếu mã lịch hẹn')
@@ -157,6 +158,7 @@ export async function checkInLichHen({
   const payload = {
     nguon: 'online',
     appointment_id: appt._id,
+    ho_so_benh_nhan_id: patientProfileId ?? appt.ho_so_benh_nhan_id ?? null,
     member_id: appt.member_id ?? null,
     // Người tự đặt cho mình không có `member_id` lẫn `ten_khach` — trước đây rơi vào
     // 'Không rõ' và bác sĩ không biết đang khám cho ai.
@@ -185,6 +187,7 @@ export async function checkInLichHen({
     gio_den_thuc_te: now,
   }
   if (!appt.phong_kham && phongKham) capNhat.phong_kham = phongKham
+  if (patientProfileId && !appt.ho_so_benh_nhan_id) capNhat.ho_so_benh_nhan_id = patientProfileId
 
   let entry
   const session = await mongoose.startSession()

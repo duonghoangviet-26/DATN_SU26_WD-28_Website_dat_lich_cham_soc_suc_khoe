@@ -188,7 +188,11 @@ export default function PatientIntake() {
     setCheckingIn(true)
     setError('')
     try {
-      const response = await receptionistPatientIntakeService.checkInAppointment(selectedAppointment.id)
+      const response = await receptionistPatientIntakeService.checkInAppointment(selectedAppointment.id, {
+        ho_so_benh_nhan_id: selectedProfile.id,
+        so_dien_thoai: phone,
+        ho_ten: selectedProfile.ho_ten,
+      })
       const warnings = response.data?.canh_bao || []
       setMessage(`Đã ghi nhận người bệnh đến khám theo lịch hẹn ${selectedAppointment.ma_lich_hen || selectedAppointment.id}. ${warnings.length ? `Lưu ý: ${warnings.join(' ')}` : 'Người bệnh đã được đưa vào hàng đợi của bác sĩ.'}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id

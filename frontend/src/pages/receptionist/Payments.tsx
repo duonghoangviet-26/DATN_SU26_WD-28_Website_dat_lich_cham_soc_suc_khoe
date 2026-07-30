@@ -94,7 +94,7 @@ export default function Payments() {
   }
 
   async function createInvoice() {
-    if (!selected || selected.billing_summary.con_phai_thu <= 0) return
+    if (!selected) return
     setSaving(true)
     setError('')
     try {
@@ -150,8 +150,12 @@ export default function Payments() {
   const summary = selected?.billing_summary
   const invoice = selected?.invoice ?? null
   const isPaid = summary?.trang_thai_hoa_don === 'da_thanh_toan_du'
+  const isCashierConfirmed = selected?.da_xac_nhan_thu_ngan === true || summary?.da_xac_nhan_thu_ngan === true
+  const needsCashierConfirmation = Boolean(summary && !isCashierConfirmed)
   const actionLabel = !summary
     ? 'Chọn ca khám'
+    : summary.con_phai_thu <= 0
+      ? 'Xác nhận đã đối chiếu (0đ)'
     : paymentMethod === 'tien_mat'
       ? `Xác nhận thu tiền mặt ${money(summary.con_phai_thu)}`
       : `Tạo yêu cầu chuyển khoản ${money(summary.con_phai_thu)}`
@@ -332,14 +336,15 @@ export default function Payments() {
                 </div>
               )}
 
-              {!isPaid && !selected.pending_payment && summary.con_phai_thu > 0 && (
+              {!selected.pending_payment && needsCashierConfirmation && (
                 <div className="mt-5 border-t border-slate-100 pt-5 print:hidden">
-                  <label htmlFor="payment-method" className="text-sm font-semibold text-slate-900">Phương thức thanh toán</label>
+                  {summary.con_phai_thu <= 0 && <p className="mb-2 text-sm font-semibold text-emerald-800">Ca này đã đủ tiền; lễ tân vẫn cần xác nhận đã đối chiếu trước khi kết thúc thủ tục.</p>}
+                  {summary.con_phai_thu > 0 && <label htmlFor="payment-method" className="text-sm font-semibold text-slate-900">Phương thức thanh toán</label>}
                   <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-                    <select id="payment-method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)} className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+                    {summary.con_phai_thu > 0 && <select id="payment-method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)} className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
                       <option value="tien_mat">Tiền mặt</option>
                       <option value="chuyen_khoan">Chuyển khoản</option>
-                    </select>
+                    </select>}
                     <button type="button" disabled={saving} onClick={() => void createInvoice()} className="min-h-11 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-60">
                       {saving ? 'Đang ghi nhận...' : actionLabel}
                     </button>
@@ -348,7 +353,7 @@ export default function Payments() {
                 </div>
               )}
 
-              {isPaid && (
+              {isPaid && isCashierConfirmed && (
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5 print:hidden">
                   <p className="text-sm font-medium text-emerald-800">Hóa đơn đã thanh toán đủ.</p>
                   <button type="button" disabled={saving} onClick={() => void printReceipt()} className="min-h-10 rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 disabled:opacity-60">In / giao lại hóa đơn</button>

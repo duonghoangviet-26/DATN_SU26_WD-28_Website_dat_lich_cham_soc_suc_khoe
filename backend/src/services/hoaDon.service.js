@@ -3,6 +3,9 @@ import ThanhToan from '../models/ThanhToan.js'
 import LichHen from '../models/LichHen.js'
 
 function resolveInvoiceStatus(totalDue, totalPaid) {
+  if (totalDue <= 0) {
+    return 'da_thanh_toan_du'
+  }
   if (totalPaid <= 0) {
     return 'chua_thanh_toan'
   }
