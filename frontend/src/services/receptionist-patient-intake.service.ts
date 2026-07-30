@@ -12,6 +12,8 @@ export interface PatientProfile {
   nguon_tao: 'online' | 'tai_quay' | 'backfill'
   tai_khoan_id?: string | null
   nguoi_giam_ho_id?: string | null
+  tai_khoan?: OnlineAccount | null
+  loai_lien_ket_tai_khoan?: 'benh_nhan' | 'nguoi_dat_ho' | null
   member_id?: string | null
   trang_thai: 'active' | 'merged' | 'archived'
   nguoi_lien_he?: { id: string; ho_ten: string; so_dien_thoai?: string | null } | null
@@ -19,6 +21,16 @@ export interface PatientProfile {
   nhom_gia_dinh?: string | null
   lich_hen_hom_nay: TodayAppointment[]
   luot_dang_cho_hom_nay?: ActiveQueue | null
+}
+
+export interface OnlineAccount {
+  id: string
+  email: string
+  ho_ten: string
+  so_dien_thoai?: string | null
+  providers: string[]
+  phuong_thuc_dang_nhap: string
+  email_verified: boolean
 }
 
 export interface TodayAppointment {
@@ -46,6 +58,7 @@ export interface ActiveQueue {
 interface PatientSearchResult {
   phone: string
   profiles: PatientProfile[]
+  accounts: OnlineAccount[]
   total: number
   can_tao_moi: boolean
   ambiguous_appointments: TodayAppointment[]
@@ -59,6 +72,7 @@ export interface CreatePatientProfilePayload {
   gioi_tinh?: 'nam' | 'nu' | 'khac'
   dia_chi?: string
   ghi_chu?: string
+  tai_khoan_id?: string
 }
 
 export interface OfflineIntakeSlot {

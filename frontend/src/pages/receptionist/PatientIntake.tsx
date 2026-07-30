@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react'
 import {
   CapacityEvidence,
   OfflineAvailability,
+  OnlineAccount,
   PatientProfile,
   TodayAppointment,
   receptionistPatientIntakeService,
@@ -71,6 +72,8 @@ function appointmentIsCheckinable(appointment: TodayAppointment) {
 export default function PatientIntake() {
   const [phone, setPhone] = useState('')
   const [profiles, setProfiles] = useState<PatientProfile[]>([])
+  const [accounts, setAccounts] = useState<OnlineAccount[]>([])
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [ambiguousAppointments, setAmbiguousAppointments] = useState<TodayAppointment[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null)
@@ -109,6 +112,8 @@ export default function PatientIntake() {
     setError('')
     setMessage('')
     setSelectedId(null)
+    setSelectedAccountId(null)
+    setAccounts([])
     setAmbiguousAppointments([])
     clearDecision()
     if (!phone.trim()) {
@@ -120,10 +125,15 @@ export default function PatientIntake() {
     try {
       const result = await receptionistPatientIntakeService.searchByPhone(phone)
       setProfiles(result.profiles)
+      setAccounts(result.accounts || [])
+      if ((result.accounts || []).length === 1) setSelectedAccountId(result.accounts[0].id)
       setAmbiguousAppointments(result.ambiguous_appointments || [])
-      setMessage(result.total ? `Tìm thấy ${result.total} hồ sơ. Hãy xác nhận đúng người bệnh trước khi tiếp nhận.` : 'Chưa có hồ sơ, có thể tạo mới tại quầy.')
+      setMessage(result.total
+        ? `Tìm thấy ${result.total} hồ sơ. Hãy xác nhận đúng người bệnh trước khi tiếp nhận.`
+        : result.accounts?.length ? 'Tìm thấy tài khoản online nhưng chưa có hồ sơ bệnh nhân; hãy chọn đúng tài khoản trước khi tạo hồ sơ.' : 'Chưa có hồ sơ hoặc tài khoản, có thể tạo mới tại quầy.')
     } catch (requestError: any) {
       setProfiles([])
+      setAccounts([])
       setError(requestError?.response?.data?.message || 'Không thể tra cứu hồ sơ')
     } finally {
       setLoading(false)
@@ -154,11 +164,14 @@ export default function PatientIntake() {
         ngay_sinh: form.ngay_sinh || undefined,
         gioi_tinh: form.gioi_tinh || undefined,
         ghi_chu: form.ghi_chu || undefined,
+        tai_khoan_id: selectedAccountId || undefined,
       })
       const normalizedProfile: PatientProfile = { ...profile, lich_hen_hom_nay: [] }
       setProfiles((current) => [...current, normalizedProfile])
       setSelectedId(normalizedProfile.id)
       setPhone(normalizedProfile.so_dien_thoai || phone)
+      setAccounts((current) => current.filter((account) => account.id !== selectedAccountId))
+      setSelectedAccountId(null)
       setForm(emptyForm)
       setMessage('Đã tạo hồ sơ. Vì người bệnh chưa có lịch hẹn, hãy kiểm tra khả năng tiếp nhận trước khi xếp hàng chờ khám.')
     } catch (requestError: any) {
@@ -273,6 +286,31 @@ export default function PatientIntake() {
             </div>
           )}
 
+          {accounts.length > 0 && (
+            <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-violet-950">Tài khoản online tìm thấy</p>
+                  <p className="mt-1 text-xs text-violet-800">Email là định danh đăng nhập. Nếu có nhiều tài khoản dùng chung số điện thoại, hãy xác nhận đúng email trước khi gắn hồ sơ.</p>
+                </div>
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-violet-700">{accounts.length} tài khoản</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {accounts.map((account) => (
+                  <button key={account.id} type="button" onClick={() => setSelectedAccountId(account.id)} className={`w-full rounded-lg border p-3 text-left ${selectedAccountId === account.id ? 'border-violet-500 bg-white ring-2 ring-violet-100' : 'border-violet-200 bg-white/60 hover:border-violet-400'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-800">{account.email}</p>
+                        <p className="mt-1 text-xs text-slate-600">{account.ho_ten} · {account.phuong_thuc_dang_nhap === 'google_va_email' ? 'Google + Email/mật khẩu' : account.phuong_thuc_dang_nhap === 'google' ? 'Google' : 'Email/mật khẩu'}{account.email_verified ? ' · Email đã xác minh' : ''}</p>
+                      </div>
+                      <span className="text-xs font-semibold text-violet-700">{selectedAccountId === account.id ? 'Đã chọn' : 'Chọn'}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="mt-5 space-y-3">
             {profiles.map((profile) => (
               <button key={profile.id} type="button" onClick={() => selectProfile(profile)} className={`w-full rounded-xl border p-4 text-left transition ${selectedId === profile.id ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300 hover:bg-slate-50'}`}>
@@ -281,6 +319,7 @@ export default function PatientIntake() {
                     <p className="font-semibold text-slate-800">{profile.ho_ten}</p>
                     <p className="mt-1 text-sm text-slate-500">Ngày sinh: {formatDate(profile.ngay_sinh)} · {profile.gioi_tinh || 'Chưa rõ giới tính'}</p>
                     <p className="mt-1 text-xs text-slate-500">{profile.nguoi_lien_he?.ho_ten ? `Người liên hệ: ${profile.nguoi_lien_he.ho_ten}` : profile.member_id ? 'Thành viên gia đình' : 'Hồ sơ tại quầy'}</p>
+                    <p className={`mt-1 text-xs font-semibold ${profile.tai_khoan ? 'text-violet-700' : 'text-slate-500'}`}>{profile.tai_khoan ? `Tài khoản: ${profile.tai_khoan.email} · ${profile.tai_khoan.phuong_thuc_dang_nhap === 'google_va_email' ? 'Google + Email' : profile.tai_khoan.phuong_thuc_dang_nhap === 'google' ? 'Google' : 'Email'}` : 'Chưa liên kết tài khoản online'}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className={`rounded-full px-2 py-1 text-xs font-semibold ${profile.lich_hen_hom_nay.length ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
@@ -421,7 +460,7 @@ export default function PatientIntake() {
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div><h3 className="text-base font-bold text-slate-800">Tạo hồ sơ mới</h3><p className="mt-1 text-sm text-slate-500">Chỉ dùng khi người bệnh chưa có hồ sơ. Số điện thoại trùng không đồng nghĩa là cùng một người.</p></div>
+            <div><h3 className="text-base font-bold text-slate-800">Tạo hồ sơ mới</h3><p className="mt-1 text-sm text-slate-500">Chỉ dùng khi người bệnh chưa có hồ sơ. Số điện thoại trùng không đồng nghĩa là cùng một người.</p>{accounts.length > 0 && <p className="mt-1 text-xs font-semibold text-violet-700">Hồ sơ mới sẽ được gắn với tài khoản đã chọn: {accounts.find((account) => account.id === selectedAccountId)?.email || 'chưa chọn tài khoản'}.</p>}</div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Không tạo lịch hẹn</span>
           </div>
           <form className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4" onSubmit={createProfile}>
@@ -429,7 +468,7 @@ export default function PatientIntake() {
             <div className="text-sm font-medium text-slate-700">Số liên hệ đã tra cứu<div className={`mt-1.5 flex min-h-11 items-center rounded-xl border px-3 text-sm ${phone ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>{phone || 'Chưa nhập số điện thoại ở bước tra cứu'}</div><p className="mt-1 text-xs font-normal text-slate-500">Hệ thống sẽ tự dùng số này cho hồ sơ mới.</p></div>
             <label className="text-sm font-medium text-slate-700">Ngày sinh<input type="date" value={form.ngay_sinh} onChange={(event) => setForm({ ...form, ngay_sinh: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
             <label className="text-sm font-medium text-slate-700">Giới tính<select value={form.gioi_tinh} onChange={(event) => setForm({ ...form, gioi_tinh: event.target.value as typeof form.gioi_tinh })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"><option value="">Chưa cập nhật</option><option value="nam">Nam</option><option value="nu">Nữ</option><option value="khac">Khác</option></select></label>
-            <button type="submit" disabled={saving} className="min-h-11 self-end rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Đang lưu...' : 'Tạo hồ sơ'}</button>
+            <button type="submit" disabled={saving || (accounts.length > 0 && !selectedAccountId)} className="min-h-11 self-end rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Đang lưu...' : accounts.length > 0 && !selectedAccountId ? 'Chọn tài khoản trước' : 'Tạo hồ sơ'}</button>
           </form>
         </section>
       </div>

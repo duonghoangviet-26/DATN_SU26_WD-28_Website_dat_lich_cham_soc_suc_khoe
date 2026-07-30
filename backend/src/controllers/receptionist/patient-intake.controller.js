@@ -22,6 +22,27 @@ function isValidPhone(phone) {
   return /^0\d{9,10}$/.test(phone)
 }
 
+function phoneVariants(phone) {
+  const normalized = normalizePhone(phone)
+  return [...new Set([normalized, normalized.startsWith('0') ? `84${normalized.slice(1)}` : normalized])]
+}
+
+function serializeAccount(account) {
+  if (!account) return null
+  const providers = Array.isArray(account.providers) ? account.providers : []
+  const coGoogle = providers.includes('google')
+  const coEmail = providers.includes('local')
+  return {
+    id: String(account._id),
+    email: account.email,
+    ho_ten: account.ho_ten,
+    so_dien_thoai: account.so_dien_thoai ?? null,
+    providers,
+    phuong_thuc_dang_nhap: coGoogle && coEmail ? 'google_va_email' : coGoogle ? 'google' : 'email',
+    email_verified: Boolean(account.email_verified),
+  }
+}
+
 function serializeProfile(profile) {
   return {
     id: String(profile._id),
@@ -34,6 +55,8 @@ function serializeProfile(profile) {
     nguon_tao: profile.nguon_tao,
     tai_khoan_id: profile.tai_khoan_id,
     nguoi_giam_ho_id: profile.nguoi_giam_ho_id,
+    tai_khoan: serializeAccount(profile.tai_khoan_online),
+    loai_lien_ket_tai_khoan: profile.loai_lien_ket_tai_khoan ?? null,
     member_id: profile.member_id,
     trang_thai: profile.trang_thai,
     nguoi_lien_he: profile.nguoi_lien_he ?? null,
@@ -94,9 +117,22 @@ export const searchPatientProfiles = async (req, res) => {
       return fail(res, 400, 'Số điện thoại không đúng định dạng')
     }
 
+    const phoneAccounts = await NguoiDung.find({
+      role: { $in: ['user', 'patient'] },
+      status: 'active',
+      ngay_xoa: null,
+      so_dien_thoai: { $in: phoneVariants(phone) },
+    }).select('_id').lean()
+    const phoneAccountIds = phoneAccounts.map((account) => account._id)
+    const profileIdentityFilters = [
+      { so_dien_thoai_tim_kiem: phone },
+      ...(phoneAccountIds.length
+        ? [{ tai_khoan_id: { $in: phoneAccountIds } }, { nguoi_giam_ho_id: { $in: phoneAccountIds } }]
+        : []),
+    ]
     const profiles = await HoSoBenhNhan.find({
-      so_dien_thoai_tim_kiem: phone,
       trang_thai: 'active',
+      $or: profileIdentityFilters,
     })
       .sort({ ho_ten: 1, ngay_tao: 1 })
       .lean()
@@ -104,17 +140,13 @@ export const searchPatientProfiles = async (req, res) => {
     const { start, end } = khoangHomNay()
     const profileIds = profiles.map((profile) => profile._id)
     const memberIds = profiles.filter((profile) => profile.member_id).map((profile) => profile.member_id)
-    const accountIds = profiles
+    const profileAccountIds = profiles
       .flatMap((profile) => [profile.tai_khoan_id, profile.nguoi_giam_ho_id])
       .filter(Boolean)
 
-    const [members, families, contacts] = await Promise.all([
+    const [members] = await Promise.all([
       memberIds.length
         ? ThanhVien.find({ _id: { $in: memberIds } }).select('ho_ten quan_he la_chu_ho tai_khoan_id family_id').lean()
-        : [],
-      [],
-      accountIds.length
-        ? NguoiDung.find({ _id: { $in: accountIds } }).select('ho_ten so_dien_thoai').lean()
         : [],
     ])
 
@@ -122,25 +154,36 @@ export const searchPatientProfiles = async (req, res) => {
     const familyIds = members.map((member) => member.family_id).filter(Boolean)
     const familyRows = familyIds.length
       ? await GiaDinh.find({ _id: { $in: familyIds } }).select('user_id ten_nhom').lean()
-      : families
+      : []
     const familyById = new Map(familyRows.map((family) => [String(family._id), family]))
-    const contactIds = [...new Set([
-      ...accountIds.map(String),
+    const accountIds = [...new Set([
+      ...profileAccountIds.map(String),
+      ...members.map((member) => member.tai_khoan_id).filter(Boolean).map(String),
       ...familyRows.map((family) => family.user_id).filter(Boolean).map(String),
     ])]
-    const allContacts = contactIds.length
-      ? await NguoiDung.find({ _id: { $in: contactIds } }).select('ho_ten so_dien_thoai').lean()
-      : contacts
-    const contactById = new Map(allContacts.map((contact) => [String(contact._id), contact]))
+    const accountRows = await NguoiDung.find({
+      role: { $in: ['user', 'patient'] },
+      status: 'active',
+      ngay_xoa: null,
+      $or: [
+        ...(accountIds.length ? [{ _id: { $in: accountIds } }] : []),
+        { so_dien_thoai: { $in: phoneVariants(phone) } },
+      ],
+    }).select('ho_ten email so_dien_thoai providers email_verified last_login_provider').lean()
+    const accountById = new Map(accountRows.map((account) => [String(account._id), account]))
 
     for (const profile of profiles) {
       const member = profile.member_id ? memberById.get(String(profile.member_id)) : null
       const family = member?.family_id ? familyById.get(String(member.family_id)) : null
-      const contactId = profile.nguoi_giam_ho_id
-        ?? profile.tai_khoan_id
+      const contactId = profile.tai_khoan_id
+        ?? profile.nguoi_giam_ho_id
         ?? member?.tai_khoan_id
         ?? family?.user_id
-      const contact = contactId ? contactById.get(String(contactId)) : null
+      const contact = contactId ? accountById.get(String(contactId)) : null
+      profile.tai_khoan_online = contact
+      profile.loai_lien_ket_tai_khoan = profile.tai_khoan_id
+        ? 'benh_nhan'
+        : (profile.nguoi_giam_ho_id || member?.tai_khoan_id || family?.user_id ? 'nguoi_dat_ho' : null)
       profile.nguoi_lien_he = contact
         ? { id: String(contact._id), ho_ten: contact.ho_ten, so_dien_thoai: contact.so_dien_thoai ?? null }
         : null
@@ -209,6 +252,7 @@ export const searchPatientProfiles = async (req, res) => {
     return ok(res, {
       phone,
       profiles: profiles.map(serializeProfile),
+      accounts: accountRows.map(serializeAccount),
       total: profiles.length,
       can_tao_moi: true,
       ambiguous_appointments: ambiguousAppointments,
@@ -228,6 +272,7 @@ export const createPatientProfile = async (req, res) => {
       gioi_tinh,
       dia_chi,
       ghi_chu,
+      tai_khoan_id,
     } = req.body
     const ho_ten = String(rawName ?? '').trim().replace(/\s+/g, ' ')
     const so_dien_thoai = normalizePhone(rawPhone)
@@ -240,6 +285,21 @@ export const createPatientProfile = async (req, res) => {
 
     if (ngay_sinh && Number.isNaN(new Date(ngay_sinh).getTime())) {
       return fail(res, 400, 'Ngày sinh không hợp lệ')
+    }
+
+    let linkedAccount = null
+    if (tai_khoan_id) {
+      if (!mongoose.Types.ObjectId.isValid(tai_khoan_id)) return fail(res, 400, 'Mã tài khoản không hợp lệ')
+      linkedAccount = await NguoiDung.findOne({
+        _id: tai_khoan_id,
+        role: { $in: ['user', 'patient'] },
+        status: 'active',
+        ngay_xoa: null,
+      }).lean()
+      if (!linkedAccount) return fail(res, 404, 'Không tìm thấy tài khoản bệnh nhân đang hoạt động')
+      if (linkedAccount.so_dien_thoai && !phoneVariants(linkedAccount.so_dien_thoai).includes(so_dien_thoai)) {
+        return fail(res, 409, 'Số điện thoại hồ sơ không khớp với tài khoản đã chọn')
+      }
     }
 
     // Không gộp tự động chỉ vì trùng số điện thoại; một người giám hộ có thể
@@ -264,12 +324,12 @@ export const createPatientProfile = async (req, res) => {
       dia_chi: dia_chi?.trim() || null,
       ghi_chu: ghi_chu?.trim() || null,
       // Khong tu dong gan tai khoan theo so dien thoai vi day co the la so cua nguoi giam ho.
-      tai_khoan_id: null,
+      tai_khoan_id: linkedAccount?._id ?? null,
       nguon_tao: 'tai_quay',
       trang_thai: 'active',
     })
 
-    return created(res, { profile: serializeProfile(profile.toObject()) }, 'Đã tạo hồ sơ bệnh nhân')
+    return created(res, { profile: serializeProfile({ ...profile.toObject(), tai_khoan_online: linkedAccount }) }, 'Đã tạo hồ sơ bệnh nhân')
   } catch (error) {
     if (error instanceof mongoose.Error.ValidationError) {
       return fail(res, 400, error.message)

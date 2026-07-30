@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { OAuth2Client } from 'google-auth-library'
-import { NguoiDung, ThongBao, UserSession } from '../../models/index.js'
+import { HoSoBenhNhan, NguoiDung, ThongBao, UserSession } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { emitDashboardNewPatient } from '../../realtime/socket.js'
 import { sendResetPasswordEmail } from '../../services/mail.service.js'
@@ -11,6 +11,21 @@ import { logAuthActivity } from '../../services/auditLog.service.js'
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 
 const ADMIN_ID = "000000000000000000000099"
+
+function normalizePatientPhone(value) {
+  const digits = String(value ?? '').replace(/\D/g, '')
+  if (!digits) return ''
+  return digits.startsWith('84') ? `0${digits.slice(2)}` : digits
+}
+
+async function syncDirectPatientProfile(userId, hoTen, soDienThoai) {
+  const phone = normalizePatientPhone(soDienThoai)
+  if (!phone) return
+  await HoSoBenhNhan.updateOne(
+    { tai_khoan_id: userId, trang_thai: 'active' },
+    { $set: { ho_ten: hoTen.trim(), so_dien_thoai: phone, so_dien_thoai_tim_kiem: phone } },
+  )
+}
 
 // ============================================================
 // CONTROLLER: Xác thực (A1)
@@ -544,16 +559,21 @@ export async function updateOnboarding(req, res) {
     if (!so_dien_thoai) {
       return fail(res, 400, 'Vui lòng cung cấp số điện thoại')
     }
+    const normalizedPhone = normalizePatientPhone(so_dien_thoai)
+    if (!/^0\d{9,10}$/.test(normalizedPhone)) {
+      return fail(res, 400, 'Số điện thoại không đúng định dạng')
+    }
 
     const user = await NguoiDung.findOne({ _id: userId, ngay_xoa: null })
     if (!user) {
       return fail(res, 404, 'Tài khoản không tồn tại')
     }
 
-    user.so_dien_thoai = so_dien_thoai.trim()
+    user.so_dien_thoai = normalizedPhone
     if (ho_ten) user.ho_ten = ho_ten.trim()
     user.requires_onboarding = false
     await user.save()
+    await syncDirectPatientProfile(user._id, user.ho_ten, user.so_dien_thoai)
 
     return ok(res, {
       id: user._id,
@@ -580,14 +600,17 @@ export async function updateProfile(req, res) {
     const { ho_ten, so_dien_thoai } = req.body ?? {}
     if (!ho_ten?.trim()) return fail(res, 400, 'Họ tên là bắt buộc')
     if (!so_dien_thoai?.trim()) return fail(res, 400, 'Số điện thoại là bắt buộc')
+    const normalizedPhone = normalizePatientPhone(so_dien_thoai)
+    if (!/^0\d{9,10}$/.test(normalizedPhone)) return fail(res, 400, 'Số điện thoại không đúng định dạng')
 
     user.ho_ten = ho_ten.trim()
-    user.so_dien_thoai = so_dien_thoai.trim()
+    user.so_dien_thoai = normalizedPhone
     // Google chỉ dùng để xác thực danh tính. Khi bệnh nhân đã hoàn tất hồ sơ
     // trong hệ thống, lần đăng nhập Google sau không được đưa họ về trạng thái
     // onboarding hoặc lấy lại thông tin hồ sơ cũ từ Google.
     user.requires_onboarding = false
     await user.save()
+    await syncDirectPatientProfile(user._id, user.ho_ten, user.so_dien_thoai)
 
     return ok(res, {
       id: String(user._id),

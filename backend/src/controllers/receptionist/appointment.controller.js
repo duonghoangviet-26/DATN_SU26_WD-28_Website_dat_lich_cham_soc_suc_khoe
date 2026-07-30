@@ -150,10 +150,23 @@ export const markAsArrived = async (req, res) => {
     }
 
     const checkedAppointment = await LichHen.findById(req.params.id)
-      .select('ho_so_benh_nhan_id member_id user_id nguoi_dat_ho_id ten_khach so_dien_thoai_khach')
+      .select('ho_so_benh_nhan_id member_id user_id nguoi_dat_ho_id dat_ho ten_khach so_dien_thoai_khach')
       .lean()
     if (!checkedAppointment || !appointmentBelongsToProfile(checkedAppointment, profile)) {
       return res.status(409).json({ success: false, message: 'Lịch hẹn không thuộc đúng bệnh nhân vừa được xác nhận.' })
+    }
+
+    // Nếu đây là lần đầu hồ sơ tại quầy gặp lại tài khoản online, liên kết ngay
+    // sau khi lễ tân đã xác minh đúng người. Không ghi đè liên kết cũ và phân biệt
+    // tài khoản bệnh nhân với tài khoản người đặt hộ.
+    if (checkedAppointment.user_id && !profile.tai_khoan_id && !profile.nguoi_giam_ho_id) {
+      const linkField = checkedAppointment.dat_ho || checkedAppointment.member_id || checkedAppointment.nguoi_dat_ho_id
+        ? 'nguoi_giam_ho_id'
+        : 'tai_khoan_id'
+      await HoSoBenhNhan.updateOne(
+        { _id: profile._id, tai_khoan_id: null, nguoi_giam_ho_id: null },
+        { $set: { [linkField]: checkedAppointment.user_id } },
+      )
     }
 
     const { entry, appointment, trang_thai_cu, canh_bao } = await checkInLichHen({
