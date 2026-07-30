@@ -40,21 +40,12 @@ export async function tinhTrangThaiHoaDon(hoaDonId) {
     await hoaDon.save()
   }
 
-  // Đồng bộ trạng thái thanh toán sang Lịch Hẹn tương ứng
+  // `LichHen.payment_status` chỉ phản ánh khoản thu để giữ lịch/phí khám ban đầu.
+  // Hóa đơn cuối buổi có thể phát sinh thêm dịch vụ, vì vậy không được dùng trạng
+  // thái hóa đơn cuối buổi để ghi đè trạng thái phí đặt lịch của lịch hẹn.
   let appointmentStatusChange = null
   if (hoaDon.appointment_id) {
-    const appointmentPaymentStatus =
-      trangThaiMoi === 'da_thanh_toan_du'
-        ? 'paid'
-        : trangThaiMoi === 'da_dat_coc'
-        ? 'partial'
-        : 'unpaid'
-
-    const updateFields = { payment_status: appointmentPaymentStatus }
-
     if (trangThaiMoi === 'da_thanh_toan_du') {
-      updateFields.thoi_diem_thanh_toan = new Date()
-
       // Chỉ tự động duyệt trạng thái khám nếu đang chờ xác nhận (pending)
       const statusUpdate = await LichHen.updateOne(
         { _id: hoaDon.appointment_id, status: 'pending' },
@@ -65,10 +56,6 @@ export async function tinhTrangThaiHoaDon(hoaDonId) {
       }
     }
 
-    await LichHen.updateOne(
-      { _id: hoaDon.appointment_id },
-      { $set: updateFields }
-    )
   }
 
   return {

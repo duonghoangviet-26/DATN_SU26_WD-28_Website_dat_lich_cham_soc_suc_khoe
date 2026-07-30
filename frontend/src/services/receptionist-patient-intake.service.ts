@@ -191,6 +191,9 @@ export interface BillingCase {
     tong_tien_phat_sinh: number
     tong_thanh_toan: number
     tong_da_thu: number
+    tong_da_thu_truoc: number
+    tong_da_thu_sau_kham: number
+    con_phai_thu_sau_kham: number
     con_phai_thu: number
     trang_thai_hoa_don: string
     da_xac_nhan_thu_ngan: boolean
@@ -200,6 +203,7 @@ export interface BillingCase {
   payments: Array<{
     id: string
     so_tien: number
+    loai_thanh_toan: 'phi_dat_lich' | 'dat_coc' | 'thanh_toan_bo_sung'
     phuong_thuc: 'tien_mat' | 'chuyen_khoan'
     status: 'pending' | 'paid' | 'failed' | 'refunded'
     ma_giao_dich?: string | null

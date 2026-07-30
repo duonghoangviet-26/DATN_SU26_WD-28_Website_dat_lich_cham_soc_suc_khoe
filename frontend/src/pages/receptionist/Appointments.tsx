@@ -356,7 +356,7 @@ export default function Appointments() {
                 <th className="px-4 py-3 font-semibold">Thời gian</th>
                 <th className="px-4 py-3 font-semibold">Bệnh nhân</th>
                 <th className="px-4 py-3 font-semibold">Bác sĩ</th>
-                <th className="px-4 py-3 font-semibold">Thanh toán</th>
+                <th className="px-4 py-3 font-semibold">Phí đặt lịch (thu trước)</th>
                 <th className="px-4 py-3 font-semibold">Trạng thái</th>
                 <th className="px-4 py-3 font-semibold">Thao tác</th>
               </tr>
@@ -392,10 +392,17 @@ export default function Appointments() {
                       <td className="px-4 py-3">{apt.doctor_id?.user_id?.ho_ten || 'Chưa gán'}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          apt.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 
+                          apt.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
+                          apt.payment_status === 'partial' ? 'bg-amber-100 text-amber-700' :
                           apt.payment_status === 'refunded' ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'
                         }`}>
-                          {apt.payment_status === 'paid' ? 'Đã thu' : apt.payment_status === 'refunded' ? 'Đã hoàn' : 'Chưa thu'}
+                          {apt.payment_status === 'paid'
+                            ? 'Đã trả phí khám'
+                            : apt.payment_status === 'partial'
+                              ? 'Đã trả một phần'
+                              : apt.payment_status === 'refunded'
+                                ? 'Đã hoàn phí khám'
+                                : 'Chưa trả phí khám'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -747,14 +754,21 @@ export default function Appointments() {
                       </div>
                       
                       <div className="flex justify-between items-center">
-                        <p className="text-sm text-slate-600">Thanh toán:</p>
+                        <p className="text-sm text-slate-600">Phí đặt lịch (thu trước):</p>
                         <div className="text-right">
                           <p className="font-semibold text-slate-800">{selectedDetailAppointment.gia_kham?.toLocaleString('vi-VN')} đ</p>
                           <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${
-                            selectedDetailAppointment.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 
+                            selectedDetailAppointment.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
+                            selectedDetailAppointment.payment_status === 'partial' ? 'bg-amber-100 text-amber-700' :
                             selectedDetailAppointment.payment_status === 'refunded' ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'
                           }`}>
-                            {selectedDetailAppointment.payment_status === 'paid' ? 'Đã thu' : selectedDetailAppointment.payment_status === 'refunded' ? 'Đã hoàn' : 'Chưa thu'}
+                            {selectedDetailAppointment.payment_status === 'paid'
+                              ? 'Đã trả phí khám'
+                              : selectedDetailAppointment.payment_status === 'partial'
+                                ? 'Đã trả một phần'
+                                : selectedDetailAppointment.payment_status === 'refunded'
+                                  ? 'Đã hoàn phí khám'
+                                  : 'Chưa trả phí khám'}
                           </span>
                         </div>
                       </div>

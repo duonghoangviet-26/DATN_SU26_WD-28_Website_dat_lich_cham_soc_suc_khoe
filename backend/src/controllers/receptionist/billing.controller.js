@@ -46,7 +46,7 @@ async function pendingPayment(invoiceId) {
 
 async function paymentHistory(invoiceId) {
   return ThanhToan.find({ hoa_don_id: invoiceId })
-    .select('so_tien phuong_thuc status ma_giao_dich ngay_tao ngay_thanh_toan')
+    .select('so_tien loai_thanh_toan phuong_thuc status ma_giao_dich ngay_tao ngay_thanh_toan')
     .sort({ ngay_tao: -1 })
     .lean()
 }
@@ -83,6 +83,7 @@ function serializePaymentHistory(payments) {
   return payments.map((payment) => ({
     id: String(payment._id),
     so_tien: Number(payment.so_tien || 0),
+    loai_thanh_toan: payment.loai_thanh_toan,
     phuong_thuc: payment.phuong_thuc,
     status: payment.status,
     ma_giao_dich: payment.ma_giao_dich ?? null,
@@ -194,6 +195,13 @@ async function serializeCase(caseItem) {
   const fee = await getFee(caseItem)
   const { lines, serviceTotal } = invoiceLines(caseItem, fee)
   const total = fee + serviceTotal
+  const paidBeforeExam = payments
+    .filter((payment) => payment.status === 'paid' && ['phi_dat_lich', 'dat_coc'].includes(payment.loai_thanh_toan))
+    .reduce((sum, payment) => sum + Number(payment.so_tien || 0), 0)
+  const paidAfterExam = payments
+    .filter((payment) => payment.status === 'paid' && payment.loai_thanh_toan === 'thanh_toan_bo_sung')
+    .reduce((sum, payment) => sum + Number(payment.so_tien || 0), 0)
+  const remainingAfterExam = Math.max(0, total - paidBeforeExam - paidAfterExam)
   const invoiceStatus = total <= 0 || paid >= total
     ? 'da_thanh_toan_du'
     : paid > 0 ? 'da_dat_coc' : 'chua_thanh_toan'
@@ -203,6 +211,9 @@ async function serializeCase(caseItem) {
     tong_tien_phat_sinh: serviceTotal,
     tong_thanh_toan: total,
     tong_da_thu: paid,
+    tong_da_thu_truoc: paidBeforeExam,
+    tong_da_thu_sau_kham: paidAfterExam,
+    con_phai_thu_sau_kham: remainingAfterExam,
     con_phai_thu: Math.max(0, total - paid),
     trang_thai_hoa_don: invoiceStatus,
     da_xac_nhan_thu_ngan: Boolean(invoice?.da_xac_nhan_thu_ngan && Number(invoice.tong_thanh_toan || 0) === total),
