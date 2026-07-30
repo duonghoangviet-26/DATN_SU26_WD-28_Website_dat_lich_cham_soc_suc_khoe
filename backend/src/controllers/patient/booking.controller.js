@@ -17,7 +17,6 @@ import {
   isSlotInPast,
 } from '../../utils/clinicTime.js'
 import { donDepSlotTruocKhiDoc } from '../../services/slotRelease.service.js'
-import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 import {
   chonBacSiChoKhung,
   layGiaKhamChuyenKhoa,
@@ -633,20 +632,10 @@ export async function createBooking(req, res) {
         )
       }
 
-      // Overflow control (rule muc 6): ca da tre >= 2 khung (60') thi khong nhan them luot
-      // vao cac khung con lai — ban tiep chi bien mot buoi chieu muon 30 phut thanh mot
-      // buoi toi muon 2 tieng. CHI ap cho lich HOM NAY: ca ngay mai chua bat dau, do tre
-      // hom nay khong noi len gi ve no.
-      if (appointmentDate.getTime() === getTodayDateOnly().getTime()) {
-        const quaTai = await kiemTraQuaTai(doc._id)
-        if (quaTai.chanDatOnline) {
-          return rollbackFail(
-            409,
-            `Bác sĩ đang khám trễ ${quaTai.doTrePhut} phút nên tạm ngừng nhận thêm lượt hôm nay. `
-            + 'Vui lòng chọn bác sĩ khác hoặc ngày khác.',
-          )
-        }
-      }
+      // Overflow chỉ kiểm soát lượt walk-in tại quầy. Lịch online được đặt trước,
+      // nên không bị chặn chỉ vì ca hiện tại đang trễ hoặc đang nghỉ giữa ca.
+      // Các điều kiện an toàn cho online vẫn được kiểm tra ở trên: slot còn trống,
+      // chưa qua giờ khám và chưa qua cutoff đặt online.
 
       // Giu cho CO GIAN: min(15', T-15' − now). Cua so co dinh 15' se de giu cho chet QUA
       // moc T-15' roi moi nha — dung luc le tan da het quyen ban khung do, ghe trong ma
