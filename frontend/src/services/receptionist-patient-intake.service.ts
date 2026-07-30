@@ -35,12 +35,16 @@ export interface OnlineAccount {
 
 export interface TodayAppointment {
   id: string
+  tai_khoan_id?: string | null
   ma_lich_hen?: string | null
   ngay_kham: string
   gio_kham: string
   gio_ket_thuc?: string | null
   status: string
   payment_status: string
+  ten_khach?: string | null
+  so_dien_thoai_khach?: string | null
+  nam_sinh_khach?: number | null
   nguon: 'online' | 'tai_cho'
   doctor: { id: string; ho_ten: string | null } | null
   chuyen_khoa: { id: string; ten: string | null } | null
@@ -62,6 +66,7 @@ interface PatientSearchResult {
   total: number
   can_tao_moi: boolean
   ambiguous_appointments: TodayAppointment[]
+  account_appointments: TodayAppointment[]
   checked_at: string
 }
 

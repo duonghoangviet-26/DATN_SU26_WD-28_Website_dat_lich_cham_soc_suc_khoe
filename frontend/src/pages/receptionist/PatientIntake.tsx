@@ -26,11 +26,11 @@ function formatDateTime(value?: string | null) {
 }
 
 function paymentLabel(status: string) {
-  return ({ paid: 'Đã thanh toán', partial: 'Thanh toán một phần', unpaid: 'Chưa thanh toán', refunded: 'Đã hoàn tiền' } as Record<string, string>)[status] ?? status
+  return ({ paid: 'Đã trả phí khám', partial: 'Đã trả một phần', unpaid: 'Chưa trả phí khám', refunded: 'Đã hoàn phí khám' } as Record<string, string>)[status] ?? status
 }
 
 function appointmentStatusLabel(status: string) {
-  return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã tiếp nhận', in_progress: 'Đang khám', completed: 'Hoàn thành' } as Record<string, string>)[status] ?? status
+  return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã tiếp nhận', in_progress: 'Đang khám', completed: 'Hoàn thành', cancelled: 'Đã hủy', no_show: 'Không đến' } as Record<string, string>)[status] ?? status
 }
 
 function capacityLabel(row: CapacityEvidence) {
@@ -75,6 +75,7 @@ export default function PatientIntake() {
   const [accounts, setAccounts] = useState<OnlineAccount[]>([])
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [ambiguousAppointments, setAmbiguousAppointments] = useState<TodayAppointment[]>([])
+  const [accountAppointments, setAccountAppointments] = useState<TodayAppointment[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -115,6 +116,7 @@ export default function PatientIntake() {
     setSelectedAccountId(null)
     setAccounts([])
     setAmbiguousAppointments([])
+    setAccountAppointments([])
     clearDecision()
     if (!phone.trim()) {
       setError('Vui lòng nhập số điện thoại để tra cứu')
@@ -128,6 +130,7 @@ export default function PatientIntake() {
       setAccounts(result.accounts || [])
       if ((result.accounts || []).length === 1) setSelectedAccountId(result.accounts[0].id)
       setAmbiguousAppointments(result.ambiguous_appointments || [])
+      setAccountAppointments(result.account_appointments || [])
       setMessage(result.total
         ? `Tìm thấy ${result.total} hồ sơ. Hãy xác nhận đúng người bệnh trước khi tiếp nhận.`
         : result.accounts?.length ? 'Tìm thấy tài khoản online nhưng chưa có hồ sơ bệnh nhân; hãy chọn đúng tài khoản trước khi tạo hồ sơ.' : 'Chưa có hồ sơ hoặc tài khoản, có thể tạo mới tại quầy.')
@@ -166,14 +169,18 @@ export default function PatientIntake() {
         ghi_chu: form.ghi_chu || undefined,
         tai_khoan_id: selectedAccountId || undefined,
       })
-      const normalizedProfile: PatientProfile = { ...profile, lich_hen_hom_nay: [] }
-      setProfiles((current) => [...current, normalizedProfile])
-      setSelectedId(normalizedProfile.id)
-      setPhone(normalizedProfile.so_dien_thoai || phone)
-      setAccounts((current) => current.filter((account) => account.id !== selectedAccountId))
+      const refreshed = await receptionistPatientIntakeService.searchByPhone(phone.trim())
+      setProfiles(refreshed.profiles)
+      setSelectedId(refreshed.profiles.find((item) => item.id === profile.id)?.id || profile.id)
+      setPhone(profile.so_dien_thoai || phone)
+      setAccounts(refreshed.accounts || [])
       setSelectedAccountId(null)
+      setAmbiguousAppointments(refreshed.ambiguous_appointments || [])
+      setAccountAppointments(refreshed.account_appointments || [])
       setForm(emptyForm)
-      setMessage('Đã tạo hồ sơ. Vì người bệnh chưa có lịch hẹn, hãy kiểm tra khả năng tiếp nhận trước khi xếp hàng chờ khám.')
+      setMessage(refreshed.account_appointments?.some((appointment) => ['pending', 'confirmed'].includes(appointment.status))
+        ? 'Đã tạo và gắn hồ sơ với tài khoản online. Hãy chọn lịch hẹn để xác nhận người bệnh đến khám và đưa vào hàng đợi bác sĩ.'
+        : 'Đã tạo hồ sơ. Chưa có lịch hẹn đủ điều kiện check-in hôm nay.')
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Không thể tạo hồ sơ bệnh nhân')
     } finally {
@@ -307,6 +314,47 @@ export default function PatientIntake() {
                     </div>
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {profiles.length === 0 && accountAppointments.length > 0 && (
+            <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+              <p className="font-semibold">Lịch hẹn online của tài khoản đã chọn</p>
+              <p className="mt-1 text-xs leading-5 text-blue-800">Lịch hẹn đã được tìm thấy theo tài khoản/email. Cần tạo hồ sơ bệnh nhân và xác minh đúng họ tên trước khi check-in vào hàng đợi bác sĩ.</p>
+              <div className="mt-3 space-y-2">
+                {accountAppointments.map((appointment) => {
+                  const canCheckIn = appointmentIsCheckinable(appointment)
+                  return (
+                    <div key={appointment.id} className="rounded-lg border border-blue-100 bg-white p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-800">{appointment.gio_kham} · {appointment.doctor?.ho_ten || 'Chưa gán bác sĩ'}</p>
+                          <p className="mt-1 text-xs text-slate-600">{appointment.ma_lich_hen || appointment.id} · {appointment.chuyen_khoa?.ten || 'Chưa có chuyên khoa'} · {appointment.phong_kham || 'Chưa có phòng'}</p>
+                        </div>
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${canCheckIn ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                          {appointmentStatusLabel(appointment.status)}
+                        </span>
+                      </div>
+                      {canCheckIn ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const account = accounts.find((item) => item.id === appointment.tai_khoan_id) || accounts[0]
+                            setSelectedAccountId(appointment.tai_khoan_id || account?.id || null)
+                            setForm((current) => ({ ...current, ho_ten: appointment.ten_khach || account?.ho_ten || current.ho_ten }))
+                            document.getElementById('create-profile-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          }}
+                          className="mt-3 min-h-10 rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800"
+                        >
+                          Tạo hồ sơ để check-in lịch này
+                        </button>
+                      ) : (
+                        <p className="mt-2 text-xs font-medium text-slate-600">Lịch này không thể check-in vì đã ở trạng thái {appointmentStatusLabel(appointment.status).toLowerCase()}.</p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -458,7 +506,7 @@ export default function PatientIntake() {
           )}
         </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+        <section id="create-profile-section" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div><h3 className="text-base font-bold text-slate-800">Tạo hồ sơ mới</h3><p className="mt-1 text-sm text-slate-500">Chỉ dùng khi người bệnh chưa có hồ sơ. Số điện thoại trùng không đồng nghĩa là cùng một người.</p>{accounts.length > 0 && <p className="mt-1 text-xs font-semibold text-violet-700">Hồ sơ mới sẽ được gắn với tài khoản đã chọn: {accounts.find((account) => account.id === selectedAccountId)?.email || 'chưa chọn tài khoản'}.</p>}</div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Không tạo lịch hẹn</span>

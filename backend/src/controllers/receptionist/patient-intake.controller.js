@@ -77,12 +77,16 @@ function khoangHomNay(now = new Date()) {
 function serializeAppointment(appointment) {
   return {
     id: String(appointment._id),
+    tai_khoan_id: appointment.user_id ? String(appointment.user_id._id ?? appointment.user_id) : null,
     ma_lich_hen: appointment.ma_lich_hen ?? null,
     ngay_kham: appointment.ngay_kham,
     gio_kham: appointment.gio_kham,
     gio_ket_thuc: appointment.gio_ket_thuc ?? null,
     status: appointment.status,
     payment_status: appointment.payment_status,
+    ten_khach: appointment.ten_khach ?? null,
+    so_dien_thoai_khach: appointment.so_dien_thoai_khach ?? null,
+    nam_sinh_khach: appointment.nam_sinh_khach ?? null,
     nguon: appointment.nguon ?? (appointment.hinh_thuc_dat_lich === 'receptionist' ? 'tai_cho' : 'online'),
     doctor: appointment.doctor_id
       ? {
@@ -158,6 +162,7 @@ export const searchPatientProfiles = async (req, res) => {
     const familyById = new Map(familyRows.map((family) => [String(family._id), family]))
     const accountIds = [...new Set([
       ...profileAccountIds.map(String),
+      ...phoneAccountIds.map(String),
       ...members.map((member) => member.tai_khoan_id).filter(Boolean).map(String),
       ...familyRows.map((family) => family.user_id).filter(Boolean).map(String),
     ])]
@@ -191,6 +196,13 @@ export const searchPatientProfiles = async (req, res) => {
       profile.nhom_gia_dinh = family?.ten_nhom ?? null
     }
 
+    const appointmentSelect = 'ma_lich_hen ngay_kham gio_kham gio_ket_thuc status payment_status nguon hinh_thuc_dat_lich doctor_id specialty_id phong_kham ho_so_benh_nhan_id member_id user_id nguoi_dat_ho_id so_dien_thoai_khach ten_khach nam_sinh_khach'
+    const appointmentPopulate = (query) => query
+      .select(appointmentSelect)
+      .populate({ path: 'doctor_id', select: 'user_id', populate: { path: 'user_id', select: 'ho_ten' } })
+      .populate('specialty_id', 'ten')
+      .sort({ gio_kham: 1 })
+
     const appointmentQuery = {
       loai_kham: 'clinic',
       ngay_kham: { $gte: start, $lt: end },
@@ -203,19 +215,26 @@ export const searchPatientProfiles = async (req, res) => {
       ],
     }
 
-    const [appointments, activeQueues] = await Promise.all([
-      LichHen.find(appointmentQuery)
-        .select('ma_lich_hen ngay_kham gio_kham gio_ket_thuc status payment_status nguon hinh_thuc_dat_lich doctor_id specialty_id phong_kham ho_so_benh_nhan_id member_id user_id nguoi_dat_ho_id so_dien_thoai_khach')
-        .populate({ path: 'doctor_id', select: 'user_id', populate: { path: 'user_id', select: 'ho_ten' } })
-        .populate('specialty_id', 'ten')
-        .sort({ gio_kham: 1 })
-        .lean(),
+    const [appointments, activeQueues, accountAppointments] = await Promise.all([
+      appointmentPopulate(LichHen.find(appointmentQuery)).lean(),
       profileIds.length
         ? HangDoi.find({
             ho_so_benh_nhan_id: { $in: profileIds },
             checkin_time: { $gte: start, $lt: end },
             trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu'] },
-          }).select('_id ho_so_benh_nhan_id appointment_id trang_thai doctor_id phong_kham gio_hen_goc checkin_time').lean()
+        }).select('_id ho_so_benh_nhan_id appointment_id trang_thai doctor_id phong_kham gio_hen_goc checkin_time').lean()
+        : [],
+      accountIds.length
+        ? appointmentPopulate(LichHen.find({
+            loai_kham: 'clinic',
+            ngay_kham: { $gte: start, $lt: end },
+            status: { $in: ['pending', 'confirmed', 'checked_in', 'in_progress', 'waiting_record', 'waiting_doctor_confirm', 'completed', 'cancelled', 'no_show'] },
+            $or: [
+              { user_id: { $in: accountIds } },
+              { nguoi_dat_ho_id: { $in: accountIds } },
+              { so_dien_thoai_khach: phone },
+            ],
+          })).lean()
         : [],
     ])
 
@@ -253,6 +272,7 @@ export const searchPatientProfiles = async (req, res) => {
       phone,
       profiles: profiles.map(serializeProfile),
       accounts: accountRows.map(serializeAccount),
+      account_appointments: accountAppointments.map(serializeAppointment),
       total: profiles.length,
       can_tao_moi: true,
       ambiguous_appointments: ambiguousAppointments,
