@@ -227,6 +227,13 @@ export interface SpecialtyItem {
     doctor_count?: number;
     status: "active" | "hidden";
     ngay_tao?: string;
+    // Cấu hình năng lực khám — rule mục 2/4/12 (.claude/rules/lich-lam-viec-bac-si.md).
+    // Optional vì bản ghi tạo trước migration 010 chưa có các field này.
+    thoi_gian_kham_trung_binh_phut?: number;
+    so_slot_moi_khung?: number | null; // null = tự tính floor(30 / thời gian khám)
+    ty_le_online_phan_tram?: number;
+    gia_kham?: number;
+    so_slot_moi_khung_thuc_dung?: number; // backend tính sẵn, chỉ để đọc
 }
 
 // ─── Dịch vụ ─────────────────────────────────────────────────────────────────
@@ -242,14 +249,6 @@ export interface ClinicRoomDoctor {
     specialties?: { _id: string; ten: string }[];
 }
 
-export interface ClinicRoomNurse {
-    _id: string;
-    ho_ten: string;
-    email?: string | null;
-    so_dien_thoai?: string | null;
-    status?: UserStatus;
-}
-
 export interface ClinicRoomItem {
     _id: string;
     ten: string;
@@ -259,9 +258,7 @@ export interface ClinicRoomItem {
     trang_thai: "active" | "inactive";
     full_name: string;
     doctor_ids: ClinicRoomDoctor[];
-    nurse_ids: ClinicRoomNurse[];
     doctor_count: number;
-    nurse_count: number;
     future_schedule_count: number;
     active_appointment_count: number;
     ngay_tao?: string | null;
@@ -275,12 +272,10 @@ export interface ClinicRoomPayload {
     loai: string;
     trang_thai: "active" | "inactive";
     doctor_ids: string[];
-    nurse_ids: string[];
 }
 
 export interface ClinicRoomOptions {
     doctors: ClinicRoomDoctor[];
-    nurses: ClinicRoomNurse[];
 }
 
 export type ServiceType = "home" | "related";
@@ -305,6 +300,8 @@ export interface ServiceItem {
     mo_ta_ngan?: string | null;
     mo_ta?: string | null;
     hinh_anh?: string | null;
+    // API cũ và màn hình public dùng image_url; giữ alias khi dữ liệu chưa đổi tên.
+    image_url?: string | null;
     // home: cố định 60ph, có lịch áp dụng (đặt lịch riêng, chọn BS+slot)
     // related: null — không đặt lịch riêng (đi kèm khám clinic, BS chỉ định), thời lượng/lịch áp dụng vô nghĩa
     thoi_gian_phut?: number | null;
@@ -388,6 +385,14 @@ export interface AppointmentItem {
     ghi_chu_le_tan?: string | null;
     ghi_chu_tiep_nhan?: string | null;
     so_lan_thay_doi?: number;
+    /**
+     * Số lần KHÁCH tự xin dời — trần 1 (rule mục 5). Khác `so_lan_thay_doi` (đếm MỌI thay
+     * đổi, kể cả lần dời do lỗi phòng khám). Chặn theo `so_lan_thay_doi` sẽ tước oan quyền
+     * dời của khách khi lần trước là lỗi phòng khám.
+     */
+    so_lan_doi_khach_yeu_cau?: number;
+    /** Phân loại lần dời gần nhất: khách yêu cầu (tính hạn mức) hay lỗi phòng khám (không tính). */
+    ly_do_doi?: 'khach_yeu_cau' | 'phong_kham' | null;
     canh_bao?: {
         unpaid: boolean;
         rescheduled_multiple_times: boolean;
@@ -681,6 +686,8 @@ export interface DoctorSlot {
     benh_nhan?: string | null;
     benh_nhan_id?: string | null;
     la_khach_vang_lai?: boolean;
+    // Nguon dang chiem slot: lich dat truoc hoac luot tai quay trong HangDoi.
+    nguon_chiem_cho?: "dat_truoc" | "tai_quay" | null;
     // pending_payment: slot bị BN giữ 15 phút trong khi thanh toán VNPay (soft-lock)
     status:
         | "active"
@@ -748,6 +755,7 @@ export interface DoctorScheduleDetailSlot {
     benh_nhan_id: string | null;
     benh_nhan: string | null;
     la_khach_vang_lai: boolean;
+    nguon_chiem_cho: "dat_truoc" | "tai_quay" | null;
     lock_expires_at: string | null;
     cancel_requested: boolean;
     bi_khoa_boi_nghi_phep: boolean;
@@ -802,7 +810,9 @@ export type KetQuaKhamStatus =
 // như DoctorAppointmentDetail (màn này chỉ để lọc nhanh hồ sơ cần xử lý).
 export interface DoctorPendingRecord {
     id: string; // KetQuaKham._id
-    appointment_id: string;
+    appointment_id: string | null;
+    hang_doi_id?: string | null;
+    ho_so_benh_nhan_id?: string | null;
     ngay_kham: string;
     benh_nhan: string;
     ten_dich_vu: string | null;
@@ -827,6 +837,7 @@ export type ExamQueueStatus =
 export interface DoctorExamQueueRow {
     id: string; // HangDoiKham._id
     appointment_id: string | null; // null nếu là lượt vãng lai (offline)
+    ho_so_benh_nhan_id?: string | null;
     nguon: "online" | "offline";
     ten_benh_nhan: string;
     tuoi: number | null;
@@ -906,7 +917,34 @@ export interface QueueCheckinEntry {
 
 export interface QueueCheckinResult {
     entry: QueueCheckinEntry;
+    /** Danh sách cảnh báo tại quầy: chưa thanh toán, đến sớm/trễ, ca đang quá tải. */
+    canh_bao: string[];
+    /** Giữ lại cho code cũ — cùng nội dung với `canh_bao`, gộp thành một chuỗi. */
     canh_bao_qua_tai: string | null;
+}
+
+// GET /doctor/queue/pending-checkin — khách đã đặt hôm nay nhưng CHƯA vào hàng đợi.
+// Mắt xích giữa "khách đã đặt + đã trả tiền" và "bác sĩ tiếp nhận".
+export interface LichChoTiepNhan {
+    appointment_id: string;
+    ma_lich_hen: string | null;
+    ten_benh_nhan: string;
+    so_dien_thoai: string | null;
+    tuoi: number | null;
+    gioi_tinh: "nam" | "nu" | "khac" | null;
+    doctor_id: string;
+    chuyen_khoa: string | null;
+    gio_kham: string;
+    phong_kham: string | null;
+    nguon: "online" | "tai_cho";
+    status: string;
+    payment_status: "unpaid" | "partial" | "paid" | "refunded";
+    /** Đã tới giờ khung của mình chưa (mốc `T` — rule mục 11). */
+    da_toi_khung: boolean;
+    /** Đang trong 15 phút grace `T` → `T+15'` — vẫn giữ ưu tiên online. */
+    con_trong_grace: boolean;
+    /** Trễ quá `T+15'` — vẫn được khám, xếp sau, KHÔNG mất tiền. */
+    tre_qua_grace: boolean;
 }
 
 // PATCH /doctor/queue/:id/{call,into-room,finish,skip,cancel}
@@ -917,10 +955,11 @@ export interface QueueActionResult {
 }
 
 export interface DoctorAppointmentDetail {
-    id: string; // Mongo ObjectId — backend trả về string, không phải number
+    id: string | number; // Mongo ObjectId từ API; mock cũ có thể dùng number
     ma_lich_hen?: string | null;
     benh_nhan: string;
-    benh_nhan_id: string;
+    benh_nhan_id: string | number;
+    ho_so_benh_nhan_id?: string | null;
     so_dien_thoai: string;
     ngay_kham: string;
     gio_kham: string;
@@ -963,7 +1002,23 @@ export interface ExamResultEditPayload {
     ghi_chu?: string | null;
     ngay_tai_kham?: string | null;
     thuoc?: Omit<PrescriptionDrug, 'id'>[];
+    dich_vu_phat_sinh?: Array<{ service_id: string; so_luong: number }>;
     sinh_hieu?: VitalSigns;
+}
+
+export interface ExamRelatedService {
+    _id: string;
+    ten: string;
+    gia: number;
+    specialty_id?: string | null;
+}
+
+export interface ExaminationServiceOrder {
+    service_id: string;
+    ten: string;
+    so_luong: number;
+    don_gia: number;
+    thanh_tien: number;
 }
 
 // Sinh hiệu ban đầu — bác sĩ tự đo/nhập ngay khi nhập kết quả khám.
@@ -995,6 +1050,7 @@ export interface ExaminationResult {
     ngay_tai_kham: string;
     co_the_sua: boolean; // dự phòng cho khóa thủ công/tương lai — khóa thật hiện dựa vào status==='da_xac_nhan' (GAP-001)
     thuoc: PrescriptionDrug[]; // joined từ don_thuoc (backend trả gộp)
+    dich_vu_phat_sinh?: ExaminationServiceOrder[];
     ngay_tao: string;
     lich_su_sua?: ExaminationHistoryEntry[];
 }
@@ -1124,7 +1180,6 @@ export interface DoctorUpdatePayload {
     phi_kham?: number;
     la_hien?: boolean;
     anh_dai_dien?: string | null;
-    admin_id: string;
 }
 
 export interface NotificationUpdatePayload {
@@ -1148,10 +1203,66 @@ export interface NewsItem {
     id: string;
     tieu_de: string;
     slug: string;
+    url_slug?: string | null;
     noi_dung_ngan: string;
     noi_dung: string;
     anh_dai_dien: string;
     nguoi_viet: string;
     luot_xem: number;
     ngay_tao: string;
+}
+
+export type NewsStatus = "draft" | "published" | "hidden";
+
+export interface NewsArticle {
+    id: string;
+    _id?: string;
+    title: string;
+    slug: string;
+    url_slug?: string | null;
+    image: string;
+    content: string;
+    excerpt: string;
+    status: NewsStatus;
+    author_id?: string | null;
+    author_name?: string | null;
+    view_count: number;
+    created_at: string;
+    updated_at?: string | null;
+    // Legacy aliases returned by the backend while old client code is being phased out.
+    tieu_de?: string;
+    noi_dung_ngan?: string;
+    noi_dung?: string;
+    anh_dai_dien?: string;
+    nguoi_viet?: string;
+    luot_xem?: number;
+    ngay_tao?: string;
+}
+
+export interface NewsPayload {
+    title: string;
+    slug: string;
+    author_name: string;
+    image: string;
+    content: string;
+    status?: NewsStatus;
+}
+
+export interface NewsListResult {
+    items: NewsArticle[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    };
+}
+
+export interface AdminNewsListResult extends NewsListResult {
+    statistics: {
+        total: number;
+        published: number;
+        draft: number;
+        hidden: number;
+    };
 }

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 
+import { buildSlotDateTime } from '../utils/clinicTime.js'
 import {
   HoaDon,
   LichHen,
@@ -300,10 +301,10 @@ export async function cancelAppointmentWithPaymentSync({
   const { invoice, payments } = await findInvoiceAndPaymentsForAppointment(appointment._id, session)
   const paidPayments = payments.filter((payment) => payment.status === 'paid')
 
-  const [h, m] = (appointment.gio_kham || '00:00').split(':').map(Number)
-  const gioKham = new Date(appointment.ngay_kham)
-  gioKham.setHours(h || 0, m || 0, 0, 0)
-  const diffMs = gioKham.getTime() - Date.now()
+  // gio_kham la gio phong kham (UTC+7); setHours() truc tiep se lech 7 tieng vi TZ tien trinh
+  // da bi ep = UTC (config/timezone.js). Dung ham chuan -> nguong 24h tinh dung.
+  const gioKham = buildSlotDateTime(appointment.ngay_kham, appointment.gio_kham || '00:00')
+  const diffMs = (gioKham?.getTime() ?? Date.now()) - Date.now()
   const isWithin24h = diffMs < 24 * 3600 * 1000
 
   for (const payment of payments) {

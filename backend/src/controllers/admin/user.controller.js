@@ -5,6 +5,22 @@ import { ok, fail } from '../../utils/response.js'
 import { emitDashboardNewPatient } from '../../realtime/socket.js'
 
 const ADMIN_ID = "000000000000000000000099"
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const ADMIN_MANAGED_ROLES = ['user', 'patient', 'doctor', 'admin', 'receptionist']
+
+function buildDefaultDoctorProfile(userId) {
+  return {
+    user_id: userId,
+    trang_thai_duyet: 'pending',
+    so_nam_kinh_nghiem: 0,
+    gia_kham: 0,
+    phi_kham: 0,
+    specialties: [],
+    services: [],
+    related_services: [],
+    la_hien: true,
+  }
+}
 
 /**
  * Hàm trợ giúp ghi nhật ký thao tác
@@ -50,7 +66,14 @@ export async function getAllUsers(req, res) {
       ]
     }
 
-    if (role) query.role = role
+    if (role) {
+      if (!ADMIN_MANAGED_ROLES.includes(role)) {
+        return fail(res, 400, 'Vai trò không hợp lệ')
+      }
+      query.role = role
+    } else {
+      query.role = { $in: ADMIN_MANAGED_ROLES }
+    }
     if (status) query.status = status
 
     // Tính toán phân trang
@@ -107,15 +130,20 @@ export async function getUserById(req, res) {
  */
 export async function createUser(req, res) {
   try {
-    const { email, mat_khau, ho_ten, so_dien_thoai, anh_dai_dien, role } = req.body
+    let { email, mat_khau, ho_ten, so_dien_thoai, anh_dai_dien, role } = req.body
 
     // 1. Validate dữ liệu
     if (!email || !mat_khau || !ho_ten) {
       return fail(res, 400, 'Vui lòng nhập đầy đủ email, mật khẩu và họ tên')
     }
 
+    email = String(email).trim().toLowerCase()
+    if (!EMAIL_REGEX.test(email)) {
+      return fail(res, 400, 'Email không đúng định dạng')
+    }
+
     // 2. Kiểm tra email tồn tại
-    const existed = await NguoiDung.findOne({ email })
+    const existed = await NguoiDung.findOne({ email, ngay_xoa: null })
     if (existed) {
       return fail(res, 400, 'Email này đã được đăng ký trong hệ thống')
     }
@@ -125,13 +153,18 @@ export async function createUser(req, res) {
     const hashedPassword = await bcrypt.hash(mat_khau, salt)
 
     // 4. Tạo user
+    const normalizedRole = role || 'user'
+    if (!ADMIN_MANAGED_ROLES.includes(normalizedRole)) {
+      return fail(res, 400, 'Vai trò không hợp lệ')
+    }
+
     const newUser = await NguoiDung.create({
       email,
       mat_khau: hashedPassword,
       ho_ten,
       so_dien_thoai,
       anh_dai_dien: anh_dai_dien || null,
-      role: role || 'user'
+      role: normalizedRole
     })
 
     if (['user', 'patient'].includes(newUser.role)) {
@@ -140,10 +173,7 @@ export async function createUser(req, res) {
 
     // NẾU LÀ BÁC SĨ -> TẠO NGAY HỒ SƠ BÁC SĨ (để xuất hiện bên Quản lý Bác sĩ)
     if (newUser.role === 'doctor') {
-      await BacSi.create({
-        user_id: newUser._id,
-        trang_thai_duyet: 'pending' // Mặc định là chờ duyệt
-      })
+      await BacSi.create(buildDefaultDoctorProfile(newUser._id))
 
       // Gửi thông báo cho Admin
       await ThongBao.create({
@@ -157,7 +187,7 @@ export async function createUser(req, res) {
 
     // 5. Ghi nhật ký
     await logActivity(req, 'CREATE_USER', newUser._id, null, {
-      email, ho_ten, anh_dai_dien: anh_dai_dien || null, role: role || 'user'
+      email, ho_ten, anh_dai_dien: anh_dai_dien || null, role: normalizedRole
     })
 
     return res.status(201).json({
@@ -175,16 +205,45 @@ export async function createUser(req, res) {
  */
 export async function updateUser(req, res) {
   try {
-    const { ho_ten, so_dien_thoai, anh_dai_dien, role, status } = req.body
-
-    const updateData = { ho_ten, so_dien_thoai, role, status }
-    if (anh_dai_dien !== undefined) {
-      updateData.anh_dai_dien = anh_dai_dien || null
-    }
-
     const oldUser = await NguoiDung.findById(req.params.id).lean()
     if (!oldUser) {
       return fail(res, 404, 'Không tìm thấy người dùng để cập nhật')
+    }
+
+    const { email, ho_ten, so_dien_thoai, anh_dai_dien, role, status } = req.body
+
+    const updateData = {}
+    if (email !== undefined) {
+      const normalizedEmail = String(email).trim().toLowerCase()
+      if (!normalizedEmail) {
+        return fail(res, 400, 'Vui lòng nhập email')
+      }
+      if (!EMAIL_REGEX.test(normalizedEmail)) {
+        return fail(res, 400, 'Email không đúng định dạng')
+      }
+
+      const existed = await NguoiDung.findOne({
+        email: normalizedEmail,
+        ngay_xoa: null,
+        _id: { $ne: req.params.id },
+      }).lean()
+      if (existed) {
+        return fail(res, 400, 'Email này đã được đăng ký trong hệ thống')
+      }
+
+      updateData.email = normalizedEmail
+    }
+    if (ho_ten !== undefined) updateData.ho_ten = ho_ten
+    if (so_dien_thoai !== undefined) updateData.so_dien_thoai = so_dien_thoai
+    if (role !== undefined) {
+      if (!ADMIN_MANAGED_ROLES.includes(role)) {
+        return fail(res, 400, 'Vai trò không hợp lệ')
+      }
+      updateData.role = role
+    }
+    if (status !== undefined) updateData.status = status
+    if (anh_dai_dien !== undefined) {
+      updateData.anh_dai_dien = anh_dai_dien || null
     }
 
     const oldLogData = {}
@@ -206,14 +265,15 @@ export async function updateUser(req, res) {
       { new: true, runValidators: true }
     )
 
-    // NẾU ĐỔI ROLE THÀNH BÁC SĨ MÀ CHƯA CÓ HỒ SƠ -> TẠO HỒ SƠ
-    if (user && user.role === 'doctor') {
-      const existingBacSi = await BacSi.findOne({ user_id: user._id })
-      if (!existingBacSi) {
-        await BacSi.create({
-          user_id: user._id,
-          trang_thai_duyet: 'pending'
-        })
+    if (!user) {
+      return fail(res, 404, 'Không tìm thấy người dùng để cập nhật')
+    }
+
+    // Nếu vai trò chuyển thành bác sĩ, tự động tạo hồ sơ bác sĩ mặc định nếu chưa có.
+    if (user.role === 'doctor') {
+      const exists = await BacSi.findOne({ user_id: user._id })
+      if (!exists) {
+        await BacSi.create(buildDefaultDoctorProfile(user._id))
 
         // Gửi thông báo cho Admin
         await ThongBao.create({
@@ -221,25 +281,6 @@ export async function updateUser(req, res) {
           tieu_de: 'Có hồ sơ bác sĩ mới cần duyệt',
           noi_dung: `Người dùng ${user.ho_ten} vừa được nâng cấp thành Bác sĩ. Vui lòng kiểm tra hồ sơ.`,
           loai: 'system'
-        })
-      }
-    }
-
-    if (!user) {
-      return fail(res, 404, 'Không tìm thấy người dùng để cập nhật')
-    }
-
-    // Nếu vai trò chuyển thành bác sĩ, tự động tạo hoặc kích hoạt lại hồ sơ bác sĩ
-    if (user.role === 'doctor') {
-      const exists = await BacSi.findOne({ user_id: user._id })
-      if (!exists) {
-        await BacSi.create({
-          user_id: user._id,
-          trang_thai_duyet: 'approved',
-          so_nam_kinh_nghiem: 0,
-          phi_tu_van: 0,
-          specialties: [],
-          services: []
         })
       }
     }
@@ -324,6 +365,20 @@ export async function softDeleteUser(req, res) {
  */
 export async function restoreUser(req, res) {
   try {
+    const oldUser = await NguoiDung.findById(req.params.id).lean()
+    if (!oldUser) {
+      return fail(res, 404, 'Không tìm thấy người dùng')
+    }
+
+    const activeEmailOwner = await NguoiDung.findOne({
+      email: oldUser.email,
+      ngay_xoa: null,
+      _id: { $ne: req.params.id },
+    }).lean()
+    if (activeEmailOwner) {
+      return fail(res, 400, 'Không thể khôi phục vì email này đang được tài khoản khác sử dụng')
+    }
+
     const user = await NguoiDung.findByIdAndUpdate(
       req.params.id,
       { ngay_xoa: null },
@@ -352,14 +407,16 @@ export async function getUserStatistics(req, res) {
       total,
       admins,
       doctors,
+      receptionists,
       users,
       active,
       locked,
       deleted
     ] = await Promise.all([
-      NguoiDung.countDocuments({ ngay_xoa: null }),
+      NguoiDung.countDocuments({ role: { $in: ADMIN_MANAGED_ROLES }, ngay_xoa: null }),
       NguoiDung.countDocuments({ role: 'admin', ngay_xoa: null }),
       NguoiDung.countDocuments({ role: 'doctor', ngay_xoa: null }),
+      NguoiDung.countDocuments({ role: 'receptionist', ngay_xoa: null }),
       NguoiDung.countDocuments({ role: 'user', ngay_xoa: null }),
       NguoiDung.countDocuments({ status: 'active', ngay_xoa: null }),
       NguoiDung.countDocuments({ status: 'locked', ngay_xoa: null }),
@@ -368,7 +425,7 @@ export async function getUserStatistics(req, res) {
 
     return ok(res, {
       total,
-      roles: { admin: admins, doctor: doctors, user: users },
+      roles: { admin: admins, doctor: doctors, receptionist: receptionists, user: users },
       status: { active, locked },
       deleted
     }, 'Lấy thống kê người dùng thành công')

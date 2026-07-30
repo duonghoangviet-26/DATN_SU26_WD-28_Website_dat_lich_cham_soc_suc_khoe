@@ -8,7 +8,12 @@ export interface VirtualNotification {
   ngay_tao: string
   da_doc: boolean
   loai: string
-  related_id: string
+  related_id: string | null
+  related_type?: string | null
+  du_lieu_dinh_kem?: {
+    url?: string | null
+    [key: string]: unknown
+  } | null
 }
 
 export const receptionistNotificationService = {

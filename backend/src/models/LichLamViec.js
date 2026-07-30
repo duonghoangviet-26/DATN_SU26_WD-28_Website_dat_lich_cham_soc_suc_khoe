@@ -44,7 +44,16 @@ const slotSchema = new mongoose.Schema(
       enum: ['online', 'walk_in'],
       default: 'online', // giu hanh vi cu: moi slot deu kha dung cho dat online
     },
+    // Ten phong dang snapshot ("Phòng 101, Tầng 1, Tòa A") — giu de doi ten phong khong
+    // lam vo lich cu. `phong_id` la khoa that, them 2026-07-26 cung `MauLichLamViec`:
+    // phong gan voi CA chu khong gan voi NGAY (bac si co the sang phong 101, chieu 102),
+    // nen no phai nam o cap SLOT, khong nam o cap lich.
     phong_kham: { type: String, default: null },
+    phong_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PhongKham',
+      default: null,
+    },
     status: {
       type: String,
       enum: ['active', 'pending_payment', 'booked', 'locked', 'cancelled', 'expired'],
@@ -70,6 +79,20 @@ const slotSchema = new mongoose.Schema(
 slotSchema.pre('validate', function () {
   if (this.gio_bat_dau && this.gio_ket_thuc && this.gio_ket_thuc <= this.gio_bat_dau) {
     throw new Error('gio_ket_thuc phai sau gio_bat_dau')
+  }
+  // Giu cho PHAI co han. Khong co han thi khong bao gio het han -> slot khoa vinh vien,
+  // khach khong dat duoc du ghe trong (2026-07-25: 9 slot nhu vay tren DB that).
+  //
+  // ⚠️ CHI kiem tra slot BI DUNG TOI trong lan luu nay (`isModified`). Neu kiem tra moi slot,
+  // mot slot xau con sot trong mang se lam VO TOAN BO cac luong khac cung goi save() tren lich
+  // do — duyet nghi phep, admin sua slot khac, va nghiem trong nhat la releaseAppointmentSlot()
+  // trong luong HUY LICH (khach se khong huy duoc lich hen). Da kiem chung bang thuc nghiem.
+  //
+  // Hook nay cung chi chan duong document.save() (vd admin/slots.controller.js). Duong dat lich
+  // cua benh nhan dung findOneAndUpdate nen KHONG qua day — phong ve chinh nam o
+  // services/slotRelease.service.js (coi giu cho khong han la hong -> nha khi doc lich).
+  if (this.isModified() && this.status === 'pending_payment' && !this.pending_expired_at) {
+    throw new Error('slot pending_payment bat buoc phai co pending_expired_at')
   }
 })
 

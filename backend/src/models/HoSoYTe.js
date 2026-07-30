@@ -12,6 +12,8 @@ const medicalRecordSchema = new mongoose.Schema(
   {
     member_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'ThanhVien', default: null },
     appointment_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichHen', default: null },
+    hang_doi_id: { type: mongoose.Schema.Types.ObjectId, ref: 'HangDoi', default: null },
+    ho_so_benh_nhan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'HoSoBenhNhan', default: null },
     ten_khach: { type: String, default: null, maxlength: 255 },
     ngay_kham: {
       type: Date,
@@ -41,16 +43,18 @@ const medicalRecordSchema = new mongoose.Schema(
 // nguon='tu_kham': phải có appointment_id (tạo từ lịch khám)
 // mọi hồ sơ: phải có member_id hoặc ten_khach (biết của ai)
 medicalRecordSchema.pre('validate', function () {
-  if (this.nguon === 'tu_kham' && !this.appointment_id) {
-    throw new Error('Hồ sơ từ lịch khám (tu_kham) phải có appointment_id')
+  if (this.nguon === 'tu_kham' && !this.appointment_id && !this.hang_doi_id) {
+    throw new Error('Hồ sơ từ lượt khám (tu_kham) phải có appointment_id hoặc hang_doi_id')
   }
-  if (!this.member_id && !this.ten_khach) {
-    throw new Error('Hồ sơ y tế phải có member_id hoặc ten_khach')
+  if (!this.member_id && !this.ten_khach && !this.ho_so_benh_nhan_id) {
+    throw new Error('Hồ sơ y tế phải có member_id, ho_so_benh_nhan_id hoặc ten_khach')
   }
 })
 
 medicalRecordSchema.index({ member_id: 1 })
 medicalRecordSchema.index({ appointment_id: 1 })
+medicalRecordSchema.index({ hang_doi_id: 1 })
+medicalRecordSchema.index({ ho_so_benh_nhan_id: 1 })
 medicalRecordSchema.index({ ngay_kham: -1 })
 
 export default mongoose.model('HoSoYTe', medicalRecordSchema)

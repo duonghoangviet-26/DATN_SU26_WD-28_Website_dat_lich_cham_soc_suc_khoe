@@ -11,13 +11,18 @@
     "lint": "eslint . --ext js,jsx,ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e:receptionist": "playwright test",
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.5",
+    "@google/generative-ai": "^0.24.1",
+    "antd": "^6.5.1",
     "axios": "^1.7.2",
     "date-fns": "^3.6.0",
     "framer-motion": "^12.42.2",
+    "lucide-react": "^1.27.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

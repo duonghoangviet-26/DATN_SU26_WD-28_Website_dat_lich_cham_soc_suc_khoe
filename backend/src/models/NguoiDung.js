@@ -5,14 +5,14 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: [true, 'Email la bat buoc'],
-      unique: true,
       lowercase: true,
       trim: true,
       maxlength: 255,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Email khong dung dinh dang'],
     },
     mat_khau: {
       type: String,
-      required: [true, 'Mat khau la bat buoc'],
+      default: null,
       maxlength: 255,
       select: false,
     },
@@ -24,6 +24,24 @@ const userSchema = new mongoose.Schema(
     },
     so_dien_thoai: { type: String, default: null, maxlength: 20 },
     anh_dai_dien: { type: String, default: null, maxlength: 500 },
+    anh_dai_dien_google: { type: String, default: null, maxlength: 500 },
+    google_id: {
+      type: String,
+      default: null,
+      sparse: true,
+    },
+    providers: {
+      type: [String],
+      enum: ['local', 'google'],
+      default: ['local'],
+    },
+    email_verified: {
+      type: Boolean,
+      default: false,
+    },
+    last_login_at: { type: Date, default: null },
+    last_login_provider: { type: String, default: null },
+    requires_onboarding: { type: Boolean, default: false },
     role: {
       type: String,
       enum: ['user', 'patient', 'doctor', 'admin', 'receptionist'],
@@ -57,6 +75,8 @@ const userSchema = new mongoose.Schema(
       min: 0,
     },
     ngay_xoa: { type: Date, default: null },
+    reset_password_token: { type: String, default: null },
+    reset_password_expire: { type: Date, default: null },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },
@@ -76,5 +96,19 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ role: 1 })
 userSchema.index({ status: 1 })
+userSchema.index(
+  { google_id: 1 },
+  {
+    sparse: true,
+    partialFilterExpression: { ngay_xoa: null },
+  }
+)
+userSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { ngay_xoa: null },
+  }
+)
 
 export default mongoose.model('NguoiDung', userSchema)

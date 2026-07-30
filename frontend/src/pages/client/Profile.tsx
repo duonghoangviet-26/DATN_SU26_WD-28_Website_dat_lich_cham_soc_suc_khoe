@@ -6,6 +6,7 @@ import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import Modal from '@/components/common/Modal'
 import Toast from '@/components/common/Toast'
+import RescheduleModal from '@/components/client/RescheduleModal'
 import { useAuth } from '@/context/AuthContext'
 import {
   patientRecordsService,
@@ -60,7 +61,9 @@ export default function Profile() {
 
   const [toast, setToast] = useState<string | null>(null)
   const [cancelModalId, setCancelModalId] = useState<string | null>(null)
-  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false)
+  // Giữ ID lịch hẹn thay vì boolean: modal cần biết dời lịch NÀO (trước đây chỉ mở một
+  // hộp thoại tĩnh bảo khách gọi hotline, không gắn với lịch cụ thể).
+  const [rescheduleAppId, setRescheduleAppId] = useState<string | null>(null)
   const [refundHelpAppId, setRefundHelpAppId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -68,6 +71,16 @@ export default function Profile() {
       navigate('/login?redirect=/profile')
     }
   }, [user, authLoading, navigate])
+
+  // Tách riêng để dời lịch xong có thể nạp lại danh sách mà không phải reload trang.
+  async function loadAppointments() {
+    try {
+      const result = await patientRecordsService.getAppointments()
+      setAppointments(Array.isArray(result?.data) ? result.data : [])
+    } catch (error: any) {
+      setToast(error.response?.data?.message || error.message || 'Không tải được lịch hẹn của bạn.')
+    }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -463,10 +476,10 @@ export default function Profile() {
                               <div className="flex gap-2">
                                 <Button
                                   variant="secondary"
-                                  onClick={() => setRescheduleModalOpen(true)}
+                                  onClick={() => setRescheduleAppId(appointment.id)}
                                   className="border-blue-100 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                                 >
-                                  Rời lịch
+                                  Dời lịch
                                 </Button>
                                 {appointment.payment_status === 'paid' ? (
                                   <Button
@@ -474,7 +487,7 @@ export default function Profile() {
                                     onClick={() => setRefundHelpAppId(appointment.id)}
                                     className="border-red-100 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
                                   >
-                                    Hủy & Hoàn tiền
+                                    Hủy lịch
                                   </Button>
                                 ) : (
                                   <Button
@@ -992,68 +1005,65 @@ export default function Profile() {
         )
       })()}
 
-      {rescheduleModalOpen && (
-        <Modal
-          isOpen={rescheduleModalOpen}
-          onClose={() => setRescheduleModalOpen(false)}
-          title="RỜI LỊCH KHÁM CHUYÊN KHOA"
-        >
-          <div className="space-y-4">
-            <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 text-left text-xs space-y-2">
-              <p className="font-bold text-blue-800 uppercase tracking-wider text-sm">Hỗ trợ dời lịch khám:</p>
-              <p className="text-blue-700 leading-relaxed text-[13px]">
-                Để thực hiện dời lịch khám sang ngày hoặc khung giờ trực khác của bác sĩ, quý khách vui lòng liên hệ hotline chăm sóc khách hàng <strong>0365 747888</strong> hoặc trao đổi trực tiếp tại quầy lễ tân của phòng khám.
-              </p>
-              <p className="text-blue-600 leading-relaxed text-[12px] italic">
-                * Lưu ý: Chi phí khám đã thanh toán sẽ được hệ thống bảo lưu và chuyển sang lịch khám mới của quý khách hoàn toàn miễn phí.
-              </p>
-            </div>
-            <div className="flex justify-end">
-              <Button variant="primary" onClick={() => setRescheduleModalOpen(false)}>Đồng ý</Button>
-            </div>
-          </div>
-        </Modal>
+      {rescheduleAppId && (
+        <RescheduleModal
+          appointmentId={rescheduleAppId}
+          onClose={() => setRescheduleAppId(null)}
+          onDone={(thongBao) => {
+            setRescheduleAppId(null)
+            setToast(thongBao)
+            void loadAppointments()
+          }}
+        />
       )}
 
+      {/* Rule mục 5: KHÔNG hoàn tiền trong mọi trường hợp. Bản cũ ở đây hứa hoàn 50%/100%
+          tuỳ mốc 24h — trái hẳn điều khoản khách đã ký lúc đặt, và là loại mâu thuẫn dẫn
+          thẳng tới tranh chấp. Nay nói đúng chính sách và hướng khách sang DỜI LỊCH, thứ
+          họ thực sự được hưởng. */}
       {refundHelpAppId && (() => {
         const selectedApp = appointments.find((a) => a.id === refundHelpAppId)
-        let isWithin24h = false
-        if (selectedApp) {
-          try {
-            const appDate = new Date(selectedApp.ngay_kham)
-            if (selectedApp.gio_kham && selectedApp.gio_kham.includes(':')) {
-              const [h, m] = selectedApp.gio_kham.split(':').map(Number)
-              appDate.setHours(h, m, 0, 0)
-            }
-            isWithin24h = (appDate.getTime() - Date.now()) < 24 * 3600 * 1000
-          } catch {}
-        }
         return (
           <Modal
             isOpen={!!refundHelpAppId}
             onClose={() => setRefundHelpAppId(null)}
-            title="HỦY LỊCH & YÊU CẦU HOÀN TIỀN"
+            title="HỦY LỊCH KHÁM"
           >
-            <div className="space-y-4">
-              <div className="rounded-xl bg-orange-50 border border-orange-100 p-4 text-left text-xs space-y-2">
-                <p className="font-bold text-orange-800 uppercase tracking-wider text-sm">Chính sách hoàn phí:</p>
-                {isWithin24h ? (
-                  <p className="text-orange-700 leading-relaxed text-[13px]">
-                    Lịch khám của quý khách sẽ diễn ra trong vòng 24h tới. Theo chính sách phòng khám, quý khách đủ điều kiện được **hoàn trả 50%** chi phí đã thanh toán ({((selectedApp?.gia_kham || 0) * 0.5).toLocaleString('vi-VN')}đ).
-                  </p>
-                ) : (
-                  <p className="text-orange-700 leading-relaxed text-[13px]">
-                    Lịch khám của quý khách còn hơn 24h mới diễn ra. Theo chính sách phòng khám, quý khách đủ điều kiện được **hoàn trả 100%** chi phí đã thanh toán ({selectedApp?.gia_kham.toLocaleString('vi-VN')}đ).
-                  </p>
-                )}
-                
-                <p className="font-bold text-slate-800 uppercase tracking-wider text-sm mt-3 pt-2 border-t border-orange-100">Liên hệ hoàn tiền:</p>
-                <p className="text-slate-600 leading-relaxed text-[13px]">
-                  Để thực hiện thủ tục hủy lịch và nhận lại số tiền hoàn trả trên, quý khách vui lòng liên hệ hotline chăm sóc khách hàng <strong>0365 747888</strong> hoặc trao đổi với nhân viên tại quầy lễ tân để được xử lý hoàn tiền thủ công.
+            <div className="space-y-4 text-left">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-relaxed text-red-800">
+                <p className="font-bold">Huỷ lịch đồng nghĩa mất toàn bộ số tiền đã thanh toán
+                  {selectedApp ? ` (${selectedApp.gia_kham.toLocaleString('vi-VN')}đ)` : ''}.</p>
+                <p className="mt-2">
+                  Phòng khám không hoàn tiền — đây là điều khoản bạn đã đồng ý khi đặt lịch.
                 </p>
               </div>
-              <div className="flex justify-end">
-                <Button variant="primary" onClick={() => setRefundHelpAppId(null)}>Đồng ý</Button>
+
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-800">
+                <p className="font-bold">Bạn nên dời lịch thay vì huỷ.</p>
+                <p className="mt-2">
+                  Dời lịch giữ nguyên số tiền đã trả và bạn được dời một lần miễn phí. Nếu không
+                  đến được vào giờ đã hẹn, chỉ cần dời trước giờ khám 30 phút.
+                </p>
+              </div>
+
+              <p className="text-xs leading-relaxed text-slate-500">
+                Nếu bạn cho rằng đây là lỗi từ phía phòng khám (bác sĩ nghỉ, đổi lịch...), vui lòng
+                liên hệ hotline <strong>0365 747888</strong> — những trường hợp đó được dời lịch mà
+                không tính vào hạn mức của bạn.
+              </p>
+
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="secondary" onClick={() => setRefundHelpAppId(null)}>Để sau</Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    const id = refundHelpAppId
+                    setRefundHelpAppId(null)
+                    setRescheduleAppId(id)
+                  }}
+                >
+                  Dời lịch thay vì huỷ
+                </Button>
               </div>
             </div>
           </Modal>

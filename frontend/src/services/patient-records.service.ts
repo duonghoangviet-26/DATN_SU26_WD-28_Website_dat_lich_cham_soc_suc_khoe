@@ -44,6 +44,7 @@ export interface PatientRecordDetail extends PatientRecordListItem {
       lieu_luong?: string
       tan_suat?: string
       gio_uong?: string[]
+      so_ngay?: number
       ngay_bat_dau?: string
       ngay_ket_thuc?: string
       ghi_chu?: string | null

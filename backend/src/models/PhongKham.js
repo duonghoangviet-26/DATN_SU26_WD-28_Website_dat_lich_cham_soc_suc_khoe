@@ -5,7 +5,7 @@ import mongoose from 'mongoose'
 // ============================================================
 // Vai trò:
 //   - Admin tạo/sửa/ẩn phòng nhỏ.
-//   - Gán bác sĩ/y tá phụ trách phòng.
+//   - Gán bác sĩ phụ trách phòng.
 //   - Lưu snapshot full_name vào lịch làm việc/lịch hẹn để không vỡ lịch cũ khi đổi tên phòng.
 //
 // full_name (virtual): "{ten}, Tầng {tang}, Tòa {toa}".
@@ -44,11 +44,6 @@ const phongKhamSchema = new mongoose.Schema(
     doctor_ids: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: 'BacSi',
-      default: [],
-    }],
-    nurse_ids: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'NguoiDung',
       default: [],
     }],
   },
