@@ -157,6 +157,15 @@ export interface PatientPaymentStatusResult {
   appointment_status: string | null
   appointment_payment_status: string | null
   invoice_status: string | null
+  appointment_info: {
+    ma_lich_hen: string | null
+    ngay_kham: string | null
+    gio_kham: string | null
+    phong_kham: string | null
+    doctor: { id: string; ho_ten: string | null } | null
+    specialty: { id: string; ten: string | null } | null
+    patient: { ho_ten: string | null; so_dien_thoai: string | null; nam_sinh: number | null }
+  } | null
   ngay_thanh_toan: string | null
   phuong_thuc: string
   gateway: PatientPaymentGatewaySnapshot
@@ -234,6 +243,14 @@ export const patientBookingService = {
 
   async confirmPayment(paymentId: string): Promise<PatientPaymentStatusResult> {
     const res = await axiosInstance.patch<ApiResponse<PatientPaymentStatusResult>>(`/patient/payments/${paymentId}/confirm`)
+    return res.data.data
+  },
+
+  async cancelBooking(appointmentId: string, ly_do?: string): Promise<{ id: string; status: string; payment_status: string }> {
+    const res = await axiosInstance.patch<ApiResponse<{ id: string; status: string; payment_status: string }>>(
+      `/patient/booking/${appointmentId}/cancel`,
+      { ly_do },
+    )
     return res.data.data
   },
 

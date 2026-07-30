@@ -77,6 +77,7 @@ export default function Booking() {
   const [toast, setToast] = useState<string | null>(null)
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
+  const [cancellingPayment, setCancellingPayment] = useState(false)
 
   // Specialty filters
   const [specialties, setSpecialties] = useState<{ id: string; ten: string }[]>([])
@@ -400,18 +401,18 @@ export default function Booking() {
     window.open(paymentSnapshot.gateway.payment_url, '_blank', 'noopener,noreferrer')
   }
 
-  async function handleRefreshVnpaySession() {
-    if (!createdBooking?.payment_id) return
+  async function handleCancelPayment() {
+    if (!createdBooking?.appointment_id || cancellingPayment) return
+    if (!window.confirm('Bạn có chắc muốn hủy thanh toán và trả lại khung giờ khám không?')) return
 
-    setCreatingPaymentSession(true)
+    setCancellingPayment(true)
     try {
-      const refreshed = await patientBookingService.createVnpaySession(createdBooking.payment_id)
-      setPaymentSnapshot(refreshed)
-      setToast('Đã tạo lại mã QR VNPAY mới.')
+      await patientBookingService.cancelBooking(createdBooking.appointment_id, 'Khách hàng hủy thanh toán tại bước thanh toán')
+      navigate('/profile?cancelled=true', { replace: true })
     } catch (error: any) {
-      setToast(error.response?.data?.message || error.message || 'Không tạo lại được mã QR VNPAY')
+      setToast(error.response?.data?.message || error.message || 'Không thể hủy thanh toán')
     } finally {
-      setCreatingPaymentSession(false)
+      setCancellingPayment(false)
     }
   }
 
@@ -850,6 +851,24 @@ export default function Booking() {
             </div>
           </div>
 
+          {paymentSnapshot?.appointment_info && (
+            <div className="grid gap-4 rounded-2xl border border-brand-100 bg-brand-50/40 p-5 sm:grid-cols-2">
+              <div className="space-y-2 text-sm text-slate-700">
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-700">Thông tin ca khám</p>
+                <p><span className="font-semibold text-slate-500">Bác sĩ:</span> {paymentSnapshot.appointment_info.doctor?.ho_ten || 'Đang phân công'}</p>
+                <p><span className="font-semibold text-slate-500">Chuyên khoa:</span> {paymentSnapshot.appointment_info.specialty?.ten || 'Đang cập nhật'}</p>
+                <p><span className="font-semibold text-slate-500">Thời gian:</span> {paymentSnapshot.appointment_info.gio_kham || '--'} · {paymentSnapshot.appointment_info.ngay_kham ? new Date(paymentSnapshot.appointment_info.ngay_kham).toLocaleDateString('vi-VN') : '--'}</p>
+                <p><span className="font-semibold text-slate-500">Phòng:</span> {paymentSnapshot.appointment_info.phong_kham || 'Sẽ được điều phối'}</p>
+              </div>
+              <div className="space-y-2 text-sm text-slate-700">
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-700">Thông tin bệnh nhân</p>
+                <p><span className="font-semibold text-slate-500">Họ tên:</span> {paymentSnapshot.appointment_info.patient.ho_ten || patientName}</p>
+                <p><span className="font-semibold text-slate-500">Số điện thoại:</span> {paymentSnapshot.appointment_info.patient.so_dien_thoai || patientPhone}</p>
+                {paymentSnapshot.appointment_info.patient.nam_sinh && <p><span className="font-semibold text-slate-500">Năm sinh:</span> {paymentSnapshot.appointment_info.patient.nam_sinh}</p>}
+              </div>
+            </div>
+          )}
+
           {creatingPaymentSession && !paymentSnapshot ? (
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-6 text-center text-sm text-slate-500">
               Đang tạo session VNPAY và mã QR thanh toán...
@@ -914,11 +933,8 @@ export default function Booking() {
                   <Button variant="secondary" onClick={handleOpenVnpayPage} disabled={!paymentSnapshot.gateway.payment_url}>
                     Mở trang VNPAY
                   </Button>
-                  <Button variant="secondary" onClick={handleRefreshVnpaySession} loading={creatingPaymentSession}>
-                    Tạo lại mã QR
-                  </Button>
-                  <Button variant="secondary" onClick={() => navigate('/profile', { replace: true })}>
-                    Thanh toán sau
+                  <Button variant="danger" onClick={handleCancelPayment} loading={cancellingPayment}>
+                    Hủy thanh toán và trả lại khung giờ
                   </Button>
                 </div>
               </div>
