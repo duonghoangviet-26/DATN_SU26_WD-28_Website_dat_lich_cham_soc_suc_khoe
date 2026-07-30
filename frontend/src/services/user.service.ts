@@ -57,6 +57,12 @@ export const userService = {
     return data.data
   },
 
+  // Reset mật khẩu người dùng về mặc định 123456
+  async resetPassword(id: string): Promise<{ user: User; default_password: string }> {
+    const { data } = await axios.patch(`/admin/users/${id}/reset-password`)
+    return data.data
+  },
+
   // Xóa mềm người dùng
   async softDelete(id: string): Promise<void> {
     await axios.patch(`/admin/users/${id}/delete`)

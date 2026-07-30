@@ -20,6 +20,7 @@ router.put('/:id', userController.updateUser)
 
 // Các thao tác trạng thái
 router.patch('/:id/toggle-lock', userController.toggleStatus)
+router.patch('/:id/reset-password', userController.resetUserPassword)
 router.patch('/:id/delete', userController.softDeleteUser)
 router.patch('/:id/restore', userController.restoreUser)
 router.delete('/:id/permanently', userController.hardDeleteUser)

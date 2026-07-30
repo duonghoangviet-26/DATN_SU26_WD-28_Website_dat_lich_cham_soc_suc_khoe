@@ -57,19 +57,49 @@ function getPopulatedObject(value) {
 
 function resolvePaymentPatient(payment) {
   const directPatient = getPopulatedObject(payment.benh_nhan_id)
-  const appointment = getPopulatedObject(payment.appointment_id)
+  const invoice = getPopulatedObject(payment.hoa_don_id)
+  const appointment = getPopulatedObject(payment.appointment_id) ?? getPopulatedObject(invoice?.appointment_id)
   const appointmentPatient = getPopulatedObject(appointment?.user_id)
+  const queue = getPopulatedObject(invoice?.hang_doi_id)
+  const profile =
+    getPopulatedObject(payment.ho_so_benh_nhan_id)
+    ?? getPopulatedObject(invoice?.ho_so_benh_nhan_id)
+    ?? getPopulatedObject(appointment?.ho_so_benh_nhan_id)
+    ?? getPopulatedObject(queue?.ho_so_benh_nhan_id)
 
   return {
-    ho_ten: directPatient?.ho_ten ?? appointmentPatient?.ho_ten ?? appointment?.ten_khach ?? null,
+    ho_ten: directPatient?.ho_ten ?? appointmentPatient?.ho_ten ?? profile?.ho_ten ?? queue?.ten_benh_nhan ?? appointment?.ten_khach ?? null,
     email: directPatient?.email ?? appointmentPatient?.email ?? appointment?.email_khach ?? null,
     so_dien_thoai:
       directPatient?.so_dien_thoai
       ?? appointmentPatient?.so_dien_thoai
+      ?? profile?.so_dien_thoai
+      ?? queue?.so_dien_thoai
       ?? appointment?.so_dien_thoai_khach
       ?? appointment?.nguoi_dat_sdt
       ?? null,
   }
+}
+
+function resolvePaymentDoctor(payment) {
+  const invoice = getPopulatedObject(payment.hoa_don_id)
+  const appointment = getPopulatedObject(payment.appointment_id) ?? getPopulatedObject(invoice?.appointment_id)
+  const queue = getPopulatedObject(invoice?.hang_doi_id)
+
+  return appointment?.doctor_id?.user_id?.ho_ten
+    ?? queue?.doctor_id?.user_id?.ho_ten
+    ?? null
+}
+
+function resolvePaymentAppointmentId(payment) {
+  const invoice = getPopulatedObject(payment.hoa_don_id)
+  const invoiceAppointment = getPopulatedObject(invoice?.appointment_id)
+
+  return payment.appointment_id?._id
+    ?? payment.appointment_id
+    ?? invoiceAppointment?._id
+    ?? invoice?.appointment_id
+    ?? null
 }
 
 async function validateInvoiceOrThrow(hoaDonId) {
@@ -91,12 +121,12 @@ function mapPaymentDetail(payment) {
   return {
     id: payment._id,
     hoa_don_id: payment.hoa_don_id?._id ?? payment.hoa_don_id ?? null,
-    appointment_id: payment.appointment_id?._id ?? payment.appointment_id ?? null,
+    appointment_id: resolvePaymentAppointmentId(payment),
     ma_giao_dich: payment.ma_giao_dich,
     benh_nhan: patient.ho_ten,
     email: patient.email,
     so_dien_thoai: patient.so_dien_thoai,
-    bac_si: payment.appointment_id?.doctor_id?.user_id?.ho_ten,
+    bac_si: resolvePaymentDoctor(payment),
     so_tien: payment.so_tien,
     loai_thanh_toan: payment.loai_thanh_toan,
     phuong_thuc: payment.phuong_thuc,
@@ -105,7 +135,43 @@ function mapPaymentDetail(payment) {
     status: payment.status,
     ngay_thanh_toan: payment.ngay_thanh_toan,
     ngay_tao: payment.ngay_tao,
+    trang_thai_hoa_don: payment.hoa_don_id?.trang_thai_hoa_don ?? null,
   }
+}
+
+const appointmentPopulate = {
+  path: 'appointment_id',
+  select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id',
+  populate: [
+    { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
+    { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
+    { path: 'ho_so_benh_nhan_id', select: 'ho_ten so_dien_thoai' },
+  ],
+}
+
+const invoicePopulate = {
+  path: 'hoa_don_id',
+  select: 'so_hoa_don trang_thai_hoa_don appointment_id hang_doi_id ho_so_benh_nhan_id',
+  populate: [
+    {
+      path: 'appointment_id',
+      select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id',
+      populate: [
+        { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
+        { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
+        { path: 'ho_so_benh_nhan_id', select: 'ho_ten so_dien_thoai' },
+      ],
+    },
+    {
+      path: 'hang_doi_id',
+      select: 'ten_benh_nhan so_dien_thoai doctor_id ho_so_benh_nhan_id',
+      populate: [
+        { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
+        { path: 'ho_so_benh_nhan_id', select: 'ho_ten so_dien_thoai' },
+      ],
+    },
+    { path: 'ho_so_benh_nhan_id', select: 'ho_ten so_dien_thoai' },
+  ],
 }
 
 async function syncAppointmentPaymentStatusFromPayment(payment, invoiceState = null) {
@@ -177,15 +243,9 @@ export async function list(req, res) {
       ThanhToan.countDocuments(filter),
       ThanhToan.find(filter)
         .populate('benh_nhan_id', 'ho_ten email so_dien_thoai')
-        .populate('hoa_don_id', 'so_hoa_don trang_thai_hoa_don')
-        .populate({
-          path: 'appointment_id',
-          select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt',
-          populate: [
-            { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
-            { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
-          ],
-        })
+        .populate('ho_so_benh_nhan_id', 'ho_ten so_dien_thoai')
+        .populate(invoicePopulate)
+        .populate(appointmentPopulate)
         .sort({ ngay_tao: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -213,13 +273,15 @@ export async function list(req, res) {
         benh_nhan: patient.ho_ten ?? 'Không rõ',
         email: patient.email,
         so_dien_thoai: patient.so_dien_thoai,
-        bac_si: p.appointment_id?.doctor_id?.user_id?.ho_ten ?? 'Không rõ',
         so_tien: p.so_tien,
         loai_thanh_toan: p.loai_thanh_toan,
         phuong_thuc: p.phuong_thuc,
         status: p.status,
         thoi_diem_thanh_toan: p.thoi_diem_thanh_toan,
         ngay_tao: p.ngay_tao,
+        bac_si: resolvePaymentDoctor(p) ?? 'Không rõ',
+        appointment_id: resolvePaymentAppointmentId(p),
+        trang_thai_hoa_don: p.hoa_don_id?.trang_thai_hoa_don ?? null,
       }
     })
     return res.status(200).json({
@@ -320,15 +382,9 @@ export async function getById(req, res) {
   try {
     const p = await ThanhToan.findById(req.params.id)
       .populate('benh_nhan_id', 'ho_ten email so_dien_thoai')
-      .populate('hoa_don_id', 'so_hoa_don trang_thai_hoa_don')
-      .populate({
-        path: 'appointment_id',
-        select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt',
-        populate: [
-          { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
-          { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
-        ],
-      })
+      .populate('ho_so_benh_nhan_id', 'ho_ten so_dien_thoai')
+      .populate(invoicePopulate)
+      .populate(appointmentPopulate)
       .lean()
     if (!p) return fail(res, 404, 'Khong tim thay giao dich')
 

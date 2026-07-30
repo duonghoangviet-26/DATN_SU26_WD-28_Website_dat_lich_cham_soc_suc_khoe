@@ -14,6 +14,7 @@ import { formatAdminActionLabel, formatAdminFieldLabel, formatAdminValue } from 
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
+import Toast from '@/components/common/Toast'
 import Icon from '@/components/admin/icons'
 import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 
@@ -46,6 +47,11 @@ const LOG_CONFIG: Record<string, { label: string; color: 'green' | 'red' | 'blue
     label: 'Xóa vĩnh viễn',
     color: 'red',
   },
+}
+
+LOG_CONFIG.RESET_PASSWORD = {
+  label: 'Reset MK',
+  color: 'yellow',
 }
 
 const ROLE_OPTIONS: { value: Role; label: string }[] = [
@@ -86,10 +92,11 @@ export default function ManageUsers() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'delete' | 'restore' | 'hard-delete' | 'hard-delete-locked', user: User } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'delete' | 'restore' | 'hard-delete' | 'hard-delete-locked' | 'reset-password', user: User } | null>(null)
   const [detailLogs, setDetailLogs] = useState<any[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null)
 
   // State thống kê ở đầu trang
   const [stats, setStats] = useState({
@@ -98,6 +105,10 @@ export default function ManageUsers() {
     status: { active: 0, locked: 0 },
     deleted: 0,
   })
+
+  function showToast(message: string, type: 'success' | 'error' | 'warning' = 'success') {
+    setToast({ message, type })
+  }
 
   // Form state
   const [formData, setFormData] = useState<{
@@ -237,10 +248,13 @@ export default function ManageUsers() {
         await userService.restore(user.id)
       } else if (type === 'hard-delete' || type === 'hard-delete-locked') {
         await userService.hardDelete(user.id)
+      } else if (type === 'reset-password') {
+        const result = await userService.resetPassword(user.id)
+        showToast(`Đã reset mật khẩu của "${user.ho_ten}" về mặc định ${result.default_password || '123456'}.`)
       }
       loadUsers()
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Thao tác thất bại')
+      showToast(err.response?.data?.message || 'Thao tác thất bại', 'error')
     }
   }
 
@@ -310,6 +324,9 @@ export default function ManageUsers() {
       case 'HARD_DELETE_USER':
         return 'Xóa vĩnh viễn tài khoản khỏi hệ thống'
 
+      case 'RESET_PASSWORD':
+        return 'Reset mật khẩu về mặc định 123456'
+
       default:
         return 'Thực hiện thao tác'
     }
@@ -342,6 +359,14 @@ export default function ManageUsers() {
 
   return (
     <AdminAutoStagger className="space-y-6">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       <PageHeader title="Quản lý người dùng" description="Quản lý tài khoản, vai trò và trạng thái thành viên.">
         <button onClick={() => setShowAddModal(true)} className="btn btn-primary flex items-center gap-2">
           <Icon name="plus" className="h-4 w-4" /> Thêm người dùng
@@ -607,6 +632,13 @@ export default function ManageUsers() {
                             {u.id !== currentUser?.id && (
                               <>
                                 {/* active → nút khóa + xóa mềm | locked → nút mở khóa + xóa cứng */}
+                                <button
+                                  onClick={() => setConfirmAction({ type: 'reset-password', user: u })}
+                                  className="p-2 rounded-lg transition-colors text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                                  title="Reset mật khẩu về 123456"
+                                >
+                                  <Icon name="lock" className="h-4 w-4" />
+                                </button>
                                 {u.status === 'active' ? (
                                   <>
                                     <button
@@ -901,7 +933,9 @@ export default function ManageUsers() {
             (confirmAction?.type === 'lock' && confirmAction.user.status === 'active')
           }
           title={
-            confirmAction?.type === 'hard-delete' || confirmAction?.type === 'hard-delete-locked'
+            confirmAction?.type === 'reset-password'
+              ? 'Reset mật khẩu'
+              : confirmAction?.type === 'hard-delete' || confirmAction?.type === 'hard-delete-locked'
               ? 'XÓA VĨNH VIỄN'
               : confirmAction?.type === 'delete'
               ? 'Xóa người dùng'
@@ -913,7 +947,9 @@ export default function ManageUsers() {
           }
           message={
             confirmAction
-              ? `Bạn có chắc muốn ${
+              ? confirmAction.type === 'reset-password'
+                ? `Reset mật khẩu của "${confirmAction.user.ho_ten}" về mặc định 123456?`
+                : `Bạn có chắc muốn ${
                   confirmAction.type === 'hard-delete' || confirmAction.type === 'hard-delete-locked'
                     ? 'XÓA VĨNH VIỄN (không thể khôi phục)'
                     : confirmAction.type === 'delete'
@@ -930,7 +966,7 @@ export default function ManageUsers() {
                 }`
               : ''
           }
-          confirmText="Xác nhận"
+          confirmText={confirmAction?.type === 'reset-password' ? 'Reset mật khẩu' : 'Xác nhận'}
           onConfirm={onConfirmAction}
           onCancel={() => setConfirmAction(null)}
         />,
