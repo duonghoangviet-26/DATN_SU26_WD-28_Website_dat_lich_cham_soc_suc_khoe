@@ -297,7 +297,7 @@ export default function ReceptionistBooking() {
                 setPaymentSnapshot(null)
               }}
               onPrintSuccess={() => {
-                setToast({ message: 'Đã giả lập in phiếu khám bệnh thành công!', type: 'success' })
+                setToast({ message: 'Đã xác nhận Check-in và đẩy lệnh in Số thứ tự tới máy in thành công!', type: 'success' })
               }}
               ticketData={{
                 patientName: patientName,
