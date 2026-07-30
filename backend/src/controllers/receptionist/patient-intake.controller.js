@@ -228,7 +228,9 @@ export const searchPatientProfiles = async (req, res) => {
         ? appointmentPopulate(LichHen.find({
             loai_kham: 'clinic',
             ngay_kham: { $gte: start, $lt: end },
-            status: { $in: ['pending', 'confirmed', 'checked_in', 'in_progress', 'waiting_record', 'waiting_doctor_confirm', 'completed', 'cancelled', 'no_show'] },
+            // Chỉ đưa lịch còn hiệu lực vào luồng tiếp đón. Lịch đã hủy/không đến/hoàn tất
+            // không phải là lịch có thể check-in nên không hiển thị ở đây.
+            status: { $in: ['pending', 'confirmed', 'checked_in', 'in_progress', 'waiting_record', 'waiting_doctor_confirm'] },
             $or: [
               { user_id: { $in: accountIds } },
               { nguoi_dat_ho_id: { $in: accountIds } },

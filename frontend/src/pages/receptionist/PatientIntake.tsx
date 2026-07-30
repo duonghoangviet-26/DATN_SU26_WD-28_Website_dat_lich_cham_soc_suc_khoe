@@ -66,7 +66,7 @@ function availabilityTone(status: OfflineAvailability['trang_thai_kiem_tra']) {
 }
 
 function appointmentIsCheckinable(appointment: TodayAppointment) {
-  return ['pending', 'confirmed'].includes(appointment.status)
+  return appointment.status === 'confirmed'
 }
 
 export default function PatientIntake() {
@@ -178,7 +178,7 @@ export default function PatientIntake() {
       setAmbiguousAppointments(refreshed.ambiguous_appointments || [])
       setAccountAppointments(refreshed.account_appointments || [])
       setForm(emptyForm)
-      setMessage(refreshed.account_appointments?.some((appointment) => ['pending', 'confirmed'].includes(appointment.status))
+      setMessage(refreshed.account_appointments?.some((appointment) => appointment.status === 'confirmed')
         ? 'Đã tạo và gắn hồ sơ với tài khoản online. Hãy chọn lịch hẹn để xác nhận người bệnh đến khám và đưa vào hàng đợi bác sĩ.'
         : 'Đã tạo hồ sơ. Chưa có lịch hẹn đủ điều kiện check-in hôm nay.')
     } catch (requestError: any) {
@@ -221,6 +221,49 @@ export default function PatientIntake() {
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Chưa thể ghi nhận người bệnh đến khám. Vui lòng tải lại dữ liệu.')
     } finally {
+      setCheckingIn(false)
+    }
+  }
+
+  const createProfileAndCheckIn = async (appointment: TodayAppointment) => {
+    const account = accounts.find((item) => item.id === appointment.tai_khoan_id) || accounts[0]
+    const patientName = appointment.ten_khach || account?.ho_ten || ''
+    const patientPhone = appointment.so_dien_thoai_khach || phone.trim()
+    const accountId = appointment.tai_khoan_id || account?.id || null
+    if (!patientName || !patientPhone || !accountId) {
+      setError('Chưa đủ thông tin tài khoản, họ tên hoặc số điện thoại để tạo hồ sơ và check-in.')
+      return
+    }
+
+    setSaving(true)
+    setCheckingIn(true)
+    setError('')
+    setMessage('')
+    try {
+      const profile = await receptionistPatientIntakeService.createProfile({
+        ho_ten: patientName,
+        so_dien_thoai: patientPhone,
+        tai_khoan_id: accountId,
+      })
+      const response = await receptionistPatientIntakeService.checkInAppointment(appointment.id, {
+        ho_so_benh_nhan_id: profile.id,
+        so_dien_thoai: patientPhone,
+        ho_ten: patientName,
+      })
+      const refreshed = await receptionistPatientIntakeService.searchByPhone(patientPhone)
+      setProfiles(refreshed.profiles)
+      setSelectedId(refreshed.profiles.find((item) => item.id === profile.id)?.id || profile.id)
+      setSelectedAppointmentId(appointment.id)
+      setAccounts(refreshed.accounts || [])
+      setAmbiguousAppointments(refreshed.ambiguous_appointments || [])
+      setAccountAppointments(refreshed.account_appointments || [])
+      setPhone(patientPhone)
+      setMessage(`Đã tạo hồ sơ và đưa ${patientName} vào hàng đợi của ${appointment.doctor?.ho_ten || 'bác sĩ phụ trách'} theo lịch ${appointment.ma_lich_hen || appointment.id}.`)
+      return response
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.message || 'Không thể tạo hồ sơ hoặc đưa người bệnh vào hàng đợi bác sĩ.')
+    } finally {
+      setSaving(false)
       setCheckingIn(false)
     }
   }
@@ -339,15 +382,11 @@ export default function PatientIntake() {
                       {canCheckIn ? (
                         <button
                           type="button"
-                          onClick={() => {
-                            const account = accounts.find((item) => item.id === appointment.tai_khoan_id) || accounts[0]
-                            setSelectedAccountId(appointment.tai_khoan_id || account?.id || null)
-                            setForm((current) => ({ ...current, ho_ten: appointment.ten_khach || account?.ho_ten || current.ho_ten }))
-                            document.getElementById('create-profile-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                          }}
-                          className="mt-3 min-h-10 rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800"
+                          onClick={() => void createProfileAndCheckIn(appointment)}
+                          disabled={saving || checkingIn}
+                          className="mt-3 min-h-10 rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Tạo hồ sơ để check-in lịch này
+                          {saving || checkingIn ? 'Đang tạo hồ sơ và đưa vào hàng đợi...' : 'Tạo hồ sơ và check-in lịch này'}
                         </button>
                       ) : (
                         <p className="mt-2 text-xs font-medium text-slate-600">Lịch này không thể check-in vì đã ở trạng thái {appointmentStatusLabel(appointment.status).toLowerCase()}.</p>
