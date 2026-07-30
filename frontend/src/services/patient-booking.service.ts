@@ -69,7 +69,7 @@ export interface SpecialtyTimeSlot {
   khung_index: number | null
   gio_bat_dau: string
   gio_ket_thuc: string
-  ca: 'sang' | 'chieu'
+  ca: 'sang' | 'chieu' | 'toi'
   so_cho_trong: number
 }
 

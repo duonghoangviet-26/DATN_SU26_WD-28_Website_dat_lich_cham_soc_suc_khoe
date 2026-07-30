@@ -552,13 +552,18 @@ export default function Booking() {
                   Không còn khung giờ trống cho ngày đã chọn. Vui lòng chọn ngày khác.
                 </p>
               ) : (
-                (['sang', 'chieu'] as const).map((ca) => {
+                (['sang', 'chieu', 'toi'] as const).map((ca) => {
                   const dsKhung = khungTheoChuyenKhoa.khung_gio.filter((k) => k.ca === ca)
                   if (dsKhung.length === 0) return null
+                  const caLabel = ca === 'sang'
+                    ? 'Ca sáng · 08:00 – 11:30'
+                    : ca === 'chieu'
+                      ? 'Ca chiều · 13:30 – 17:30'
+                      : 'Ca tối · 18:00 – 23:45'
                   return (
                     <div key={ca} className="space-y-2 border-t border-slate-100 pt-4 first:border-t-0 first:pt-0">
                       <p className="text-xs font-semibold text-slate-600">
-                        {ca === 'sang' ? 'Ca sáng · 08:00 – 11:30' : 'Ca chiều · 13:30 – 17:30'}
+                        {caLabel}
                       </p>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {dsKhung.map((khung) => (

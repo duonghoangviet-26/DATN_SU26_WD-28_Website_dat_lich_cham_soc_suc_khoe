@@ -405,7 +405,7 @@ export default function Home() {
 
       <div className="mx-auto flex max-w-7xl flex-wrap gap-x-8 gap-y-3 px-4 py-6 text-xs text-slate-500 sm:px-6 lg:px-8">
         <span className="inline-flex items-center gap-2"><MapPin size={14} className="text-teal-700" aria-hidden="true" /> 123 Nguyễn Trãi, Thanh Xuân, Hà Nội</span>
-        <span className="inline-flex items-center gap-2"><Clock3 size={14} className="text-teal-700" aria-hidden="true" /> 08:00 - 17:30, thứ 2 đến thứ 7</span>
+        <span className="inline-flex items-center gap-2"><Clock3 size={14} className="text-teal-700" aria-hidden="true" /> 08:00 - 23:45, thứ 2 đến thứ 7</span>
       </div>
     </div>
   )

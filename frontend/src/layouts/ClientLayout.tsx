@@ -32,7 +32,7 @@ export default function ClientLayout() {
     <div className="flex min-h-screen flex-col bg-[#f7faf9] text-left text-slate-900">
       <div className="border-b border-teal-900/10 bg-teal-900 text-xs text-teal-50">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-2 sm:px-6 lg:px-8">
-          <span className="inline-flex items-center gap-2"><Clock3 size={13} aria-hidden="true" /> 08:00 - 17:30, thứ 2 đến thứ 7</span>
+          <span className="inline-flex items-center gap-2"><Clock3 size={13} aria-hidden="true" /> 08:00 - 23:45, thứ 2 đến thứ 7</span>
           <a href="tel:0365747888" className="inline-flex items-center gap-2 font-semibold text-white hover:text-teal-200"><Phone size={13} aria-hidden="true" /> Hotline 0365 747 888</a>
         </div>
       </div>
@@ -127,7 +127,7 @@ export default function ClientLayout() {
             <h2 className="text-sm font-semibold text-white">Phòng khám</h2>
             <div className="mt-4 space-y-3 text-sm leading-6">
               <p>123 Nguyễn Trãi, Thanh Xuân, Hà Nội</p>
-              <p>08:00 - 17:30<br />Thứ 2 - Thứ 7</p>
+              <p>08:00 - 23:45<br />Thứ 2 - Thứ 7</p>
               <p>contact@vitefamily.vn</p>
             </div>
           </div>
