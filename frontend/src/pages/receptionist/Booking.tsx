@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { format } from 'date-fns'
 import { useNavigate } from 'react-router-dom'
 
 import Breadcrumb from '@/components/common/Breadcrumb'
@@ -71,8 +72,14 @@ export default function ReceptionistBooking() {
     for (let i = 0; i < 7; i++) {
       const date = new Date(today)
       date.setDate(today.getDate() + i)
-      const dateString = date.toISOString().split('T')[0]
-      const label = i === 0 ? 'Hôm nay' : i === 1 ? 'Ngày mai' : date.toLocaleDateString('vi-VN')
+      const dateString = format(date, 'yyyy-MM-dd')
+      
+      let dayName = ''
+      if (i === 0) dayName = 'Hôm nay'
+      else if (i === 1) dayName = 'Ngày mai'
+      else dayName = date.toLocaleDateString('vi-VN', { weekday: 'short' }) // e.g., 'Th 2', 'Th 3'
+      
+      const label = `${dayName}, ${format(date, 'dd/MM')}`
       datesList.push({ value: dateString, label })
     }
     setDates(datesList)
@@ -280,7 +287,25 @@ export default function ReceptionistBooking() {
             <BookingStep4Payment
               createdBooking={createdBooking}
               paymentMethod={selectedPaymentMethod}
-              onDone={() => navigate('/receptionist/appointments')}
+              onDone={() => {
+                setStep(1)
+                setPatientName('')
+                setPatientPhone('')
+                setSymptoms('')
+                setSelectedSlotId('')
+                setCreatedBooking(null)
+                setPaymentSnapshot(null)
+              }}
+              onPrintSuccess={() => {
+                setToast({ message: 'Đã giả lập in phiếu khám bệnh thành công!', type: 'success' })
+              }}
+              ticketData={{
+                patientName: patientName,
+                doctorName: selectedDoctor?.ho_ten || 'Đang cập nhật',
+                roomNumber: selectedSlot?.phong_kham || 'Phòng khám 1',
+                queueNumber: createdBooking?.appointment_id ? `STT-${createdBooking.appointment_id.slice(-3).toUpperCase()}` : 'STT-00',
+                appointmentTime: selectedDate ? `${new Date(selectedDate).toLocaleDateString('vi-VN')} - ${selectedSlot?.gio_bat_dau || ''}` : '',
+              }}
             />
           )}
         </div>

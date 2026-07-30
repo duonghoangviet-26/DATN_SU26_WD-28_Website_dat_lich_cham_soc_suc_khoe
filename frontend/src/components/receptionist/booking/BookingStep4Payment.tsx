@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import QRCode from 'qrcode'
 import { CreatedReceptionistBookingResult, ReceptionistPaymentStatusResult, receptionistBookingService } from '@/services/receptionist-booking.service'
 import Button from '@/components/common/Button'
+import { Printer } from 'lucide-react'
+import QueueTicketTemplate, { QueueTicketData } from '../QueueTicketTemplate'
 
 const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val)
 const formatGatewayExpiry = (dateStr: string) => {
@@ -13,12 +15,16 @@ export interface BookingStep4PaymentProps {
   createdBooking: CreatedReceptionistBookingResult | null
   paymentMethod: 'cash' | 'transfer'
   onDone: () => void
+  onPrintSuccess?: () => void
+  ticketData?: QueueTicketData
 }
 
 export default function BookingStep4Payment({
   createdBooking,
   paymentMethod,
   onDone,
+  onPrintSuccess,
+  ticketData,
 }: BookingStep4PaymentProps) {
   const [paymentSnapshot, setPaymentSnapshot] = useState<ReceptionistPaymentStatusResult | null>(null)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
@@ -114,6 +120,14 @@ export default function BookingStep4Payment({
     return () => clearInterval(interval)
   }, [paymentSnapshot?.gateway?.expires_at])
 
+  const handleManualPrint = () => {
+    if (onPrintSuccess) {
+      onPrintSuccess()
+    } else {
+      alert("In phiếu khám thành công!")
+    }
+  }
+
   const handleOpenVnpayPage = () => {
     if (paymentSnapshot?.gateway?.payment_url) {
       window.open(paymentSnapshot.gateway.payment_url, '_blank')
@@ -174,10 +188,26 @@ export default function BookingStep4Payment({
           <p className="flex justify-between"><span className="font-semibold">Mã giao dịch:</span> <span>{createdBooking.ma_giao_dich}</span></p>
           <p className="flex justify-between"><span className="font-semibold">Số tiền thu:</span> <span className="font-bold text-slate-800">{formatCurrency(createdBooking.gia_kham)}</span></p>
         </div>
-        <div className="pt-4">
+        
+        <div className="flex gap-4 pt-4 justify-center print:hidden">
+          {ticketData && (
+            <Button
+              variant="secondary"
+              onClick={handleManualPrint}
+              className="flex items-center justify-center gap-2 border-brand-200 text-brand-700 hover:bg-brand-50"
+            >
+              <Printer className="w-5 h-5" />
+              In Phiếu Khám
+            </Button>
+          )}
           <Button onClick={onDone} className="bg-brand-600 hover:bg-brand-700 text-white min-w-[200px]">
-            Hoàn tất & Về danh sách
+            Hoàn tất & Đặt lịch mới
           </Button>
+        </div>
+
+        {/* Ẩn trên màn hình, chỉ hiện khi in */}
+        <div className="hidden print:block w-full">
+          {ticketData && <QueueTicketTemplate data={ticketData} />}
         </div>
       </div>
     )
@@ -285,17 +315,27 @@ export default function BookingStep4Payment({
               <Button onClick={handleMockComplete} loading={creatingPaymentSession} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Mô phỏng thanh toán thành công
               </Button>
-              <Button variant="secondary" onClick={onDone}>
-                Thanh toán sau (Về danh sách)
+              {ticketData && (
+                <Button variant="secondary" onClick={handleManualPrint} className="print:hidden border-brand-200 text-brand-700 hover:bg-brand-50">
+                  <Printer className="w-5 h-5 mr-2 inline" /> In Phiếu Khám
+                </Button>
+              )}
+              <Button variant="secondary" onClick={onDone} className="print:hidden">
+                Hoàn tất & Đặt lịch mới
               </Button>
             </div>
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-600">
+        <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-600 print:hidden">
           Không tải được session VNPAY mock cho lịch hẹn này.
         </div>
       )}
+
+      {/* Ẩn trên màn hình, chỉ hiện khi in */}
+      <div className="hidden print:block w-full">
+        {ticketData && <QueueTicketTemplate data={ticketData} />}
+      </div>
     </div>
   )
 }

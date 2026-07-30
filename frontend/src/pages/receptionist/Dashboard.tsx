@@ -83,7 +83,7 @@ export default function Dashboard() {
 
   // --- Logic Lọc Dữ liệu cho Khung 2 & 3 ---
   
-  // Khung 2: Lịch đặt trực tiếp (walk-in) - Tạm tính bằng cách user_id === null hoặc hinh_thuc_dat_lich === 'receptionist'
+  // Khung 2: Lịch đặt trực tiếp (walk-in)
   const walkinAppointments = allAppointments.filter(
     (a) => (!a.user_id || a.hinh_thuc_dat_lich === 'receptionist') && (a.status === 'pending' || a.status === 'confirmed')
   );
@@ -162,13 +162,19 @@ export default function Dashboard() {
                     <p className="text-sm font-bold text-slate-700">{apt.ten_khach || 'Khách vãng lai'}</p>
                     <p className="text-xs text-slate-500 font-medium">{apt.gio_kham}</p>
                   </div>
-                  <button 
-                    onClick={() => handleArrived(apt._id)}
-                    className="flex items-center gap-1 bg-brand-500 hover:bg-brand-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                  >
-                    <Icon name="check" className="w-3.5 h-3.5" />
-                    Đã đến
-                  </button>
+                  {isAppointmentOverdue(apt.ngay_kham, apt.gio_kham) ? (
+                    <span className="bg-red-50 text-red-600 px-3 py-1.5 rounded-full text-xs font-semibold border border-red-100">
+                      Quá giờ
+                    </span>
+                  ) : (
+                    <button 
+                      onClick={() => handleArrived(apt._id)}
+                      className="flex items-center gap-1 bg-brand-500 hover:bg-brand-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                    >
+                      <Icon name="check" className="w-3.5 h-3.5" />
+                      Đã đến
+                    </button>
+                  )}
                 </div>
               ))
             )}
