@@ -560,7 +560,7 @@ export default function Booking() {
                     ? 'Ca sáng · 08:00 – 11:30'
                     : ca === 'chieu'
                       ? 'Ca chiều · 13:30 – 17:30'
-                      : 'Ca tối · 18:00 – 23:45'
+                      : 'Ca tối · 18:00 – 24:00'
                   return (
                     <div key={ca} className="space-y-2 border-t border-slate-100 pt-4 first:border-t-0 first:pt-0">
                       <p className="text-xs font-semibold text-slate-600">
