@@ -4,6 +4,7 @@ import Breadcrumb from '@/components/common/Breadcrumb'
 import Loading from '@/components/common/Loading'
 import { patientBookingService, type PatientBookingDoctor } from '@/services/patient-booking.service'
 import { useAuth } from '@/context/AuthContext'
+import { resolveMediaUrl } from '@/utils/media'
 
 export default function DoctorDetail() {
   const { id } = useParams<{ id: string }>()
@@ -101,8 +102,8 @@ export default function DoctorDetail() {
       <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm flex flex-col md:flex-row gap-8 items-start">
         {/* Avatar */}
         <div className="aspect-square w-full md:w-56 shrink-0 bg-slate-100 rounded-xl overflow-hidden shadow-inner">
-          {doctor.anh_dai_dien ? (
-            <img src={doctor.anh_dai_dien} alt={doctor.ho_ten} className="h-full w-full object-cover" />
+          {resolveMediaUrl(doctor.anh_dai_dien) ? (
+            <img src={resolveMediaUrl(doctor.anh_dai_dien) || undefined} alt={doctor.ho_ten} className="h-full w-full object-cover" />
           ) : (
             <div className="grid h-full w-full place-items-center bg-brand-50 text-brand-600 font-extrabold text-5xl">
               {doctor.ho_ten.split(' ').pop()?.charAt(0)}

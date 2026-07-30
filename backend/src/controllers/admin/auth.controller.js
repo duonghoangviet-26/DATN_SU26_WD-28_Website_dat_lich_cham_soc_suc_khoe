@@ -566,3 +566,40 @@ export async function updateOnboarding(req, res) {
     return fail(res, 500, 'Lỗi cập nhật thông tin: ' + err.message)
   }
 }
+
+/**
+ * Cập nhật thông tin tài khoản bệnh nhân.
+ * Chỉ cập nhật dữ liệu hồ sơ hiện tại; các lịch hẹn cũ giữ nguyên snapshot
+ * tên/số điện thoại đã dùng tại thời điểm đặt lịch để bảo toàn lịch sử khám.
+ */
+export async function updateProfile(req, res) {
+  try {
+    const user = await NguoiDung.findOne({ _id: req.user.id, ngay_xoa: null })
+    if (!user) return fail(res, 404, 'Tài khoản không tồn tại')
+
+    const { ho_ten, so_dien_thoai } = req.body ?? {}
+    if (!ho_ten?.trim()) return fail(res, 400, 'Họ tên là bắt buộc')
+    if (!so_dien_thoai?.trim()) return fail(res, 400, 'Số điện thoại là bắt buộc')
+
+    user.ho_ten = ho_ten.trim()
+    user.so_dien_thoai = so_dien_thoai.trim()
+    // Google chỉ dùng để xác thực danh tính. Khi bệnh nhân đã hoàn tất hồ sơ
+    // trong hệ thống, lần đăng nhập Google sau không được đưa họ về trạng thái
+    // onboarding hoặc lấy lại thông tin hồ sơ cũ từ Google.
+    user.requires_onboarding = false
+    await user.save()
+
+    return ok(res, {
+      id: String(user._id),
+      email: user.email,
+      ho_ten: user.ho_ten,
+      so_dien_thoai: user.so_dien_thoai,
+      anh_dai_dien: user.anh_dai_dien,
+      role: user.role,
+      status: user.status,
+      requires_onboarding: false,
+    }, 'Cập nhật thông tin cá nhân thành công')
+  } catch (err) {
+    return fail(res, 500, 'Lỗi cập nhật thông tin cá nhân: ' + err.message)
+  }
+}

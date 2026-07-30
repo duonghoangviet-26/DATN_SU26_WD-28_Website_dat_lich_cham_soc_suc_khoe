@@ -85,6 +85,11 @@ export const authService = {
     return res.data.data
   },
 
+  async updateProfile(data: { ho_ten: string; so_dien_thoai: string }): Promise<User> {
+    const res = await axiosInstance.put<ApiResponse<User>>('/auth/profile', data)
+    return res.data.data
+  },
+
   /**
    * Đăng xuất hệ thống & thu hồi session
    */

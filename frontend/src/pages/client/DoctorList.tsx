@@ -5,6 +5,7 @@ import Empty from '@/components/common/Empty'
 import Skeleton from '@/components/common/Skeleton'
 import Pagination from '@/components/common/Pagination'
 import { patientBookingService, type PatientBookingDoctor } from '@/services/patient-booking.service'
+import { resolveMediaUrl } from '@/utils/media'
 
 export default function DoctorList() {
   const [loading, setLoading] = useState(true)
@@ -140,8 +141,8 @@ export default function DoctorList() {
               <div key={d.id} className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300">
                 <div>
                   <div className="aspect-square w-full bg-slate-100 relative overflow-hidden">
-                    {d.anh_dai_dien ? (
-                      <img src={d.anh_dai_dien} alt={d.ho_ten} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    {resolveMediaUrl(d.anh_dai_dien) ? (
+                      <img src={resolveMediaUrl(d.anh_dai_dien) || undefined} alt={d.ho_ten} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     ) : (
                       <div className="grid h-full w-full place-items-center bg-brand-55 text-brand-600 font-extrabold text-3xl">
                         {d.ho_ten.split(' ').pop()?.charAt(0)}
