@@ -91,9 +91,10 @@ function clinicDayRange(value = new Date()) {
 }
 
 async function formatAppointment(a) {
-  const [user, member, result] = await Promise.all([
+  const [user, member, profile, result] = await Promise.all([
     NguoiDung.findById(a.user_id).select('ho_ten so_dien_thoai').lean(),
-    a.member_id ? ThanhVien.findById(a.member_id).select('ho_ten ngay_sinh gioi_tinh di_ung benh_nen').lean() : null,
+    a.member_id ? ThanhVien.findById(a.member_id).select('ho_ten ngay_sinh gioi_tinh nhom_mau di_ung benh_nen').lean() : null,
+    a.ho_so_benh_nhan_id ? HoSoBenhNhan.findById(a.ho_so_benh_nhan_id).select('ho_ten so_dien_thoai ngay_sinh gioi_tinh nhom_mau di_ung benh_nen dia_chi ghi_chu').lean() : null,
     KetQuaKham.findOne({ appointment_id: a._id }).select('status').lean(),
   ])
 
@@ -129,6 +130,19 @@ async function formatAppointment(a) {
     ket_qua_status:   result?.status ?? null,
     ly_do_huy:        a.ly_do_huy,
     payment_deadline: a.payment_deadline,
+    // Ho so tai quay la nguon du phong cho lich khong co member_id.
+    benh_nhan:        member?.ho_ten ?? profile?.ho_ten ?? benh_nhan_ho_ten,
+    tuoi:             member?.ngay_sinh || profile?.ngay_sinh
+      ? new Date().getFullYear() - new Date(member?.ngay_sinh ?? profile?.ngay_sinh).getFullYear()
+      : tuoi,
+    gioi_tinh:        { nam: 'Nam', nu: 'Nữ', khac: 'Khác' }[member?.gioi_tinh ?? profile?.gioi_tinh] ?? undefined,
+    ngay_sinh:       member?.ngay_sinh ?? profile?.ngay_sinh ?? null,
+    nhom_mau:        member?.nhom_mau ?? profile?.nhom_mau ?? null,
+    di_ung:          member?.di_ung ?? profile?.di_ung ?? null,
+    benh_nen:        member?.benh_nen ?? profile?.benh_nen ?? null,
+    dia_chi:         profile?.dia_chi ?? null,
+    ghi_chu:         profile?.ghi_chu ?? null,
+    so_dien_thoai:   a.so_dien_thoai_khach ?? profile?.so_dien_thoai ?? user?.so_dien_thoai ?? null,
   }
 }
 
@@ -189,9 +203,21 @@ export async function examQueue(req, res) {
     // Join hồ sơ: gom theo hang_doi_id (mới) + appointment_id (dữ liệu cũ).
     const hangDoiIds = entries.map((e) => e._id)
     const apptIds = entries.filter((e) => e.appointment_id).map((e) => e.appointment_id)
-    const results = await KetQuaKham.find({
-      $or: [{ hang_doi_id: { $in: hangDoiIds } }, { appointment_id: { $in: apptIds } }],
-    }).select('hang_doi_id appointment_id status').lean()
+    const profileIds = entries.filter((e) => e.ho_so_benh_nhan_id).map((e) => e.ho_so_benh_nhan_id)
+    const memberIds = entries.filter((e) => e.member_id).map((e) => e.member_id)
+    const [profiles, members, results] = await Promise.all([
+      profileIds.length
+        ? HoSoBenhNhan.find({ _id: { $in: profileIds } }).select('ho_ten so_dien_thoai ngay_sinh gioi_tinh nhom_mau di_ung benh_nen dia_chi ghi_chu').lean()
+        : [],
+      memberIds.length
+        ? ThanhVien.find({ _id: { $in: memberIds } }).select('ho_ten ngay_sinh gioi_tinh nhom_mau di_ung benh_nen').lean()
+        : [],
+      KetQuaKham.find({
+        $or: [{ hang_doi_id: { $in: hangDoiIds } }, { appointment_id: { $in: apptIds } }],
+      }).select('hang_doi_id appointment_id status').lean(),
+    ])
+    const profileById = new Map(profiles.map((profile) => [String(profile._id), profile]))
+    const memberById = new Map(members.map((member) => [String(member._id), member]))
     const kqByHangDoi = new Map(results.filter((r) => r.hang_doi_id).map((r) => [String(r.hang_doi_id), r]))
     const kqByAppt = new Map(results.filter((r) => r.appointment_id).map((r) => [String(r.appointment_id), r]))
 
@@ -201,6 +227,9 @@ export async function examQueue(req, res) {
     const rows = entries
       .sort((a, b) => soSanhThuTuHangDoi(a, b, now))
       .map((e) => {
+        const profile = e.ho_so_benh_nhan_id ? profileById.get(String(e.ho_so_benh_nhan_id)) : null
+        const member = e.member_id ? memberById.get(String(e.member_id)) : null
+        const ngaySinh = e.ngay_sinh ?? member?.ngay_sinh ?? profile?.ngay_sinh ?? null
         const kq = kqByHangDoi.get(String(e._id)) || (e.appointment_id ? kqByAppt.get(String(e.appointment_id)) : null)
         return {
           id: e._id,
@@ -208,8 +237,15 @@ export async function examQueue(req, res) {
           ho_so_benh_nhan_id: e.ho_so_benh_nhan_id ?? null,
           nguon: e.nguon,
           ten_benh_nhan: e.ten_benh_nhan,
-          tuoi: e.tuoi ?? null,
-          gioi_tinh: e.gioi_tinh ?? null,
+          so_dien_thoai: e.so_dien_thoai ?? profile?.so_dien_thoai ?? null,
+          ngay_sinh: ngaySinh,
+          tuoi: e.tuoi ?? (ngaySinh ? new Date().getFullYear() - new Date(ngaySinh).getFullYear() : null),
+          gioi_tinh: e.gioi_tinh ?? member?.gioi_tinh ?? profile?.gioi_tinh ?? null,
+          nhom_mau: e.nhom_mau ?? member?.nhom_mau ?? profile?.nhom_mau ?? null,
+          di_ung: e.di_ung ?? member?.di_ung ?? profile?.di_ung ?? null,
+          benh_nen: e.benh_nen ?? member?.benh_nen ?? profile?.benh_nen ?? null,
+          dia_chi: e.dia_chi ?? profile?.dia_chi ?? null,
+          ghi_chu: e.ghi_chu ?? profile?.ghi_chu ?? null,
           phong_kham: e.phong_kham ?? null,
           muc_uu_tien: tinhBacUuTienDong(e, now),
           hang_doi_trang_thai: e.trang_thai,
@@ -925,7 +961,7 @@ export async function getPatientProfileHistory(req, res) {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return fail(res, 400, 'Mã hồ sơ bệnh nhân không hợp lệ')
 
     const profile = await HoSoBenhNhan.findOne({ _id: req.params.id, trang_thai: 'active' })
-      .select('ho_ten so_dien_thoai ngay_sinh gioi_tinh dia_chi')
+      .select('ho_ten so_dien_thoai ngay_sinh gioi_tinh nhom_mau di_ung benh_nen dia_chi ghi_chu')
       .lean()
     if (!profile) return fail(res, 404, 'Không tìm thấy hồ sơ bệnh nhân')
 

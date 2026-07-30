@@ -12,6 +12,10 @@ const emptyForm = {
   ho_ten: '',
   ngay_sinh: '',
   gioi_tinh: '' as '' | 'nam' | 'nu' | 'khac',
+  nhom_mau: '' as '' | 'A' | 'B' | 'AB' | 'O',
+  di_ung: '',
+  benh_nen: '',
+  dia_chi: '',
   ghi_chu: '',
 }
 
@@ -166,6 +170,10 @@ export default function PatientIntake() {
         so_dien_thoai: phone.trim(),
         ngay_sinh: form.ngay_sinh || undefined,
         gioi_tinh: form.gioi_tinh || undefined,
+        nhom_mau: form.nhom_mau || undefined,
+        di_ung: form.di_ung || undefined,
+        benh_nen: form.benh_nen || undefined,
+        dia_chi: form.dia_chi || undefined,
         ghi_chu: form.ghi_chu || undefined,
         tai_khoan_id: selectedAccountId || undefined,
       })
@@ -556,6 +564,11 @@ export default function PatientIntake() {
             <label className="text-sm font-medium text-slate-700">Ngày sinh<input type="date" value={form.ngay_sinh} onChange={(event) => setForm({ ...form, ngay_sinh: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
             <label className="text-sm font-medium text-slate-700">Giới tính<select value={form.gioi_tinh} onChange={(event) => setForm({ ...form, gioi_tinh: event.target.value as typeof form.gioi_tinh })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"><option value="">Chưa cập nhật</option><option value="nam">Nam</option><option value="nu">Nữ</option><option value="khac">Khác</option></select></label>
             <button type="submit" disabled={saving || (accounts.length > 0 && !selectedAccountId)} className="min-h-11 self-end rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Đang lưu...' : accounts.length > 0 && !selectedAccountId ? 'Chọn tài khoản trước' : 'Tạo hồ sơ'}</button>
+            <label className="text-sm font-medium text-slate-700">Nhóm máu<select value={form.nhom_mau} onChange={(event) => setForm({ ...form, nhom_mau: event.target.value as typeof form.nhom_mau })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"><option value="">Chưa cập nhật</option><option value="A">A</option><option value="B">B</option><option value="AB">AB</option><option value="O">O</option></select></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Địa chỉ<textarea rows={2} value={form.dia_chi} onChange={(event) => setForm({ ...form, dia_chi: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" placeholder="Địa chỉ hiện tại của người bệnh" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Dị ứng<textarea rows={2} value={form.di_ung} onChange={(event) => setForm({ ...form, di_ung: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" placeholder="Ví dụ: dị ứng thuốc, thức ăn; ghi Không nếu không có" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Bệnh nền<textarea rows={2} value={form.benh_nen} onChange={(event) => setForm({ ...form, benh_nen: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" placeholder="Ví dụ: tăng huyết áp, tiểu đường; ghi Không nếu không có" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Ghi chú tiếp nhận<textarea rows={2} value={form.ghi_chu} onChange={(event) => setForm({ ...form, ghi_chu: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
           </form>
         </section>
       </div>

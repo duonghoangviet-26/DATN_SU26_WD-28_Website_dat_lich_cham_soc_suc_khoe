@@ -50,6 +50,9 @@ function serializeProfile(profile) {
     so_dien_thoai: profile.so_dien_thoai,
     ngay_sinh: profile.ngay_sinh,
     gioi_tinh: profile.gioi_tinh,
+    nhom_mau: profile.nhom_mau,
+    di_ung: profile.di_ung,
+    benh_nen: profile.benh_nen,
     dia_chi: profile.dia_chi,
     ghi_chu: profile.ghi_chu,
     nguon_tao: profile.nguon_tao,
@@ -150,7 +153,7 @@ export const searchPatientProfiles = async (req, res) => {
 
     const [members] = await Promise.all([
       memberIds.length
-        ? ThanhVien.find({ _id: { $in: memberIds } }).select('ho_ten quan_he la_chu_ho tai_khoan_id family_id').lean()
+        ? ThanhVien.find({ _id: { $in: memberIds } }).select('ho_ten quan_he la_chu_ho tai_khoan_id family_id ngay_sinh gioi_tinh nhom_mau di_ung benh_nen').lean()
         : [],
     ])
 
@@ -180,6 +183,11 @@ export const searchPatientProfiles = async (req, res) => {
     for (const profile of profiles) {
       const member = profile.member_id ? memberById.get(String(profile.member_id)) : null
       const family = member?.family_id ? familyById.get(String(member.family_id)) : null
+      profile.ngay_sinh ??= member?.ngay_sinh ?? null
+      profile.gioi_tinh ??= member?.gioi_tinh ?? null
+      profile.nhom_mau ??= member?.nhom_mau ?? null
+      profile.di_ung ??= member?.di_ung ?? null
+      profile.benh_nen ??= member?.benh_nen ?? null
       const contactId = profile.tai_khoan_id
         ?? profile.nguoi_giam_ho_id
         ?? member?.tai_khoan_id
@@ -292,6 +300,9 @@ export const createPatientProfile = async (req, res) => {
       so_dien_thoai: rawPhone,
       ngay_sinh,
       gioi_tinh,
+      nhom_mau,
+      di_ung,
+      benh_nen,
       dia_chi,
       ghi_chu,
       tai_khoan_id,
@@ -303,6 +314,10 @@ export const createPatientProfile = async (req, res) => {
     if (!isValidPhone(so_dien_thoai)) return fail(res, 400, 'Số điện thoại không đúng định dạng')
     if (gioi_tinh && !['nam', 'nu', 'khac'].includes(gioi_tinh)) {
       return fail(res, 400, 'Giới tính không hợp lệ')
+    }
+
+    if (nhom_mau && !['A', 'B', 'AB', 'O'].includes(nhom_mau)) {
+      return fail(res, 400, 'NhÃ³m mÃ¡u khÃ´ng há»£p lá»‡')
     }
 
     if (ngay_sinh && Number.isNaN(new Date(ngay_sinh).getTime())) {
@@ -343,6 +358,9 @@ export const createPatientProfile = async (req, res) => {
       so_dien_thoai_tim_kiem: so_dien_thoai,
       ngay_sinh: ngay_sinh ? new Date(ngay_sinh) : null,
       gioi_tinh: gioi_tinh || null,
+      nhom_mau: nhom_mau || null,
+      di_ung: di_ung?.trim() || null,
+      benh_nen: benh_nen?.trim() || null,
       dia_chi: dia_chi?.trim() || null,
       ghi_chu: ghi_chu?.trim() || null,
       // Khong tu dong gan tai khoan theo so dien thoai vi day co the la so cua nguoi giam ho.

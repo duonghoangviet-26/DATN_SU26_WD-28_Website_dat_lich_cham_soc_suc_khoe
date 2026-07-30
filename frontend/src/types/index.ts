@@ -840,8 +840,15 @@ export interface DoctorExamQueueRow {
     ho_so_benh_nhan_id?: string | null;
     nguon: "online" | "offline";
     ten_benh_nhan: string;
+    so_dien_thoai?: string | null;
+    ngay_sinh?: string | null;
     tuoi: number | null;
     gioi_tinh: string | null;
+    nhom_mau?: "A" | "B" | "AB" | "O" | null;
+    di_ung?: string | null;
+    benh_nen?: string | null;
+    dia_chi?: string | null;
+    ghi_chu?: string | null;
     phong_kham: string | null;
     muc_uu_tien: "online_uu_tien" | "online_thuong" | "offline";
     hang_doi_trang_thai: string;
@@ -961,6 +968,7 @@ export interface DoctorAppointmentDetail {
     benh_nhan_id: string | number;
     ho_so_benh_nhan_id?: string | null;
     so_dien_thoai: string;
+    ngay_sinh?: string | null;
     ngay_kham: string;
     gio_kham: string;
     loai_kham: "clinic" | "home";
@@ -974,8 +982,11 @@ export interface DoctorAppointmentDetail {
     ten_dich_vu?: string | null; // joined từ dich_vu.ten — backend trả về
     tuoi?: number;
     gioi_tinh?: "Nam" | "Nữ" | "Khác";
+    nhom_mau?: "A" | "B" | "AB" | "O" | null;
     di_ung?: string | null;
     benh_nen?: string | null;
+    dia_chi?: string | null;
+    ghi_chu?: string | null;
     da_co_ket_qua: boolean; // computed bởi backend (exists in ket_qua_kham)
     ket_qua_status?: KetQuaKhamStatus | null; // null nếu chưa có hồ sơ
     ly_do_huy?: string | null;

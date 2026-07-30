@@ -7,6 +7,9 @@ export interface PatientProfile {
   so_dien_thoai?: string | null
   ngay_sinh?: string | null
   gioi_tinh?: 'nam' | 'nu' | 'khac' | null
+  nhom_mau?: 'A' | 'B' | 'AB' | 'O' | null
+  di_ung?: string | null
+  benh_nen?: string | null
   dia_chi?: string | null
   ghi_chu?: string | null
   nguon_tao: 'online' | 'tai_quay' | 'backfill'
@@ -75,6 +78,9 @@ export interface CreatePatientProfilePayload {
   so_dien_thoai: string
   ngay_sinh?: string
   gioi_tinh?: 'nam' | 'nu' | 'khac'
+  nhom_mau?: 'A' | 'B' | 'AB' | 'O'
+  di_ung?: string
+  benh_nen?: string
   dia_chi?: string
   ghi_chu?: string
   tai_khoan_id?: string
