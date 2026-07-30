@@ -18,12 +18,21 @@ function normalizePatientPhone(value) {
   return digits.startsWith('84') ? `0${digits.slice(2)}` : digits
 }
 
-async function syncDirectPatientProfile(userId, hoTen, soDienThoai) {
+async function syncDirectPatientProfile(userId, hoTen, soDienThoai, extra = {}) {
   const phone = normalizePatientPhone(soDienThoai)
   if (!phone) return
-  await HoSoBenhNhan.updateOne(
+  const setFields = {
+    ho_ten: hoTen.trim(),
+    so_dien_thoai: phone,
+    so_dien_thoai_tim_kiem: phone,
+  }
+  for (const field of ['ngay_sinh', 'gioi_tinh', 'nhom_mau', 'di_ung', 'benh_nen', 'dia_chi', 'ghi_chu']) {
+    if (extra[field] !== undefined) setFields[field] = extra[field]
+  }
+  return HoSoBenhNhan.findOneAndUpdate(
     { tai_khoan_id: userId, trang_thai: 'active' },
-    { $set: { ho_ten: hoTen.trim(), so_dien_thoai: phone, so_dien_thoai_tim_kiem: phone } },
+    { $set: setFields, $setOnInsert: { nguon_tao: 'online', trang_thai: 'active' } },
+    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
   )
 }
 
@@ -592,16 +601,62 @@ export async function updateOnboarding(req, res) {
  * Chỉ cập nhật dữ liệu hồ sơ hiện tại; các lịch hẹn cũ giữ nguyên snapshot
  * tên/số điện thoại đã dùng tại thời điểm đặt lịch để bảo toàn lịch sử khám.
  */
+export async function getProfile(req, res) {
+  try {
+    const user = await NguoiDung.findOne({ _id: req.user.id, ngay_xoa: null }).lean()
+    if (!user) return fail(res, 404, 'TÃ i khoáº£n khÃ´ng tá»“n táº¡i')
+    const profile = await HoSoBenhNhan.findOne({ tai_khoan_id: user._id, trang_thai: 'active' })
+      .select('ngay_sinh gioi_tinh nhom_mau di_ung benh_nen dia_chi ghi_chu')
+      .lean()
+
+    return ok(res, {
+      id: String(user._id),
+      email: user.email,
+      ho_ten: user.ho_ten,
+      so_dien_thoai: user.so_dien_thoai,
+      anh_dai_dien: user.anh_dai_dien,
+      role: user.role,
+      status: user.status,
+      requires_onboarding: Boolean(user.requires_onboarding),
+      ngay_sinh: profile?.ngay_sinh ?? null,
+      gioi_tinh: profile?.gioi_tinh ?? null,
+      nhom_mau: profile?.nhom_mau ?? null,
+      di_ung: profile?.di_ung ?? null,
+      benh_nen: profile?.benh_nen ?? null,
+      dia_chi: profile?.dia_chi ?? null,
+      ghi_chu: profile?.ghi_chu ?? null,
+    })
+  } catch (err) {
+    return fail(res, 500, 'Lá»—i táº£i há»“ sÆ¡: ' + err.message)
+  }
+}
+
 export async function updateProfile(req, res) {
   try {
     const user = await NguoiDung.findOne({ _id: req.user.id, ngay_xoa: null })
     if (!user) return fail(res, 404, 'Tài khoản không tồn tại')
 
-    const { ho_ten, so_dien_thoai } = req.body ?? {}
+    const {
+      ho_ten,
+      so_dien_thoai,
+      ngay_sinh,
+      gioi_tinh,
+      nhom_mau,
+      di_ung,
+      benh_nen,
+      dia_chi,
+      ghi_chu,
+    } = req.body ?? {}
     if (!ho_ten?.trim()) return fail(res, 400, 'Họ tên là bắt buộc')
     if (!so_dien_thoai?.trim()) return fail(res, 400, 'Số điện thoại là bắt buộc')
     const normalizedPhone = normalizePatientPhone(so_dien_thoai)
     if (!/^0\d{9,10}$/.test(normalizedPhone)) return fail(res, 400, 'Số điện thoại không đúng định dạng')
+
+    if (ngay_sinh && (Number.isNaN(new Date(ngay_sinh).getTime()) || new Date(ngay_sinh) >= new Date())) {
+      return fail(res, 400, 'NgÃ y sinh khÃ´ng há»£p lá»‡')
+    }
+    if (gioi_tinh && !['nam', 'nu', 'khac'].includes(gioi_tinh)) return fail(res, 400, 'Giá»›i tÃ­nh khÃ´ng há»£p lá»‡')
+    if (nhom_mau && !['A', 'B', 'AB', 'O'].includes(nhom_mau)) return fail(res, 400, 'NhÃ³m mÃ¡u khÃ´ng há»£p lá»‡')
 
     user.ho_ten = ho_ten.trim()
     user.so_dien_thoai = normalizedPhone
@@ -610,7 +665,15 @@ export async function updateProfile(req, res) {
     // onboarding hoặc lấy lại thông tin hồ sơ cũ từ Google.
     user.requires_onboarding = false
     await user.save()
-    await syncDirectPatientProfile(user._id, user.ho_ten, user.so_dien_thoai)
+    const profile = await syncDirectPatientProfile(user._id, user.ho_ten, user.so_dien_thoai, {
+      ngay_sinh: ngay_sinh ? new Date(ngay_sinh) : null,
+      gioi_tinh: gioi_tinh || null,
+      nhom_mau: nhom_mau || null,
+      di_ung: di_ung?.trim() || null,
+      benh_nen: benh_nen?.trim() || null,
+      dia_chi: dia_chi?.trim() || null,
+      ghi_chu: ghi_chu?.trim() || null,
+    })
 
     return ok(res, {
       id: String(user._id),
@@ -621,6 +684,13 @@ export async function updateProfile(req, res) {
       role: user.role,
       status: user.status,
       requires_onboarding: false,
+      ngay_sinh: profile?.ngay_sinh ?? null,
+      gioi_tinh: profile?.gioi_tinh ?? null,
+      nhom_mau: profile?.nhom_mau ?? null,
+      di_ung: profile?.di_ung ?? null,
+      benh_nen: profile?.benh_nen ?? null,
+      dia_chi: profile?.dia_chi ?? null,
+      ghi_chu: profile?.ghi_chu ?? null,
     }, 'Cập nhật thông tin cá nhân thành công')
   } catch (err) {
     return fail(res, 500, 'Lỗi cập nhật thông tin cá nhân: ' + err.message)

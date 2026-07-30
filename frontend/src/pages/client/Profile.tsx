@@ -58,6 +58,14 @@ export default function Profile() {
   const [hoTen, setHoTen] = useState('')
   const [soDienThoai, setSoDienThoai] = useState('')
   const [email, setEmail] = useState('')
+  const [ngaySinh, setNgaySinh] = useState('')
+  const [gioiTinh, setGioiTinh] = useState<'' | 'nam' | 'nu' | 'khac'>('')
+  const [nhomMau, setNhomMau] = useState<'' | 'A' | 'B' | 'AB' | 'O'>('')
+  const [diUng, setDiUng] = useState('')
+  const [benhNen, setBenhNen] = useState('')
+  const [diaChi, setDiaChi] = useState('')
+  const [ghiChu, setGhiChu] = useState('')
+  const [profileLoading, setProfileLoading] = useState(false)
 
   const [toast, setToast] = useState<string | null>(null)
   const [cancelModalId, setCancelModalId] = useState<string | null>(null)
@@ -88,6 +96,28 @@ export default function Profile() {
     setHoTen(user.ho_ten)
     setSoDienThoai(user.so_dien_thoai || '')
     setEmail(user.email)
+    setNgaySinh(user.ngay_sinh ? new Date(user.ngay_sinh).toISOString().slice(0, 10) : '')
+    setGioiTinh(user.gioi_tinh || '')
+    setNhomMau(user.nhom_mau || '')
+    setDiUng(user.di_ung || '')
+    setBenhNen(user.benh_nen || '')
+    setDiaChi(user.dia_chi || '')
+    setGhiChu(user.ghi_chu || '')
+
+    let profileIgnore = false
+    authService.getProfile().then((profile) => {
+      if (profileIgnore) return
+      setHoTen(profile.ho_ten)
+      setSoDienThoai(profile.so_dien_thoai || '')
+      setEmail(profile.email)
+      setNgaySinh(profile.ngay_sinh ? new Date(profile.ngay_sinh).toISOString().slice(0, 10) : '')
+      setGioiTinh(profile.gioi_tinh || '')
+      setNhomMau(profile.nhom_mau || '')
+      setDiUng(profile.di_ung || '')
+      setBenhNen(profile.benh_nen || '')
+      setDiaChi(profile.dia_chi || '')
+      setGhiChu(profile.ghi_chu || '')
+    }).catch(() => {})
 
     let ignore = false
     setAppointmentsLoading(true)
@@ -112,6 +142,7 @@ export default function Profile() {
 
     return () => {
       ignore = true
+      profileIgnore = true
     }
   }, [user, justBooked])
 
@@ -266,10 +297,18 @@ export default function Profile() {
     event.preventDefault()
     if (!user) return
 
+    setProfileLoading(true)
     try {
       const updatedUser = await authService.updateProfile({
         ho_ten: hoTen.trim(),
         so_dien_thoai: soDienThoai.trim(),
+        ngay_sinh: ngaySinh || null,
+        gioi_tinh: gioiTinh || null,
+        nhom_mau: nhomMau || null,
+        di_ung: diUng.trim() || null,
+        benh_nen: benhNen.trim() || null,
+        dia_chi: diaChi.trim() || null,
+        ghi_chu: ghiChu.trim() || null,
       })
       // Giữ nguyên toàn bộ thông tin phiên hiện tại, đặc biệt là id tài khoản.
       // Tên chỉ là thuộc tính hiển thị, không được thay thế khóa định danh.
@@ -278,10 +317,19 @@ export default function Profile() {
         ho_ten: updatedUser.ho_ten,
         so_dien_thoai: updatedUser.so_dien_thoai,
         anh_dai_dien: updatedUser.anh_dai_dien ?? user.anh_dai_dien ?? null,
+        ngay_sinh: updatedUser.ngay_sinh,
+        gioi_tinh: updatedUser.gioi_tinh,
+        nhom_mau: updatedUser.nhom_mau,
+        di_ung: updatedUser.di_ung,
+        benh_nen: updatedUser.benh_nen,
+        dia_chi: updatedUser.dia_chi,
+        ghi_chu: updatedUser.ghi_chu,
       })
       setToast('Cập nhật thông tin cá nhân thành công.')
     } catch (error: any) {
       setToast(error.response?.data?.message || error.message || 'Không thể lưu thông tin cá nhân.')
+    } finally {
+      setProfileLoading(false)
     }
   }
 
@@ -695,13 +743,36 @@ export default function Profile() {
                   <Input label="Số điện thoại liên hệ" value={soDienThoai} onChange={(event) => setSoDienThoai(event.target.value)} required />
                 </div>
 
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input label="Ngày sinh" type="date" value={ngaySinh} onChange={(event) => setNgaySinh(event.target.value)} />
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">Giới tính</label>
+                    <select value={gioiTinh} onChange={(event) => setGioiTinh(event.target.value as typeof gioiTinh)} className="input w-full">
+                      <option value="">Chưa cập nhật</option><option value="nam">Nam</option><option value="nu">Nữ</option><option value="khac">Khác</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">Nhóm máu</label>
+                    <select value={nhomMau} onChange={(event) => setNhomMau(event.target.value as typeof nhomMau)} className="input w-full">
+                      <option value="">Chưa cập nhật</option><option value="A">A</option><option value="B">B</option><option value="AB">AB</option><option value="O">O</option>
+                    </select>
+                  </div>
+                  <Input label="Địa chỉ" value={diaChi} onChange={(event) => setDiaChi(event.target.value)} />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">Dị ứng<textarea rows={3} value={diUng} onChange={(event) => setDiUng(event.target.value)} className="input w-full resize-y" placeholder="Ví dụ: dị ứng Penicillin, hải sản..." /></label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">Bệnh nền<textarea rows={3} value={benhNen} onChange={(event) => setBenhNen(event.target.value)} className="input w-full resize-y" placeholder="Ví dụ: tăng huyết áp, tiểu đường..." /></label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700 sm:col-span-2">Ghi chú<textarea rows={3} value={ghiChu} onChange={(event) => setGhiChu(event.target.value)} className="input w-full resize-y" placeholder="Thông tin khác muốn lưu cho hồ sơ của bạn" /></label>
+                </div>
+
                 <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
                   <span className="font-semibold text-slate-800">Email đăng ký:</span> {email}
                   <p className="mt-1 text-xs text-slate-500">Email dùng để đăng nhập và không thể chỉnh sửa tại đây.</p>
                 </div>
 
                 <div className="flex justify-end border-t border-slate-50 pt-2">
-                  <Button type="submit">Lưu thay đổi</Button>
+                  <Button type="submit" loading={profileLoading}>Lưu thay đổi</Button>
                 </div>
               </form>
             </div>

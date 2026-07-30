@@ -15,6 +15,7 @@ router.post('/google', authController.googleLogin)
 router.post('/refresh-token', authController.refreshToken)
 router.post('/logout', authController.logout)
 router.post('/update-onboarding', verifyToken, authController.updateOnboarding)
+router.get('/profile', verifyToken, authController.getProfile)
 router.put('/profile', verifyToken, authController.updateProfile)
 
 export default router

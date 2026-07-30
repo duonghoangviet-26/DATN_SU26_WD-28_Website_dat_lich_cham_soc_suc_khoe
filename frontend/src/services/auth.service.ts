@@ -85,7 +85,22 @@ export const authService = {
     return res.data.data
   },
 
-  async updateProfile(data: { ho_ten: string; so_dien_thoai: string }): Promise<User> {
+  async getProfile(): Promise<User> {
+    const res = await axiosInstance.get<ApiResponse<User>>('/auth/profile')
+    return res.data.data
+  },
+
+  async updateProfile(data: {
+    ho_ten: string
+    so_dien_thoai: string
+    ngay_sinh?: string | null
+    gioi_tinh?: 'nam' | 'nu' | 'khac' | null
+    nhom_mau?: 'A' | 'B' | 'AB' | 'O' | null
+    di_ung?: string | null
+    benh_nen?: string | null
+    dia_chi?: string | null
+    ghi_chu?: string | null
+  }): Promise<User> {
     const res = await axiosInstance.put<ApiResponse<User>>('/auth/profile', data)
     return res.data.data
   },
