@@ -8,6 +8,7 @@ import HeroBanner from '@/components/client/HeroBanner'
 import { newsService } from '@/services/news.service'
 import { serviceService } from '@/services/service.service'
 import type { NewsArticle, ServiceItem } from '@/types'
+import { getNewsImageSrcSet, getNewsImageUrl } from '@/utils/newsImage'
 
 const benefits = [
   {
@@ -230,7 +231,19 @@ export default function Home() {
               {latestNews.map((article) => (
                 <Link key={article.id} to={`/tin-tuc/${article.url_slug || article.id}`} className="group overflow-hidden rounded-xl bg-gradient-to-br from-brand-50/60 to-white border border-gray-100 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10">
                   <div className="aspect-[1.45/1] overflow-hidden bg-slate-100">
-                    <img src={article.image} alt={article.title} className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" loading="lazy" />
+                    <img
+                      src={getNewsImageUrl(article.image, { width: 720, height: 496 })}
+                      srcSet={getNewsImageSrcSet(article.image, [
+                        { width: 480, height: 331 },
+                        { width: 720, height: 496 },
+                        { width: 960, height: 662 },
+                      ])}
+                      sizes="(min-width: 768px) 33vw, calc(100vw - 32px)"
+                      alt={article.title}
+                      className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
                   <div className="p-5">
                     <p className="text-xs font-medium text-slate-400">{new Date(article.created_at).toLocaleDateString('vi-VN')}</p>

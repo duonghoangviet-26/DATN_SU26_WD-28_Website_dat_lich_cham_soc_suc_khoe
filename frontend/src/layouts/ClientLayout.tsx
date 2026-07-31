@@ -46,6 +46,16 @@ export default function ClientLayout() {
   const mobileNavClass = ({ isActive }: { isActive: boolean }) =>
     `block rounded-2xl px-4 py-3 text-base font-semibold transition-colors ${isActive ? 'bg-teal-50 text-teal-800' : 'text-slate-700 hover:bg-slate-50'}`
 
+  const patientProfileRoles = ['user', 'patient']
+  const canAccessPatientProfile = Boolean(user && patientProfileRoles.includes(user.role))
+  const staffArea = user?.role === 'admin'
+    ? { to: '/admin', label: 'Khu vực admin' }
+    : user?.role === 'receptionist'
+      ? { to: '/receptionist', label: 'Khu vực lễ tân' }
+      : user?.role === 'doctor'
+        ? { to: '/doctor', label: 'Khu vực bác sĩ' }
+        : null
+
   return (
     <div className="flex min-h-screen flex-col bg-[#f7faf9] text-left text-slate-900">
       <div className="border-b border-teal-900/10 bg-teal-900 text-xs text-teal-50">
@@ -71,14 +81,14 @@ export default function ClientLayout() {
             <NavLink to="/" end className={navClass}>Trang chủ</NavLink>
             <NavLink to="/dich-vu" className={navClass}>Dịch vụ</NavLink>
             <NavLink to="/tin-tuc" className={navClass}>Cẩm nang sức khỏe</NavLink>
-            {user && <NavLink to="/profile" className={navClass}>Hồ sơ của tôi</NavLink>}
+            {canAccessPatientProfile && <NavLink to="/profile" className={navClass}>Hồ sơ của tôi</NavLink>}
           </nav>
 
           <div className="hidden items-center gap-3 lg:flex">
             {user ? (
               <>
                 <span className="max-w-[150px] truncate text-xs font-medium text-slate-600">Xin chào, {user.ho_ten}</span>
-                {user.role === 'doctor' && <Link to="/doctor" className="rounded-full px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-white hover:text-teal-800">Khu vực bác sĩ</Link>}
+                {staffArea && <Link to={staffArea.to} className="rounded-full px-3 py-2 text-xs font-semibold text-slate-600 transition-colors duration-200 hover:bg-white hover:text-teal-800">{staffArea.label}</Link>}
                 <button type="button" onClick={handleLogout} className="rounded-full px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-white hover:text-red-600">Đăng xuất</button>
               </>
             ) : (
@@ -118,7 +128,8 @@ export default function ClientLayout() {
               <NavLink to="/" end className={mobileNavClass} onClick={closeMobileMenu}>Trang chủ</NavLink>
               <NavLink to="/dich-vu" className={mobileNavClass} onClick={closeMobileMenu}>Dịch vụ</NavLink>
               <NavLink to="/tin-tuc" className={mobileNavClass} onClick={closeMobileMenu}>Cẩm nang sức khỏe</NavLink>
-              {user && <NavLink to="/profile" className={mobileNavClass} onClick={closeMobileMenu}>Hồ sơ của tôi</NavLink>}
+              {canAccessPatientProfile && <NavLink to="/profile" className={mobileNavClass} onClick={closeMobileMenu}>Hồ sơ của tôi</NavLink>}
+              {staffArea && <NavLink to={staffArea.to} className={mobileNavClass} onClick={closeMobileMenu}>{staffArea.label}</NavLink>}
             </nav>
             <div className="mt-4 border-t border-slate-100 pt-4">
               {user ? (

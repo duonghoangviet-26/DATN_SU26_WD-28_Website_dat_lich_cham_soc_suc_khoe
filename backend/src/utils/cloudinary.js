@@ -20,6 +20,16 @@ const storage = new CloudinaryStorage({
   },
 })
 
-const upload = multer({ storage: storage })
+const newsStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vitafamily/news',
+    allowedFormats: ['jpg', 'png', 'jpeg', 'webp'],
+    transformation: [{ width: 1920, crop: 'limit' }]
+  },
+})
 
-export { cloudinary, upload }
+const upload = multer({ storage: storage })
+const newsUpload = multer({ storage: newsStorage })
+
+export { cloudinary, upload, newsUpload }

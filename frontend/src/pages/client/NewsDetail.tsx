@@ -4,6 +4,7 @@ import { newsService } from '@/services/news.service'
 import Breadcrumb from '@/components/common/Breadcrumb'
 import Loading from '@/components/common/Loading'
 import type { NewsArticle } from '@/types'
+import { getNewsImageSrcSet, getNewsImageUrl, optimizeNewsContentImages } from '@/utils/newsImage'
 import { sanitizeHtml } from '@/utils/sanitizeHtml'
 
 export default function NewsDetail() {
@@ -11,7 +12,10 @@ export default function NewsDetail() {
   const [loading, setLoading] = useState(true)
   const [article, setArticle] = useState<NewsArticle | null>(null)
   const [relatedArticles, setRelatedArticles] = useState<NewsArticle[]>([])
-  const safeArticleContent = useMemo(() => sanitizeHtml(article?.content || ''), [article?.content])
+  const safeArticleContent = useMemo(
+    () => optimizeNewsContentImages(sanitizeHtml(article?.content || '')),
+    [article?.content],
+  )
 
   useEffect(() => {
     if (!slug) return
@@ -71,7 +75,19 @@ export default function NewsDetail() {
 
           {/* Featured Image */}
           <div className="aspect-[16/9] w-full rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
-            <img src={article.image} alt={article.title} className="h-full w-full object-cover" decoding="async" />
+            <img
+              src={getNewsImageUrl(article.image, { width: 1280, height: 720 })}
+              srcSet={getNewsImageSrcSet(article.image, [
+                { width: 768, height: 432 },
+                { width: 1024, height: 576 },
+                { width: 1280, height: 720 },
+                { width: 1600, height: 900 },
+              ])}
+              sizes="(min-width: 1024px) 760px, calc(100vw - 32px)"
+              alt={article.title}
+              className="h-full w-full object-cover"
+              decoding="async"
+            />
           </div>
 
           {/* Article Body */}
@@ -101,7 +117,19 @@ export default function NewsDetail() {
                   className="group flex gap-3 items-start border-b border-slate-50 pb-3 last:border-0 last:pb-0"
                 >
                   <div className="h-16 w-16 bg-slate-100 rounded-lg overflow-hidden shrink-0">
-                    <img src={n.image} alt={n.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" loading="lazy" decoding="async" />
+                    <img
+                      src={getNewsImageUrl(n.image, { width: 160, height: 160 })}
+                      srcSet={getNewsImageSrcSet(n.image, [
+                        { width: 128, height: 128 },
+                        { width: 160, height: 160 },
+                        { width: 240, height: 240 },
+                      ])}
+                      sizes="64px"
+                      alt={n.title}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-700 group-hover:text-brand-600 transition-colors line-clamp-2 leading-snug">
