@@ -62,7 +62,7 @@ export default function ClientLayout() {
               <span className="text-xl font-semibold leading-none">V</span>
             </span>
             <span>
-              <span className="block text-base font-semibold tracking-[-0.03em] text-slate-950 sm:text-lg">VitaFamily</span>
+              <span className="block text-base font-semibold tracking-[-0.03em] text-slate-950 sm:text-lg">ViteFamily</span>
               <span className="block text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">Tai Mũi Họng</span>
             </span>
           </Link>
@@ -147,7 +147,7 @@ export default function ClientLayout() {
           <div className="max-w-sm">
             <Link to="/" className="inline-flex items-center gap-3 text-white">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-700 font-semibold">V</span>
-              <span className="text-lg font-semibold tracking-[-0.03em]">VitaFamily</span>
+              <span className="text-lg font-semibold tracking-[-0.03em]">ViteFamily</span>
             </Link>
             <p className="mt-5 text-sm leading-6 text-slate-400">Phòng khám chuyên khoa Tai Mũi Họng dành cho người lớn và trẻ em. Đặt lịch dễ dàng, khám rõ ràng.</p>
             <a href="tel:0365747888" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-teal-300 hover:text-white"><Phone size={15} aria-hidden="true" /> 0365 747 888</a>
@@ -171,7 +171,7 @@ export default function ClientLayout() {
         </div>
         <div className="border-t border-white/10">
           <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-            <p>© 2026 VitaFamily. Phòng khám Tai Mũi Họng.</p>
+            <p>© 2026 ViteFamily. Phòng khám Tai Mũi Họng.</p>
             <p>Thông tin trên website không thay thế chẩn đoán y khoa trực tiếp.</p>
           </div>
         </div>
