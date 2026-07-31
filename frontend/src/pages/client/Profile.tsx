@@ -370,11 +370,17 @@ export default function Profile() {
     event.preventDefault()
     if (!user) return
 
+    const cleanPhone = soDienThoai.trim().replace(/\D/g, '')
+    if (!/^0\d{9,10}$/.test(cleanPhone)) {
+      setToast('Số điện thoại không hợp lệ (phải bắt đầu bằng số 0 và có 10 chữ số).')
+      return
+    }
+
     setProfileLoading(true)
     try {
       const updatedUser = await authService.updateProfile({
         ho_ten: hoTen.trim(),
-        so_dien_thoai: soDienThoai.trim(),
+        so_dien_thoai: cleanPhone,
         ngay_sinh: ngaySinh || null,
         gioi_tinh: gioiTinh || null,
         nhom_mau: nhomMau || null,

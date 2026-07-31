@@ -459,6 +459,12 @@ export async function createBooking(req, res) {
     if (booking_for === 'other' && (!ten_khach || !so_dien_thoai_khach)) {
       return rollbackFail(400, 'Đặt cho người khác phải có họ tên và số điện thoại người được khám')
     }
+    if (so_dien_thoai_khach) {
+      const cleanPhone = normalizeBookingPhone(so_dien_thoai_khach)
+      if (!/^0\d{9,10}$/.test(cleanPhone)) {
+        return rollbackFail(400, 'Số điện thoại liên hệ không đúng định dạng (phải có 10 chữ số, ví dụ 0912345678)')
+      }
+    }
 
     // ⛔ Không có bằng chứng khách đồng ý điều khoản KHÔNG HOÀN TIỀN thì KHÔNG được thu
     // tiền (rule mục 5). Thu trước rồi mới tranh cãi là phòng khám thua — phải chặn ở đây,
