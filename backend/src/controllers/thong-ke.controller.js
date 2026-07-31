@@ -1,5 +1,6 @@
 import {
   getBenhNhanMoiTheoThang,
+  getBenhNhanMoiTheoTuanTrongThang,
   getDichVuPhoBien,
   getDoanhThuTheoBacSi,
   getDoanhThuTheoNgay,
@@ -97,6 +98,12 @@ export async function doanhThuTheoBacSi(req, res) {
 }
 
 export async function benhNhanMoiTheoThang(req, res) {
+  if (req.query.mode === 'month') {
+    const range = monthRange(req.query.thang || currentClinicMonth())
+    if (!range) return fail(res, 400, 'Tham số thang phải có định dạng YYYY-MM')
+    return respond(res, () => getBenhNhanMoiTheoTuanTrongThang(range), 'Thống kê bệnh nhân mới theo tuần')
+  }
+
   const range = yearRange(req.query.nam || currentClinicYear())
   if (!range) return fail(res, 400, 'Tham số nam phải có định dạng YYYY')
   return respond(res, () => getBenhNhanMoiTheoThang(range), 'Thống kê bệnh nhân mới theo tháng')

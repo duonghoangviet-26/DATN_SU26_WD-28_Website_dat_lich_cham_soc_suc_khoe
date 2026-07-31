@@ -17,8 +17,20 @@ export interface DoctorRevenueStatistic {
 
 export interface MonthlyNewPatientStatistic {
   thang: number
+  label?: string
   so_luong: number
 }
+
+export interface WeeklyNewPatientStatistic {
+  tuan: number
+  label: string
+  tu: number
+  den: number
+  so_luong: number
+}
+
+export type NewPatientStatisticMode = 'month' | 'year'
+export type NewPatientStatistic = MonthlyNewPatientStatistic | WeeklyNewPatientStatistic
 
 export interface TopServiceStatistic {
   ten_dich_vu: string

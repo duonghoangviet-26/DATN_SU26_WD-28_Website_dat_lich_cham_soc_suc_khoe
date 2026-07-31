@@ -4,7 +4,14 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { thongKeService } from '@/services/thong-ke.service'
 import type { AppointmentStatusStatistic } from '@/types/thong-ke'
 import ChartCard from './ChartCard'
-import { clinicDate, getErrorMessage } from './chart-utils'
+import { clinicDate, clinicMonthStart, clinicYearStart, getErrorMessage } from './chart-utils'
+
+type AppointmentStatusPeriod = 'month' | 'year'
+
+const PERIOD_OPTIONS: Array<{ value: AppointmentStatusPeriod; label: string }> = [
+  { value: 'month', label: '1 tháng' },
+  { value: 'year', label: '1 năm' },
+]
 
 const STATUS_META = {
   cho_xac_nhan: { label: 'Chờ xác nhận', color: '#f59e0b' },
@@ -14,18 +21,29 @@ const STATUS_META = {
 }
 
 export default function AppointmentStatusChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
+  const [period, setPeriod] = useState<AppointmentStatusPeriod>('month')
   const [data, setData] = useState<AppointmentStatusStatistic[]>([])
   const [loading, setLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
-    thongKeService.getAppointmentStatuses(clinicDate(-29), clinicDate())
-      .then((rows) => { if (active) setData(rows) })
+    setLoading(true)
+    setError('')
+
+    const startDate = period === 'month' ? clinicMonthStart() : clinicYearStart()
+    thongKeService.getAppointmentStatuses(startDate, clinicDate())
+      .then((rows) => {
+        if (active) {
+          setData(rows)
+          setHasLoaded(true)
+        }
+      })
       .catch((err) => { if (active) setError(getErrorMessage(err)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [refreshVersion])
+  }, [period, refreshVersion])
 
   const chartData = useMemo(() => data.map((item) => ({
     ...item,
@@ -33,17 +51,39 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
     color: STATUS_META[item.trang_thai].color,
   })), [data])
   const total = data.reduce((sum, item) => sum + item.so_luong, 0)
+  const subtitle = period === 'month'
+    ? 'Phân bổ lịch hẹn theo trạng thái trong tháng hiện tại.'
+    : 'Phân bổ lịch hẹn theo trạng thái trong năm hiện tại.'
 
   return (
     <ChartCard
       title="Trạng thái lịch hẹn"
-      subtitle="Phân bổ lịch hẹn theo trạng thái trong 30 ngày gần nhất."
+      subtitle={subtitle}
       icon="calendar"
       iconBackgroundClassName="bg-purple-100"
       iconClassName="text-purple-600"
-      loading={loading}
+      loading={loading && !hasLoaded}
       empty={!data.length}
       error={error}
+      action={
+        <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200" aria-label="Khoảng thời gian lịch hẹn">
+          {PERIOD_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setPeriod(option.value)}
+              className={`min-h-9 rounded-md px-3 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-purple-300 motion-reduce:transition-none ${
+                period === option.value
+                  ? 'bg-white text-purple-700 shadow-sm'
+                  : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'
+              }`}
+              aria-pressed={period === option.value}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      }
     >
       <div className="relative h-56 w-full" aria-label="Biểu đồ trạng thái lịch hẹn">
         <ResponsiveContainer width="100%" height="100%">
