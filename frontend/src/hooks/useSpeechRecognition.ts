@@ -72,7 +72,7 @@ export function useSpeechRecognition() {
       }
 
       recognitionRef.current = recognition
-    } catch (e) {
+    } catch {
       setState('error')
       setErrorMsg('Lỗi khởi tạo Micro.')
     }
@@ -89,7 +89,7 @@ export function useSpeechRecognition() {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.start()
-      } catch (e) {
+      } catch {
         // Ignored if already started
       }
     }
@@ -100,7 +100,7 @@ export function useSpeechRecognition() {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop()
-      } catch (e) {
+      } catch {
         // Ignored
       }
     }

@@ -167,7 +167,7 @@ export default function RescheduleModal({ appointmentId, onClose, onDone }: Prop
             )}
 
             {loi && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{loi}</div>
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600" role="alert">{loi}</div>
             )}
 
             <div className="flex justify-end gap-2">

@@ -53,7 +53,7 @@ export default function EditClinic({ clinic, loading = false, onSaved, onCancel,
       setError(null)
       const url = await clinicService.uploadImage(file)
       setForm((prev) => ({ ...prev, logo_url: url }))
-    } catch (_) {
+    } catch {
       setError('Lỗi khi tải ảnh lên')
     } finally {
       setUploading(false)

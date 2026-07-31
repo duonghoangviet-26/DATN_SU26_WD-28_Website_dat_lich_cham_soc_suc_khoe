@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react'
+import React, { forwardRef, useId } from 'react'
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string
@@ -7,14 +7,17 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, icon, className = '', id, ...props }, ref) => {
-    const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`
+  ({ label, error, icon, className = '', id, required, 'aria-describedby': describedBy, ...props }, ref) => {
+    const generatedId = useId()
+    const inputId = id || `input-${generatedId.replace(/:/g, '')}`
+    const errorId = `${inputId}-error`
+    const visibleLabel = label?.replace(/\s*\*\s*$/, '')
 
     return (
       <div className="w-full space-y-1.5 text-left">
-        {label && (
+        {visibleLabel && (
           <label htmlFor={inputId} className="text-xs font-semibold text-slate-700">
-            {label}
+            {visibleLabel}{required && <span className="text-red-600" aria-hidden="true"> *</span>}
           </label>
         )}
         <div className="relative">
@@ -26,6 +29,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             id={inputId}
             ref={ref}
+            required={required}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? [describedBy, errorId].filter(Boolean).join(' ') : describedBy}
             className={`w-full rounded-lg border text-sm transition-all duration-200 outline-none
               ${icon ? 'pl-10' : 'pl-3.5'} pr-3.5 py-2.5
               ${
@@ -37,7 +43,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
         </div>
-        {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+        {error && <p id={errorId} className="text-xs font-medium text-red-600" role="alert">{error}</p>}
       </div>
     )
   }

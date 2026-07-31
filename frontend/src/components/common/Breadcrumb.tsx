@@ -12,9 +12,9 @@ interface BreadcrumbProps {
 
 export default function Breadcrumb({ items }: BreadcrumbProps) {
   return (
-    <nav className="flex items-center gap-1.5 text-xs text-slate-500 py-3" aria-label="Breadcrumb">
-      <Link to="/" className="hover:text-brand-600 transition-colors flex items-center gap-1">
-        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <nav className="flex min-w-0 items-center gap-1.5 overflow-hidden py-3 text-xs text-slate-500" aria-label="Breadcrumb">
+      <Link to="/" className="flex shrink-0 items-center gap-1 transition-colors hover:text-brand-600">
+        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
         </svg>
         Trang chủ
@@ -25,15 +25,15 @@ export default function Breadcrumb({ items }: BreadcrumbProps) {
 
         return (
           <React.Fragment key={index}>
-            <svg className="h-3 w-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="h-3 w-3 shrink-0 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
             {isLast || !item.to ? (
-              <span className="font-semibold text-slate-800" aria-current="page">
+              <span className="min-w-0 truncate font-semibold text-slate-800" aria-current="page" title={item.label}>
                 {item.label}
               </span>
             ) : (
-              <Link to={item.to} className="hover:text-brand-600 transition-colors">
+              <Link to={item.to} className="min-w-0 truncate transition-colors hover:text-brand-600">
                 {item.label}
               </Link>
             )}

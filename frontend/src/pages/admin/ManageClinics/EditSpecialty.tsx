@@ -63,7 +63,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       setError(null)
       const url = await clinicService.uploadImage(file)
       setForm((prev) => ({ ...prev, icon_url: url }))
-    } catch (_) {
+    } catch {
       setError('Lỗi khi tải ảnh lên')
     } finally {
       setUploading(false)

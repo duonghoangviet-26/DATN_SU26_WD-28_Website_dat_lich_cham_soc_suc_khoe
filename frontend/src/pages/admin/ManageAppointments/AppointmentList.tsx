@@ -243,7 +243,7 @@ export default function AppointmentList({
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-800">Hủy lịch hẹn</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Xác nhận hủy lịch hẹn của "{confirmItem.benh_nhan}" với {confirmItem.bac_si}.
+              Xác nhận hủy lịch hẹn của &ldquo;{confirmItem.benh_nhan}&rdquo; với {confirmItem.bac_si}.
             </p>
             <div className="mt-4">
               <label className="mb-1 block text-sm font-medium text-slate-700">

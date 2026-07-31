@@ -890,9 +890,9 @@ export default function Booking() {
 
                 <div className="grid place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
                   {qrCodeDataUrl ? (
-                    <img src={qrCodeDataUrl} alt="Mã QR VNPAY mock" className="h-72 w-72 rounded-xl bg-white p-3 shadow-sm" />
+                    <img src={qrCodeDataUrl} alt="Mã QR VNPAY mock" className="aspect-square w-full max-w-[288px] rounded-xl bg-white p-3 shadow-sm" />
                   ) : (
-                    <div className="grid h-72 w-72 place-items-center rounded-xl bg-white text-sm text-slate-400 shadow-sm">
+                    <div className="grid aspect-square w-full max-w-[288px] place-items-center rounded-xl bg-white text-sm text-slate-400 shadow-sm">
                       Đang render mã QR...
                     </div>
                   )}

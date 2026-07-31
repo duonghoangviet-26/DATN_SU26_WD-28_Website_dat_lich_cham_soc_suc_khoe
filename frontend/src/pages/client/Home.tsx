@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronRight, Clock3, Ear, MapPin, Phone, ShieldCheck, Stethoscope } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, Check, ChevronRight, Clock3, Ear, MapPin, ShieldCheck, Stethoscope } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import Skeleton from '@/components/common/Skeleton'
+import { Reveal } from '@/components/client/ClientMotion'
+import HeroBanner from '@/components/client/HeroBanner'
 import { newsService } from '@/services/news.service'
 import { serviceService } from '@/services/service.service'
 import type { NewsArticle, ServiceItem } from '@/types'
@@ -31,42 +33,12 @@ const bookingSteps = [
   { icon: Check, title: 'Đến khám đúng hẹn', description: 'Bác sĩ phù hợp sẽ được phân công theo lịch thực tế.' },
 ]
 
-const heroSlides = [
-  {
-    eyebrow: 'Phòng khám chuyên khoa Tai Mũi Họng',
-    title: 'Chăm sóc Tai Mũi Họng, rõ ràng từ lần khám đầu tiên.',
-    description: 'Một địa chỉ chuyên khoa dành cho cả gia đình, với quy trình khám dễ hiểu và lịch hẹn chủ động.',
-    image: '/images/ent-clinic-hero.png',
-    imageAlt: 'Bác sĩ thăm khám tai cho người bệnh tại phòng khám',
-    label: 'Lịch hẹn chủ động',
-    caption: 'Phòng khám tự sắp xếp bác sĩ phù hợp',
-  },
-  {
-    eyebrow: 'Không gian chăm sóc cẩn thận',
-    title: 'Một buổi khám nhẹ nhàng bắt đầu từ nơi bạn bước vào.',
-    description: 'Không gian sạch, sáng và riêng tư để người bệnh an tâm chia sẻ triệu chứng của mình.',
-    image: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1400&auto=format&fit=crop&q=85',
-    imageAlt: 'Không gian sạch sáng tại phòng khám chuyên khoa',
-    label: 'Ưu tiên sự thoải mái',
-    caption: 'Thiết kế để gia đình dễ dàng tìm thấy sự yên tâm',
-  },
-  {
-    eyebrow: 'Đồng hành cùng cả gia đình',
-    title: 'Hiểu đúng triệu chứng, chăm sóc đúng hướng.',
-    description: 'Từ những dấu hiệu nhỏ ở tai, mũi, họng đến kế hoạch theo dõi rõ ràng sau buổi khám.',
-    image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1400&auto=format&fit=crop&q=85',
-    imageAlt: 'Bác sĩ tư vấn và chăm sóc người bệnh',
-    label: 'Khám rõ, theo dõi dễ',
-    caption: 'Bác sĩ giải thích kết quả bằng ngôn ngữ dễ hiểu',
-  },
-]
-
 function ServiceMark({ index }: { index: number }) {
   const icons = [Ear, Stethoscope, ShieldCheck, Clock3]
   const Icon = icons[index % icons.length]
 
   return (
-    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700 transition-transform duration-300 ease-out group-hover:scale-110">
       <Icon size={21} strokeWidth={1.8} aria-hidden="true" />
     </span>
   )
@@ -76,54 +48,6 @@ export default function Home() {
   const [clinicServices, setClinicServices] = useState<ServiceItem[]>([])
   const [latestNews, setLatestNews] = useState<NewsArticle[]>([])
   const [loadingServices, setLoadingServices] = useState(true)
-  const [activeSlide, setActiveSlide] = useState(0)
-  const [reducedMotion, setReducedMotion] = useState(false)
-
-  const activeHeroSlide = heroSlides[activeSlide]
-
-  function moveToSlide(index: number) {
-    setActiveSlide((index + heroSlides.length) % heroSlides.length)
-  }
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const syncMotionPreference = () => setReducedMotion(mediaQuery.matches)
-    syncMotionPreference()
-    mediaQuery.addEventListener?.('change', syncMotionPreference)
-
-    return () => mediaQuery.removeEventListener?.('change', syncMotionPreference)
-  }, [])
-
-  useEffect(() => {
-    if (reducedMotion) return
-
-    const timer = window.setInterval(() => {
-      setActiveSlide((current) => (current + 1) % heroSlides.length)
-    }, 6800)
-
-    return () => window.clearInterval(timer)
-  }, [reducedMotion])
-
-  useEffect(() => {
-    const revealNodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
-    if (!revealNodes.length) return
-
-    if (reducedMotion || !('IntersectionObserver' in window)) {
-      revealNodes.forEach((node) => node.classList.add('is-visible'))
-      return
-    }
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return
-        entry.target.classList.add('is-visible')
-        observer.unobserve(entry.target)
-      })
-    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' })
-
-    revealNodes.forEach((node) => observer.observe(node))
-    return () => observer.disconnect()
-  }, [reducedMotion])
 
   useEffect(() => {
     let ignore = false
@@ -153,86 +77,10 @@ export default function Home() {
 
   return (
     <div className="overflow-hidden bg-[#f7faf9] text-slate-900">
-      <section className="relative border-b border-slate-200/80 bg-[#eef7f5]">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 pb-14 pt-10 sm:px-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:gap-16 lg:px-8 lg:pb-20 lg:pt-16">
-          <div key={activeSlide} className="relative z-10 min-h-[600px] max-w-xl hero-copy-in sm:min-h-[500px] lg:min-h-0">
-            <p className="mb-5 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">
-              <span className="h-2 w-2 rounded-full bg-teal-600" aria-hidden="true" />
-              {activeHeroSlide.eyebrow}
-            </p>
-            <h1 className="max-w-2xl text-4xl font-semibold leading-[1.08] tracking-[-0.035em] text-slate-950 sm:text-5xl lg:text-[4.25rem]">
-              {activeHeroSlide.title}
-            </h1>
-            <p className="mt-6 max-w-lg text-base leading-7 text-slate-600 sm:text-lg">
-              {activeHeroSlide.description}
-            </p>
+      <HeroBanner />
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Link to="/booking" className="btn-primary rounded-full px-6 py-3.5 text-sm font-semibold shadow-[0_12px_28px_rgba(15,118,110,0.2)]">
-                Đặt lịch khám
-                <ArrowUpRight size={17} aria-hidden="true" />
-              </Link>
-              <a href="tel:0365747888" className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-white hover:text-teal-800">
-                <Phone size={16} strokeWidth={1.8} aria-hidden="true" />
-                0365 747 888
-              </a>
-            </div>
-
-            <div className="mt-10 grid max-w-lg grid-cols-3 gap-4 border-t border-teal-900/10 pt-5 text-sm">
-              <div>
-                <p className="font-semibold text-slate-900">Tai Mũi Họng</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Chuyên khoa duy nhất</p>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900">Cho cả nhà</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Người lớn và trẻ em</p>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900">Đặt lịch online</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Chọn giờ trước khi đến</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative h-[360px] w-full lg:h-[540px]">
-            <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full border-[36px] border-white/60" aria-hidden="true" />
-            <div
-              className="relative h-full min-h-0 overflow-hidden rounded-[2rem] bg-slate-200 shadow-[0_24px_70px_rgba(15,63,65,0.18)]"
-              role="region"
-              aria-roledescription="carousel"
-              aria-label="Các điểm nổi bật của phòng khám"
-            >
-              {heroSlides.map((slide, index) => (
-                <img
-                  key={slide.image}
-                  src={slide.image}
-                  alt={index === activeSlide ? slide.imageAlt : ''}
-                  aria-hidden={index !== activeSlide}
-                  className={`absolute inset-0 h-full w-full object-cover object-center hero-slide-image ${index === activeSlide ? 'is-active' : ''}`}
-                  loading={index === 0 ? 'eager' : 'lazy'}
-                />
-              ))}
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-slate-950/5 to-transparent" aria-hidden="true" />
-              <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between gap-4 sm:bottom-7 sm:left-7 sm:right-7">
-                <div key={`${activeSlide}-caption`} className="hero-caption-in max-w-[min(70%,18rem)] rounded-2xl border border-white/50 bg-white/90 px-4 py-3 shadow-lg backdrop-blur-sm">
-                  <p className="text-xs font-semibold text-teal-800">{activeHeroSlide.label}</p>
-                  <p className="mt-1 text-sm font-medium leading-5 text-slate-800">{activeHeroSlide.caption}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button type="button" onClick={() => moveToSlide(activeSlide - 1)} className="hero-control" aria-label="Ảnh trước">
-                    <ArrowLeft size={17} aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => moveToSlide(activeSlide + 1)} className="hero-control" aria-label="Ảnh tiếp theo">
-                    <ArrowRight size={17} aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section data-reveal className="reveal-on-scroll mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8 lg:py-24">
+      <Reveal>
+      <section className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8 lg:py-24">
         <div className="max-w-md">
           <p className="text-sm font-semibold text-teal-700">Một cuộc hẹn nhẹ nhàng hơn</p>
           <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">
@@ -263,8 +111,10 @@ export default function Home() {
           })}
         </div>
       </section>
+      </Reveal>
 
-      <section data-reveal className="reveal-on-scroll border-y border-slate-200/80 bg-white">
+      <Reveal>
+      <section className="border-y border-slate-200/80 bg-white">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:px-8 lg:py-24">
           <div className="relative overflow-hidden rounded-[2rem] bg-slate-100">
             <img
@@ -305,8 +155,10 @@ export default function Home() {
           </div>
         </div>
       </section>
+      </Reveal>
 
-      <section data-reveal className="reveal-on-scroll mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+      <Reveal>
+      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-xl">
             <p className="text-sm font-semibold text-teal-700">Dịch vụ và triệu chứng</p>
@@ -331,24 +183,24 @@ export default function Home() {
         ) : (
           <div className="mt-10 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
             {featuredService && (
-              <Link to={`/dich-vu/${featuredService.id}`} className="group flex min-h-[300px] flex-col justify-between rounded-[2rem] bg-teal-800 p-7 text-white transition-transform duration-300 hover:-translate-y-1 sm:p-9">
+              <Link to={`/dich-vu/${featuredService.id}`} className="group flex min-h-[300px] flex-col justify-between rounded-xl bg-brand-800 p-7 text-white shadow-sm hover:shadow-xl hover:shadow-brand-500/10 transition-all duration-300 ease-out hover:-translate-y-1 sm:p-9 border border-brand-700">
                 <div className="flex items-start justify-between gap-4">
                   <ServiceMark index={0} />
-                  <ArrowUpRight className="text-teal-200 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" size={22} aria-hidden="true" />
+                  <ArrowUpRight className="text-brand-200 transition-transform duration-300 ease-out group-hover:translate-x-1" size={22} aria-hidden="true" />
                 </div>
                 <div className="mt-14 max-w-md">
-                  <p className="text-sm font-medium text-teal-100">Dịch vụ nổi bật</p>
+                  <p className="text-sm font-medium text-brand-100">Dịch vụ nổi bật</p>
                   <h3 className="mt-2 text-2xl font-semibold tracking-[-0.025em]">{featuredService.ten}</h3>
-                  <p className="mt-3 text-sm leading-6 text-teal-50/80">{featuredService.mo_ta_ngan || 'Khám và tư vấn chuyên khoa theo tình trạng cụ thể của bạn.'}</p>
+                  <p className="mt-3 text-sm leading-6 text-brand-50/80">{featuredService.mo_ta_ngan || 'Khám và tư vấn chuyên khoa theo tình trạng cụ thể của bạn.'}</p>
                 </div>
               </Link>
             )}
             <div className="grid gap-4 sm:grid-cols-2">
               {secondaryServices.map((service, index) => (
-                <Link key={service.id} to={`/dich-vu/${service.id}`} className="group flex min-h-[142px] flex-col justify-between rounded-3xl bg-white p-5 shadow-[0_10px_35px_rgba(21,54,56,0.06)] transition-transform duration-300 hover:-translate-y-1">
+                <Link key={service.id} to={`/dich-vu/${service.id}`} className="group flex min-h-[142px] flex-col justify-between rounded-xl bg-gradient-to-br from-brand-50/60 to-white border border-gray-100 p-5 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10">
                   <div className="flex items-start justify-between gap-3">
                     <ServiceMark index={index + 1} />
-                    <ChevronRight className="text-slate-300 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-teal-700" size={18} aria-hidden="true" />
+                    <ChevronRight className="text-slate-300 transition-transform duration-300 ease-out group-hover:translate-x-1 group-hover:text-brand-700" size={18} aria-hidden="true" />
                   </div>
                   <h3 className="mt-7 text-sm font-semibold leading-5 text-slate-900">{service.ten}</h3>
                 </Link>
@@ -357,8 +209,10 @@ export default function Home() {
           </div>
         )}
       </section>
+      </Reveal>
 
-      <section data-reveal className="reveal-on-scroll border-t border-slate-200/80 bg-[#eef7f5]">
+      <Reveal>
+      <section className="border-t border-slate-200/80 bg-[#eef7f5]">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -374,13 +228,13 @@ export default function Home() {
           {latestNews.length > 0 && (
             <div className="mt-10 grid gap-5 md:grid-cols-3">
               {latestNews.map((article) => (
-                <Link key={article.id} to={`/tin-tuc/${article.url_slug || article.id}`} className="group overflow-hidden rounded-3xl bg-white shadow-[0_10px_35px_rgba(21,54,56,0.05)] transition-transform duration-300 hover:-translate-y-1">
+                <Link key={article.id} to={`/tin-tuc/${article.url_slug || article.id}`} className="group overflow-hidden rounded-xl bg-gradient-to-br from-brand-50/60 to-white border border-gray-100 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10">
                   <div className="aspect-[1.45/1] overflow-hidden bg-slate-100">
-                    <img src={article.image} alt={article.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                    <img src={article.image} alt={article.title} className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" loading="lazy" />
                   </div>
                   <div className="p-5">
                     <p className="text-xs font-medium text-slate-400">{new Date(article.created_at).toLocaleDateString('vi-VN')}</p>
-                    <h3 className="mt-3 line-clamp-2 text-base font-semibold leading-6 text-slate-900 group-hover:text-teal-800">{article.title}</h3>
+                    <h3 className="mt-3 line-clamp-2 text-base font-semibold leading-6 text-slate-900 group-hover:text-brand-800 transition-colors">{article.title}</h3>
                     <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{article.excerpt}</p>
                   </div>
                 </Link>
@@ -389,8 +243,10 @@ export default function Home() {
           )}
         </div>
       </section>
+      </Reveal>
 
-      <section data-reveal className="reveal-on-scroll bg-teal-900 text-white">
+      <Reveal>
+      <section className="bg-teal-900 text-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-14 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 lg:py-16">
           <div className="max-w-2xl">
             <p className="text-sm font-medium text-teal-200">Bạn đang cần được thăm khám?</p>
@@ -402,6 +258,7 @@ export default function Home() {
           </Link>
         </div>
       </section>
+      </Reveal>
 
       <div className="mx-auto flex max-w-7xl flex-wrap gap-x-8 gap-y-3 px-4 py-6 text-xs text-slate-500 sm:px-6 lg:px-8">
         <span className="inline-flex items-center gap-2"><MapPin size={14} className="text-teal-700" aria-hidden="true" /> 123 Nguyễn Trãi, Thanh Xuân, Hà Nội</span>

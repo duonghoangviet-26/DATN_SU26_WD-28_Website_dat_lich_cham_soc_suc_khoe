@@ -44,6 +44,7 @@ export default function ManageClinics() {
       const data = await clinicService.getCurrentClinic()
       setClinic(data)
     } catch {
+      setClinic(null)
     } finally {
       setClinicLoading(false)
     }
@@ -55,6 +56,7 @@ export default function ManageClinics() {
       const data = await clinicService.getSpecialties()
       setSpecialties(data)
     } catch {
+      setSpecialties([])
     } finally {
       setSpecialtyLoading(false)
     }

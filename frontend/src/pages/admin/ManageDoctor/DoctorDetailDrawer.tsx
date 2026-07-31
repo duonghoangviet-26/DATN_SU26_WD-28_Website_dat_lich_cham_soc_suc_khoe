@@ -301,7 +301,6 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                       <p className="text-slate-500 text-center py-10">Chưa có lịch sử thao tác nào.</p>
                     ) : (
                       logs.map(log => {
-                        const isApprove = log.hanh_dong === 'APPROVE_DOCTOR' || log.hanh_dong === 'RESTORE_DOCTOR'
                         const isReject = log.hanh_dong === 'REJECT_DOCTOR'
                         const isSuspend = log.hanh_dong === 'SUSPEND_DOCTOR'
                         const changedFields = getChangedFields(log)

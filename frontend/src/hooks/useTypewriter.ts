@@ -12,6 +12,7 @@ export function useTypewriter(text: string, isNewMessage: boolean, options?: Use
   const indexRef = useRef(0)
   const timerRef = useRef<any>(null)
   const speed = options?.speed || 20
+  const onComplete = options?.onComplete
 
   useEffect(() => {
     // Nếu không phải tin nhắn mới (load từ lịch sử) => render full luôn
@@ -46,9 +47,7 @@ export function useTypewriter(text: string, isNewMessage: boolean, options?: Use
         timerRef.current = setTimeout(typeNextChar, nextSpeed)
       } else {
         setIsTyping(false)
-        if (options?.onComplete) {
-          options.onComplete()
-        }
+        onComplete?.()
       }
     }
 
@@ -60,7 +59,7 @@ export function useTypewriter(text: string, isNewMessage: boolean, options?: Use
         clearTimeout(timerRef.current)
       }
     }
-  }, [text, isNewMessage, speed])
+  }, [text, isNewMessage, speed, onComplete])
 
   return { displayedText, isTyping }
 }

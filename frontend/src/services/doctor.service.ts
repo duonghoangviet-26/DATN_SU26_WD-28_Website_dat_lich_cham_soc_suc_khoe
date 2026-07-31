@@ -9,7 +9,7 @@ const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
 
 // Mock state — chỉ dùng cho updateServiceFields/getBySpecialtySlug bên dưới, 2 hàm này
 // chưa có endpoint backend thật (xem docs/DB_CHANGES_MAIN_VS_QUANLYDICHVU.md).
-let mockDoctorsState = [...mockDoctors]
+const mockDoctorsState = [...mockDoctors]
 
 export const doctorService = {
   // Lấy danh sách bác sĩ (có phân trang, tìm kiếm, lọc)

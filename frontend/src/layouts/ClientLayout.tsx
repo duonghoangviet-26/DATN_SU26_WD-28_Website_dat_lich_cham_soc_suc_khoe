@@ -1,14 +1,32 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { CalendarDays, Clock3, Menu, Phone, X } from 'lucide-react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 
+import { RouteTransition } from '@/components/client/ClientMotion'
 import AIChatbot from '@/pages/client/chatbot'
 import { useAuth } from '@/context/AuthContext'
 
 export default function ClientLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const outlet = useOutlet()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [mobileMenuTop, setMobileMenuTop] = useState(82)
+  const headerRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const updateMenuPosition = () => setMobileMenuTop((headerRef.current?.getBoundingClientRect().bottom || 74) + 8)
+    updateMenuPosition()
+    window.addEventListener('resize', updateMenuPosition)
+    window.addEventListener('scroll', updateMenuPosition, { passive: true })
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition)
+      window.removeEventListener('scroll', updateMenuPosition)
+    }
+  }, [mobileMenuOpen])
 
   function closeMobileMenu() {
     setMobileMenuOpen(false)
@@ -37,7 +55,7 @@ export default function ClientLayout() {
         </div>
       </div>
 
-      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-[#f7faf9]/95 backdrop-blur-xl">
+      <header ref={headerRef} className="sticky top-0 z-30 border-b border-slate-200/80 bg-[#f7faf9]/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[74px] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-3" onClick={closeMobileMenu}>
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-800 text-white shadow-[0_8px_20px_rgba(15,118,110,0.18)]">
@@ -71,15 +89,31 @@ export default function ClientLayout() {
             </Link>
           </div>
 
-          <button type="button" onClick={() => setMobileMenuOpen((open) => !open)} className="flex h-10 w-10 items-center justify-center rounded-2xl text-slate-700 hover:bg-white lg:hidden" aria-label={mobileMenuOpen ? 'Đóng menu' : 'Mở menu'} aria-expanded={mobileMenuOpen}>
+          <button type="button" onClick={() => setMobileMenuOpen((open) => !open)} className="flex h-11 w-11 items-center justify-center rounded-2xl text-slate-700 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2 lg:hidden" aria-label={mobileMenuOpen ? 'Đóng menu' : 'Mở menu'} aria-expanded={mobileMenuOpen}>
             {mobileMenuOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
           </button>
         </div>
       </header>
 
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-20 bg-slate-950/20 backdrop-blur-sm lg:hidden" onClick={closeMobileMenu}>
-          <div className="absolute inset-x-3 top-[92px] rounded-3xl border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,63,65,0.16)]" onClick={(event) => event.stopPropagation()}>
+      <AnimatePresence>
+        {mobileMenuOpen && (
+        <motion.div
+          className="fixed inset-0 z-20 bg-slate-950/20 backdrop-blur-sm lg:hidden"
+          onClick={closeMobileMenu}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <motion.div
+            className="absolute inset-x-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,63,65,0.16)]"
+            style={{ top: mobileMenuTop }}
+            onClick={(event) => event.stopPropagation()}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          >
             <nav className="space-y-1" aria-label="Điều hướng di động">
               <NavLink to="/" end className={mobileNavClass} onClick={closeMobileMenu}>Trang chủ</NavLink>
               <NavLink to="/dich-vu" className={mobileNavClass} onClick={closeMobileMenu}>Dịch vụ</NavLink>
@@ -97,12 +131,15 @@ export default function ClientLayout() {
               )}
               <Link to="/booking" onClick={closeMobileMenu} className="btn-primary mt-3 w-full rounded-2xl py-3 text-sm font-semibold">Đặt lịch khám</Link>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
 
       <main className="flex-1">
-        <Outlet />
+        <AnimatePresence mode="wait" initial>
+          <RouteTransition key={location.pathname}>{outlet}</RouteTransition>
+        </AnimatePresence>
       </main>
 
       <footer className="border-t border-slate-200 bg-slate-950 text-slate-400">

@@ -185,25 +185,29 @@ export default function DoctorDetail() {
               ) : (
                 <form onSubmit={handleSubmitReview} className="space-y-3">
                   {/* Chọn số sao */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500">Số sao:</span>
+                  <fieldset className="flex items-center gap-2">
+                    <legend className="text-xs text-slate-500">Số sao:</legend>
                     <div className="flex gap-1">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <button
                           key={star}
                           type="button"
                           onClick={() => setNewReviewRating(star)}
-                          className="text-lg transition-transform hover:scale-110 focus:outline-none"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg text-lg transition-colors hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+                          aria-label={`${star} sao`}
+                          aria-pressed={newReviewRating === star}
                         >
                           {star <= newReviewRating ? '⭐' : '☆'}
                         </button>
                       ))}
                     </div>
-                  </div>
+                  </fieldset>
 
                   {/* Nhập nội dung */}
                   <div className="space-y-1">
+                    <label htmlFor="doctor-review" className="sr-only">Nhận xét về bác sĩ</label>
                     <textarea
+                      id="doctor-review"
                       placeholder="Nhập nhận xét của bạn về bác sĩ sau khi khám..."
                       value={newReviewComment}
                       onChange={(e) => setNewReviewComment(e.target.value)}
@@ -214,10 +218,10 @@ export default function DoctorDetail() {
                   </div>
 
                   {reviewError && (
-                    <p className="text-[11px] font-semibold text-red-650">{reviewError}</p>
+                    <p className="text-xs font-semibold text-red-600" role="alert">{reviewError}</p>
                   )}
                   {reviewSuccess && (
-                    <p className="text-[11px] font-semibold text-emerald-650">{reviewSuccess}</p>
+                    <p className="text-xs font-semibold text-emerald-600" role="status">{reviewSuccess}</p>
                   )}
 
                   <button
@@ -242,8 +246,8 @@ export default function DoctorDetail() {
                       <span className="text-xs font-bold text-slate-800">{r.benh_nhan}</span>
                       <span className="text-xs font-bold text-amber-500">{'⭐'.repeat(r.so_sao)}</span>
                     </div>
-                    <p className="text-xs text-slate-550 leading-relaxed italic">
-                      "{r.noi_dung || 'Không có bình luận.'}"
+                    <p className="text-xs leading-relaxed text-slate-600 italic">
+                      &ldquo;{r.noi_dung || 'Không có bình luận.'}&rdquo;
                     </p>
                     <p className="text-[9px] text-slate-400">
                       {new Date(r.ngay_tao).toLocaleDateString('vi-VN')}

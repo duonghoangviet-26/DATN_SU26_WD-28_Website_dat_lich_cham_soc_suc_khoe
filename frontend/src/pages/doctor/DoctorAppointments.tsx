@@ -170,7 +170,6 @@ export default function DoctorAppointments() {
     upcoming: all.filter((a) => upcomingWorkingDays.has(ngayKhamLocal(a))).length,
     past: all.filter((a) => ngayKhamLocal(a) < todayStr).length,
     all: all.length,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [all, todayStr, upcomingWorkingDays])
 
   // Tab "Đã qua" (lịch sử) mặc định RỖNG — chỉ hiện khi có từ khóa tìm kiếm hoặc đã chọn 1
@@ -201,7 +200,6 @@ export default function DoctorAppointments() {
       )
     }
     return list
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, timeTab, filterStatus, filterDate, searchTerm, todayStr, upcomingWorkingDays, historyLocked])
 
   const hasActiveFilter = Boolean(filterDate || filterStatus || searchTerm.trim())

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { notificationService } from '@/services/notification.service'
 import { formatDateTime } from '@/utils/format'
@@ -37,7 +37,7 @@ export default function ReceiveNotificationTab() {
     }
   }, [location.state, navigate, location.pathname])
 
-  const loadData = async (ignore = false) => {
+  const loadData = useCallback(async (ignore = false) => {
     setLoading(true)
     try {
       const { data, pagination } = await notificationService.getReceived(page, 10)
@@ -56,14 +56,13 @@ export default function ReceiveNotificationTab() {
     } finally {
       if (!ignore) setLoading(false)
     }
-  }
+  }, [page])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let ignore = false
     loadData(ignore)
     return () => { ignore = true }
-  }, [page])
+  }, [loadData])
 
   const handlePageChange = (newPage: number) => {
     if (newPage > 0 && newPage <= totalPages) {
