@@ -7,11 +7,16 @@ export interface PatientProfile {
   so_dien_thoai?: string | null
   ngay_sinh?: string | null
   gioi_tinh?: 'nam' | 'nu' | 'khac' | null
+  nhom_mau?: 'A' | 'B' | 'AB' | 'O' | null
+  di_ung?: string | null
+  benh_nen?: string | null
   dia_chi?: string | null
   ghi_chu?: string | null
   nguon_tao: 'online' | 'tai_quay' | 'backfill'
   tai_khoan_id?: string | null
   nguoi_giam_ho_id?: string | null
+  tai_khoan?: OnlineAccount | null
+  loai_lien_ket_tai_khoan?: 'benh_nhan' | 'nguoi_dat_ho' | null
   member_id?: string | null
   trang_thai: 'active' | 'merged' | 'archived'
   nguoi_lien_he?: { id: string; ho_ten: string; so_dien_thoai?: string | null } | null
@@ -21,14 +26,28 @@ export interface PatientProfile {
   luot_dang_cho_hom_nay?: ActiveQueue | null
 }
 
+export interface OnlineAccount {
+  id: string
+  email: string
+  ho_ten: string
+  so_dien_thoai?: string | null
+  providers: string[]
+  phuong_thuc_dang_nhap: string
+  email_verified: boolean
+}
+
 export interface TodayAppointment {
   id: string
+  tai_khoan_id?: string | null
   ma_lich_hen?: string | null
   ngay_kham: string
   gio_kham: string
   gio_ket_thuc?: string | null
   status: string
   payment_status: string
+  ten_khach?: string | null
+  so_dien_thoai_khach?: string | null
+  nam_sinh_khach?: number | null
   nguon: 'online' | 'tai_cho'
   doctor: { id: string; ho_ten: string | null } | null
   chuyen_khoa: { id: string; ten: string | null } | null
@@ -46,9 +65,11 @@ export interface ActiveQueue {
 interface PatientSearchResult {
   phone: string
   profiles: PatientProfile[]
+  accounts: OnlineAccount[]
   total: number
   can_tao_moi: boolean
   ambiguous_appointments: TodayAppointment[]
+  account_appointments: TodayAppointment[]
   checked_at: string
 }
 
@@ -57,8 +78,12 @@ export interface CreatePatientProfilePayload {
   so_dien_thoai: string
   ngay_sinh?: string
   gioi_tinh?: 'nam' | 'nu' | 'khac'
+  nhom_mau?: 'A' | 'B' | 'AB' | 'O'
+  di_ung?: string
+  benh_nen?: string
   dia_chi?: string
   ghi_chu?: string
+  tai_khoan_id?: string
 }
 
 export interface OfflineIntakeSlot {
@@ -177,14 +202,19 @@ export interface BillingCase {
     tong_tien_phat_sinh: number
     tong_thanh_toan: number
     tong_da_thu: number
+    tong_da_thu_truoc: number
+    tong_da_thu_sau_kham: number
+    con_phai_thu_sau_kham: number
     con_phai_thu: number
     trang_thai_hoa_don: string
+    da_xac_nhan_thu_ngan: boolean
     source: 'invoice' | 'medical_record'
   }
   pending_payment: OfflinePendingPayment | null
   payments: Array<{
     id: string
     so_tien: number
+    loai_thanh_toan: 'phi_dat_lich' | 'dat_coc' | 'thanh_toan_bo_sung'
     phuong_thuc: 'tien_mat' | 'chuyen_khoan'
     status: 'pending' | 'paid' | 'failed' | 'refunded'
     ma_giao_dich?: string | null
@@ -192,6 +222,7 @@ export interface BillingCase {
     ngay_thanh_toan?: string | null
   }>
   dich_vu_chi_dinh: BillingServiceLine[]
+  da_xac_nhan_thu_ngan: boolean
 }
 
 export const receptionistPatientIntakeService = {
@@ -223,12 +254,12 @@ export const receptionistPatientIntakeService = {
     return response.data.data
   },
 
-  async checkInAppointment(appointmentId: string) {
+  async checkInAppointment(appointmentId: string, patient: { ho_so_benh_nhan_id: string; so_dien_thoai: string; ho_ten: string }) {
     const response = await axiosInstance.patch<ApiResponse<{
       appointment: TodayAppointment
       hang_doi: { id: string; doctor_id: string; phong_kham?: string | null; gio_hen_goc?: string | null; checkin_time: string }
       canh_bao?: string[]
-    }>>(`/receptionist/appointments/${appointmentId}/arrived`)
+    }>>(`/receptionist/appointments/${appointmentId}/arrived`, patient)
     return response.data
   },
 

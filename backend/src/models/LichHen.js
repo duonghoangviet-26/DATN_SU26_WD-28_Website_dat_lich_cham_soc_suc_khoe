@@ -46,6 +46,8 @@ const appointmentSchema = new mongoose.Schema(
       default: 'pending',
     },
     payment_status: {
+      // Chỉ là trạng thái phí đặt lịch/phí khám ban đầu. Hóa đơn sau khám
+      // và các dịch vụ phát sinh theo dõi riêng ở HoaDon/ThanhToan.
       type: String,
       enum: ['unpaid', 'partial', 'paid', 'refunded'],
       default: 'unpaid',

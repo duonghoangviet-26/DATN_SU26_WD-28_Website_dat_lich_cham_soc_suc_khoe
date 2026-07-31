@@ -164,20 +164,6 @@ export default function Appointments() {
 
   // Check-in đưa bệnh nhân vào HÀNG ĐỢI của bác sĩ (rule mục 6), không chỉ đổi trạng thái lịch.
   // Server trả kèm cảnh báo cần xử lý ngay tại quầy: chưa thanh toán, đến sớm/trễ, ca quá tải.
-  const handleArrived = async (id: string) => {
-    try {
-      const res = await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
-      const canhBao: string[] = res.data?.canh_bao ?? [];
-      const phong = res.data?.hang_doi?.phong_kham;
-      if (canhBao.length > 0) {
-        alert(`Đã đưa vào hàng đợi${phong ? ` — phòng ${phong}` : ''}.\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`);
-      }
-      fetchAppointments();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Lỗi khi check-in');
-    }
-  };
-
   const handleCancel = (id: string) => {
     setSelectedAppointmentId(id);
     setCancelReason('');
@@ -370,7 +356,7 @@ export default function Appointments() {
                 <th className="px-4 py-3 font-semibold">Thời gian</th>
                 <th className="px-4 py-3 font-semibold">Bệnh nhân</th>
                 <th className="px-4 py-3 font-semibold">Bác sĩ</th>
-                <th className="px-4 py-3 font-semibold">Thanh toán</th>
+                <th className="px-4 py-3 font-semibold">Phí đặt lịch (thu trước)</th>
                 <th className="px-4 py-3 font-semibold">Trạng thái</th>
                 <th className="px-4 py-3 font-semibold">Thao tác</th>
               </tr>
@@ -406,10 +392,17 @@ export default function Appointments() {
                       <td className="px-4 py-3">{apt.doctor_id?.user_id?.ho_ten || 'Chưa gán'}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          apt.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 
+                          apt.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
+                          apt.payment_status === 'partial' ? 'bg-amber-100 text-amber-700' :
                           apt.payment_status === 'refunded' ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'
                         }`}>
-                          {apt.payment_status === 'paid' ? 'Đã thu' : apt.payment_status === 'refunded' ? 'Đã hoàn' : 'Chưa thu'}
+                          {apt.payment_status === 'paid'
+                            ? 'Đã trả phí khám'
+                            : apt.payment_status === 'partial'
+                              ? 'Đã trả một phần'
+                              : apt.payment_status === 'refunded'
+                                ? 'Đã hoàn phí khám'
+                                : 'Chưa trả phí khám'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -429,13 +422,9 @@ export default function Appointments() {
                           {activeTab !== 'past' && (
                             <>
                               {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
-                                <button
-                                  title="Đã đến"
-                                  onClick={() => handleArrived(apt._id)}
-                                  className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors"
-                                >
-                                  <Icon name="check" className="w-4 h-4" />
-                                </button>
+                                <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                                  Tra cứu tại Tiếp nhận
+                                </span>
                               )}
                               {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                                 <button
@@ -765,14 +754,21 @@ export default function Appointments() {
                       </div>
                       
                       <div className="flex justify-between items-center">
-                        <p className="text-sm text-slate-600">Thanh toán:</p>
+                        <p className="text-sm text-slate-600">Phí đặt lịch (thu trước):</p>
                         <div className="text-right">
                           <p className="font-semibold text-slate-800">{selectedDetailAppointment.gia_kham?.toLocaleString('vi-VN')} đ</p>
                           <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${
-                            selectedDetailAppointment.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 
+                            selectedDetailAppointment.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
+                            selectedDetailAppointment.payment_status === 'partial' ? 'bg-amber-100 text-amber-700' :
                             selectedDetailAppointment.payment_status === 'refunded' ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'
                           }`}>
-                            {selectedDetailAppointment.payment_status === 'paid' ? 'Đã thu' : selectedDetailAppointment.payment_status === 'refunded' ? 'Đã hoàn' : 'Chưa thu'}
+                            {selectedDetailAppointment.payment_status === 'paid'
+                              ? 'Đã trả phí khám'
+                              : selectedDetailAppointment.payment_status === 'partial'
+                                ? 'Đã trả một phần'
+                                : selectedDetailAppointment.payment_status === 'refunded'
+                                  ? 'Đã hoàn phí khám'
+                                  : 'Chưa trả phí khám'}
                           </span>
                         </div>
                       </div>

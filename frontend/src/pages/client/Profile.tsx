@@ -8,6 +8,7 @@ import Modal from '@/components/common/Modal'
 import Toast from '@/components/common/Toast'
 import RescheduleModal from '@/components/client/RescheduleModal'
 import { useAuth } from '@/context/AuthContext'
+import { authService } from '@/services/auth.service'
 import {
   patientRecordsService,
   type PatientRecordDetail,
@@ -20,17 +21,15 @@ import {
 } from '@/services/patient-booking.service'
 
 export default function Profile() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, updateUser } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
   const justBooked = searchParams.get('booked') === 'true'
 
-  const [activeTab, setActiveTab] = useState<'appointments' | 'ehr' | 'account' | 'family'>('appointments')
+  const [activeTab, setActiveTab] = useState<'appointments' | 'account' | 'family'>('appointments')
   const [appointments, setAppointments] = useState<PatientRecordListItem[]>([])
   const [appointmentsLoading, setAppointmentsLoading] = useState(true)
-  const [selectedEHR, setSelectedEHR] = useState<PatientRecordDetail | null>(null)
-  const [ehrLoading, setEhrLoading] = useState(false)
 
   // Family group states
   const [familyGroup, setFamilyGroup] = useState<FamilyGroup | null>(null)
@@ -41,6 +40,10 @@ export default function Profile() {
   const [selectedAppointment, setSelectedAppointment] = useState<PatientRecordDetail | null>(null)
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [contactEditOpen, setContactEditOpen] = useState(false)
+  const [contactEditName, setContactEditName] = useState('')
+  const [contactEditPhone, setContactEditPhone] = useState('')
+  const [contactSaving, setContactSaving] = useState(false)
 
   // Member modal states
   const [memberModalOpen, setMemberModalOpen] = useState(false)
@@ -55,9 +58,14 @@ export default function Profile() {
   const [hoTen, setHoTen] = useState('')
   const [soDienThoai, setSoDienThoai] = useState('')
   const [email, setEmail] = useState('')
-  const [birthDate, setBirthDate] = useState('1998-05-12')
-  const [gender, setGender] = useState('male')
-  const [insuranceCard, setInsuranceCard] = useState('GD401023901923')
+  const [ngaySinh, setNgaySinh] = useState('')
+  const [gioiTinh, setGioiTinh] = useState<'' | 'nam' | 'nu' | 'khac'>('')
+  const [nhomMau, setNhomMau] = useState<'' | 'A' | 'B' | 'AB' | 'O'>('')
+  const [diUng, setDiUng] = useState('')
+  const [benhNen, setBenhNen] = useState('')
+  const [diaChi, setDiaChi] = useState('')
+  const [ghiChu, setGhiChu] = useState('')
+  const [profileLoading, setProfileLoading] = useState(false)
 
   const [toast, setToast] = useState<string | null>(null)
   const [cancelModalId, setCancelModalId] = useState<string | null>(null)
@@ -88,6 +96,28 @@ export default function Profile() {
     setHoTen(user.ho_ten)
     setSoDienThoai(user.so_dien_thoai || '')
     setEmail(user.email)
+    setNgaySinh(user.ngay_sinh ? new Date(user.ngay_sinh).toISOString().slice(0, 10) : '')
+    setGioiTinh(user.gioi_tinh || '')
+    setNhomMau(user.nhom_mau || '')
+    setDiUng(user.di_ung || '')
+    setBenhNen(user.benh_nen || '')
+    setDiaChi(user.dia_chi || '')
+    setGhiChu(user.ghi_chu || '')
+
+    let profileIgnore = false
+    authService.getProfile().then((profile) => {
+      if (profileIgnore) return
+      setHoTen(profile.ho_ten)
+      setSoDienThoai(profile.so_dien_thoai || '')
+      setEmail(profile.email)
+      setNgaySinh(profile.ngay_sinh ? new Date(profile.ngay_sinh).toISOString().slice(0, 10) : '')
+      setGioiTinh(profile.gioi_tinh || '')
+      setNhomMau(profile.nhom_mau || '')
+      setDiUng(profile.di_ung || '')
+      setBenhNen(profile.benh_nen || '')
+      setDiaChi(profile.dia_chi || '')
+      setGhiChu(profile.ghi_chu || '')
+    }).catch(() => {})
 
     let ignore = false
     setAppointmentsLoading(true)
@@ -112,6 +142,7 @@ export default function Profile() {
 
     return () => {
       ignore = true
+      profileIgnore = true
     }
   }, [user, justBooked])
 
@@ -155,6 +186,9 @@ export default function Profile() {
       patientRecordsService.getAppointmentDetail(targetId)
         .then((detail) => {
           setSelectedAppointment(detail)
+          setContactEditName(detail.ten_khach || '')
+          setContactEditPhone(detail.so_dien_thoai_khach || '')
+          setContactEditOpen(false)
           setDetailModalOpen(true)
         })
         .catch((error) => {
@@ -208,23 +242,14 @@ export default function Profile() {
     }
   }
 
-  async function handleOpenEhr(id: string) {
-    setEhrLoading(true)
-    try {
-      const detail = await patientRecordsService.getAppointmentDetail(id)
-      setSelectedEHR(detail)
-    } catch (error: any) {
-      setToast(error.response?.data?.message || error.message || 'Không tải được chi tiết bệnh án.')
-    } finally {
-      setEhrLoading(false)
-    }
-  }
-
   async function handleOpenAppointmentDetail(id: string) {
     setDetailLoading(true)
     try {
       const detail = await patientRecordsService.getAppointmentDetail(id)
       setSelectedAppointment(detail)
+      setContactEditName(detail.ten_khach || '')
+      setContactEditPhone(detail.so_dien_thoai_khach || '')
+      setContactEditOpen(false)
       setDetailModalOpen(true)
     } catch (error: any) {
       setToast(error.response?.data?.message || error.message || 'Không tải được chi tiết cuộc hẹn.')
@@ -233,17 +258,79 @@ export default function Profile() {
     }
   }
 
-  function handleUpdateProfile(event: React.FormEvent) {
+  function canEditAppointmentContact(appointment: PatientRecordDetail) {
+    return ['pending', 'confirmed'].includes(appointment.status)
+      && !isAppointmentInPast(appointment.ngay_kham, appointment.gio_kham)
+  }
+
+  async function handleUpdateAppointmentContact(event: React.FormEvent) {
+    event.preventDefault()
+    if (!selectedAppointment) return
+
+    setContactSaving(true)
+    try {
+      const updated = await patientRecordsService.updateAppointmentContact(selectedAppointment.id, {
+        ho_ten: contactEditName.trim(),
+        so_dien_thoai: contactEditPhone.trim(),
+      })
+
+      setSelectedAppointment((current) => current ? {
+        ...current,
+        ten_khach: updated.ten_khach,
+        so_dien_thoai_khach: updated.so_dien_thoai_khach,
+      } : current)
+      setAppointments((current) => current.map((appointment) => appointment.id === selectedAppointment.id ? {
+        ...appointment,
+        ten_khach: updated.ten_khach,
+        so_dien_thoai_khach: updated.so_dien_thoai_khach,
+      } : appointment))
+      setContactEditOpen(false)
+      setToast('Đã cập nhật thông tin cho lịch hẹn này.')
+    } catch (error: any) {
+      setToast(error.response?.data?.message || error.message || 'Không thể cập nhật thông tin lịch hẹn.')
+    } finally {
+      setContactSaving(false)
+    }
+  }
+
+  async function handleUpdateProfile(event: React.FormEvent) {
     event.preventDefault()
     if (!user) return
 
-    const updatedUser = {
-      ...user,
-      ho_ten: hoTen,
-      so_dien_thoai: soDienThoai,
+    setProfileLoading(true)
+    try {
+      const updatedUser = await authService.updateProfile({
+        ho_ten: hoTen.trim(),
+        so_dien_thoai: soDienThoai.trim(),
+        ngay_sinh: ngaySinh || null,
+        gioi_tinh: gioiTinh || null,
+        nhom_mau: nhomMau || null,
+        di_ung: diUng.trim() || null,
+        benh_nen: benhNen.trim() || null,
+        dia_chi: diaChi.trim() || null,
+        ghi_chu: ghiChu.trim() || null,
+      })
+      // Giữ nguyên toàn bộ thông tin phiên hiện tại, đặc biệt là id tài khoản.
+      // Tên chỉ là thuộc tính hiển thị, không được thay thế khóa định danh.
+      updateUser({
+        ...user,
+        ho_ten: updatedUser.ho_ten,
+        so_dien_thoai: updatedUser.so_dien_thoai,
+        anh_dai_dien: updatedUser.anh_dai_dien ?? user.anh_dai_dien ?? null,
+        ngay_sinh: updatedUser.ngay_sinh,
+        gioi_tinh: updatedUser.gioi_tinh,
+        nhom_mau: updatedUser.nhom_mau,
+        di_ung: updatedUser.di_ung,
+        benh_nen: updatedUser.benh_nen,
+        dia_chi: updatedUser.dia_chi,
+        ghi_chu: updatedUser.ghi_chu,
+      })
+      setToast('Cập nhật thông tin cá nhân thành công.')
+    } catch (error: any) {
+      setToast(error.response?.data?.message || error.message || 'Không thể lưu thông tin cá nhân.')
+    } finally {
+      setProfileLoading(false)
     }
-    localStorage.setItem('user', JSON.stringify(updatedUser))
-    setToast('Cập nhật hồ sơ thông tin cá nhân thành công.')
   }
 
   async function handleCreateFamily(event: React.FormEvent) {
@@ -358,42 +445,58 @@ export default function Profile() {
     return 'Chưa thanh toán'
   }
 
-  const completedAppointments = appointments.filter((item) => item.status === 'completed' || item.da_co_ket_qua)
-
   if (authLoading || !user) {
     return null
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-16 space-y-6">
-      <Breadcrumb items={[{ label: 'Hồ sơ bệnh nhân' }]} />
+    <div className="mx-auto max-w-7xl space-y-6 px-4 pb-16 sm:px-6">
+      <Breadcrumb items={[{ label: 'Hồ sơ cá nhân' }]} />
 
-      <div className="flex flex-col items-start gap-8 lg:flex-row">
-        <div className="w-full shrink-0 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-4 text-left lg:w-64">
-          <div className="space-y-1">
-            <h2 className="text-base font-bold text-slate-800">{user.ho_ten}</h2>
-            <p className="text-xs font-medium text-slate-400">Bệnh nhân chuyên khoa</p>
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_22px_60px_-35px_rgba(15,118,110,0.5)]">
+        <div className="flex flex-col gap-5 bg-[linear-gradient(120deg,#f0fdfa_0%,#ffffff_58%,#f8fafc_100%)] px-5 py-6 sm:flex-row sm:items-center sm:px-8">
+          <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-teal-700 text-xl font-black text-white shadow-sm">
+            {user.ho_ten?.split(' ').pop()?.charAt(0) || 'B'}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">Khu vực bệnh nhân</p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">Hồ sơ cá nhân</h1>
+            <p className="mt-1 text-sm text-slate-600">Quản lý lịch hẹn, thông tin liên hệ và kết quả khám của gia đình.</p>
+          </div>
+          <div className="rounded-2xl border border-white bg-white/80 px-4 py-3 text-sm shadow-sm">
+            <p className="text-xs text-slate-500">Đang đăng nhập với</p>
+            <p className="mt-0.5 max-w-[240px] truncate font-semibold text-slate-800">{user.email}</p>
+          </div>
+        </div>
+      </section>
+
+      <div className="flex flex-col items-start gap-6 lg:flex-row">
+        <aside className="w-full shrink-0 rounded-3xl border border-slate-200 bg-white p-3 text-left shadow-sm lg:w-72">
+          <div className="rounded-2xl bg-slate-50 px-4 py-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Tài khoản</p>
+            <p className="mt-1 text-base font-bold text-slate-900">{user.ho_ten}</p>
+            <p className="mt-1 text-xs text-slate-500">Thông tin được cập nhật trực tiếp vào hồ sơ.</p>
           </div>
 
-          <div className="flex flex-col gap-1 border-t border-slate-50 pt-3">
+          <div className="mt-3 flex flex-col gap-1">
             {[
-              { key: 'appointments', label: '📅 Lịch hẹn' },
-              { key: 'ehr', label: '📄 Bệnh án & Đơn thuốc' },
-              { key: 'family', label: '👨‍👩‍👧 Thành viên gia đình' },
-              { key: 'account', label: '👤 Thông tin cá nhân' },
+              { key: 'appointments', label: 'Lịch hẹn', meta: 'Theo dõi lịch khám' },
+              { key: 'family', label: 'Gia đình', meta: 'Quản lý người thân' },
+              { key: 'account', label: 'Thông tin cá nhân', meta: 'Tên và số liên hệ' },
             ].map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as 'appointments' | 'ehr' | 'account' | 'family')}
-                className={`w-full rounded-lg px-4 py-2.5 text-left text-xs font-semibold transition ${
-                  activeTab === tab.key ? 'bg-brand-50 text-brand-600 font-bold' : 'text-slate-650 hover:bg-slate-50'
+                onClick={() => setActiveTab(tab.key as 'appointments' | 'account' | 'family')}
+                className={`w-full rounded-2xl px-4 py-3 text-left transition ${
+                  activeTab === tab.key ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                {tab.label}
+                <span className="block text-sm font-bold">{tab.label}</span>
+                <span className={`mt-0.5 block text-xs ${activeTab === tab.key ? 'text-teal-100' : 'text-slate-400'}`}>{tab.meta}</span>
               </button>
             ))}
           </div>
-        </div>
+        </aside>
 
         <div className="w-full flex-1 text-left">
           {activeTab === 'appointments' && (
@@ -470,7 +573,7 @@ export default function Profile() {
                               disabled={detailLoading}
                               className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
                             >
-                              {detailLoading ? 'Đang tải...' : 'Chi tiết'}
+                              {detailLoading ? 'Đang tải...' : appointment.status === 'completed' ? 'Xem kết quả' : 'Chi tiết'}
                             </button>
                             {['pending', 'confirmed'].includes(appointment.status) && !isAppointmentInPast(appointment.ngay_kham, appointment.gio_kham) && (
                               <div className="flex gap-2">
@@ -503,54 +606,6 @@ export default function Profile() {
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'ehr' && (
-            <div className="space-y-6">
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-slate-800">Lịch sử bệnh án & Đơn thuốc</h3>
-                <p className="text-xs text-slate-400">Các ca đã hoàn thành sẽ hiển thị tại đây cùng chi tiết chẩn đoán và toa thuốc.</p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {appointmentsLoading ? (
-                  <div className="col-span-2 rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
-                    Đang tải dữ liệu bệnh án...
-                  </div>
-                ) : completedAppointments.length === 0 ? (
-                  <div className="col-span-2 rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
-                    Chưa có bệnh án điện tử nào được lưu trữ.
-                  </div>
-                ) : (
-                  completedAppointments.map((appointment) => (
-                    <div key={appointment.id} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:shadow-md space-y-4">
-                      <div className="flex items-start justify-between border-b border-slate-50 pb-3">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400">Ngày khám: {new Date(appointment.ngay_kham).toLocaleDateString('vi-VN')}</span>
-                          <h4 className="mt-0.5 text-sm font-bold text-slate-800">{appointment.ten_dich_vu}</h4>
-                        </div>
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
-                          Đã chẩn đoán
-                        </span>
-                      </div>
-
-                      <div className="space-y-1.5 text-xs text-slate-500">
-                        <p><span className="font-semibold text-slate-700">Bác sĩ:</span> {appointment.bac_si.ho_ten}</p>
-                        <p><span className="font-semibold text-slate-700">Trạng thái thanh toán:</span> {getPaymentLabel(appointment.payment_status)}</p>
-                      </div>
-
-                      <button
-                        onClick={() => handleOpenEhr(appointment.id)}
-                        className="btn-secondary w-full py-2 text-center text-xs font-semibold"
-                        disabled={ehrLoading}
-                      >
-                        {ehrLoading ? 'Đang tải...' : 'Xem chi tiết kết quả bệnh án'}
-                      </button>
                     </div>
                   ))
                 )}
@@ -689,77 +744,41 @@ export default function Profile() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="Địa chỉ email đăng ký" type="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled />
-                  <Input label="Số bảo hiểm y tế (BHYT)" value={insuranceCard} onChange={(event) => setInsuranceCard(event.target.value)} />
+                  <Input label="Ngày sinh" type="date" value={ngaySinh} onChange={(event) => setNgaySinh(event.target.value)} />
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">Giới tính</label>
+                    <select value={gioiTinh} onChange={(event) => setGioiTinh(event.target.value as typeof gioiTinh)} className="input w-full">
+                      <option value="">Chưa cập nhật</option><option value="nam">Nam</option><option value="nu">Nữ</option><option value="khac">Khác</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">Nhóm máu</label>
+                    <select value={nhomMau} onChange={(event) => setNhomMau(event.target.value as typeof nhomMau)} className="input w-full">
+                      <option value="">Chưa cập nhật</option><option value="A">A</option><option value="B">B</option><option value="AB">AB</option><option value="O">O</option>
+                    </select>
+                  </div>
+                  <Input label="Địa chỉ" value={diaChi} onChange={(event) => setDiaChi(event.target.value)} />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="Ngày sinh" type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} />
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Giới tính</label>
-                    <select
-                      value={gender}
-                      onChange={(event) => setGender(event.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                    >
-                      <option value="male">Nam</option>
-                      <option value="female">Nữ</option>
-                      <option value="other">Khác</option>
-                    </select>
-                  </div>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">Dị ứng<textarea rows={3} value={diUng} onChange={(event) => setDiUng(event.target.value)} className="input w-full resize-y" placeholder="Ví dụ: dị ứng Penicillin, hải sản..." /></label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">Bệnh nền<textarea rows={3} value={benhNen} onChange={(event) => setBenhNen(event.target.value)} className="input w-full resize-y" placeholder="Ví dụ: tăng huyết áp, tiểu đường..." /></label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700 sm:col-span-2">Ghi chú<textarea rows={3} value={ghiChu} onChange={(event) => setGhiChu(event.target.value)} className="input w-full resize-y" placeholder="Thông tin khác muốn lưu cho hồ sơ của bạn" /></label>
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  <span className="font-semibold text-slate-800">Email đăng ký:</span> {email}
+                  <p className="mt-1 text-xs text-slate-500">Email dùng để đăng nhập và không thể chỉnh sửa tại đây.</p>
                 </div>
 
                 <div className="flex justify-end border-t border-slate-50 pt-2">
-                  <Button type="submit">Lưu thay đổi</Button>
+                  <Button type="submit" loading={profileLoading}>Lưu thay đổi</Button>
                 </div>
               </form>
             </div>
           )}
         </div>
       </div>
-
-      {selectedEHR && (
-        <Modal
-          isOpen={!!selectedEHR}
-          onClose={() => setSelectedEHR(null)}
-          title="BỆNH ÁN ĐIỆN TỬ CHI TIẾT"
-        >
-          <div className="max-h-[80vh] space-y-6 overflow-y-auto pr-2 text-left text-sm text-slate-600">
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h4 className="text-base font-extrabold text-slate-800">{selectedEHR.ten_dich_vu}</h4>
-                <p className="mt-0.5 text-xs text-slate-400">Mã bệnh án: {selectedEHR.id}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-bold text-slate-800">{selectedEHR.bac_si.ho_ten}</p>
-                <p className="text-[10px] text-slate-500">Ngày khám: {new Date(selectedEHR.ngay_kham).toLocaleDateString('vi-VN')}</p>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Chẩn đoán lâm sàng</span>
-              <p className="rounded-lg bg-slate-50 p-3 font-medium text-slate-800">
-                {selectedEHR.ket_qua?.chan_doan || 'Chưa có chẩn đoán chi tiết.'}
-              </p>
-            </div>
-
-            {selectedEHR.ket_qua?.thuoc?.length ? (
-              <div className="space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Đơn thuốc chỉ định</span>
-                <ul className="list-decimal list-inside space-y-1 rounded-lg bg-slate-50 p-4">
-                  {selectedEHR.ket_qua.thuoc.map((thuoc, index) => (
-                    <li key={index} className="text-slate-700">
-                      {typeof thuoc === 'string'
-                        ? thuoc
-                        : `${thuoc.ten_thuoc}${thuoc.lieu_luong ? ` (Liều lượng: ${thuoc.lieu_luong})` : ''} - ${thuoc.tan_suat || ''}${thuoc.so_ngay ? ` (Uống trong ${thuoc.so_ngay} ngày)` : ''}${thuoc.ghi_chu ? ` [Lưu ý: ${thuoc.ghi_chu}]` : ''}`}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        </Modal>
-      )}
 
       {memberModalOpen && (
         <Modal
@@ -849,6 +868,7 @@ export default function Profile() {
           onClose={() => {
             setDetailModalOpen(false)
             setSelectedAppointment(null)
+            setContactEditOpen(false)
           }}
           title="CHI TIẾT LỊCH HẸN KHÁM"
         >
@@ -873,30 +893,53 @@ export default function Profile() {
             <div className="bg-blue-50/60 p-4 rounded-xl border border-blue-100 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">Thông tin bệnh nhân khám</p>
-                <span className="text-[11px] font-semibold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
-                  {selectedAppointment.member_id
-                    ? 'Thành viên gia đình'
-                    : selectedAppointment.ten_khach && selectedAppointment.ten_khach !== user?.ho_ten
-                    ? 'Đặt hộ người thân'
-                    : 'Tài khoản chính (Bản thân)'}
-                </span>
+                <div className="flex items-center gap-2">
+                  {canEditAppointmentContact(selectedAppointment) && !contactEditOpen && (
+                    <button
+                      type="button"
+                      onClick={() => setContactEditOpen(true)}
+                      className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-50"
+                    >
+                      Chỉnh sửa
+                    </button>
+                  )}
+                  <span className="text-[11px] font-semibold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
+                    {selectedAppointment.member_id
+                      ? 'Thành viên gia đình'
+                      : selectedAppointment.ten_khach && selectedAppointment.ten_khach !== user?.ho_ten
+                      ? 'Đặt hộ người thân'
+                      : 'Tài khoản chính (Bản thân)'}
+                  </span>
+                </div>
               </div>
-              <div className="grid sm:grid-cols-2 gap-3 text-sm pt-1">
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Họ và tên bệnh nhân:</p>
-                  <p className="font-bold text-slate-800">{selectedAppointment.ten_khach || user?.ho_ten}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Số điện thoại liên hệ:</p>
-                  <p className="font-bold text-slate-800">{selectedAppointment.so_dien_thoai_khach || user?.so_dien_thoai || 'Chưa cập nhật'}</p>
-                </div>
-                {selectedAppointment.nam_sinh_khach && (
-                  <div>
-                    <p className="text-xs text-slate-500 font-medium">Năm sinh:</p>
-                    <p className="font-semibold text-slate-700">{selectedAppointment.nam_sinh_khach}</p>
+              {contactEditOpen ? (
+                <form onSubmit={handleUpdateAppointmentContact} className="space-y-3 pt-2">
+                  <Input label="Họ và tên bệnh nhân" value={contactEditName} onChange={(event) => setContactEditName(event.target.value)} required />
+                  <Input label="Số điện thoại liên hệ" value={contactEditPhone} onChange={(event) => setContactEditPhone(event.target.value)} required />
+                  <p className="text-xs leading-5 text-blue-700">Thay đổi này chỉ áp dụng cho lịch hẹn hiện tại, không thay đổi hồ sơ cá nhân.</p>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="secondary" onClick={() => setContactEditOpen(false)}>Hủy</Button>
+                    <Button type="submit" loading={contactSaving}>Lưu thông tin</Button>
                   </div>
-                )}
-              </div>
+                </form>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3 text-sm pt-1">
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Họ và tên bệnh nhân:</p>
+                    <p className="font-bold text-slate-800">{selectedAppointment.ten_khach || user?.ho_ten}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium">Số điện thoại liên hệ:</p>
+                    <p className="font-bold text-slate-800">{selectedAppointment.so_dien_thoai_khach || user?.so_dien_thoai || 'Chưa cập nhật'}</p>
+                  </div>
+                  {selectedAppointment.nam_sinh_khach && (
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium">Năm sinh:</p>
+                      <p className="font-semibold text-slate-700">{selectedAppointment.nam_sinh_khach}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 text-sm">
@@ -924,6 +967,37 @@ export default function Profile() {
                 <div className="border-b border-slate-100 pb-2">
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Triệu chứng / Lý do khám</p>
                   <p className="text-slate-700 mt-1">{selectedAppointment.ly_do_kham}</p>
+                </div>
+              )}
+
+              {selectedAppointment.status === 'completed' && selectedAppointment.ket_qua && (
+                <div className="space-y-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Kết quả sau khám</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">
+                      {selectedAppointment.ket_qua.chan_doan || 'Chưa có chẩn đoán chi tiết.'}
+                    </p>
+                  </div>
+                  {selectedAppointment.ket_qua.huong_dan_dieu_tri && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500">Hướng dẫn điều trị</p>
+                      <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700">{selectedAppointment.ket_qua.huong_dan_dieu_tri}</p>
+                    </div>
+                  )}
+                  {selectedAppointment.ket_qua.thuoc.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500">Đơn thuốc</p>
+                      <ul className="mt-2 space-y-2">
+                        {selectedAppointment.ket_qua.thuoc.map((thuoc, index) => (
+                          <li key={index} className="rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-700">
+                            {typeof thuoc === 'string'
+                              ? thuoc
+                              : `${thuoc.ten_thuoc || 'Thuốc'}${thuoc.lieu_luong ? ` · ${thuoc.lieu_luong}` : ''}${thuoc.tan_suat ? ` · ${thuoc.tan_suat}` : ''}${thuoc.so_ngay ? ` · ${thuoc.so_ngay} ngày` : ''}`}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 

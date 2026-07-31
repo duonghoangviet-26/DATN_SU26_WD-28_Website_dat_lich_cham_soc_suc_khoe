@@ -186,6 +186,13 @@ async function syncAppointmentPaymentStatusFromPayment(payment, invoiceState = n
     return
   }
 
+  // `LichHen.payment_status` là trạng thái phí đặt lịch/phí khám trả trước.
+  // Khoản `thanh_toan_bo_sung` chỉ thuộc hóa đơn sau khám, không được ghi đè
+  // trạng thái đã trả trước của lịch hẹn.
+  if (!['phi_dat_lich', 'dat_coc'].includes(payment.loai_thanh_toan)) {
+    return
+  }
+
   let nextPaymentStatus = 'unpaid'
   if (payment.status === 'refunded') {
     nextPaymentStatus = 'refunded'

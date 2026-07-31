@@ -12,7 +12,7 @@ function money(value: number) {
 }
 
 function sourceLabel(source: BillingCase['source']) {
-  return source === 'online' ? 'Đặt trước' : 'Khách tại quầy'
+  return source === 'online' ? 'Đặt lịch online' : 'Khách tại quầy'
 }
 
 function methodLabel(method: 'tien_mat' | 'chuyen_khoan') {
@@ -32,7 +32,21 @@ function formatDateTime(value?: string | null) {
 }
 
 function lineLabel(type: string) {
-  return type === 'phi_kham' ? 'Phí khám' : 'Dịch vụ chỉ định'
+  return type === 'phi_kham' ? 'Phí khám trả trước' : 'Dịch vụ phát sinh sau khám'
+}
+
+function paymentTypeLabel(type: BillingCase['payments'][number]['loai_thanh_toan']) {
+  return type === 'thanh_toan_bo_sung' ? 'Thanh toán thêm sau khám' : 'Phí khám trả trước'
+}
+
+function casePaymentLabel(caseItem: BillingCase, view: PaymentView) {
+  if (view === 'paid') return 'Đã đối chiếu đủ hóa đơn'
+  if (caseItem.pending_payment) return 'Chờ xác nhận thanh toán thêm'
+  if (caseItem.billing_summary.con_phai_thu_sau_kham > 0 && caseItem.billing_summary.tong_da_thu_truoc > 0) {
+    return 'Còn dịch vụ phát sinh cần thu'
+  }
+  if (caseItem.billing_summary.tong_da_thu_truoc > 0) return 'Đã trả phí khám · chờ đối chiếu'
+  return 'Chờ thanh toán sau khám'
 }
 
 function formatCaseDate(value?: string | null) {
@@ -94,7 +108,7 @@ export default function Payments() {
   }
 
   async function createInvoice() {
-    if (!selected || selected.billing_summary.con_phai_thu <= 0) return
+    if (!selected) return
     setSaving(true)
     setError('')
     try {
@@ -150,8 +164,12 @@ export default function Payments() {
   const summary = selected?.billing_summary
   const invoice = selected?.invoice ?? null
   const isPaid = summary?.trang_thai_hoa_don === 'da_thanh_toan_du'
+  const isCashierConfirmed = selected?.da_xac_nhan_thu_ngan === true || summary?.da_xac_nhan_thu_ngan === true
+  const needsCashierConfirmation = Boolean(summary && !isCashierConfirmed)
   const actionLabel = !summary
     ? 'Chọn ca khám'
+    : summary.con_phai_thu <= 0
+      ? 'Xác nhận đã đối chiếu (0đ)'
     : paymentMethod === 'tien_mat'
       ? `Xác nhận thu tiền mặt ${money(summary.con_phai_thu)}`
       : `Tạo yêu cầu chuyển khoản ${money(summary.con_phai_thu)}`
@@ -162,6 +180,9 @@ export default function Payments() {
         <div className="max-w-2xl">
           <p className="text-sm font-semibold text-brand-700">Thu ngân</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Hóa đơn và thanh toán</h1>
+          <div className="mt-2 rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-sm leading-5 text-brand-900">
+            <strong>Phân biệt 2 khoản thu:</strong> phí khám/giữ lịch được trả trước; dịch vụ phát sinh chỉ thanh toán sau khi bác sĩ hoàn tất hồ sơ.
+          </div>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Số tiền chỉ được lấy từ phí khám và dịch vụ bác sĩ đã xác nhận trong hồ sơ bệnh án.
           </p>
@@ -247,7 +268,7 @@ export default function Payments() {
                           {money(view === 'paid' ? caseSummary.tong_da_thu : caseSummary.con_phai_thu)}
                         </p>
                         <span className={`mt-1 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${view === 'paid' ? 'bg-emerald-100 text-emerald-800' : caseItem.pending_payment ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
-                          {view === 'paid' ? 'Đã thanh toán' : caseItem.pending_payment ? 'Chờ chuyển khoản' : 'Chưa thu'}
+                          {casePaymentLabel(caseItem, view)}
                         </span>
                       </div>
                     </div>
@@ -275,7 +296,7 @@ export default function Payments() {
                 <div className="text-right">
                   <p className="font-mono text-sm font-semibold text-slate-700">{invoice?.so_hoa_don || 'CHƯA LẬP HÓA ĐƠN'}</p>
                   <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isPaid ? 'bg-emerald-100 text-emerald-800' : selected.pending_payment ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
-                    {isPaid ? 'Đã thanh toán đủ' : selected.pending_payment ? 'Chờ xác nhận chuyển khoản' : 'Chưa thu tiền'}
+                    {isPaid ? 'Đã đối chiếu đủ hóa đơn' : casePaymentLabel(selected, 'pending')}
                   </span>
                 </div>
               </div>
@@ -283,6 +304,12 @@ export default function Payments() {
               {summary.source === 'medical_record' && (
                 <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm leading-6 text-brand-900 print:hidden">
                   Đây là số tiền xem trước từ hồ sơ bệnh án đã xác nhận. Khi thu tiền, hệ thống sẽ lập hóa đơn với đúng các mục bên dưới.
+                </div>
+              )}
+
+              {selected.source === 'online' && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950 print:hidden">
+                  <strong>Hóa đơn sau khám:</strong> phí khám đã trả trước không đồng nghĩa với dịch vụ phát sinh đã thanh toán. Lễ tân vẫn cần đối chiếu và thu phần dịch vụ còn thiếu (nếu có).
                 </div>
               )}
 
@@ -299,9 +326,12 @@ export default function Payments() {
               </div>
 
               <dl className="mt-4 space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
-                <div className="flex justify-between gap-4 text-slate-700"><dt>Tổng thanh toán</dt><dd className="font-semibold text-slate-900">{money(summary.tong_thanh_toan)}</dd></div>
-                <div className="flex justify-between gap-4 text-emerald-800"><dt>Đã thu</dt><dd className="font-semibold">{money(summary.tong_da_thu)}</dd></div>
-                <div className="flex justify-between gap-4 border-t border-slate-200 pt-2 text-base text-slate-900"><dt className="font-semibold">Còn phải thu</dt><dd className="font-bold">{money(summary.con_phai_thu)}</dd></div>
+                <div className="flex justify-between gap-4 text-slate-700"><dt>Phí khám (trả trước)</dt><dd className="font-semibold text-slate-900">{money(summary.tong_tien_kham)}</dd></div>
+                <div className="flex justify-between gap-4 text-slate-700"><dt>Dịch vụ phát sinh sau khám</dt><dd className="font-semibold text-slate-900">{money(summary.tong_tien_phat_sinh)}</dd></div>
+                <div className="flex justify-between gap-4 text-slate-700"><dt>Tổng hóa đơn sau khám</dt><dd className="font-semibold text-slate-900">{money(summary.tong_thanh_toan)}</dd></div>
+                <div className="flex justify-between gap-4 text-emerald-800"><dt>Đã trả trước phí khám</dt><dd className="font-semibold">{money(summary.tong_da_thu_truoc)}</dd></div>
+                <div className="flex justify-between gap-4 text-emerald-800"><dt>Đã thu thêm sau khám</dt><dd className="font-semibold">{money(summary.tong_da_thu_sau_kham)}</dd></div>
+                <div className="flex justify-between gap-4 border-t border-slate-200 pt-2 text-base text-slate-900"><dt className="font-semibold">Còn phải thu sau khám</dt><dd className="font-bold">{money(summary.con_phai_thu_sau_kham)}</dd></div>
               </dl>
 
               {selected.pending_payment && (
@@ -322,7 +352,7 @@ export default function Payments() {
                     {selected.payments.map((payment) => (
                       <div key={payment.id} className="flex items-center justify-between gap-4 py-2.5">
                         <div>
-                          <p className="font-medium text-slate-800">{methodLabel(payment.phuong_thuc)} · {paymentStatusLabel(payment.status)}</p>
+                          <p className="font-medium text-slate-800">{paymentTypeLabel(payment.loai_thanh_toan)} · {methodLabel(payment.phuong_thuc)} · {paymentStatusLabel(payment.status)}</p>
                           <p className="mt-0.5 text-xs text-slate-500">{payment.ma_giao_dich || payment.id} · {formatDateTime(payment.ngay_thanh_toan || payment.ngay_tao)}</p>
                         </div>
                         <strong className={payment.status === 'paid' ? 'text-emerald-700' : 'text-slate-700'}>{money(payment.so_tien)}</strong>
@@ -332,14 +362,15 @@ export default function Payments() {
                 </div>
               )}
 
-              {!isPaid && !selected.pending_payment && summary.con_phai_thu > 0 && (
+              {!selected.pending_payment && needsCashierConfirmation && (
                 <div className="mt-5 border-t border-slate-100 pt-5 print:hidden">
-                  <label htmlFor="payment-method" className="text-sm font-semibold text-slate-900">Phương thức thanh toán</label>
+                  {summary.con_phai_thu <= 0 && <p className="mb-2 text-sm font-semibold text-emerald-800">Ca này đã đủ tiền; lễ tân vẫn cần xác nhận đã đối chiếu trước khi kết thúc thủ tục.</p>}
+                  {summary.con_phai_thu > 0 && <label htmlFor="payment-method" className="text-sm font-semibold text-slate-900">Phương thức thanh toán</label>}
                   <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-                    <select id="payment-method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)} className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+                    {summary.con_phai_thu > 0 && <select id="payment-method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)} className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
                       <option value="tien_mat">Tiền mặt</option>
                       <option value="chuyen_khoan">Chuyển khoản</option>
-                    </select>
+                    </select>}
                     <button type="button" disabled={saving} onClick={() => void createInvoice()} className="min-h-11 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-60">
                       {saving ? 'Đang ghi nhận...' : actionLabel}
                     </button>
@@ -348,7 +379,7 @@ export default function Payments() {
                 </div>
               )}
 
-              {isPaid && (
+              {isPaid && isCashierConfirmed && (
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5 print:hidden">
                   <p className="text-sm font-medium text-emerald-800">Hóa đơn đã thanh toán đủ.</p>
                   <button type="button" disabled={saving} onClick={() => void printReceipt()} className="min-h-10 rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 disabled:opacity-60">In / giao lại hóa đơn</button>

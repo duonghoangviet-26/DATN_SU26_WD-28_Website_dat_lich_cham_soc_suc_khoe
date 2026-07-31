@@ -33,6 +33,7 @@ import {
   BacSi, HangDoi, LichHen, LichLamViec, NguoiDung, NhatKyThaoTac, ThanhVien, ThongBao,
   TrangThaiPhongKham,
 } from '../models/index.js'
+import HoSoBenhNhan from '../models/HoSoBenhNhan.js'
 import { quetNoShowHetCa } from '../services/noShowSweep.service.js'
 import { startOfDayUtc } from '../utils/clinicTime.js'
 
@@ -121,6 +122,13 @@ async function main() {
   const bacSiUser = await NguoiDung.findById(bacSi.user_id).lean()
   const benhNhan = await NguoiDung.findOne({ role: { $in: ['user', 'patient'] } }).lean()
   const thanhVien = await ThanhVien.findOne({ user_id: benhNhan._id }).lean()
+  const hoSo = await HoSoBenhNhan.findOne(
+    thanhVien ? { member_id: thanhVien._id, trang_thai: 'active' } : { tai_khoan_id: benhNhan._id, trang_thai: 'active' },
+  ).lean()
+  if (!hoSo) {
+    console.error(`[${TAG}] Khong tim duoc ho so benh nhan active cho du lieu test.`)
+    process.exit(1)
+  }
   const tokBacSi = taoToken(bacSiUser)
 
   // Route le tan yeu cau role receptionist|admin (boc verifyToken 2026-07-26).
@@ -197,7 +205,10 @@ async function main() {
   // ── 2 ────────────────────────────────────────────────────────────────────
   muc('2. Le tan tiep nhan (PATCH /receptionist/appointments/:id/arrived)')
   {
-    const r = await api('PATCH', `/receptionist/appointments/${apptId}/arrived`, { tok: tokLeTan })
+    const r = await api('PATCH', `/receptionist/appointments/${apptId}/arrived`, {
+      tok: tokLeTan,
+      body: { ho_so_benh_nhan_id: String(hoSo._id), so_dien_thoai: hoSo.so_dien_thoai_tim_kiem || hoSo.so_dien_thoai, ho_ten: hoSo.ho_ten },
+    })
     kt('tra 200', r.status === 200, r.body?.message)
     kt('tra kem thong tin hang doi', !!r.body?.hang_doi?.id)
 
@@ -229,7 +240,10 @@ async function main() {
   // ── 4 ────────────────────────────────────────────────────────────────────
   muc('4. Rang buoc tiep nhan (rule muc 7)')
   {
-    const r = await api('PATCH', `/receptionist/appointments/${apptId}/arrived`, { tok: tokLeTan })
+    const r = await api('PATCH', `/receptionist/appointments/${apptId}/arrived`, {
+      tok: tokLeTan,
+      body: { ho_so_benh_nhan_id: String(hoSo._id), so_dien_thoai: hoSo.so_dien_thoai_tim_kiem || hoSo.so_dien_thoai, ho_ten: hoSo.ho_ten },
+    })
     kt('tiep nhan lan 2 bi chan 409', r.status === 409, `${r.status} ${r.body?.message}`)
     kt('van chi co 1 ban ghi hang doi', (await HangDoi.countDocuments({ appointment_id: apptId })) === 1)
 
@@ -255,7 +269,10 @@ async function main() {
       ma_lich_hen: `${TAG}H${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
     })
     daTao.lichHen.push(home._id)
-    const rh = await api('PATCH', `/receptionist/appointments/${home._id}/arrived`, { tok: tokLeTan })
+    const rh = await api('PATCH', `/receptionist/appointments/${home._id}/arrived`, {
+      tok: tokLeTan,
+      body: { ho_so_benh_nhan_id: String(hoSo._id), so_dien_thoai: hoSo.so_dien_thoai_tim_kiem || hoSo.so_dien_thoai, ho_ten: hoSo.ho_ten },
+    })
     kt('lich kham tai nha bi chan 400', rh.status === 400, `${rh.status} ${rh.body?.message}`)
   }
 

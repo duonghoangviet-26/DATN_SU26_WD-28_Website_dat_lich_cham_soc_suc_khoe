@@ -52,9 +52,29 @@ function PatientInfoBlock({ appt, result }: { appt: DoctorAppointmentDetail; res
         </div>
       )}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ngày sinh</p>
+          <p className="mt-0.5 text-slate-700">{appt.ngay_sinh ? formatDate(appt.ngay_sinh) : 'Chưa cập nhật'}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Nhóm máu</p>
+          <p className="mt-0.5 text-slate-700">{appt.nhom_mau || 'Chưa cập nhật'}</p>
+        </div>
         {canhBao('Dị ứng', appt.di_ung)}
         {canhBao('Bệnh nền', appt.benh_nen)}
       </div>
+      {appt.dia_chi && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Địa chỉ</p>
+          <p className="mt-0.5 text-slate-700">{appt.dia_chi}</p>
+        </div>
+      )}
+      {appt.ghi_chu && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Ghi chú tiếp nhận</p>
+          <p className="mt-0.5 whitespace-pre-wrap text-amber-900">{appt.ghi_chu}</p>
+        </div>
+      )}
       {result?.trieu_chung_ban_dau && (
         <div className="mt-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Triệu chứng ban đầu</p>

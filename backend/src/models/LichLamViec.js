@@ -1,6 +1,8 @@
 import mongoose from 'mongoose'
 
-const isHHMM = (value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+// `24:00` là mốc kết thúc hợp lệ của khung 23:30–24:00; không dùng `00:00`
+// vì giá trị đó được hiểu là đầu ngày và làm sai thứ tự/độ dài ca đêm.
+const isHHMM = (value) => /^(24:00|([01]\d|2[0-3]):[0-5]\d)$/.test(value)
 
 const slotSchema = new mongoose.Schema(
   {

@@ -1,16 +1,38 @@
-import { LichHen, KetQuaKham, DonThuoc, BacSi, NguoiDung } from '../../models/index.js'
+import { LichHen, KetQuaKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
+import { buildSlotDateTime } from '../../utils/clinicTime.js'
+import { withOptionalTransaction } from '../../services/bookingPaymentState.service.js'
 
 // ============================================================
 // A3 — Lịch sử khám & Kết quả (Bệnh nhân)
 // Routes: /api/patient/records
 // ============================================================
 
+function ownedByUser(userId) {
+  return {
+    $or: [
+      { user_id: userId },
+      // Hỗ trợ dữ liệu lịch cũ được tạo qua luồng đặt hộ / lễ tân nhưng vẫn
+      // thuộc tài khoản này. Không dùng họ tên vì tên có thể thay đổi.
+      { nguoi_tao_id: userId },
+      { nguoi_dat_ho_id: userId },
+    ],
+  }
+}
+
+const EDITABLE_APPOINTMENT_STATUSES = ['pending', 'confirmed']
+
+function appointmentError(statusCode, message) {
+  const error = new Error(message)
+  error.statusCode = statusCode
+  return error
+}
+
 // ─── GET /api/patient/records?status=&page=&limit= ──────────────────────────
 export async function listRecords(req, res) {
   try {
     const { status, page = 1, limit = 10 } = req.query
-    const filter = { user_id: req.user.id }
+    const filter = ownedByUser(req.user.id)
     if (status) filter.status = status
 
     const skip  = (Number(page) - 1) * Number(limit)
@@ -35,7 +57,14 @@ export async function listRecords(req, res) {
     const examResults = await KetQuaKham.find({ appointment_id: { $in: appointmentIds } })
       .select('appointment_id')
       .lean()
-    const resultAppIds = new Set(examResults.map((r) => r.appointment_id.toString()))
+    const completedAppointmentIds = new Set(
+      appointments.filter((a) => a.status === 'completed').map((a) => a._id.toString()),
+    )
+    const resultAppIds = new Set(
+      examResults
+        .map((r) => r.appointment_id?.toString())
+        .filter((id) => id && completedAppointmentIds.has(id)),
+    )
 
     const data = appointments.map((a) => ({
       id:             a._id,
@@ -70,12 +99,12 @@ export async function listRecords(req, res) {
 // ─── GET /api/patient/records/:id ───────────────────────────────────────────
 export async function getRecord(req, res) {
   try {
-    const a = await LichHen.findOne({ _id: req.params.id, user_id: req.user.id }).lean()
+    const a = await LichHen.findOne({ _id: req.params.id, ...ownedByUser(req.user.id) }).lean()
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
 
     const [doc, ketQua] = await Promise.all([
       BacSi.findById(a.doctor_id).populate('user_id', 'ho_ten anh_dai_dien so_dien_thoai').select('user_id').lean(),
-      KetQuaKham.findOne({ appointment_id: a._id }).lean(),
+      a.status === 'completed' ? KetQuaKham.findOne({ appointment_id: a._id }).lean() : null,
     ])
 
     let prescription = null
@@ -123,5 +152,75 @@ export async function getRecord(req, res) {
     })
   } catch (err) {
     return fail(res, 500, err.message)
+  }
+}
+
+// PATCH /api/patient/records/:id/contact
+// Chỉ sửa snapshot liên hệ của đúng lịch hẹn này; không sửa hồ sơ tài khoản.
+export async function updateAppointmentContact(req, res) {
+  try {
+    const hoTen = String(req.body?.ho_ten ?? '').trim()
+    const soDienThoai = String(req.body?.so_dien_thoai ?? '').trim()
+
+    if (hoTen.length < 2 || hoTen.length > 100) {
+      return fail(res, 400, 'Họ tên phải có từ 2 đến 100 ký tự')
+    }
+    if (!/^[\p{L}\s.'-]+$/u.test(hoTen)) {
+      return fail(res, 400, 'Họ tên chỉ được chứa chữ cái và khoảng trắng')
+    }
+    if (!/^0\d{9}$/.test(soDienThoai)) {
+      return fail(res, 400, 'Số điện thoại phải gồm 10 số và bắt đầu bằng số 0')
+    }
+
+    const updated = await withOptionalTransaction(async (session) => {
+      const appointment = await LichHen.findOne({
+        _id: req.params.id,
+        ...ownedByUser(req.user.id),
+      }).session(session)
+
+      if (!appointment) throw appointmentError(404, 'Không tìm thấy lịch hẹn')
+      if (!EDITABLE_APPOINTMENT_STATUSES.includes(appointment.status)) {
+        throw appointmentError(409, 'Lịch hẹn chỉ được sửa khi đang chờ xác nhận hoặc đã xác nhận')
+      }
+
+      const appointmentTime = buildSlotDateTime(appointment.ngay_kham, appointment.gio_kham)
+      if (!appointmentTime || appointmentTime.getTime() <= Date.now()) {
+        throw appointmentError(409, 'Lịch hẹn đã qua thời gian chỉnh sửa')
+      }
+
+      const oldName = appointment.ten_khach ?? null
+      const oldPhone = appointment.so_dien_thoai_khach ?? null
+      appointment.ten_khach = hoTen
+      appointment.so_dien_thoai_khach = soDienThoai
+      await appointment.save({ session })
+
+      await LichSuLichHen.create([{
+        appointment_id: appointment._id,
+        tu_trang_thai: appointment.status,
+        den_trang_thai: appointment.status,
+        loai_thay_doi: 'patient_contact_update',
+        ly_do_thay_doi: 'Bệnh nhân cập nhật thông tin liên hệ cho lịch hẹn',
+        nguoi_thay_doi_id: req.user.id,
+        nguoi_thuc_hien_id: req.user.id,
+        vai_tro: 'user',
+        kenh_thay_doi: 'patient_profile',
+        ly_do: JSON.stringify({
+          ten_khach_cu: oldName,
+          so_dien_thoai_khach_cu: oldPhone,
+          ten_khach_moi: hoTen,
+          so_dien_thoai_khach_moi: soDienThoai,
+        }),
+      }], { session })
+
+      return appointment
+    })
+
+    return ok(res, {
+      id: updated._id,
+      ten_khach: updated.ten_khach,
+      so_dien_thoai_khach: updated.so_dien_thoai_khach,
+    }, 'Cập nhật thông tin lịch hẹn thành công')
+  } catch (err) {
+    return fail(res, err.statusCode ?? 500, err.statusCode ? err.message : 'Không thể cập nhật thông tin lịch hẹn')
   }
 }

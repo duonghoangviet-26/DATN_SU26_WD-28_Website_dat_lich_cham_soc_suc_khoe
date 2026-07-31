@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { HangDoi, LichHen, LichLamViec, NguoiDung, ThanhVien } from '../models/index.js'
+import { HangDoi, HoSoBenhNhan, LichHen, LichLamViec, NguoiDung, ThanhVien } from '../models/index.js'
 import { tinhMucUuTien } from '../models/HangDoi.js'
 import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../utils/clinicTime.js'
 import { kiemTraQuaTai } from './queueOverflow.service.js'
@@ -63,8 +63,9 @@ async function timPhongKham(appt, session = null) {
 }
 
 /** Tuổi từ ngày sinh thành viên, thiếu thì suy từ `nam_sinh_khach` của lịch khách lẻ. */
-function tinhTuoi(member, appt, now) {
+function tinhTuoi(member, profile, appt, now) {
   if (member?.ngay_sinh) return now.getFullYear() - new Date(member.ngay_sinh).getFullYear()
+  if (profile?.ngay_sinh) return now.getFullYear() - new Date(profile.ngay_sinh).getFullYear()
   if (appt?.nam_sinh_khach) return now.getFullYear() - Number(appt.nam_sinh_khach)
   return null
 }
@@ -115,6 +116,7 @@ export async function checkInLichHen({
   actorUserId = null,
   actorRole = null,
   restrictToDoctorId = null,
+  patientProfileId = null,
   now = new Date(),
 }) {
   if (!appointmentId) throw loi(400, 'Thiếu mã lịch hẹn')
@@ -146,8 +148,10 @@ export async function checkInLichHen({
   const daCo = await HangDoi.findOne({ appointment_id: appt._id }).select('_id trang_thai').lean()
   if (daCo) throw loi(409, 'Lịch hẹn này đã có trong hàng đợi')
 
-  const [member, chuTaiKhoan] = await Promise.all([
-    appt.member_id ? ThanhVien.findById(appt.member_id).select('ho_ten ngay_sinh gioi_tinh').lean() : null,
+  const profileId = patientProfileId ?? appt.ho_so_benh_nhan_id
+  const [member, profile, chuTaiKhoan] = await Promise.all([
+    appt.member_id ? ThanhVien.findById(appt.member_id).select('ho_ten ngay_sinh gioi_tinh nhom_mau di_ung benh_nen').lean() : null,
+    profileId ? HoSoBenhNhan.findById(profileId).select('ho_ten so_dien_thoai ngay_sinh gioi_tinh nhom_mau di_ung benh_nen dia_chi ghi_chu').lean() : null,
     appt.user_id ? NguoiDung.findById(appt.user_id).select('ho_ten so_dien_thoai').lean() : null,
   ])
   const phongKham = await timPhongKham(appt)
@@ -157,12 +161,19 @@ export async function checkInLichHen({
   const payload = {
     nguon: 'online',
     appointment_id: appt._id,
+    ho_so_benh_nhan_id: patientProfileId ?? appt.ho_so_benh_nhan_id ?? null,
     member_id: appt.member_id ?? null,
     // Người tự đặt cho mình không có `member_id` lẫn `ten_khach` — trước đây rơi vào
     // 'Không rõ' và bác sĩ không biết đang khám cho ai.
     ten_benh_nhan: member?.ho_ten ?? appt.ten_khach ?? chuTaiKhoan?.ho_ten ?? 'Không rõ',
     so_dien_thoai: appt.so_dien_thoai_khach ?? chuTaiKhoan?.so_dien_thoai ?? null,
-    tuoi: tinhTuoi(member, appt, now),
+    tuoi: tinhTuoi(member, profile, appt, now),
+    ngay_sinh: member?.ngay_sinh ?? profile?.ngay_sinh ?? null,
+    nhom_mau: member?.nhom_mau ?? profile?.nhom_mau ?? null,
+    di_ung: member?.di_ung ?? profile?.di_ung ?? null,
+    benh_nen: member?.benh_nen ?? profile?.benh_nen ?? null,
+    dia_chi: profile?.dia_chi ?? null,
+    ghi_chu: profile?.ghi_chu ?? null,
     gioi_tinh: member?.gioi_tinh ?? GIOI_TINH_KHACH_SANG_HANG_DOI[appt.gioi_tinh_khach] ?? null,
     specialty_id: appt.specialty_id,
     doctor_id: appt.doctor_id,
@@ -185,6 +196,7 @@ export async function checkInLichHen({
     gio_den_thuc_te: now,
   }
   if (!appt.phong_kham && phongKham) capNhat.phong_kham = phongKham
+  if (patientProfileId && !appt.ho_so_benh_nhan_id) capNhat.ho_so_benh_nhan_id = patientProfileId
 
   let entry
   const session = await mongoose.startSession()

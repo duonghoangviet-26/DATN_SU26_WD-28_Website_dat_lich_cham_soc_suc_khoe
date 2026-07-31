@@ -103,8 +103,14 @@ const queueSchema = new mongoose.Schema(
     ho_so_benh_nhan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'HoSoBenhNhan', default: null },
     ten_benh_nhan: { type: String, required: true, trim: true, maxlength: 255 },
     so_dien_thoai: { type: String, default: null, maxlength: 20 },
+    ngay_sinh: { type: Date, default: null },
     tuoi: { type: Number, default: null, min: 0 },
     gioi_tinh: { type: String, enum: ['nam', 'nu', 'khac'], default: null },
+    nhom_mau: { type: String, enum: ['A', 'B', 'AB', 'O', null], default: null },
+    di_ung: { type: String, default: null, maxlength: 1000 },
+    benh_nen: { type: String, default: null, maxlength: 1000 },
+    dia_chi: { type: String, default: null, maxlength: 500 },
+    ghi_chu: { type: String, default: null, maxlength: 1000 },
 
     // Điều phối — KHÔNG lưu thu_tu (thứ tự đổi liên tục, tính động lúc query)
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', required: true },

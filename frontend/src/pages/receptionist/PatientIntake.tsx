@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react'
 import {
   CapacityEvidence,
   OfflineAvailability,
+  OnlineAccount,
   PatientProfile,
   TodayAppointment,
   receptionistPatientIntakeService,
@@ -11,6 +12,10 @@ const emptyForm = {
   ho_ten: '',
   ngay_sinh: '',
   gioi_tinh: '' as '' | 'nam' | 'nu' | 'khac',
+  nhom_mau: '' as '' | 'A' | 'B' | 'AB' | 'O',
+  di_ung: '',
+  benh_nen: '',
+  dia_chi: '',
   ghi_chu: '',
 }
 
@@ -25,11 +30,11 @@ function formatDateTime(value?: string | null) {
 }
 
 function paymentLabel(status: string) {
-  return ({ paid: 'Đã thanh toán', partial: 'Thanh toán một phần', unpaid: 'Chưa thanh toán', refunded: 'Đã hoàn tiền' } as Record<string, string>)[status] ?? status
+  return ({ paid: 'Đã trả phí khám', partial: 'Đã trả một phần', unpaid: 'Chưa trả phí khám', refunded: 'Đã hoàn phí khám' } as Record<string, string>)[status] ?? status
 }
 
 function appointmentStatusLabel(status: string) {
-  return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã tiếp nhận', in_progress: 'Đang khám', completed: 'Hoàn thành' } as Record<string, string>)[status] ?? status
+  return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã tiếp nhận', in_progress: 'Đang khám', completed: 'Hoàn thành', cancelled: 'Đã hủy', no_show: 'Không đến' } as Record<string, string>)[status] ?? status
 }
 
 function capacityLabel(row: CapacityEvidence) {
@@ -65,13 +70,16 @@ function availabilityTone(status: OfflineAvailability['trang_thai_kiem_tra']) {
 }
 
 function appointmentIsCheckinable(appointment: TodayAppointment) {
-  return ['pending', 'confirmed'].includes(appointment.status)
+  return appointment.status === 'confirmed'
 }
 
 export default function PatientIntake() {
   const [phone, setPhone] = useState('')
   const [profiles, setProfiles] = useState<PatientProfile[]>([])
+  const [accounts, setAccounts] = useState<OnlineAccount[]>([])
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [ambiguousAppointments, setAmbiguousAppointments] = useState<TodayAppointment[]>([])
+  const [accountAppointments, setAccountAppointments] = useState<TodayAppointment[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -109,7 +117,10 @@ export default function PatientIntake() {
     setError('')
     setMessage('')
     setSelectedId(null)
+    setSelectedAccountId(null)
+    setAccounts([])
     setAmbiguousAppointments([])
+    setAccountAppointments([])
     clearDecision()
     if (!phone.trim()) {
       setError('Vui lòng nhập số điện thoại để tra cứu')
@@ -120,10 +131,16 @@ export default function PatientIntake() {
     try {
       const result = await receptionistPatientIntakeService.searchByPhone(phone)
       setProfiles(result.profiles)
+      setAccounts(result.accounts || [])
+      if ((result.accounts || []).length === 1) setSelectedAccountId(result.accounts[0].id)
       setAmbiguousAppointments(result.ambiguous_appointments || [])
-      setMessage(result.total ? `Tìm thấy ${result.total} hồ sơ. Hãy xác nhận đúng người bệnh trước khi tiếp nhận.` : 'Chưa có hồ sơ, có thể tạo mới tại quầy.')
+      setAccountAppointments(result.account_appointments || [])
+      setMessage(result.total
+        ? `Tìm thấy ${result.total} hồ sơ. Hãy xác nhận đúng người bệnh trước khi tiếp nhận.`
+        : result.accounts?.length ? 'Tìm thấy tài khoản online nhưng chưa có hồ sơ bệnh nhân; hãy chọn đúng tài khoản trước khi tạo hồ sơ.' : 'Chưa có hồ sơ hoặc tài khoản, có thể tạo mới tại quầy.')
     } catch (requestError: any) {
       setProfiles([])
+      setAccounts([])
       setError(requestError?.response?.data?.message || 'Không thể tra cứu hồ sơ')
     } finally {
       setLoading(false)
@@ -153,14 +170,25 @@ export default function PatientIntake() {
         so_dien_thoai: phone.trim(),
         ngay_sinh: form.ngay_sinh || undefined,
         gioi_tinh: form.gioi_tinh || undefined,
+        nhom_mau: form.nhom_mau || undefined,
+        di_ung: form.di_ung || undefined,
+        benh_nen: form.benh_nen || undefined,
+        dia_chi: form.dia_chi || undefined,
         ghi_chu: form.ghi_chu || undefined,
+        tai_khoan_id: selectedAccountId || undefined,
       })
-      const normalizedProfile: PatientProfile = { ...profile, lich_hen_hom_nay: [] }
-      setProfiles((current) => [...current, normalizedProfile])
-      setSelectedId(normalizedProfile.id)
-      setPhone(normalizedProfile.so_dien_thoai || phone)
+      const refreshed = await receptionistPatientIntakeService.searchByPhone(phone.trim())
+      setProfiles(refreshed.profiles)
+      setSelectedId(refreshed.profiles.find((item) => item.id === profile.id)?.id || profile.id)
+      setPhone(profile.so_dien_thoai || phone)
+      setAccounts(refreshed.accounts || [])
+      setSelectedAccountId(null)
+      setAmbiguousAppointments(refreshed.ambiguous_appointments || [])
+      setAccountAppointments(refreshed.account_appointments || [])
       setForm(emptyForm)
-      setMessage('Đã tạo hồ sơ. Vì người bệnh chưa có lịch hẹn, hãy kiểm tra khả năng tiếp nhận trước khi xếp hàng chờ khám.')
+      setMessage(refreshed.account_appointments?.some((appointment) => appointment.status === 'confirmed')
+        ? 'Đã tạo và gắn hồ sơ với tài khoản online. Hãy chọn lịch hẹn để xác nhận người bệnh đến khám và đưa vào hàng đợi bác sĩ.'
+        : 'Đã tạo hồ sơ. Chưa có lịch hẹn đủ điều kiện check-in hôm nay.')
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Không thể tạo hồ sơ bệnh nhân')
     } finally {
@@ -188,7 +216,11 @@ export default function PatientIntake() {
     setCheckingIn(true)
     setError('')
     try {
-      const response = await receptionistPatientIntakeService.checkInAppointment(selectedAppointment.id)
+      const response = await receptionistPatientIntakeService.checkInAppointment(selectedAppointment.id, {
+        ho_so_benh_nhan_id: selectedProfile.id,
+        so_dien_thoai: phone,
+        ho_ten: selectedProfile.ho_ten,
+      })
       const warnings = response.data?.canh_bao || []
       setMessage(`Đã ghi nhận người bệnh đến khám theo lịch hẹn ${selectedAppointment.ma_lich_hen || selectedAppointment.id}. ${warnings.length ? `Lưu ý: ${warnings.join(' ')}` : 'Người bệnh đã được đưa vào hàng đợi của bác sĩ.'}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
@@ -197,6 +229,49 @@ export default function PatientIntake() {
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Chưa thể ghi nhận người bệnh đến khám. Vui lòng tải lại dữ liệu.')
     } finally {
+      setCheckingIn(false)
+    }
+  }
+
+  const createProfileAndCheckIn = async (appointment: TodayAppointment) => {
+    const account = accounts.find((item) => item.id === appointment.tai_khoan_id) || accounts[0]
+    const patientName = appointment.ten_khach || account?.ho_ten || ''
+    const patientPhone = appointment.so_dien_thoai_khach || phone.trim()
+    const accountId = appointment.tai_khoan_id || account?.id || null
+    if (!patientName || !patientPhone || !accountId) {
+      setError('Chưa đủ thông tin tài khoản, họ tên hoặc số điện thoại để tạo hồ sơ và check-in.')
+      return
+    }
+
+    setSaving(true)
+    setCheckingIn(true)
+    setError('')
+    setMessage('')
+    try {
+      const profile = await receptionistPatientIntakeService.createProfile({
+        ho_ten: patientName,
+        so_dien_thoai: patientPhone,
+        tai_khoan_id: accountId,
+      })
+      const response = await receptionistPatientIntakeService.checkInAppointment(appointment.id, {
+        ho_so_benh_nhan_id: profile.id,
+        so_dien_thoai: patientPhone,
+        ho_ten: patientName,
+      })
+      const refreshed = await receptionistPatientIntakeService.searchByPhone(patientPhone)
+      setProfiles(refreshed.profiles)
+      setSelectedId(refreshed.profiles.find((item) => item.id === profile.id)?.id || profile.id)
+      setSelectedAppointmentId(appointment.id)
+      setAccounts(refreshed.accounts || [])
+      setAmbiguousAppointments(refreshed.ambiguous_appointments || [])
+      setAccountAppointments(refreshed.account_appointments || [])
+      setPhone(patientPhone)
+      setMessage(`Đã tạo hồ sơ và đưa ${patientName} vào hàng đợi của ${appointment.doctor?.ho_ten || 'bác sĩ phụ trách'} theo lịch ${appointment.ma_lich_hen || appointment.id}.`)
+      return response
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.message || 'Không thể tạo hồ sơ hoặc đưa người bệnh vào hàng đợi bác sĩ.')
+    } finally {
+      setSaving(false)
       setCheckingIn(false)
     }
   }
@@ -269,6 +344,68 @@ export default function PatientIntake() {
             </div>
           )}
 
+          {accounts.length > 0 && (
+            <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-violet-950">Tài khoản online tìm thấy</p>
+                  <p className="mt-1 text-xs text-violet-800">Email là định danh đăng nhập. Nếu có nhiều tài khoản dùng chung số điện thoại, hãy xác nhận đúng email trước khi gắn hồ sơ.</p>
+                </div>
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-violet-700">{accounts.length} tài khoản</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {accounts.map((account) => (
+                  <button key={account.id} type="button" onClick={() => setSelectedAccountId(account.id)} className={`w-full rounded-lg border p-3 text-left ${selectedAccountId === account.id ? 'border-violet-500 bg-white ring-2 ring-violet-100' : 'border-violet-200 bg-white/60 hover:border-violet-400'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-800">{account.email}</p>
+                        <p className="mt-1 text-xs text-slate-600">{account.ho_ten} · {account.phuong_thuc_dang_nhap === 'google_va_email' ? 'Google + Email/mật khẩu' : account.phuong_thuc_dang_nhap === 'google' ? 'Google' : 'Email/mật khẩu'}{account.email_verified ? ' · Email đã xác minh' : ''}</p>
+                      </div>
+                      <span className="text-xs font-semibold text-violet-700">{selectedAccountId === account.id ? 'Đã chọn' : 'Chọn'}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {profiles.length === 0 && accountAppointments.length > 0 && (
+            <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+              <p className="font-semibold">Lịch hẹn online của tài khoản đã chọn</p>
+              <p className="mt-1 text-xs leading-5 text-blue-800">Lịch hẹn đã được tìm thấy theo tài khoản/email. Cần tạo hồ sơ bệnh nhân và xác minh đúng họ tên trước khi check-in vào hàng đợi bác sĩ.</p>
+              <div className="mt-3 space-y-2">
+                {accountAppointments.map((appointment) => {
+                  const canCheckIn = appointmentIsCheckinable(appointment)
+                  return (
+                    <div key={appointment.id} className="rounded-lg border border-blue-100 bg-white p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-800">{appointment.gio_kham} · {appointment.doctor?.ho_ten || 'Chưa gán bác sĩ'}</p>
+                          <p className="mt-1 text-xs text-slate-600">{appointment.ma_lich_hen || appointment.id} · {appointment.chuyen_khoa?.ten || 'Chưa có chuyên khoa'} · {appointment.phong_kham || 'Chưa có phòng'}</p>
+                        </div>
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${canCheckIn ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                          {appointmentStatusLabel(appointment.status)}
+                        </span>
+                      </div>
+                      {canCheckIn ? (
+                        <button
+                          type="button"
+                          onClick={() => void createProfileAndCheckIn(appointment)}
+                          disabled={saving || checkingIn}
+                          className="mt-3 min-h-10 rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {saving || checkingIn ? 'Đang tạo hồ sơ và đưa vào hàng đợi...' : 'Tạo hồ sơ và check-in lịch này'}
+                        </button>
+                      ) : (
+                        <p className="mt-2 text-xs font-medium text-slate-600">Lịch này không thể check-in vì đã ở trạng thái {appointmentStatusLabel(appointment.status).toLowerCase()}.</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="mt-5 space-y-3">
             {profiles.map((profile) => (
               <button key={profile.id} type="button" onClick={() => selectProfile(profile)} className={`w-full rounded-xl border p-4 text-left transition ${selectedId === profile.id ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300 hover:bg-slate-50'}`}>
@@ -277,6 +414,7 @@ export default function PatientIntake() {
                     <p className="font-semibold text-slate-800">{profile.ho_ten}</p>
                     <p className="mt-1 text-sm text-slate-500">Ngày sinh: {formatDate(profile.ngay_sinh)} · {profile.gioi_tinh || 'Chưa rõ giới tính'}</p>
                     <p className="mt-1 text-xs text-slate-500">{profile.nguoi_lien_he?.ho_ten ? `Người liên hệ: ${profile.nguoi_lien_he.ho_ten}` : profile.member_id ? 'Thành viên gia đình' : 'Hồ sơ tại quầy'}</p>
+                    <p className={`mt-1 text-xs font-semibold ${profile.tai_khoan ? 'text-violet-700' : 'text-slate-500'}`}>{profile.tai_khoan ? `Tài khoản: ${profile.tai_khoan.email} · ${profile.tai_khoan.phuong_thuc_dang_nhap === 'google_va_email' ? 'Google + Email' : profile.tai_khoan.phuong_thuc_dang_nhap === 'google' ? 'Google' : 'Email'}` : 'Chưa liên kết tài khoản online'}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className={`rounded-full px-2 py-1 text-xs font-semibold ${profile.lich_hen_hom_nay.length ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
@@ -415,9 +553,9 @@ export default function PatientIntake() {
           )}
         </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+        <section id="create-profile-section" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div><h3 className="text-base font-bold text-slate-800">Tạo hồ sơ mới</h3><p className="mt-1 text-sm text-slate-500">Chỉ dùng khi người bệnh chưa có hồ sơ. Số điện thoại trùng không đồng nghĩa là cùng một người.</p></div>
+            <div><h3 className="text-base font-bold text-slate-800">Tạo hồ sơ mới</h3><p className="mt-1 text-sm text-slate-500">Chỉ dùng khi người bệnh chưa có hồ sơ. Số điện thoại trùng không đồng nghĩa là cùng một người.</p>{accounts.length > 0 && <p className="mt-1 text-xs font-semibold text-violet-700">Hồ sơ mới sẽ được gắn với tài khoản đã chọn: {accounts.find((account) => account.id === selectedAccountId)?.email || 'chưa chọn tài khoản'}.</p>}</div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Không tạo lịch hẹn</span>
           </div>
           <form className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4" onSubmit={createProfile}>
@@ -425,7 +563,12 @@ export default function PatientIntake() {
             <div className="text-sm font-medium text-slate-700">Số liên hệ đã tra cứu<div className={`mt-1.5 flex min-h-11 items-center rounded-xl border px-3 text-sm ${phone ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>{phone || 'Chưa nhập số điện thoại ở bước tra cứu'}</div><p className="mt-1 text-xs font-normal text-slate-500">Hệ thống sẽ tự dùng số này cho hồ sơ mới.</p></div>
             <label className="text-sm font-medium text-slate-700">Ngày sinh<input type="date" value={form.ngay_sinh} onChange={(event) => setForm({ ...form, ngay_sinh: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
             <label className="text-sm font-medium text-slate-700">Giới tính<select value={form.gioi_tinh} onChange={(event) => setForm({ ...form, gioi_tinh: event.target.value as typeof form.gioi_tinh })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"><option value="">Chưa cập nhật</option><option value="nam">Nam</option><option value="nu">Nữ</option><option value="khac">Khác</option></select></label>
-            <button type="submit" disabled={saving} className="min-h-11 self-end rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Đang lưu...' : 'Tạo hồ sơ'}</button>
+            <button type="submit" disabled={saving || (accounts.length > 0 && !selectedAccountId)} className="min-h-11 self-end rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Đang lưu...' : accounts.length > 0 && !selectedAccountId ? 'Chọn tài khoản trước' : 'Tạo hồ sơ'}</button>
+            <label className="text-sm font-medium text-slate-700">Nhóm máu<select value={form.nhom_mau} onChange={(event) => setForm({ ...form, nhom_mau: event.target.value as typeof form.nhom_mau })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"><option value="">Chưa cập nhật</option><option value="A">A</option><option value="B">B</option><option value="AB">AB</option><option value="O">O</option></select></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Địa chỉ<textarea rows={2} value={form.dia_chi} onChange={(event) => setForm({ ...form, dia_chi: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" placeholder="Địa chỉ hiện tại của người bệnh" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Dị ứng<textarea rows={2} value={form.di_ung} onChange={(event) => setForm({ ...form, di_ung: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" placeholder="Ví dụ: dị ứng thuốc, thức ăn; ghi Không nếu không có" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Bệnh nền<textarea rows={2} value={form.benh_nen} onChange={(event) => setForm({ ...form, benh_nen: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" placeholder="Ví dụ: tăng huyết áp, tiểu đường; ghi Không nếu không có" /></label>
+            <label className="text-sm font-medium text-slate-700 md:col-span-2">Ghi chú tiếp nhận<textarea rows={2} value={form.ghi_chu} onChange={(event) => setForm({ ...form, ghi_chu: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
           </form>
         </section>
       </div>

@@ -72,6 +72,14 @@ export const patientRecordsService = {
     return res.data.data
   },
 
+  async updateAppointmentContact(id: string, payload: { ho_ten: string; so_dien_thoai: string }): Promise<Pick<PatientRecordDetail, 'id' | 'ten_khach' | 'so_dien_thoai_khach'>> {
+    const res = await axiosInstance.patch<ApiResponse<Pick<PatientRecordDetail, 'id' | 'ten_khach' | 'so_dien_thoai_khach'>>>(
+      `/patient/records/${id}/contact`,
+      payload,
+    )
+    return res.data.data
+  },
+
   async cancelAppointment(id: string, ly_do = 'Bệnh nhân hủy lịch'): Promise<{ id: string; status: string; payment_status: string }> {
     const res = await axiosInstance.patch<ApiResponse<{ id: string; status: string; payment_status: string }>>(
       `/patient/booking/${id}/cancel`,

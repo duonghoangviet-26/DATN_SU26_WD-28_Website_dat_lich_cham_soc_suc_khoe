@@ -77,6 +77,7 @@ export default function Booking() {
   const [toast, setToast] = useState<string | null>(null)
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
+  const [cancellingPayment, setCancellingPayment] = useState(false)
 
   // Specialty filters
   const [specialties, setSpecialties] = useState<{ id: string; ten: string }[]>([])
@@ -138,7 +139,10 @@ export default function Booking() {
       .then((data) => {
         if (!ignore) {
           setSpecialties(data)
-          if (data.length === 1) setSelectedSpecialtyId(data[0].id)
+          if (data.length > 0) {
+            setSelectedSpecialtyId(data[0].id)
+            setStep(2)
+          }
         }
       })
       .catch((err) => {
@@ -340,7 +344,9 @@ export default function Booking() {
     if (step === 5) {
       return
     }
-    if (step > 1) {
+    // Chuyên khoa đã được cấu hình sẵn cho phòng khám Tai Mũi Họng.
+    // Không quay lại màn hình chọn chuyên khoa trong luồng đặt lịch online.
+    if (step > 2) {
       setStep((prev) => (prev - 1) as BookingStep)
     }
   }
@@ -368,6 +374,7 @@ export default function Booking() {
         ly_do_kham: symptoms.trim(),
         ten_khach: patientName.trim(),
         so_dien_thoai_khach: patientPhone.trim(),
+        booking_for: bookingFor,
         phuong_thuc: 'chuyen_khoan',
         dong_y_dieu_khoan: true,
       }
@@ -394,18 +401,18 @@ export default function Booking() {
     window.open(paymentSnapshot.gateway.payment_url, '_blank', 'noopener,noreferrer')
   }
 
-  async function handleRefreshVnpaySession() {
-    if (!createdBooking?.payment_id) return
+  async function handleCancelPayment() {
+    if (!createdBooking?.appointment_id || cancellingPayment) return
+    if (!window.confirm('Bạn có chắc muốn hủy thanh toán và trả lại khung giờ khám không?')) return
 
-    setCreatingPaymentSession(true)
+    setCancellingPayment(true)
     try {
-      const refreshed = await patientBookingService.createVnpaySession(createdBooking.payment_id)
-      setPaymentSnapshot(refreshed)
-      setToast('Đã tạo lại mã QR VNPAY mới.')
+      await patientBookingService.cancelBooking(createdBooking.appointment_id, 'Khách hàng hủy thanh toán tại bước thanh toán')
+      navigate('/profile?cancelled=true', { replace: true })
     } catch (error: any) {
-      setToast(error.response?.data?.message || error.message || 'Không tạo lại được mã QR VNPAY')
+      setToast(error.response?.data?.message || error.message || 'Không thể hủy thanh toán')
     } finally {
-      setCreatingPaymentSession(false)
+      setCancellingPayment(false)
     }
   }
 
@@ -438,10 +445,10 @@ export default function Booking() {
       <div className="rounded-2xl border border-slate-200 bg-white px-5 py-6 text-left sm:px-7">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div className="max-w-2xl space-y-2">
-            <p className="text-sm font-semibold text-brand-700">Lịch khám tại phòng khám</p>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Đặt lịch khám</h1>
+            <p className="text-sm font-semibold text-brand-700">Khám Tai Mũi Họng tại VitaFamily</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Chọn một khung giờ phù hợp</h1>
             <p className="text-sm leading-6 text-slate-600">
-              Chọn chuyên khoa và khung giờ phù hợp. Bác sĩ sẽ được phân công tự động theo suất thực tế.
+              Bạn không cần chọn bác sĩ. Chỉ cần chọn ngày, khung giờ và mô tả triệu chứng, phòng khám sẽ sắp xếp bác sĩ còn lịch phù hợp.
             </p>
           </div>
           <div className="flex max-w-sm items-start gap-2 rounded-xl bg-brand-50 px-3 py-2.5 text-xs leading-5 text-brand-800">
@@ -456,12 +463,11 @@ export default function Booking() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3">
         <div className="flex min-w-[560px] items-center text-center">
         {[
-          { num: 1, label: 'Chuyên khoa' },
           { num: 2, label: 'Thời gian' },
           { num: 3, label: 'Triệu chứng' },
           { num: 4, label: 'Xác nhận lịch' },
           { num: 5, label: 'Thanh toán' },
-        ].map((item) => (
+        ].map((item, index) => (
           <div key={item.num} className="relative flex min-w-28 flex-1 flex-col items-center gap-2">
             {item.num < 5 && (
               <span className={`absolute left-[calc(50%+18px)] top-4 h-px w-[calc(100%-36px)] ${step > item.num ? 'bg-brand-500' : 'bg-slate-200'}`} />
@@ -471,7 +477,7 @@ export default function Booking() {
                 step > item.num ? 'bg-brand-600 text-white' : step === item.num ? 'bg-brand-600 text-white ring-4 ring-brand-100' : 'bg-slate-100 text-slate-400'
               }`}
             >
-              {step > item.num ? '✓' : item.num}
+              {step > item.num ? '✓' : index + 1}
             </div>
             <p className={`text-xs font-semibold ${step >= item.num ? 'text-slate-800' : 'text-slate-400'}`}>
               {item.label}
@@ -480,62 +486,6 @@ export default function Booking() {
         ))}
         </div>
       </div>
-
-      {step === 1 && (
-        <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 text-left sm:p-6">
-          <div className="space-y-4">
-            <div className="border-b border-slate-100 pb-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Chọn chuyên khoa</h2>
-                <p className="mt-1 text-sm text-slate-600">Chúng tôi tổng hợp suất trống của tất cả bác sĩ thuộc chuyên khoa bạn chọn.</p>
-              </div>
-            </div>
-
-            {!loadingSpecialties && specialties.length > 0 && (
-              <div className="flex flex-wrap gap-2" aria-label="Danh sách chuyên khoa">
-                <button
-                  type="button"
-                  onClick={() => setSelectedSpecialtyId('all')}
-                  aria-pressed={selectedSpecialtyId === 'all'}
-                  className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
-                    selectedSpecialtyId === 'all'
-                      ? 'border-slate-300 bg-slate-100 text-slate-600'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  Tất cả chuyên khoa
-                </button>
-                {specialties.map((spec) => (
-                  <button
-                  key={spec.id}
-                  type="button"
-                  onClick={() => setSelectedSpecialtyId(spec.id)}
-                  aria-pressed={selectedSpecialtyId === spec.id}
-                  className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
-                    selectedSpecialtyId === spec.id
-                      ? 'border-brand-600 bg-brand-600 text-white'
-                      : 'border-slate-200 bg-white text-slate-700 hover:border-brand-200 hover:bg-brand-50/50'
-                  }`}
-                  >
-                    {spec.ten}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {selectedSpecialtyId === 'all' ? (
-              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
-                Chọn một chuyên khoa để hệ thống hiển thị các khung giờ còn chỗ.
-              </p>
-            ) : (
-              <div className="flex gap-3 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm leading-6 text-brand-900">
-                <svg className="mt-1 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
-                <p>Đã chọn <strong>{selectedSpecialty?.ten}</strong>. Ở bước tiếp theo, bạn chỉ cần chọn thời gian; hệ thống sẽ phân công bác sĩ còn suất.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {step === 2 && (
         <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 text-left sm:p-6">
@@ -603,13 +553,18 @@ export default function Booking() {
                   Không còn khung giờ trống cho ngày đã chọn. Vui lòng chọn ngày khác.
                 </p>
               ) : (
-                (['sang', 'chieu'] as const).map((ca) => {
+                (['sang', 'chieu', 'toi'] as const).map((ca) => {
                   const dsKhung = khungTheoChuyenKhoa.khung_gio.filter((k) => k.ca === ca)
                   if (dsKhung.length === 0) return null
+                  const caLabel = ca === 'sang'
+                    ? 'Ca sáng · 08:00 – 11:30'
+                    : ca === 'chieu'
+                      ? 'Ca chiều · 13:30 – 17:30'
+                      : 'Ca tối · 18:00 – 24:00'
                   return (
                     <div key={ca} className="space-y-2 border-t border-slate-100 pt-4 first:border-t-0 first:pt-0">
                       <p className="text-xs font-semibold text-slate-600">
-                        {ca === 'sang' ? 'Ca sáng · 08:00 – 11:30' : 'Ca chiều · 13:30 – 17:30'}
+                        {caLabel}
                       </p>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {dsKhung.map((khung) => (
@@ -896,6 +851,24 @@ export default function Booking() {
             </div>
           </div>
 
+          {paymentSnapshot?.appointment_info && (
+            <div className="grid gap-4 rounded-2xl border border-brand-100 bg-brand-50/40 p-5 sm:grid-cols-2">
+              <div className="space-y-2 text-sm text-slate-700">
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-700">Thông tin ca khám</p>
+                <p><span className="font-semibold text-slate-500">Bác sĩ:</span> {paymentSnapshot.appointment_info.doctor?.ho_ten || 'Đang phân công'}</p>
+                <p><span className="font-semibold text-slate-500">Chuyên khoa:</span> {paymentSnapshot.appointment_info.specialty?.ten || 'Đang cập nhật'}</p>
+                <p><span className="font-semibold text-slate-500">Thời gian:</span> {paymentSnapshot.appointment_info.gio_kham || '--'} · {paymentSnapshot.appointment_info.ngay_kham ? new Date(paymentSnapshot.appointment_info.ngay_kham).toLocaleDateString('vi-VN') : '--'}</p>
+                <p><span className="font-semibold text-slate-500">Phòng:</span> {paymentSnapshot.appointment_info.phong_kham || 'Sẽ được điều phối'}</p>
+              </div>
+              <div className="space-y-2 text-sm text-slate-700">
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-700">Thông tin bệnh nhân</p>
+                <p><span className="font-semibold text-slate-500">Họ tên:</span> {paymentSnapshot.appointment_info.patient.ho_ten || patientName}</p>
+                <p><span className="font-semibold text-slate-500">Số điện thoại:</span> {paymentSnapshot.appointment_info.patient.so_dien_thoai || patientPhone}</p>
+                {paymentSnapshot.appointment_info.patient.nam_sinh && <p><span className="font-semibold text-slate-500">Năm sinh:</span> {paymentSnapshot.appointment_info.patient.nam_sinh}</p>}
+              </div>
+            </div>
+          )}
+
           {creatingPaymentSession && !paymentSnapshot ? (
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-6 text-center text-sm text-slate-500">
               Đang tạo session VNPAY và mã QR thanh toán...
@@ -960,11 +933,8 @@ export default function Booking() {
                   <Button variant="secondary" onClick={handleOpenVnpayPage} disabled={!paymentSnapshot.gateway.payment_url}>
                     Mở trang VNPAY
                   </Button>
-                  <Button variant="secondary" onClick={handleRefreshVnpaySession} loading={creatingPaymentSession}>
-                    Tạo lại mã QR
-                  </Button>
-                  <Button variant="secondary" onClick={() => navigate('/profile', { replace: true })}>
-                    Thanh toán sau
+                  <Button variant="danger" onClick={handleCancelPayment} loading={cancellingPayment}>
+                    Hủy thanh toán và trả lại khung giờ
                   </Button>
                 </div>
               </div>
@@ -978,7 +948,7 @@ export default function Booking() {
       )}
 
       <div className="flex items-center justify-between pt-4">
-        {step > 1 && step < 5 ? (
+        {step > 2 && step < 5 ? (
           <Button variant="secondary" onClick={handlePrevStep}>
             Quay lại
           </Button>

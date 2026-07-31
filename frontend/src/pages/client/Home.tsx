@@ -1,158 +1,138 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, ArrowRight, ArrowUpRight, CalendarDays, Check, ChevronRight, Clock3, Ear, MapPin, Phone, ShieldCheck, Stethoscope } from 'lucide-react'
 import { Link } from 'react-router-dom'
+
+import Skeleton from '@/components/common/Skeleton'
 import { newsService } from '@/services/news.service'
-import { patientBookingService, type PatientBookingDoctor } from '@/services/patient-booking.service'
 import { serviceService } from '@/services/service.service'
 import type { NewsArticle, ServiceItem } from '@/types'
-import Skeleton from '@/components/common/Skeleton'
 
-interface AutoSliderProps {
-  children: React.ReactNode
-  cardWidthClass?: string
-}
+const benefits = [
+  {
+    icon: Stethoscope,
+    title: 'Tập trung một chuyên khoa',
+    description: 'Đội ngũ và quy trình được xây dựng riêng cho các vấn đề về tai, mũi, họng.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Khám rõ ràng, dễ hiểu',
+    description: 'Bác sĩ giải thích kết quả và hướng điều trị bằng ngôn ngữ dễ theo dõi.',
+  },
+  {
+    icon: Clock3,
+    title: 'Chủ động thời gian',
+    description: 'Chọn ngày và khung giờ phù hợp. Phòng khám tự sắp xếp bác sĩ còn suất.',
+  },
+]
 
-function AutoSlider({ children, cardWidthClass = 'w-[85%] sm:w-[48%] lg:w-[31%]' }: AutoSliderProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [isMouseDown, setIsMouseDown] = useState(false)
-  const [startX, setStartX] = useState(0)
-  const [scrollLeft, setScrollLeft] = useState(0)
-  const [isAutoplayPaused, setIsAutoplayPaused] = useState(false)
-  const autoplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+const bookingSteps = [
+  { icon: CalendarDays, title: 'Chọn ngày khám', description: 'Xem khung giờ còn chỗ trong 7 ngày gần nhất.' },
+  { icon: Ear, title: 'Mô tả triệu chứng', description: 'Cho chúng tôi biết điều đang khiến bạn khó chịu.' },
+  { icon: Check, title: 'Đến khám đúng hẹn', description: 'Bác sĩ phù hợp sẽ được phân công theo lịch thực tế.' },
+]
 
-  // Dragging handlers (Mouse)
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!containerRef.current) return
-    setIsMouseDown(true)
-    setIsAutoplayPaused(true)
-    
-    // Clear any resume timers
-    if (autoplayTimerRef.current) {
-      clearTimeout(autoplayTimerRef.current)
-    }
+const heroSlides = [
+  {
+    eyebrow: 'Phòng khám chuyên khoa Tai Mũi Họng',
+    title: 'Chăm sóc Tai Mũi Họng, rõ ràng từ lần khám đầu tiên.',
+    description: 'Một địa chỉ chuyên khoa dành cho cả gia đình, với quy trình khám dễ hiểu và lịch hẹn chủ động.',
+    image: '/images/ent-clinic-hero.png',
+    imageAlt: 'Bác sĩ thăm khám tai cho người bệnh tại phòng khám',
+    label: 'Lịch hẹn chủ động',
+    caption: 'Phòng khám tự sắp xếp bác sĩ phù hợp',
+  },
+  {
+    eyebrow: 'Không gian chăm sóc cẩn thận',
+    title: 'Một buổi khám nhẹ nhàng bắt đầu từ nơi bạn bước vào.',
+    description: 'Không gian sạch, sáng và riêng tư để người bệnh an tâm chia sẻ triệu chứng của mình.',
+    image: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1400&auto=format&fit=crop&q=85',
+    imageAlt: 'Không gian sạch sáng tại phòng khám chuyên khoa',
+    label: 'Ưu tiên sự thoải mái',
+    caption: 'Thiết kế để gia đình dễ dàng tìm thấy sự yên tâm',
+  },
+  {
+    eyebrow: 'Đồng hành cùng cả gia đình',
+    title: 'Hiểu đúng triệu chứng, chăm sóc đúng hướng.',
+    description: 'Từ những dấu hiệu nhỏ ở tai, mũi, họng đến kế hoạch theo dõi rõ ràng sau buổi khám.',
+    image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1400&auto=format&fit=crop&q=85',
+    imageAlt: 'Bác sĩ tư vấn và chăm sóc người bệnh',
+    label: 'Khám rõ, theo dõi dễ',
+    caption: 'Bác sĩ giải thích kết quả bằng ngôn ngữ dễ hiểu',
+  },
+]
 
-    setStartX(e.pageX - containerRef.current.offsetLeft)
-    setScrollLeft(containerRef.current.scrollLeft)
-  }
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isMouseDown || !containerRef.current) return
-    e.preventDefault()
-    const x = e.pageX - containerRef.current.offsetLeft
-    const walk = (x - startX) * 1.5 // Speed multiplier
-    containerRef.current.scrollLeft = scrollLeft - walk
-  }
-
-  const handleMouseUpOrLeave = () => {
-    if (!isMouseDown) return
-    setIsMouseDown(false)
-    
-    // Resume auto-play after 4 seconds of inactivity
-    autoplayTimerRef.current = setTimeout(() => {
-      setIsAutoplayPaused(false)
-    }, 4000)
-  }
-
-  // Touch handlers for mobile
-  const handleTouchStart = () => {
-    setIsAutoplayPaused(true)
-    if (autoplayTimerRef.current) {
-      clearTimeout(autoplayTimerRef.current)
-    }
-  }
-
-  const handleTouchEnd = () => {
-    autoplayTimerRef.current = setTimeout(() => {
-      setIsAutoplayPaused(false)
-    }, 4000)
-  }
-
-  // Clean timers on unmount
-  useEffect(() => {
-    return () => {
-      if (autoplayTimerRef.current) {
-        clearTimeout(autoplayTimerRef.current)
-      }
-    }
-  }, [])
-
-  // Autoplay effect
-  useEffect(() => {
-    if (isAutoplayPaused) return
-
-    const container = containerRef.current
-    if (!container) return
-
-    const interval = setInterval(() => {
-      const currentContainer = containerRef.current
-      if (!currentContainer) return
-
-      const maxScrollLeft = currentContainer.scrollWidth - currentContainer.clientWidth
-
-      // Wrap back to beginning if we are near the end
-      if (currentContainer.scrollLeft >= maxScrollLeft - 10) {
-        currentContainer.scrollTo({ left: 0, behavior: 'smooth' })
-      } else {
-        const firstChild = currentContainer.firstElementChild as HTMLElement
-        const scrollAmount = firstChild ? firstChild.clientWidth + 24 : 320 // slide width + gap
-        currentContainer.scrollBy({ left: scrollAmount, behavior: 'smooth' })
-      }
-    }, 3000) // Autoplay every 3 seconds
-
-    return () => clearInterval(interval)
-  }, [isAutoplayPaused])
+function ServiceMark({ index }: { index: number }) {
+  const icons = [Ear, Stethoscope, ShieldCheck, Clock3]
+  const Icon = icons[index % icons.length]
 
   return (
-    <div
-      ref={containerRef}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUpOrLeave}
-      onMouseLeave={handleMouseUpOrLeave}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      className="flex gap-6 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory select-none cursor-grab active:cursor-grabbing px-0 py-4"
-      style={{ scrollBehavior: 'smooth' }}
-    >
-      {React.Children.map(children, (child) => (
-        <div className={`snap-start shrink-0 ${cardWidthClass}`}>
-          {child}
-        </div>
-      ))}
-    </div>
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+      <Icon size={21} strokeWidth={1.8} aria-hidden="true" />
+    </span>
   )
 }
 
 export default function Home() {
-  const [specialists, setSpecialists] = useState<PatientBookingDoctor[]>([])
   const [clinicServices, setClinicServices] = useState<ServiceItem[]>([])
   const [latestNews, setLatestNews] = useState<NewsArticle[]>([])
-  const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [loadingServices, setLoadingServices] = useState(true)
+  const [activeSlide, setActiveSlide] = useState(0)
+  const [reducedMotion, setReducedMotion] = useState(false)
+
+  const activeHeroSlide = heroSlides[activeSlide]
+
+  function moveToSlide(index: number) {
+    setActiveSlide((index + heroSlides.length) % heroSlides.length)
+  }
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const syncMotionPreference = () => setReducedMotion(mediaQuery.matches)
+    syncMotionPreference()
+    mediaQuery.addEventListener?.('change', syncMotionPreference)
+
+    return () => mediaQuery.removeEventListener?.('change', syncMotionPreference)
+  }, [])
+
+  useEffect(() => {
+    if (reducedMotion) return
+
+    const timer = window.setInterval(() => {
+      setActiveSlide((current) => (current + 1) % heroSlides.length)
+    }, 6800)
+
+    return () => window.clearInterval(timer)
+  }, [reducedMotion])
+
+  useEffect(() => {
+    const revealNodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
+    if (!revealNodes.length) return
+
+    if (reducedMotion || !('IntersectionObserver' in window)) {
+      revealNodes.forEach((node) => node.classList.add('is-visible'))
+      return
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return
+        entry.target.classList.add('is-visible')
+        observer.unobserve(entry.target)
+      })
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' })
+
+    revealNodes.forEach((node) => observer.observe(node))
+    return () => observer.disconnect()
+  }, [reducedMotion])
 
   useEffect(() => {
     let ignore = false
-    patientBookingService.getDoctors()
-      .then((data) => {
-        if (!ignore) {
-          setSpecialists(data)
-        }
-      })
-      .catch((err) => {
-        console.error('Không tải được danh sách bác sĩ:', err)
-      })
-      .finally(() => {
-        if (!ignore) setLoadingDoctors(false)
-      })
 
     serviceService.getAll('related', '', 'active', 1, 100)
       .then((res) => {
-        if (!ignore) {
-          setClinicServices(res.items)
-        }
+        if (!ignore) setClinicServices(res.items)
       })
-      .catch((err) => {
-        console.error('Không tải được danh sách dịch vụ:', err)
-      })
+      .catch((error) => console.error('Không tải được dịch vụ phòng khám:', error))
       .finally(() => {
         if (!ignore) setLoadingServices(false)
       })
@@ -161,299 +141,272 @@ export default function Home() {
       .then((res) => {
         if (!ignore) setLatestNews(res.items)
       })
-      .catch((err) => {
-        console.error('Không tải được tin tức mới nhất:', err)
-      })
+      .catch((error) => console.error('Không tải được cẩm nang sức khỏe:', error))
 
     return () => {
       ignore = true
     }
   }, [])
 
+  const featuredService = clinicServices[0]
+  const secondaryServices = clinicServices.slice(1, 4)
+
   return (
-    <div className="space-y-20 pb-16">
-      {/* 1. HERO BANNER */}
-      <section className="relative overflow-hidden bg-slate-950 py-20 text-white min-h-[420px] flex items-center justify-center">
-        {/* Background Image */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src="https://thienhanhhospital.com/wp-content/uploads/2024/09/lienkhoa-Noi-soi-tai-mui-hong-1-768x480.webp"
-            alt="Tai Mũi Họng Chuyên Khoa"
-            className="w-full h-full object-cover opacity-25 object-center"
-          />
-          <div className="absolute inset-0 bg-gradient-to-br from-brand-950/90 via-brand-900/85 to-slate-950/80" />
-        </div>
+    <div className="overflow-hidden bg-[#f7faf9] text-slate-900">
+      <section className="relative border-b border-slate-200/80 bg-[#eef7f5]">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 pb-14 pt-10 sm:px-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:gap-16 lg:px-8 lg:pb-20 lg:pt-16">
+          <div key={activeSlide} className="relative z-10 min-h-[600px] max-w-xl hero-copy-in sm:min-h-[500px] lg:min-h-0">
+            <p className="mb-5 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">
+              <span className="h-2 w-2 rounded-full bg-teal-600" aria-hidden="true" />
+              {activeHeroSlide.eyebrow}
+            </p>
+            <h1 className="max-w-2xl text-4xl font-semibold leading-[1.08] tracking-[-0.035em] text-slate-950 sm:text-5xl lg:text-[4.25rem]">
+              {activeHeroSlide.title}
+            </h1>
+            <p className="mt-6 max-w-lg text-base leading-7 text-slate-600 sm:text-lg">
+              {activeHeroSlide.description}
+            </p>
 
-        <div className="relative z-10 mx-auto max-w-4xl px-6 text-center space-y-6">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500/25 px-4 py-1 text-sm font-semibold text-brand-300 ring-1 ring-brand-500/30">
-            🏥 Phòng khám chuyên khoa Tai Mũi Họng
-          </span>
-          <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl leading-tight">
-            Chăm sóc sức khỏe Tai Mũi Họng <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-brand-300 to-sky-200 bg-clip-text text-transparent">
-              Chu đáo cho cả gia đình bạn
-            </span>
-          </h1>
-          <p className="mx-auto max-w-xl text-base text-slate-300 leading-relaxed">
-            Đặt lịch khám trực tuyến với các bác sĩ đầu ngành, chụp nội soi ống mềm thế hệ mới không đau và nhận kết quả hồ sơ bệnh án số hóa tức thì.
-          </p>
-          <div className="pt-4 flex flex-wrap justify-center gap-4">
-            <Link to="/booking" className="btn-primary bg-white text-brand-900 hover:bg-slate-100 px-6 py-3 text-base shadow-lg shadow-brand-950/20">
-              Đặt lịch khám ngay
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. CLINIC INTRODUCTION */}
-      <section className="mx-auto max-w-6xl px-4 grid gap-10 lg:grid-cols-2 items-center">
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-brand-600">Giới thiệu chung</span>
-            <h2 className="text-2xl font-extrabold text-slate-800 sm:text-3xl leading-tight">
-              Phòng Khám Tai Mũi Họng ViteFamily
-            </h2>
-          </div>
-          <p className="text-slate-600 text-sm leading-relaxed">
-            Được thành lập với sứ mệnh mang đến dịch vụ chăm sóc tai mũi họng tiêu chuẩn quốc tế, ViteFamily tự hào là đơn vị tiên phong ứng dụng công nghệ nội soi ống mềm không đau tại Hà Nội. Chúng tôi tập trung tối đa nguồn lực vào một chuyên khoa duy nhất để mang lại chất lượng chẩn đoán chính xác tuyệt đối.
-          </p>
-          <div className="grid grid-cols-2 gap-4 pt-2">
-            <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
-              <p className="text-2xl font-extrabold text-brand-600">100%</p>
-              <p className="text-xs font-semibold text-slate-500">Nội soi bằng ống mềm</p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Link to="/booking" className="btn-primary rounded-full px-6 py-3.5 text-sm font-semibold shadow-[0_12px_28px_rgba(15,118,110,0.2)]">
+                Đặt lịch khám
+                <ArrowUpRight size={17} aria-hidden="true" />
+              </Link>
+              <a href="tel:0365747888" className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-white hover:text-teal-800">
+                <Phone size={16} strokeWidth={1.8} aria-hidden="true" />
+                0365 747 888
+              </a>
             </div>
-            <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
-              <p className="text-2xl font-extrabold text-brand-600">15+ Năm</p>
-              <p className="text-xs font-semibold text-slate-500">Kinh nghiệm y tế trung bình</p>
-            </div>
-          </div>
-        </div>
-        <div className="relative rounded-2xl overflow-hidden shadow-xl aspect-video bg-slate-100 border border-slate-200">
-          <img
-            src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&auto=format&fit=crop&q=60"
-            alt="Trang thiết bị phòng khám"
-            className="h-full w-full object-cover"
-          />
-        </div>
-      </section>
 
-      {/* 3. FEATURED SERVICES */}
-      <section className="mx-auto max-w-6xl px-4 space-y-8">
-        <div className="text-center space-y-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-brand-600">Dịch vụ nổi bật</span>
-          <h2 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Điều Trị Chuyên Khoa</h2>
-          <p className="mx-auto max-w-md text-sm text-slate-500">
-            Các kỹ thuật lâm sàng thế mạnh hỗ trợ điều trị nhanh chóng và triệt để.
-          </p>
-        </div>
-        {loadingServices ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="rounded-2xl border border-slate-100 bg-white p-6 space-y-4 shadow-sm">
-                <Skeleton className="h-12 w-12 rounded-xl" />
-                <Skeleton className="h-5 w-2/3" />
-                <Skeleton className="h-4 w-full" />
+            <div className="mt-10 grid max-w-lg grid-cols-3 gap-4 border-t border-teal-900/10 pt-5 text-sm">
+              <div>
+                <p className="font-semibold text-slate-900">Tai Mũi Họng</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Chuyên khoa duy nhất</p>
               </div>
-            ))}
+              <div>
+                <p className="font-semibold text-slate-900">Cho cả nhà</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Người lớn và trẻ em</p>
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">Đặt lịch online</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">Chọn giờ trước khi đến</p>
+              </div>
+            </div>
           </div>
-        ) : clinicServices.length === 0 ? (
-          <div className="text-center py-6 text-slate-400 text-sm">
-            Chưa có dịch vụ phòng khám hoạt động.
-          </div>
-        ) : (
-          <AutoSlider cardWidthClass="w-[85%] sm:w-[calc((100%-24px)/2)] lg:w-[calc((100%-48px)/3)]">
-            {clinicServices.map((s) => (
-              <div key={s.id} className="group relative flex h-full flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-md hover:border-brand-100 select-none">
-                <div className="space-y-4">
-                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600 group-hover:bg-brand-500 group-hover:text-white transition-colors duration-300">
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                  </div>
-                  <div className="space-y-1.5 text-left">
-                    <h3 className="font-bold text-slate-800 text-base">{s.ten}</h3>
-                    <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed">{s.mo_ta_ngan}</p>
-                  </div>
+
+          <div className="relative h-[360px] w-full lg:h-[540px]">
+            <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full border-[36px] border-white/60" aria-hidden="true" />
+            <div
+              className="relative h-full min-h-0 overflow-hidden rounded-[2rem] bg-slate-200 shadow-[0_24px_70px_rgba(15,63,65,0.18)]"
+              role="region"
+              aria-roledescription="carousel"
+              aria-label="Các điểm nổi bật của phòng khám"
+            >
+              {heroSlides.map((slide, index) => (
+                <img
+                  key={slide.image}
+                  src={slide.image}
+                  alt={index === activeSlide ? slide.imageAlt : ''}
+                  aria-hidden={index !== activeSlide}
+                  className={`absolute inset-0 h-full w-full object-cover object-center hero-slide-image ${index === activeSlide ? 'is-active' : ''}`}
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                />
+              ))}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-slate-950/5 to-transparent" aria-hidden="true" />
+              <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between gap-4 sm:bottom-7 sm:left-7 sm:right-7">
+                <div key={`${activeSlide}-caption`} className="hero-caption-in max-w-[min(70%,18rem)] rounded-2xl border border-white/50 bg-white/90 px-4 py-3 shadow-lg backdrop-blur-sm">
+                  <p className="text-xs font-semibold text-teal-800">{activeHeroSlide.label}</p>
+                  <p className="mt-1 text-sm font-medium leading-5 text-slate-800">{activeHeroSlide.caption}</p>
                 </div>
-                <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
-                  <span className="text-sm font-bold text-slate-900">
-                    {s.gia === 0 ? 'Miễn phí' : `${s.gia.toLocaleString('vi-VN')} đ`}
-                  </span>
-                  <Link to={`/dich-vu/${s.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-800 flex items-center gap-1 select-none pointer-events-auto">
-                    Chi tiết
-                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" onClick={() => moveToSlide(activeSlide - 1)} className="hero-control" aria-label="Ảnh trước">
+                    <ArrowLeft size={17} aria-hidden="true" />
+                  </button>
+                  <button type="button" onClick={() => moveToSlide(activeSlide + 1)} className="hero-control" aria-label="Ảnh tiếp theo">
+                    <ArrowRight size={17} aria-hidden="true" />
+                  </button>
                 </div>
               </div>
-            ))}
-          </AutoSlider>
-        )}
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* 4. DOCTORS SECTION */}
-      <section className="mx-auto max-w-6xl px-4 space-y-8">
-        <div className="text-center space-y-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-brand-600">Đội ngũ của chúng tôi</span>
-          <h2 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Bác Sĩ Tai Mũi Họng Đầu Ngành</h2>
-          <p className="mx-auto max-w-md text-sm text-slate-500">
-            Các phó giáo sư, thạc sĩ y khoa giàu tâm huyết và trực tiếp thực hiện thăm khám.
+      <section data-reveal className="reveal-on-scroll mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8 lg:py-24">
+        <div className="max-w-md">
+          <p className="text-sm font-semibold text-teal-700">Một cuộc hẹn nhẹ nhàng hơn</p>
+          <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">
+            Bạn không cần tự chọn bác sĩ.
+          </h2>
+          <p className="mt-5 text-base leading-7 text-slate-600">
+            Bạn chỉ cần chọn ngày và khung giờ. Hệ thống sẽ tổng hợp suất khám của phòng khám và phân công bác sĩ còn lịch phù hợp.
           </p>
-        </div>
-        {loadingDoctors ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="rounded-2xl border border-slate-100 bg-white p-4 space-y-4 shadow-sm">
-                <Skeleton className="aspect-square w-full rounded-xl" />
-                <Skeleton className="h-5 w-2/3" />
-                <Skeleton className="h-4 w-1/3" />
-              </div>
-            ))}
-          </div>
-        ) : specialists.length === 0 ? (
-          <div className="text-center py-6 text-slate-400 text-sm">
-            Chưa có bác sĩ chuyên khoa hoạt động.
-          </div>
-        ) : (
-          <AutoSlider cardWidthClass="w-[85%] sm:w-[calc((100%-24px)/2)] lg:w-[calc((100%-72px)/4)]">
-            {specialists.map((d) => (
-              <div key={d.id} className="group relative flex h-full flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300 select-none">
-                <div>
-                  {/* Doctor Avatar */}
-                  <div className="aspect-square w-full bg-slate-100 relative overflow-hidden">
-                    {d.anh_dai_dien ? (
-                      <img
-                        src={d.anh_dai_dien}
-                        alt={d.ho_ten}
-                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none"
-                        draggable={false}
-                      />
-                    ) : (
-                      <div className="grid h-full w-full place-items-center bg-brand-50 text-brand-600 font-extrabold text-3xl select-none">
-                        {d.ho_ten.split(' ').pop()?.charAt(0)}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Doctor Details */}
-                  <div className="p-4 space-y-2 text-left">
-                    <h3 className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors">{d.ho_ten}</h3>
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{d.bang_cap?.split('—')[0] || d.bang_cap || 'Bác sĩ chuyên khoa'}</p>
-                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{d.kinh_nghiem || 'Khám điều trị bệnh lý Tai Mũi Họng.'}</p>
-                  </div>
-                </div>
-
-                {/* Booking Actions */}
-                <div className="p-4 pt-3 border-t border-slate-50 flex items-center justify-center mt-2">
-                  <Link
-                    to="/booking"
-                    className="btn-primary w-full text-center py-2 text-xs font-bold shadow-sm shadow-brand-100 pointer-events-auto select-none"
-                  >
-                    Đặt lịch khám
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </AutoSlider>
-        )}
-      </section>
-
-      {/* 5. WHY CHOOSE US */}
-      <section className="bg-slate-100/50 py-16 rounded-3xl mx-4 sm:mx-0">
-        <div className="mx-auto max-w-5xl px-6 space-y-12">
-          <div className="text-center space-y-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-brand-600">Vì sao chọn chúng tôi</span>
-            <h2 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Cam Kết Chất Lượng Vượt Trội</h2>
-          </div>
-          <div className="grid gap-8 sm:grid-cols-3">
-            <div className="text-center space-y-3">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-brand-600 shadow-md">
-                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <h3 className="font-bold text-slate-800 text-sm">Chẩn Đoán Chuẩn Xác</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">Đội ngũ phó giáo sư, thạc sĩ trực tiếp nội soi và điều trị dứt điểm.</p>
-            </div>
-            <div className="text-center space-y-3">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-brand-600 shadow-md">
-                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-              </div>
-              <h3 className="font-bold text-slate-800 text-sm">Nội Soi Ống Mềm Không Đau</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">Thiết bị siêu nhỏ, không gây kích thích nhợn ói, hoàn toàn thoải mái cho bé.</p>
-            </div>
-            <div className="text-center space-y-3">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-brand-600 shadow-md">
-                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="font-bold text-slate-800 text-sm">Khám Đúng Giờ Hẹn</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">Đặt khung giờ trước trực tuyến giúp tiết kiệm 100% thời gian chờ đợi xếp hàng.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 6. LATEST NEWS */}
-      <section className="mx-auto max-w-6xl px-4 space-y-8">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div className="space-y-2 text-left">
-            <span className="text-xs font-bold uppercase tracking-wider text-brand-600">Cẩm nang y khoa</span>
-            <h2 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Tin Tức & Cảnh Báo Sức Khỏe</h2>
-          </div>
-          <Link to="/tin-tuc" className="text-sm font-semibold text-brand-600 hover:text-brand-800 flex items-center gap-1 shrink-0">
-            Xem tất cả bài viết
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
+          <Link to="/booking" className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-teal-800 transition-colors hover:text-teal-950">
+            Bắt đầu đặt lịch
+            <ChevronRight size={17} aria-hidden="true" />
           </Link>
         </div>
-        {latestNews.length === 0 ? (
-          <div className="rounded-2xl border border-slate-100 bg-white py-8 text-center text-sm text-slate-400">
-            Chưa có tin tức được xuất bản.
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          {bookingSteps.map((item, index) => {
+            const Icon = item.icon
+            return (
+              <article key={item.title} className={`relative rounded-3xl p-6 ${index === 1 ? 'bg-teal-800 text-white' : 'bg-white text-slate-900 shadow-[0_10px_35px_rgba(21,54,56,0.06)]'}`}>
+                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${index === 1 ? 'bg-white/15 text-white' : 'bg-teal-50 text-teal-700'}`}>
+                  <Icon size={21} strokeWidth={1.8} aria-hidden="true" />
+                </span>
+                <p className={`mt-12 text-xs font-semibold ${index === 1 ? 'text-teal-100' : 'text-teal-700'}`}>0{index + 1}</p>
+                <h3 className="mt-2 text-lg font-semibold tracking-[-0.02em]">{item.title}</h3>
+                <p className={`mt-3 text-sm leading-6 ${index === 1 ? 'text-teal-50/80' : 'text-slate-500'}`}>{item.description}</p>
+              </article>
+            )
+          })}
+        </div>
+      </section>
+
+      <section data-reveal className="reveal-on-scroll border-y border-slate-200/80 bg-white">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:px-8 lg:py-24">
+          <div className="relative overflow-hidden rounded-[2rem] bg-slate-100">
+            <img
+              src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1200&auto=format&fit=crop&q=80"
+              alt="Không gian sạch sẽ, sáng thoáng của phòng khám"
+              className="aspect-[4/3] h-full w-full object-cover"
+              loading="lazy"
+            />
+            <div className="absolute bottom-5 left-5 max-w-[220px] rounded-2xl border border-white/70 bg-white/90 px-4 py-3 backdrop-blur-sm">
+              <p className="text-sm font-semibold text-slate-900">Không gian khám riêng tư</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Thiết kế để người bệnh cảm thấy thoải mái ngay từ lúc bước vào.</p>
+            </div>
           </div>
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {latestNews.map((n) => (
-            <Link key={n.id} to={`/tin-tuc/${n.url_slug || n.id}`} className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300">
-              <div>
-                <div className="aspect-video w-full bg-slate-100 overflow-hidden">
-                  <img
-                    src={n.image}
-                    alt={n.title}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                </div>
-                <div className="p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold uppercase">
-                    <span>{n.author_name || 'VitaFamily'}</span>
-                    <span>•</span>
-                    <span>{new Date(n.created_at).toLocaleDateString('vi-VN')}</span>
+          <div className="max-w-lg">
+            <p className="text-sm font-semibold text-teal-700">Phòng khám VitaFamily</p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">
+              Chẩn đoán kỹ, giải thích dễ hiểu, đồng hành đến khi ổn hơn.
+            </h2>
+            <p className="mt-5 text-base leading-7 text-slate-600">
+              Chúng tôi tập trung vào trải nghiệm khám rõ ràng: lắng nghe triệu chứng, kiểm tra cẩn thận và thống nhất hướng chăm sóc cùng người bệnh.
+            </p>
+            <div className="mt-8 space-y-4">
+              {benefits.map((benefit) => {
+                const Icon = benefit.icon
+                return (
+                  <div key={benefit.title} className="flex gap-4">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+                      <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">{benefit.title}</h3>
+                      <p className="mt-1 text-sm leading-6 text-slate-500">{benefit.description}</p>
+                    </div>
                   </div>
-                  <h3 className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors line-clamp-2 leading-snug">
-                    {n.title}
-                  </h3>
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                    {n.excerpt}
-                  </p>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-reveal className="reveal-on-scroll mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-xl">
+            <p className="text-sm font-semibold text-teal-700">Dịch vụ và triệu chứng</p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">Bắt đầu từ điều bạn đang khó chịu.</h2>
+            <p className="mt-4 text-base leading-7 text-slate-600">Tìm hiểu các hướng thăm khám thường gặp tại phòng khám Tai Mũi Họng.</p>
+          </div>
+          <Link to="/dich-vu" className="inline-flex items-center gap-2 text-sm font-semibold text-teal-800 hover:text-teal-950">
+            Xem tất cả dịch vụ
+            <ArrowUpRight size={17} aria-hidden="true" />
+          </Link>
+        </div>
+
+        {loadingServices ? (
+          <div className="mt-10 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+            <Skeleton className="min-h-[280px] rounded-[2rem]" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[1, 2, 3, 4].map((item) => <Skeleton key={item} className="min-h-[130px] rounded-3xl" />)}
+            </div>
+          </div>
+        ) : clinicServices.length === 0 ? (
+          <div className="mt-10 rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">Dịch vụ đang được cập nhật.</div>
+        ) : (
+          <div className="mt-10 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+            {featuredService && (
+              <Link to={`/dich-vu/${featuredService.id}`} className="group flex min-h-[300px] flex-col justify-between rounded-[2rem] bg-teal-800 p-7 text-white transition-transform duration-300 hover:-translate-y-1 sm:p-9">
+                <div className="flex items-start justify-between gap-4">
+                  <ServiceMark index={0} />
+                  <ArrowUpRight className="text-teal-200 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" size={22} aria-hidden="true" />
                 </div>
-              </div>
-              <div className="p-5 pt-0 text-xs font-semibold text-brand-600 flex items-center gap-1 group-hover:text-brand-800">
-                Đọc bài viết
-                <svg className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </Link>
-            ))}
+                <div className="mt-14 max-w-md">
+                  <p className="text-sm font-medium text-teal-100">Dịch vụ nổi bật</p>
+                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.025em]">{featuredService.ten}</h3>
+                  <p className="mt-3 text-sm leading-6 text-teal-50/80">{featuredService.mo_ta_ngan || 'Khám và tư vấn chuyên khoa theo tình trạng cụ thể của bạn.'}</p>
+                </div>
+              </Link>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {secondaryServices.map((service, index) => (
+                <Link key={service.id} to={`/dich-vu/${service.id}`} className="group flex min-h-[142px] flex-col justify-between rounded-3xl bg-white p-5 shadow-[0_10px_35px_rgba(21,54,56,0.06)] transition-transform duration-300 hover:-translate-y-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <ServiceMark index={index + 1} />
+                    <ChevronRight className="text-slate-300 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-teal-700" size={18} aria-hidden="true" />
+                  </div>
+                  <h3 className="mt-7 text-sm font-semibold leading-5 text-slate-900">{service.ten}</h3>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </section>
+
+      <section data-reveal className="reveal-on-scroll border-t border-slate-200/80 bg-[#eef7f5]">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-teal-700">Cẩm nang sức khỏe</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">Thông tin hữu ích cho cả gia đình.</h2>
+            </div>
+            <Link to="/tin-tuc" className="inline-flex items-center gap-2 text-sm font-semibold text-teal-800 hover:text-teal-950">
+              Xem cẩm nang
+              <ArrowUpRight size={17} aria-hidden="true" />
+            </Link>
+          </div>
+
+          {latestNews.length > 0 && (
+            <div className="mt-10 grid gap-5 md:grid-cols-3">
+              {latestNews.map((article) => (
+                <Link key={article.id} to={`/tin-tuc/${article.url_slug || article.id}`} className="group overflow-hidden rounded-3xl bg-white shadow-[0_10px_35px_rgba(21,54,56,0.05)] transition-transform duration-300 hover:-translate-y-1">
+                  <div className="aspect-[1.45/1] overflow-hidden bg-slate-100">
+                    <img src={article.image} alt={article.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                  </div>
+                  <div className="p-5">
+                    <p className="text-xs font-medium text-slate-400">{new Date(article.created_at).toLocaleDateString('vi-VN')}</p>
+                    <h3 className="mt-3 line-clamp-2 text-base font-semibold leading-6 text-slate-900 group-hover:text-teal-800">{article.title}</h3>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{article.excerpt}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section data-reveal className="reveal-on-scroll bg-teal-900 text-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-14 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 lg:py-16">
+          <div className="max-w-2xl">
+            <p className="text-sm font-medium text-teal-200">Bạn đang cần được thăm khám?</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">Đặt một khung giờ phù hợp cho hôm nay.</h2>
+          </div>
+          <Link to="/booking" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-teal-900 transition-colors hover:bg-teal-50">
+            Đặt lịch khám
+            <ArrowUpRight size={17} aria-hidden="true" />
+          </Link>
+        </div>
+      </section>
+
+      <div className="mx-auto flex max-w-7xl flex-wrap gap-x-8 gap-y-3 px-4 py-6 text-xs text-slate-500 sm:px-6 lg:px-8">
+        <span className="inline-flex items-center gap-2"><MapPin size={14} className="text-teal-700" aria-hidden="true" /> 123 Nguyễn Trãi, Thanh Xuân, Hà Nội</span>
+        <span className="inline-flex items-center gap-2"><Clock3 size={14} className="text-teal-700" aria-hidden="true" /> 08:00 - 24:00 (theo ca bác sĩ), thứ 2 đến thứ 7</span>
+      </div>
     </div>
   )
 }
-
