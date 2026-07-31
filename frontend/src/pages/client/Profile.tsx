@@ -6,7 +6,9 @@ import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import Modal from '@/components/common/Modal'
 import Toast from '@/components/common/Toast'
+import Pagination from '@/components/common/Pagination'
 import RescheduleModal from '@/components/client/RescheduleModal'
+import { ContentTransition, RouteTransition } from '@/components/client/ClientMotion'
 import { useAuth } from '@/context/AuthContext'
 import { authService } from '@/services/auth.service'
 import {
@@ -30,6 +32,13 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState<'appointments' | 'account' | 'family'>('appointments')
   const [appointments, setAppointments] = useState<PatientRecordListItem[]>([])
   const [appointmentsLoading, setAppointmentsLoading] = useState(true)
+
+  // Lọc và phân trang lịch hẹn
+  const [appCurrentPage, setAppCurrentPage] = useState(1)
+  const [appSearchDoctor, setAppSearchDoctor] = useState('')
+  const [appStartDate, setAppStartDate] = useState('')
+  const [appEndDate, setAppEndDate] = useState('')
+  const ITEMS_PER_PAGE = 5
 
   // Family group states
   const [familyGroup, setFamilyGroup] = useState<FamilyGroup | null>(null)
@@ -73,6 +82,28 @@ export default function Profile() {
   // hộp thoại tĩnh bảo khách gọi hotline, không gắn với lịch cụ thể).
   const [rescheduleAppId, setRescheduleAppId] = useState<string | null>(null)
   const [refundHelpAppId, setRefundHelpAppId] = useState<string | null>(null)
+
+  const filteredAppointments = appointments.filter((app) => {
+    if (appSearchDoctor && app.bac_si?.ho_ten) {
+      if (!app.bac_si.ho_ten.toLowerCase().includes(appSearchDoctor.toLowerCase())) {
+        return false
+      }
+    }
+    if (appStartDate && app.ngay_kham < appStartDate) {
+      return false
+    }
+    if (appEndDate && app.ngay_kham > appEndDate) {
+      return false
+    }
+    return true
+  })
+
+  const totalPages = Math.max(1, Math.ceil(filteredAppointments.length / ITEMS_PER_PAGE))
+  const paginatedAppointments = filteredAppointments.slice((appCurrentPage - 1) * ITEMS_PER_PAGE, appCurrentPage * ITEMS_PER_PAGE)
+
+  useEffect(() => {
+    setAppCurrentPage(1)
+  }, [appSearchDoctor, appStartDate, appEndDate])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -450,7 +481,8 @@ export default function Profile() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 pb-16 sm:px-6">
+    <RouteTransition>
+      <div className="mx-auto max-w-7xl space-y-6 px-4 pb-16 sm:px-6">
       <Breadcrumb items={[{ label: 'Hồ sơ cá nhân' }]} />
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_22px_60px_-35px_rgba(15,118,110,0.5)]">
@@ -506,6 +538,38 @@ export default function Profile() {
                 <p className="text-xs text-slate-400">Theo dõi trạng thái lịch hẹn và tình trạng thanh toán từ dữ liệu thật của hệ thống.</p>
               </div>
 
+              {appointments.length > 0 && (
+                <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm flex flex-col md:flex-row gap-3">
+                  <div className="flex-1">
+                    <Input
+                      label=""
+                      placeholder="Tìm theo tên bác sĩ..."
+                      value={appSearchDoctor}
+                      onChange={(e) => setAppSearchDoctor(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <Input
+                        label=""
+                        type="date"
+                        value={appStartDate}
+                        onChange={(e) => setAppStartDate(e.target.value)}
+                      />
+                    </div>
+                    <span className="text-slate-400">-</span>
+                    <div className="flex-1">
+                      <Input
+                        label=""
+                        type="date"
+                        value={appEndDate}
+                        onChange={(e) => setAppEndDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-4">
                 {appointmentsLoading ? (
                   <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
@@ -515,10 +579,15 @@ export default function Profile() {
                   <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
                     Bạn chưa có lịch hẹn khám nào.
                   </div>
+                ) : paginatedAppointments.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
+                    Không tìm thấy lịch hẹn phù hợp.
+                  </div>
                 ) : (
-                  appointments.map((appointment) => (
-                    <div
-                      key={appointment.id}
+                  <>
+                    {paginatedAppointments.map((appointment) => (
+                      <div
+                        key={appointment.id}
                       className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:border-brand-100"
                     >
                       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -607,7 +676,17 @@ export default function Profile() {
                         </div>
                       </div>
                     </div>
-                  ))
+                  ))}
+                  {totalPages > 1 && (
+                    <div className="pt-2">
+                      <Pagination
+                        currentPage={appCurrentPage}
+                        totalPages={totalPages}
+                        onPageChange={setAppCurrentPage}
+                      />
+                    </div>
+                  )}
+                  </>
                 )}
               </div>
             </div>
@@ -1146,5 +1225,6 @@ export default function Profile() {
 
       {toast && <Toast message={toast} type="success" onClose={() => setToast(null)} />}
     </div>
+    </RouteTransition>
   )
 }

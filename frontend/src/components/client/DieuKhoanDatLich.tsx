@@ -47,7 +47,7 @@ export default function DieuKhoanDatLich({ daDongY, onChange, giaKham }: Props) 
           type="button"
           onClick={() => setMoRong((v) => !v)}
           aria-expanded={moRong}
-          className="flex w-full items-center justify-between gap-3 rounded-lg text-left text-sm font-semibold text-amber-900 hover:text-amber-950"
+          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg text-left text-sm font-semibold text-amber-900 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2"
         >
           <span>Xem đầy đủ 7 tình huống và cách xử lý</span>
           <span aria-hidden className={`transition-transform ${moRong ? 'rotate-180' : ''}`}>▾</span>

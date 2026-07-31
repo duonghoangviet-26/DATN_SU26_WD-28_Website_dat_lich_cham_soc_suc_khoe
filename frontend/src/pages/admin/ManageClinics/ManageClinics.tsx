@@ -44,6 +44,7 @@ export default function ManageClinics() {
       const data = await clinicService.getCurrentClinic()
       setClinic(data)
     } catch {
+      setClinic(null)
     } finally {
       setClinicLoading(false)
     }
@@ -55,6 +56,7 @@ export default function ManageClinics() {
       const data = await clinicService.getSpecialties()
       setSpecialties(data)
     } catch {
+      setSpecialties([])
     } finally {
       setSpecialtyLoading(false)
     }
@@ -165,12 +167,6 @@ export default function ManageClinics() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard
-          title="Cơ sở"
-          value={clinic ? 1 : 0}
-          note={clinic ? 'Đã khởi tạo phòng khám chính' : 'Chưa có dữ liệu phòng khám'}
-          icon="hospital"
-        />
         <SummaryCard
           title="Phòng khám nhỏ"
           value={activeRooms}

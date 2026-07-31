@@ -1,7 +1,7 @@
 // ============================================================
 // SERVICE: Quản lý người dùng (chức năng C1 của Admin)
 // ============================================================
-import type { User, ApiResponse } from '@/types'
+import type { User } from '@/types'
 import axios from './axiosInstance'
 
 interface UserFilters {

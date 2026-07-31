@@ -209,7 +209,7 @@ export default function Dashboard() {
           <RevenueTrendChart refreshVersion={versions.revenue + refreshTick} />
         </AdminMotionItem>
         <AdminMotionItem className="min-w-0">
-          <AppointmentStatusChart refreshVersion={versions.appointments} />
+          <AppointmentStatusChart refreshVersion={versions.appointments + refreshTick} />
         </AdminMotionItem>
         </AdminMotionGroup>
       </AdminMotionItem>
@@ -220,7 +220,7 @@ export default function Dashboard() {
           <DoctorRevenueChart refreshVersion={versions.doctors + refreshTick} />
         </AdminMotionItem>
         <AdminMotionItem className="min-w-0">
-          <NewPatientsChart refreshVersion={versions.patients} />
+          <NewPatientsChart refreshVersion={versions.patients + refreshTick} />
         </AdminMotionItem>
         </AdminMotionGroup>
       </AdminMotionItem>

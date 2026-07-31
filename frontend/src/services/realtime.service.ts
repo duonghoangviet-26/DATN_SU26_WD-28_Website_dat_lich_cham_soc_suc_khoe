@@ -14,6 +14,7 @@ export type DashboardAppointmentPayload = {
 }
 
 export type DashboardPatientPayload = {
+  ngay: string
   thang: number
   emitted_at?: string
 }

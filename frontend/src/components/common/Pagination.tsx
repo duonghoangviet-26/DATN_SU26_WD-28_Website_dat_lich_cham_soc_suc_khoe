@@ -34,7 +34,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
       <button
         disabled={currentPage === 1}
         onClick={() => onPageChange(currentPage - 1)}
-        className="flex items-center justify-center px-3 py-1.5 h-8 sm:h-9 min-w-[32px] sm:min-w-[36px] text-sm font-medium rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+        className="flex h-11 min-w-11 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
         aria-label="Trang trước"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -43,17 +43,19 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
       {getPageNumbers().map((page, index) => (
         <React.Fragment key={index}>
           {page === '...' ? (
-            <span className="flex items-center justify-center px-1 sm:px-2 h-8 sm:h-9 text-slate-400">
+            <span className="flex h-11 min-w-8 items-center justify-center px-1 text-slate-400 sm:px-2">
               ...
             </span>
           ) : (
             <button
               onClick={() => onPageChange(page as number)}
-              className={`flex items-center justify-center px-2.5 sm:px-3.5 h-8 sm:h-9 min-w-[32px] sm:min-w-[36px] text-sm font-medium rounded-md transition-colors ${
+              className={`flex h-11 min-w-11 items-center justify-center rounded-md px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 sm:px-3.5 ${
                 currentPage === page
                   ? 'bg-brand-600 text-white border border-brand-600 shadow-sm'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-900'
               }`}
+              aria-label={`Trang ${page}`}
+              aria-current={currentPage === page ? 'page' : undefined}
             >
               {page}
             </button>
@@ -64,7 +66,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
       <button
         disabled={currentPage === totalPages}
         onClick={() => onPageChange(currentPage + 1)}
-        className="flex items-center justify-center px-3 py-1.5 h-8 sm:h-9 min-w-[32px] sm:min-w-[36px] text-sm font-medium rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+        className="flex h-11 min-w-11 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
         aria-label="Trang sau"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>

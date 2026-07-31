@@ -35,7 +35,7 @@ export default function Sidebar({ open, onClose }: Props) {
             </svg>
           </div>
           <div>
-            <p className="text-sm font-bold leading-tight text-slate-800">VitaFamily</p>
+            <p className="text-sm font-bold leading-tight text-slate-800">ViteFamily</p>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Receptionist</p>
           </div>
         </div>

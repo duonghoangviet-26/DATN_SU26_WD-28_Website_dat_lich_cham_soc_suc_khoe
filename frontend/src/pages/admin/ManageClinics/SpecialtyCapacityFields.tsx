@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Capacity helpers are co-located with the field component. */
 // Cấu hình năng lực khám của một chuyên khoa.
 // Nghiệp vụ bất biến: .claude/rules/lich-lam-viec-bac-si.md mục 2, 4, 12.
 //   CA → KHUNG GIỜ (30') → SLOT.  Ca sáng 7 khung, ca chiều 8 khung.

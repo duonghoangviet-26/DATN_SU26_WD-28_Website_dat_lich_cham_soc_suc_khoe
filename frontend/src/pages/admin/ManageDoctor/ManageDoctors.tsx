@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { doctorService } from '@/services/doctor.service'
 import type { DoctorProfileAPI, DoctorDetailAPI, DoctorApproval } from '@/types'
 import { DOCTOR_APPROVAL_LABEL } from '@/utils/constants'
@@ -48,7 +48,7 @@ export default function ManageDoctors() {
   }, [keyword])
 
   // Load data
-  const loadData = async (ignore = false) => {
+  const loadData = useCallback(async (ignore = false) => {
     setLoading(true)
     try {
       const { doctors: data, pagination } = await doctorService.getAll({
@@ -67,13 +67,13 @@ export default function ManageDoctors() {
     } finally {
       if (!ignore) setLoading(false)
     }
-  }
+  }, [activeTab, debouncedKeyword, page])
 
   useEffect(() => {
     let ignore = false
     loadData(ignore)
     return () => { ignore = true }
-  }, [activeTab, debouncedKeyword, page])
+  }, [loadData])
 
   // Reset page when tab/keyword changes
   useEffect(() => { setPage(1) }, [activeTab, debouncedKeyword])

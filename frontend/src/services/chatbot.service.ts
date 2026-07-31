@@ -5,7 +5,7 @@ const removeAccents = (str: string) => {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase().trim();
 }
 
-export const fallbackLLM = async (prompt: string, contextData?: string): Promise<string> => {
+export const fallbackLLM = async (prompt: string, _contextData?: string): Promise<string> => {
   const text = removeAccents(prompt)
   
   // Rule 1: Xin chào
@@ -15,7 +15,7 @@ export const fallbackLLM = async (prompt: string, contextData?: string): Promise
 
   // Rule 2: Hỏi tên/chức năng
   if (text.match(/(ban la ai|ten gi|ban lam duoc gi|nghiep vu|chuc nang)/i)) {
-    return "Tôi là AI Chatbot độc quyền của hệ thống **VitaFamily**. Nhiệm vụ của tôi là tự động hóa các nghiệp vụ của phòng khám như:\n- Tư vấn chọn bác sĩ\n- Báo giá dịch vụ khám\n- Hỗ trợ bệnh nhân đặt lịch\nBạn muốn trải nghiệm chức năng nào?"
+    return "Tôi là trợ lý đặt lịch của **VitaFamily**. Tôi có thể hỗ trợ bạn:\n- Tìm khung giờ khám Tai Mũi Họng còn trống\n- Tra cứu thông tin bác sĩ và dịch vụ\n- Hướng dẫn đặt lịch, thanh toán\nBạn cần hỗ trợ nội dung nào?"
   }
 
   // Rule 3: Hỏi thời tiết/linh tinh

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { reviewService } from '@/services/review.service'
 import type { ReviewFilters, ReviewItem, ReviewStatistics, PaginationInfo } from '@/types/review.type'
 import PageHeader from '@/components/common/PageHeader'
@@ -58,20 +58,8 @@ export default function ManageReviews() {
       })
   }, [])
 
-  // 1. Tự động cập nhật dữ liệu trang hiện tại khi người dùng quay lại tab (window focus)
-  useEffect(() => {
-    const handleFocus = () => {
-      fetchReviews(pagination.page)
-    }
-
-    window.addEventListener('focus', handleFocus)
-    return () => {
-      window.removeEventListener('focus', handleFocus)
-    }
-  }, [pagination.page])
-
-  // 2. Tải danh sách đánh giá từ API dựa trên bộ lọc và trang hiện tại
-  const fetchReviews = (pageNumber = 1) => {
+  // Tải danh sách đánh giá từ API dựa trên bộ lọc và trang hiện tại.
+  const fetchReviews = useCallback((pageNumber = 1) => {
     // Lấy ngày hiện tại ở múi giờ địa phương (timezone-safe YYYY-MM-DD)
     const getLocalDateString = () => {
       const d = new Date()
@@ -117,13 +105,19 @@ export default function ManageReviews() {
       .finally(() => {
         setLoading(false)
       })
-  }
+  }, [filters, pagination.limit])
+
+  useEffect(() => {
+    const handleFocus = () => fetchReviews(pagination.page)
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [fetchReviews, pagination.page])
 
   // Reload danh sách khi filters hoặc trang thay đổi
   useEffect(() => {
     fetchReviews(1)
     setSelectedIds([]) // Reset chọn nhiều khi đổi bộ lọc
-  }, [filters])
+  }, [fetchReviews])
 
   const handlePageChange = (newPage: number) => {
     fetchReviews(newPage)

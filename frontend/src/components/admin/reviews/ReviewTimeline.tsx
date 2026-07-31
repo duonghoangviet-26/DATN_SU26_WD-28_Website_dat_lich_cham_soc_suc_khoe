@@ -44,7 +44,7 @@ export default function ReviewTimeline({ history, loading }: Props) {
 
   return (
     <div className="relative pl-6 border-l-2 border-slate-100 ml-4 space-y-6 py-2">
-      {history.map((log, index) => {
+      {history.map((log) => {
         const style = ACTION_COLOR_MAP[log.hanh_dong] || {
           bg: 'bg-slate-100',
           text: 'text-slate-700',
@@ -88,7 +88,7 @@ export default function ReviewTimeline({ history, loading }: Props) {
                     Lý do thay đổi
                   </p>
                   <p className="text-base text-slate-700 font-medium leading-relaxed italic">
-                    "{log.ly_do}"
+                    &ldquo;{log.ly_do}&rdquo;
                   </p>
                 </div>
               )}

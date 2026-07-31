@@ -112,7 +112,11 @@ export function emitDashboardAppointmentChanged(trang_thai_cu, trang_thai_moi) {
 }
 
 export function emitDashboardNewPatient(ngayTao = new Date()) {
-  emitAdminRealtime('thongke:benh_nhan_moi', { thang: clinicMonth(ngayTao) })
+  const createdAt = ngayTao?.ngay_tao || ngayTao?.created_at || ngayTao || new Date()
+  emitAdminRealtime('thongke:benh_nhan_moi', {
+    ngay: clinicDate(createdAt),
+    thang: clinicMonth(createdAt),
+  })
 }
 
 export function getRealtimeServer() {
