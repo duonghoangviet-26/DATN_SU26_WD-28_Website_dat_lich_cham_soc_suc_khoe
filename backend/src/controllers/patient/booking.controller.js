@@ -984,14 +984,16 @@ export async function createDoctorReview(req, res) {
       return fail(res, 400, 'Số sao phải từ 1 đến 5')
     }
 
-    // 1. Tìm lịch hẹn của người dùng này với bác sĩ này
+    // 1. Tìm lịch hẹn ĐÃ HOÀN THÀNH của người dùng này với bác sĩ này
+    //    Chỉ lịch hẹn status='completed' mới đủ điều kiện đánh giá
     const appointments = await LichHen.find({
       user_id: userId,
-      doctor_id: doctorId
+      doctor_id: doctorId,
+      status: 'completed',
     }).lean()
 
     if (appointments.length === 0) {
-      return fail(res, 400, 'Bạn cần đăng ký khám với bác sĩ này trước khi viết đánh giá.')
+      return fail(res, 400, 'Bạn cần có ít nhất một lịch hẹn đã hoàn thành với bác sĩ này để viết đánh giá.')
     }
 
     // 2. Tìm lịch hẹn chưa được đánh giá
