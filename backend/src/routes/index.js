@@ -12,6 +12,7 @@ import receptionistRoutes from './receptionist/index.js'
 import patientRoutes      from './patient/index.js'
 import thongKeRoutes      from './thong-ke.routes.js'
 import newsRoutes         from './news.routes.js'
+import chatbotRoutes      from './chatbot.routes.js'
 
 const router = Router()
 
@@ -25,6 +26,7 @@ router.use('/patient', patientRoutes)
 router.use('/news', newsRoutes)
 router.use('/admin', adminRoutes)
 router.use('/thong-ke', thongKeRoutes)
+router.use('/chatbot', chatbotRoutes)
 router.use('/admin/upload', uploadRoutes)
 
 // New canonical mounts.

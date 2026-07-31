@@ -71,10 +71,9 @@ export default function AIChatbot() {
       patientBookingService.getDoctors().then(docs => setDoctorList(docs)).catch(() => {})
     }
     
-    // Khởi tạo tin nhắn chào mừng nếu lịch sử trống
     if (isOpen && isLoaded && messages.length === 0) {
       addMessage({
-        text: 'Chào bạn, tôi là trợ lý đặt lịch của VitaFamily. Tôi có thể giúp bạn tìm khung giờ khám Tai Mũi Họng, xem dịch vụ hoặc đặt lịch.',
+        text: 'Chào bạn, tôi là Trợ lý ảo của ViteFamily. Tôi có thể giúp bạn tìm khung giờ khám Tai Mũi Họng, xem dịch vụ hoặc đặt lịch.',
         sender: 'bot'
       })
     }
@@ -292,14 +291,20 @@ export default function AIChatbot() {
       {!isOpen && <motion.button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-teal-700 text-white shadow-xl transition-colors hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
-        initial={{ opacity: 0, scale: 0.92 }}
+        className="fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/50"
+        initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.92 }}
-        transition={{ duration: 0.2 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ type: "spring", stiffness: 260, damping: 20 }}
         aria-label="Mở trợ lý đặt lịch"
       >
-        <MessageCircle className="h-6 w-6" aria-hidden="true" />
+        <div className="relative h-full w-full rounded-full overflow-hidden border-[3px] border-white shadow-md bg-teal-50">
+           <img src="/images/robot-avatar.png" alt="Trợ lý ảo" className="h-full w-full object-cover" />
+        </div>
+        <span className="absolute -right-1 -top-1 flex h-4 w-4">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+          <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-red-500"></span>
+        </span>
       </motion.button>}
       </AnimatePresence>
 
@@ -320,12 +325,19 @@ export default function AIChatbot() {
           onTouchStart={handleMouseDown}
         >
           <div className="flex items-center gap-3 pointer-events-none">
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-              <Bot className="w-6 h-6" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.3)] overflow-hidden border-2 border-white/80">
+              <img src="/images/robot-avatar.png" alt="Bot Avatar" className="h-full w-full object-cover" />
+              <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-200 opacity-75"></span>
+                <span className="relative inline-flex h-3 w-3 rounded-full border-2 border-teal-700 bg-teal-400"></span>
+              </span>
             </div>
             <div>
-              <h3 className="font-semibold text-sm">VitaFamily Bot</h3>
-              <p className="text-xs text-teal-50/90">Tư vấn đặt lịch</p>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-base tracking-wide text-white drop-shadow-sm">Trợ lý ảo ViteFamily</h3>
+                <span className="rounded bg-gradient-to-r from-amber-400 to-orange-500 px-1.5 py-[2px] text-[9px] font-black uppercase tracking-wider text-white shadow-sm">AI</span>
+              </div>
+              <p className="mt-0.5 text-xs font-medium text-teal-50/90">Sẵn sàng hỗ trợ 24/7</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -366,8 +378,8 @@ export default function AIChatbot() {
                 <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`flex gap-2 max-w-[85%] ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700">
-                      {msg.sender === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700 overflow-hidden shadow-sm border border-slate-100">
+                      {msg.sender === 'user' ? <UserIcon className="w-4 h-4" /> : <img src="/images/robot-avatar.png" alt="Bot" className="h-full w-full object-cover" />}
                     </div>
 
                     <div className={`flex flex-col gap-1 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
@@ -446,8 +458,8 @@ export default function AIChatbot() {
           {isLoading && (
             <div className="flex justify-start">
               <div className="flex gap-2 max-w-[85%] flex-row">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-50 text-teal-700">
-                  <Bot className="w-4 h-4" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-50 text-teal-700 overflow-hidden shadow-sm border border-slate-100">
+                  <img src="/images/robot-avatar.png" alt="Bot" className="h-full w-full object-cover" />
                 </div>
                 <div className="flex h-[38px] items-center gap-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm">
                   <Loader2 className="h-4 w-4 animate-spin text-teal-700 motion-reduce:animate-none" aria-hidden="true" />
