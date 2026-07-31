@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { upload } from '../../utils/cloudinary.js'
+import { newsUpload } from '../../utils/cloudinary.js'
 import { verifyToken, requireRole } from '../../middlewares/auth.middleware.js'
 import { ok, fail } from '../../utils/response.js'
 import {
@@ -13,7 +13,7 @@ const router = Router()
 
 router.use(verifyToken, requireRole('receptionist', 'admin'))
 
-router.post('/upload', upload.single('image'), (req, res) => {
+router.post('/upload', newsUpload.single('image'), (req, res) => {
   try {
     if (!req.file) return fail(res, 400, 'Không tìm thấy file ảnh')
     return ok(res, { url: req.file.path }, 'Tải ảnh tin tức thành công')

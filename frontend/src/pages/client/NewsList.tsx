@@ -4,6 +4,7 @@ import { newsService } from '@/services/news.service'
 import Breadcrumb from '@/components/common/Breadcrumb'
 import Empty from '@/components/common/Empty'
 import Skeleton from '@/components/common/Skeleton'
+import { getNewsImageSrcSet, getNewsImageUrl } from '@/utils/newsImage'
 import type { NewsArticle } from '@/types'
 import { RouteTransition } from '@/components/client/ClientMotion'
 
@@ -114,9 +115,16 @@ export default function NewsList() {
             >
               <div className="aspect-[16/10] w-full bg-slate-100 rounded-xl overflow-hidden">
                 <img
-                  src={featuredItem.image}
+                  src={getNewsImageUrl(featuredItem.image, { width: 960, height: 600 })}
+                  srcSet={getNewsImageSrcSet(featuredItem.image, [
+                    { width: 640, height: 400 },
+                    { width: 960, height: 600 },
+                    { width: 1280, height: 800 },
+                  ])}
+                  sizes="(min-width: 768px) 50vw, calc(100vw - 32px)"
                   alt={featuredItem.title}
                   className="h-full w-full object-cover group-hover:scale-[1.02] transition-transform duration-300 ease-out"
+                  decoding="async"
                 />
               </div>
               <div className="text-left space-y-4 pr-4">
@@ -150,9 +158,17 @@ export default function NewsList() {
                   <div>
                     <div className="aspect-video w-full bg-slate-100 overflow-hidden">
                       <img
-                        src={n.image}
+                        src={getNewsImageUrl(n.image, { width: 720, height: 405 })}
+                        srcSet={getNewsImageSrcSet(n.image, [
+                          { width: 480, height: 270 },
+                          { width: 720, height: 405 },
+                          { width: 960, height: 540 },
+                        ])}
+                        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, calc(100vw - 32px)"
                         alt={n.title}
                         className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300 ease-out"
+                        loading="lazy"
+                        decoding="async"
                       />
                     </div>
                     <div className="p-5 space-y-3 text-left">
