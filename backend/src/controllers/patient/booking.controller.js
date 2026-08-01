@@ -479,6 +479,12 @@ export async function createBooking(req, res) {
     const appointmentDate = parseDateOnly(ngay_kham)
     if (!appointmentDate) return rollbackFail(400, 'Ngày khám không hợp lệ')
 
+    // Phòng khám nghỉ Chủ nhật (getDay() === 0). Chặn phòng thủ ở backend
+    // để tránh đặt lịch qua API trực tiếp vào ngày nghỉ.
+    if (appointmentDate.getUTCDay() === 0) {
+      return rollbackFail(400, 'Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
+    }
+
     // ── Tự gán bác sĩ (rule mục 12) ─────────────────────────────────────────
     // Chạy TRƯỚC mọi kiểm tra khác để phần dưới không phải biết khách đã đi đường nào:
     // sau bước này luôn có đủ doctor_id + schedule_id + slot_id như đường chọn đích danh.
