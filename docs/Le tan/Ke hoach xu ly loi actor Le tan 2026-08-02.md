@@ -449,6 +449,8 @@ Khách/lễ tân yêu cầu hủy
 
 **Mức ưu tiên:** P0. **Phụ thuộc:** LT-00, LT-09.
 
+**Tình trạng triển khai 2026-08-02:** đã khóa các thao tác lễ tân có thể làm lệch lịch khi bệnh nhân đã vào hàng đợi hoặc đang trong phòng. `reschedule` và `cancel` dùng `assertReceptionistAppointmentAction()` nên bị chặn khi `LichHen.status='in_progress'` hoặc `HangDoi.trang_thai='trong_phong'`; frontend nhận `allowed_actions=[]` và `lock_reason` từ backend. Luồng thanh toán mock của lễ tân cũng được gia cố: chỉ tạo/xác nhận QR khi lịch còn `pending`, tránh ghi đè nhầm lịch đã check-in/đang khám về `confirmed`.
+
 **Lỗi/gap hiện tại:** nếu lễ tân có thể dời một lịch đang `in_progress`, bác sĩ, phòng khám, hàng đợi và hồ sơ khám sẽ cùng tham chiếu các dữ liệu không còn nhất quán.
 
 **Quy tắc:**

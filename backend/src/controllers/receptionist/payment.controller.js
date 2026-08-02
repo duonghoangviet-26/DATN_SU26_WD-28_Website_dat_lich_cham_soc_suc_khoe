@@ -171,6 +171,9 @@ async function finalizePendingPayment({ payment, appointment, actorUserId, actor
   if (payment.status !== 'pending') {
     throw Object.assign(new Error('Chi co the xac nhan giao dich dang cho thanh toan'), { statusCode: 409 })
   }
+  if (appointment.status !== 'pending') {
+    throw Object.assign(new Error(`Chi co the xac nhan thanh toan cho lich dang cho xu ly (hien tai: ${appointment.status})`), { statusCode: 409 })
+  }
 
   const oldStatus = appointment.status
   const oldPaymentStatus = appointment.payment_status
@@ -246,6 +249,9 @@ export const createMockVnpaySession = async (req, res) => {
 
     const { payment, appointment, invoice } = bundle
     if (payment.status !== 'pending') return fail(res, 409, 'Giao dich nay khong con o trang thai cho thanh toan')
+    if (appointment.status !== 'pending') {
+      return fail(res, 409, `Chi tao QR thanh toan cho lich dang cho xu ly (hien tai: ${appointment.status})`)
+    }
 
     const gateway = getGatewayResponseObject(payment)
     const existingExpiry = toDateOrNull(gateway.expires_at)
