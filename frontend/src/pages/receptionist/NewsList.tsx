@@ -179,7 +179,7 @@ export default function ReceptionistNewsList() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-slate-600">{item.author_name || 'VitaFamily'}</td>
+                    <td className="px-5 py-4 text-slate-600">{item.author_name || 'ViteFamily'}</td>
                     <td className="px-5 py-4">
                       <Badge color={STATUS_COLOR[item.status]}>{STATUS_LABEL[item.status]}</Badge>
                     </td>

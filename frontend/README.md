@@ -1,6 +1,6 @@
-# VitaFamily — Frontend (Giao diện)
+# ViteFamily — Frontend (Giao diện)
 
-Giao diện người dùng hệ thống VitaFamily. **React 18 + Vite + TailwindCSS**.
+Giao diện người dùng hệ thống ViteFamily. **React 18 + Vite + TailwindCSS**.
 
 ## Chạy thử
 

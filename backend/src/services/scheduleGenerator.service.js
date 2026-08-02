@@ -36,7 +36,7 @@ export function phanBoOnlineTheoKhung(soKhung, soSlotMoiKhung, tyLeOnlinePhanTra
   return onlinePerKhung.map((online) => Math.min(online, soSlotMoiKhung))
 }
 
-// Weekly schedule generator for VitaFamily private clinic.
+// Weekly schedule generator for ViteFamily private clinic.
 // The clinic works Monday -> Sunday and always excludes 11:30 -> 13:30.
 export const DEFAULT_SLOT_TIMES = [
   ['08:00', '08:30'], ['08:30', '09:00'], ['09:00', '09:30'], ['09:30', '10:00'],

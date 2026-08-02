@@ -69,7 +69,7 @@ test('patient books a specialty time slot without choosing a doctor', async ({ p
             vnp_txn_ref: 'TXN-BROWSER-E2E',
             bank_code: 'VNBANK',
             locale: 'vn',
-            merchant_name: 'VitaFamily',
+            merchant_name: 'ViteFamily',
             merchant_code: 'VITEFAMILY',
             note: null,
             mock_status: 'waiting_for_customer',

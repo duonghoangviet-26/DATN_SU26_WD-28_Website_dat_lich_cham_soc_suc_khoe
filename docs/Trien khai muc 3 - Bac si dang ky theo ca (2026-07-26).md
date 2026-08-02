@@ -7,7 +7,7 @@ Rule: `.claude/rules/lich-lam-viec-bac-si.md` mục 3 + 10.B/10.C.
 
 ## 1. Vấn đề
 
-`scheduleGenerator` sinh lịch **full-day cho MỌI bác sĩ đang hoạt động, cả 7 ngày trong tuần**. Sai nghiệp vụ: bác sĩ VitaFamily không full-time, họ đăng ký theo **ca**. Hậu quả: bệnh nhân thấy chỗ trống ở những ca thực tế không có ai trực.
+`scheduleGenerator` sinh lịch **full-day cho MỌI bác sĩ đang hoạt động, cả 7 ngày trong tuần**. Sai nghiệp vụ: bác sĩ ViteFamily không full-time, họ đăng ký theo **ca**. Hậu quả: bệnh nhân thấy chỗ trống ở những ca thực tế không có ai trực.
 
 ---
 

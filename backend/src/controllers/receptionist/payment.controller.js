@@ -257,7 +257,7 @@ export const createMockVnpaySession = async (req, res) => {
         ...gateway,
         provider: 'vnpay',
         mode: 'mock',
-        merchant_name: 'VitaFamily',
+        merchant_name: 'ViteFamily',
         merchant_code: 'VITAFAMILY',
         note: invoice?.so_hoa_don || payment.ma_giao_dich,
         bank_code: 'VNBANK',

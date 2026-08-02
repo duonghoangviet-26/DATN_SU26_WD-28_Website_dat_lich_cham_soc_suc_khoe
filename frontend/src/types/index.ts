@@ -1,5 +1,5 @@
 // Kiểu dữ liệu dùng chung toàn project.
-// Khớp với cấu trúc bảng trong VitaFamily_Database.sql.
+// Khớp với cấu trúc bảng trong ViteFamily_Database.sql.
 
 export type Role = "user" | "patient" | "doctor" | "admin" | "receptionist";
 export type UserStatus = "active" | "locked";

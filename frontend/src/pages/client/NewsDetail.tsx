@@ -65,7 +65,7 @@ export default function NewsDetail() {
               {article.title}
             </h1>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-400">
-              <span>Tác giả: <strong className="text-slate-600 font-semibold">{article.author_name || 'VitaFamily'}</strong></span>
+              <span>Tác giả: <strong className="text-slate-600 font-semibold">{article.author_name || 'ViteFamily'}</strong></span>
               <span>•</span>
               <span>{new Date(article.created_at).toLocaleDateString('vi-VN')}</span>
               <span>•</span>

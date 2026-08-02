@@ -15,7 +15,7 @@ interface Hospital {
 }
 
 export const mockHospitals: Hospital[] = [
-  { id: 1, ten: 'Bệnh viện Đa khoa VitaFamily', dia_chi: '123 Đường Phổ Quang, Tân Bình, TP.HCM', so_dien_thoai: '1900 1234', gio_lam_viec: '07:00 - 21:00', status: 'active', ngay_tao: '2024-01-01' },
+  { id: 1, ten: 'Bệnh viện Đa khoa ViteFamily', dia_chi: '123 Đường Phổ Quang, Tân Bình, TP.HCM', so_dien_thoai: '1900 1234', gio_lam_viec: '07:00 - 21:00', status: 'active', ngay_tao: '2024-01-01' },
   { id: 2, ten: 'Phòng khám Vita cơ sở 2', dia_chi: '456 Đường Nguyễn Huệ, Quận 1, TP.HCM', so_dien_thoai: '1900 5678', gio_lam_viec: '08:00 - 18:00', status: 'active', ngay_tao: '2024-02-10' },
 ]
 

@@ -1,6 +1,6 @@
 # RULE (BẤT BIẾN) — Nghiệp vụ Lịch làm việc bác sĩ / Lịch hẹn
 
-> ⛔ **KHÔNG ĐƯỢC TỰ Ý THAY ĐỔI nghiệp vụ này.** Đây là quy tắc đã chốt của VitaFamily.
+> ⛔ **KHÔNG ĐƯỢC TỰ Ý THAY ĐỔI nghiệp vụ này.** Đây là quy tắc đã chốt của ViteFamily.
 > Mọi phân tích, thiết kế DB, API, UI về lịch làm việc / lịch hẹn / hàng đợi PHẢI tuân thủ.
 > Muốn đổi quy tắc → phải được người dùng yêu cầu rõ ràng, không tự suy diễn.
 > Chi tiết đầy đủ: `docs/Lịch làm việc bác sĩ.md`.

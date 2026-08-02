@@ -11,7 +11,7 @@ const heroSlides = [
     headline: 'Chăm sóc đúng chuyên khoa, an tâm từ lần khám đầu tiên.',
     subheadline: 'Thăm khám kỹ lưỡng cho cả người lớn và trẻ em, với lịch hẹn chủ động và hướng điều trị được giải thích rõ ràng.',
     image: '/images/ent-clinic-hero.jpg',
-    imageAlt: 'Bác sĩ thăm khám tai cho người bệnh tại phòng khám VitaFamily',
+    imageAlt: 'Bác sĩ thăm khám tai cho người bệnh tại phòng khám ViteFamily',
   },
   {
     tag: 'Không gian khám riêng tư, chu đáo',
@@ -23,7 +23,7 @@ const heroSlides = [
   {
     tag: 'Đồng hành cùng sức khỏe cả gia đình',
     headline: 'Hiểu đúng triệu chứng, chăm sóc đúng hướng.',
-    subheadline: 'Từ những dấu hiệu nhỏ ở tai, mũi, họng đến kế hoạch theo dõi rõ ràng sau buổi khám, VitaFamily luôn đồng hành cùng bạn.',
+    subheadline: 'Từ những dấu hiệu nhỏ ở tai, mũi, họng đến kế hoạch theo dõi rõ ràng sau buổi khám, ViteFamily luôn đồng hành cùng bạn.',
     image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=1800&auto=format&fit=crop&q=88',
     imageAlt: 'Bác sĩ tư vấn và chăm sóc người bệnh',
   },
@@ -120,7 +120,7 @@ export default function HeroBanner() {
       className="relative h-[calc(100svh-6.5rem)] min-h-[460px] max-h-[680px] overflow-hidden bg-slate-950 text-white"
       role="region"
       aria-roledescription="carousel"
-      aria-label="Giới thiệu phòng khám VitaFamily"
+      aria-label="Giới thiệu phòng khám ViteFamily"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -150,32 +150,45 @@ export default function HeroBanner() {
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-transparent to-slate-950/20" aria-hidden="true" />
 
       <div className="relative z-10 mx-auto flex h-full max-w-7xl items-center px-14 py-8 sm:px-20 sm:py-12 lg:px-24">
-        <AnimatePresence mode="wait" initial={false}>
+        <AnimatePresence mode="wait">
           <motion.div
             key={activeSlide}
             className="max-w-4xl pb-14 sm:pb-10"
-            initial={{ y: 28, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -16, opacity: 0 }}
-            transition={{
-              duration: 0.5,
-              delay: 0.12,
-              ease: [0.16, 1, 0.3, 1],
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            variants={{
+              hidden: { opacity: 0 },
+              show: {
+                opacity: 1,
+                transition: {
+                  staggerChildren: 0.1,
+                  delayChildren: 0.2,
+                },
+              },
+              exit: {
+                opacity: 0,
+                y: -20,
+                transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
+              },
             }}
           >
-            <p className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/30 bg-slate-950/30 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm backdrop-blur-sm sm:gap-2.5 sm:px-4 sm:py-2 sm:text-sm">
-              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-teal-300 motion-reduce:animate-none" aria-hidden="true" />
-              <span className="truncate">{activeHeroSlide.tag}</span>
-            </p>
+            <motion.div variants={{ hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } } }}>
+              <p className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/30 bg-slate-950/30 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm backdrop-blur-sm sm:gap-2.5 sm:px-4 sm:py-2 sm:text-sm">
+                <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-teal-300 motion-reduce:animate-none" aria-hidden="true" />
+                <span className="truncate">{activeHeroSlide.tag}</span>
+              </p>
+            </motion.div>
 
-            <h1 className="mt-4 max-w-4xl text-balance text-[clamp(2rem,4vw,4rem)] font-black leading-[1.02] tracking-[-0.035em] text-white drop-shadow-xl sm:mt-5 sm:leading-[0.98]">
+            <motion.h1 variants={{ hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } } }} className="mt-4 max-w-4xl text-balance text-[clamp(2rem,4vw,4rem)] font-black leading-[1.02] tracking-[-0.035em] text-white drop-shadow-xl sm:mt-5 sm:leading-[0.98]">
               {activeHeroSlide.headline}
-            </h1>
-            <p className="mt-4 line-clamp-2 max-w-2xl text-pretty text-sm font-medium leading-6 text-white/90 drop-shadow-lg sm:mt-5 sm:line-clamp-none sm:text-lg sm:leading-8">
+            </motion.h1>
+            
+            <motion.p variants={{ hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } } }} className="mt-4 line-clamp-2 max-w-2xl text-pretty text-sm font-medium leading-6 text-white/90 drop-shadow-lg sm:mt-5 sm:line-clamp-none sm:text-lg sm:leading-8">
               {activeHeroSlide.subheadline}
-            </p>
+            </motion.p>
 
-            <div className="mt-5 flex flex-wrap items-center gap-3 sm:mt-7">
+            <motion.div variants={{ hidden: { opacity: 0, y: 30 }, show: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } } }} className="mt-5 flex flex-wrap items-center gap-3 sm:mt-7">
               <Link
                 to="/booking"
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-teal-500 px-6 py-3.5 text-sm font-bold text-white shadow-[0_6px_8px_rgba(0,0,0,0.2)] transition-colors duration-200 hover:bg-teal-400 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-950"
@@ -189,7 +202,7 @@ export default function HeroBanner() {
               >
                 Gọi 0365 747 888
               </a>
-            </div>
+            </motion.div>
           </motion.div>
         </AnimatePresence>
       </div>

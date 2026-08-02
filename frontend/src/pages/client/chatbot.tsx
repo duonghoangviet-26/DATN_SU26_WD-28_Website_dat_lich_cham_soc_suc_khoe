@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Mic, MicOff, Sun, Moon, Move } from 'lucide-react'
+import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Mic, MicOff, Sun, Moon, Move, Phone, CalendarDays } from 'lucide-react'
 import type { DoctorProfile } from '@/types'
 import { fallbackLLM } from '@/services/chatbot.service'
 import { patientBookingService } from '@/services/patient-booking.service'
@@ -109,7 +109,7 @@ export default function AIChatbot() {
 
       // 0.5. Phân tích List Services
       if (parseListServicesIntent(text)) {
-        addBotMessage(`VitaFamily chỉ phục vụ chuyên khoa Tai Mũi Họng. Danh mục hiện có gồm khám chuyên khoa và các kỹ thuật Tai Mũi Họng được phòng khám cập nhật theo tình trạng hoạt động. Bạn có thể xem bảng dịch vụ để biết mô tả và chi phí hiện tại.`, {
+        addBotMessage(`ViteFamily chỉ phục vụ chuyên khoa Tai Mũi Họng. Danh mục hiện có gồm khám chuyên khoa và các kỹ thuật Tai Mũi Họng được phòng khám cập nhật theo tình trạng hoạt động. Bạn có thể xem bảng dịch vụ để biết mô tả và chi phí hiện tại.`, {
           label: 'Xem bảng giá dịch vụ',
           route: '/dich-vu'
         })
@@ -288,24 +288,53 @@ export default function AIChatbot() {
   return (
     <>
       <AnimatePresence>
-      {!isOpen && <motion.button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/50"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.8 }}
-        transition={{ type: "spring", stiffness: 260, damping: 20 }}
-        aria-label="Mở trợ lý đặt lịch"
-      >
-        <div className="relative h-full w-full rounded-full overflow-hidden border-[3px] border-white shadow-md bg-teal-50">
-           <img src="/images/robot-avatar.png" alt="Trợ lý ảo" className="h-full w-full object-cover" />
-        </div>
-        <span className="absolute -right-1 -top-1 flex h-4 w-4">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
-          <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-red-500"></span>
-        </span>
-      </motion.button>}
+      {!isOpen && (
+        <motion.div
+          className="fixed bottom-6 right-6 z-50 flex flex-col sm:flex-row items-end sm:items-center gap-3 pointer-events-none"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          transition={{ type: "spring", stiffness: 260, damping: 20 }}
+        >
+          {/* Nút Chatbot */}
+          <div className="group relative flex items-center gap-3 pointer-events-auto">
+            <div className="absolute right-full mr-3 flex items-center justify-center rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-lg border border-slate-100 whitespace-nowrap opacity-0 invisible scale-95 origin-right transition-all duration-200 group-hover:opacity-100 group-hover:visible group-hover:scale-100">
+              Trợ lý ảo ViteFamily
+              <div className="absolute top-1/2 -right-1 h-2 w-2 -translate-y-1/2 rotate-45 border-r border-t border-slate-100 bg-white" />
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsOpen(true)}
+              className="flex items-center justify-center gap-2 rounded-full bg-[#0068ff] p-3 sm:px-4 sm:py-2.5 text-sm font-bold text-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-transform group-hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/50"
+              aria-label="Mở trợ lý đặt lịch"
+            >
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[#0068ff]">
+                <MessageCircle className="h-3 w-3 fill-current" />
+              </div>
+              <span className="hidden sm:inline">Trợ lý ảo 24/7</span>
+            </button>
+          </div>
+
+          {/* Nút Gọi Điện */}
+          <a
+            href="tel:0365747888"
+            className="pointer-events-auto flex items-center justify-center gap-2 rounded-full bg-[#f97316] p-3 sm:px-4 sm:py-2.5 text-sm font-bold text-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-transform hover:scale-105"
+          >
+            <Phone className="h-5 w-5 fill-current" />
+            <span className="hidden sm:inline">0365 747 888</span>
+          </a>
+
+          {/* Nút Đặt Lịch */}
+          <button
+            type="button"
+            onClick={() => navigate('/booking')}
+            className="pointer-events-auto flex items-center justify-center gap-2 rounded-full bg-[#00894b] p-3 sm:px-4 sm:py-2.5 text-sm font-bold text-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-transform hover:scale-105"
+          >
+            <CalendarDays className="h-5 w-5" />
+            <span className="hidden sm:inline">Đặt lịch</span>
+          </button>
+        </motion.div>
+      )}
       </AnimatePresence>
 
       <AnimatePresence>

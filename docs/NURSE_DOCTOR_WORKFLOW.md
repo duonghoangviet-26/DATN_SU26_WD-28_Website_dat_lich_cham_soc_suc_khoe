@@ -1,4 +1,4 @@
-# VitaFamily — Phân tích & Thiết kế luồng Y tá ↔ Bác sĩ
+# ViteFamily — Phân tích & Thiết kế luồng Y tá ↔ Bác sĩ
 
 > Tài liệu phân tích nghiệp vụ + kiến trúc cho vai trò **Y tá (Nurse)**, mối quan hệ với **Bác sĩ**,
 > lịch làm việc, lịch hẹn, hồ sơ khám, đơn thuốc, dịch vụ cộng thêm.

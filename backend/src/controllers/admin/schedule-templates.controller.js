@@ -8,7 +8,7 @@ import { ok, created, fail } from '../../utils/response.js'
 // C — Mau dang ky ca lam viec cua bac si (rule muc 3 + 10.B)
 // Routes: /api/admin/schedule-templates
 // ============================================================
-// Bac si VitaFamily KHONG full-time. Bang nay la NGUON de generator biet ca nao that su
+// Bac si ViteFamily KHONG full-time. Bang nay la NGUON de generator biet ca nao that su
 // co nguoi truc; truoc day generator tu sinh full-day cho moi bac si, sai nghiep vu.
 //
 // Hai rang buoc bat bien duoc gac O DAY (khong gac o `LichLamViec`):
