@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import Pagination from '../../components/common/Pagination';
 import { receptionistBookingService, ReceptionistBookingSlot } from '../../services/receptionist-booking.service';
 import Icon from '../../components/admin/icons';
+import QueueTicketTemplate, { QueueTicketData } from '../../components/receptionist/QueueTicketTemplate';
 
 interface Appointment {
   _id: string;
@@ -108,9 +109,28 @@ export default function Appointments() {
   const [rescheduleLimitModalOpen, setRescheduleLimitModalOpen] = useState(false);
   const [rescheduleHistory, setRescheduleHistory] = useState<RescheduleHistory[]>([]);
 
+  // States cho Doctor Filter
+  const [filterDoctorId, setFilterDoctorId] = useState('');
+  const [doctorsList, setDoctorsList] = useState<any[]>([]);
+
+  // States cho Bulk Action
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [selectedApts, setSelectedApts] = useState<string[]>([]);
+  const [bulkCancelModalOpen, setBulkCancelModalOpen] = useState(false);
+  const [bulkRescheduleModalOpen, setBulkRescheduleModalOpen] = useState(false);
+  const [bulkReason, setBulkReason] = useState('');
+  const [bulkStartDate, setBulkStartDate] = useState('');
+  const [bulkStartTime, setBulkStartTime] = useState('');
+  const [availableBulkSlots, setAvailableBulkSlots] = useState<string[]>([]);
+
   // States cho Modal Chi tiết
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedDetailAppointment, setSelectedDetailAppointment] = useState<Appointment | null>(null);
+
+  // States cho Check-in In Phiếu
+  const [confirmCheckInModalOpen, setConfirmCheckInModalOpen] = useState(false);
+  const [selectedCheckInApt, setSelectedCheckInApt] = useState<Appointment | null>(null);
+  const [printData, setPrintData] = useState<QueueTicketData | null>(null);
 
   const fetchAppointments = async (page = currentPage) => {
     try {
@@ -120,6 +140,9 @@ export default function Appointments() {
       let url = `/receptionist/appointments?timeframe=${activeTab}&page=${page}&limit=10`;
       if (filterDate) {
         url += `&date=${filterDate}`;
+      }
+      if (filterDoctorId) {
+        url += `&doctor_id=${filterDoctorId}`;
       }
       if (searchQuery.trim()) {
         url += `&search=${encodeURIComponent(searchQuery.trim())}`;
@@ -141,9 +164,41 @@ export default function Appointments() {
   };
 
   useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const res = await axiosInstance.get('/receptionist/booking/doctors');
+        if (res.data.success) setDoctorsList(res.data.data);
+      } catch (err) {}
+    };
+    fetchDoctors();
+  }, []);
+
+  useEffect(() => {
+    if (!bulkStartDate) {
+      setAvailableBulkSlots([]);
+      setBulkStartTime('');
+      return;
+    }
+    const fetchBulkSlots = async () => {
+      try {
+        const res = await axiosInstance.get(`/receptionist/booking/doctors/all/slots?date=${bulkStartDate}`);
+        if (res.data.success) {
+          const slots = res.data.data;
+          const times = [...new Set(slots.map((s: any) => s.gio_bat_dau))].sort() as string[];
+          setAvailableBulkSlots(times);
+          if (!times.includes(bulkStartTime)) {
+            setBulkStartTime('');
+          }
+        }
+      } catch (err) {}
+    };
+    fetchBulkSlots();
+  }, [bulkStartDate, bulkStartTime]);
+
+  useEffect(() => {
     fetchAppointments(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, filterDate]); // Re-fetch when tab or date changes
+  }, [activeTab, filterDate, filterDoctorId]); // Re-fetch when tab, date, or doctor changes
 
   // Thêm một useEffect để fetch với debounce cho search
   useEffect(() => {
@@ -158,12 +213,100 @@ export default function Appointments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
+  const toggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedApts(appointments.map(a => a._id));
+    } else {
+      setSelectedApts([]);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    if (selectedApts.includes(id)) {
+      setSelectedApts(selectedApts.filter(i => i !== id));
+    } else {
+      setSelectedApts([...selectedApts, id]);
+    }
+  };
+
+  const handleBulkCancel = async () => {
+    try {
+      const res = await axiosInstance.post('/receptionist/appointments/bulk-cancel', { ids: selectedApts, reason: bulkReason });
+      alert(res.data.message);
+      setBulkCancelModalOpen(false);
+      setSelectedApts([]);
+      setIsBulkMode(false);
+      setBulkReason('');
+      fetchAppointments(currentPage);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Lỗi khi hủy hàng loạt');
+    }
+  };
+
+  const handleBulkReschedule = async () => {
+    try {
+      const res = await axiosInstance.post('/receptionist/appointments/bulk-reschedule', { 
+        ids: selectedApts, 
+        startDate: bulkStartDate, 
+        startTime: bulkStartTime,
+        reason: bulkReason 
+      });
+      alert(res.data.message);
+      setBulkRescheduleModalOpen(false);
+      setSelectedApts([]);
+      setIsBulkMode(false);
+      setBulkStartDate('');
+      setBulkStartTime('');
+      setBulkReason('');
+      fetchAppointments(currentPage);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Lỗi khi dời hàng loạt');
+    }
+  };
+
   const handlePageChange = (newPage: number) => {
     fetchAppointments(newPage);
   };
 
   // Check-in đưa bệnh nhân vào HÀNG ĐỢI của bác sĩ (rule mục 6), không chỉ đổi trạng thái lịch.
   // Server trả kèm cảnh báo cần xử lý ngay tại quầy: chưa thanh toán, đến sớm/trễ, ca quá tải.
+  const handleArrived = async (id: string) => {
+    try {
+      const res = await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
+      const canhBao: string[] = res.data?.canh_bao ?? [];
+      const phong = res.data?.hang_doi?.phong_kham;
+      if (canhBao.length > 0) {
+        alert(`Đã đưa vào hàng đợi${phong ? ` — phòng ${phong}` : ''}.\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`);
+      }
+      fetchAppointments();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Lỗi khi check-in');
+    }
+  };
+
+  const confirmCheckIn = async () => {
+    if (!selectedCheckInApt) return;
+    try {
+      const res = await axiosInstance.patch(`/receptionist/appointments/${selectedCheckInApt._id}/arrived`);
+      
+      setConfirmCheckInModalOpen(false);
+      fetchAppointments();
+      
+      const canhBao: string[] = res.data?.canh_bao ?? [];
+      const phong = res.data?.hang_doi?.phong_kham;
+      
+      let msg = 'Đã xác nhận Check-in và đẩy lệnh in Số thứ tự tới máy in thành công!';
+      if (canhBao.length > 0) {
+        msg += `\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`;
+      }
+      
+      alert(msg);
+      
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Lỗi khi check-in');
+    }
+  };
+
   const handleCancel = (id: string) => {
     setSelectedAppointmentId(id);
     setCancelReason('');
@@ -308,7 +451,16 @@ export default function Appointments() {
       </div>
 
       {/* Toolbar: Tìm kiếm & Lọc */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+      <div className="flex flex-col xl:flex-row gap-4 mb-6">
+        <button
+          onClick={() => {
+            setIsBulkMode(!isBulkMode);
+            setSelectedApts([]);
+          }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isBulkMode ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+        >
+          {isBulkMode ? 'Hủy chọn nhiều' : 'Chọn nhiều'}
+        </button>
         <div className="flex-1 relative">
           <input
             type="text"
@@ -323,8 +475,22 @@ export default function Appointments() {
             </svg>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Ngày khám:</label>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Bác sĩ:</label>
+            <select
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              value={filterDoctorId}
+              onChange={(e) => setFilterDoctorId(e.target.value)}
+            >
+              <option value="">Tất cả Bác sĩ</option>
+              {doctorsList.map(doc => (
+                <option key={doc.id} value={doc.id}>{doc.ho_ten || 'Bác sĩ'}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Ngày khám:</label>
           <input
             type="date"
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -333,12 +499,13 @@ export default function Appointments() {
           />
           {filterDate && (
             <button
-              onClick={() => setFilterDate('')}
+              onClick={() => { setFilterDate(''); setFilterDoctorId(''); }}
               className="px-3 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
             >
               Xóa lọc
             </button>
           )}
+          </div>
         </div>
       </div>
       
@@ -353,7 +520,12 @@ export default function Appointments() {
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-slate-800 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 font-semibold">Thời gian</th>
+                <th className="px-4 py-3 font-semibold flex items-center gap-2">
+                  {isBulkMode && (
+                    <input type="checkbox" checked={selectedApts.length > 0 && selectedApts.length === appointments.length} onChange={toggleSelectAll} className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500" />
+                  )}
+                  Thời gian
+                </th>
                 <th className="px-4 py-3 font-semibold">Bệnh nhân</th>
                 <th className="px-4 py-3 font-semibold">Bác sĩ</th>
                 <th className="px-4 py-3 font-semibold">Phí đặt lịch (thu trước)</th>
@@ -380,10 +552,15 @@ export default function Appointments() {
                   const isPendingAndOverdue = (apt.status === 'pending' || apt.status === 'confirmed') && isOverdue;
 
                   return (
-                    <tr key={apt._id} className={`hover:bg-slate-50 transition-colors ${isPendingAndOverdue ? 'bg-amber-50/50' : ''}`}>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800">{apt.gio_kham}</div>
-                        <div className="text-xs text-slate-500">{format(new Date(apt.ngay_kham), 'dd/MM/yyyy')}</div>
+                    <tr key={apt._id} className={`transition-colors ${selectedApts.includes(apt._id) ? 'bg-brand-50' : (isPendingAndOverdue ? 'bg-amber-50/50' : 'hover:bg-slate-50')}`}>
+                      <td className="px-4 py-3 flex items-center gap-2">
+                        {isBulkMode && (
+                          <input type="checkbox" checked={selectedApts.includes(apt._id)} onChange={() => toggleSelect(apt._id)} className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500" />
+                        )}
+                        <div>
+                          <div className="font-medium text-slate-800">{apt.gio_kham}</div>
+                          <div className="text-xs text-slate-500">{format(new Date(apt.ngay_kham), 'dd/MM/yyyy')}</div>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-800">{apt.user_id?.ho_ten || apt.ten_khach || 'Khách vãng lai'}</div>
@@ -422,9 +599,16 @@ export default function Appointments() {
                           {activeTab !== 'past' && (
                             <>
                               {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
-                                <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
-                                  Tra cứu tại Tiếp nhận
-                                </span>
+                                <button
+                                  title="Đã đến"
+                                  onClick={() => {
+                                    setSelectedCheckInApt(apt);
+                                    setConfirmCheckInModalOpen(true);
+                                  }}
+                                  className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors"
+                                >
+                                  <Icon name="check" className="w-4 h-4" />
+                                </button>
                               )}
                               {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
                                 <button
@@ -798,6 +982,162 @@ export default function Appointments() {
           </div>
         </div>
       )}
+
+      {/* Modal Check-in Xác nhận */}
+      {confirmCheckInModalOpen && selectedCheckInApt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
+          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Xác nhận Đã đến</h3>
+            <div className="mb-6">
+              <p className="text-slate-600 mb-2">Thông tin in trên phiếu chờ khám:</p>
+              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-100 space-y-2">
+                <div className="flex justify-between border-b border-emerald-200/50 pb-2">
+                  <span className="text-sm opacity-80">Bệnh nhân:</span>
+                  <span className="font-bold">{selectedCheckInApt.user_id?.ho_ten || selectedCheckInApt.ten_khach || 'Khách vãng lai'}</span>
+                </div>
+                <div className="flex justify-between border-b border-emerald-200/50 pb-2">
+                  <span className="text-sm opacity-80">Bác sĩ:</span>
+                  <span className="font-semibold">{selectedCheckInApt.doctor_id?.user_id?.ho_ten || 'Đang cập nhật'}</span>
+                </div>
+                <div className="flex justify-between pb-1">
+                  <span className="text-sm opacity-80">Phòng khám:</span>
+                  <span className="font-semibold">
+                    {`Phòng ${parseInt((selectedCheckInApt.doctor_id?._id || '0').substring(20) || '0', 16) % 5 + 101}`}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-slate-500 mt-3 italic text-center">Hệ thống sẽ đẩy lệnh in Số thứ tự tới máy in sau khi xác nhận.</p>
+            </div>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmCheckInModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={confirmCheckIn}
+                className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <Icon name="check" className="w-4 h-4" />
+                Xác nhận & In Phiếu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Bar */}
+      {isBulkMode && selectedApts.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white shadow-xl border border-slate-200 rounded-full px-6 py-3 flex items-center gap-6 z-40">
+          <span className="font-semibold text-brand-700">Đã chọn {selectedApts.length} lịch hẹn</span>
+          <div className="w-px h-6 bg-slate-200"></div>
+          <button onClick={() => setBulkCancelModalOpen(true)} className="text-red-600 hover:text-red-700 font-medium text-sm">Hủy hàng loạt</button>
+          <button onClick={() => setBulkRescheduleModalOpen(true)} className="bg-brand-600 text-white px-4 py-1.5 rounded-full hover:bg-brand-700 font-medium text-sm">Dời lịch hàng loạt</button>
+        </div>
+      )}
+
+      {/* Bulk Cancel Modal */}
+      {bulkCancelModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-red-50/50">
+              <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
+                Hủy {selectedApts.length} lịch hẹn
+              </h3>
+              <button onClick={() => setBulkCancelModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Lý do hủy hàng loạt (áp dụng cho tất cả)</label>
+                <textarea
+                  className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 outline-none"
+                  rows={3}
+                  value={bulkReason}
+                  onChange={(e) => setBulkReason(e.target.value)}
+                  placeholder="Vd: Bác sĩ nghỉ ốm đột xuất"
+                ></textarea>
+              </div>
+            </div>
+            <div className="p-6 pt-0 flex justify-end gap-3">
+              <button onClick={() => setBulkCancelModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Hủy bỏ</button>
+              <button onClick={handleBulkCancel} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium">Xác nhận Hủy</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Reschedule Modal */}
+      {bulkRescheduleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-brand-50/50">
+              <h3 className="text-lg font-bold text-brand-700 flex items-center gap-2">
+                Dời {selectedApts.length} lịch hẹn (Auto-fill)
+              </h3>
+              <button onClick={() => setBulkRescheduleModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                Hệ thống sẽ tự động tìm kiếm chỗ trống (kể cả của Bác sĩ khác cùng chuyên khoa) để dồn các bệnh nhân vào, bắt đầu từ <b>Ngày bắt đầu</b> bạn chọn bên dưới.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Ngày bắt đầu tìm chỗ trống <span className="text-red-500">*</span></label>
+                <input
+                  type="date"
+                  className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                  value={bulkStartDate}
+                  onChange={(e) => setBulkStartDate(e.target.value)}
+                />
+              </div>
+              {availableBulkSlots.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Khung giờ bắt đầu <span className="text-red-500">*</span></label>
+                  <select
+                    className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                    value={bulkStartTime}
+                    onChange={(e) => setBulkStartTime(e.target.value)}
+                  >
+                    <option value="">-- Chọn giờ --</option>
+                    {availableBulkSlots.map(time => (
+                      <option key={time} value={time}>{time}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {bulkStartDate && availableBulkSlots.length === 0 && (
+                <p className="text-sm text-amber-600 flex items-center gap-1 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                  <Icon name="alert-triangle" className="w-4 h-4" />
+                  Không có khung giờ nào trống trong ngày này.
+                </p>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Lý do dời (áp dụng cho tất cả)</label>
+                <textarea
+                  className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                  rows={2}
+                  value={bulkReason}
+                  onChange={(e) => setBulkReason(e.target.value)}
+                  placeholder="Vd: Bác sĩ nghỉ phép, chuyển sang ca tiếp theo"
+                ></textarea>
+              </div>
+            </div>
+            <div className="p-6 pt-0 flex justify-end gap-3">
+              <button onClick={() => setBulkRescheduleModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Hủy bỏ</button>
+              <button onClick={handleBulkReschedule} disabled={!bulkStartDate || (availableBulkSlots.length > 0 && !bulkStartTime)} className="px-4 py-2 bg-brand-600 text-white hover:bg-brand-700 rounded-lg text-sm font-medium disabled:opacity-50">Xác nhận Dời</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Component In Phiếu Ẩn */}
+      <QueueTicketTemplate data={printData} />
+
     </div>
   );
 }

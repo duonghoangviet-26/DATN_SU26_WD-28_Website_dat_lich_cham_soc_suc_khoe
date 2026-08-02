@@ -3,6 +3,7 @@ import axiosInstance from '../../services/axiosInstance';
 import { receptionistNotificationService, VirtualNotification } from '../../services/receptionist-notification.service';
 import Icon from '../../components/admin/icons';
 import { format } from 'date-fns';
+import { receptionistPaymentService } from '../../services/receptionist-payment.service';
 
 interface Appointment {
   _id: string;
@@ -30,7 +31,7 @@ interface PendingCheckin {
 export default function Dashboard() {
   const [totalToday, setTotalToday] = useState(0);
   const [waiting, setWaiting] = useState(0);
-
+  const [todayRevenue, setTodayRevenue] = useState(0);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [pendingCheckins, setPendingCheckins] = useState<PendingCheckin[]>([]);
   const [notifications, setNotifications] = useState<VirtualNotification[]>([]);
@@ -51,6 +52,11 @@ export default function Dashboard() {
           appointments.filter((a) => a.status === 'checked_in').length
         );
       }
+      
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const paymentRes = await receptionistPaymentService.getAll({ from: today, to: today, limit: 1000 });
+      setTodayRevenue(paymentRes.summary.paidAmount || 0);
+      
     } catch (err) {
       console.error('Lỗi khi lấy dữ liệu tổng quan:', err);
     }
@@ -90,6 +96,7 @@ export default function Dashboard() {
   // Check-in đưa bệnh nhân vào hàng đợi bác sĩ (rule mục 6) — xem chú thích ở Appointments.tsx.
   // --- Logic Lọc Dữ liệu cho Khung 2 & 3 ---
   
+
   // Khung 3: Lịch hẹn 4h tới
   const upcomingAppointments = allAppointments.filter((a) => {
     if (a.status !== 'pending' && a.status !== 'confirmed') return false;
@@ -115,10 +122,12 @@ export default function Dashboard() {
           <p className="text-slate-500 text-sm font-medium">Đang chờ khám</p>
           <p className="text-3xl font-bold text-brand-600 mt-2">{waiting}</p>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow opacity-60">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
           <p className="text-slate-500 text-sm font-medium">Doanh thu tại quầy</p>
-          <p className="text-3xl font-bold text-brand-600 mt-2">0 đ</p>
-          <p className="text-xs text-slate-400 mt-1">(Sắp ra mắt)</p>
+          <p className="text-3xl font-bold text-brand-600 mt-2">
+            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(todayRevenue)}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">Hôm nay</p>
         </div>
       </div>
 
