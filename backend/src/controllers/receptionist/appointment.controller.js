@@ -522,6 +522,67 @@ export const getDoctorOperationalStatuses = async (req, res) => {
 }
 
 // Tráº§n sá»‘ láº§n khÃ¡ch tá»± xin dá»i (rule má»¥c 5) â€” giá»‘ng `patient/reschedule.controller.js`.
+// ─── E-6: danh sách lịch CHƯA check-in bị ảnh hưởng bởi ca đang trễ ──────────
+// Thuần tính toán (filter + sort + map) — tách để unit test không cần Mongo.
+// Cùng khái niệm với `lich_chua_checkin_bi_anh_huong` trong getDoctorOperationalStatuses,
+// nhưng KHÔNG giới hạn top 5 (dashboard chỉ xem trước, màn điều phối lô cần đủ để chọn).
+export function buildOverloadAffectedList(appointments, now, doTrePhut) {
+  return appointments
+    .filter((appointment) => {
+      const slotTime = buildSlotDateTime(appointment.ngay_kham, appointment.gio_kham)
+      return !slotTime || slotTime.getTime() >= now.getTime()
+    })
+    .sort((a, b) => String(a.gio_kham).localeCompare(String(b.gio_kham)))
+    .map((appointment) => ({
+      appointment_id: appointment._id,
+      ma_lich_hen: appointment.ma_lich_hen ?? null,
+      ten_benh_nhan: appointment.user_id?.ho_ten ?? appointment.ten_khach ?? 'Khách hàng',
+      so_dien_thoai: appointment.user_id?.so_dien_thoai ?? appointment.so_dien_thoai_khach ?? null,
+      gio_kham: appointment.gio_kham,
+      status: appointment.status,
+      thoi_gian_tre_uoc_tinh_phut: doTrePhut,
+    }))
+}
+
+// GET /api/receptionist/appointments/overload-affected?doctor_id=&date=
+export async function getOverloadAffectedAppointments(req, res) {
+  try {
+    const { doctor_id: doctorId, date } = req.query
+    if (!doctorId || !mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({ success: false, message: 'Cần doctor_id hợp lệ' })
+    }
+
+    const todayStart = startOfDayUtc(date ?? new Date())
+    const todayEnd = new Date(todayStart)
+    todayEnd.setUTCDate(todayEnd.getUTCDate() + 1)
+    const now = new Date()
+
+    const appointments = await LichHen.find({
+      doctor_id: doctorId,
+      ngay_kham: { $gte: todayStart, $lt: todayEnd },
+      status: { $in: ['pending', 'confirmed'] },
+    })
+      .select('_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id')
+      .populate('user_id', 'ho_ten so_dien_thoai')
+      .lean()
+
+    const overflow = await kiemTraQuaTai(doctorId, now)
+    const lichHenBiAnhHuong = buildOverloadAffectedList(appointments, now, overflow.doTrePhut)
+
+    res.status(200).json({
+      success: true,
+      data: {
+        do_tre_ca_phut: overflow.doTrePhut,
+        ngung_nhan_walkin: overflow.ngungBanWalkIn,
+        chan_dat_online: overflow.chanDatOnline,
+        lich_hen: lichHenBiAnhHuong,
+      },
+    })
+  } catch (error) {
+    res.status(error.statusCode ?? 500).json({ success: false, message: error.message })
+  }
+}
+
 const TRAN_DOI_KHACH_YEU_CAU = 1
 
 // Slot cÃ²n nháº­n Ä‘Æ°á»£c ngÆ°á»i má»›i. CÃ¹ng Ä‘á»‹nh nghÄ©a vá»›i `appointmentReschedule.service.js`.
@@ -1533,6 +1594,7 @@ export default {
   markAsArrived,
   getPendingCheckin,
   getDoctorOperationalStatuses,
+  getOverloadAffectedAppointments,
   reportDoctorUnavailable,
   rescheduleAppointment,
   markLateArrival,

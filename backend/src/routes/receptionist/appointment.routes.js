@@ -7,6 +7,7 @@ router.get('/', appointmentController.getAppointments)
 // Phải đứng TRƯỚC '/:id/...' — nếu không 'pending-checkin' sẽ khớp vào ':id'.
 router.get('/pending-checkin', appointmentController.getPendingCheckin)
 router.get('/doctor-statuses', appointmentController.getDoctorOperationalStatuses)
+router.get('/overload-affected', appointmentController.getOverloadAffectedAppointments)
 router.post('/bulk-cancel', appointmentController.bulkCancelAppointments)
 router.post('/bulk-reschedule', appointmentController.bulkRescheduleAppointments)
 router.post('/doctor-unavailable', appointmentController.reportDoctorUnavailable)
