@@ -9,6 +9,7 @@ import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
+import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
 import { cacMocCuaKhung } from '../../utils/clinicTime.js'
 import {
   RECEPTIONIST_APPOINTMENT_ACTIONS,
@@ -517,18 +518,7 @@ export const cancelAppointment = async (req, res) => {
     if (getActorUserId(req)) appointment.nguoi_huy_id = getActorUserId(req)
     appointment.thoi_diem_huy = new Date()
     
-    // Giải phóng slot trong LichLamViec
-    const { schedule_id, slot_id } = appointment
-    if (schedule_id && slot_id) {
-      const schedule = await LichLamViec.findById(schedule_id).session(session)
-      if (schedule) {
-        const slot = schedule.slots.id(slot_id)
-        if (slot) {
-          slot.status = 'active'
-          await schedule.save({ session })
-        }
-      }
-    }
+    const releasedSlot = await releaseAppointmentSlot({ appointment, session })
 
     await appointment.save({ session })
     await LichSuLichHen.create([{
@@ -576,6 +566,7 @@ export const cancelAppointment = async (req, res) => {
       message: 'Đã hủy lịch hẹn',
       data: appointment,
       notification: notificationResult,
+      slot_released: Boolean(releasedSlot),
     })
   } catch (error) {
     await session.abortTransaction()

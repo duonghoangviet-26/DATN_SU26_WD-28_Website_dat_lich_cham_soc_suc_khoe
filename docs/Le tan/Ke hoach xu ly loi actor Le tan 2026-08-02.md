@@ -417,6 +417,8 @@ Bác sĩ đánh dấu/ hệ thống phát hiện lượt trong phòng vượt ng
 
 **Mức ưu tiên:** P0. **Phụ thuộc:** LT-00, LT-08, LT-09.
 
+**Tình trạng triển khai 2026-08-02:** đã chuẩn hóa luồng lễ tân hủy lịch để dùng chung `releaseAppointmentSlot()`. Khi hủy hợp lệ, backend cập nhật `LichHen.status='cancelled'`, ghi lịch sử, tạo thông báo/công việc cần gọi thủ công và giải phóng slot trong cùng transaction; slot được xóa sạch `benh_nhan_id`, `benh_nhan_tam_giu_id`, `pending_expired_at` rồi trả về `active`, giúp khách khác đặt lại ngay sau commit. API trả thêm `slot_released` để tester biết thao tác đã thật sự mở lại slot.
+
 **Lỗi/gap hiện tại:** về mặt schema, lịch `cancelled` đã được loại khỏi unique slot index; nhưng luồng hủy cần bảo đảm đồng thời cả lịch hẹn, slot và thông báo. Nếu chỉ đổi `status`, giao diện đặt lịch có thể vẫn đọc slot là kín.
 
 **Luồng thao tác:**
@@ -684,7 +686,7 @@ Ba task đầu tạo nền kiểm soát. Sau đó mới mở rộng các tình h
 - `HangDoi` đã là nguồn sự thật cho lượt khám thực tế và đã có trạng thái `dang_cho`, `da_goi`, `trong_phong`, `cho_dich_vu`, `hoan_thanh`.
 - Check-in lịch hẹn đã chạy theo transaction `LichHen + HangDoi`; đây là nền tốt cho LT-02 và LT-06.
 - Dời lịch đã dùng chung `apDungPhuongAn()` và đã có `de_xuat_doi` trên lịch hẹn; LT-01 nên mở rộng đúng điểm này.
-- Hủy lịch hiện đã trả slot về `active`, nhưng cần chuẩn hóa service/audit/notification theo LT-04.
+- Hủy lịch lễ tân hiện đã dùng chung `releaseAppointmentSlot()`, có audit/notification theo LT-04 và slot được mở lại sạch sau commit.
 - `LichSuLichHen` trước đây thiếu enum `receptionist`; phần enum nền đã được xử lý trong LT-00, còn LT-09 tiếp tục chuẩn hóa đầy đủ nội dung history trước/sau cho các thao tác dời lịch/chuyển bác sĩ/hủy lịch.
 - Hệ thống chưa lưu số thứ tự check-in cố định; đây là phần bổ sung dữ liệu nhỏ nhưng cần transaction/index ở LT-06.
 
