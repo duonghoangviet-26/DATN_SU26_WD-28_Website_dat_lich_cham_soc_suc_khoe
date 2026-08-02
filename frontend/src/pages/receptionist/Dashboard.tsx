@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import axiosInstance from '../../services/axiosInstance';
 import { receptionistNotificationService, VirtualNotification } from '../../services/receptionist-notification.service';
 import Icon from '../../components/admin/icons';
@@ -296,6 +297,12 @@ export default function Dashboard() {
                           {doctor.chan_dat_online ? 'Tạm chặn đặt online khung còn lại.' : 'Tạm ngưng nhận walk-in khung còn lại.'}
                         </p>
                       )}
+                      <Link
+                        to={`/receptionist/appointments?overload_doctor=${doctor.doctor_id}`}
+                        className="mt-2 inline-block rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
+                      >
+                        Điều phối ca quá tải
+                      </Link>
                     </div>
                   )}
                   {(doctor.luot_cho_bi_anh_huong?.length ?? 0) > 0 && (

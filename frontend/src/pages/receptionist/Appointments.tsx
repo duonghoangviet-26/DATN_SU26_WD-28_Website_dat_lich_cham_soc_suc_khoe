@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axiosInstance from '../../services/axiosInstance';
 import { format } from 'date-fns';
 import Pagination from '../../components/common/Pagination';
@@ -95,6 +96,7 @@ const hasAction = (appointment: Appointment, action: 'check_in' | 'reschedule' |
 };
 
 export default function Appointments() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [activeTab, setActiveTab] = useState<'today' | 'tomorrow' | 'upcoming' | 'past'>('today');
   const [loading, setLoading] = useState(true);
@@ -103,6 +105,7 @@ export default function Appointments() {
   const [filterDate, setFilterDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [overloadNotice, setOverloadNotice] = useState('');
 
   const isFirstSearchRender = useRef(true);
 
@@ -197,6 +200,42 @@ export default function Appointments() {
     };
     fetchDoctors();
   }, []);
+
+  // E-6: den tu nut "Dieu phoi ca qua tai" tren Dashboard (?overload_doctor=<id>) — tu dong
+  // nap toan bo lich CHUA check-in con lai cua ca dang tre, chon san vao che do bulk.
+  useEffect(() => {
+    const doctorId = searchParams.get('overload_doctor');
+    if (!doctorId) return;
+
+    const loadOverloadAffected = async () => {
+      try {
+        const res = await axiosInstance.get('/receptionist/appointments/overload-affected', {
+          params: { doctor_id: doctorId },
+        });
+        if (!res.data.success) return;
+        const rows = res.data.data?.lich_hen ?? [];
+        if (rows.length === 0) {
+          setOverloadNotice('Bac si nay hien khong co lich chua check-in nao can dieu phoi.');
+        } else {
+          setActiveTab('today');
+          setFilterDoctorId(doctorId);
+          setIsBulkMode(true);
+          setSelectedApts(rows.map((row: { appointment_id: string }) => row.appointment_id));
+          setBulkReason(`Dieu phoi ca qua tai (tre ~${res.data.data?.do_tre_ca_phut ?? 0} phut)`);
+          setBulkRescheduleModalOpen(true);
+        }
+      } catch {
+        setOverloadNotice('Khong the tai danh sach lich can dieu phoi cua bac si nay.');
+      } finally {
+        setSearchParams((params) => {
+          params.delete('overload_doctor');
+          return params;
+        }, { replace: true });
+      }
+    };
+    loadOverloadAffected();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     if (!bulkStartDate) {
@@ -579,6 +618,12 @@ export default function Appointments() {
       {error && (
         <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
           {error}
+        </div>
+      )}
+
+      {overloadNotice && (
+        <div className="bg-amber-50 text-amber-700 p-4 rounded-lg mb-6">
+          {overloadNotice}
         </div>
       )}
 
