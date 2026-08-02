@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axiosInstance from '../../services/axiosInstance';
 import { format } from 'date-fns';
 import Pagination from '../../components/common/Pagination';
@@ -25,9 +25,9 @@ interface Appointment {
   dat_ho?: boolean;
   so_lan_thay_doi?: number;
   /**
-   * Sá»‘ láº§n KHÃCH tá»± xin dá»i â€” tráº§n 1 (rule má»¥c 5). KhÃ¡c `so_lan_thay_doi` (Ä‘áº¿m Má»ŒI thay Ä‘á»•i,
-   * ká»ƒ cáº£ láº§n dá»i do lá»—i phÃ²ng khÃ¡m). Cháº·n theo `so_lan_thay_doi` sáº½ tÆ°á»›c oan quyá»n dá»i cá»§a
-   * khÃ¡ch khi láº§n trÆ°á»›c lÃ  lá»—i phÃ²ng khÃ¡m.
+   * Số lần KHÁCH tự xin dời — trần 1 (rule mục 5). Khác `so_lan_thay_doi` (đếm MỌI thay đổi,
+   * kể cả lần dời do lỗi phòng khám). Chặn theo `so_lan_thay_doi` sẽ tước oan quyền dời của
+   * khách khi lần trước là lỗi phòng khám.
    */
   so_lan_doi_khach_yeu_cau?: number;
   ly_do_doi?: 'khach_yeu_cau' | 'phong_kham' | 'khach_den_muon' | null;
@@ -46,12 +46,12 @@ interface RescheduleHistory {
 type LateArrivalPolicy = 'end_of_shift' | 'nearest_available' | 'tomorrow';
 
 const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
-  // TÃ¡ch ngÃ y tá»« chuá»—i UTC (vd: "2026-07-20T00:00...")
+  // Tách ngày từ chuỗi UTC (vd: "2026-07-20T00:00...")
   const dateString = ngay_kham.split('T')[0];
   const [year, month, day] = dateString.split('-').map(Number);
   const [hours, minutes] = gio_kham.split(':').map(Number);
 
-  // Táº¡o Local Date cá»‘ Ä‘á»‹nh theo Ä‘Ãºng cÃ¡c thÃ´ng sá»‘ trÃªn
+  // Tạo Local Date cố định theo đúng các thông số trên
   const appointmentDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
   const now = new Date();
 
@@ -61,20 +61,20 @@ const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
 const getStatusBadge = (status: string, isOverdue: boolean = false) => {
   switch (status) {
     case 'checked_in':
-      return { label: 'ÄÃ£ Ä‘áº¿n', className: 'bg-emerald-100 text-emerald-700' };
+      return { label: 'Đã đến', className: 'bg-emerald-100 text-emerald-700' };
     case 'in_progress':
     case 'waiting_record':
     case 'waiting_doctor_confirm':
-      return { label: 'Äang khÃ¡m', className: 'bg-indigo-100 text-indigo-700' };
+      return { label: 'Đang khám', className: 'bg-indigo-100 text-indigo-700' };
     case 'completed':
-      return { label: 'HoÃ n thÃ nh', className: 'bg-blue-100 text-blue-700' };
+      return { label: 'Hoàn thành', className: 'bg-blue-100 text-blue-700' };
     case 'cancelled':
-      return { label: 'ÄÃ£ há»§y', className: 'bg-red-100 text-red-700' };
+      return { label: 'Đã hủy', className: 'bg-red-100 text-red-700' };
     case 'pending':
     case 'confirmed':
     default:
       return {
-        label: 'ChÆ°a Ä‘áº¿n',
+        label: 'Chưa đến',
         className: isOverdue ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700'
       };
   }
@@ -85,7 +85,7 @@ const hasAction = (appointment: Appointment, action: 'check_in' | 'reschedule' |
     return appointment.allowed_actions.includes(action);
   }
 
-  // Fallback cho dá»¯ liá»‡u cÅ©/mock chÆ°a cÃ³ contract tá»« backend.
+  // Fallback cho dữ liệu cũ/mock chưa có contract từ backend.
   if (action === 'check_in') return appointment.status === 'confirmed';
   if (action === 'reschedule') return appointment.status === 'pending' || appointment.status === 'confirmed';
   if (action === 'late_reschedule') return appointment.status === 'confirmed';
@@ -105,20 +105,20 @@ export default function Appointments() {
 
   const isFirstSearchRender = useRef(true);
 
-  // States cho Modal Há»§y lá»‹ch
+  // States cho Modal Hủy lịch
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
 
-  // States cho Modal Dá»i lá»‹ch
+  // States cho Modal Dời lịch
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
   const [availableSlots, setAvailableSlots] = useState<ReceptionistBookingSlot[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [rescheduleReason, setRescheduleReason] = useState('');
-  // PhÃ¢n loáº¡i nghiá»‡p vá»¥ cá»§a láº§n dá»i (rule má»¥c 5, 10.D): khÃ¡ch yÃªu cáº§u thÃ¬ tÃ­nh vÃ o tráº§n 1 láº§n
-  // vÃ  pháº£i trÆ°á»›c `T-30'`; lá»—i phÃ²ng khÃ¡m thÃ¬ khÃ´ng tÃ­nh háº¡n má»©c vÃ  khÃ´ng bá»‹ má»‘c Ä‘Ã³ cháº·n.
+  // Phân loại nghiệp vụ của lần dời (rule mục 5, 10.D): khách yêu cầu thì tính vào trần 1 lần
+  // và phải trước `T-30'`; lỗi phòng khám thì không tính hạn mức và không bị mốc đó chặn.
   const [lyDoDoi, setLyDoDoi] = useState<'khach_yeu_cau' | 'phong_kham'>('khach_yeu_cau');
   const [khachHetLuotDoi, setKhachHetLuotDoi] = useState(false);
   const [aptDangDoi, setAptDangDoi] = useState<Appointment | null>(null);
@@ -129,7 +129,7 @@ export default function Appointments() {
   const [latePolicy, setLatePolicy] = useState<LateArrivalPolicy>('nearest_available');
   const [lateReason, setLateReason] = useState('');
 
-  // States cho Modal Lá»‹ch sá»­ quÃ¡ háº¡n dá»i lá»‹ch
+  // States cho Modal Lịch sử quá hạn dời lịch
   const [rescheduleLimitModalOpen, setRescheduleLimitModalOpen] = useState(false);
   const [rescheduleHistory, setRescheduleHistory] = useState<RescheduleHistory[]>([]);
 
@@ -148,11 +148,11 @@ export default function Appointments() {
   const [bulkStartTime, setBulkStartTime] = useState('');
   const [availableBulkSlots, setAvailableBulkSlots] = useState<string[]>([]);
 
-  // States cho Modal Chi tiáº¿t
+  // States cho Modal Chi tiết
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedDetailAppointment, setSelectedDetailAppointment] = useState<Appointment | null>(null);
 
-  // States cho Check-in In Phiáº¿u
+  // States cho Check-in In Phiếu
   const [confirmCheckInModalOpen, setConfirmCheckInModalOpen] = useState(false);
   const [selectedCheckInApt, setSelectedCheckInApt] = useState<Appointment | null>(null);
   const [printData, setPrintData] = useState<QueueTicketData | null>(null);
@@ -182,7 +182,7 @@ export default function Appointments() {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Lá»—i khi táº£i danh sÃ¡ch lá»‹ch háº¹n');
+      setError(err.response?.data?.message || 'Lỗi khi tải danh sách lịch hẹn');
     } finally {
       setLoading(false);
     }
@@ -225,7 +225,7 @@ export default function Appointments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, filterDate, filterDoctorId]); // Re-fetch when tab, date, or doctor changes
 
-  // ThÃªm má»™t useEffect Ä‘á»ƒ fetch vá»›i debounce cho search
+  // Thêm một useEffect để fetch với debounce cho search
   useEffect(() => {
     if (isFirstSearchRender.current) {
       isFirstSearchRender.current = false;
@@ -264,7 +264,7 @@ export default function Appointments() {
       setBulkReason('');
       fetchAppointments(currentPage);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Lá»—i khi há»§y hÃ ng loáº¡t');
+      alert(err.response?.data?.message || 'Lỗi khi hủy hàng loạt');
     }
   };
 
@@ -285,7 +285,7 @@ export default function Appointments() {
       setBulkReason('');
       fetchAppointments(currentPage);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Lá»—i khi dá»i hÃ ng loáº¡t');
+      alert(err.response?.data?.message || 'Lỗi khi dời hàng loạt');
     }
   };
 
@@ -334,19 +334,19 @@ export default function Appointments() {
     fetchAppointments(newPage);
   };
 
-  // Check-in Ä‘Æ°a bá»‡nh nhÃ¢n vÃ o HÃ€NG Äá»¢I cá»§a bÃ¡c sÄ© (rule má»¥c 6), khÃ´ng chá»‰ Ä‘á»•i tráº¡ng thÃ¡i lá»‹ch.
-  // Server tráº£ kÃ¨m cáº£nh bÃ¡o cáº§n xá»­ lÃ½ ngay táº¡i quáº§y: chÆ°a thanh toÃ¡n, Ä‘áº¿n sá»›m/trá»…, ca quÃ¡ táº£i.
+  // Check-in đưa bệnh nhân vào HÀNG ĐỢI của bác sĩ (rule mục 6), không chỉ đổi trạng thái lịch.
+  // Server trả kèm cảnh báo cần xử lý ngay tại quầy: chưa thanh toán, đến sớm/trễ, ca quá tải.
   const handleArrived = async (id: string) => {
     try {
       const res = await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
       const canhBao: string[] = res.data?.canh_bao ?? [];
       const phong = res.data?.hang_doi?.phong_kham;
       if (canhBao.length > 0) {
-        alert(`ÄÃ£ Ä‘Æ°a vÃ o hÃ ng Ä‘á»£i${phong ? ` â€” phÃ²ng ${phong}` : ''}.\n\nLÆ¯U Ã:\nâ€¢ ${canhBao.join('\nâ€¢ ')}`);
+        alert(`Đã đưa vào hàng đợi${phong ? ` — phòng ${phong}` : ''}.\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`);
       }
       fetchAppointments();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Lá»—i khi check-in');
+      alert(err.response?.data?.message || 'Lỗi khi check-in');
     }
   };
 
@@ -361,15 +361,15 @@ export default function Appointments() {
       const canhBao: string[] = res.data?.canh_bao ?? [];
       const phong = res.data?.hang_doi?.phong_kham;
 
-      let msg = 'ÄÃ£ xÃ¡c nháº­n Check-in vÃ  Ä‘áº©y lá»‡nh in Sá»‘ thá»© tá»± tá»›i mÃ¡y in thÃ nh cÃ´ng!';
+      let msg = 'Đã xác nhận Check-in và đẩy lệnh in Số thứ tự tới máy in thành công!';
       if (canhBao.length > 0) {
-        msg += `\n\nLÆ¯U Ã:\nâ€¢ ${canhBao.join('\nâ€¢ ')}`;
+        msg += `\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`;
       }
 
       alert(msg);
 
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Lá»—i khi check-in');
+      alert(err.response?.data?.message || 'Lỗi khi check-in');
     }
   };
 
@@ -381,7 +381,7 @@ export default function Appointments() {
 
   const confirmCancel = async () => {
     if (!selectedAppointmentId || !cancelReason.trim()) {
-      alert('Vui lÃ²ng nháº­p lÃ½ do há»§y!');
+      alert('Vui lòng nhập lý do hủy!');
       return;
     }
     try {
@@ -389,17 +389,17 @@ export default function Appointments() {
       setCancelModalOpen(false);
       fetchAppointments();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Lá»—i khi há»§y lá»‹ch');
+      alert(err.response?.data?.message || 'Lỗi khi hủy lịch');
     }
   };
 
-  // Má»Ÿ modal dá»i lá»‹ch. Tráº§n 1 láº§n chá»‰ Ã¡p cho láº§n dá»i do KHÃCH yÃªu cáº§u (rule má»¥c 5) â€”
-  // Ä‘áº¿m báº±ng `so_lan_doi_khach_yeu_cau`, KHÃ”NG pháº£i `so_lan_thay_doi`. Láº§n dá»i do lá»—i phÃ²ng
-  // khÃ¡m khÃ´ng tÃ­nh háº¡n má»©c, nÃªn háº¿t lÆ°á»£t váº«n pháº£i dá»i Ä‘Æ°á»£c, chá»‰ lÃ  buá»™c chá»n "lá»—i phÃ²ng khÃ¡m".
+  // Mở modal dời lịch. Trần 1 lần chỉ áp cho lần dời do KHÁCH yêu cầu (rule mục 5) —
+  // đếm bằng `so_lan_doi_khach_yeu_cau`, KHÔNG phải `so_lan_thay_doi`. Lần dời do lỗi phòng
+  // khám không tính hạn mức, nên hết lượt vẫn phải dời được, chỉ là buộc chọn "lỗi phòng khám".
   const moModalDoiLich = (apt: Appointment) => {
     setSelectedDoctorId(apt.doctor_id?._id || '');
     setNewDate(format(new Date(apt.ngay_kham), 'yyyy-MM-dd'));
-    setNewTime(''); // Reset giá» vÃ¬ list giá» sáº½ fetch láº¡i
+    setNewTime(''); // Reset giờ vì list giờ sẽ fetch lại
     setRescheduleReason('');
     setRescheduleModalOpen(true);
   };
@@ -409,7 +409,7 @@ export default function Appointments() {
 
     const hetLuotKhach = (apt.so_lan_doi_khach_yeu_cau || 0) >= 1;
     setKhachHetLuotDoi(hetLuotKhach);
-    // Háº¿t lÆ°á»£t cá»§a khÃ¡ch -> chá»‰ cÃ²n Ä‘Æ°á»ng "lá»—i phÃ²ng khÃ¡m", chá»‘t sáºµn Ä‘á»ƒ lá»… tÃ¢n khÃ´ng chá»n sai.
+    // Hết lượt của khách -> chỉ còn đường "lỗi phòng khám", chốt sẵn để lễ tân không chọn sai.
     setLyDoDoi(hetLuotKhach ? 'phong_kham' : 'khach_yeu_cau');
 
     if (hetLuotKhach) {
@@ -421,7 +421,7 @@ export default function Appointments() {
           setRescheduleLimitModalOpen(true);
         }
       } catch {
-        alert('Lá»—i khi táº£i lá»‹ch sá»­ dá»i lá»‹ch');
+        alert('Lỗi khi tải lịch sử dời lịch');
       }
       return;
     }
@@ -441,7 +441,7 @@ export default function Appointments() {
 
   const confirmReschedule = async () => {
     if (!selectedAppointmentId || !newDate || !newTime || !rescheduleReason.trim()) {
-      alert('Vui lÃ²ng chá»n ngÃ y, giá» vÃ  nháº­p lÃ½ do dá»i lá»‹ch!');
+      alert('Vui lòng chọn ngày, giờ và nhập lý do dời lịch!');
       return;
     }
 
@@ -449,7 +449,7 @@ export default function Appointments() {
     const selectedDateTime = new Date(`${newDate}T${newTime}`);
     const now = new Date();
     if (selectedDateTime <= now) {
-      alert('KhÃ´ng thá»ƒ dá»i lá»‹ch vá» quÃ¡ khá»©. Vui lÃ²ng chá»n thá»i gian trong tÆ°Æ¡ng lai!');
+      alert('Không thể dời lịch về quá khứ. Vui lòng chọn thời gian trong tương lai!');
       return;
     }
 
@@ -464,7 +464,7 @@ export default function Appointments() {
       if (res.data?.message) alert(res.data.message);
       fetchAppointments();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Lá»—i khi dá»i lá»‹ch');
+      alert(err.response?.data?.message || 'Lỗi khi dời lịch');
     }
   };
 
@@ -494,7 +494,7 @@ export default function Appointments() {
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-bold text-slate-800 mb-6">Lá»‹ch háº¹n PhÃ²ng khÃ¡m</h2>
+      <h2 className="text-2xl font-bold text-slate-800 mb-6">Lịch hẹn Phòng khám</h2>
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 mb-6">
@@ -506,7 +506,7 @@ export default function Appointments() {
           }`}
           onClick={() => setActiveTab('today')}
         >
-          HÃ´m nay
+          Hôm nay
         </button>
         <button
           className={`py-3 px-6 font-medium text-sm transition-colors border-b-2 ${
@@ -516,7 +516,7 @@ export default function Appointments() {
           }`}
           onClick={() => setActiveTab('tomorrow')}
         >
-          NgÃ y mai
+          Ngày mai
         </button>
         <button
           className={`py-3 px-6 font-medium text-sm transition-colors border-b-2 ${
@@ -526,7 +526,7 @@ export default function Appointments() {
           }`}
           onClick={() => setActiveTab('upcoming')}
         >
-          Sáº¯p tá»›i
+          Sắp tới
         </button>
         <button
           className={`py-3 px-6 font-medium text-sm transition-colors border-b-2 ${
@@ -536,11 +536,11 @@ export default function Appointments() {
           }`}
           onClick={() => setActiveTab('past')}
         >
-          ÄÃ£ qua
+          Đã qua
         </button>
       </div>
 
-      {/* Toolbar: TÃ¬m kiáº¿m & Lá»c */}
+      {/* Toolbar: Tìm kiếm & Lọc */}
       <div className="flex flex-col xl:flex-row gap-4 mb-6">
         <button
           onClick={() => {
@@ -549,12 +549,12 @@ export default function Appointments() {
           }}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isBulkMode ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
         >
-          {isBulkMode ? 'Há»§y chá»n nhiá»u' : 'Chá»n nhiá»u'}
+          {isBulkMode ? 'Hủy chọn nhiều' : 'Chọn nhiều'}
         </button>
         <div className="flex-1 relative">
           <input
             type="text"
-            placeholder="TÃ¬m theo tÃªn, SÄT, mÃ£ lá»‹ch háº¹n..."
+            placeholder="Tìm theo tên, SĐT, mã lịch hẹn..."
             className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -567,20 +567,20 @@ export default function Appointments() {
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-slate-700 whitespace-nowrap">BÃ¡c sÄ©:</label>
+            <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Bác sĩ:</label>
             <select
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
               value={filterDoctorId}
               onChange={(e) => setFilterDoctorId(e.target.value)}
             >
-              <option value="">Táº¥t cáº£ BÃ¡c sÄ©</option>
+              <option value="">Tất cả Bác sĩ</option>
               {doctorsList.map(doc => (
-                <option key={doc.id} value={doc.id}>{doc.ho_ten || 'BÃ¡c sÄ©'}</option>
+                <option key={doc.id} value={doc.id}>{doc.ho_ten || 'Bác sĩ'}</option>
               ))}
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-slate-700 whitespace-nowrap">NgÃ y khÃ¡m:</label>
+            <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Ngày khám:</label>
           <input
             type="date"
             className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -592,7 +592,7 @@ export default function Appointments() {
               onClick={() => { setFilterDate(''); setFilterDoctorId(''); }}
               className="px-3 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
             >
-              XÃ³a lá»c
+              Xóa lọc
             </button>
           )}
           </div>
@@ -614,26 +614,26 @@ export default function Appointments() {
                   {isBulkMode && (
                     <input type="checkbox" checked={selectedApts.length > 0 && selectedApts.length === appointments.length} onChange={toggleSelectAll} className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500" />
                   )}
-                  Thá»i gian
+                  Thời gian
                 </th>
-                <th className="px-4 py-3 font-semibold">Bá»‡nh nhÃ¢n</th>
-                <th className="px-4 py-3 font-semibold">BÃ¡c sÄ©</th>
-                <th className="px-4 py-3 font-semibold">PhÃ­ Ä‘áº·t lá»‹ch (thu trÆ°á»›c)</th>
-                <th className="px-4 py-3 font-semibold">Tráº¡ng thÃ¡i</th>
-                <th className="px-4 py-3 font-semibold">Thao tÃ¡c</th>
+                <th className="px-4 py-3 font-semibold">Bệnh nhân</th>
+                <th className="px-4 py-3 font-semibold">Bác sĩ</th>
+                <th className="px-4 py-3 font-semibold">Phí đặt lịch (thu trước)</th>
+                <th className="px-4 py-3 font-semibold">Trạng thái</th>
+                <th className="px-4 py-3 font-semibold">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                    Äang táº£i dá»¯ liá»‡u...
+                    Đang tải dữ liệu...
                   </td>
                 </tr>
               ) : appointments.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                    ChÆ°a cÃ³ lá»‹ch háº¹n nÃ o táº¡i phÃ²ng khÃ¡m
+                    Chưa có lịch hẹn nào tại phòng khám
                   </td>
                 </tr>
               ) : (
@@ -654,10 +654,10 @@ export default function Appointments() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800">{apt.user_id?.ho_ten || apt.ten_khach || 'KhÃ¡ch vÃ£ng lai'}</div>
+                        <div className="font-medium text-slate-800">{apt.user_id?.ho_ten || apt.ten_khach || 'Khách vãng lai'}</div>
                         <div className="text-xs text-slate-500">{apt.user_id?.so_dien_thoai || apt.so_dien_thoai_khach}</div>
                       </td>
-                      <td className="px-4 py-3">{apt.doctor_id?.user_id?.ho_ten || 'ChÆ°a gÃ¡n'}</td>
+                      <td className="px-4 py-3">{apt.doctor_id?.user_id?.ho_ten || 'Chưa gán'}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           apt.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
@@ -665,12 +665,12 @@ export default function Appointments() {
                           apt.payment_status === 'refunded' ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'
                         }`}>
                           {apt.payment_status === 'paid'
-                            ? 'ÄÃ£ tráº£ phÃ­ khÃ¡m'
+                            ? 'Đã trả phí khám'
                             : apt.payment_status === 'partial'
-                              ? 'ÄÃ£ tráº£ má»™t pháº§n'
+                              ? 'Đã trả một phần'
                               : apt.payment_status === 'refunded'
-                                ? 'ÄÃ£ hoÃ n phÃ­ khÃ¡m'
-                                : 'ChÆ°a tráº£ phÃ­ khÃ¡m'}
+                                ? 'Đã hoàn phí khám'
+                                : 'Chưa trả phí khám'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -680,7 +680,7 @@ export default function Appointments() {
                           </span>
                           {isPendingAndOverdue && (
                             <span className="text-[10px] font-bold text-red-500 uppercase tracking-wide">
-                              (QuÃ¡ giá»)
+                              (Quá giờ)
                             </span>
                           )}
                         </div>
@@ -691,7 +691,7 @@ export default function Appointments() {
                             <>
                               {activeTab === 'today' && hasAction(apt, 'check_in') && (
                                 <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
-                                  Tra cá»©u táº¡i Tiáº¿p nháº­n
+                                  Tra cứu tại Tiếp nhận
                                 </span>
                               )}
                               {canHandleLateArrival && (
@@ -705,7 +705,7 @@ export default function Appointments() {
                               )}
                               {hasAction(apt, 'reschedule') && (
                                 <button
-                                  title="Dá»i lá»‹ch"
+                                  title="Dời lịch"
                                   onClick={() => handleReschedule(apt)}
                                   className="p-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-md transition-colors"
                                 >
@@ -714,7 +714,7 @@ export default function Appointments() {
                               )}
                               {hasAction(apt, 'cancel') && (
                                 <button
-                                  title="Há»§y lá»‹ch"
+                                  title="Hủy lịch"
                                   onClick={() => handleCancel(apt._id)}
                                   className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-md transition-colors"
                                 >
@@ -729,7 +729,7 @@ export default function Appointments() {
                             </>
                           )}
                           <button
-                            title="Xem chi tiáº¿t"
+                            title="Xem chi tiết"
                             onClick={() => {
                               setSelectedDetailAppointment(apt);
                               setDetailModalOpen(true);
@@ -748,7 +748,7 @@ export default function Appointments() {
           </table>
         </div>
 
-        {/* Component PhÃ¢n trang */}
+        {/* Component Phân trang */}
         <div className="p-4 border-t border-slate-200">
           <Pagination
             currentPage={currentPage}
@@ -758,28 +758,28 @@ export default function Appointments() {
         </div>
       </div>
 
-      {/* Modal Lá»‹ch sá»­ Dá»i Lá»‹ch (QuÃ¡ giá»›i háº¡n 1 láº§n) */}
+      {/* Modal Lịch sử Dời Lịch (Quá giới hạn 1 lần) */}
       {rescheduleLimitModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-lg animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-red-600 mb-2">KhÃ¡ch Ä‘Ã£ dÃ¹ng háº¿t lÆ°á»£t dá»i lá»‹ch</h3>
+            <h3 className="text-xl font-bold text-red-600 mb-2">Khách đã dùng hết lượt dời lịch</h3>
             <p className="text-sm text-slate-600 mb-4">
-              KhÃ¡ch hÃ ng nÃ y Ä‘Ã£ tá»± xin dá»i <strong className="text-red-500">1 láº§n</strong> â€” háº¿t háº¡n má»©c. KhÃ¡ch váº«n
-              Ä‘Æ°á»£c khÃ¡m náº¿u tá»›i trong ca vÃ  <strong>khÃ´ng máº¥t tiá»n</strong>. Náº¿u láº§n nÃ y lÃ  <strong>lá»—i phÃ²ng khÃ¡m</strong>
-              {' '}(bÃ¡c sÄ© nghá»‰, báº­n Ä‘á»™t xuáº¥t, sá»± cá»‘ thiáº¿t bá»‹) thÃ¬ váº«n dá»i Ä‘Æ°á»£c vÃ  khÃ´ng tÃ­nh vÃ o háº¡n má»©c cá»§a khÃ¡ch.
+              Khách hàng này đã tự xin dời <strong className="text-red-500">1 lần</strong> — hết hạn mức. Khách vẫn
+              được khám nếu tới trong ca và <strong>không mất tiền</strong>. Nếu lần này là <strong>lỗi phòng khám</strong>
+              {' '}(bác sĩ nghỉ, bận đột xuất, sự cố thiết bị) thì vẫn dời được và không tính vào hạn mức của khách.
             </p>
 
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 max-h-60 overflow-y-auto space-y-4">
               {rescheduleHistory.length === 0 ? (
-                <p className="text-sm text-slate-500 italic">KhÃ´ng cÃ³ dá»¯ liá»‡u lá»‹ch sá»­ cÅ©.</p>
+                <p className="text-sm text-slate-500 italic">Không có dữ liệu lịch sử cũ.</p>
               ) : (
                 rescheduleHistory.map((history, idx) => (
                   <div key={history._id} className="border-b border-slate-200 pb-3 last:border-0 last:pb-0">
                     <div className="flex justify-between items-start mb-1">
-                      <span className="text-xs font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded">Láº§n {idx + 1}</span>
+                      <span className="text-xs font-semibold bg-slate-200 text-slate-700 px-2 py-0.5 rounded">Lần {idx + 1}</span>
                       <span className="text-xs text-slate-500">{new Date(history.thoi_diem).toLocaleString('vi-VN')}</span>
                     </div>
-                    <p className="text-sm text-slate-700 mt-1">LÃ½ do: {history.ly_do_thay_doi}</p>
+                    <p className="text-sm text-slate-700 mt-1">Lý do: {history.ly_do_thay_doi}</p>
                   </div>
                 ))
               )}
@@ -790,7 +790,7 @@ export default function Appointments() {
                 onClick={() => setRescheduleLimitModalOpen(false)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
               >
-                ÄÃ³ng thÃ´ng bÃ¡o
+                Đóng thông báo
               </button>
               <button
                 onClick={() => {
@@ -800,7 +800,7 @@ export default function Appointments() {
                 }}
                 className="px-4 py-2 bg-amber-500 text-white hover:bg-amber-600 rounded-lg text-sm font-medium transition-colors"
               >
-                Dá»i do lá»—i phÃ²ng khÃ¡m
+                Dời do lỗi phòng khám
               </button>
             </div>
           </div>
@@ -863,16 +863,16 @@ export default function Appointments() {
         </div>
       )}
 
-      {/* Modal Há»§y Lá»‹ch */}
+      {/* Modal Hủy Lịch */}
       {cancelModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">Há»§y lá»‹ch háº¹n</h3>
-            <p className="text-sm text-slate-600 mb-4">Vui lÃ²ng nháº­p lÃ½ do há»§y lá»‹ch Ä‘á»ƒ lÆ°u láº¡i vÃ o há»“ sÆ¡.</p>
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Hủy lịch hẹn</h3>
+            <p className="text-sm text-slate-600 mb-4">Vui lòng nhập lý do hủy lịch để lưu lại vào hồ sơ.</p>
             <textarea
               className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none mb-6 resize-none"
               rows={4}
-              placeholder="Nháº­p lÃ½ do (vÃ­ dá»¥: khÃ¡ch yÃªu cáº§u há»§y, khÃ´ng liÃªn láº¡c Ä‘Æ°á»£c...)"
+              placeholder="Nhập lý do (ví dụ: khách yêu cầu hủy, không liên lạc được...)"
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
             />
@@ -881,49 +881,49 @@ export default function Appointments() {
                 onClick={() => setCancelModalOpen(false)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
               >
-                Quay láº¡i
+                Quay lại
               </button>
               <button
                 onClick={confirmCancel}
                 className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium transition-colors"
               >
-                XÃ¡c nháº­n há»§y
+                Xác nhận hủy
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Dá»i Lá»‹ch */}
+      {/* Modal Dời Lịch */}
       {rescheduleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">Dá»i lá»‹ch háº¹n</h3>
-            <p className="text-sm text-slate-600 mb-4">Vui lÃ²ng chá»n ngÃ y vÃ  giá» khÃ¡m má»›i cho bá»‡nh nhÃ¢n.</p>
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Dời lịch hẹn</h3>
+            <p className="text-sm text-slate-600 mb-4">Vui lòng chọn ngày và giờ khám mới cho bệnh nhân.</p>
 
             <div className="space-y-4 mb-6">
-              {/* PhÃ¢n loáº¡i lÃ½ do quyáº¿t Ä‘á»‹nh háº¡n má»©c vÃ  má»‘c thá»i gian (rule má»¥c 5, 11) â€”
-                  pháº£i lÃ  lá»±a chá»n tÆ°á»ng minh, khÃ´ng suy Ä‘oÃ¡n há»™ lá»… tÃ¢n. */}
+              {/* Phân loại lý do quyết định hạn mức và mốc thời gian (rule mục 5, 11) —
+                  phải là lựa chọn tường minh, không suy đoán hộ lễ tân. */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Dá»i theo yÃªu cáº§u cá»§a ai?</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Dời theo yêu cầu của ai?</label>
                 <select
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   value={lyDoDoi}
                   onChange={(e) => setLyDoDoi(e.target.value as 'khach_yeu_cau' | 'phong_kham')}
                 >
                   <option value="khach_yeu_cau" disabled={khachHetLuotDoi}>
-                    KhÃ¡ch yÃªu cáº§u â€” tÃ­nh vÃ o háº¡n má»©c 1 láº§n{khachHetLuotDoi ? ' (Ä‘Ã£ háº¿t lÆ°á»£t)' : ''}
+                    Khách yêu cầu — tính vào hạn mức 1 lần{khachHetLuotDoi ? ' (đã hết lượt)' : ''}
                   </option>
-                  <option value="phong_kham">Lá»—i phÃ²ng khÃ¡m â€” khÃ´ng tÃ­nh háº¡n má»©c</option>
+                  <option value="phong_kham">Lỗi phòng khám — không tính hạn mức</option>
                 </select>
                 <p className="mt-1 text-xs text-slate-500">
                   {lyDoDoi === 'khach_yeu_cau'
-                    ? 'KhÃ¡ch chá»‰ Ä‘Æ°á»£c dá»i 1 láº§n, vÃ  pháº£i trÆ°á»›c giá» khÃ¡m 30 phÃºt.'
-                    : 'KhÃ´ng giá»›i háº¡n sá»‘ láº§n, khÃ´ng bá»‹ má»‘c 30 phÃºt cháº·n. Báº¯t buá»™c ghi rÃµ lÃ½ do bÃªn dÆ°á»›i.'}
+                    ? 'Khách chỉ được dời 1 lần, và phải trước giờ khám 30 phút.'
+                    : 'Không giới hạn số lần, không bị mốc 30 phút chặn. Bắt buộc ghi rõ lý do bên dưới.'}
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">NgÃ y khÃ¡m má»›i</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Ngày khám mới</label>
                 <input
                   type="date"
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
@@ -932,28 +932,28 @@ export default function Appointments() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Giá» khÃ¡m má»›i</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Giờ khám mới</label>
                 <select
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none"
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
                 >
-                  <option value="">-- Chá»n giá» khÃ¡m --</option>
+                  <option value="">-- Chọn giờ khám --</option>
                   {availableSlots.length > 0 ? availableSlots.map((slot) => (
                     <option key={slot.id} value={slot.gio_bat_dau}>
                       {slot.gio_bat_dau} - {slot.gio_ket_thuc}
                     </option>
                   )) : (
-                    <option value="" disabled>KhÃ´ng cÃ³ khung giá» ráº£nh</option>
+                    <option value="" disabled>Không có khung giờ rảnh</option>
                   )}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">LÃ½ do dá»i lá»‹ch</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Lý do dời lịch</label>
                 <textarea
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none resize-none"
                   rows={3}
-                  placeholder="Nháº­p lÃ½ do dá»i lá»‹ch..."
+                  placeholder="Nhập lý do dời lịch..."
                   value={rescheduleReason}
                   onChange={(e) => setRescheduleReason(e.target.value)}
                 />
@@ -965,28 +965,28 @@ export default function Appointments() {
                 onClick={() => setRescheduleModalOpen(false)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
               >
-                Há»§y bá»
+                Hủy bỏ
               </button>
               <button
                 onClick={confirmReschedule}
                 className="px-4 py-2 bg-brand-600 text-white hover:bg-brand-700 rounded-lg text-sm font-medium transition-colors"
               >
-                LÆ°u thay Ä‘á»•i
+                Lưu thay đổi
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Xem Chi Tiáº¿t Lá»‹ch Háº¹n */}
+      {/* Modal Xem Chi Tiết Lịch Hẹn */}
       {detailModalOpen && selectedDetailAppointment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl animate-in fade-in zoom-in duration-200 overflow-hidden flex flex-col max-h-[90vh]">
             {/* Header Modal */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Chi tiáº¿t Lá»‹ch háº¹n</h3>
-                <p className="text-sm text-slate-500 mt-1">MÃ£: {selectedDetailAppointment.ma_lich_hen || 'ChÆ°a cÃ³'}</p>
+                <h3 className="text-lg font-bold text-slate-800">Chi tiết Lịch hẹn</h3>
+                <p className="text-sm text-slate-500 mt-1">Mã: {selectedDetailAppointment.ma_lich_hen || 'Chưa có'}</p>
               </div>
               <button
                 onClick={() => setDetailModalOpen(false)}
@@ -998,33 +998,33 @@ export default function Appointments() {
               </button>
             </div>
 
-            {/* Ná»™i dung Modal */}
+            {/* Nội dung Modal */}
             <div className="p-6 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                {/* Cá»™t 1: ThÃ´ng tin KhÃ¡ch hÃ ng & BÃ¡c sÄ© */}
+                {/* Cột 1: Thông tin Khách hàng & Bác sĩ */}
                 <div className="space-y-6">
                   <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">ThÃ´ng tin Bá»‡nh nhÃ¢n</h4>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Thông tin Bệnh nhân</h4>
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-4">
-                      {/* Bá»‡nh nhÃ¢n khÃ¡m thá»±c táº¿ */}
+                      {/* Bệnh nhân khám thực tế */}
                       <div>
-                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">NgÆ°á»i Ä‘áº¿n khÃ¡m</p>
+                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Người đến khám</p>
                         <p className="font-semibold text-slate-800">
-                          {selectedDetailAppointment.ten_khach || selectedDetailAppointment.user_id?.ho_ten || 'KhÃ¡ch vÃ£ng lai'}
+                          {selectedDetailAppointment.ten_khach || selectedDetailAppointment.user_id?.ho_ten || 'Khách vãng lai'}
                         </p>
                         <p className="text-sm text-slate-600 flex items-center gap-2 mt-1">
                           <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                           </svg>
-                          {selectedDetailAppointment.so_dien_thoai_khach || selectedDetailAppointment.user_id?.so_dien_thoai || 'KhÃ´ng cÃ³ sá»‘ Ä‘iá»‡n thoáº¡i'}
+                          {selectedDetailAppointment.so_dien_thoai_khach || selectedDetailAppointment.user_id?.so_dien_thoai || 'Không có số điện thoại'}
                         </p>
                       </div>
 
-                      {/* TÃ i khoáº£n Ä‘áº·t lá»‹ch */}
+                      {/* Tài khoản đặt lịch */}
                       {selectedDetailAppointment.user_id && (
                         <div className="pt-3 border-t border-slate-200 border-dashed">
-                          <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">TÃ i khoáº£n Ä‘áº·t lá»‹ch</p>
+                          <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Tài khoản đặt lịch</p>
                           <div className="flex items-center gap-2">
                             <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -1034,7 +1034,7 @@ export default function Appointments() {
                             </p>
                             {selectedDetailAppointment.dat_ho && (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-600">
-                                Äáº·t há»™
+                                Đặt hộ
                               </span>
                             )}
                           </div>
@@ -1044,40 +1044,40 @@ export default function Appointments() {
                   </div>
 
                   <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">ThÃ´ng tin Dá»‹ch vá»¥</h4>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Thông tin Dịch vụ</h4>
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-3">
                       <div>
-                        <p className="text-xs text-slate-500 mb-1">BÃ¡c sÄ© phá»¥ trÃ¡ch</p>
-                        <p className="font-medium text-slate-800">{selectedDetailAppointment.doctor_id?.user_id?.ho_ten || 'ChÆ°a gÃ¡n'}</p>
+                        <p className="text-xs text-slate-500 mb-1">Bác sĩ phụ trách</p>
+                        <p className="font-medium text-slate-800">{selectedDetailAppointment.doctor_id?.user_id?.ho_ten || 'Chưa gán'}</p>
                       </div>
                       {selectedDetailAppointment.ten_dich_vu && (
                         <div>
-                          <p className="text-xs text-slate-500 mb-1">Dá»‹ch vá»¥</p>
+                          <p className="text-xs text-slate-500 mb-1">Dịch vụ</p>
                           <p className="font-medium text-slate-800">{selectedDetailAppointment.ten_dich_vu}</p>
                         </div>
                       )}
                       <div>
-                        <p className="text-xs text-slate-500 mb-1">Loáº¡i khÃ¡m</p>
+                        <p className="text-xs text-slate-500 mb-1">Loại khám</p>
                         <span className="px-2 py-1 rounded text-[11px] font-semibold bg-brand-50 text-brand-700">
-                          {selectedDetailAppointment.loai_kham === 'home' ? 'Táº¡i nhÃ ' : 'Táº¡i phÃ²ng khÃ¡m'}
+                          {selectedDetailAppointment.loai_kham === 'home' ? 'Tại nhà' : 'Tại phòng khám'}
                         </span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Cá»™t 2: Thá»i gian, Tráº¡ng thÃ¡i & LÃ½ do */}
+                {/* Cột 2: Thời gian, Trạng thái & Lý do */}
                 <div className="space-y-6">
                   <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Lá»‹ch háº¹n & Tráº¡ng thÃ¡i</h4>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Lịch hẹn & Trạng thái</h4>
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-3">
                       <div className="flex justify-between items-center pb-3 border-b border-slate-200 border-dashed">
                         <div>
-                          <p className="text-xs text-slate-500 mb-1">Giá» khÃ¡m</p>
+                          <p className="text-xs text-slate-500 mb-1">Giờ khám</p>
                           <p className="font-bold text-slate-800 text-lg">{selectedDetailAppointment.gio_kham}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs text-slate-500 mb-1">NgÃ y khÃ¡m</p>
+                          <p className="text-xs text-slate-500 mb-1">Ngày khám</p>
                           <p className="font-medium text-slate-800">
                             {format(new Date(selectedDetailAppointment.ngay_kham), 'dd/MM/yyyy')}
                           </p>
@@ -1085,28 +1085,28 @@ export default function Appointments() {
                       </div>
 
                       <div className="flex justify-between items-center pt-1">
-                        <p className="text-sm text-slate-600">Tráº¡ng thÃ¡i khÃ¡m:</p>
+                        <p className="text-sm text-slate-600">Trạng thái khám:</p>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(selectedDetailAppointment.status, isAppointmentOverdue(selectedDetailAppointment.ngay_kham, selectedDetailAppointment.gio_kham)).className}`}>
                           {getStatusBadge(selectedDetailAppointment.status, isAppointmentOverdue(selectedDetailAppointment.ngay_kham, selectedDetailAppointment.gio_kham)).label}
                         </span>
                       </div>
 
                       <div className="flex justify-between items-center">
-                        <p className="text-sm text-slate-600">PhÃ­ Ä‘áº·t lá»‹ch (thu trÆ°á»›c):</p>
+                        <p className="text-sm text-slate-600">Phí đặt lịch (thu trước):</p>
                         <div className="text-right">
-                          <p className="font-semibold text-slate-800">{selectedDetailAppointment.gia_kham?.toLocaleString('vi-VN')} Ä‘</p>
+                          <p className="font-semibold text-slate-800">{selectedDetailAppointment.gia_kham?.toLocaleString('vi-VN')} đ</p>
                           <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${
                             selectedDetailAppointment.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
                             selectedDetailAppointment.payment_status === 'partial' ? 'bg-amber-100 text-amber-700' :
                             selectedDetailAppointment.payment_status === 'refunded' ? 'bg-slate-100 text-slate-700' : 'bg-red-100 text-red-700'
                           }`}>
                             {selectedDetailAppointment.payment_status === 'paid'
-                              ? 'ÄÃ£ tráº£ phÃ­ khÃ¡m'
+                              ? 'Đã trả phí khám'
                               : selectedDetailAppointment.payment_status === 'partial'
-                                ? 'ÄÃ£ tráº£ má»™t pháº§n'
+                                ? 'Đã trả một phần'
                                 : selectedDetailAppointment.payment_status === 'refunded'
-                                  ? 'ÄÃ£ hoÃ n phÃ­ khÃ¡m'
-                                  : 'ChÆ°a tráº£ phÃ­ khÃ¡m'}
+                                  ? 'Đã hoàn phí khám'
+                                  : 'Chưa trả phí khám'}
                           </span>
                         </div>
                       </div>
@@ -1114,9 +1114,9 @@ export default function Appointments() {
                   </div>
 
                   <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">LÃ½ do khÃ¡m / Triá»‡u chá»©ng</h4>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Lý do khám / Triệu chứng</h4>
                     <div className="bg-brand-50/50 p-4 rounded-lg border border-brand-100 text-sm text-slate-700 leading-relaxed min-h-[80px]">
-                      {selectedDetailAppointment.ly_do_kham || <span className="text-slate-400 italic">Bá»‡nh nhÃ¢n khÃ´ng ghi chÃº gÃ¬ thÃªm.</span>}
+                      {selectedDetailAppointment.ly_do_kham || <span className="text-slate-400 italic">Bệnh nhân không ghi chú gì thêm.</span>}
                     </div>
                   </div>
                 </div>
@@ -1130,37 +1130,37 @@ export default function Appointments() {
                 onClick={() => setDetailModalOpen(false)}
                 className="px-5 py-2 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded-lg text-sm font-bold transition-colors"
               >
-                ÄÃ³ng
+                Đóng
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Check-in XÃ¡c nháº­n */}
+      {/* Modal Check-in Xác nhận */}
       {confirmCheckInModalOpen && selectedCheckInApt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">XÃ¡c nháº­n ÄÃ£ Ä‘áº¿n</h3>
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Xác nhận Đã đến</h3>
             <div className="mb-6">
-              <p className="text-slate-600 mb-2">ThÃ´ng tin in trÃªn phiáº¿u chá» khÃ¡m:</p>
+              <p className="text-slate-600 mb-2">Thông tin in trên phiếu chờ khám:</p>
               <div className="p-4 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-100 space-y-2">
                 <div className="flex justify-between border-b border-emerald-200/50 pb-2">
-                  <span className="text-sm opacity-80">Bá»‡nh nhÃ¢n:</span>
-                  <span className="font-bold">{selectedCheckInApt.user_id?.ho_ten || selectedCheckInApt.ten_khach || 'KhÃ¡ch vÃ£ng lai'}</span>
+                  <span className="text-sm opacity-80">Bệnh nhân:</span>
+                  <span className="font-bold">{selectedCheckInApt.user_id?.ho_ten || selectedCheckInApt.ten_khach || 'Khách vãng lai'}</span>
                 </div>
                 <div className="flex justify-between border-b border-emerald-200/50 pb-2">
-                  <span className="text-sm opacity-80">BÃ¡c sÄ©:</span>
-                  <span className="font-semibold">{selectedCheckInApt.doctor_id?.user_id?.ho_ten || 'Äang cáº­p nháº­t'}</span>
+                  <span className="text-sm opacity-80">Bác sĩ:</span>
+                  <span className="font-semibold">{selectedCheckInApt.doctor_id?.user_id?.ho_ten || 'Đang cập nhật'}</span>
                 </div>
                 <div className="flex justify-between pb-1">
-                  <span className="text-sm opacity-80">PhÃ²ng khÃ¡m:</span>
+                  <span className="text-sm opacity-80">Phòng khám:</span>
                   <span className="font-semibold">
-                    {`PhÃ²ng ${parseInt((selectedCheckInApt.doctor_id?._id || '0').substring(20) || '0', 16) % 5 + 101}`}
+                    {`Phòng ${parseInt((selectedCheckInApt.doctor_id?._id || '0').substring(20) || '0', 16) % 5 + 101}`}
                   </span>
                 </div>
               </div>
-              <p className="text-sm text-slate-500 mt-3 italic text-center">Há»‡ thá»‘ng sáº½ Ä‘áº©y lá»‡nh in Sá»‘ thá»© tá»± tá»›i mÃ¡y in sau khi xÃ¡c nháº­n.</p>
+              <p className="text-sm text-slate-500 mt-3 italic text-center">Hệ thống sẽ đẩy lệnh in Số thứ tự tới máy in sau khi xác nhận.</p>
             </div>
 
             <div className="flex justify-end gap-3">
@@ -1168,14 +1168,14 @@ export default function Appointments() {
                 onClick={() => setConfirmCheckInModalOpen(false)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
               >
-                Há»§y bá»
+                Hủy bỏ
               </button>
               <button
                 onClick={confirmCheckIn}
                 className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
               >
                 <Icon name="check" className="w-4 h-4" />
-                XÃ¡c nháº­n & In Phiáº¿u
+                Xác nhận & In Phiếu
               </button>
             </div>
           </div>
@@ -1185,10 +1185,10 @@ export default function Appointments() {
       {/* Floating Action Bar */}
       {isBulkMode && selectedApts.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white shadow-xl border border-slate-200 rounded-full px-6 py-3 flex items-center gap-6 z-40">
-          <span className="font-semibold text-brand-700">ÄÃ£ chá»n {selectedApts.length} lá»‹ch háº¹n</span>
+          <span className="font-semibold text-brand-700">Đã chọn {selectedApts.length} lịch hẹn</span>
           <div className="w-px h-6 bg-slate-200"></div>
-          <button onClick={() => setBulkCancelModalOpen(true)} className="text-red-600 hover:text-red-700 font-medium text-sm">Há»§y hÃ ng loáº¡t</button>
-          <button onClick={() => setBulkRescheduleModalOpen(true)} className="bg-brand-600 text-white px-4 py-1.5 rounded-full hover:bg-brand-700 font-medium text-sm">Dá»i lá»‹ch hÃ ng loáº¡t</button>
+          <button onClick={() => setBulkCancelModalOpen(true)} className="text-red-600 hover:text-red-700 font-medium text-sm">Hủy hàng loạt</button>
+          <button onClick={() => setBulkRescheduleModalOpen(true)} className="bg-brand-600 text-white px-4 py-1.5 rounded-full hover:bg-brand-700 font-medium text-sm">Dời lịch hàng loạt</button>
           <button onClick={() => setBulkDoctorLeaveModalOpen(true)} className="bg-orange-600 text-white px-4 py-1.5 rounded-full hover:bg-orange-700 font-medium text-sm">Bac si nghi dot xuat</button>
         </div>
       )}
@@ -1199,7 +1199,7 @@ export default function Appointments() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-red-50/50">
               <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
-                Há»§y {selectedApts.length} lá»‹ch háº¹n
+                Hủy {selectedApts.length} lịch hẹn
               </h3>
               <button onClick={() => setBulkCancelModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <Icon name="x" className="w-5 h-5" />
@@ -1207,19 +1207,19 @@ export default function Appointments() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">LÃ½ do há»§y hÃ ng loáº¡t (Ã¡p dá»¥ng cho táº¥t cáº£)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Lý do hủy hàng loạt (áp dụng cho tất cả)</label>
                 <textarea
                   className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 outline-none"
                   rows={3}
                   value={bulkReason}
                   onChange={(e) => setBulkReason(e.target.value)}
-                  placeholder="Vd: BÃ¡c sÄ© nghá»‰ á»‘m Ä‘á»™t xuáº¥t"
+                  placeholder="Vd: Bác sĩ nghỉ ốm đột xuất"
                 ></textarea>
               </div>
             </div>
             <div className="p-6 pt-0 flex justify-end gap-3">
-              <button onClick={() => setBulkCancelModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Há»§y bá»</button>
-              <button onClick={handleBulkCancel} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium">XÃ¡c nháº­n Há»§y</button>
+              <button onClick={() => setBulkCancelModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Hủy bỏ</button>
+              <button onClick={handleBulkCancel} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium">Xác nhận Hủy</button>
             </div>
           </div>
         </div>
@@ -1272,7 +1272,7 @@ export default function Appointments() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-brand-50/50">
               <h3 className="text-lg font-bold text-brand-700 flex items-center gap-2">
-                Dá»i {selectedApts.length} lá»‹ch háº¹n (Auto-fill)
+                Dời {selectedApts.length} lịch hẹn (Auto-fill)
               </h3>
               <button onClick={() => setBulkRescheduleModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <Icon name="x" className="w-5 h-5" />
@@ -1280,10 +1280,10 @@ export default function Appointments() {
             </div>
             <div className="p-6 space-y-4">
               <p className="text-sm text-slate-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                Há»‡ thá»‘ng sáº½ tá»± Ä‘á»™ng tÃ¬m kiáº¿m chá»— trá»‘ng (ká»ƒ cáº£ cá»§a BÃ¡c sÄ© khÃ¡c cÃ¹ng chuyÃªn khoa) Ä‘á»ƒ dá»“n cÃ¡c bá»‡nh nhÃ¢n vÃ o, báº¯t Ä‘áº§u tá»« <b>NgÃ y báº¯t Ä‘áº§u</b> báº¡n chá»n bÃªn dÆ°á»›i.
+                Hệ thống sẽ tự động tìm kiếm chỗ trống (kể cả của Bác sĩ khác cùng chuyên khoa) để dồn các bệnh nhân vào, bắt đầu từ <b>Ngày bắt đầu</b> bạn chọn bên dưới.
               </p>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">NgÃ y báº¯t Ä‘áº§u tÃ¬m chá»— trá»‘ng <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Ngày bắt đầu tìm chỗ trống <span className="text-red-500">*</span></label>
                 <input
                   type="date"
                   className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
@@ -1293,13 +1293,13 @@ export default function Appointments() {
               </div>
               {availableBulkSlots.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Khung giá» báº¯t Ä‘áº§u <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Khung giờ bắt đầu <span className="text-red-500">*</span></label>
                   <select
                     className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                     value={bulkStartTime}
                     onChange={(e) => setBulkStartTime(e.target.value)}
                   >
-                    <option value="">-- Chá»n giá» --</option>
+                    <option value="">-- Chọn giờ --</option>
                     {availableBulkSlots.map(time => (
                       <option key={time} value={time}>{time}</option>
                     ))}
@@ -1309,29 +1309,29 @@ export default function Appointments() {
               {bulkStartDate && availableBulkSlots.length === 0 && (
                 <p className="text-sm text-amber-600 flex items-center gap-1 bg-amber-50 p-3 rounded-lg border border-amber-100">
                   <Icon name="alert-triangle" className="w-4 h-4" />
-                  KhÃ´ng cÃ³ khung giá» nÃ o trá»‘ng trong ngÃ y nÃ y.
+                  Không có khung giờ nào trống trong ngày này.
                 </p>
               )}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">LÃ½ do dá»i (Ã¡p dá»¥ng cho táº¥t cáº£)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Lý do dời (áp dụng cho tất cả)</label>
                 <textarea
                   className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                   rows={2}
                   value={bulkReason}
                   onChange={(e) => setBulkReason(e.target.value)}
-                  placeholder="Vd: BÃ¡c sÄ© nghá»‰ phÃ©p, chuyá»ƒn sang ca tiáº¿p theo"
+                  placeholder="Vd: Bác sĩ nghỉ phép, chuyển sang ca tiếp theo"
                 ></textarea>
               </div>
             </div>
             <div className="p-6 pt-0 flex justify-end gap-3">
-              <button onClick={() => setBulkRescheduleModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Há»§y bá»</button>
-              <button onClick={handleBulkReschedule} disabled={!bulkStartDate || (availableBulkSlots.length > 0 && !bulkStartTime)} className="px-4 py-2 bg-brand-600 text-white hover:bg-brand-700 rounded-lg text-sm font-medium disabled:opacity-50">XÃ¡c nháº­n Dá»i</button>
+              <button onClick={() => setBulkRescheduleModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Hủy bỏ</button>
+              <button onClick={handleBulkReschedule} disabled={!bulkStartDate || (availableBulkSlots.length > 0 && !bulkStartTime)} className="px-4 py-2 bg-brand-600 text-white hover:bg-brand-700 rounded-lg text-sm font-medium disabled:opacity-50">Xác nhận Dời</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Component In Phiáº¿u áº¨n */}
+      {/* Component In Phiếu Ẩn */}
       <QueueTicketTemplate data={printData} />
 
     </div>
