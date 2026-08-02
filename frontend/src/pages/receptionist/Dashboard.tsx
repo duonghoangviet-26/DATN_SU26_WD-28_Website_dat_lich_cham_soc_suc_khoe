@@ -4,6 +4,7 @@ import { receptionistNotificationService, VirtualNotification } from '../../serv
 import Icon from '../../components/admin/icons';
 import { format } from 'date-fns';
 import { receptionistPaymentService } from '../../services/receptionist-payment.service';
+import QueueTransferModal, { QueueTransferCandidate } from '../../components/receptionist/QueueTransferModal';
 
 interface Appointment {
   _id: string;
@@ -32,6 +33,7 @@ interface DoctorOperationalStatus {
   doctor_id: string;
   ten_bac_si: string;
   phong_kham?: string | null;
+  specialties?: Array<{ id: string; ten: string | null }>;
   trang_thai_van_hanh: string;
   so_dang_cho: number;
   thoi_gian_kham_hien_tai_phut?: number | null;
@@ -48,6 +50,7 @@ interface DoctorOperationalStatus {
   luot_cho_bi_anh_huong?: Array<{
     hang_doi_id: string;
     appointment_id?: string | null;
+    specialty_id?: string | null;
     ten_benh_nhan: string;
     ma_so_thu_tu?: string | null;
     trang_thai: string;
@@ -79,6 +82,16 @@ export default function Dashboard() {
   
   // Trạng thái cho Tooltip
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+
+  // Trạng thái cho modal chuyển bác sĩ (E-4)
+  const [transferTarget, setTransferTarget] = useState<{
+    hangDoiId: string;
+    tenBenhNhan: string;
+    maSoThuTu?: string | null;
+    specialtyId: string | null;
+    currentDoctorId: string;
+  } | null>(null);
+  const [transferMessage, setTransferMessage] = useState('');
 
   const fetchStats = async () => {
     try {
@@ -190,10 +203,34 @@ export default function Dashboard() {
     return format(date, 'HH:mm');
   };
 
+  // Bác sĩ không thể nhận thêm lượt chuyển đến (khớp nhãn ở doctorStatusLabel).
+  const KHONG_THE_NHAN_CHUYEN = ['khong_co_lich', 'tam_nghi', 'nghi_phep', 'nghi_viec'];
+
+  const getTransferCandidates = (specialtyId: string | null, currentDoctorId: string): QueueTransferCandidate[] => {
+    return doctorStatuses
+      .filter((doctor) => doctor.doctor_id !== currentDoctorId)
+      .filter((doctor) => !KHONG_THE_NHAN_CHUYEN.includes(doctor.trang_thai_van_hanh))
+      .filter((doctor) => !specialtyId || (doctor.specialties ?? []).some((specialty) => specialty.id === specialtyId))
+      .map((doctor) => ({
+        doctor_id: doctor.doctor_id,
+        ten_bac_si: doctor.ten_bac_si,
+        so_dang_cho: doctor.so_dang_cho,
+        phong_kham: doctor.phong_kham,
+      }));
+  };
+
+  const handleTransferred = () => {
+    setTransferTarget(null);
+    setTransferMessage('Đã chuyển lượt sang bác sĩ khác.');
+    fetchDoctorStatuses();
+    window.setTimeout(() => setTransferMessage(''), 4000);
+  };
+
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold text-slate-800 mb-6">Tổng quan Lễ tân</h2>
-      
+      {transferMessage && <p className="mb-6 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{transferMessage}</p>}
+
       {/* Khung Thống Kê */}
       <div className="grid grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -278,6 +315,21 @@ export default function Dashboard() {
                             {queue.nguon === 'online' ? 'Online' : 'Tại quầy'}
                             {formatQueueTime(queue.gio_hen_goc) ? ` · hẹn ${formatQueueTime(queue.gio_hen_goc)}` : ''}
                           </p>
+                          {queue.trang_thai === 'dang_cho' && (
+                            <button
+                              type="button"
+                              onClick={() => setTransferTarget({
+                                hangDoiId: queue.hang_doi_id,
+                                tenBenhNhan: queue.ten_benh_nhan,
+                                maSoThuTu: queue.ma_so_thu_tu,
+                                specialtyId: queue.specialty_id ?? null,
+                                currentDoctorId: doctor.doctor_id,
+                              })}
+                              className="mt-1.5 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-brand-700 hover:bg-brand-50"
+                            >
+                              Chuyển bác sĩ
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -406,6 +458,17 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {transferTarget && (
+        <QueueTransferModal
+          hangDoiId={transferTarget.hangDoiId}
+          tenBenhNhan={transferTarget.tenBenhNhan}
+          maSoThuTu={transferTarget.maSoThuTu}
+          candidates={getTransferCandidates(transferTarget.specialtyId, transferTarget.currentDoctorId)}
+          onClose={() => setTransferTarget(null)}
+          onTransferred={handleTransferred}
+        />
+      )}
     </div>
   );
 }

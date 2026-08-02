@@ -385,7 +385,7 @@ export const getDoctorOperationalStatuses = async (req, res) => {
           doctor_id: { $in: doctorIds },
           checkin_time: { $gte: todayStart, $lt: todayEnd },
           trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu'] },
-        }).select('_id appointment_id doctor_id trang_thai ten_benh_nhan checkin_time gio_hen_goc thoi_diem_goi thoi_diem_vao_phong ma_so_thu_tu so_thu_tu_checkin nguon').lean()
+        }).select('_id appointment_id doctor_id specialty_id trang_thai ten_benh_nhan checkin_time gio_hen_goc thoi_diem_goi thoi_diem_vao_phong ma_so_thu_tu so_thu_tu_checkin nguon').lean()
         : [],
       doctorIds.length
         ? LichHen.find({
@@ -456,6 +456,7 @@ export const getDoctorOperationalStatuses = async (req, res) => {
         return {
           hang_doi_id: queue._id,
           appointment_id: queue.appointment_id ?? null,
+          specialty_id: queue.specialty_id ?? null,
           ten_benh_nhan: queue.ten_benh_nhan,
           ma_so_thu_tu: queue.ma_so_thu_tu ?? null,
           so_thu_tu_checkin: queue.so_thu_tu_checkin ?? null,
