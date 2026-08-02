@@ -30,8 +30,8 @@ interface Appointment {
    * khÃ¡ch khi láº§n trÆ°á»›c lÃ  lá»—i phÃ²ng khÃ¡m.
    */
   so_lan_doi_khach_yeu_cau?: number;
-  ly_do_doi?: 'khach_yeu_cau' | 'phong_kham' | null;
-  allowed_actions?: Array<'check_in' | 'reschedule' | 'cancel'>;
+  ly_do_doi?: 'khach_yeu_cau' | 'phong_kham' | 'khach_den_muon' | null;
+  allowed_actions?: Array<'check_in' | 'reschedule' | 'late_reschedule' | 'cancel'>;
   lock_reason?: string | null;
   queue_state?: string | null;
 }
@@ -42,6 +42,8 @@ interface RescheduleHistory {
   ly_do_thay_doi: string;
   thoi_diem: string;
 }
+
+type LateArrivalPolicy = 'end_of_shift' | 'nearest_available' | 'tomorrow';
 
 const isAppointmentOverdue = (ngay_kham: string, gio_kham: string) => {
   // TÃ¡ch ngÃ y tá»« chuá»—i UTC (vd: "2026-07-20T00:00...")
@@ -78,7 +80,7 @@ const getStatusBadge = (status: string, isOverdue: boolean = false) => {
   }
 };
 
-const hasAction = (appointment: Appointment, action: 'check_in' | 'reschedule' | 'cancel') => {
+const hasAction = (appointment: Appointment, action: 'check_in' | 'reschedule' | 'late_reschedule' | 'cancel') => {
   if (Array.isArray(appointment.allowed_actions)) {
     return appointment.allowed_actions.includes(action);
   }
@@ -86,6 +88,7 @@ const hasAction = (appointment: Appointment, action: 'check_in' | 'reschedule' |
   // Fallback cho dá»¯ liá»‡u cÅ©/mock chÆ°a cÃ³ contract tá»« backend.
   if (action === 'check_in') return appointment.status === 'confirmed';
   if (action === 'reschedule') return appointment.status === 'pending' || appointment.status === 'confirmed';
+  if (action === 'late_reschedule') return appointment.status === 'confirmed';
   if (action === 'cancel') return appointment.status === 'pending' || appointment.status === 'confirmed';
   return false;
 };
@@ -119,6 +122,12 @@ export default function Appointments() {
   const [lyDoDoi, setLyDoDoi] = useState<'khach_yeu_cau' | 'phong_kham'>('khach_yeu_cau');
   const [khachHetLuotDoi, setKhachHetLuotDoi] = useState(false);
   const [aptDangDoi, setAptDangDoi] = useState<Appointment | null>(null);
+
+  // States cho Modal Khach den muon
+  const [lateModalOpen, setLateModalOpen] = useState(false);
+  const [lateAppointment, setLateAppointment] = useState<Appointment | null>(null);
+  const [latePolicy, setLatePolicy] = useState<LateArrivalPolicy>('nearest_available');
+  const [lateReason, setLateReason] = useState('');
 
   // States cho Modal Lá»‹ch sá»­ quÃ¡ háº¡n dá»i lá»‹ch
   const [rescheduleLimitModalOpen, setRescheduleLimitModalOpen] = useState(false);
@@ -417,6 +426,30 @@ export default function Appointments() {
     }
   };
 
+  const handleLateArrival = (apt: Appointment) => {
+    setLateAppointment(apt);
+    setLatePolicy('nearest_available');
+    setLateReason('Khach den muon, le tan dieu phoi lai slot.');
+    setLateModalOpen(true);
+  };
+
+  const confirmLateArrival = async () => {
+    if (!lateAppointment) return;
+
+    try {
+      const res = await axiosInstance.patch(`/receptionist/appointments/${lateAppointment._id}/mark-late`, {
+        policy: latePolicy,
+        reason: lateReason,
+      });
+      setLateModalOpen(false);
+      setLateAppointment(null);
+      if (res.data?.message) alert(res.data.message);
+      fetchAppointments();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Loi khi xu ly khach den muon');
+    }
+  };
+
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold text-slate-800 mb-6">Lá»‹ch háº¹n PhÃ²ng khÃ¡m</h2>
@@ -565,6 +598,7 @@ export default function Appointments() {
                 appointments.map(apt => {
                   const isOverdue = isAppointmentOverdue(apt.ngay_kham, apt.gio_kham);
                   const isPendingAndOverdue = (apt.status === 'pending' || apt.status === 'confirmed') && isOverdue;
+                  const canHandleLateArrival = activeTab === 'today' && isOverdue && hasAction(apt, 'late_reschedule');
 
                   return (
                     <tr key={apt._id} className={`transition-colors ${selectedApts.includes(apt._id) ? 'bg-brand-50' : (isPendingAndOverdue ? 'bg-amber-50/50' : 'hover:bg-slate-50')}`}>
@@ -617,6 +651,15 @@ export default function Appointments() {
                                 <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
                                   Tra cá»©u táº¡i Tiáº¿p nháº­n
                                 </span>
+                              )}
+                              {canHandleLateArrival && (
+                                <button
+                                  title="Khach den muon"
+                                  onClick={() => handleLateArrival(apt)}
+                                  className="p-1.5 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-md transition-colors"
+                                >
+                                  <Icon name="clock" className="w-4 h-4" />
+                                </button>
                               )}
                               {hasAction(apt, 'reschedule') && (
                                 <button
@@ -716,6 +759,62 @@ export default function Appointments() {
                 className="px-4 py-2 bg-amber-500 text-white hover:bg-amber-600 rounded-lg text-sm font-medium transition-colors"
               >
                 Dá»i do lá»—i phÃ²ng khÃ¡m
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Khach Den Muon */}
+      {lateModalOpen && lateAppointment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Xu ly khach den muon</h3>
+            <p className="text-sm text-slate-600 mb-4">
+              Lich {lateAppointment.ma_lich_hen || ''} luc <strong>{lateAppointment.gio_kham}</strong> da qua gio. Chon cach dieu phoi phu hop.
+            </p>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Cach dieu phoi</label>
+                <select
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                  value={latePolicy}
+                  onChange={(e) => setLatePolicy(e.target.value as LateArrivalPolicy)}
+                >
+                  <option value="nearest_available">Slot trong gan nhat trong ngay</option>
+                  <option value="end_of_shift">Dua xuong cuoi ca hien tai</option>
+                  <option value="tomorrow">Doi sang ngay lam viec tiep theo</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Ghi chu cho khach hang</label>
+                <textarea
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none resize-none"
+                  rows={3}
+                  value={lateReason}
+                  onChange={(e) => setLateReason(e.target.value)}
+                />
+              </div>
+
+              <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-xs text-orange-700">
+                He thong se tu tim slot con trong, ghi lich su dieu phoi va thong bao cho khach hang.
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setLateModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
+              >
+                Huy bo
+              </button>
+              <button
+                onClick={confirmLateArrival}
+                className="px-4 py-2 bg-orange-600 text-white hover:bg-orange-700 rounded-lg text-sm font-medium transition-colors"
+              >
+                Xac nhan dieu phoi
               </button>
             </div>
           </div>

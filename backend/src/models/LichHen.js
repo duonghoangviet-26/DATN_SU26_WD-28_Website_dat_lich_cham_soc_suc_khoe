@@ -98,7 +98,7 @@ const appointmentSchema = new mongoose.Schema(
     // còn lỗi phòng khám thì dời bao nhiêu lần cũng không tính vào hạn mức của khách.
     ly_do_doi: {
       type: String,
-      enum: ['khach_yeu_cau', 'phong_kham'],
+      enum: ['khach_yeu_cau', 'phong_kham', 'khach_den_muon'],
       default: null,
     },
     so_lan_doi_khach_yeu_cau: { type: Number, default: 0, min: 0 },

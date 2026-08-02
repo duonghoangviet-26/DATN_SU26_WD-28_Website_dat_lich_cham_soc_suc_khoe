@@ -45,6 +45,7 @@ export const QUEUE_STATUSES = ['checked_in', 'in_progress', 'waiting_record', 'w
 export const RECEPTIONIST_APPOINTMENT_ACTIONS = {
   CHECK_IN: 'check_in',
   RESCHEDULE: 'reschedule',
+  LATE_RESCHEDULE: 'late_reschedule',
   CANCEL: 'cancel',
 }
 
@@ -118,6 +119,7 @@ export function buildReceptionistAppointmentActions(appointment, queueEntry = nu
     allowed.push(
       RECEPTIONIST_APPOINTMENT_ACTIONS.CHECK_IN,
       RECEPTIONIST_APPOINTMENT_ACTIONS.RESCHEDULE,
+      RECEPTIONIST_APPOINTMENT_ACTIONS.LATE_RESCHEDULE,
       RECEPTIONIST_APPOINTMENT_ACTIONS.CANCEL,
     )
   } else if (status === 'pending') {

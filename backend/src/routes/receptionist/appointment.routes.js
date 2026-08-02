@@ -10,6 +10,7 @@ router.get('/doctor-statuses', appointmentController.getDoctorOperationalStatuse
 router.post('/bulk-cancel', appointmentController.bulkCancelAppointments)
 router.post('/bulk-reschedule', appointmentController.bulkRescheduleAppointments)
 router.patch('/:id/arrived', appointmentController.markAsArrived)
+router.patch('/:id/mark-late', appointmentController.markLateArrival)
 router.patch('/:id/reschedule', appointmentController.rescheduleAppointment)
 router.get('/:id/reschedule-history', appointmentController.getRescheduleHistory)
 router.patch('/:id/cancel', appointmentController.cancelAppointment)

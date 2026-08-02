@@ -353,6 +353,8 @@ Admin/lễ tân xác nhận sự cố của bác sĩ
 
 **Mức ưu tiên:** P0. **Phụ thuộc:** LT-00, LT-03, LT-06, LT-08, LT-09.
 
+**Tình trạng triển khai 2026-08-02:** đã thêm thao tác riêng `late_reschedule` cho lễ tân và API `PATCH /receptionist/appointments/:id/mark-late`. Màn danh sách lịch hẹn hiển thị nút xử lý khách đến muộn khi lịch hôm nay đã quá giờ và chưa check-in/đang khám. Lễ tân chọn một trong ba phương án: đưa xuống cuối ca hiện tại, slot trống gần nhất trong ngày, hoặc ngày làm việc tiếp theo. Backend tự tìm slot còn trống, cập nhật lịch hẹn, ghi `LichSuLichHen.loai_thay_doi='late_reschedule'`, đặt `ly_do_doi='khach_den_muon'`, ghi `trang_thai_den='den_muon'`, và gọi luồng thông báo khách hàng. Không tạo thêm trạng thái `LichHen.status` mới để tránh xung đột với luồng bác sĩ.
+
 **Lỗi/gap hiện tại:** “đến muộn” dễ bị hiểu thành dời giờ hẹn. Thực tế, lịch đã check-in muộn vẫn là một lượt khám hôm nay; nếu đổi `gio_kham` một cách máy móc sẽ làm sai slot và lịch sử cam kết ban đầu.
 
 **Luồng thao tác cho lễ tân:**

@@ -15,7 +15,8 @@ import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
 import { sendNotificationEmail, isMailConfigured } from '../../services/mail.service.js'
-import { cacMocCuaKhung, startOfDayUtc } from '../../utils/clinicTime.js'
+import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../../utils/clinicTime.js'
+import { caCuaKhung } from '../../models/MauLichLamViec.js'
 import {
   RECEPTIONIST_APPOINTMENT_ACTIONS,
   assertReceptionistAppointmentAction,
@@ -379,6 +380,121 @@ function slotConTrong(slot) {
   return slot.status === 'active' && !slot.benh_nhan_id && !slot.bi_khoa_boi_nghi_phep
 }
 
+function addDays(date, days) {
+  return new Date(date.getTime() + days * 86400000)
+}
+
+function hhmmToMinutes(value) {
+  const [hours, minutes] = String(value || '').split(':').map(Number)
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
+  return hours * 60 + minutes
+}
+
+function normalizeDateOnly(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  date.setUTCHours(0, 0, 0, 0)
+  return date
+}
+
+async function bookedSlotIdsForSchedule(scheduleId, appointmentId) {
+  const appointments = await LichHen.find({
+    schedule_id: scheduleId,
+    status: { $ne: 'cancelled' },
+    _id: { $ne: appointmentId },
+  }).select('slot_id').lean()
+  return new Set(appointments.filter((appointment) => appointment.slot_id).map((appointment) => String(appointment.slot_id)))
+}
+
+function getAvailableFutureSlots(schedule, bookedSlotIds, appointment, now) {
+  return (schedule.slots || [])
+    .filter((slot) => {
+      if (!slotConTrong(slot) || bookedSlotIds.has(String(slot._id))) return false
+      if (String(slot._id) === String(appointment.slot_id)) return false
+      const slotTime = buildSlotDateTime(schedule.ngay, slot.gio_bat_dau)
+      return slotTime && slotTime.getTime() > now.getTime()
+    })
+    .sort((a, b) => a.gio_bat_dau.localeCompare(b.gio_bat_dau))
+}
+
+async function findLateArrivalTargetSlot({ appointment, policy, now = new Date() }) {
+  const day = normalizeDateOnly(appointment.ngay_kham)
+  if (!day) {
+    throw Object.assign(new Error('Ngay kham hien tai khong hop le'), { statusCode: 400 })
+  }
+
+  const requestedPolicy = ['end_of_shift', 'nearest_available', 'tomorrow'].includes(policy)
+    ? policy
+    : 'nearest_available'
+
+  const todaySchedule = await LichLamViec.findOne({
+    doctor_id: appointment.doctor_id,
+    ngay: { $gte: day, $lt: addDays(day, 1) },
+    trang_thai_ngay: 'lam_viec',
+    trang_thai_xac_nhan: { $ne: 'tu_choi' },
+  }).lean()
+
+  if (requestedPolicy !== 'tomorrow' && todaySchedule) {
+    const bookedSlotIds = await bookedSlotIdsForSchedule(todaySchedule._id, appointment._id)
+    let slots = getAvailableFutureSlots(todaySchedule, bookedSlotIds, appointment, now)
+
+    if (requestedPolicy === 'end_of_shift') {
+      const currentSlot = (todaySchedule.slots || []).find((slot) => String(slot._id) === String(appointment.slot_id))
+      const currentShift = currentSlot?.khung_index !== null && currentSlot?.khung_index !== undefined
+        ? caCuaKhung(currentSlot.khung_index)
+        : null
+      if (currentShift) {
+        slots = slots.filter((slot) => slot.khung_index !== null && slot.khung_index !== undefined && caCuaKhung(slot.khung_index) === currentShift)
+      }
+      slots.sort((a, b) => (hhmmToMinutes(b.gio_bat_dau) ?? 0) - (hhmmToMinutes(a.gio_bat_dau) ?? 0))
+    }
+
+    if (slots.length > 0) {
+      const slot = slots[0]
+      return {
+        policy: requestedPolicy,
+        doctor_id: todaySchedule.doctor_id,
+        schedule_id: todaySchedule._id,
+        slot_id: slot._id,
+        ngay: todaySchedule.ngay,
+        gio_bat_dau: slot.gio_bat_dau,
+        phong_kham: slot.phong_kham || null,
+      }
+    }
+
+    if (requestedPolicy === 'end_of_shift') {
+      throw Object.assign(new Error('Khong con slot trong o cuoi ca hien tai. Hay chon slot trong gan nhat hoac doi sang ngay hom sau.'), { statusCode: 409 })
+    }
+  }
+
+  const start = requestedPolicy === 'tomorrow' ? addDays(day, 1) : day
+  const schedules = await LichLamViec.find({
+    doctor_id: appointment.doctor_id,
+    ngay: { $gte: start, $lt: addDays(start, 14) },
+    trang_thai_ngay: 'lam_viec',
+    trang_thai_xac_nhan: { $ne: 'tu_choi' },
+  }).sort({ ngay: 1 }).lean()
+
+  for (const schedule of schedules) {
+    const bookedSlotIds = await bookedSlotIdsForSchedule(schedule._id, appointment._id)
+    const slots = getAvailableFutureSlots(schedule, bookedSlotIds, appointment, now)
+    if (slots.length > 0) {
+      const slot = slots[0]
+      return {
+        policy: requestedPolicy,
+        doctor_id: schedule.doctor_id,
+        schedule_id: schedule._id,
+        slot_id: slot._id,
+        ngay: schedule.ngay,
+        gio_bat_dau: slot.gio_bat_dau,
+        phong_kham: slot.phong_kham || null,
+      }
+    }
+  }
+
+  throw Object.assign(new Error('Khong tim thay slot trong de xu ly khach den muon trong 14 ngay toi.'), { statusCode: 409 })
+}
+
 // Lá»… tÃ¢n dá»i lá»‹ch há»™ khÃ¡ch.
 //
 // âš ï¸ Báº£n trÆ°á»›c bá» qua gáº§n háº¿t má»¥c 5/11 vÃ  cÃ³ thá»ƒ lÃ m há»ng dá»¯ liá»‡u:
@@ -603,6 +719,115 @@ export const rescheduleAppointment = async (req, res) => {
       data: appointment,
       ly_do_doi: lyDoDoi,
       so_lan_doi_khach_yeu_cau: appointment.so_lan_doi_khach_yeu_cau,
+      notification: notificationResult,
+    })
+  } catch (error) {
+    res.status(error.statusCode ?? 500).json({ success: false, message: error.message })
+  }
+}
+
+export const markLateArrival = async (req, res) => {
+  try {
+    const { policy = 'nearest_available', reason } = req.body ?? {}
+    const now = new Date()
+
+    const appointment = await LichHen.findById(req.params.id).populate('user_id', 'email')
+    if (!appointment) {
+      return res.status(404).json({ success: false, message: 'Khong tim thay lich hen' })
+    }
+
+    const queueEntry = await getQueueEntryForAppointment(appointment._id)
+    assertReceptionistAppointmentAction(
+      appointment,
+      queueEntry,
+      RECEPTIONIST_APPOINTMENT_ACTIONS.LATE_RESCHEDULE,
+    )
+
+    const moc = cacMocCuaKhung(appointment.ngay_kham, appointment.gio_kham)
+    if (!moc || now.getTime() < moc.T.getTime()) {
+      return res.status(409).json({ success: false, message: 'Lich hen chua qua gio kham, khong the ghi nhan khach den muon.' })
+    }
+
+    const target = await findLateArrivalTargetSlot({ appointment, policy, now })
+    const gioCu = appointment.gio_kham
+    const ngayCu = appointment.ngay_kham
+    const trangThaiCu = appointment.status
+    const paymentStatusCu = appointment.payment_status
+    const bacSiCuId = appointment.doctor_id
+    const specialtyCuId = appointment.specialty_id
+    const scheduleCuId = appointment.schedule_id
+    const slotCuId = appointment.slot_id
+    let phongKhamCu = null
+
+    if (appointment.schedule_id && appointment.slot_id) {
+      const scheduleCu = await LichLamViec.findById(appointment.schedule_id).lean()
+      const slotCu = scheduleCu?.slots?.find((slot) => String(slot._id) === String(appointment.slot_id))
+      phongKhamCu = slotCu?.phong_kham || null
+    }
+
+    await apDungPhuongAn({
+      appointment,
+      phuongAn: {
+        loai: 'doi_khung',
+        doctor_id: target.doctor_id,
+        schedule_id: target.schedule_id,
+        slot_id: target.slot_id,
+        ngay: target.ngay,
+        gio_bat_dau: target.gio_bat_dau,
+        lan_walk_in: false,
+      },
+      lyDoDoi: 'khach_den_muon',
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
+    })
+
+    appointment.trang_thai_den = 'den_muon'
+    appointment.gio_den_thuc_te = now
+    appointment.ly_do_doi_lich = reason?.trim() || 'Khach den muon, le tan dieu phoi sang slot phu hop.'
+    await appointment.save()
+
+    await LichSuLichHen.create([{
+      appointment_id: appointment._id,
+      tu_trang_thai: trangThaiCu,
+      den_trang_thai: appointment.status,
+      tu_payment_status: paymentStatusCu,
+      den_payment_status: appointment.payment_status,
+      loai_thay_doi: 'late_reschedule',
+      ly_do_thay_doi: appointment.ly_do_doi_lich,
+      bac_si_cu_id: bacSiCuId,
+      bac_si_moi_id: appointment.doctor_id,
+      specialty_cu_id: specialtyCuId,
+      specialty_moi_id: appointment.specialty_id,
+      schedule_cu_id: scheduleCuId,
+      schedule_moi_id: appointment.schedule_id,
+      slot_cu_id: slotCuId,
+      slot_moi_id: appointment.slot_id,
+      vai_tro: getActorRole(req),
+      kenh_thay_doi: getActorRole(req),
+      ngay_kham_cu: ngayCu,
+      ngay_kham_moi: appointment.ngay_kham,
+      gio_kham_cu: gioCu,
+      gio_kham_moi: appointment.gio_kham,
+      phong_kham_cu: phongKhamCu,
+      phong_kham_moi: target.phong_kham,
+      ly_do: `late_policy=${target.policy}`,
+      nguoi_thay_doi_id: getActorUserId(req) ?? appointment.user_id,
+      nguoi_thuc_hien_id: getActorUserId(req),
+    }])
+
+    const notificationResult = await notifyAppointmentCustomerChange({
+      appointment,
+      action: 'reschedule',
+      reason: appointment.ly_do_doi_lich,
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
+    })
+
+    res.status(200).json({
+      success: true,
+      message: `Da xu ly khach den muon: chuyen tu ${gioCu} sang ${appointment.gio_kham}.`,
+      data: appointment,
+      late_policy: target.policy,
       notification: notificationResult,
     })
   } catch (error) {
@@ -963,6 +1188,7 @@ export default {
   getPendingCheckin,
   getDoctorOperationalStatuses,
   rescheduleAppointment,
+  markLateArrival,
   cancelAppointment,
   getRescheduleHistory,
   bulkCancelAppointments,
