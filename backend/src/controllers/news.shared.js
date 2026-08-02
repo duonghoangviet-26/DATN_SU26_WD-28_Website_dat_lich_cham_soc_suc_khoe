@@ -92,7 +92,7 @@ export function normalizeNewsPayload(body = {}, { partial = false } = {}) {
 
 export function formatNews(news) {
   const plain = typeof news.toObject === 'function' ? news.toObject() : news
-  const authorName = plain.author_name || plain.author_id?.ho_ten || 'VitaFamily'
+  const authorName = plain.author_name || plain.author_id?.ho_ten || 'ViteFamily'
   const excerpt = stripTags(plain.content).slice(0, 180)
 
   return {

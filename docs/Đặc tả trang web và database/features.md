@@ -1,4 +1,4 @@
-# VitaFamily — 20 Chức Năng
+# ViteFamily — 20 Chức Năng
 
 > Tóm tắt nhanh để AI và thành viên nắm được luồng xử lý.
 > Chi tiết đầy đủ: `Tài liệu dự án/Chức Năng Chính/[tên].pdf`
@@ -74,7 +74,7 @@
 - Khi duyệt: `doctors.trang_thai_duyet='approved'` + `doctors.la_hien=true` + `users.role='doctor'` (1 transaction)
 - Bác sĩ bị từ chối nhận email kèm lý do; lịch sử từ chối lưu trong `lich_su_tu_choi[]`
 - Bác sĩ tự chọn chuyên khoa (`specialties[]`) và dịch vụ (`services[]`) mình cung cấp
-- VitaFamily là phòng khám tư 1 cơ sở — bác sĩ không gắn với bệnh viện nào cả
+- ViteFamily là phòng khám tư 1 cơ sở — bác sĩ không gắn với bệnh viện nào cả
 - **Bảng liên quan:** `bac_si` (embed `specialties[]`, `services[]`), `nguoi_dung`
 
 ### B2 — Quản lý lịch làm việc
@@ -127,7 +127,7 @@
 
 ### C3 — Quản lý chuyên khoa
 
-- CRUD chuyên khoa _(VitaFamily là phòng khám tư 1 cơ sở — không quản lý nhiều bệnh viện)_
+- CRUD chuyên khoa _(ViteFamily là phòng khám tư 1 cơ sở — không quản lý nhiều bệnh viện)_
 - Ẩn thay vì xóa (`status = 'hidden'`) để không ảnh hưởng bác sĩ/dịch vụ đã gắn
 - Slug tự sinh từ tên (URL-friendly), bất biến sau khi tạo
 - **Bảng liên quan:** `chuyen_khoa`

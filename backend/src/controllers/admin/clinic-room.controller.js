@@ -204,7 +204,7 @@ async function normalizeClinicBuildingData() {
     const possibleOldNames = Array.from(new Set([
       room.full_name,
       `${room.ten}, Tầng ${room.tang}, Tòa ${room.toa}`,
-      `${room.ten}, Tầng ${room.tang}, Tòa VitaFamily`,
+      `${room.ten}, Tầng ${room.tang}, Tòa ViteFamily`,
       `${room.ten}, Tầng ${room.tang}, Tòa A`,
       `${room.ten}, Tầng ${room.tang}, Tòa B`,
     ].flatMap((name) => [name, toWindows1252Mojibake(name)])))

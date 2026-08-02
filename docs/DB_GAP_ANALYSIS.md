@@ -1,4 +1,4 @@
-# VitaFamily — DB Gap Analysis (B2 · B3 · B4 · C1–C8)
+# ViteFamily — DB Gap Analysis (B2 · B3 · B4 · C1–C8)
 
 > Tài liệu này ghi lại toàn bộ sự khác biệt giữa **frontend TypeScript types + mock data**
 > và **MongoDB schema thực tế** (docs/database.md).

@@ -1,4 +1,4 @@
-# Bản đồ tài liệu VitaFamily
+# Bản đồ tài liệu ViteFamily
 
 > Bạn đang tìm gì? Tìm nhanh tại đây.
 
@@ -20,9 +20,9 @@
 | Biết chi tiết 1 chức năng (vd: Đặt lịch) | `docs/features.md` → mục A5 |
 | Thiết kế bảng / viết model | `docs/database.md` |
 | Phân tích chi tiết C4 — Quản lý dịch vụ | `docs/Admin/Chi tiết quản lý dịch vụ.md` |
-| Đặc tả gốc đầy đủ nhất | `Tài liệu dự án/Đặc tả/Dac_Ta_Du_An_VitaFamily.md` |
+| Đặc tả gốc đầy đủ nhất | `Tài liệu dự án/Đặc tả/Dac_Ta_Du_An_ViteFamily.md` |
 | Chi tiết từng chức năng (PDF) | `Tài liệu dự án/Chức Năng Chính/*.pdf` |
-| SQL schema gốc (MySQL) | `Tài liệu dự án/Cơ sở dữ liệu/VitaFamily_Database.sql` |
+| SQL schema gốc (MySQL) | `Tài liệu dự án/Cơ sở dữ liệu/ViteFamily_Database.sql` |
 | Làm trang Admin mới | `frontend/README.md` |
 | Viết API mới (controller/route/middleware) | `backend/README.md` |
 | Convention của nhóm | `.agents/memory/project-conventions.md` |
@@ -35,7 +35,7 @@
 ```
 Tài liệu dự án/
 ├── Đặc tả/
-│   ├── Dac_Ta_Du_An_VitaFamily.md    ← Đặc tả dạng Markdown (AI đọc được)
+│   ├── Dac_Ta_Du_An_ViteFamily.md    ← Đặc tả dạng Markdown (AI đọc được)
 │   └── Đặc tả dự án pdf.pdf          ← Bản PDF đầy đủ
 ├── Chức Năng Chính/
 │   ├── Đăng Ký Đăng Nhập.pdf         ← A1
@@ -59,7 +59,7 @@ Tài liệu dự án/
 │   ├── Thông báo hệ thống.pdf        ← C7
 │   └── Quản lý thanh toán.pdf        ← C8
 └── Cơ sở dữ liệu/
-    └── VitaFamily_Database.sql        ← 27 bảng MySQL (dùng làm tham chiếu thiết kế)
+    └── ViteFamily_Database.sql        ← 27 bảng MySQL (dùng làm tham chiếu thiết kế)
 ```
 
 ---

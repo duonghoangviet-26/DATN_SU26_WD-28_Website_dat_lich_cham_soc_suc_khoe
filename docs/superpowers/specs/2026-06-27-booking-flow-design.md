@@ -538,7 +538,7 @@ related_services: [
 
 ```ts
 export const mockClinicInfo = {
-  ten: 'Phòng khám VitaFamily',
+  ten: 'Phòng khám ViteFamily',
   dia_chi: '123 Đường ABC, Phường XYZ, Quận 1, TP.HCM',
   so_dien_thoai: '028 1234 5678',
   gio_lam_viec: '08:00–17:00 Thứ 2 – Thứ 7',

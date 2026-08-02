@@ -138,7 +138,7 @@ export default function NewsList() {
                   {featuredItem.excerpt}
                 </p>
                 <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold uppercase pt-2">
-                  <span>{featuredItem.author_name || 'VitaFamily'}</span>
+                  <span>{featuredItem.author_name || 'ViteFamily'}</span>
                   <span>•</span>
                   <span>{new Date(featuredItem.created_at).toLocaleDateString('vi-VN')}</span>
                 </div>
@@ -173,7 +173,7 @@ export default function NewsList() {
                     </div>
                     <div className="p-5 space-y-3 text-left">
                       <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold uppercase">
-                        <span>{n.author_name || 'VitaFamily'}</span>
+                        <span>{n.author_name || 'ViteFamily'}</span>
                         <span>•</span>
                         <span>{new Date(n.created_at).toLocaleDateString('vi-VN')}</span>
                       </div>

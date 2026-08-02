@@ -47,6 +47,7 @@ export default function RescheduleModal({ appointmentId, onClose, onDone }: Prop
       setChon(data.phuong_an.length > 0 ? 0 : null)
     } catch (err: any) {
       setLoi(err.response?.data?.message || 'Không tải được phương án dời lịch')
+      setOptions(null)
     } finally {
       setDangTai(false)
     }
@@ -78,10 +79,11 @@ export default function RescheduleModal({ appointmentId, onClose, onDone }: Prop
         {!dangTai && loi && !options && (
           <div className="space-y-3">
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{loi}</div>
-            <p className="text-xs leading-relaxed text-slate-500">
-              Bạn vẫn giữ nguyên lịch hẹn hiện tại và số tiền đã thanh toán. Nếu cần hỗ trợ thêm,
-              vui lòng liên hệ quầy lễ tân.
-            </p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              Bạn vẫn giữ nguyên lịch hẹn hiện tại và số tiền đã thanh toán.
+              Nếu cần hỗ trợ thêm hoặc đây là trường hợp bất khả kháng,
+              hãy gọi ngay <a href="tel:0365747888" className="font-semibold text-brand-700 underline">0365 747 888</a>.
+            </div>
             <div className="flex justify-end">
               <Button variant="secondary" onClick={onClose}>Đóng</Button>
             </div>
@@ -164,6 +166,13 @@ export default function RescheduleModal({ appointmentId, onClose, onDone }: Prop
                 Bạn còn <strong>{options.con_lai}</strong> lần dời lịch. Sau khi dời, lịch này sẽ
                 không đổi được nữa.
               </p>
+            )}
+
+            {options.loai === 'khach_tu_doi' && options.con_lai === 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                Bạn đã dùng hết 1 lần dời lịch. Nếu đây là trường hợp bất khả kháng, vui lòng
+                liên hệ quầy lễ tân qua số điện thoại để được hỗ trợ dời lịch.
+              </div>
             )}
 
             {loi && (

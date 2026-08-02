@@ -5,7 +5,7 @@ import { sendMail } from '../services/mail.service.js'
 dotenv.config()
 
 const to = process.argv[2]
-const subject = process.argv[3] || `[VitaFamily] Test email ${new Date().toISOString()}`
+const subject = process.argv[3] || `[ViteFamily] Test email ${new Date().toISOString()}`
 
 if (!to) {
   console.error('Usage: node src/scripts/test-mail.js <recipient-email> [subject]')
@@ -16,11 +16,11 @@ try {
   const info = await sendMail({
     to,
     subject,
-    text: 'Day la email test gui that tu he thong VitaFamily bang Nodemailer Gmail.',
+    text: 'Day la email test gui that tu he thong ViteFamily bang Nodemailer Gmail.',
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-        <h2>VitaFamily - Test email</h2>
-        <p>Day la email test gui that tu he thong VitaFamily bang Nodemailer Gmail.</p>
+        <h2>ViteFamily - Test email</h2>
+        <p>Day la email test gui that tu he thong ViteFamily bang Nodemailer Gmail.</p>
         <p>Thoi gian gui: ${new Date().toISOString()}</p>
       </div>
     `,

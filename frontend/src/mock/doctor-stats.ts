@@ -17,7 +17,7 @@ export const mockDoctorProfile: DoctorProfile = {
 
 export const mockDoctorProfileExtra = {
   tieu_su: 'Bác sĩ Lê Hoàng Cường có hơn 12 năm kinh nghiệm trong lĩnh vực Nhi khoa. Ông từng công tác tại các bệnh viện lớn và có nhiều công trình nghiên cứu về dinh dưỡng trẻ em.',
-  benh_vien_chinh: 'Bệnh viện Đa khoa VitaFamily',
+  benh_vien_chinh: 'Bệnh viện Đa khoa ViteFamily',
 }
 
 export const mockDoctorStats: DoctorStats = {

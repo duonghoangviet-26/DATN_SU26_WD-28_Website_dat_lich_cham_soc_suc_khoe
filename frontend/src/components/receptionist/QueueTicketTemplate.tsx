@@ -27,7 +27,7 @@ export default function QueueTicketTemplate({ data }: Props) {
       </style>
 
       <div className="text-center border-b-2 border-dashed border-gray-300 pb-3 mb-3">
-        <h1 className="text-xl font-bold uppercase tracking-wider mb-1">VitaFamily</h1>
+        <h1 className="text-xl font-bold uppercase tracking-wider mb-1">ViteFamily</h1>
         <p className="text-xs text-gray-600">Phòng khám Chăm sóc Sức khỏe</p>
       </div>
 

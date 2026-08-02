@@ -1,5 +1,5 @@
 // Các hằng số dùng chung toàn hệ thống.
-// Khớp với ENUM trong cơ sở dữ liệu (xem VitaFamily_Database.sql).
+// Khớp với ENUM trong cơ sở dữ liệu (xem ViteFamily_Database.sql).
 
 // Vai trò người dùng
 export const ROLES = {

@@ -1,7 +1,7 @@
-# VitaFamily — Database Schema (MongoDB / Mongoose)
+# ViteFamily — Database Schema (MongoDB / Mongoose)
 
 > Stack: **MongoDB + Mongoose**
-> Nguồn gốc: Chuyển đổi từ `Tài liệu dự án/Cơ sở dữ liệu/VitaFamily_Database.sql` (MySQL 27 bảng)
+> Nguồn gốc: Chuyển đổi từ `Tài liệu dự án/Cơ sở dữ liệu/ViteFamily_Database.sql` (MySQL 27 bảng)
 > Sau khi embed một số bảng join và bỏ `hospitals` (phòng khám tư 1 cơ sở) → còn **24 collection**.
 > ⚠️ **File này là phiên bản tổng quan — nguồn sự thật là `docs/MODELS_DATABASE.md`.**
 > Cập nhật: C4 V4 (services, appointments), bỏ hospitals, thêm lich_su_lich_hen.
@@ -53,7 +53,7 @@
 | Số lượng phần tử nhỏ và có giới hạn | Số lượng có thể tăng không giới hạn |
 | Dữ liệu thuộc về cha, không tồn tại độc lập | Entity có vòng đời riêng |
 
-**Áp dụng trong VitaFamily:**
+**Áp dụng trong ViteFamily:**
 - `slots[]` embed trong `doctor_schedules` → luôn load cùng ngày làm việc, tối đa ~20 slot/ngày
 - `items[]` embed trong `prescriptions` → luôn đọc cùng đơn thuốc, tối đa 10 thuốc/đơn
 - `specialties[]`, `hospitals[]`, `services[]` embed trong `doctors` → chỉ lưu ObjectId ref, ít khi thay đổi

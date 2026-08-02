@@ -136,7 +136,7 @@ Ngưỡng là cấu hình, không hardcode.
 
 → Giá khác nhau là **chuẩn ngành và hợp pháp**, nhưng phân theo **hạng công khai**, không theo từng cá nhân tuỳ hứng. Câu hỏi "sao người kia rẻ hơn" được trả lời bằng bảng giá niêm yết.
 
-**Khắc phục cho VitaFamily:** dùng **một giá duy nhất theo chuyên khoa** (`ChuyenKhoa.gia_kham`). Phòng khám tư một chuyên khoa TMH, đội ngũ chưa phân hạng học hàm — thêm bậc giá chỉ làm phức tạp đồ án mà không thêm giá trị. Giữ `BacSi.gia_kham` như field kỹ thuật nhưng **không dùng để tính tiền**. Giá phải hiển thị **trước** khi giữ chỗ.
+**Khắc phục cho ViteFamily:** dùng **một giá duy nhất theo chuyên khoa** (`ChuyenKhoa.gia_kham`). Phòng khám tư một chuyên khoa TMH, đội ngũ chưa phân hạng học hàm — thêm bậc giá chỉ làm phức tạp đồ án mà không thêm giá trị. Giữ `BacSi.gia_kham` như field kỹ thuật nhưng **không dùng để tính tiền**. Giá phải hiển thị **trước** khi giữ chỗ.
 **Khi mở rộng:** thêm `hang_bac_si` (enum) + bảng giá theo hạng, kèm luật **nâng hạng miễn phí** — nếu chỉ còn bác sĩ hạng cao hơn rảnh, khách được khám hạng cao với giá đã báo. Tự gán **không bao giờ** được tính cao hơn giá khách đã thấy.
 
 #### L11. Không có luật gán → dồn tải

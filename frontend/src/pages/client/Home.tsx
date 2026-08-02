@@ -3,11 +3,12 @@ import { ArrowUpRight, CalendarDays, Check, ChevronRight, Clock3, Ear, MapPin, S
 import { Link } from 'react-router-dom'
 
 import Skeleton from '@/components/common/Skeleton'
-import { Reveal } from '@/components/client/ClientMotion'
+import { Reveal, StaggerContainer, StaggerItem } from '@/components/client/ClientMotion'
 import HeroBanner from '@/components/client/HeroBanner'
 import { newsService } from '@/services/news.service'
 import { serviceService } from '@/services/service.service'
-import type { NewsArticle, ServiceItem } from '@/types'
+import { patientBookingService } from '@/services/patient-booking.service'
+import type { NewsArticle, ServiceItem, DoctorProfile } from '@/types'
 import { getNewsImageSrcSet, getNewsImageUrl } from '@/utils/newsImage'
 
 const benefits = [
@@ -48,7 +49,9 @@ function ServiceMark({ index }: { index: number }) {
 export default function Home() {
   const [clinicServices, setClinicServices] = useState<ServiceItem[]>([])
   const [latestNews, setLatestNews] = useState<NewsArticle[]>([])
+  const [doctors, setDoctors] = useState<DoctorProfile[]>([])
   const [loadingServices, setLoadingServices] = useState(true)
+  const [loadingDoctors, setLoadingDoctors] = useState(true)
 
   useEffect(() => {
     let ignore = false
@@ -68,6 +71,15 @@ export default function Home() {
       })
       .catch((error) => console.error('Không tải được cẩm nang sức khỏe:', error))
 
+    patientBookingService.getDoctors()
+      .then((res) => {
+        if (!ignore) setDoctors(res)
+      })
+      .catch((error) => console.error('Không tải được bác sĩ:', error))
+      .finally(() => {
+        if (!ignore) setLoadingDoctors(false)
+      })
+
     return () => {
       ignore = true
     }
@@ -80,9 +92,8 @@ export default function Home() {
     <div className="overflow-hidden bg-[#f7faf9] text-slate-900">
       <HeroBanner />
 
-      <Reveal>
-      <section className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8 lg:py-24">
-        <div className="max-w-md">
+      <StaggerContainer className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.8fr_1.2fr] lg:px-8 lg:py-24">
+        <StaggerItem className="max-w-md">
           <p className="text-sm font-semibold text-teal-700">Một cuộc hẹn nhẹ nhàng hơn</p>
           <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">
             Bạn không cần tự chọn bác sĩ.
@@ -94,30 +105,30 @@ export default function Home() {
             Bắt đầu đặt lịch
             <ChevronRight size={17} aria-hidden="true" />
           </Link>
-        </div>
+        </StaggerItem>
 
         <div className="grid gap-3 sm:grid-cols-3">
           {bookingSteps.map((item, index) => {
             const Icon = item.icon
             return (
-              <article key={item.title} className={`relative rounded-3xl p-6 ${index === 1 ? 'bg-teal-800 text-white' : 'bg-white text-slate-900 shadow-[0_10px_35px_rgba(21,54,56,0.06)]'}`}>
-                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${index === 1 ? 'bg-white/15 text-white' : 'bg-teal-50 text-teal-700'}`}>
-                  <Icon size={21} strokeWidth={1.8} aria-hidden="true" />
-                </span>
-                <p className={`mt-12 text-xs font-semibold ${index === 1 ? 'text-teal-100' : 'text-teal-700'}`}>0{index + 1}</p>
-                <h3 className="mt-2 text-lg font-semibold tracking-[-0.02em]">{item.title}</h3>
-                <p className={`mt-3 text-sm leading-6 ${index === 1 ? 'text-teal-50/80' : 'text-slate-500'}`}>{item.description}</p>
-              </article>
+              <StaggerItem key={item.title}>
+                <article className={`h-full relative rounded-3xl p-6 ${index === 1 ? 'bg-teal-800 text-white' : 'bg-white text-slate-900 shadow-[0_10px_35px_rgba(21,54,56,0.06)]'}`}>
+                  <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${index === 1 ? 'bg-white/15 text-white' : 'bg-teal-50 text-teal-700'}`}>
+                    <Icon size={21} strokeWidth={1.8} aria-hidden="true" />
+                  </span>
+                  <p className={`mt-12 text-xs font-semibold ${index === 1 ? 'text-teal-100' : 'text-teal-700'}`}>0{index + 1}</p>
+                  <h3 className="mt-2 text-lg font-semibold tracking-[-0.02em]">{item.title}</h3>
+                  <p className={`mt-3 text-sm leading-6 ${index === 1 ? 'text-teal-50/80' : 'text-slate-500'}`}>{item.description}</p>
+                </article>
+              </StaggerItem>
             )
           })}
         </div>
-      </section>
-      </Reveal>
+      </StaggerContainer>
 
-      <Reveal>
       <section className="border-y border-slate-200/80 bg-white">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:px-8 lg:py-24">
-          <div className="relative overflow-hidden rounded-[2rem] bg-slate-100">
+        <StaggerContainer className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:px-8 lg:py-24">
+          <StaggerItem className="relative overflow-hidden rounded-[2rem] bg-slate-100">
             <img
               src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1200&auto=format&fit=crop&q=80"
               alt="Không gian sạch sẽ, sáng thoáng của phòng khám"
@@ -128,20 +139,22 @@ export default function Home() {
               <p className="text-sm font-semibold text-slate-900">Không gian khám riêng tư</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">Thiết kế để người bệnh cảm thấy thoải mái ngay từ lúc bước vào.</p>
             </div>
-          </div>
+          </StaggerItem>
           <div className="max-w-lg">
-            <p className="text-sm font-semibold text-teal-700">Phòng khám VitaFamily</p>
-            <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">
-              Chẩn đoán kỹ, giải thích dễ hiểu, đồng hành đến khi ổn hơn.
-            </h2>
-            <p className="mt-5 text-base leading-7 text-slate-600">
-              Chúng tôi tập trung vào trải nghiệm khám rõ ràng: lắng nghe triệu chứng, kiểm tra cẩn thận và thống nhất hướng chăm sóc cùng người bệnh.
-            </p>
+            <StaggerItem>
+              <p className="text-sm font-semibold text-teal-700">Phòng khám ViteFamily</p>
+              <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">
+                Chẩn đoán kỹ, giải thích dễ hiểu, đồng hành đến khi ổn hơn.
+              </h2>
+              <p className="mt-5 text-base leading-7 text-slate-600">
+                Chúng tôi tập trung vào trải nghiệm khám rõ ràng: lắng nghe triệu chứng, kiểm tra cẩn thận và thống nhất hướng chăm sóc cùng người bệnh.
+              </p>
+            </StaggerItem>
             <div className="mt-8 space-y-4">
               {benefits.map((benefit) => {
                 const Icon = benefit.icon
                 return (
-                  <div key={benefit.title} className="flex gap-4">
+                  <StaggerItem key={benefit.title} className="flex gap-4">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
                       <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
                     </span>
@@ -149,18 +162,16 @@ export default function Home() {
                       <h3 className="text-sm font-semibold text-slate-900">{benefit.title}</h3>
                       <p className="mt-1 text-sm leading-6 text-slate-500">{benefit.description}</p>
                     </div>
-                  </div>
+                  </StaggerItem>
                 )
               })}
             </div>
           </div>
-        </div>
+        </StaggerContainer>
       </section>
-      </Reveal>
 
-      <Reveal>
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+      <StaggerContainer className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <StaggerItem className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-xl">
             <p className="text-sm font-semibold text-teal-700">Dịch vụ và triệu chứng</p>
             <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">Bắt đầu từ điều bạn đang khó chịu.</h2>
@@ -170,7 +181,7 @@ export default function Home() {
             Xem tất cả dịch vụ
             <ArrowUpRight size={17} aria-hidden="true" />
           </Link>
-        </div>
+        </StaggerItem>
 
         {loadingServices ? (
           <div className="mt-10 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
@@ -184,38 +195,81 @@ export default function Home() {
         ) : (
           <div className="mt-10 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
             {featuredService && (
-              <Link to={`/dich-vu/${featuredService.id}`} className="group flex min-h-[300px] flex-col justify-between rounded-xl bg-brand-800 p-7 text-white shadow-sm hover:shadow-xl hover:shadow-brand-500/10 transition-all duration-300 ease-out hover:-translate-y-1 sm:p-9 border border-brand-700">
-                <div className="flex items-start justify-between gap-4">
-                  <ServiceMark index={0} />
-                  <ArrowUpRight className="text-brand-200 transition-transform duration-300 ease-out group-hover:translate-x-1" size={22} aria-hidden="true" />
-                </div>
-                <div className="mt-14 max-w-md">
-                  <p className="text-sm font-medium text-brand-100">Dịch vụ nổi bật</p>
-                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.025em]">{featuredService.ten}</h3>
-                  <p className="mt-3 text-sm leading-6 text-brand-50/80">{featuredService.mo_ta_ngan || 'Khám và tư vấn chuyên khoa theo tình trạng cụ thể của bạn.'}</p>
-                </div>
-              </Link>
+              <StaggerItem>
+                <Link to={`/dich-vu/${featuredService.id}`} className="group flex h-full min-h-[300px] flex-col justify-between rounded-xl bg-brand-800 p-7 text-white shadow-sm hover:shadow-xl hover:shadow-brand-500/10 transition-all duration-300 ease-out hover:-translate-y-1 sm:p-9 border border-brand-700">
+                  <div className="flex items-start justify-between gap-4">
+                    <ServiceMark index={0} />
+                    <ArrowUpRight className="text-brand-200 transition-transform duration-300 ease-out group-hover:translate-x-1" size={22} aria-hidden="true" />
+                  </div>
+                  <div className="mt-14 max-w-md">
+                    <p className="text-sm font-medium text-brand-100">Dịch vụ nổi bật</p>
+                    <h3 className="mt-2 text-2xl font-semibold tracking-[-0.025em]">{featuredService.ten}</h3>
+                    <p className="mt-3 text-sm leading-6 text-brand-50/80">{featuredService.mo_ta_ngan || 'Khám và tư vấn chuyên khoa theo tình trạng cụ thể của bạn.'}</p>
+                  </div>
+                </Link>
+              </StaggerItem>
             )}
             <div className="grid gap-4 sm:grid-cols-2">
               {secondaryServices.map((service, index) => (
-                <Link key={service.id} to={`/dich-vu/${service.id}`} className="group flex min-h-[142px] flex-col justify-between rounded-xl bg-gradient-to-br from-brand-50/60 to-white border border-gray-100 p-5 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10">
-                  <div className="flex items-start justify-between gap-3">
-                    <ServiceMark index={index + 1} />
-                    <ChevronRight className="text-slate-300 transition-transform duration-300 ease-out group-hover:translate-x-1 group-hover:text-brand-700" size={18} aria-hidden="true" />
-                  </div>
-                  <h3 className="mt-7 text-sm font-semibold leading-5 text-slate-900">{service.ten}</h3>
-                </Link>
+                <StaggerItem key={service.id}>
+                  <Link to={`/dich-vu/${service.id}`} className="group flex h-full min-h-[142px] flex-col justify-between rounded-xl bg-gradient-to-br from-brand-50/60 to-white border border-gray-100 p-5 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10">
+                    <div className="flex items-start justify-between gap-3">
+                      <ServiceMark index={index + 1} />
+                      <ChevronRight className="text-slate-300 transition-transform duration-300 ease-out group-hover:translate-x-1 group-hover:text-brand-700" size={18} aria-hidden="true" />
+                    </div>
+                    <h3 className="mt-7 text-sm font-semibold leading-5 text-slate-900">{service.ten}</h3>
+                  </Link>
+                </StaggerItem>
               ))}
             </div>
           </div>
         )}
-      </section>
-      </Reveal>
+      </StaggerContainer>
 
-      <Reveal>
+      <section className="bg-white py-16 sm:py-24">
+        <StaggerContainer className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <StaggerItem>
+            <h2 className="text-center text-3xl font-bold uppercase tracking-tight text-[#006039] sm:text-4xl">Đội ngũ bác sĩ giàu kinh nghiệm</h2>
+          </StaggerItem>
+          
+          {loadingDoctors ? (
+            <div className="mt-12 flex flex-wrap justify-center gap-6">
+              {[1, 2, 3].map(item => <Skeleton key={item} className="aspect-[3/4] w-full max-w-[280px] rounded-xl" />)}
+            </div>
+          ) : doctors.length > 0 ? (
+            <div className="mt-12 flex flex-wrap justify-center gap-8">
+              {doctors.slice(0, 4).map(doctor => (
+                <StaggerItem key={doctor.id} className="w-full max-w-[320px]">
+                  <div className="h-full rounded-xl border border-transparent bg-[#eef7f5] p-4 text-center transition-transform hover:-translate-y-1 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] flex flex-col">
+                    <div className="overflow-hidden rounded-xl bg-white">
+                      <img 
+                        src={doctor.anh_dai_dien ? (doctor.anh_dai_dien.startsWith('http') ? doctor.anh_dai_dien : `http://localhost:5000${doctor.anh_dai_dien.startsWith('/') ? '' : '/'}${doctor.anh_dai_dien}`) : '/images/robot-avatar.png'} 
+                        alt={doctor.ho_ten} 
+                        className="aspect-[4/5] w-full object-cover object-top" 
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="mt-5 pb-2 flex-1 flex flex-col">
+                      <h3 className="text-[17px] font-bold text-[#ea580c]">{doctor.ho_ten}</h3>
+                      {doctor.chuyen_khoa && <p className="mt-1 text-[13px] font-semibold text-[#ea580c]">{doctor.chuyen_khoa}</p>}
+                      
+                      <div className="mt-4 pt-4 border-t border-slate-100 flex-1">
+                        <p className="text-[13px] leading-relaxed text-slate-500 line-clamp-4">
+                          {doctor.kinh_nghiem || `Bác sĩ chuyên khoa tận tâm với ${doctor.so_nam_kinh_nghiem ? `${doctor.so_nam_kinh_nghiem} năm` : 'nhiều năm'} kinh nghiệm trong lĩnh vực khám và điều trị ${doctor.chuyen_khoa || 'Tai Mũi Họng'}.`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </StaggerItem>
+              ))}
+            </div>
+          ) : null}
+        </StaggerContainer>
+      </section>
+
       <section className="border-t border-slate-200/80 bg-[#eef7f5]">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <StaggerContainer className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+          <StaggerItem className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-teal-700">Cẩm nang sức khỏe</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">Thông tin hữu ích cho cả gia đình.</h2>
@@ -224,54 +278,55 @@ export default function Home() {
               Xem cẩm nang
               <ArrowUpRight size={17} aria-hidden="true" />
             </Link>
-          </div>
+          </StaggerItem>
 
           {latestNews.length > 0 && (
             <div className="mt-10 grid gap-5 md:grid-cols-3">
               {latestNews.map((article) => (
-                <Link key={article.id} to={`/tin-tuc/${article.url_slug || article.id}`} className="group overflow-hidden rounded-xl bg-gradient-to-br from-brand-50/60 to-white border border-gray-100 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10">
-                  <div className="aspect-[1.45/1] overflow-hidden bg-slate-100">
-                    <img
-                      src={getNewsImageUrl(article.image, { width: 720, height: 496 })}
-                      srcSet={getNewsImageSrcSet(article.image, [
-                        { width: 480, height: 331 },
-                        { width: 720, height: 496 },
-                        { width: 960, height: 662 },
-                      ])}
-                      sizes="(min-width: 768px) 33vw, calc(100vw - 32px)"
-                      alt={article.title}
-                      className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                  <div className="p-5">
-                    <p className="text-xs font-medium text-slate-400">{new Date(article.created_at).toLocaleDateString('vi-VN')}</p>
-                    <h3 className="mt-3 line-clamp-2 text-base font-semibold leading-6 text-slate-900 group-hover:text-brand-800 transition-colors">{article.title}</h3>
-                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{article.excerpt}</p>
-                  </div>
-                </Link>
+                <StaggerItem key={article.id}>
+                  <Link to={`/tin-tuc/${article.url_slug || article.id}`} className="block h-full group overflow-hidden rounded-xl bg-gradient-to-br from-brand-50/60 to-white border border-gray-100 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10">
+                    <div className="aspect-[1.45/1] overflow-hidden bg-slate-100">
+                      <img
+                        src={getNewsImageUrl(article.image, { width: 720, height: 496 })}
+                        srcSet={getNewsImageSrcSet(article.image, [
+                          { width: 480, height: 331 },
+                          { width: 720, height: 496 },
+                          { width: 960, height: 662 },
+                        ])}
+                        sizes="(min-width: 768px) 33vw, calc(100vw - 32px)"
+                        alt={article.title}
+                        className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
+                    <div className="p-5">
+                      <p className="text-xs font-medium text-slate-400">{new Date(article.created_at).toLocaleDateString('vi-VN')}</p>
+                      <h3 className="mt-3 line-clamp-2 text-base font-semibold leading-6 text-slate-900 group-hover:text-brand-800 transition-colors">{article.title}</h3>
+                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{article.excerpt}</p>
+                    </div>
+                  </Link>
+                </StaggerItem>
               ))}
             </div>
           )}
-        </div>
+        </StaggerContainer>
       </section>
-      </Reveal>
 
-      <Reveal>
       <section className="bg-teal-900 text-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-14 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 lg:py-16">
-          <div className="max-w-2xl">
+        <StaggerContainer className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-14 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8 lg:py-16">
+          <StaggerItem className="max-w-2xl">
             <p className="text-sm font-medium text-teal-200">Bạn đang cần được thăm khám?</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">Đặt một khung giờ phù hợp cho hôm nay.</h2>
-          </div>
-          <Link to="/booking" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-teal-900 transition-colors hover:bg-teal-50">
-            Đặt lịch khám
-            <ArrowUpRight size={17} aria-hidden="true" />
-          </Link>
-        </div>
+          </StaggerItem>
+          <StaggerItem>
+            <Link to="/booking" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-teal-900 transition-colors hover:bg-teal-50">
+              Đặt lịch khám
+              <ArrowUpRight size={17} aria-hidden="true" />
+            </Link>
+          </StaggerItem>
+        </StaggerContainer>
       </section>
-      </Reveal>
 
       <div className="mx-auto flex max-w-7xl flex-wrap gap-x-8 gap-y-3 px-4 py-6 text-xs text-slate-500 sm:px-6 lg:px-8">
         <span className="inline-flex items-center gap-2"><MapPin size={14} className="text-teal-700" aria-hidden="true" /> 123 Nguyễn Trãi, Thanh Xuân, Hà Nội</span>
