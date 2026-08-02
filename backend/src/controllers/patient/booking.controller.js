@@ -459,6 +459,12 @@ export async function createBooking(req, res) {
     if (booking_for === 'other' && (!ten_khach || !so_dien_thoai_khach)) {
       return rollbackFail(400, 'Đặt cho người khác phải có họ tên và số điện thoại người được khám')
     }
+    if (so_dien_thoai_khach) {
+      const cleanPhone = normalizeBookingPhone(so_dien_thoai_khach)
+      if (!/^0\d{9,10}$/.test(cleanPhone)) {
+        return rollbackFail(400, 'Số điện thoại liên hệ không đúng định dạng (phải có 10 chữ số, ví dụ 0912345678)')
+      }
+    }
 
     // ⛔ Không có bằng chứng khách đồng ý điều khoản KHÔNG HOÀN TIỀN thì KHÔNG được thu
     // tiền (rule mục 5). Thu trước rồi mới tranh cãi là phòng khám thua — phải chặn ở đây,
@@ -472,6 +478,12 @@ export async function createBooking(req, res) {
 
     const appointmentDate = parseDateOnly(ngay_kham)
     if (!appointmentDate) return rollbackFail(400, 'Ngày khám không hợp lệ')
+
+    // Phòng khám nghỉ Chủ nhật (getDay() === 0). Chặn phòng thủ ở backend
+    // để tránh đặt lịch qua API trực tiếp vào ngày nghỉ.
+    if (appointmentDate.getUTCDay() === 0) {
+      return rollbackFail(400, 'Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
+    }
 
     // ── Tự gán bác sĩ (rule mục 12) ─────────────────────────────────────────
     // Chạy TRƯỚC mọi kiểm tra khác để phần dưới không phải biết khách đã đi đường nào:
@@ -984,14 +996,16 @@ export async function createDoctorReview(req, res) {
       return fail(res, 400, 'Số sao phải từ 1 đến 5')
     }
 
-    // 1. Tìm lịch hẹn của người dùng này với bác sĩ này
+    // 1. Tìm lịch hẹn ĐÃ HOÀN THÀNH của người dùng này với bác sĩ này
+    //    Chỉ lịch hẹn status='completed' mới đủ điều kiện đánh giá
     const appointments = await LichHen.find({
       user_id: userId,
-      doctor_id: doctorId
+      doctor_id: doctorId,
+      status: 'completed',
     }).lean()
 
     if (appointments.length === 0) {
-      return fail(res, 400, 'Bạn cần đăng ký khám với bác sĩ này trước khi viết đánh giá.')
+      return fail(res, 400, 'Bạn cần có ít nhất một lịch hẹn đã hoàn thành với bác sĩ này để viết đánh giá.')
     }
 
     // 2. Tìm lịch hẹn chưa được đánh giá
