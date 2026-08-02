@@ -233,6 +233,91 @@ export async function getDoctorById(req, res) {
     }
 }
 
+// ─── E-5: Ma trận bác sĩ x khung giờ trong ngày ("Lịch bác sĩ trong ngày") ────
+// Gộp slot theo khung_index thành 1 dòng — không đánh đồng slot = khung (rule mục 1).
+// Thuần tính toán, không chạm DB — export để unit test không cần Mongo.
+export function buildDoctorKhungRows(schedule) {
+    if (!schedule) return [];
+    const bySlot = new Map();
+    for (const slot of schedule.slots || []) {
+        if (slot.khung_index === null || slot.khung_index === undefined) continue;
+        if (!bySlot.has(slot.khung_index)) {
+            bySlot.set(slot.khung_index, {
+                khung_index: slot.khung_index,
+                gio_bat_dau: slot.gio_bat_dau,
+                gio_ket_thuc: slot.gio_ket_thuc,
+                tong_slot: 0,
+                con_trong: 0,
+                khoa_boi_nghi_phep: false,
+            });
+        }
+        const row = bySlot.get(slot.khung_index);
+        row.tong_slot += 1;
+        const conTrong = slot.status === "active"
+            && !slot.benh_nhan_id
+            && !slot.benh_nhan_tam_giu_id
+            && !slot.bi_khoa_boi_nghi_phep;
+        if (conTrong) row.con_trong += 1;
+        if (slot.bi_khoa_boi_nghi_phep) row.khoa_boi_nghi_phep = true;
+    }
+    return [...bySlot.values()].sort((a, b) => a.khung_index - b.khung_index);
+}
+
+// Ca sáng 08:00–11:30, ca chiều 13:30–17:30, nghỉ trưa ở giữa không sinh khung nào (rule mục 1)
+// — chỉ cần so `gio_bat_dau` với mốc 13:30 là tách đúng ca, không cần biết trước số khung/ca.
+export function chiaCaSangChieu(khungRows) {
+    return {
+        ca_sang: khungRows.filter((row) => row.gio_bat_dau < "13:30"),
+        ca_chieu: khungRows.filter((row) => row.gio_bat_dau >= "13:30"),
+    };
+}
+
+// GET /api/receptionist/booking/day-overview?date=
+export async function getDoctorDayOverview(req, res) {
+    try {
+        const ngayDate = parseDateOnly(req.query.date);
+        if (!ngayDate) return fail(res, 400, "Tham số date là bắt buộc (YYYY-MM-DD)");
+
+        const doctors = await BacSi.find({ trang_thai_duyet: "approved", la_hien: true })
+            .select("_id user_id trang_thai")
+            .populate("user_id", "ho_ten")
+            .lean();
+        const doctorIds = doctors.map((d) => d._id);
+
+        const schedules = doctorIds.length
+            ? await LichLamViec.find({
+                doctor_id: { $in: doctorIds },
+                ngay: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
+            }).lean()
+            : [];
+        const scheduleByDoctor = new Map(schedules.map((s) => [String(s.doctor_id), s]));
+
+        const data = doctors.map((doctor) => {
+            const schedule = scheduleByDoctor.get(String(doctor._id)) ?? null;
+            // Phan biet "khong dang ky ca nao" (khong co ban ghi lich) voi "co dang ky nhung
+            // nghi/nghi phep hom do" — hai tinh huong khac nhau, khong duoc gop chung thanh
+            // mot nhan "het cho" (kiem thu E-5 yeu cau tach ro).
+            const trangThaiNgay = schedule ? schedule.trang_thai_ngay : "khong_co_lich";
+            const dangLamViec = schedule?.trang_thai_ngay === "lam_viec"
+                && schedule?.trang_thai_xac_nhan !== "tu_choi";
+            const khungRows = dangLamViec ? buildDoctorKhungRows(schedule) : [];
+            const { ca_sang, ca_chieu } = chiaCaSangChieu(khungRows);
+            return {
+                doctor_id: doctor._id,
+                ten_bac_si: doctor.user_id?.ho_ten ?? "Bác sĩ",
+                trang_thai_bac_si: doctor.trang_thai,
+                trang_thai_ngay: trangThaiNgay,
+                ca_sang,
+                ca_chieu,
+            };
+        });
+
+        return ok(res, { ngay: ngayDate, doctors: data });
+    } catch (error) {
+        return fail(res, error.statusCode ?? 500, error.message);
+    }
+}
+
 export async function getSlots(req, res) {
     try {
         const { date } = req.query;
