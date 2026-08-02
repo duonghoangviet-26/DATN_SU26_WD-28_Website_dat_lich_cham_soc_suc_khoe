@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { GiaDinh, HangDoi, HoSoBenhNhan, LichHen, NguoiDung, ThanhVien } from '../../models/index.js'
+import { GiaDinh, HangDoi, HoSoBenhNhan, LichHen, NguoiDung, NhatKyThaoTac, ThanhVien } from '../../models/index.js'
 import { created, fail, ok } from '../../utils/response.js'
 import { startOfDayUtc } from '../../utils/clinicTime.js'
 import {
@@ -20,6 +20,126 @@ function normalizeName(value) {
 
 function isValidPhone(phone) {
   return /^0\d{9,10}$/.test(phone)
+}
+
+export const ADMINISTRATIVE_PROFILE_FIELDS = [
+  'ho_ten',
+  'so_dien_thoai',
+  'ngay_sinh',
+  'gioi_tinh',
+  'nhom_mau',
+  'di_ung',
+  'benh_nen',
+  'dia_chi',
+  'ghi_chu',
+]
+
+export const PROFESSIONAL_PROFILE_FIELDS = [
+  'chan_doan',
+  'ket_luan',
+  'huong_dan_dieu_tri',
+  'don_thuoc',
+  'thuoc',
+  'sinh_hieu',
+  'ket_qua_kham',
+  'trieu_chung_ban_dau',
+  'ghi_chu_dieu_duong',
+  'dich_vu_phat_sinh',
+  'chi_dinh',
+]
+
+const UPDATE_REASON_FIELDS = ['ly_do', 'ly_do_cap_nhat']
+
+function trimOrNull(value) {
+  const text = String(value ?? '').trim()
+  return text || null
+}
+
+function normalizeOptionalDate(value) {
+  if (value === null || value === '') return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    throw Object.assign(new Error('Ngay sinh khong hop le'), { statusCode: 400 })
+  }
+  return date
+}
+
+export function normalizeAdministrativeProfileUpdate(body = {}) {
+  const ly_do = String(body.ly_do_cap_nhat ?? body.ly_do ?? '').trim()
+  if (!ly_do) {
+    throw Object.assign(new Error('Can nhap ly do cap nhat ho so'), { statusCode: 400 })
+  }
+
+  const allowed = new Set([...ADMINISTRATIVE_PROFILE_FIELDS, ...UPDATE_REASON_FIELDS])
+  const invalidFields = Object.keys(body).filter((key) => !allowed.has(key))
+  const professionalFields = invalidFields.filter((key) => PROFESSIONAL_PROFILE_FIELDS.includes(key))
+  if (professionalFields.length) {
+    throw Object.assign(new Error(`Le tan khong duoc cap nhat truong chuyen mon: ${professionalFields.join(', ')}`), {
+      statusCode: 403,
+    })
+  }
+  if (invalidFields.length) {
+    throw Object.assign(new Error(`Truong khong duoc phep cap nhat: ${invalidFields.join(', ')}`), { statusCode: 403 })
+  }
+
+  const update = {}
+  if (Object.prototype.hasOwnProperty.call(body, 'ho_ten')) {
+    const ho_ten = String(body.ho_ten ?? '').trim().replace(/\s+/g, ' ')
+    if (!ho_ten) throw Object.assign(new Error('Ho ten la bat buoc'), { statusCode: 400 })
+    update.ho_ten = ho_ten
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'so_dien_thoai')) {
+    const so_dien_thoai = normalizePhone(body.so_dien_thoai)
+    if (!isValidPhone(so_dien_thoai)) {
+      throw Object.assign(new Error('So dien thoai khong dung dinh dang'), { statusCode: 400 })
+    }
+    update.so_dien_thoai = so_dien_thoai
+    update.so_dien_thoai_tim_kiem = so_dien_thoai
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'ngay_sinh')) {
+    update.ngay_sinh = normalizeOptionalDate(body.ngay_sinh)
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'gioi_tinh')) {
+    const gioi_tinh = body.gioi_tinh === null || body.gioi_tinh === '' ? null : body.gioi_tinh
+    if (gioi_tinh && !['nam', 'nu', 'khac'].includes(gioi_tinh)) {
+      throw Object.assign(new Error('Gioi tinh khong hop le'), { statusCode: 400 })
+    }
+    update.gioi_tinh = gioi_tinh
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'nhom_mau')) {
+    const nhom_mau = body.nhom_mau === null || body.nhom_mau === '' ? null : body.nhom_mau
+    if (nhom_mau && !['A', 'B', 'AB', 'O'].includes(nhom_mau)) {
+      throw Object.assign(new Error('Nhom mau khong hop le'), { statusCode: 400 })
+    }
+    update.nhom_mau = nhom_mau
+  }
+  for (const field of ['di_ung', 'benh_nen', 'dia_chi', 'ghi_chu']) {
+    if (Object.prototype.hasOwnProperty.call(body, field)) update[field] = trimOrNull(body[field])
+  }
+
+  return { ly_do, update }
+}
+
+function comparableValue(value) {
+  if (value instanceof Date) return value.toISOString()
+  if (value && typeof value.toISOString === 'function') return value.toISOString()
+  if (value === undefined) return null
+  return value
+}
+
+export function buildAdministrativeProfileAuditDiff(profile, update) {
+  const du_lieu_cu = {}
+  const du_lieu_moi = {}
+  const changed_fields = []
+  for (const [field, nextValue] of Object.entries(update)) {
+    if (field === 'so_dien_thoai_tim_kiem') continue
+    const previousValue = profile[field] ?? null
+    if (comparableValue(previousValue) === comparableValue(nextValue)) continue
+    changed_fields.push(field)
+    du_lieu_cu[field] = previousValue
+    du_lieu_moi[field] = nextValue
+  }
+  return { changed_fields, du_lieu_cu, du_lieu_moi }
 }
 
 function phoneVariants(phone) {
@@ -377,6 +497,98 @@ export const createPatientProfile = async (req, res) => {
     if (error instanceof mongoose.Error.ValidationError) {
       return fail(res, 400, error.message)
     }
+    return fail(res, 500, error.message)
+  }
+}
+
+export const updatePatientProfileAdministrative = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 400, 'Ma ho so benh nhan khong hop le')
+    }
+
+    const profile = await HoSoBenhNhan.findOne({ _id: req.params.id, trang_thai: 'active' })
+    if (!profile) return fail(res, 404, 'Khong tim thay ho so benh nhan dang hoat dong')
+
+    const { ly_do, update } = normalizeAdministrativeProfileUpdate(req.body)
+    const diff = buildAdministrativeProfileAuditDiff(profile, update)
+    if (diff.changed_fields.length === 0) {
+      return fail(res, 400, 'Khong co thong tin ho so nao thay doi')
+    }
+
+    const updated = await HoSoBenhNhan.findOneAndUpdate(
+      { _id: profile._id, trang_thai: 'active' },
+      { $set: update },
+      { new: true, runValidators: true },
+    ).lean()
+
+    const actorRole = req.user?.role === 'admin' ? 'admin' : 'receptionist'
+    const audit = await NhatKyThaoTac.create({
+      nguoi_thuc_hien_id: req.user?._id ?? req.user?.id ?? null,
+      vai_tro: actorRole,
+      hanh_dong: 'UPDATE_PATIENT_PROFILE_ADMINISTRATIVE',
+      loai_doi_tuong: 'patient_profile',
+      doi_tuong_id: profile._id,
+      ly_do,
+      du_lieu_cu: {
+        changed_fields: diff.changed_fields,
+        ...diff.du_lieu_cu,
+      },
+      du_lieu_moi: {
+        changed_fields: diff.changed_fields,
+        ...diff.du_lieu_moi,
+      },
+    })
+
+    return ok(res, {
+      profile: serializeProfile(updated),
+      audit_id: String(audit._id),
+      changed_fields: diff.changed_fields,
+    }, 'Da cap nhat ho so benh nhan')
+  } catch (error) {
+    if (error instanceof mongoose.Error.ValidationError) {
+      return fail(res, 400, error.message)
+    }
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
+export const getPatientProfileAuditLogs = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 400, 'Ma ho so benh nhan khong hop le')
+    }
+
+    const profile = await HoSoBenhNhan.findOne({ _id: req.params.id, trang_thai: 'active' }).select('_id').lean()
+    if (!profile) return fail(res, 404, 'Khong tim thay ho so benh nhan dang hoat dong')
+
+    const logs = await NhatKyThaoTac.find({
+      loai_doi_tuong: 'patient_profile',
+      doi_tuong_id: profile._id,
+      hanh_dong: 'UPDATE_PATIENT_PROFILE_ADMINISTRATIVE',
+    })
+      .populate('nguoi_thuc_hien_id', 'ho_ten email role')
+      .sort({ ngay_tao: -1 })
+      .lean()
+
+    return ok(res, logs.map((log) => ({
+      id: String(log._id),
+      actor: log.nguoi_thuc_hien_id
+        ? {
+            id: String(log.nguoi_thuc_hien_id._id),
+            ho_ten: log.nguoi_thuc_hien_id.ho_ten,
+            email: log.nguoi_thuc_hien_id.email,
+            role: log.nguoi_thuc_hien_id.role,
+          }
+        : null,
+      vai_tro: log.vai_tro,
+      hanh_dong: log.hanh_dong,
+      ly_do: log.ly_do,
+      du_lieu_cu: log.du_lieu_cu,
+      du_lieu_moi: log.du_lieu_moi,
+      ngay_tao: log.ngay_tao,
+    })))
+  } catch (error) {
     return fail(res, 500, error.message)
   }
 }
