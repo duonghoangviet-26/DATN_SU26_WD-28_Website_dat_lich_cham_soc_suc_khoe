@@ -470,6 +470,8 @@ Khách/lễ tân yêu cầu hủy
 
 **Mức ưu tiên:** P0. **Phụ thuộc:** LT-00.
 
+**Tình trạng triển khai 2026-08-02:** đã thêm số thứ tự check-in cố định trên `HangDoi`: `ngay_checkin_key`, `so_thu_tu_checkin`, `ma_so_thu_tu`. Số được sinh bằng `Counter` theo từng ngày (`checkin:YYYY-MM-DD`) cho cả lịch online khi lễ tân check-in và lượt walk-in tại quầy; index unique theo ngày + số giúp chống trùng khi nhiều lễ tân thao tác đồng thời. API check-in, tra cứu hồ sơ và danh sách queue trả mã số này; màn tiếp nhận lễ tân hiển thị mã sau khi check-in. Thứ tự gọi khám vẫn giữ thuật toán động hiện có, không dùng số thứ tự cố định để xếp ưu tiên.
+
 **Lỗi/gap hiện tại:** `HangDoi` hiện cố ý chỉ sắp thứ tự động theo ưu tiên và thời điểm check-in, chưa lưu số thứ tự. Đây là đúng cho thứ tự gọi, nhưng thiếu mã để lễ tân đưa cho khách và đối chiếu tại quầy.
 
 **Phân biệt bắt buộc:**

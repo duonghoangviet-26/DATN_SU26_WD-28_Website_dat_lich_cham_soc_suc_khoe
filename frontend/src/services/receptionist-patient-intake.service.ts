@@ -60,6 +60,8 @@ export interface ActiveQueue {
   doctor_id?: string | null
   phong_kham?: string | null
   checkin_time: string
+  so_thu_tu_checkin?: number | null
+  ma_so_thu_tu?: string | null
 }
 
 interface PatientSearchResult {
@@ -247,7 +249,7 @@ export const receptionistPatientIntakeService = {
   },
 
   async checkIn(payload: { ho_so_benh_nhan_id: string; schedule_id: string; slot_id: string }) {
-    const response = await axiosInstance.post<ApiResponse<{ entry: { _id: string }; slot: OfflineIntakeSlot }>>(
+    const response = await axiosInstance.post<ApiResponse<{ entry: { _id: string; checkin_time?: string; so_thu_tu_checkin?: number | null; ma_so_thu_tu?: string | null }; slot: OfflineIntakeSlot }>>(
       '/receptionist/patient-intake/check-in',
       payload,
     )
@@ -257,7 +259,7 @@ export const receptionistPatientIntakeService = {
   async checkInAppointment(appointmentId: string, patient: { ho_so_benh_nhan_id: string; so_dien_thoai: string; ho_ten: string }) {
     const response = await axiosInstance.patch<ApiResponse<{
       appointment: TodayAppointment
-      hang_doi: { id: string; doctor_id: string; phong_kham?: string | null; gio_hen_goc?: string | null; checkin_time: string }
+      hang_doi: { id: string; doctor_id: string; phong_kham?: string | null; gio_hen_goc?: string | null; checkin_time: string; so_thu_tu_checkin?: number | null; ma_so_thu_tu?: string | null }
       canh_bao?: string[]
     }>>(`/receptionist/appointments/${appointmentId}/arrived`, patient)
     return response.data

@@ -230,7 +230,7 @@ export const searchPatientProfiles = async (req, res) => {
             ho_so_benh_nhan_id: { $in: profileIds },
             checkin_time: { $gte: start, $lt: end },
             trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu'] },
-        }).select('_id ho_so_benh_nhan_id appointment_id trang_thai doctor_id phong_kham gio_hen_goc checkin_time').lean()
+        }).select('_id ho_so_benh_nhan_id appointment_id trang_thai doctor_id phong_kham gio_hen_goc checkin_time so_thu_tu_checkin ma_so_thu_tu').lean()
         : [],
       accountIds.length
         ? appointmentPopulate(LichHen.find({
@@ -270,6 +270,8 @@ export const searchPatientProfiles = async (req, res) => {
             doctor_id: queue.doctor_id ? String(queue.doctor_id) : null,
             phong_kham: queue.phong_kham ?? null,
             checkin_time: queue.checkin_time,
+            so_thu_tu_checkin: queue.so_thu_tu_checkin ?? null,
+            ma_so_thu_tu: queue.ma_so_thu_tu ?? null,
           }
         : null
     }

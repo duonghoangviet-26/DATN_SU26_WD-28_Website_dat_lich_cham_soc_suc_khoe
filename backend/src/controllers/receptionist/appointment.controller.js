@@ -56,7 +56,7 @@ function getActorRole(req) {
 
 async function getQueueEntryForAppointment(appointmentId, session = null) {
   const query = HangDoi.findOne({ appointment_id: appointmentId })
-    .select('_id appointment_id trang_thai checkin_time thoi_diem_vao_phong')
+    .select('_id appointment_id trang_thai checkin_time thoi_diem_vao_phong so_thu_tu_checkin ma_so_thu_tu ngay_checkin_key')
   if (session) query.session(session)
   return query.lean()
 }
@@ -133,7 +133,7 @@ export const getAppointments = async (req, res) => {
 
     const queueEntries = appointments.length
       ? await HangDoi.find({ appointment_id: { $in: appointments.map((appointment) => appointment._id) } })
-        .select('_id appointment_id trang_thai checkin_time thoi_diem_vao_phong')
+        .select('_id appointment_id trang_thai checkin_time thoi_diem_vao_phong so_thu_tu_checkin ma_so_thu_tu ngay_checkin_key')
         .lean()
       : []
     const queueByAppointment = new Map(queueEntries.map((entry) => [String(entry.appointment_id), entry]))
@@ -226,6 +226,8 @@ export const markAsArrived = async (req, res) => {
         phong_kham: entry.phong_kham,
         gio_hen_goc: entry.gio_hen_goc,
         checkin_time: entry.checkin_time,
+        so_thu_tu_checkin: entry.so_thu_tu_checkin,
+        ma_so_thu_tu: entry.ma_so_thu_tu,
       },
       canh_bao,
     })

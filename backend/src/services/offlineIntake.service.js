@@ -10,6 +10,7 @@ import { tinhMucUuTien } from '../models/HangDoi.js'
 import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
 import { kiemTraQuaTai } from './queueOverflow.service.js'
 import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
+import { capSoThuTuCheckin } from './checkInNumber.service.js'
 import { donDepSlotTruocKhiDoc } from './slotRelease.service.js'
 import { cacKhungDuocBanTaiQuay, locSlotBanTaiQuay } from './walkInWindow.service.js'
 
@@ -393,6 +394,7 @@ export async function tiepNhanHoSoVaoHangDoi({
       if (!claimed) throw loi(409, 'Slot vừa được tiếp nhận bởi người khác, vui lòng chọn slot khác')
 
       const claimedSlot = claimed.slots.id(slot._id)
+      const checkInNumber = await capSoThuTuCheckin(now)
       const [createdEntry] = await HangDoi.create([{
         nguon: 'offline',
         ho_so_benh_nhan_id: profile._id,
@@ -414,6 +416,7 @@ export async function tiepNhanHoSoVaoHangDoi({
         khung_index: claimedSlot.khung_index,
         muc_uu_tien: tinhMucUuTien('offline', now, buildSlotDateTime(schedule.ngay, claimedSlot.gio_bat_dau)),
         gio_hen_goc: buildSlotDateTime(schedule.ngay, claimedSlot.gio_bat_dau),
+        ...checkInNumber,
         checkin_time: now,
         nguoi_tiep_nhan_id: actorUserId,
         vai_tro_tiep_nhan: actorRole,

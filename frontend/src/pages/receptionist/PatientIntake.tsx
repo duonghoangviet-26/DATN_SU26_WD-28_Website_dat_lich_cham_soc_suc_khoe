@@ -222,9 +222,10 @@ export default function PatientIntake() {
         ho_ten: selectedProfile.ho_ten,
       })
       const warnings = response.data?.canh_bao || []
-      setMessage(`Đã ghi nhận người bệnh đến khám theo lịch hẹn ${selectedAppointment.ma_lich_hen || selectedAppointment.id}. ${warnings.length ? `Lưu ý: ${warnings.join(' ')}` : 'Người bệnh đã được đưa vào hàng đợi của bác sĩ.'}`)
+      const queueCode = response.data?.hang_doi?.ma_so_thu_tu
+      setMessage(`Đã ghi nhận người bệnh đến khám theo lịch hẹn ${selectedAppointment.ma_lich_hen || selectedAppointment.id}.${queueCode ? ` Số thứ tự: ${queueCode}.` : ''} ${warnings.length ? `Lưu ý: ${warnings.join(' ')}` : 'Người bệnh đã được đưa vào hàng đợi của bác sĩ.'}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
-        ? { ...profile, luot_dang_cho_hom_nay: { id: response.data.hang_doi.id, trang_thai: 'dang_cho', doctor_id: response.data.hang_doi.doctor_id, phong_kham: response.data.hang_doi.phong_kham, checkin_time: response.data.hang_doi.checkin_time } }
+        ? { ...profile, luot_dang_cho_hom_nay: { id: response.data.hang_doi.id, trang_thai: 'dang_cho', doctor_id: response.data.hang_doi.doctor_id, phong_kham: response.data.hang_doi.phong_kham, checkin_time: response.data.hang_doi.checkin_time, so_thu_tu_checkin: response.data.hang_doi.so_thu_tu_checkin, ma_so_thu_tu: response.data.hang_doi.ma_so_thu_tu } }
         : profile))
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Chưa thể ghi nhận người bệnh đến khám. Vui lòng tải lại dữ liệu.')
@@ -288,9 +289,9 @@ export default function PatientIntake() {
       })
       setAvailability(null)
       setSelectedSlotId(null)
-      setMessage(`Đã tiếp nhận ${selectedProfile.ho_ten} vào hàng đợi khám. Mã lượt: ${result.entry._id}`)
+      setMessage(`Đã tiếp nhận ${selectedProfile.ho_ten} vào hàng đợi khám. Số thứ tự: ${result.entry.ma_so_thu_tu || result.entry._id}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
-        ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'dang_cho', doctor_id: String(result.slot.doctor_id), phong_kham: result.slot.phong_kham, checkin_time: new Date().toISOString() } }
+        ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'dang_cho', doctor_id: String(result.slot.doctor_id), phong_kham: result.slot.phong_kham, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
         : profile))
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Khả năng tiếp nhận vừa thay đổi. Vui lòng kiểm tra lại lịch làm việc và suất khám còn trống.')
@@ -433,7 +434,7 @@ export default function PatientIntake() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">Đã xác nhận hồ sơ</p>
                 <p className="mt-1 text-lg font-bold text-slate-800">{selectedProfile.ho_ten}</p>
                 <p className="mt-1 text-sm text-slate-600">Ngày sinh: {formatDate(selectedProfile.ngay_sinh)} · Số liên hệ: {selectedProfile.so_dien_thoai || phone}</p>
-                {hasActiveQueue && <p className="mt-3 text-sm font-semibold text-amber-800">Hồ sơ này đã có lượt đang xử lý hôm nay tại {selectedProfile.luot_dang_cho_hom_nay?.phong_kham || 'phòng khám'}.</p>}
+                {hasActiveQueue && <p className="mt-3 text-sm font-semibold text-amber-800">Hồ sơ này đã có lượt đang xử lý hôm nay tại {selectedProfile.luot_dang_cho_hom_nay?.phong_kham || 'phòng khám'}{selectedProfile.luot_dang_cho_hom_nay?.ma_so_thu_tu ? ` · Số thứ tự ${selectedProfile.luot_dang_cho_hom_nay.ma_so_thu_tu}` : ''}.</p>}
               </div>
 
               {selectedProfile.lich_hen_hom_nay.length > 0 && (

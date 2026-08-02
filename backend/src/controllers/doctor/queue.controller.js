@@ -233,6 +233,8 @@ export async function list(req, res) {
         da_toi_khung: daToiKhungCuaMinh(e, now),
         trang_thai: e.trang_thai,
         checkin_time: e.checkin_time,
+        so_thu_tu_checkin: e.so_thu_tu_checkin ?? null,
+        ma_so_thu_tu: e.ma_so_thu_tu ?? null,
         so_lan_goi: e.so_lan_goi,
         thoi_gian_cho_uoc_tinh_phut: isWaiting ? viTriChoDangCho * tbPhut : null,
       }

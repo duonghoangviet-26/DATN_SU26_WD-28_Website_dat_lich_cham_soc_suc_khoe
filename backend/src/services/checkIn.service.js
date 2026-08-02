@@ -4,6 +4,7 @@ import { tinhMucUuTien } from '../models/HangDoi.js'
 import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../utils/clinicTime.js'
 import { kiemTraQuaTai } from './queueOverflow.service.js'
 import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
+import { capSoThuTuCheckin } from './checkInNumber.service.js'
 
 // ============================================================
 // CHECK-IN — MỘT service dùng chung cho MỌI vai trò (rule mục 7)
@@ -158,6 +159,7 @@ export async function checkInLichHen({
 
   const gioHenGoc = appt.gio_kham ? buildSlotDateTime(appt.ngay_kham, appt.gio_kham) : null
 
+  const checkInNumber = await capSoThuTuCheckin(now)
   const payload = {
     nguon: 'online',
     appointment_id: appt._id,
@@ -181,6 +183,7 @@ export async function checkInLichHen({
     // Snapshot lúc check-in — bậc ưu tiên THẬT tính động lúc query (rule mục 6).
     muc_uu_tien: tinhMucUuTien('online', now, gioHenGoc),
     gio_hen_goc: gioHenGoc,
+    ...checkInNumber,
     checkin_time: now,
     nguoi_tiep_nhan_id: actorUserId,
     vai_tro_tiep_nhan: actorRole,
@@ -263,6 +266,7 @@ export async function checkInVangLai({
     throw loi(400, 'Không xác định được chuyên khoa cho lượt khách vãng lai')
   }
 
+  const checkInNumber = await capSoThuTuCheckin(now)
   const entry = await HangDoi.create({
     nguon: 'offline',
     ten_benh_nhan: tenBenhNhan.trim(),
@@ -274,6 +278,7 @@ export async function checkInVangLai({
     phong_kham: slotDauNgay?.phong_kham ?? null,
     muc_uu_tien: tinhMucUuTien('offline', now, null),
     gio_hen_goc: null,
+    ...checkInNumber,
     checkin_time: now,
     nguoi_tiep_nhan_id: actorUserId,
     vai_tro_tiep_nhan: actorRole,
