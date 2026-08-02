@@ -578,6 +578,16 @@ export async function updateOnboarding(req, res) {
       return fail(res, 404, 'Tài khoản không tồn tại')
     }
 
+    // Kiểm tra Unique: số điện thoại không được trùng với tài khoản khác
+    const phoneExists = await NguoiDung.findOne({
+      so_dien_thoai: normalizedPhone,
+      _id: { $ne: userId },
+      ngay_xoa: null,
+    })
+    if (phoneExists) {
+      return fail(res, 400, 'Số điện thoại này đã được sử dụng bởi một tài khoản khác trong hệ thống.')
+    }
+
     user.so_dien_thoai = normalizedPhone
     if (ho_ten) user.ho_ten = ho_ten.trim()
     user.requires_onboarding = false
@@ -651,6 +661,16 @@ export async function updateProfile(req, res) {
     if (!so_dien_thoai?.trim()) return fail(res, 400, 'Số điện thoại là bắt buộc')
     const normalizedPhone = normalizePatientPhone(so_dien_thoai)
     if (!/^0\d{9,10}$/.test(normalizedPhone)) return fail(res, 400, 'Số điện thoại không đúng định dạng')
+
+    // Kiểm tra Unique: số điện thoại không được trùng với tài khoản khác
+    const phoneExists = await NguoiDung.findOne({
+      so_dien_thoai: normalizedPhone,
+      _id: { $ne: user._id },
+      ngay_xoa: null,
+    })
+    if (phoneExists) {
+      return fail(res, 400, 'Số điện thoại này đã được sử dụng bởi một tài khoản khác trong hệ thống.')
+    }
 
     if (ngay_sinh && (Number.isNaN(new Date(ngay_sinh).getTime()) || new Date(ngay_sinh) >= new Date())) {
       return fail(res, 400, 'NgÃ y sinh khÃ´ng há»£p lá»‡')

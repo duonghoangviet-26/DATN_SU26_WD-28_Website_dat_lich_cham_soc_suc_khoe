@@ -226,6 +226,15 @@ export default function PatientIntake() {
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
         ? { ...profile, luot_dang_cho_hom_nay: { id: response.data.hang_doi.id, trang_thai: 'dang_cho', doctor_id: response.data.hang_doi.doctor_id, phong_kham: response.data.hang_doi.phong_kham, checkin_time: response.data.hang_doi.checkin_time } }
         : profile))
+      
+      // Auto-print fake notification
+      alert('Đã xác nhận Check-in và đẩy lệnh in Số thứ tự tới máy in thành công!');
+      
+      // Reset form để tiếp nhận người tiếp theo
+      setPhone('')
+      setProfiles([])
+      setSelectedId(null)
+      clearDecision()
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Chưa thể ghi nhận người bệnh đến khám. Vui lòng tải lại dữ liệu.')
     } finally {
@@ -292,6 +301,15 @@ export default function PatientIntake() {
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
         ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'dang_cho', doctor_id: String(result.slot.doctor_id), phong_kham: result.slot.phong_kham, checkin_time: new Date().toISOString() } }
         : profile))
+        
+      // Auto-print fake notification
+      alert('Đã xác nhận Check-in và đẩy lệnh in Số thứ tự tới máy in thành công!');
+      
+      // Reset form để tiếp nhận người tiếp theo
+      setPhone('')
+      setProfiles([])
+      setSelectedId(null)
+      clearDecision()
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Khả năng tiếp nhận vừa thay đổi. Vui lòng kiểm tra lại lịch làm việc và suất khám còn trống.')
       const isConflict = requestError?.response?.status === 409

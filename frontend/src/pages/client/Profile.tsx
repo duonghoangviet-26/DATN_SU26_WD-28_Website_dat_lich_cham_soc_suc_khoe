@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { Star } from 'lucide-react'
 import Breadcrumb from '@/components/common/Breadcrumb'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
@@ -8,6 +9,7 @@ import Modal from '@/components/common/Modal'
 import Toast from '@/components/common/Toast'
 import Pagination from '@/components/common/Pagination'
 import RescheduleModal from '@/components/client/RescheduleModal'
+import ReviewModal from '@/components/client/ReviewModal'
 import { ContentTransition, RouteTransition } from '@/components/client/ClientMotion'
 import { useAuth } from '@/context/AuthContext'
 import { authService } from '@/services/auth.service'
@@ -22,6 +24,11 @@ import {
   type FamilyGroup,
   type FamilyMember,
 } from '@/services/patient-booking.service'
+import {
+  patientReviewService,
+  type PendingReviewAppointment,
+  type MyReviewItem,
+} from '@/services/patient-review.service'
 
 export default function Profile() {
   const { user, loading: authLoading, updateUser } = useAuth()
@@ -33,6 +40,15 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState<'appointments' | 'results' | 'account' | 'family'>('appointments')
   const [appointments, setAppointments] = useState<PatientRecordListItem[]>([])
   const [appointmentsLoading, setAppointmentsLoading] = useState(true)
+
+  // Review states
+  const [pendingReviews, setPendingReviews] = useState<PendingReviewAppointment[]>([])
+  const [myReviews, setMyReviews] = useState<MyReviewItem[]>([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewPage, setReviewPage] = useState(1)
+  const [reviewTotalPages, setReviewTotalPages] = useState(1)
+  const [selectedReviewApp, setSelectedReviewApp] = useState<PendingReviewAppointment | null>(null)
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
 
   // Lọc và phân trang lịch hẹn
   const [appCurrentPage, setAppCurrentPage] = useState(1)
@@ -206,6 +222,32 @@ export default function Profile() {
       })
   }
 
+  const fetchReviews = (page = 1) => {
+    setReviewsLoading(true)
+    Promise.all([
+      patientReviewService.getPending(),
+      patientReviewService.getMy(page, 5),
+    ])
+      .then(([pending, myData]) => {
+        setPendingReviews(pending)
+        setMyReviews(myData.reviews)
+        setReviewPage(myData.page)
+        setReviewTotalPages(myData.totalPages)
+      })
+      .catch((error: any) => {
+        console.error('Không tải được đánh giá:', error)
+      })
+      .finally(() => {
+        setReviewsLoading(false)
+      })
+  }
+
+  useEffect(() => {
+    if (activeTab === 'reviews') {
+      fetchReviews(reviewPage)
+    }
+  }, [activeTab, reviewPage])
+
   useEffect(() => {
     fetchFamilyGroup()
   }, [user])
@@ -362,11 +404,17 @@ export default function Profile() {
     event.preventDefault()
     if (!user) return
 
+    const cleanPhone = soDienThoai.trim().replace(/\D/g, '')
+    if (!/^0\d{9,10}$/.test(cleanPhone)) {
+      setToast('Số điện thoại không hợp lệ (phải bắt đầu bằng số 0 và có 10 chữ số).')
+      return
+    }
+
     setProfileLoading(true)
     try {
       const updatedUser = await authService.updateProfile({
         ho_ten: hoTen.trim(),
-        so_dien_thoai: soDienThoai.trim(),
+        so_dien_thoai: cleanPhone,
         ngay_sinh: ngaySinh || null,
         gioi_tinh: gioiTinh || null,
         nhom_mau: nhomMau || null,
@@ -550,6 +598,7 @@ export default function Profile() {
               { key: 'results', label: 'Kết quả y tế', meta: 'Đơn thuốc & chẩn đoán' },
               { key: 'family', label: 'Gia đình', meta: 'Quản lý người thân' },
               { key: 'account', label: 'Thông tin cá nhân', meta: 'Tên và số liên hệ' },
+              { key: 'reviews', label: 'Đánh giá', meta: 'Lịch sử & chờ đánh giá' },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -1055,6 +1104,181 @@ export default function Profile() {
               </form>
             </div>
           )}
+
+          {activeTab === 'reviews' && (
+            <div className="space-y-8">
+              {/* Lịch hẹn chờ đánh giá */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Lịch hẹn chờ đánh giá</h3>
+                    <p className="text-xs text-slate-400">
+                      Các cuộc hẹn đã hoàn thành và cần phản hồi từ bạn.
+                    </p>
+                  </div>
+                  {pendingReviews.length > 0 && (
+                    <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 border border-amber-200">
+                      {pendingReviews.length} cuộc hẹn
+                    </span>
+                  )}
+                </div>
+
+                {reviewsLoading ? (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-xs text-slate-400">
+                    Đang tải danh sách chờ đánh giá...
+                  </div>
+                ) : pendingReviews.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-xs text-slate-400">
+                    Bạn không có lịch hẹn nào đang chờ đánh giá.
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {pendingReviews.map((item) => (
+                      <div
+                        key={item.appointment_id}
+                        className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-4"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-800">
+                                🩺 {item.doctor?.ho_ten || 'Bác sĩ'}
+                              </h4>
+                              {item.specialty && (
+                                <p className="text-xs text-teal-700 font-medium">
+                                  {item.specialty.ten}
+                                </p>
+                              )}
+                            </div>
+                            <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold text-emerald-600">
+                              Đã khám
+                            </span>
+                          </div>
+
+                          <div className="space-y-1 text-xs text-slate-500 border-t border-slate-50 pt-2">
+                            <p>
+                              📅 Khám ngày:{' '}
+                              <strong className="text-slate-700">
+                                {new Date(item.ngay_kham).toLocaleDateString('vi-VN')}
+                              </strong>
+                            </p>
+                            <p>
+                              🕐 Giờ: <strong className="text-slate-700">{item.gio_kham}</strong>
+                            </p>
+                            {item.phong_kham && (
+                              <p>
+                                🏠 Phòng: <strong className="text-slate-700">{item.phong_kham}</strong>
+                              </p>
+                            )}
+                            {item.ma_lich_hen && (
+                              <p className="font-mono text-[10px] text-slate-400">
+                                Mã: {item.ma_lich_hen}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedReviewApp(item)
+                            setReviewModalOpen(true)
+                          }}
+                          className="w-full rounded-xl bg-teal-600 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-teal-700 flex items-center justify-center gap-1.5"
+                        >
+                          <Star size={14} className="fill-amber-300 text-amber-300" />
+                          Viết đánh giá
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Đánh giá đã gửi */}
+              <div className="space-y-4 pt-4 border-t border-slate-100">
+                <div className="space-y-1 border-b border-slate-100 pb-3">
+                  <h3 className="text-lg font-bold text-slate-800">Đánh giá đã gửi</h3>
+                  <p className="text-xs text-slate-400">
+                    Lịch sử các nhận xét và số sao bạn đã dành cho bác sĩ.
+                  </p>
+                </div>
+
+                {reviewsLoading ? (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-xs text-slate-400">
+                    Đang tải danh sách đánh giá...
+                  </div>
+                ) : myReviews.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-xs text-slate-400">
+                    Bạn chưa gửi đánh giá nào.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {myReviews.map((r) => (
+                      <div
+                        key={r.id}
+                        className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-2 text-left"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="flex gap-0.5 text-amber-400">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  size={16}
+                                  className={s <= r.so_sao ? 'fill-amber-400 text-amber-400' : 'fill-none text-slate-200'}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs font-bold text-slate-700">({r.so_sao}/5 sao)</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(r.ngay_tao).toLocaleDateString('vi-VN')}
+                          </span>
+                        </div>
+
+                        {r.doctor && (
+                          <p className="text-xs font-bold text-slate-800">
+                            🩺 {r.doctor.ho_ten}
+                            {r.appointment?.specialty && (
+                              <span className="font-normal text-slate-500">
+                                {' '}
+                                · {r.appointment.specialty.ten}
+                              </span>
+                            )}
+                          </p>
+                        )}
+
+                        {r.noi_dung && (
+                          <p className="text-xs leading-relaxed text-slate-600 italic bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            &ldquo;{r.noi_dung}&rdquo;
+                          </p>
+                        )}
+
+                        {r.appointment && (
+                          <p className="text-[10px] text-slate-400 pt-1">
+                            Lượt khám ngày:{' '}
+                            {new Date(r.appointment.ngay_kham).toLocaleDateString('vi-VN')}
+                            {r.appointment.ma_lich_hen ? ` · Mã: ${r.appointment.ma_lich_hen}` : ''}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+
+                    {reviewTotalPages > 1 && (
+                      <div className="pt-2">
+                        <Pagination
+                          currentPage={reviewPage}
+                          totalPages={reviewTotalPages}
+                          onPageChange={setReviewPage}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1421,6 +1645,21 @@ export default function Profile() {
           </Modal>
         )
       })()}
+
+      {reviewModalOpen && (
+        <ReviewModal
+          isOpen={reviewModalOpen}
+          onClose={() => {
+            setReviewModalOpen(false)
+            setSelectedReviewApp(null)
+          }}
+          appointment={selectedReviewApp}
+          onSuccess={() => {
+            setToast('Cảm ơn bạn đã gửi đánh giá!')
+            fetchReviews(reviewPage)
+          }}
+        />
+      )}
 
       {toast && <Toast message={toast} type="success" onClose={() => setToast(null)} />}
     </div>
