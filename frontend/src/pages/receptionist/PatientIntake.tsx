@@ -7,6 +7,8 @@ import {
   TodayAppointment,
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
+import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
+import ProfileAuditPanel from '@/components/receptionist/ProfileAuditPanel'
 
 const emptyForm = {
   ho_ten: '',
@@ -22,6 +24,21 @@ const emptyForm = {
 function formatDate(value?: string | null) {
   if (!value) return 'Chưa cập nhật'
   return new Date(value).toLocaleDateString('vi-VN')
+}
+
+function calcAge(value?: string | null) {
+  if (!value) return null
+  const birth = new Date(value)
+  if (Number.isNaN(birth.getTime())) return null
+  const now = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
+  const monthDiff = now.getMonth() - birth.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) age -= 1
+  return age
+}
+
+function genderLabel(value?: string | null) {
+  return ({ nam: 'Nam', nu: 'Nữ', khac: 'Khác' } as Record<string, string>)[value ?? ''] ?? 'Chưa rõ giới tính'
 }
 
 function formatDateTime(value?: string | null) {
@@ -90,6 +107,9 @@ export default function PatientIntake() {
   const [availability, setAvailability] = useState<OfflineAvailability | null>(null)
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
   const [checkingIn, setCheckingIn] = useState(false)
+  const [editingProfile, setEditingProfile] = useState<PatientProfile | null>(null)
+  const [auditProfileId, setAuditProfileId] = useState<string | null>(null)
+  const [linkAccount, setLinkAccount] = useState(true)
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedId) ?? null
   const selectedAppointment = selectedProfile?.lich_hen_hom_nay.find((appointment) => appointment.id === selectedAppointmentId) ?? null
@@ -121,6 +141,7 @@ export default function PatientIntake() {
     setAccounts([])
     setAmbiguousAppointments([])
     setAccountAppointments([])
+    setLinkAccount(true)
     clearDecision()
     if (!phone.trim()) {
       setError('Vui lòng nhập số điện thoại để tra cứu')
@@ -175,7 +196,9 @@ export default function PatientIntake() {
         benh_nen: form.benh_nen || undefined,
         dia_chi: form.dia_chi || undefined,
         ghi_chu: form.ghi_chu || undefined,
-        tai_khoan_id: selectedAccountId || undefined,
+        // E-9: lễ tân có thể chủ động không liên kết tài khoản online dù số điện thoại đã có
+        // tài khoản (khách dùng nhờ số) — không gửi tai_khoan_id để backend không đối chiếu.
+        tai_khoan_id: linkAccount ? selectedAccountId || undefined : undefined,
       })
       const refreshed = await receptionistPatientIntakeService.searchByPhone(phone.trim())
       setProfiles(refreshed.profiles)
@@ -183,6 +206,7 @@ export default function PatientIntake() {
       setPhone(profile.so_dien_thoai || phone)
       setAccounts(refreshed.accounts || [])
       setSelectedAccountId(null)
+      setLinkAccount(true)
       setAmbiguousAppointments(refreshed.ambiguous_appointments || [])
       setAccountAppointments(refreshed.account_appointments || [])
       setForm(emptyForm)
@@ -216,16 +240,18 @@ export default function PatientIntake() {
     setCheckingIn(true)
     setError('')
     try {
+      // Lay tu chinh ho so da chon, KHONG lay tu so dien thoai tra cuu — backend so khop
+      // theo SDT cua ho so (co the khac so lien he khi ho so la thanh vien gia dinh).
       const response = await receptionistPatientIntakeService.checkInAppointment(selectedAppointment.id, {
         ho_so_benh_nhan_id: selectedProfile.id,
-        so_dien_thoai: phone,
+        so_dien_thoai: selectedProfile.so_dien_thoai || phone,
         ho_ten: selectedProfile.ho_ten,
       })
-      const warnings = response.data?.canh_bao || []
-      const queueCode = response.data?.hang_doi?.ma_so_thu_tu
+      const warnings = response.canh_bao
+      const queueCode = response.hang_doi.ma_so_thu_tu
       setMessage(`Đã ghi nhận người bệnh đến khám theo lịch hẹn ${selectedAppointment.ma_lich_hen || selectedAppointment.id}.${queueCode ? ` Số thứ tự: ${queueCode}.` : ''} ${warnings.length ? `Lưu ý: ${warnings.join(' ')}` : 'Người bệnh đã được đưa vào hàng đợi của bác sĩ.'}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
-        ? { ...profile, luot_dang_cho_hom_nay: { id: response.data.hang_doi.id, trang_thai: 'dang_cho', doctor_id: response.data.hang_doi.doctor_id, phong_kham: response.data.hang_doi.phong_kham, checkin_time: response.data.hang_doi.checkin_time, so_thu_tu_checkin: response.data.hang_doi.so_thu_tu_checkin, ma_so_thu_tu: response.data.hang_doi.ma_so_thu_tu } }
+        ? { ...profile, luot_dang_cho_hom_nay: { id: response.hang_doi.id, trang_thai: 'dang_cho', doctor_id: response.hang_doi.doctor_id, phong_kham: response.hang_doi.phong_kham, checkin_time: response.hang_doi.checkin_time, so_thu_tu_checkin: response.hang_doi.so_thu_tu_checkin, ma_so_thu_tu: response.hang_doi.ma_so_thu_tu } }
         : profile))
       
       // Auto-print fake notification
@@ -244,12 +270,14 @@ export default function PatientIntake() {
   }
 
   const createProfileAndCheckIn = async (appointment: TodayAppointment) => {
-    const account = accounts.find((item) => item.id === appointment.tai_khoan_id) || accounts[0]
+    // Khong doan tai khoan khi co nhieu tai khoan cung so dien thoai — chi dung dung tai khoan
+    // gan voi lich hen nay hoac tai khoan lo tan da xac nhan chon (E-9).
+    const account = accounts.find((item) => item.id === appointment.tai_khoan_id) || (accounts.length === 1 ? accounts[0] : null)
     const patientName = appointment.ten_khach || account?.ho_ten || ''
     const patientPhone = appointment.so_dien_thoai_khach || phone.trim()
     const accountId = appointment.tai_khoan_id || account?.id || null
     if (!patientName || !patientPhone || !accountId) {
-      setError('Chưa đủ thông tin tài khoản, họ tên hoặc số điện thoại để tạo hồ sơ và check-in.')
+      setError('Chưa đủ thông tin để tạo hồ sơ và check-in. Nếu số điện thoại có nhiều tài khoản, hãy chọn đúng tài khoản trước khi tạo hồ sơ.')
       return
     }
 
@@ -283,6 +311,25 @@ export default function PatientIntake() {
     } finally {
       setSaving(false)
       setCheckingIn(false)
+    }
+  }
+
+  const handleProfileSaved = async ({ profile }: { profile: PatientProfile; changed_fields: string[] }) => {
+    setEditingProfile(null)
+    // So dien thoai co the da doi (E-2) — tra cuu lai theo so MOI de danh sach khop, khong
+    // de ho so bien mat khoi ket qua cu (rule: doi SDT phai lam moi lai theo so moi).
+    const nextPhone = profile.so_dien_thoai || phone
+    try {
+      const refreshed = await receptionistPatientIntakeService.searchByPhone(nextPhone)
+      setProfiles(refreshed.profiles)
+      setAccounts(refreshed.accounts || [])
+      setAmbiguousAppointments(refreshed.ambiguous_appointments || [])
+      setAccountAppointments(refreshed.account_appointments || [])
+      setPhone(nextPhone)
+      setSelectedId(refreshed.profiles.find((item) => item.id === profile.id)?.id || profile.id)
+      setMessage('Đã cập nhật thông tin hành chính của hồ sơ.')
+    } catch {
+      setMessage('Đã cập nhật thông tin hành chính của hồ sơ. Hãy tra cứu lại để xem dữ liệu mới nhất.')
     }
   }
 
@@ -426,32 +473,53 @@ export default function PatientIntake() {
           )}
 
           <div className="mt-5 space-y-3">
-            {profiles.map((profile) => (
-              <button key={profile.id} type="button" onClick={() => selectProfile(profile)} className={`w-full rounded-xl border p-4 text-left transition ${selectedId === profile.id ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300 hover:bg-slate-50'}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-800">{profile.ho_ten}</p>
-                    <p className="mt-1 text-sm text-slate-500">Ngày sinh: {formatDate(profile.ngay_sinh)} · {profile.gioi_tinh || 'Chưa rõ giới tính'}</p>
-                    <p className="mt-1 text-xs text-slate-500">{profile.nguoi_lien_he?.ho_ten ? `Người liên hệ: ${profile.nguoi_lien_he.ho_ten}` : profile.member_id ? 'Thành viên gia đình' : 'Hồ sơ tại quầy'}</p>
-                    <p className={`mt-1 text-xs font-semibold ${profile.tai_khoan ? 'text-violet-700' : 'text-slate-500'}`}>{profile.tai_khoan ? `Tài khoản: ${profile.tai_khoan.email} · ${profile.tai_khoan.phuong_thuc_dang_nhap === 'google_va_email' ? 'Google + Email' : profile.tai_khoan.phuong_thuc_dang_nhap === 'google' ? 'Google' : 'Email'}` : 'Chưa liên kết tài khoản online'}</p>
+            {profiles.map((profile) => {
+              const age = calcAge(profile.ngay_sinh)
+              return (
+                <button key={profile.id} type="button" onClick={() => selectProfile(profile)} className={`w-full rounded-xl border p-4 text-left transition ${selectedId === profile.id ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300 hover:bg-slate-50'}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-800">{profile.ho_ten}</p>
+                      <p className="mt-1 text-sm text-slate-500">Ngày sinh: {formatDate(profile.ngay_sinh)}{age !== null ? ` (${age} tuổi)` : ''} · {genderLabel(profile.gioi_tinh)}</p>
+                      {/* SĐT của chính hồ sơ — khác số vừa tra cứu là manh mối quan trọng khi số thuộc người giám hộ (E-8). */}
+                      <p className="mt-1 text-xs text-slate-500">SĐT hồ sơ: {profile.so_dien_thoai || 'Chưa cập nhật'}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {profile.nguoi_lien_he?.ho_ten ? `Người liên hệ: ${profile.nguoi_lien_he.ho_ten}` : profile.member_id ? 'Thành viên gia đình' : 'Hồ sơ tại quầy'}
+                        {profile.quan_he ? ` · Quan hệ: ${profile.quan_he}` : ''}
+                        {profile.nhom_gia_dinh ? ` · Nhóm gia đình: ${profile.nhom_gia_dinh}` : ''}
+                      </p>
+                      <p className={`mt-1 text-xs font-semibold ${profile.tai_khoan ? 'text-violet-700' : 'text-slate-500'}`}>{profile.tai_khoan ? `Tài khoản: ${profile.tai_khoan.email} · ${profile.tai_khoan.phuong_thuc_dang_nhap === 'google_va_email' ? 'Google + Email' : profile.tai_khoan.phuong_thuc_dang_nhap === 'google' ? 'Google' : 'Email'}` : 'Chưa liên kết tài khoản online'}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${profile.lich_hen_hom_nay.length ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
+                        {profile.lich_hen_hom_nay.length ? `${profile.lich_hen_hom_nay.length} lịch hôm nay` : 'Chưa có lịch'}
+                      </span>
+                      {profile.luot_dang_cho_hom_nay && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Đang ở hàng đợi</span>}
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${profile.lich_hen_hom_nay.length ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
-                      {profile.lich_hen_hom_nay.length ? `${profile.lich_hen_hom_nay.length} lịch hôm nay` : 'Chưa có lịch'}
-                    </span>
-                    {profile.luot_dang_cho_hom_nay && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">Đang ở hàng đợi</span>}
-                  </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
 
           {selectedProfile && (
             <div className="mt-5 border-t border-slate-100 pt-5">
               <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">Đã xác nhận hồ sơ</p>
-                <p className="mt-1 text-lg font-bold text-slate-800">{selectedProfile.ho_ten}</p>
-                <p className="mt-1 text-sm text-slate-600">Ngày sinh: {formatDate(selectedProfile.ngay_sinh)} · Số liên hệ: {selectedProfile.so_dien_thoai || phone}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">Đã xác nhận hồ sơ</p>
+                    <p className="mt-1 text-lg font-bold text-slate-800">{selectedProfile.ho_ten}</p>
+                    <p className="mt-1 text-sm text-slate-600">Ngày sinh: {formatDate(selectedProfile.ngay_sinh)} · Số liên hệ: {selectedProfile.so_dien_thoai || phone}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button type="button" onClick={() => setEditingProfile(selectedProfile)} className="min-h-9 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-800 hover:bg-brand-50">
+                      Sửa thông tin hành chính
+                    </button>
+                    <button type="button" onClick={() => setAuditProfileId(selectedProfile.id)} className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                      Lịch sử cập nhật
+                    </button>
+                  </div>
+                </div>
                 {hasActiveQueue && <p className="mt-3 text-sm font-semibold text-amber-800">Hồ sơ này đã có lượt đang xử lý hôm nay tại {selectedProfile.luot_dang_cho_hom_nay?.phong_kham || 'phòng khám'}{selectedProfile.luot_dang_cho_hom_nay?.ma_so_thu_tu ? ` · Số thứ tự ${selectedProfile.luot_dang_cho_hom_nay.ma_so_thu_tu}` : ''}.</p>}
               </div>
 
@@ -574,15 +642,21 @@ export default function PatientIntake() {
 
         <section id="create-profile-section" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div><h3 className="text-base font-bold text-slate-800">Tạo hồ sơ mới</h3><p className="mt-1 text-sm text-slate-500">Chỉ dùng khi người bệnh chưa có hồ sơ. Số điện thoại trùng không đồng nghĩa là cùng một người.</p>{accounts.length > 0 && <p className="mt-1 text-xs font-semibold text-violet-700">Hồ sơ mới sẽ được gắn với tài khoản đã chọn: {accounts.find((account) => account.id === selectedAccountId)?.email || 'chưa chọn tài khoản'}.</p>}</div>
+            <div><h3 className="text-base font-bold text-slate-800">Tạo hồ sơ mới</h3><p className="mt-1 text-sm text-slate-500">Chỉ dùng khi người bệnh chưa có hồ sơ. Số điện thoại trùng không đồng nghĩa là cùng một người.</p>{accounts.length > 0 && (linkAccount ? <p className="mt-1 text-xs font-semibold text-violet-700">Hồ sơ mới sẽ được gắn với tài khoản đã chọn: {accounts.find((account) => account.id === selectedAccountId)?.email || 'chưa chọn tài khoản'}.</p> : <p className="mt-1 text-xs font-semibold text-slate-600">Hồ sơ mới sẽ KHÔNG gắn với tài khoản online nào (khách dùng nhờ số).</p>)}</div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Không tạo lịch hẹn</span>
           </div>
           <form className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4" onSubmit={createProfile}>
             <label className="text-sm font-medium text-slate-700">Họ tên *<input required value={form.ho_ten} onChange={(event) => setForm({ ...form, ho_ten: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
+            {accounts.length > 0 && (
+              <label className="flex items-start gap-2 text-sm font-medium text-slate-700">
+                <input type="checkbox" checked={!linkAccount} onChange={(event) => { setLinkAccount(!event.target.checked); if (event.target.checked) setSelectedAccountId(null) }} className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                <span>Không liên kết tài khoản online (khách dùng nhờ số)<span className="mt-0.5 block text-xs font-normal text-slate-500">Tick khi số điện thoại này thuộc người khác, không phải chủ tài khoản online.</span></span>
+              </label>
+            )}
             <div className="text-sm font-medium text-slate-700">Số liên hệ đã tra cứu<div className={`mt-1.5 flex min-h-11 items-center rounded-xl border px-3 text-sm ${phone ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>{phone || 'Chưa nhập số điện thoại ở bước tra cứu'}</div><p className="mt-1 text-xs font-normal text-slate-500">Hệ thống sẽ tự dùng số này cho hồ sơ mới.</p></div>
             <label className="text-sm font-medium text-slate-700">Ngày sinh<input type="date" value={form.ngay_sinh} onChange={(event) => setForm({ ...form, ngay_sinh: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
             <label className="text-sm font-medium text-slate-700">Giới tính<select value={form.gioi_tinh} onChange={(event) => setForm({ ...form, gioi_tinh: event.target.value as typeof form.gioi_tinh })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"><option value="">Chưa cập nhật</option><option value="nam">Nam</option><option value="nu">Nữ</option><option value="khac">Khác</option></select></label>
-            <button type="submit" disabled={saving || (accounts.length > 0 && !selectedAccountId)} className="min-h-11 self-end rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Đang lưu...' : accounts.length > 0 && !selectedAccountId ? 'Chọn tài khoản trước' : 'Tạo hồ sơ'}</button>
+            <button type="submit" disabled={saving || (linkAccount && accounts.length > 0 && !selectedAccountId)} className="min-h-11 self-end rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Đang lưu...' : linkAccount && accounts.length > 0 && !selectedAccountId ? 'Chọn tài khoản trước' : 'Tạo hồ sơ'}</button>
             <label className="text-sm font-medium text-slate-700">Nhóm máu<select value={form.nhom_mau} onChange={(event) => setForm({ ...form, nhom_mau: event.target.value as typeof form.nhom_mau })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"><option value="">Chưa cập nhật</option><option value="A">A</option><option value="B">B</option><option value="AB">AB</option><option value="O">O</option></select></label>
             <label className="text-sm font-medium text-slate-700 md:col-span-2">Địa chỉ<textarea rows={2} value={form.dia_chi} onChange={(event) => setForm({ ...form, dia_chi: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" placeholder="Địa chỉ hiện tại của người bệnh" /></label>
             <label className="text-sm font-medium text-slate-700 md:col-span-2">Dị ứng<textarea rows={2} value={form.di_ung} onChange={(event) => setForm({ ...form, di_ung: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" placeholder="Ví dụ: dị ứng thuốc, thức ăn; ghi Không nếu không có" /></label>
@@ -591,6 +665,15 @@ export default function PatientIntake() {
           </form>
         </section>
       </div>
+
+      {editingProfile && (
+        <ProfileAdminEditModal
+          profile={editingProfile}
+          onClose={() => setEditingProfile(null)}
+          onSaved={handleProfileSaved}
+        />
+      )}
+      {auditProfileId && <ProfileAuditPanel profileId={auditProfileId} onClose={() => setAuditProfileId(null)} />}
     </div>
   )
 }

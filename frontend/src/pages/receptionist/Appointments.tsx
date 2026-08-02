@@ -5,6 +5,7 @@ import Pagination from '../../components/common/Pagination';
 import { receptionistBookingService, ReceptionistBookingSlot } from '../../services/receptionist-booking.service';
 import Icon from '../../components/admin/icons';
 import QueueTicketTemplate, { QueueTicketData } from '../../components/receptionist/QueueTicketTemplate';
+import CheckInVerifyModal from '../../components/receptionist/CheckInVerifyModal';
 
 interface Appointment {
   _id: string;
@@ -152,9 +153,8 @@ export default function Appointments() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedDetailAppointment, setSelectedDetailAppointment] = useState<Appointment | null>(null);
 
-  // States cho Check-in In Phiếu
-  const [confirmCheckInModalOpen, setConfirmCheckInModalOpen] = useState(false);
-  const [selectedCheckInApt, setSelectedCheckInApt] = useState<Appointment | null>(null);
+  // State cho modal xac minh dung benh nhan truoc khi check-in (LT-07)
+  const [checkInApt, setCheckInApt] = useState<Appointment | null>(null);
   const [printData, setPrintData] = useState<QueueTicketData | null>(null);
 
   const fetchAppointments = async (page = currentPage) => {
@@ -335,41 +335,18 @@ export default function Appointments() {
   };
 
   // Check-in đưa bệnh nhân vào HÀNG ĐỢI của bác sĩ (rule mục 6), không chỉ đổi trạng thái lịch.
-  // Server trả kèm cảnh báo cần xử lý ngay tại quầy: chưa thanh toán, đến sớm/trễ, ca quá tải.
-  const handleArrived = async (id: string) => {
-    try {
-      const res = await axiosInstance.patch(`/receptionist/appointments/${id}/arrived`);
-      const canhBao: string[] = res.data?.canh_bao ?? [];
-      const phong = res.data?.hang_doi?.phong_kham;
-      if (canhBao.length > 0) {
-        alert(`Đã đưa vào hàng đợi${phong ? ` — phòng ${phong}` : ''}.\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`);
-      }
-      fetchAppointments();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Lỗi khi check-in');
-    }
+  // Sau LT-07, backend bắt buộc xác minh ho_so_benh_nhan_id/so_dien_thoai/ho_ten trước khi
+  // check-in (chặn nhận nhầm người khi nhiều hồ sơ dùng chung số điện thoại) nên phải tra cứu
+  // và chọn đúng hồ sơ qua CheckInVerifyModal thay vì PATCH thẳng không kèm thân yêu cầu.
+  const openCheckInModal = (apt: Appointment) => {
+    setCheckInApt(apt);
   };
 
-  const confirmCheckIn = async () => {
-    if (!selectedCheckInApt) return;
-    try {
-      const res = await axiosInstance.patch(`/receptionist/appointments/${selectedCheckInApt._id}/arrived`);
-
-      setConfirmCheckInModalOpen(false);
-      fetchAppointments();
-
-      const canhBao: string[] = res.data?.canh_bao ?? [];
-      const phong = res.data?.hang_doi?.phong_kham;
-
-      let msg = 'Đã xác nhận Check-in và đẩy lệnh in Số thứ tự tới máy in thành công!';
-      if (canhBao.length > 0) {
-        msg += `\n\nLƯU Ý:\n• ${canhBao.join('\n• ')}`;
-      }
-
-      alert(msg);
-
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Lỗi khi check-in');
+  const handleCheckedIn = ({ hang_doi, canh_bao }: { hang_doi: { phong_kham?: string | null }; canh_bao: string[] }) => {
+    setCheckInApt(null);
+    fetchAppointments();
+    if (canh_bao.length > 0) {
+      alert(`Đã đưa vào hàng đợi${hang_doi.phong_kham ? ` — phòng ${hang_doi.phong_kham}` : ''}.\n\nLƯU Ý:\n• ${canh_bao.join('\n• ')}`);
     }
   };
 
@@ -690,9 +667,13 @@ export default function Appointments() {
                           {activeTab !== 'past' && (
                             <>
                               {activeTab === 'today' && hasAction(apt, 'check_in') && (
-                                <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
-                                  Tra cứu tại Tiếp nhận
-                                </span>
+                                <button
+                                  title="Check-in"
+                                  onClick={() => openCheckInModal(apt)}
+                                  className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors"
+                                >
+                                  <Icon name="check" className="w-4 h-4" />
+                                </button>
                               )}
                               {canHandleLateArrival && (
                                 <button
@@ -1137,49 +1118,15 @@ export default function Appointments() {
         </div>
       )}
 
-      {/* Modal Check-in Xác nhận */}
-      {confirmCheckInModalOpen && selectedCheckInApt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
-          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">Xác nhận Đã đến</h3>
-            <div className="mb-6">
-              <p className="text-slate-600 mb-2">Thông tin in trên phiếu chờ khám:</p>
-              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-100 space-y-2">
-                <div className="flex justify-between border-b border-emerald-200/50 pb-2">
-                  <span className="text-sm opacity-80">Bệnh nhân:</span>
-                  <span className="font-bold">{selectedCheckInApt.user_id?.ho_ten || selectedCheckInApt.ten_khach || 'Khách vãng lai'}</span>
-                </div>
-                <div className="flex justify-between border-b border-emerald-200/50 pb-2">
-                  <span className="text-sm opacity-80">Bác sĩ:</span>
-                  <span className="font-semibold">{selectedCheckInApt.doctor_id?.user_id?.ho_ten || 'Đang cập nhật'}</span>
-                </div>
-                <div className="flex justify-between pb-1">
-                  <span className="text-sm opacity-80">Phòng khám:</span>
-                  <span className="font-semibold">
-                    {`Phòng ${parseInt((selectedCheckInApt.doctor_id?._id || '0').substring(20) || '0', 16) % 5 + 101}`}
-                  </span>
-                </div>
-              </div>
-              <p className="text-sm text-slate-500 mt-3 italic text-center">Hệ thống sẽ đẩy lệnh in Số thứ tự tới máy in sau khi xác nhận.</p>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setConfirmCheckInModalOpen(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                onClick={confirmCheckIn}
-                className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-              >
-                <Icon name="check" className="w-4 h-4" />
-                Xác nhận & In Phiếu
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Modal xac minh dung benh nhan truoc khi check-in (LT-07) */}
+      {checkInApt && (
+        <CheckInVerifyModal
+          appointmentId={checkInApt._id}
+          maLichHen={checkInApt.ma_lich_hen}
+          searchPhone={checkInApt.so_dien_thoai_khach || checkInApt.user_id?.so_dien_thoai || ''}
+          onClose={() => setCheckInApt(null)}
+          onCheckedIn={handleCheckedIn}
+        />
       )}
 
       {/* Floating Action Bar */}

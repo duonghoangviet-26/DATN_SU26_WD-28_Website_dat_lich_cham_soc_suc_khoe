@@ -88,6 +88,32 @@ export interface CreatePatientProfilePayload {
   tai_khoan_id?: string
 }
 
+// 9 trường hành chính lễ tân được sửa (LT-10). Không có trường chuyên môn —
+// gửi thêm trường lạ sẽ bị backend từ chối 403.
+export interface UpdateProfileAdministrativePayload {
+  ho_ten?: string
+  so_dien_thoai?: string
+  ngay_sinh?: string | null
+  gioi_tinh?: 'nam' | 'nu' | 'khac' | null
+  nhom_mau?: 'A' | 'B' | 'AB' | 'O' | null
+  di_ung?: string | null
+  benh_nen?: string | null
+  dia_chi?: string | null
+  ghi_chu?: string | null
+  ly_do_cap_nhat: string
+}
+
+export interface ProfileAuditLog {
+  id: string
+  actor: { id: string; ho_ten: string; email?: string | null; role?: string | null } | null
+  vai_tro: string
+  hanh_dong: string
+  ly_do?: string | null
+  du_lieu_cu: Record<string, unknown>
+  du_lieu_moi: Record<string, unknown>
+  ngay_tao: string
+}
+
 export interface OfflineIntakeSlot {
   schedule_id: string
   slot_id: string
@@ -243,6 +269,19 @@ export const receptionistPatientIntakeService = {
     return response.data.data.profile
   },
 
+  async updateProfileAdministrative(id: string, payload: UpdateProfileAdministrativePayload): Promise<{ profile: PatientProfile; audit_id: string; changed_fields: string[] }> {
+    const response = await axiosInstance.patch<ApiResponse<{ profile: PatientProfile; audit_id: string; changed_fields: string[] }>>(
+      `/receptionist/patient-intake/profiles/${id}`,
+      payload,
+    )
+    return response.data.data
+  },
+
+  async getProfileAuditLogs(id: string): Promise<ProfileAuditLog[]> {
+    const response = await axiosInstance.get<ApiResponse<ProfileAuditLog[]>>(`/receptionist/patient-intake/profiles/${id}/audit`)
+    return response.data.data ?? []
+  },
+
   async getAvailability(): Promise<OfflineAvailability> {
     const response = await axiosInstance.get<ApiResponse<OfflineAvailability>>('/receptionist/patient-intake/availability')
     return response.data.data as OfflineAvailability
@@ -257,12 +296,20 @@ export const receptionistPatientIntakeService = {
   },
 
   async checkInAppointment(appointmentId: string, patient: { ho_so_benh_nhan_id: string; so_dien_thoai: string; ho_ten: string }) {
-    const response = await axiosInstance.patch<ApiResponse<{
-      appointment: TodayAppointment
+    // Luu y: backend tra hang_doi/canh_bao la anh em cung cap voi `data`, KHONG long ben trong
+    // `data` (markAsArrived tra { success, message, data: appointment, hang_doi, canh_bao }).
+    const response = await axiosInstance.patch<{
+      success: boolean
+      message?: string
+      data: TodayAppointment
       hang_doi: { id: string; doctor_id: string; phong_kham?: string | null; gio_hen_goc?: string | null; checkin_time: string; so_thu_tu_checkin?: number | null; ma_so_thu_tu?: string | null }
       canh_bao?: string[]
-    }>>(`/receptionist/appointments/${appointmentId}/arrived`, patient)
-    return response.data
+    }>(`/receptionist/appointments/${appointmentId}/arrived`, patient)
+    return {
+      appointment: response.data.data,
+      hang_doi: response.data.hang_doi,
+      canh_bao: response.data.canh_bao ?? [],
+    }
   },
 
   async getOfflineInvoice(queueId: string): Promise<{ invoice: OfflineInvoice | null; pending_payment: OfflinePendingPayment | null; hang_doi: unknown }> {
