@@ -3,6 +3,7 @@ import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
 import LichSuLichHen from '../../models/LichSuLichHen.js'
+import NghiPhepBacSi from '../../models/NghiPhepBacSi.js'
 import ThanhToan from '../../models/ThanhToan.js'
 import ThongBao from '../../models/ThongBao.js'
 import BacSi from '../../models/BacSi.js'
@@ -11,7 +12,7 @@ import HangDoi from '../../models/HangDoi.js'
 import TrangThaiPhongKham from '../../models/TrangThaiPhongKham.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
-import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
+import { apDungPhuongAn, taoDeXuatDoiChoDonNghi } from '../../services/appointmentReschedule.service.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
@@ -20,6 +21,7 @@ import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../../utils/cl
 import { caCuaKhung } from '../../models/MauLichLamViec.js'
 import { soSanhThuTuHangDoi } from '../../models/HangDoi.js'
 import {
+  AFFECTED_BY_LEAVE_STATUSES,
   RECEPTIONIST_APPOINTMENT_ACTIONS,
   assertReceptionistAppointmentAction,
   buildReceptionistAppointmentActions,
@@ -60,6 +62,80 @@ function getActorUserId(req) {
 
 function getActorRole(req) {
   return req.user?.role === 'admin' ? 'admin' : 'receptionist'
+}
+
+function nextDayUtc(date) {
+  const value = new Date(date)
+  value.setUTCDate(value.getUTCDate() + 1)
+  value.setUTCHours(0, 0, 0, 0)
+  return value
+}
+
+function validHHMM(value) {
+  return !value || /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+}
+
+function leaveSlotInRange(leave, slot) {
+  return !leave.gio_bat_dau || !leave.gio_ket_thuc
+    ? true
+    : slot.gio_bat_dau < leave.gio_ket_thuc && slot.gio_ket_thuc > leave.gio_bat_dau
+}
+
+async function lockSlotsForSuddenLeave(leave, session) {
+  const schedules = await LichLamViec.find({
+    doctor_id: leave.bac_si_id,
+    ngay: { $gte: startOfDayUtc(leave.tu_ngay), $lt: nextDayUtc(leave.den_ngay) },
+  }).session(session)
+
+  let slotsLocked = 0
+  for (const schedule of schedules) {
+    let changed = false
+    for (const slot of schedule.slots) {
+      if (!leaveSlotInRange(leave, slot) || slot.status !== 'active') continue
+      slot.status = 'locked'
+      slot.bi_khoa_boi_nghi_phep = true
+      slot.nghi_phep_id = leave._id
+      slotsLocked += 1
+      changed = true
+    }
+    if (!leave.gio_bat_dau && schedule.trang_thai_ngay === 'lam_viec') {
+      schedule.trang_thai_ngay = 'nghi_phep'
+      changed = true
+    }
+    if (changed) await schedule.save({ session })
+  }
+  return slotsLocked
+}
+
+async function findAppointmentsAffectedBySuddenLeave(leave, session, appointmentIds = null) {
+  const query = {
+    doctor_id: leave.bac_si_id,
+    status: { $in: AFFECTED_BY_LEAVE_STATUSES },
+    ngay_kham: { $gte: startOfDayUtc(leave.tu_ngay), $lt: nextDayUtc(leave.den_ngay) },
+  }
+  if (Array.isArray(appointmentIds) && appointmentIds.length > 0) {
+    query._id = { $in: appointmentIds }
+  }
+
+  let appointments = await LichHen.find(query)
+    .select('_id ma_lich_hen ngay_kham gio_kham status ten_khach so_dien_thoai_khach user_id doctor_id specialty_id schedule_id slot_id payment_status de_xuat_doi')
+    .session(session)
+
+  if (leave.gio_bat_dau && leave.gio_ket_thuc) {
+    appointments = appointments.filter((appointment) => (
+      appointment.gio_kham >= leave.gio_bat_dau && appointment.gio_kham < leave.gio_ket_thuc
+    ))
+  }
+  return appointments
+}
+
+function summarizeSuddenLeaveProposal(result) {
+  return {
+    appointment_id: result.appointment_id,
+    so_phuong_an: result.so_phuong_an,
+    cho_admin_duyet: result.cho_admin_duyet,
+    can_lien_he_thu_cong: result.so_phuong_an === 0 || result.cho_admin_duyet,
+  }
 }
 
 async function getQueueEntryForAppointment(appointmentId, session = null) {
@@ -1253,11 +1329,209 @@ export const bulkRescheduleAppointments = async (req, res) => {
   }
 }
 
+export const reportDoctorUnavailable = async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+  try {
+    const { doctor_id, date, tu_ngay, den_ngay, gio_bat_dau, gio_ket_thuc, reason, ghi_chu, appointment_ids } = req.body
+    const appointmentIds = Array.isArray(appointment_ids)
+      ? appointment_ids.filter((id) => mongoose.Types.ObjectId.isValid(id))
+      : []
+    const doctorId = doctor_id
+    const startInput = tu_ngay || date
+    const endInput = den_ngay || tu_ngay || date
+
+    if (!doctorId || !startInput || !endInput) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({
+        success: false,
+        message: 'doctor_id, ngay bat dau va ngay ket thuc la bat buoc',
+      })
+    }
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'doctor_id khong hop le' })
+    }
+    if (!validHHMM(gio_bat_dau) || !validHHMM(gio_ket_thuc) || ((gio_bat_dau || gio_ket_thuc) && (!gio_bat_dau || !gio_ket_thuc || gio_ket_thuc <= gio_bat_dau))) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Khung gio nghi khong hop le' })
+    }
+
+    const doctor = await BacSi.findOne({
+      _id: doctorId,
+      trang_thai_duyet: 'approved',
+      la_hien: true,
+    }).session(session)
+    if (!doctor) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(404).json({ success: false, message: 'Khong tim thay bac si dang hoat dong' })
+    }
+
+    const tuNgay = startOfDayUtc(new Date(startInput))
+    const denNgay = startOfDayUtc(new Date(endInput))
+    if (!tuNgay || !denNgay || denNgay < tuNgay) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(400).json({ success: false, message: 'Khoang ngay nghi khong hop le' })
+    }
+
+    const overlappingLeave = await NghiPhepBacSi.findOne({
+      bac_si_id: doctorId,
+      trang_thai: { $in: ['cho_duyet', 'da_duyet'] },
+      tu_ngay: { $lt: nextDayUtc(denNgay) },
+      den_ngay: { $gte: tuNgay },
+    }).session(session)
+    if (overlappingLeave) {
+      await session.abortTransaction()
+      session.endSession()
+      return res.status(409).json({
+        success: false,
+        message: 'Bac si da co don nghi trong khoang ngay nay, vui long xu ly tren don hien co',
+        leave_id: overlappingLeave._id,
+      })
+    }
+
+    const now = new Date()
+    const leave = await NghiPhepBacSi.create([{
+      bac_si_id: doctorId,
+      tu_ngay: tuNgay,
+      den_ngay: denNgay,
+      gio_bat_dau: gio_bat_dau || null,
+      gio_ket_thuc: gio_ket_thuc || null,
+      ly_do: reason || 'Bac si nghi dot xuat',
+      trang_thai: 'da_duyet',
+      nguoi_duyet_id: getActorUserId(req),
+      thoi_diem_duyet: now,
+      ghi_chu: ghi_chu || 'Le tan ghi nhan bac si nghi dot xuat va tao de xuat doi lich cho khach',
+    }], { session })
+    const suddenLeave = leave[0]
+
+    const affectedAppointments = await findAppointmentsAffectedBySuddenLeave(suddenLeave, session, appointmentIds)
+    const queueEntries = affectedAppointments.length
+      ? await HangDoi.find({
+          appointment_id: { $in: affectedAppointments.map((appointment) => appointment._id) },
+          trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong'] },
+        }).select('appointment_id trang_thai ma_so_thu_tu ten_benh_nhan doctor_id').session(session).lean()
+      : []
+    const queueByAppointment = new Map(queueEntries.map((entry) => [String(entry.appointment_id), entry]))
+
+    const appointmentsForProposal = affectedAppointments.filter((appointment) => (
+      ['pending', 'confirmed'].includes(appointment.status)
+      && !appointment.de_xuat_doi
+      && !queueByAppointment.has(String(appointment._id))
+    ))
+
+    const skippedAppointments = affectedAppointments
+      .filter((appointment) => !appointmentsForProposal.some((eligible) => String(eligible._id) === String(appointment._id)))
+      .map((appointment) => {
+        const queue = queueByAppointment.get(String(appointment._id))
+        return {
+          appointment_id: appointment._id,
+          ma_lich_hen: appointment.ma_lich_hen ?? null,
+          status: appointment.status,
+          ten_khach: appointment.ten_khach ?? null,
+          gio_kham: appointment.gio_kham,
+          ly_do_bo_qua: queue?.trang_thai === 'trong_phong'
+            ? 'benh_nhan_dang_trong_phong'
+            : queue
+              ? 'da_checkin_can_dieu_phoi_tai_quay'
+              : appointment.de_xuat_doi
+                ? 'dang_co_de_xuat_doi_mo'
+                : 'trang_thai_khong_cho_phep_tao_de_xuat',
+          hang_doi: queue
+            ? {
+                hang_doi_id: queue._id,
+                trang_thai: queue.trang_thai,
+                ma_so_thu_tu: queue.ma_so_thu_tu ?? null,
+              }
+            : null,
+        }
+      })
+
+    const slotsLocked = await lockSlotsForSuddenLeave(suddenLeave, session)
+    const proposals = appointmentsForProposal.length > 0
+      ? await taoDeXuatDoiChoDonNghi(suddenLeave, {
+          session,
+          now,
+          appointmentIds: appointmentsForProposal.map((appointment) => appointment._id),
+        })
+      : []
+
+    const updatedAppointments = proposals.length > 0
+      ? await LichHen.find({ _id: { $in: proposals.map((proposal) => proposal.appointment_id) } })
+          .select('_id de_xuat_doi')
+          .session(session)
+      : []
+    const affectedById = new Map(affectedAppointments.map((appointment) => [String(appointment._id), appointment]))
+    const updatedById = new Map(updatedAppointments.map((appointment) => [String(appointment._id), appointment]))
+    for (const proposal of proposals) {
+      const appointment = affectedById.get(String(proposal.appointment_id))
+      if (!appointment) continue
+      const nextOption = updatedById.get(String(proposal.appointment_id))?.de_xuat_doi?.phuong_an?.[0] ?? null
+      await LichSuLichHen.create([{
+        appointment_id: appointment._id,
+        tu_trang_thai: appointment.status,
+        den_trang_thai: appointment.status,
+        tu_payment_status: appointment.payment_status ?? null,
+        den_payment_status: appointment.payment_status ?? null,
+        loai_thay_doi: 'reschedule_proposal',
+        ly_do_thay_doi: reason || 'Bac si nghi dot xuat',
+        vai_tro: getActorRole(req),
+        kenh_thay_doi: 'web',
+        nguoi_thay_doi_id: getActorUserId(req),
+        nguoi_thuc_hien_id: getActorUserId(req),
+        bac_si_cu_id: appointment.doctor_id ?? null,
+        bac_si_moi_id: nextOption?.doctor_id ?? null,
+        specialty_cu_id: appointment.specialty_id ?? null,
+        specialty_moi_id: appointment.specialty_id ?? null,
+        schedule_cu_id: appointment.schedule_id ?? null,
+        schedule_moi_id: nextOption?.schedule_id ?? null,
+        slot_cu_id: appointment.slot_id ?? null,
+        slot_moi_id: nextOption?.slot_id ?? null,
+        ngay_kham_cu: appointment.ngay_kham ?? null,
+        ngay_kham_moi: nextOption?.ngay ?? null,
+        gio_kham_cu: appointment.gio_kham ?? null,
+        gio_kham_moi: nextOption?.gio_bat_dau ?? null,
+        ly_do: `Tao de xuat doi lich do bac si nghi dot xuat: ${reason || 'khong ghi ro ly do'}`,
+      }], { session })
+    }
+
+    await session.commitTransaction()
+    session.endSession()
+
+    const proposalSummaries = proposals.map(summarizeSuddenLeaveProposal)
+    const manualContactCount = proposalSummaries.filter((item) => item.can_lien_he_thu_cong).length
+      + skippedAppointments.filter((item) => item.ly_do_bo_qua !== 'benh_nhan_dang_trong_phong').length
+
+    return res.status(200).json({
+      success: true,
+      message: `Da ghi nhan bac si nghi dot xuat. Tao de xuat cho ${proposals.length}/${affectedAppointments.length} lich bi anh huong.`,
+      data: {
+        leave_id: suddenLeave._id,
+        so_lich_bi_anh_huong: affectedAppointments.length,
+        so_slot_da_khoa: slotsLocked,
+        de_xuat_doi: proposalSummaries,
+        can_dieu_phoi_tai_quay: skippedAppointments,
+        so_luot_can_le_tan_lien_he: manualContactCount,
+      },
+    })
+  } catch (error) {
+    await session.abortTransaction().catch(() => {})
+    session.endSession()
+    return res.status(500).json({ success: false, message: error.message })
+  }
+}
+
 export default {
   getAppointments,
   markAsArrived,
   getPendingCheckin,
   getDoctorOperationalStatuses,
+  reportDoctorUnavailable,
   rescheduleAppointment,
   markLateArrival,
   cancelAppointment,

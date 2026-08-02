@@ -142,6 +142,7 @@ export default function Appointments() {
   const [selectedApts, setSelectedApts] = useState<string[]>([]);
   const [bulkCancelModalOpen, setBulkCancelModalOpen] = useState(false);
   const [bulkRescheduleModalOpen, setBulkRescheduleModalOpen] = useState(false);
+  const [bulkDoctorLeaveModalOpen, setBulkDoctorLeaveModalOpen] = useState(false);
   const [bulkReason, setBulkReason] = useState('');
   const [bulkStartDate, setBulkStartDate] = useState('');
   const [bulkStartTime, setBulkStartTime] = useState('');
@@ -285,6 +286,47 @@ export default function Appointments() {
       fetchAppointments(currentPage);
     } catch (err: any) {
       alert(err.response?.data?.message || 'Lá»—i khi dá»i hÃ ng loáº¡t');
+    }
+  };
+
+  const handleDoctorUnavailable = async () => {
+    const selectedAppointments = appointments.filter((apt) => selectedApts.includes(apt._id));
+    const doctorIds = [...new Set(selectedAppointments.map((apt) => apt.doctor_id?._id).filter(Boolean))];
+    if (selectedAppointments.length === 0) {
+      alert('Vui long chon lich hen bi anh huong');
+      return;
+    }
+    if (doctorIds.length !== 1) {
+      alert('Chi duoc xu ly mot bac si nghi dot xuat moi lan');
+      return;
+    }
+    if (!bulkReason.trim()) {
+      alert('Vui long nhap ly do bac si nghi dot xuat');
+      return;
+    }
+
+    const selectedDates = selectedAppointments
+      .map((apt) => apt.ngay_kham.split('T')[0])
+      .sort();
+
+    try {
+      const res = await axiosInstance.post('/receptionist/appointments/doctor-unavailable', {
+        doctor_id: doctorIds[0],
+        tu_ngay: selectedDates[0],
+        den_ngay: selectedDates[selectedDates.length - 1],
+        reason: bulkReason,
+        appointment_ids: selectedApts,
+      });
+      const data = res.data?.data;
+      const manualCount = data?.so_luot_can_le_tan_lien_he ?? 0;
+      alert(`${res.data.message}${manualCount ? `\nCan le tan lien he/doi truc tiep: ${manualCount} luot.` : ''}`);
+      setBulkDoctorLeaveModalOpen(false);
+      setSelectedApts([]);
+      setIsBulkMode(false);
+      setBulkReason('');
+      fetchAppointments(currentPage);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Loi khi ghi nhan bac si nghi dot xuat');
     }
   };
 
@@ -1147,6 +1189,7 @@ export default function Appointments() {
           <div className="w-px h-6 bg-slate-200"></div>
           <button onClick={() => setBulkCancelModalOpen(true)} className="text-red-600 hover:text-red-700 font-medium text-sm">Há»§y hÃ ng loáº¡t</button>
           <button onClick={() => setBulkRescheduleModalOpen(true)} className="bg-brand-600 text-white px-4 py-1.5 rounded-full hover:bg-brand-700 font-medium text-sm">Dá»i lá»‹ch hÃ ng loáº¡t</button>
+          <button onClick={() => setBulkDoctorLeaveModalOpen(true)} className="bg-orange-600 text-white px-4 py-1.5 rounded-full hover:bg-orange-700 font-medium text-sm">Bac si nghi dot xuat</button>
         </div>
       )}
 
@@ -1177,6 +1220,47 @@ export default function Appointments() {
             <div className="p-6 pt-0 flex justify-end gap-3">
               <button onClick={() => setBulkCancelModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Há»§y bá»</button>
               <button onClick={handleBulkCancel} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium">XÃ¡c nháº­n Há»§y</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Doctor Unavailable Modal */}
+      {bulkDoctorLeaveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-orange-50/70">
+              <h3 className="text-lg font-bold text-orange-700 flex items-center gap-2">
+                Xu ly bac si nghi dot xuat
+              </h3>
+              <button onClick={() => setBulkDoctorLeaveModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <Icon name="x" className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600 bg-orange-50 p-3 rounded-lg border border-orange-100">
+                He thong se khoa cac slot cua bac si trong khoang lich da chon, tao phuong an doi lich cho khach chua vao hang doi va ghi lich su thao tac cua le tan.
+              </p>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <div className="font-semibold text-slate-800">Da chon {selectedApts.length} lich hen</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Chi nen chon cac lich cua cung mot bac si trong ca/ngay bi anh huong.
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Ly do thong bao cho khach <span className="text-red-500">*</span></label>
+                <textarea
+                  className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+                  rows={3}
+                  value={bulkReason}
+                  onChange={(e) => setBulkReason(e.target.value)}
+                  placeholder="Vi du: Bac si co viec dot xuat, phong kham xin phep chuyen lich sang phuong an gan nhat"
+                ></textarea>
+              </div>
+            </div>
+            <div className="p-6 pt-0 flex justify-end gap-3">
+              <button onClick={() => setBulkDoctorLeaveModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Huy bo</button>
+              <button onClick={handleDoctorUnavailable} className="px-4 py-2 bg-orange-600 text-white hover:bg-orange-700 rounded-lg text-sm font-medium">Tao de xuat va thong bao</button>
             </div>
           </div>
         </div>

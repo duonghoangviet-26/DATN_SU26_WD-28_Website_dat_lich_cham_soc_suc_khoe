@@ -290,14 +290,19 @@ export async function apDungPhuongAn({
  * Lịch ĐÃ THANH TOÁN → `cho_admin_duyet`: tiền của khách không để một người tự định đoạt.
  * Lịch chưa thanh toán → `cho_khach_chon` luôn.
  */
-export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new Date() } = {}) {
+export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new Date(), appointmentIds = null } = {}) {
   const endExclusive = addDays(new Date(leave.den_ngay), 1)
 
-  let appointments = await LichHen.find({
+  const query = {
     doctor_id: leave.bac_si_id,
     status: { $in: ['pending', 'confirmed'] },
     ngay_kham: { $gte: leave.tu_ngay, $lt: endExclusive },
-  }).session(session)
+  }
+  if (Array.isArray(appointmentIds) && appointmentIds.length > 0) {
+    query._id = { $in: appointmentIds }
+  }
+
+  let appointments = await LichHen.find(query).session(session)
 
   if (leave.gio_bat_dau && leave.gio_ket_thuc) {
     appointments = appointments.filter(

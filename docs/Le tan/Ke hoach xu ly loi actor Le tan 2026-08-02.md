@@ -319,6 +319,8 @@ queue_state: null | 'dang_cho' | 'da_goi' | 'trong_phong' | ...
 
 **Mức ưu tiên:** P0. **Phụ thuộc:** LT-00, LT-08, LT-09.
 
+**Tình trạng triển khai 2026-08-02:** đã thêm luồng riêng cho lễ tân báo bác sĩ nghỉ đột xuất qua API `POST /receptionist/appointments/doctor-unavailable`. Lễ tân chọn các lịch bị ảnh hưởng trong màn danh sách, nhập lý do, hệ thống tạo bản ghi `NghiPhepBacSi` đã duyệt, khóa slot bác sĩ nghỉ, sinh `de_xuat_doi` cho các lịch `pending/confirmed` chưa vào hàng đợi, giữ chỗ phương án đầu tiên, gửi thông báo theo luồng LT-08 và ghi `LichSuLichHen.loai_thay_doi='reschedule_proposal'` với vai trò lễ tân. Các lịch đã check-in/hàng đợi chưa bị đổi âm thầm; API trả về danh sách `can_dieu_phoi_tai_quay` để lễ tân xử lý trực tiếp, tránh lỗi lên sai hàng đợi bác sĩ.
+
 **Lỗi/gap hiện tại:** khi bác sĩ không thể khám, lịch đã đặt bị ảnh hưởng nhưng chưa có luồng lễ tân xử lý hàng loạt có kiểm soát. Nếu chỉ đổi thẳng `doctor_id`, khách có thể gặp bác sĩ khác khi chưa biết hoặc bị chuyển vào một slot không trống.
 
 **Luồng nghiệp vụ đề xuất:**
