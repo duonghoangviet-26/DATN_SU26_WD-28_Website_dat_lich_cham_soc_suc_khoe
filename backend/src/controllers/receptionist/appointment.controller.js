@@ -1,8 +1,11 @@
-import mongoose from 'mongoose'
+﻿import mongoose from 'mongoose'
 import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
 import LichSuLichHen from '../../models/LichSuLichHen.js'
+import ThanhToan from '../../models/ThanhToan.js'
+import ThongBao from '../../models/ThongBao.js'
+import BacSi from '../../models/BacSi.js'
 import HoSoBenhNhan from '../../models/HoSoBenhNhan.js'
 import HangDoi from '../../models/HangDoi.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
@@ -10,6 +13,7 @@ import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.servi
 import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
+import { sendNotificationEmail, isMailConfigured } from '../../services/mail.service.js'
 import { cacMocCuaKhung } from '../../utils/clinicTime.js'
 import {
   RECEPTIONIST_APPOINTMENT_ACTIONS,
@@ -37,8 +41,8 @@ function appointmentBelongsToProfile(appointment, profile) {
 
   if (exactProfile || memberMatch || accountMatch) return true
 
-  // Lịch đặt hộ người chưa có hồ sơ liên kết: chỉ nhận khi cả tên và số điện thoại
-  // trên lịch khớp với hồ sơ mà lễ tân vừa xác nhận.
+  // Lá»‹ch Ä‘áº·t há»™ ngÆ°á»i chÆ°a cÃ³ há»“ sÆ¡ liÃªn káº¿t: chá»‰ nháº­n khi cáº£ tÃªn vÃ  sá»‘ Ä‘iá»‡n thoáº¡i
+  // trÃªn lá»‹ch khá»›p vá»›i há»“ sÆ¡ mÃ  lá»… tÃ¢n vá»«a xÃ¡c nháº­n.
   return Boolean(
     appointment.ten_khach
       && normalizeName(appointment.ten_khach) === normalizeName(profile.ho_ten)
@@ -63,11 +67,11 @@ async function getQueueEntryForAppointment(appointmentId, session = null) {
 
 export const getAppointments = async (req, res) => {
   try {
-    const { date, status, timeframe, search, page = 1, limit = 10 } = req.query
+    const { date, status, timeframe, search, doctor_id, page = 1, limit = 10 } = req.query
     const pageNum = parseInt(page) || 1
     const limitNum = parseInt(limit) || 10
     const query = { loai_kham: 'clinic' }
-    
+
     if (search) {
       const users = await NguoiDung.find({
         $or: [
@@ -75,9 +79,9 @@ export const getAppointments = async (req, res) => {
           { so_dien_thoai: { $regex: search, $options: 'i' } }
         ]
       }).select('_id')
-      
+
       const userIds = users.map(u => u._id)
-      
+
       query.$or = [
         { ma_lich_hen: { $regex: search, $options: 'i' } },
         { ten_khach: { $regex: search, $options: 'i' } },
@@ -85,16 +89,16 @@ export const getAppointments = async (req, res) => {
         { user_id: { $in: userIds } }
       ]
     }
-    
+
     if (date) {
       query.ngay_kham = new Date(`${date}T00:00:00.000Z`)
     } else {
       const now = new Date()
-      // Ép chuẩn về múi giờ Việt Nam (UTC+7) để Server không bị lạc ngày
+      // Ã‰p chuáº©n vá» mÃºi giá» Viá»‡t Nam (UTC+7) Ä‘á»ƒ Server khÃ´ng bá»‹ láº¡c ngÃ y
       const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000)
       const todayString = vnTime.toISOString().split('T')[0]
       const todayUTC = new Date(`${todayString}T00:00:00.000Z`)
-      
+
       const tomorrowVn = new Date(vnTime.getTime() + 24 * 60 * 60 * 1000)
       const tomorrowString = tomorrowVn.toISOString().split('T')[0]
       const tomorrowUTC = new Date(`${tomorrowString}T00:00:00.000Z`)
@@ -109,8 +113,9 @@ export const getAppointments = async (req, res) => {
         query.ngay_kham = { $lt: todayUTC }
       }
     }
-    
+
     if (status) query.status = status
+    if (doctor_id) query.doctor_id = doctor_id
 
     let sortOption = { ngay_kham: 1, gio_kham: 1 }
     if (timeframe === 'past') {
@@ -144,9 +149,9 @@ export const getAppointments = async (req, res) => {
         queueByAppointment.get(String(appointment._id)) ?? null,
       ),
     }))
-      
-    res.status(200).json({ 
-      success: true, 
+
+    res.status(200).json({
+      success: true,
       data,
       pagination: {
         page: pageNum,
@@ -160,43 +165,43 @@ export const getAppointments = async (req, res) => {
   }
 }
 
-// Lễ tân tiếp nhận bệnh nhân tới quầy.
+// Lá»… tÃ¢n tiáº¿p nháº­n bá»‡nh nhÃ¢n tá»›i quáº§y.
 //
-// ⚠️ Trước 2026-07-26 hàm này CHỈ đổi `status = 'checked_in'`. Bệnh nhân đặt online, đã thanh
-// toán, tới quầy, lễ tân bấm "đã đến" — và không bao giờ xuất hiện trong hàng đợi của bác sĩ,
-// vì hàng đợi neo trên collection `HangDoi` chứ không trên `LichHen.status`. Bác sĩ không có
-// cách nào tiếp nhận họ; tệ hơn, rule mục 8 định nghĩa `no_show` = "hết ca mà không có bản ghi
-// HangDoi" nên người đã tới quầy vẫn bị coi là không đến và mất 100% tiền (mục 5).
+// âš ï¸ TrÆ°á»›c 2026-07-26 hÃ m nÃ y CHá»ˆ Ä‘á»•i `status = 'checked_in'`. Bá»‡nh nhÃ¢n Ä‘áº·t online, Ä‘Ã£ thanh
+// toÃ¡n, tá»›i quáº§y, lá»… tÃ¢n báº¥m "Ä‘Ã£ Ä‘áº¿n" â€” vÃ  khÃ´ng bao giá» xuáº¥t hiá»‡n trong hÃ ng Ä‘á»£i cá»§a bÃ¡c sÄ©,
+// vÃ¬ hÃ ng Ä‘á»£i neo trÃªn collection `HangDoi` chá»© khÃ´ng trÃªn `LichHen.status`. BÃ¡c sÄ© khÃ´ng cÃ³
+// cÃ¡ch nÃ o tiáº¿p nháº­n há»; tá»‡ hÆ¡n, rule má»¥c 8 Ä‘á»‹nh nghÄ©a `no_show` = "háº¿t ca mÃ  khÃ´ng cÃ³ báº£n ghi
+// HangDoi" nÃªn ngÆ°á»i Ä‘Ã£ tá»›i quáº§y váº«n bá»‹ coi lÃ  khÃ´ng Ä‘áº¿n vÃ  máº¥t 100% tiá»n (má»¥c 5).
 //
-// Nay gọi CHUNG service check-in với bác sĩ (rule mục 7). Khác biệt duy nhất: lễ tân tiếp nhận
-// cho cả phòng khám nên không truyền `restrictToDoctorId`.
+// Nay gá»i CHUNG service check-in vá»›i bÃ¡c sÄ© (rule má»¥c 7). KhÃ¡c biá»‡t duy nháº¥t: lá»… tÃ¢n tiáº¿p nháº­n
+// cho cáº£ phÃ²ng khÃ¡m nÃªn khÃ´ng truyá»n `restrictToDoctorId`.
 export const markAsArrived = async (req, res) => {
   try {
     const { ho_so_benh_nhan_id, so_dien_thoai, ho_ten } = req.body ?? {}
     if (!ho_so_benh_nhan_id || !so_dien_thoai || !ho_ten) {
       return res.status(400).json({
         success: false,
-        message: 'Check-in phải tra cứu và xác nhận hồ sơ bằng số điện thoại, họ tên bệnh nhân trước.',
+        message: 'Check-in pháº£i tra cá»©u vÃ  xÃ¡c nháº­n há»“ sÆ¡ báº±ng sá»‘ Ä‘iá»‡n thoáº¡i, há» tÃªn bá»‡nh nhÃ¢n trÆ°á»›c.',
       })
     }
 
     const profile = await HoSoBenhNhan.findOne({ _id: ho_so_benh_nhan_id, trang_thai: 'active' }).lean()
-    if (!profile) return res.status(404).json({ success: false, message: 'Không tìm thấy hồ sơ bệnh nhân đã xác nhận.' })
+    if (!profile) return res.status(404).json({ success: false, message: 'KhÃ´ng tÃ¬m tháº¥y há»“ sÆ¡ bá»‡nh nhÃ¢n Ä‘Ã£ xÃ¡c nháº­n.' })
     if (normalizePhone(so_dien_thoai) !== normalizePhone(profile.so_dien_thoai_tim_kiem || profile.so_dien_thoai)
       || normalizeName(ho_ten) !== normalizeName(profile.ho_ten)) {
-      return res.status(409).json({ success: false, message: 'Thông tin check-in không khớp với hồ sơ bệnh nhân đã tra cứu.' })
+      return res.status(409).json({ success: false, message: 'ThÃ´ng tin check-in khÃ´ng khá»›p vá»›i há»“ sÆ¡ bá»‡nh nhÃ¢n Ä‘Ã£ tra cá»©u.' })
     }
 
     const checkedAppointment = await LichHen.findById(req.params.id)
       .select('ho_so_benh_nhan_id member_id user_id nguoi_dat_ho_id dat_ho ten_khach so_dien_thoai_khach')
       .lean()
     if (!checkedAppointment || !appointmentBelongsToProfile(checkedAppointment, profile)) {
-      return res.status(409).json({ success: false, message: 'Lịch hẹn không thuộc đúng bệnh nhân vừa được xác nhận.' })
+      return res.status(409).json({ success: false, message: 'Lá»‹ch háº¹n khÃ´ng thuá»™c Ä‘Ãºng bá»‡nh nhÃ¢n vá»«a Ä‘Æ°á»£c xÃ¡c nháº­n.' })
     }
 
-    // Nếu đây là lần đầu hồ sơ tại quầy gặp lại tài khoản online, liên kết ngay
-    // sau khi lễ tân đã xác minh đúng người. Không ghi đè liên kết cũ và phân biệt
-    // tài khoản bệnh nhân với tài khoản người đặt hộ.
+    // Náº¿u Ä‘Ã¢y lÃ  láº§n Ä‘áº§u há»“ sÆ¡ táº¡i quáº§y gáº·p láº¡i tÃ i khoáº£n online, liÃªn káº¿t ngay
+    // sau khi lá»… tÃ¢n Ä‘Ã£ xÃ¡c minh Ä‘Ãºng ngÆ°á»i. KhÃ´ng ghi Ä‘Ã¨ liÃªn káº¿t cÅ© vÃ  phÃ¢n biá»‡t
+    // tÃ i khoáº£n bá»‡nh nhÃ¢n vá»›i tÃ i khoáº£n ngÆ°á»i Ä‘áº·t há»™.
     if (checkedAppointment.user_id && !profile.tai_khoan_id && !profile.nguoi_giam_ho_id) {
       const linkField = checkedAppointment.dat_ho || checkedAppointment.member_id || checkedAppointment.nguoi_dat_ho_id
         ? 'nguoi_giam_ho_id'
@@ -214,11 +219,26 @@ export const markAsArrived = async (req, res) => {
       patientProfileId: profile._id,
     })
 
+    // Create ThanhToan record if it doesn't exist
+    const existingPayment = await ThanhToan.findOne({ appointment_id: appointment._id })
+    if (!existingPayment && appointment.payment_status === 'unpaid') {
+      await ThanhToan.create({
+        appointment_id: appointment._id,
+        benh_nhan_id: appointment.user_id,
+        ma_giao_dich: `TXN${Date.now().toString().slice(-6)}`,
+        so_tien: appointment.gia_kham || 200000,
+        loai_thanh_toan: 'phi_dat_lich',
+        phuong_thuc: 'tien_mat',
+        status: 'pending',
+        ngay_tao: new Date()
+      })
+    }
+
     emitDashboardAppointmentChanged(trang_thai_cu, appointment.status)
 
     res.status(200).json({
       success: true,
-      message: 'Đã check-in bệnh nhân vào hàng đợi',
+      message: 'ÄÃ£ check-in bá»‡nh nhÃ¢n vÃ o hÃ ng Ä‘á»£i',
       data: appointment,
       hang_doi: {
         id: entry._id,
@@ -236,8 +256,8 @@ export const markAsArrived = async (req, res) => {
   }
 }
 
-// GET /api/receptionist/appointments/pending-checkin — khách đã đặt hôm nay, chưa vào hàng đợi.
-// Cùng nguồn dữ liệu với danh sách của bác sĩ, chỉ khác là không giới hạn theo một bác sĩ.
+// GET /api/receptionist/appointments/pending-checkin â€” khÃ¡ch Ä‘Ã£ Ä‘áº·t hÃ´m nay, chÆ°a vÃ o hÃ ng Ä‘á»£i.
+// CÃ¹ng nguá»“n dá»¯ liá»‡u vá»›i danh sÃ¡ch cá»§a bÃ¡c sÄ©, chá»‰ khÃ¡c lÃ  khÃ´ng giá»›i háº¡n theo má»™t bÃ¡c sÄ©.
 export const getPendingCheckin = async (req, res) => {
   try {
     const rows = await layLichChoTiepNhan({ ngay: req.query.date ?? null })
@@ -247,43 +267,43 @@ export const getPendingCheckin = async (req, res) => {
   }
 }
 
-// Trần số lần khách tự xin dời (rule mục 5) — giống `patient/reschedule.controller.js`.
+// Tráº§n sá»‘ láº§n khÃ¡ch tá»± xin dá»i (rule má»¥c 5) â€” giá»‘ng `patient/reschedule.controller.js`.
 const TRAN_DOI_KHACH_YEU_CAU = 1
 
-// Slot còn nhận được người mới. Cùng định nghĩa với `appointmentReschedule.service.js`.
+// Slot cÃ²n nháº­n Ä‘Æ°á»£c ngÆ°á»i má»›i. CÃ¹ng Ä‘á»‹nh nghÄ©a vá»›i `appointmentReschedule.service.js`.
 function slotConTrong(slot) {
   return slot.status === 'active' && !slot.benh_nhan_id && !slot.bi_khoa_boi_nghi_phep
 }
 
-// Lễ tân dời lịch hộ khách.
+// Lá»… tÃ¢n dá»i lá»‹ch há»™ khÃ¡ch.
 //
-// ⚠️ Bản trước bỏ qua gần hết mục 5/11 và có thể làm hỏng dữ liệu:
-//   - Không kiểm mốc `T-30'` → khách sắp trễ nhờ lễ tân dời lúc `T-5'`, phòng khám mất
-//     trắng chỗ vì không kịp bán lại (đúng chiêu mà mục 11 dựng mốc đó để chặn).
-//   - `slots.find(s => s.gio_bat_dau === gio_kham)` lấy slot ĐẦU TIÊN trùng giờ: một khung
-//     có nhiều slot (TMH 2 slot/khung) nên slot đầu có thể đã kín trong khi slot bên cạnh
-//     còn trống → báo "đã kín" oan. Ngược lại nó cũng nhận cả slot `walk_in` và slot người
-//     khác đang giữ chỗ, trong khi mục 5 chốt khách tự dời KHÔNG BAO GIỜ được lấn walk-in.
-//   - Không kiểm lịch hẹn nào khác đã trỏ vào slot đó → đụng unique index
-//     `uniq_lich_hen_theo_slot` và trả 500 thay vì thông báo đọc được.
-//   - Đếm hạn mức bằng `so_lan_thay_doi` (đếm MỌI thay đổi) thay vì
-//     `so_lan_doi_khach_yeu_cau`, nên một lần dời do lỗi phòng khám cũng ăn mất quyền dời
-//     của khách — trái mục 5 ("lỗi phòng khám KHÔNG tính vào hạn mức").
-//   - Trả slot cũ về `active` ngay trong cùng transaction, kể cả khi khung đã sát giờ.
+// âš ï¸ Báº£n trÆ°á»›c bá» qua gáº§n háº¿t má»¥c 5/11 vÃ  cÃ³ thá»ƒ lÃ m há»ng dá»¯ liá»‡u:
+//   - KhÃ´ng kiá»ƒm má»‘c `T-30'` â†’ khÃ¡ch sáº¯p trá»… nhá» lá»… tÃ¢n dá»i lÃºc `T-5'`, phÃ²ng khÃ¡m máº¥t
+//     tráº¯ng chá»— vÃ¬ khÃ´ng ká»‹p bÃ¡n láº¡i (Ä‘Ãºng chiÃªu mÃ  má»¥c 11 dá»±ng má»‘c Ä‘Ã³ Ä‘á»ƒ cháº·n).
+//   - `slots.find(s => s.gio_bat_dau === gio_kham)` láº¥y slot Äáº¦U TIÃŠN trÃ¹ng giá»: má»™t khung
+//     cÃ³ nhiá»u slot (TMH 2 slot/khung) nÃªn slot Ä‘áº§u cÃ³ thá»ƒ Ä‘Ã£ kÃ­n trong khi slot bÃªn cáº¡nh
+//     cÃ²n trá»‘ng â†’ bÃ¡o "Ä‘Ã£ kÃ­n" oan. NgÆ°á»£c láº¡i nÃ³ cÅ©ng nháº­n cáº£ slot `walk_in` vÃ  slot ngÆ°á»i
+//     khÃ¡c Ä‘ang giá»¯ chá»—, trong khi má»¥c 5 chá»‘t khÃ¡ch tá»± dá»i KHÃ”NG BAO GIá»œ Ä‘Æ°á»£c láº¥n walk-in.
+//   - KhÃ´ng kiá»ƒm lá»‹ch háº¹n nÃ o khÃ¡c Ä‘Ã£ trá» vÃ o slot Ä‘Ã³ â†’ Ä‘á»¥ng unique index
+//     `uniq_lich_hen_theo_slot` vÃ  tráº£ 500 thay vÃ¬ thÃ´ng bÃ¡o Ä‘á»c Ä‘Æ°á»£c.
+//   - Äáº¿m háº¡n má»©c báº±ng `so_lan_thay_doi` (Ä‘áº¿m Má»ŒI thay Ä‘á»•i) thay vÃ¬
+//     `so_lan_doi_khach_yeu_cau`, nÃªn má»™t láº§n dá»i do lá»—i phÃ²ng khÃ¡m cÅ©ng Äƒn máº¥t quyá»n dá»i
+//     cá»§a khÃ¡ch â€” trÃ¡i má»¥c 5 ("lá»—i phÃ²ng khÃ¡m KHÃ”NG tÃ­nh vÃ o háº¡n má»©c").
+//   - Tráº£ slot cÅ© vá» `active` ngay trong cÃ¹ng transaction, ká»ƒ cáº£ khi khung Ä‘Ã£ sÃ¡t giá».
 //
-// Nay dùng CHUNG `apDungPhuongAn()` với luồng bệnh nhân tự dời: một chỗ quyết định cách
-// chiếm slot, khoá slot cũ, đặt `ly_do_doi`, đếm hạn mức và ghi nhật ký.
+// Nay dÃ¹ng CHUNG `apDungPhuongAn()` vá»›i luá»“ng bá»‡nh nhÃ¢n tá»± dá»i: má»™t chá»— quyáº¿t Ä‘á»‹nh cÃ¡ch
+// chiáº¿m slot, khoÃ¡ slot cÅ©, Ä‘áº·t `ly_do_doi`, Ä‘áº¿m háº¡n má»©c vÃ  ghi nháº­t kÃ½.
 export const rescheduleAppointment = async (req, res) => {
   try {
     const { ngay_kham, gio_kham, ly_do_doi_lich, ly_do_doi } = req.body
 
     if (!ngay_kham || !gio_kham) {
-      return res.status(400).json({ success: false, message: 'Vui lòng cung cấp ngày và giờ khám mới' })
+      return res.status(400).json({ success: false, message: 'Vui lÃ²ng cung cáº¥p ngÃ y vÃ  giá» khÃ¡m má»›i' })
     }
 
-    const appointment = await LichHen.findById(req.params.id)
+    const appointment = await LichHen.findById(req.params.id).populate('user_id', 'email')
     if (!appointment) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
+      return res.status(404).json({ success: false, message: 'KhÃ´ng tÃ¬m tháº¥y lá»‹ch háº¹n' })
     }
     const queueEntry = await getQueueEntryForAppointment(appointment._id)
     assertReceptionistAppointmentAction(
@@ -292,29 +312,29 @@ export const rescheduleAppointment = async (req, res) => {
       RECEPTIONIST_APPOINTMENT_ACTIONS.RESCHEDULE,
     )
 
-    // Đang có đề xuất của phòng khám (bác sĩ nghỉ/bận — mục 14, 15) thì phải xử lý đề xuất đó,
-    // không dời tay chồng lên: chỗ của phương án đang được giữ sẵn cho khách.
+    // Äang cÃ³ Ä‘á» xuáº¥t cá»§a phÃ²ng khÃ¡m (bÃ¡c sÄ© nghá»‰/báº­n â€” má»¥c 14, 15) thÃ¬ pháº£i xá»­ lÃ½ Ä‘á» xuáº¥t Ä‘Ã³,
+    // khÃ´ng dá»i tay chá»“ng lÃªn: chá»— cá»§a phÆ°Æ¡ng Ã¡n Ä‘ang Ä‘Æ°á»£c giá»¯ sáºµn cho khÃ¡ch.
     const deXuat = appointment.de_xuat_doi
     if (deXuat && ['cho_khach_chon', 'cho_admin_duyet'].includes(deXuat.trang_thai)) {
       return res.status(409).json({
         success: false,
-        message: 'Lịch này đang có phương án dời do phòng khám đề xuất. Hãy xử lý đề xuất đó trước.',
+        message: 'Lá»‹ch nÃ y Ä‘ang cÃ³ phÆ°Æ¡ng Ã¡n dá»i do phÃ²ng khÃ¡m Ä‘á» xuáº¥t. HÃ£y xá»­ lÃ½ Ä‘á» xuáº¥t Ä‘Ã³ trÆ°á»›c.',
       })
     }
 
-    // `ly_do_doi` là trường BẮT BUỘC khi dời (mục 10.D) và quyết định hạn mức:
-    //   khach_yeu_cau → tính vào trần 1 lần của khách, phải trước `T-30'`
-    //   phong_kham    → KHÔNG tính hạn mức, không áp mốc `T-30'` (mục 15), nhưng phải có
-    //                   người duyệt + lý do và được ghi nhật ký
-    // Mặc định `khach_yeu_cau`: lễ tân dời hộ thì gần như luôn là khách yêu cầu, và chọn
-    // mặc định này KHÔNG thể bị dùng để lách trần. Muốn `phong_kham` thì phải nói rõ.
+    // `ly_do_doi` lÃ  trÆ°á»ng Báº®T BUá»˜C khi dá»i (má»¥c 10.D) vÃ  quyáº¿t Ä‘á»‹nh háº¡n má»©c:
+    //   khach_yeu_cau â†’ tÃ­nh vÃ o tráº§n 1 láº§n cá»§a khÃ¡ch, pháº£i trÆ°á»›c `T-30'`
+    //   phong_kham    â†’ KHÃ”NG tÃ­nh háº¡n má»©c, khÃ´ng Ã¡p má»‘c `T-30'` (má»¥c 15), nhÆ°ng pháº£i cÃ³
+    //                   ngÆ°á»i duyá»‡t + lÃ½ do vÃ  Ä‘Æ°á»£c ghi nháº­t kÃ½
+    // Máº·c Ä‘á»‹nh `khach_yeu_cau`: lá»… tÃ¢n dá»i há»™ thÃ¬ gáº§n nhÆ° luÃ´n lÃ  khÃ¡ch yÃªu cáº§u, vÃ  chá»n
+    // máº·c Ä‘á»‹nh nÃ y KHÃ”NG thá»ƒ bá»‹ dÃ¹ng Ä‘á»ƒ lÃ¡ch tráº§n. Muá»‘n `phong_kham` thÃ¬ pháº£i nÃ³i rÃµ.
     const laLoiPhongKham = ly_do_doi === 'phong_kham'
     const lyDoDoi = laLoiPhongKham ? 'phong_kham' : 'khach_yeu_cau'
 
     if (laLoiPhongKham && !ly_do_doi_lich?.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Dời do lỗi phòng khám bắt buộc ghi lý do cụ thể (rule mục 5).',
+        message: 'Dá»i do lá»—i phÃ²ng khÃ¡m báº¯t buá»™c ghi lÃ½ do cá»¥ thá»ƒ (rule má»¥c 5).',
       })
     }
 
@@ -323,27 +343,27 @@ export const rescheduleAppointment = async (req, res) => {
       if (daDung >= TRAN_DOI_KHACH_YEU_CAU) {
         return res.status(409).json({
           success: false,
-          message: `Khách đã dùng hết ${TRAN_DOI_KHACH_YEU_CAU} lần dời lịch. Nếu đây là lỗi phòng khám, `
-            + 'chọn lý do "phòng khám" kèm giải trình.',
+          message: `KhÃ¡ch Ä‘Ã£ dÃ¹ng háº¿t ${TRAN_DOI_KHACH_YEU_CAU} láº§n dá»i lá»‹ch. Náº¿u Ä‘Ã¢y lÃ  lá»—i phÃ²ng khÃ¡m, `
+            + 'chá»n lÃ½ do "phÃ²ng khÃ¡m" kÃ¨m giáº£i trÃ¬nh.',
         })
       }
 
-      // Mốc `T-30'` của khung CŨ (mục 11). Chặn chiêu né mất tiền: sắp trễ mới xin dời thì
-      // slot không kịp bán cho ai.
+      // Má»‘c `T-30'` cá»§a khung CÅ¨ (má»¥c 11). Cháº·n chiÃªu nÃ© máº¥t tiá»n: sáº¯p trá»… má»›i xin dá»i thÃ¬
+      // slot khÃ´ng ká»‹p bÃ¡n cho ai.
       const moc = cacMocCuaKhung(appointment.ngay_kham, appointment.gio_kham)
       if (!moc || Date.now() >= moc.dongDatOnline.getTime()) {
         return res.status(409).json({
           success: false,
-          message: 'Đã quá hạn xin dời (trước giờ khám 30 phút). Khách vẫn được khám nếu tới trong ca '
-            + 'và KHÔNG mất tiền.',
+          message: 'ÄÃ£ quÃ¡ háº¡n xin dá»i (trÆ°á»›c giá» khÃ¡m 30 phÃºt). KhÃ¡ch váº«n Ä‘Æ°á»£c khÃ¡m náº¿u tá»›i trong ca '
+            + 'vÃ  KHÃ”NG máº¥t tiá»n.',
         })
       }
     }
 
-    // ── Tìm slot đích ────────────────────────────────────────────────────────
+    // â”€â”€ TÃ¬m slot Ä‘Ã­ch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const ngayMoi = new Date(ngay_kham)
     if (Number.isNaN(ngayMoi.getTime())) {
-      return res.status(400).json({ success: false, message: 'ngay_kham không hợp lệ' })
+      return res.status(400).json({ success: false, message: 'ngay_kham khÃ´ng há»£p lá»‡' })
     }
     ngayMoi.setUTCHours(0, 0, 0, 0)
 
@@ -355,10 +375,10 @@ export const rescheduleAppointment = async (req, res) => {
     }).lean()
 
     if (!scheduleMoi) {
-      return res.status(400).json({ success: false, message: 'Bác sĩ không có lịch làm việc vào ngày này' })
+      return res.status(400).json({ success: false, message: 'BÃ¡c sÄ© khÃ´ng cÃ³ lá»‹ch lÃ m viá»‡c vÃ o ngÃ y nÃ y' })
     }
 
-    // Lịch hẹn khác đã trỏ vào slot nào thì slot đó hết chỗ, dù `status` trong lịch có lệch.
+    // Lá»‹ch háº¹n khÃ¡c Ä‘Ã£ trá» vÃ o slot nÃ o thÃ¬ slot Ä‘Ã³ háº¿t chá»—, dÃ¹ `status` trong lá»‹ch cÃ³ lá»‡ch.
     const slotDaCoLich = new Set(
       (await LichHen.find({
         schedule_id: scheduleMoi._id,
@@ -368,18 +388,18 @@ export const rescheduleAppointment = async (req, res) => {
         .filter((a) => a.slot_id).map((a) => String(a.slot_id)),
     )
 
-    // Quét MỌI slot trùng giờ, không lấy slot đầu tiên: một khung có nhiều slot.
+    // QuÃ©t Má»ŒI slot trÃ¹ng giá», khÃ´ng láº¥y slot Ä‘áº§u tiÃªn: má»™t khung cÃ³ nhiá»u slot.
     const slotTrungGio = scheduleMoi.slots.filter((s) => s.gio_bat_dau === gio_kham)
     if (slotTrungGio.length === 0) {
-      return res.status(400).json({ success: false, message: `Bác sĩ không có khung ${gio_kham} trong ngày này` })
+      return res.status(400).json({ success: false, message: `BÃ¡c sÄ© khÃ´ng cÃ³ khung ${gio_kham} trong ngÃ y nÃ y` })
     }
     if (slotTrungGio.some((s) => String(s._id) === String(appointment.slot_id))) {
-      return res.status(400).json({ success: false, message: 'Vui lòng chọn ngày và giờ khác với lịch hẹn hiện tại' })
+      return res.status(400).json({ success: false, message: 'Vui lÃ²ng chá»n ngÃ y vÃ  giá» khÃ¡c vá»›i lá»‹ch háº¹n hiá»‡n táº¡i' })
     }
 
-    // Khách tự dời KHÔNG BAO GIỜ được lấn slot walk-in (mục 5, 15). Lỗi phòng khám thì mục 15
-    // cho lấn nhưng có trần 1 slot/khung và phải ghi nhật ký — chưa hiện thực ở màn hình này,
-    // nên tạm thời chặn cả hai chiều thay vì lấn không kiểm soát.
+    // KhÃ¡ch tá»± dá»i KHÃ”NG BAO GIá»œ Ä‘Æ°á»£c láº¥n slot walk-in (má»¥c 5, 15). Lá»—i phÃ²ng khÃ¡m thÃ¬ má»¥c 15
+    // cho láº¥n nhÆ°ng cÃ³ tráº§n 1 slot/khung vÃ  pháº£i ghi nháº­t kÃ½ â€” chÆ°a hiá»‡n thá»±c á»Ÿ mÃ n hÃ¬nh nÃ y,
+    // nÃªn táº¡m thá»i cháº·n cáº£ hai chiá»u thay vÃ¬ láº¥n khÃ´ng kiá»ƒm soÃ¡t.
     const slotMoi = slotTrungGio.find(
       (s) => slotConTrong(s) && s.loai_slot !== 'walk_in' && !slotDaCoLich.has(String(s._id)),
     )
@@ -388,12 +408,12 @@ export const rescheduleAppointment = async (req, res) => {
       return res.status(409).json({
         success: false,
         message: coWalkIn
-          ? `Khung ${gio_kham} chỉ còn chỗ dành cho khách tới quầy, không dùng để dời lịch đặt trước.`
-          : `Khung ${gio_kham} đã kín, vui lòng chọn khung khác.`,
+          ? `Khung ${gio_kham} chá»‰ cÃ²n chá»— dÃ nh cho khÃ¡ch tá»›i quáº§y, khÃ´ng dÃ¹ng Ä‘á»ƒ dá»i lá»‹ch Ä‘áº·t trÆ°á»›c.`
+          : `Khung ${gio_kham} Ä‘Ã£ kÃ­n, vui lÃ²ng chá»n khung khÃ¡c.`,
       })
     }
 
-    // ── Ghi ──────────────────────────────────────────────────────────────────
+    // â”€â”€ Ghi â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const gioCu = appointment.gio_kham
     const ngayCu = appointment.ngay_kham
     const trangThaiCu = appointment.status
@@ -402,6 +422,16 @@ export const rescheduleAppointment = async (req, res) => {
     const specialtyCuId = appointment.specialty_id
     const scheduleCuId = appointment.schedule_id
     const slotCuId = appointment.slot_id
+
+    let phongKhamCu = null
+    if (appointment.schedule_id && appointment.slot_id) {
+      const scheduleCu = await LichLamViec.findById(appointment.schedule_id).lean()
+      if (scheduleCu && scheduleCu.slots) {
+        const slotCu = scheduleCu.slots.find(s => String(s._id) === String(appointment.slot_id))
+        if (slotCu) phongKhamCu = slotCu.phong_kham
+      }
+    }
+    const phongKhamMoi = slotMoi.phong_kham || null
 
     await apDungPhuongAn({
       appointment,
@@ -419,9 +449,9 @@ export const rescheduleAppointment = async (req, res) => {
       actorRole: getActorRole(req),
     })
 
-    // `ly_do_doi_lich` là mô tả tự do cho lễ tân đọc lại; `ly_do_doi` là phân loại nghiệp vụ.
+    // `ly_do_doi_lich` lÃ  mÃ´ táº£ tá»± do cho lá»… tÃ¢n Ä‘á»c láº¡i; `ly_do_doi` lÃ  phÃ¢n loáº¡i nghiá»‡p vá»¥.
     appointment.ly_do_doi_lich = ly_do_doi_lich?.trim()
-      || (laLoiPhongKham ? 'Phòng khám dời lịch' : 'Khách yêu cầu dời lịch')
+      || (laLoiPhongKham ? 'PhÃ²ng khÃ¡m dá»i lá»‹ch' : 'KhÃ¡ch yÃªu cáº§u dá»i lá»‹ch')
     await appointment.save()
 
     await LichSuLichHen.create([{
@@ -446,6 +476,8 @@ export const rescheduleAppointment = async (req, res) => {
       ngay_kham_moi: appointment.ngay_kham,
       gio_kham_cu: gioCu,
       gio_kham_moi: appointment.gio_kham,
+      phong_kham_cu: phongKhamCu,
+      phong_kham_moi: phongKhamMoi,
       ly_do: `ly_do_doi=${lyDoDoi}`,
       nguoi_thay_doi_id: getActorUserId(req) ?? appointment.user_id,
       nguoi_thuc_hien_id: getActorUserId(req),
@@ -462,8 +494,8 @@ export const rescheduleAppointment = async (req, res) => {
     res.status(200).json({
       success: true,
       message: laLoiPhongKham
-        ? 'Đã dời lịch hẹn (lỗi phòng khám — không tính vào hạn mức của khách)'
-        : `Đã dời lịch hẹn. Khách đã dùng ${appointment.so_lan_doi_khach_yeu_cau}/${TRAN_DOI_KHACH_YEU_CAU} lần dời.`,
+        ? 'ÄÃ£ dá»i lá»‹ch háº¹n (lá»—i phÃ²ng khÃ¡m â€” khÃ´ng tÃ­nh vÃ o háº¡n má»©c cá»§a khÃ¡ch)'
+        : `ÄÃ£ dá»i lá»‹ch háº¹n. KhÃ¡ch Ä‘Ã£ dÃ¹ng ${appointment.so_lan_doi_khach_yeu_cau}/${TRAN_DOI_KHACH_YEU_CAU} láº§n dá»i.`,
       data: appointment,
       ly_do_doi: lyDoDoi,
       so_lan_doi_khach_yeu_cau: appointment.so_lan_doi_khach_yeu_cau,
@@ -481,12 +513,12 @@ export const cancelAppointment = async (req, res) => {
   try {
     const { id } = req.params
     const { ly_do_huy } = req.body
-    
+
     const appointment = await LichHen.findById(id).session(session)
     if (!appointment) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
+      return res.status(404).json({ success: false, message: 'KhÃ´ng tÃ¬m tháº¥y lá»‹ch háº¹n' })
     }
 
     const queueEntry = await getQueueEntryForAppointment(appointment._id, session)
@@ -505,7 +537,7 @@ export const cancelAppointment = async (req, res) => {
         permissions: error.permissions,
       })
     }
-    
+
     const oldStatus = appointment.status
     const oldPaymentStatus = appointment.payment_status
     const oldDoctorId = appointment.doctor_id
@@ -515,11 +547,11 @@ export const cancelAppointment = async (req, res) => {
     const oldDate = appointment.ngay_kham
     const oldTime = appointment.gio_kham
     appointment.status = 'cancelled'
-    appointment.ly_do_huy = ly_do_huy || 'Lễ tân hủy lịch'
+    appointment.ly_do_huy = ly_do_huy || 'Lá»… tÃ¢n há»§y lá»‹ch'
     appointment.huy_boi = getActorRole(req)
     if (getActorUserId(req)) appointment.nguoi_huy_id = getActorUserId(req)
     appointment.thoi_diem_huy = new Date()
-    
+
     const releasedSlot = await releaseAppointmentSlot({ appointment, session })
 
     await appointment.save({ session })
@@ -562,10 +594,10 @@ export const cancelAppointment = async (req, res) => {
     session.endSession()
 
     emitDashboardAppointmentChanged(oldStatus, appointment.status)
-    
+
     res.status(200).json({
       success: true,
-      message: 'Đã hủy lịch hẹn',
+      message: 'ÄÃ£ há»§y lá»‹ch háº¹n',
       data: appointment,
       notification: notificationResult,
       slot_released: Boolean(releasedSlot),
@@ -583,10 +615,240 @@ export const getRescheduleHistory = async (req, res) => {
     const history = await LichSuLichHen.find({
       appointment_id: id,
       loai_thay_doi: 'reschedule'
-    }).sort({ thoi_diem: 1 })
-    
+    }).populate('nguoi_thay_doi_id', 'ho_ten')
+      .sort({ thoi_diem: 1 })
+
     res.status(200).json({ success: true, data: history })
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+export const bulkCancelAppointments = async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+  try {
+    const { ids, reason } = req.body
+    if (!ids || !ids.length) {
+      return res.status(400).json({ success: false, message: 'KhÃ´ng cÃ³ lá»‹ch háº¹n nÃ o Ä‘Æ°á»£c chá»n' })
+    }
+
+    const appointments = await LichHen.find({ _id: { $in: ids }, status: { $in: ['pending', 'confirmed'] } }).populate('user_id', 'email')
+
+    for (const appointment of appointments) {
+      const oldStatus = appointment.status
+      appointment.status = 'cancelled'
+      appointment.ly_do_huy = reason || 'Há»§y lá»‹ch hÃ ng loáº¡t'
+
+      // Giai phong slot if needed
+      if (appointment.schedule_id && appointment.slot_id) {
+        const schedule = await LichLamViec.findById(appointment.schedule_id).session(session)
+        if (schedule) {
+          const slot = schedule.slots.id(appointment.slot_id)
+          if (slot && String(slot.benh_nhan_id) === String(appointment.user_id?._id || appointment.user_id)) {
+            slot.benh_nhan_id = null
+            slot.benh_nhan_tam_giu_id = null
+            slot.status = 'active'
+            await schedule.save({ session })
+          }
+        }
+      }
+
+      await appointment.save({ session })
+
+      await LichSuLichHen.create([{
+        appointment_id: appointment._id,
+        tu_trang_thai: oldStatus,
+        den_trang_thai: 'cancelled',
+        loai_thay_doi: 'cancel',
+        ly_do_thay_doi: appointment.ly_do_huy,
+        vai_tro: 'admin',
+        kenh_thay_doi: 'web',
+        nguoi_thay_doi_id: req.user?.id ?? req.user?._id ?? null,
+      }], { session })
+
+      emitDashboardAppointmentChanged(oldStatus, 'cancelled')
+
+      // Notification
+      const tieuDe = 'Lá»‹ch háº¹n cá»§a báº¡n Ä‘Ã£ bá»‹ há»§y'
+      const noiDung = `PhÃ²ng khÃ¡m Ä‘Ã£ há»§y lá»‹ch háº¹n ngÃ y ${appointment.ngay_kham.toLocaleDateString('vi-VN')} lÃºc ${appointment.gio_kham}. LÃ½ do: ${appointment.ly_do_huy}`
+
+      if (appointment.user_id) {
+        await ThongBao.create([{
+          user_id: appointment.user_id._id,
+          tieu_de: tieuDe,
+          noi_dung: noiDung,
+          loai: 'appointment',
+          related_id: appointment._id,
+          related_type: 'LichHen',
+        }], { session })
+      }
+
+      const emailNhan = appointment.user_id?.email || appointment.email_khach
+      if (emailNhan && isMailConfigured()) {
+        sendNotificationEmail({
+          to: emailNhan,
+          title: tieuDe,
+          content: noiDung,
+        }).catch(err => console.error(err))
+      }
+    }
+
+    await session.commitTransaction()
+    session.endSession()
+    res.status(200).json({ success: true, message: `ÄÃ£ há»§y ${appointments.length} lá»‹ch háº¹n` })
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+export const bulkRescheduleAppointments = async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+  try {
+    const { ids, startDate, startTime, reason } = req.body
+    if (!ids || !ids.length || !startDate) {
+      return res.status(400).json({ success: false, message: 'Thiáº¿u thÃ´ng tin dá»i lá»‹ch' })
+    }
+
+    const appointments = await LichHen.find({ _id: { $in: ids }, status: { $in: ['pending', 'confirmed'] } })
+      .populate('user_id', 'email')
+      .sort({ ngay_kham: 1, gio_kham: 1 })
+
+    let assignedCount = 0
+    let startSearchDate = new Date(startDate)
+    startSearchDate.setHours(0, 0, 0, 0)
+
+    // Find booked slots to avoid conflict
+    const getBookedSlotIds = async () => {
+      const booked = await LichHen.find({ status: { $ne: 'cancelled' } }).select('slot_id').lean()
+      return new Set(booked.filter(a => a.slot_id).map(a => String(a.slot_id)))
+    }
+
+    const bookedSlots = await getBookedSlotIds()
+
+    for (const appointment of appointments) {
+      const oldStatus = appointment.status
+      const ngayCu = appointment.ngay_kham
+      const gioCu = appointment.gio_kham
+
+      // Giáº£i phÃ³ng slot cÅ© trÆ°á»›c (cá»¥c bá»™ trong memory/session) Ä‘á»ƒ náº¿u chÃ­nh nÃ³ Ä‘Æ°á»£c xáº¿p láº¡i cÃ¹ng lá»‹ch thÃ¬ ko bá»‹ lá»—i
+      if (appointment.schedule_id && appointment.slot_id) {
+        const schedule = await LichLamViec.findById(appointment.schedule_id).session(session)
+        if (schedule) {
+          const slot = schedule.slots.id(appointment.slot_id)
+          if (slot) {
+            slot.benh_nhan_id = null
+            slot.benh_nhan_tam_giu_id = null
+            slot.status = 'active'
+            await schedule.save({ session })
+            bookedSlots.delete(String(slot._id))
+          }
+        }
+      }
+
+      // Auto-fill spill-over logic
+      let newSlotFound = false
+      let searchDate = new Date(startSearchDate)
+      const maxDaysToSearch = 14 // Try up to 14 days forward
+
+      for (let dayOffset = 0; dayOffset < maxDaysToSearch; dayOffset++) {
+        const currentDate = new Date(searchDate.getTime() + dayOffset * 86400000)
+
+        // Láº¥y táº¥t cáº£ lá»‹ch lÃ m viá»‡c trong ngÃ y nÃ y cho chuyÃªn khoa cá»§a appointment
+        const schedules = await LichLamViec.find({
+          ngay: { $gte: currentDate, $lt: new Date(currentDate.getTime() + 86400000) },
+          trang_thai_ngay: 'lam_viec',
+          trang_thai_xac_nhan: { $ne: 'tu_choi' }
+        }).populate('doctor_id').session(session)
+
+        for (const schedule of schedules) {
+          // Bá» qua náº¿u ko Ä‘Ãºng chuyÃªn khoa (náº¿u appointment cÃ³ specialty_id)
+          if (appointment.specialty_id) {
+             const bacSi = await BacSi.findById(schedule.doctor_id).session(session)
+             if (!bacSi || !bacSi.specialties.includes(appointment.specialty_id)) continue
+          }
+
+          const availableSlot = schedule.slots.find(s => {
+            if (dayOffset === 0 && startTime && s.gio_bat_dau < startTime) {
+              return false;
+            }
+            return s.status === 'active' &&
+                   !s.benh_nhan_id &&
+                   !s.bi_khoa_boi_nghi_phep &&
+                   !bookedSlots.has(String(s._id));
+          })
+
+          if (availableSlot) {
+            // Assign this slot
+            availableSlot.benh_nhan_id = appointment.user_id?._id || appointment.user_id
+            await schedule.save({ session })
+            bookedSlots.add(String(availableSlot._id))
+
+            appointment.schedule_id = schedule._id
+            appointment.slot_id = availableSlot._id
+            appointment.doctor_id = schedule.doctor_id
+            appointment.ngay_kham = schedule.ngay
+            appointment.gio_kham = availableSlot.gio_bat_dau
+            appointment.ly_do_doi_lich = reason || 'Dá»i lá»‹ch hÃ ng loáº¡t (Auto-fill)'
+
+            // Xá»­ lÃ½ phÃ²ng khÃ¡m
+            const phongKhamMoi = availableSlot.phong_id ? (await mongoose.model('MauLichLamViec').findOne({'ca_kham.phong_id': availableSlot.phong_id})).ca_kham.find(c => String(c.phong_id) === String(availableSlot.phong_id))?.ten_phong : null;
+
+            await appointment.save({ session })
+
+            await LichSuLichHen.create([{
+              appointment_id: appointment._id,
+              tu_trang_thai: oldStatus,
+              den_trang_thai: appointment.status,
+              loai_thay_doi: 'reschedule',
+              ly_do_thay_doi: appointment.ly_do_doi_lich,
+              vai_tro: 'admin',
+              kenh_thay_doi: 'web',
+              ngay_kham_cu: ngayCu,
+              ngay_kham_moi: appointment.ngay_kham,
+              gio_kham_cu: gioCu,
+              gio_kham_moi: appointment.gio_kham,
+              phong_kham_moi: phongKhamMoi,
+              nguoi_thay_doi_id: req.user?.id ?? req.user?._id ?? null,
+            }], { session })
+
+            // Notify
+            const tieuDe = 'Lá»‹ch háº¹n cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c thay Ä‘á»•i'
+            const noiDung = `PhÃ²ng khÃ¡m Ä‘Ã£ tá»± Ä‘á»™ng dá»i lá»‹ch háº¹n cá»§a báº¡n sang ngÃ y ${new Date(appointment.ngay_kham).toLocaleDateString('vi-VN')} lÃºc ${appointment.gio_kham}.`
+            if (appointment.user_id) {
+              await ThongBao.create([{
+                user_id: appointment.user_id._id,
+                tieu_de: tieuDe,
+                noi_dung: noiDung,
+                loai: 'appointment',
+                related_id: appointment._id,
+                related_type: 'LichHen',
+              }], { session })
+            }
+            const emailNhan = appointment.user_id?.email || appointment.email_khach
+            if (emailNhan && isMailConfigured()) {
+               sendNotificationEmail({ to: emailNhan, title: tieuDe, content: noiDung }).catch(console.error)
+            }
+
+            newSlotFound = true
+            assignedCount++
+            break // Done with this appointment
+          }
+        }
+
+        if (newSlotFound) break
+      }
+    }
+
+    await session.commitTransaction()
+    session.endSession()
+    res.status(200).json({ success: true, message: `ÄÃ£ dá»i thÃ nh cÃ´ng ${assignedCount}/${appointments.length} lá»‹ch háº¹n` })
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
     res.status(500).json({ success: false, message: error.message })
   }
 }
@@ -597,5 +859,7 @@ export default {
   getPendingCheckin,
   rescheduleAppointment,
   cancelAppointment,
-  getRescheduleHistory
+  getRescheduleHistory,
+  bulkCancelAppointments,
+  bulkRescheduleAppointments
 }

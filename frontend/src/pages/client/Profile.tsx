@@ -17,6 +17,7 @@ import {
   patientRecordsService,
   type PatientRecordDetail,
   type PatientRecordListItem,
+  type MedicalResultItem,
 } from '@/services/patient-records.service'
 import {
   patientBookingService,
@@ -36,7 +37,7 @@ export default function Profile() {
 
   const justBooked = searchParams.get('booked') === 'true'
 
-  const [activeTab, setActiveTab] = useState<'appointments' | 'account' | 'family' | 'reviews'>('appointments')
+  const [activeTab, setActiveTab] = useState<'appointments' | 'results' | 'account' | 'family'>('appointments')
   const [appointments, setAppointments] = useState<PatientRecordListItem[]>([])
   const [appointmentsLoading, setAppointmentsLoading] = useState(true)
 
@@ -55,6 +56,19 @@ export default function Profile() {
   const [appStartDate, setAppStartDate] = useState('')
   const [appEndDate, setAppEndDate] = useState('')
   const ITEMS_PER_PAGE = 5
+
+  // Medical results states
+  const [medicalResults, setMedicalResults] = useState<MedicalResultItem[]>([])
+  const [medicalResultsLoading, setMedicalResultsLoading] = useState(false)
+  const [resultsCurrentPage, setResultsCurrentPage] = useState(1)
+  const [resultsTotalPages, setResultsTotalPages] = useState(1)
+  const [resultsStartDate, setResultsStartDate] = useState('')
+  const [resultsEndDate, setResultsEndDate] = useState('')
+  const [expandedResultIds, setExpandedResultIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setResultsCurrentPage(1)
+  }, [resultsStartDate, resultsEndDate])
 
   // Family group states
   const [familyGroup, setFamilyGroup] = useState<FamilyGroup | null>(null)
@@ -237,6 +251,26 @@ export default function Profile() {
   useEffect(() => {
     fetchFamilyGroup()
   }, [user])
+
+  useEffect(() => {
+    if (activeTab === 'results' && user) {
+      setMedicalResultsLoading(true)
+      patientRecordsService.getMedicalResults({ 
+        page: resultsCurrentPage, 
+        limit: 5,
+        startDate: resultsStartDate || undefined,
+        endDate: resultsEndDate || undefined 
+      })
+        .then((res) => {
+          setMedicalResults(res.data)
+          setResultsTotalPages(Math.max(1, Math.ceil(res.total / res.limit)))
+        })
+        .catch((err: any) => {
+          setToast(err.response?.data?.message || err.message || 'Không tải được kết quả khám.')
+        })
+        .finally(() => setMedicalResultsLoading(false))
+    }
+  }, [activeTab, resultsCurrentPage, user, resultsStartDate, resultsEndDate])
 
   useEffect(() => {
     const bookedId = searchParams.get('id')
@@ -561,6 +595,7 @@ export default function Profile() {
           <div className="mt-3 flex flex-col gap-1">
             {[
               { key: 'appointments', label: 'Lịch hẹn', meta: 'Theo dõi lịch khám' },
+              { key: 'results', label: 'Kết quả y tế', meta: 'Đơn thuốc & chẩn đoán' },
               { key: 'family', label: 'Gia đình', meta: 'Quản lý người thân' },
               { key: 'account', label: 'Thông tin cá nhân', meta: 'Tên và số liên hệ' },
               { key: 'reviews', label: 'Đánh giá', meta: 'Lịch sử & chờ đánh giá' },
@@ -726,7 +761,7 @@ export default function Profile() {
                       </div>
                     </div>
                   ))}
-                  {totalPages > 1 && (
+                  {totalPages > 0 && (
                     <div className="pt-2">
                       <Pagination
                         currentPage={appCurrentPage}
@@ -735,6 +770,170 @@ export default function Profile() {
                       />
                     </div>
                   )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'results' && (
+            <div className="space-y-6">
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-800">Kết quả y tế & Đơn thuốc</h3>
+                <p className="text-xs text-slate-400">Xem lại các chẩn đoán bệnh, hướng dẫn điều trị và đơn thuốc từ bác sĩ.</p>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm flex flex-col sm:flex-row gap-3 items-center">
+                <span className="text-sm font-semibold text-slate-600 whitespace-nowrap">Lọc theo ngày khám:</span>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="flex-1">
+                    <Input
+                      label=""
+                      type="date"
+                      value={resultsStartDate}
+                      onChange={(e) => setResultsStartDate(e.target.value)}
+                    />
+                  </div>
+                  <span className="text-slate-400">-</span>
+                  <div className="flex-1">
+                    <Input
+                      label=""
+                      type="date"
+                      value={resultsEndDate}
+                      onChange={(e) => setResultsEndDate(e.target.value)}
+                    />
+                  </div>
+                  {(resultsStartDate || resultsEndDate) && (
+                    <button
+                      onClick={() => {
+                        setResultsStartDate('')
+                        setResultsEndDate('')
+                      }}
+                      className="ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      title="Xóa bộ lọc"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {medicalResultsLoading ? (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
+                    Đang tải danh sách kết quả...
+                  </div>
+                ) : medicalResults.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
+                    Bạn chưa có kết quả khám nào được ghi nhận.
+                  </div>
+                ) : (
+                  <>
+                    {medicalResults.map((result) => {
+                      const isExpanded = expandedResultIds.has(result.id)
+                      return (
+                        <div
+                          key={result.id}
+                          className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:border-brand-100"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                            <div>
+                              <h4 className="text-base font-bold text-slate-800">
+                                {result.ten_dich_vu || 'Khám lâm sàng'}
+                              </h4>
+                              <p className="text-xs text-slate-600 font-medium mt-1">
+                                👤 Bệnh nhân: <span className="font-bold text-slate-800">{result.ten_khach || user?.ho_ten}</span>
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                Bác sĩ: <span className="font-semibold text-slate-700">{result.bac_si.ho_ten}</span>
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-3 sm:text-right">
+                              <p className="text-xs font-semibold text-brand-600 bg-brand-50 inline-block px-2.5 py-1 rounded-lg">
+                                {result.gio_kham}, {new Date(result.ngay_kham).toLocaleDateString('vi-VN')}
+                              </p>
+                              <button
+                                onClick={() => {
+                                  setExpandedResultIds(prev => {
+                                    const next = new Set(prev)
+                                    if (next.has(result.id)) next.delete(result.id)
+                                    else next.add(result.id)
+                                    return next
+                                  })
+                                }}
+                                className="text-xs font-bold text-brand-600 hover:text-brand-700 hover:bg-brand-50 px-3 py-1.5 rounded-lg border border-brand-100 transition"
+                              >
+                                {isExpanded ? 'Thu gọn kết quả' : 'Xem chi tiết kết quả'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="mt-4 space-y-4 border-t border-slate-50 pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                              {/* Body of card: Diagnosis and Guide */}
+                              <div className="grid sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Chẩn đoán</p>
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {result.ket_qua.chan_doan || 'Chưa có chẩn đoán chi tiết.'}
+                                  </p>
+                                </div>
+                                {result.ket_qua.huong_dan_dieu_tri && (
+                                  <div className="space-y-1">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Hướng dẫn điều trị</p>
+                                    <p className="text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+                                      {result.ket_qua.huong_dan_dieu_tri}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Prescriptions */}
+                              {result.ket_qua.thuoc && result.ket_qua.thuoc.length > 0 && (
+                                <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-2">💊 Đơn thuốc</p>
+                                  <ul className="space-y-2">
+                                    {result.ket_qua.thuoc.map((thuoc, index) => (
+                                      <li key={index} className="flex gap-3 items-start bg-white/80 rounded-lg p-3 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700 shrink-0 mt-0.5">
+                                          {index + 1}
+                                        </span>
+                                        <div className="flex-1 text-sm">
+                                          {typeof thuoc === 'string' ? (
+                                            <p className="font-semibold text-slate-800">{thuoc}</p>
+                                          ) : (
+                                            <>
+                                              <p className="font-bold text-slate-800">{thuoc.ten_thuoc || 'Thuốc'}</p>
+                                              <p className="text-xs text-slate-600 mt-1">
+                                                {thuoc.lieu_luong && <span className="mr-3">Liều lượng: <strong>{thuoc.lieu_luong}</strong></span>}
+                                                {thuoc.tan_suat && <span className="mr-3">Tần suất: <strong>{thuoc.tan_suat}</strong></span>}
+                                                {thuoc.so_ngay && <span>Số ngày: <strong>{thuoc.so_ngay} ngày</strong></span>}
+                                              </p>
+                                              {thuoc.ghi_chu && (
+                                                <p className="text-[11px] text-slate-500 italic mt-1">Ghi chú: {thuoc.ghi_chu}</p>
+                                              )}
+                                            </>
+                                          )}
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {resultsTotalPages > 0 && (
+                      <div className="pt-2">
+                        <Pagination
+                          currentPage={resultsCurrentPage}
+                          totalPages={resultsTotalPages}
+                          onPageChange={setResultsCurrentPage}
+                        />
+                      </div>
+                    )}
                   </>
                 )}
               </div>
