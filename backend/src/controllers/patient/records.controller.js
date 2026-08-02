@@ -96,6 +96,111 @@ export async function listRecords(req, res) {
   }
 }
 
+// ─── GET /api/patient/records/medical-results ───────────────────────────────
+export async function listMedicalResults(req, res) {
+  try {
+    const { page = 1, limit = 10, startDate, endDate } = req.query
+    const filter = { ...ownedByUser(req.user.id), status: 'completed' }
+
+    if (startDate || endDate) {
+      filter.ngay_kham = {}
+      if (startDate) filter.ngay_kham.$gte = new Date(`${startDate}T00:00:00.000Z`)
+      if (endDate) filter.ngay_kham.$lte = new Date(`${endDate}T23:59:59.999Z`)
+    }
+
+    // Fetch ALL appointments matching the date and user filter to sort them
+    const allSortedAppointments = await LichHen.find(filter)
+      .sort({ ngay_kham: -1, gio_kham: -1 })
+      .select('_id')
+      .lean()
+      
+    const allAppointmentIds = allSortedAppointments.map((a) => a._id)
+
+    // Fetch ALL exam results for these appointments to know which ones actually have results
+    const allExamResults = await KetQuaKham.find({ appointment_id: { $in: allAppointmentIds } })
+      .select('appointment_id')
+      .lean()
+      
+    const appointmentsWithResultsIds = new Set(allExamResults.map((r) => r.appointment_id.toString()))
+
+    // Filter appointments to only those with results, maintaining sort order
+    const validAppointments = allSortedAppointments.filter((a) => appointmentsWithResultsIds.has(a._id.toString()))
+    
+    const total = validAppointments.length
+    const skip = (Number(page) - 1) * Number(limit)
+    
+    const paginatedAppIds = validAppointments.slice(skip, skip + Number(limit)).map((a) => a._id)
+
+    if (paginatedAppIds.length === 0) {
+      return ok(res, { total, page: Number(page), limit: Number(limit), data: [] })
+    }
+
+    // Now fetch full documents for the paginated page
+    const appointments = await LichHen.find({ _id: { $in: paginatedAppIds } })
+      .sort({ ngay_kham: -1, gio_kham: -1 })
+      .lean()
+
+    const appointmentIds = appointments.map((a) => a._id)
+    const doctorIds = [...new Set(appointments.map((a) => a.doctor_id.toString()))]
+
+    const [docList, examResults] = await Promise.all([
+      BacSi.find({ _id: { $in: doctorIds } })
+        .populate('user_id', 'ho_ten anh_dai_dien')
+        .select('user_id')
+        .lean(),
+      KetQuaKham.find({ appointment_id: { $in: appointmentIds } }).lean()
+    ])
+
+    const docMap = Object.fromEntries(docList.map((d) => [d._id.toString(), d.user_id]))
+    const examResultMap = Object.fromEntries(examResults.map((r) => [r.appointment_id.toString(), r]))
+
+    const resultIds = examResults.map((r) => r._id)
+    const prescriptions = await DonThuoc.find({
+      $or: [
+        { medical_record_id: { $in: resultIds } },
+        { ket_qua_kham_id: { $in: resultIds } }
+      ]
+    }).lean()
+
+    const prescriptionMap = Object.fromEntries(prescriptions.map((p) => {
+      const key = (p.ket_qua_kham_id || p.medical_record_id).toString()
+      return [key, p.items]
+    }))
+
+    const data = appointments.map((a) => {
+      const ketQua = examResultMap[a._id.toString()]
+      const thuoc = ketQua ? (prescriptionMap[ketQua._id.toString()] || []) : []
+      return {
+        id: a._id,
+        ngay_kham: a.ngay_kham,
+        gio_kham: a.gio_kham,
+        ten_dich_vu: a.ten_dich_vu,
+        phong_kham: a.phong_kham || 'Phòng 102 - Tầng 1',
+        dia_chi_kham: a.dia_chi_kham,
+        ten_khach: a.ten_khach || null,
+        member_id: a.member_id || null,
+        bac_si: {
+          ho_ten: docMap[a.doctor_id.toString()]?.ho_ten ?? 'Không rõ',
+          anh_dai_dien: docMap[a.doctor_id.toString()]?.anh_dai_dien ?? null,
+        },
+        ket_qua: ketQua ? {
+          id: ketQua._id,
+          chan_doan: ketQua.chan_doan,
+          huong_dan_dieu_tri: ketQua.huong_dan_dieu_tri,
+          ghi_chu: ketQua.ghi_chu,
+          ngay_tai_kham: ketQua.ngay_tai_kham,
+          ngay_tao: ketQua.ngay_tao,
+          thuoc: thuoc
+        } : null
+      }
+    })
+
+    return ok(res, { total, page: Number(page), limit: Number(limit), data })
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
 // ─── GET /api/patient/records/:id ───────────────────────────────────────────
 export async function getRecord(req, res) {
   try {
