@@ -46,9 +46,22 @@ async function pendingPayment(invoiceId) {
 
 async function paymentHistory(invoiceId) {
   return ThanhToan.find({ hoa_don_id: invoiceId })
-    .select('so_tien phuong_thuc status ma_giao_dich ngay_tao ngay_thanh_toan')
+    .select('so_tien loai_thanh_toan phuong_thuc status ma_giao_dich ngay_tao ngay_thanh_toan')
     .sort({ ngay_tao: -1 })
     .lean()
+}
+
+async function confirmCashierReview(invoiceId, userId) {
+  await HoaDon.updateOne(
+    { _id: invoiceId, da_xac_nhan_thu_ngan: { $ne: true } },
+    {
+      $set: {
+        da_xac_nhan_thu_ngan: true,
+        nguoi_xac_nhan_thu_ngan_id: userId ?? null,
+        thoi_diem_xac_nhan_thu_ngan: new Date(),
+      },
+    },
+  )
 }
 
 function serializePendingPayment(payment) {
@@ -70,6 +83,7 @@ function serializePaymentHistory(payments) {
   return payments.map((payment) => ({
     id: String(payment._id),
     so_tien: Number(payment.so_tien || 0),
+    loai_thanh_toan: payment.loai_thanh_toan,
     phuong_thuc: payment.phuong_thuc,
     status: payment.status,
     ma_giao_dich: payment.ma_giao_dich ?? null,
@@ -175,43 +189,35 @@ async function serializeCase(caseItem) {
   const paid = invoice ? await paidTotal(invoice._id) : 0
   const pending = invoice ? await pendingPayment(invoice._id) : null
   const payments = invoice ? await paymentHistory(invoice._id) : []
-  const preview = invoice
-    ? {
-      tong_tien_kham: Number(invoice.tong_tien_kham || 0),
-      chi_tiet_thu_phi: invoice.chi_tiet_thu_phi,
-      tong_tien_phat_sinh: Number(invoice.tong_tien_phat_sinh || 0),
-      tong_thanh_toan: Number(invoice.tong_thanh_toan || 0),
-      tong_da_thu: paid,
-      con_phai_thu: Math.max(0, Number(invoice.tong_thanh_toan || 0) - paid),
-      trang_thai_hoa_don: invoice.trang_thai_hoa_don,
-      source: 'invoice',
-    }
-    : (() => {
-      const fee = Number(caseItem.appointment?.gia_kham ?? 0)
-      const { lines, serviceTotal } = invoiceLines(caseItem, fee)
-      const total = fee + serviceTotal
-      return {
-        tong_tien_kham: fee,
-        chi_tiet_thu_phi: lines,
-        tong_tien_phat_sinh: serviceTotal,
-        tong_thanh_toan: total,
-        tong_da_thu: 0,
-        con_phai_thu: total,
-        trang_thai_hoa_don: 'chua_thanh_toan',
-        source: 'medical_record',
-      }
-    })()
-
-  // Walk-in does not have an appointment price snapshot, so derive its preview
-  // from the specialty rate before any invoice is persisted.
-  if (!invoice && caseItem.source === 'offline') {
-    const fee = await getFee(caseItem)
-    const { lines, serviceTotal } = invoiceLines(caseItem, fee)
-    preview.tong_tien_kham = fee
-    preview.chi_tiet_thu_phi = lines
-    preview.tong_tien_phat_sinh = serviceTotal
-    preview.tong_thanh_toan = fee + serviceTotal
-    preview.con_phai_thu = fee + serviceTotal
+  // Luôn dựng lại bản xem trước từ hồ sơ khám mới nhất. Hóa đơn online được
+  // tạo từ lúc đặt lịch chỉ có phí khám; nếu bác sĩ thêm dịch vụ thì không được
+  // tiếp tục hiển thị tổng cũ và kết luận là đã thanh toán đủ.
+  const fee = await getFee(caseItem)
+  const { lines, serviceTotal } = invoiceLines(caseItem, fee)
+  const total = fee + serviceTotal
+  const paidBeforeExam = payments
+    .filter((payment) => payment.status === 'paid' && ['phi_dat_lich', 'dat_coc'].includes(payment.loai_thanh_toan))
+    .reduce((sum, payment) => sum + Number(payment.so_tien || 0), 0)
+  const paidAfterExam = payments
+    .filter((payment) => payment.status === 'paid' && payment.loai_thanh_toan === 'thanh_toan_bo_sung')
+    .reduce((sum, payment) => sum + Number(payment.so_tien || 0), 0)
+  const remainingAfterExam = Math.max(0, total - paidBeforeExam - paidAfterExam)
+  const invoiceStatus = total <= 0 || paid >= total
+    ? 'da_thanh_toan_du'
+    : paid > 0 ? 'da_dat_coc' : 'chua_thanh_toan'
+  const preview = {
+    tong_tien_kham: fee,
+    chi_tiet_thu_phi: lines,
+    tong_tien_phat_sinh: serviceTotal,
+    tong_thanh_toan: total,
+    tong_da_thu: paid,
+    tong_da_thu_truoc: paidBeforeExam,
+    tong_da_thu_sau_kham: paidAfterExam,
+    con_phai_thu_sau_kham: remainingAfterExam,
+    con_phai_thu: Math.max(0, total - paid),
+    trang_thai_hoa_don: invoiceStatus,
+    da_xac_nhan_thu_ngan: Boolean(invoice?.da_xac_nhan_thu_ngan && Number(invoice.tong_thanh_toan || 0) === total),
+    source: invoice ? 'invoice' : 'medical_record',
   }
 
   return {
@@ -224,15 +230,17 @@ async function serializeCase(caseItem) {
     gio_kham: caseItem.appointment?.gio_kham ?? null,
     invoice: invoice ? {
       id: String(invoice._id), so_hoa_don: invoice.so_hoa_don,
-      tong_tien_kham: invoice.tong_tien_kham,
-      chi_tiet_thu_phi: invoice.chi_tiet_thu_phi,
-      tong_tien_phat_sinh: invoice.tong_tien_phat_sinh,
-      tong_thanh_toan: invoice.tong_thanh_toan,
+      tong_tien_kham: preview.tong_tien_kham,
+      chi_tiet_thu_phi: preview.chi_tiet_thu_phi,
+      tong_tien_phat_sinh: preview.tong_tien_phat_sinh,
+      tong_thanh_toan: preview.tong_thanh_toan,
       tong_da_thu: paid,
-      con_phai_thu: Math.max(0, invoice.tong_thanh_toan - paid),
-      trang_thai_hoa_don: invoice.trang_thai_hoa_don,
+      con_phai_thu: preview.con_phai_thu,
+      trang_thai_hoa_don: preview.trang_thai_hoa_don,
+      da_xac_nhan_thu_ngan: preview.da_xac_nhan_thu_ngan,
     } : null,
     billing_summary: preview,
+    da_xac_nhan_thu_ngan: preview.da_xac_nhan_thu_ngan,
     pending_payment: serializePendingPayment(pending),
     payments: serializePaymentHistory(payments),
     dich_vu_chi_dinh: caseItem.result.dich_vu_phat_sinh ?? [],
@@ -288,8 +296,8 @@ export async function listBillingCases(req, res) {
     const rows = await Promise.all(scopedCases.map(serializeCase))
     const filteredRows = rows.filter((row) => (
       view === 'paid'
-        ? row.billing_summary.trang_thai_hoa_don === 'da_thanh_toan_du'
-        : row.billing_summary.trang_thai_hoa_don !== 'da_thanh_toan_du'
+        ? row.billing_summary.trang_thai_hoa_don === 'da_thanh_toan_du' && row.billing_summary.da_xac_nhan_thu_ngan
+        : row.billing_summary.trang_thai_hoa_don !== 'da_thanh_toan_du' || !row.billing_summary.da_xac_nhan_thu_ngan
     ))
     return ok(res, filteredRows)
   } catch (error) {
@@ -353,6 +361,9 @@ export async function createBillingInvoice(req, res) {
       })
     }
     const trangThaiHoaDon = await tinhTrangThaiHoaDon(invoice._id)
+    if (trangThaiHoaDon.trang_thai_hoa_don === 'da_thanh_toan_du' && !await pendingPayment(invoice._id)) {
+      await confirmCashierReview(invoice._id, req.user?._id ?? req.user?.id ?? null)
+    }
     await hoanTatLuotKhamOnlineNeuDaThuDu(caseItem, trangThaiHoaDon)
     return created(res, await serializeCase(caseItem), 'Đã lập hoặc cập nhật hóa đơn')
   } catch (error) {
@@ -380,6 +391,9 @@ export async function confirmTransfer(req, res) {
     }, { new: true }).lean()
     if (!updated) throw loi(409, 'Giao dịch vừa được xử lý ở tab khác')
     const trangThaiHoaDon = await tinhTrangThaiHoaDon(invoice._id)
+    if (trangThaiHoaDon.trang_thai_hoa_don === 'da_thanh_toan_du') {
+      await confirmCashierReview(invoice._id, req.user?._id ?? req.user?.id ?? null)
+    }
     await hoanTatLuotKhamOnlineNeuDaThuDu(caseItem, trangThaiHoaDon)
     return ok(res, await serializeCase(caseItem), 'Đã xác nhận chuyển khoản')
   } catch (error) {
@@ -405,6 +419,13 @@ export async function markReceiptPrinted(req, res) {
   try {
     const caseItem = await resolveBillingCase(req.params.referenceId, sourceFrom(req))
     const invoice = await HoaDon.findOne(invoiceFilter(caseItem)).lean()
+    const fee = await getFee(caseItem)
+    const { serviceTotal } = invoiceLines(caseItem, fee)
+    const currentTotal = fee + serviceTotal
+    if (invoice && Number(invoice.tong_thanh_toan || 0) !== currentTotal) {
+      throw loi(409, 'Dịch vụ phát sinh đã thay đổi; lễ tân cần đối chiếu và cập nhật lại hóa đơn trước khi in')
+    }
+    if (invoice && !invoice.da_xac_nhan_thu_ngan) throw loi(409, 'Hóa đơn chưa được lễ tân xác nhận thu ngân')
     if (!invoice || invoice.trang_thai_hoa_don !== 'da_thanh_toan_du') throw loi(409, 'Chỉ in/giao hóa đơn khi đã thanh toán đủ')
     await NhatKyThaoTac.create({
       nguoi_thuc_hien_id: req.user?._id ?? req.user?.id ?? null,

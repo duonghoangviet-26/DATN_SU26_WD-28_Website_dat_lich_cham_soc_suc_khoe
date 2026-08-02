@@ -7,6 +7,7 @@ import Empty from '@/components/common/Empty'
 import Skeleton from '@/components/common/Skeleton'
 import Pagination from '@/components/common/Pagination'
 import { getServiceImage } from '@/utils/serviceImage'
+import { RouteTransition } from '@/components/client/ClientMotion'
 
 export default function ServiceList() {
   const [loading, setLoading] = useState(true)
@@ -43,120 +44,124 @@ export default function ServiceList() {
   const paginatedServices = filteredServices.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-16 space-y-6">
-      <Breadcrumb items={[{ label: 'Dịch vụ điều trị' }]} />
+    <RouteTransition>
+      <div className="mx-auto max-w-6xl px-4 pb-16 space-y-6">
+        <Breadcrumb items={[{ label: 'Dịch vụ điều trị' }]} />
 
-      <div className="text-left space-y-2">
-        <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Gói Dịch Vụ Tai Mũi Họng</h1>
-        <p className="text-sm text-slate-500 max-w-2xl">
-          Phòng khám cung cấp đầy đủ các dịch vụ nội soi chẩn đoán và hút rửa xoang mũi lâm sàng bởi các chuyên gia.
-        </p>
-      </div>
+        <div className="text-left space-y-2">
+          <h1 className="text-2xl font-extrabold text-slate-800 sm:text-3xl">Gói Dịch Vụ Tai Mũi Họng</h1>
+          <p className="text-sm text-slate-500 max-w-2xl">
+            Phòng khám cung cấp đầy đủ các dịch vụ nội soi chẩn đoán và hút rửa xoang mũi lâm sàng bởi các chuyên gia.
+          </p>
+        </div>
 
-      {/* FILTER SECTION */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between border-b border-slate-200 pb-4">
-        <div /> {/* Spacing */}
-        {/* Search */}
-        <div className="relative w-full sm:w-72">
-          <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </span>
-          <input
-            type="text"
-            placeholder="Tìm mã hoặc tên dịch vụ..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 pl-9 pr-4 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none bg-white transition"
-          />
+        {/* FILTER SECTION */}
+        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between border-b border-slate-200 pb-4">
+          <div /> {/* Spacing */}
+          {/* Search */}
+          <div className="relative w-full sm:w-72">
+            <label htmlFor="service-search" className="sr-only">Tìm dịch vụ theo mã hoặc tên</label>
+            <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
+            <input
+              id="service-search"
+              type="text"
+              placeholder="Tìm mã hoặc tên dịch vụ..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 pl-9 pr-4 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none bg-white transition"
+            />
+          </div>
         </div>
-      </div>
 
-      {/* SERVICES GRID */}
-      {loading ? (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4 shadow-sm">
-              <Skeleton className="h-32 w-full rounded-xl" />
-              <Skeleton className="h-6 w-3/4" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-5 w-1/3" />
-            </div>
-          ))}
-        </div>
-      ) : filteredServices.length === 0 ? (
-        <div className="rounded-2xl border border-slate-100 bg-white p-8">
-          <Empty title="Không có dịch vụ tương ứng" description="Vui lòng đổi từ khóa hoặc bộ lọc." icon="search" />
-        </div>
-      ) : (
-        <div className="space-y-8">
+        {/* SERVICES GRID */}
+        {loading ? (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {paginatedServices.map((s, index) => (
-              <div
-                key={s.id}
-                className="group relative flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-brand-200"
-              >
-                <div className="space-y-3">
-                  {/* Service Image Banner */}
-                  <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-slate-100">
-                    <img
-                      src={getServiceImage(s, index)}
-                      alt={s.ten}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <span className="absolute top-2.5 left-2.5 text-[10px] font-bold text-white bg-slate-900/70 backdrop-blur-md px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-white/20">
-                      {s.ma_dich_vu}
-                    </span>
-                    {s.la_goi && (
-                      <span className="absolute top-2.5 right-2.5 text-[10px] font-extrabold text-brand-950 bg-gradient-to-r from-amber-300 to-amber-200 px-2.5 py-0.5 rounded-full shadow-sm">
-                        Gói ưu đãi
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5 text-left pt-1">
-                    <h3 className="font-bold text-slate-800 text-base group-hover:text-brand-600 transition-colors line-clamp-1">
-                      {s.ten}
-                    </h3>
-                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                      {s.mo_ta_ngan || 'Dịch vụ chẩn đoán & hỗ trợ điều trị chuyên khoa Tai Mũi Họng.'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Chi phí</span>
-                    <span className="text-base font-extrabold text-brand-700">
-                      {s.gia === 0 ? 'Miễn phí' : `${s.gia.toLocaleString('vi-VN')} đ`}
-                    </span>
-                  </div>
-                  <Link
-                    to={`/dich-vu/${s.id}`}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-800 bg-brand-50 hover:bg-brand-100/80 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    Xem chi tiết
-                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                </div>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-xl border border-slate-100 bg-white p-5 space-y-4 shadow-sm">
+                <Skeleton className="h-32 w-full rounded-xl" />
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-5 w-1/3" />
               </div>
             ))}
           </div>
+        ) : filteredServices.length === 0 ? (
+          <div className="rounded-xl border border-slate-100 bg-white p-8">
+            <Empty title="Không có dịch vụ tương ứng" description="Vui lòng đổi từ khóa hoặc bộ lọc." icon="search" />
+          </div>
+        ) : (
+          <div className="space-y-8">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {paginatedServices.map((s, index) => (
+                <Link
+                  key={s.id}
+                  to={`/dich-vu/${s.id}`}
+                  className="group relative flex flex-col justify-between rounded-xl border border-slate-100 bg-gradient-to-br from-brand-50/60 to-white p-5 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10"
+                >
+                  <div className="space-y-3">
+                    {/* Service Image Banner */}
+                    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-slate-100">
+                      <img
+                        src={getServiceImage(s, index)}
+                        alt={s.ten}
+                        className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span className="absolute top-2.5 left-2.5 text-[10px] font-bold text-white bg-slate-900/70 backdrop-blur-md px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-white/20">
+                        {s.ma_dich_vu}
+                      </span>
+                      {s.la_goi && (
+                        <span className="absolute right-2.5 top-2.5 rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-extrabold text-brand-900 shadow-sm">
+                          Gói ưu đãi
+                        </span>
+                      )}
+                    </div>
 
-          {totalPages > 1 && (
-            <div className="flex justify-center pt-4">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
+                    <div className="space-y-1.5 text-left pt-1">
+                      <h3 className="font-bold text-slate-800 text-base group-hover:text-brand-600 transition-colors line-clamp-1">
+                        {s.ten}
+                      </h3>
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                        {s.mo_ta_ngan || 'Dịch vụ chẩn đoán & hỗ trợ điều trị chuyên khoa Tai Mũi Họng.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Chi phí</span>
+                      <span className="text-base font-extrabold text-brand-700">
+                        {s.gia === 0 ? 'Miễn phí' : `${s.gia.toLocaleString('vi-VN')} đ`}
+                      </span>
+                    </div>
+                    <span className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-brand-50 px-3 py-2 text-xs font-bold text-brand-600 transition-colors group-hover:bg-brand-100/80 group-hover:text-brand-800">
+                      Xem chi tiết
+                      <svg className="h-3.5 w-3.5 transition-transform duration-300 ease-out group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </span>
+                  </div>
+                </Link>
+              ))}
             </div>
-          )}
-        </div>
-      )}
-    </div>
+
+            {totalPages > 1 && (
+              <div className="flex justify-center pt-4">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </RouteTransition>
   )
 }

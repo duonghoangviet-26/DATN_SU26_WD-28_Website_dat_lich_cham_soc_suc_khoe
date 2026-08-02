@@ -1,330 +1,193 @@
-import { useState, useEffect } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
-import { serviceService } from '@/services/service.service'
-import type { ServiceItem } from '@/types'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { CalendarDays, Clock3, Menu, Phone, X } from 'lucide-react'
+import { Link, NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
+
+import { RouteTransition } from '@/components/client/ClientMotion'
 import AIChatbot from '@/pages/client/chatbot'
+import { useAuth } from '@/context/AuthContext'
 
 export default function ClientLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const outlet = useOutlet()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
-  // Dịch vụ cho menu và backdrop hover
-  const [navServices, setNavServices] = useState<ServiceItem[]>([])
-  const [showDropdown, setShowDropdown] = useState(false)
+  const [mobileMenuTop, setMobileMenuTop] = useState(82)
+  const headerRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
-    serviceService.getAll('related', '', 'active', 1, 100)
-      .then((res) => {
-        setNavServices(res.items)
-      })
-      .catch((err) => {
-        console.error('Không tải được danh sách dịch vụ menu:', err)
-      })
-  }, [])
+    if (!mobileMenuOpen) return
+    const updateMenuPosition = () => setMobileMenuTop((headerRef.current?.getBoundingClientRect().bottom || 74) + 8)
+    updateMenuPosition()
+    window.addEventListener('resize', updateMenuPosition)
+    window.addEventListener('scroll', updateMenuPosition, { passive: true })
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition)
+      window.removeEventListener('scroll', updateMenuPosition)
+    }
+  }, [mobileMenuOpen])
+
+  function closeMobileMenu() {
+    setMobileMenuOpen(false)
+  }
 
   function handleLogout() {
     logout()
-    setMobileMenuOpen(false)
+    closeMobileMenu()
     navigate('/login')
   }
 
-  const activeClass = ({ isActive }: { isActive: boolean }) =>
-    `text-sm font-bold transition-colors duration-200 ${isActive ? 'text-brand-600 border-b-2 border-brand-600 pb-1' : 'text-slate-650 hover:text-brand-500'
+  const navClass = ({ isActive }: { isActive: boolean }) =>
+    `relative py-2 text-sm font-medium transition-colors duration-200 ${
+      isActive ? 'text-teal-800 after:absolute after:inset-x-0 after:-bottom-0.5 after:h-0.5 after:rounded-full after:bg-teal-700' : 'text-slate-600 hover:text-teal-800'
     }`
 
-  const mobileActiveClass = ({ isActive }: { isActive: boolean }) =>
-    `block px-4 py-2.5 rounded-lg text-base font-bold transition-colors ${isActive ? 'bg-brand-50 text-brand-600 font-bold' : 'text-slate-600 hover:bg-slate-50'
-    }`
+  const mobileNavClass = ({ isActive }: { isActive: boolean }) =>
+    `block rounded-2xl px-4 py-3 text-base font-semibold transition-colors ${isActive ? 'bg-teal-50 text-teal-800' : 'text-slate-700 hover:bg-slate-50'}`
+
+  const patientProfileRoles = ['user', 'patient']
+  const canAccessPatientProfile = Boolean(user && patientProfileRoles.includes(user.role))
+  const staffArea = user?.role === 'admin'
+    ? { to: '/admin', label: 'Khu vực admin' }
+    : user?.role === 'receptionist'
+      ? { to: '/receptionist', label: 'Khu vực lễ tân' }
+      : user?.role === 'doctor'
+        ? { to: '/doctor', label: 'Khu vực bác sĩ' }
+        : null
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-left">
-      {/* 1. TOP UTILITY BAR (Hospital-style) */}
-      <div className="bg-brand-900 text-[11px] text-brand-100 py-2.5 border-b border-brand-850">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
-          <div className="flex items-center gap-5">
-            <span className="flex items-center gap-1.5">
-              📍 123 Nguyễn Trãi, Thanh Xuân, Hà Nội
-            </span>
-            <span className="hidden sm:inline">
-              ⏰ Làm việc: 08:00 - 17:30 (Thứ 2 - Thứ 7)
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="font-bold text-white">
-              📞 Hotline hỗ trợ 24/7: 0365 747888
-            </span>
-          </div>
+    <div className="flex min-h-screen flex-col bg-[#f7faf9] text-left text-slate-900">
+      <div className="border-b border-teal-900/10 bg-teal-900 text-xs text-teal-50">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-2 sm:px-6 lg:px-8">
+          <span className="inline-flex items-center gap-2"><Clock3 size={13} aria-hidden="true" /> 08:00 - 24:00 (theo ca bác sĩ), thứ 2 đến thứ 7</span>
+          <a href="tel:0365747888" className="inline-flex items-center gap-2 font-semibold text-white hover:text-teal-200"><Phone size={13} aria-hidden="true" /> Hotline 0365 747 888</a>
         </div>
       </div>
 
-      {/* 2. MAIN HEADER & NAVBAR */}
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md">
-        <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-4">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-500 shadow-md shadow-brand-100">
-              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-              </svg>
-            </div>
-            <div>
-              <span className="block text-base font-extrabold leading-none text-slate-800 tracking-tight sm:text-lg">VITEFAMILY</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tai Mũi Họng Chuyên Khoa</span>
-            </div>
+      <header ref={headerRef} className="sticky top-0 z-30 border-b border-slate-200/80 bg-[#f7faf9]/95 backdrop-blur-xl">
+        <div className="mx-auto flex h-[74px] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link to="/" className="flex items-center gap-3" onClick={closeMobileMenu}>
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-800 text-white shadow-[0_8px_20px_rgba(15,118,110,0.18)]">
+              <span className="text-xl font-semibold leading-none">V</span>
+            </span>
+            <span>
+              <span className="block text-base font-semibold tracking-[-0.03em] text-slate-950 sm:text-lg">ViteFamily</span>
+              <span className="block text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">Tai Mũi Họng</span>
+            </span>
           </Link>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-6">
-            <NavLink to="/" className={activeClass}>Trang chủ</NavLink>
-            <NavLink to="/bac-si" className={activeClass}>Đội ngũ bác sĩ</NavLink>
-            <div
-              onMouseEnter={() => setShowDropdown(true)}
-              onMouseLeave={() => setShowDropdown(false)}
-              className="relative py-2"
-            >
-              <NavLink to="/dich-vu" className={activeClass}>Dịch vụ điều trị</NavLink>
-
-              {showDropdown && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2.5 w-[480px] z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-xl">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {navServices.slice(0, 6).map((service) => (
-                        <Link
-                          key={service.id}
-                          to={`/dich-vu/${service.id}`}
-                          onClick={() => setShowDropdown(false)}
-                          className="group/item flex flex-col justify-between p-3 rounded-xl border border-slate-50 hover:border-brand-100 hover:bg-brand-50/5 transition text-left"
-                        >
-                          <div>
-                            <h4 className="text-xs font-bold text-slate-800 group-hover/item:text-brand-600 transition-colors line-clamp-1">
-                              {service.ten}
-                            </h4>
-                            <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed mt-1">
-                              {service.mo_ta_ngan || 'Dịch vụ chẩn đoán kỹ thuật chuyên sâu.'}
-                            </p>
-                          </div>
-                          <div className="flex justify-between items-center mt-2.5 pt-1.5 border-t border-slate-50">
-                            <span className="text-[10px] font-bold text-slate-650">
-                              {service.gia.toLocaleString('vi-VN')} đ
-                            </span>
-                            <span className="text-[9px] font-bold text-brand-600 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                              Xem thêm →
-                            </span>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-
-                    {navServices.length > 6 && (
-                      <div className="border-t border-slate-50 mt-3 pt-2 text-center">
-                        <Link
-                          to="/dich-vu"
-                          onClick={() => setShowDropdown(false)}
-                          className="text-xs font-bold text-brand-600 hover:text-brand-800 transition"
-                        >
-                          Xem tất cả {navServices.length} dịch vụ →
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            <NavLink to="/tin-tuc" className={activeClass}>Tin tức</NavLink>
-            {user && <NavLink to="/profile" className={activeClass}>Hồ sơ bệnh nhân</NavLink>}
+          <nav className="hidden items-center gap-8 lg:flex" aria-label="Điều hướng chính">
+            <NavLink to="/" end className={navClass}>Trang chủ</NavLink>
+            <NavLink to="/dich-vu" className={navClass}>Dịch vụ</NavLink>
+            <NavLink to="/tin-tuc" className={navClass}>Cẩm nang sức khỏe</NavLink>
+            {canAccessPatientProfile && <NavLink to="/profile" className={navClass}>Hồ sơ của tôi</NavLink>}
           </nav>
 
-          {/* User Auth Controls & Booking Button */}
-          <div className="hidden lg:flex items-center gap-3">
+          <div className="hidden items-center gap-3 lg:flex">
             {user ? (
               <>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  {user.ho_ten}
-                </span>
-                {user.role === 'doctor' && (
-                  <Link to="/doctor" className="btn-secondary py-1.5 text-xs font-bold">
-                    Trang bác sĩ
-                  </Link>
-                )}
-                <button onClick={handleLogout} className="btn-ghost py-1.5 text-xs text-slate-500 hover:text-red-500 font-semibold">
-                  Đăng xuất
-                </button>
+                <span className="max-w-[150px] truncate text-xs font-medium text-slate-600">Xin chào, {user.ho_ten}</span>
+                {staffArea && <Link to={staffArea.to} className="rounded-full px-3 py-2 text-xs font-semibold text-slate-600 transition-colors duration-200 hover:bg-white hover:text-teal-800">{staffArea.label}</Link>}
+                <button type="button" onClick={handleLogout} className="rounded-full px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-white hover:text-red-600">Đăng xuất</button>
               </>
             ) : (
-              <>
-                <Link to="/login" className="btn-ghost px-3 py-1.5 text-xs font-bold">
-                  Đăng nhập
-                </Link>
-                <Link to="/register" className="btn-secondary px-3 py-1.5 text-xs font-bold">
-                  Đăng ký
-                </Link>
-              </>
+              <Link to="/login" className="rounded-full px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white hover:text-teal-800">Đăng nhập</Link>
             )}
-            <Link to="/booking" className="btn-primary px-5 py-2 text-xs font-bold shadow-md shadow-brand-150 rounded-full">
-              Đặt lịch khám
+            <Link to="/booking" className="btn-primary rounded-full px-5 py-2.5 text-sm font-semibold shadow-[0_8px_20px_rgba(15,118,110,0.16)]">
+              <CalendarDays size={16} aria-hidden="true" /> Đặt lịch khám
             </Link>
           </div>
 
-          {/* Mobile Menu Toggle */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
-            aria-label="Toggle menu"
-          >
-            {mobileMenuOpen ? (
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            )}
+          <button type="button" onClick={() => setMobileMenuOpen((open) => !open)} className="flex h-11 w-11 items-center justify-center rounded-2xl text-slate-700 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2 lg:hidden" aria-label={mobileMenuOpen ? 'Đóng menu' : 'Mở menu'} aria-expanded={mobileMenuOpen}>
+            {mobileMenuOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
           </button>
         </div>
       </header>
 
-      {showDropdown && (
-        <div className="fixed inset-0 top-0 bg-slate-950/15 backdrop-blur-sm z-40 transition-opacity duration-300 pointer-events-none" />
-      )}
-
-      {/* 3. MOBILE MENU DRAWER */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm lg:hidden" onClick={() => setMobileMenuOpen(false)}>
-          <div className="absolute right-0 top-0 h-full w-64 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex flex-col gap-5 text-left">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                <span className="font-bold text-slate-800">Danh mục chính</span>
-                <button onClick={() => setMobileMenuOpen(false)} className="text-slate-400 hover:text-slate-600">
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Mobile Navigation Links */}
-              <nav className="flex flex-col gap-2">
-                <NavLink to="/" onClick={() => setMobileMenuOpen(false)} className={mobileActiveClass}>Trang chủ</NavLink>
-                <NavLink to="/bac-si" onClick={() => setMobileMenuOpen(false)} className={mobileActiveClass}>Đội ngũ bác sĩ</NavLink>
-                <NavLink to="/dich-vu" onClick={() => setMobileMenuOpen(false)} className={mobileActiveClass}>Dịch vụ điều trị</NavLink>
-                <NavLink to="/tin-tuc" onClick={() => setMobileMenuOpen(false)} className={mobileActiveClass}>Tin tức</NavLink>
-                {user && <NavLink to="/profile" onClick={() => setMobileMenuOpen(false)} className={mobileActiveClass}>Hồ sơ bệnh nhân</NavLink>}
-              </nav>
-
-              <div className="border-t border-slate-100 pt-4">
-                {user ? (
-                  <div className="space-y-3">
-                    <p className="text-sm font-semibold text-slate-850 px-4">Bệnh nhân: {user.ho_ten}</p>
-                    {user.role === 'doctor' && (
-                      <Link to="/doctor" onClick={() => setMobileMenuOpen(false)} className="btn-secondary w-full text-center text-sm py-2 block font-semibold">
-                        Trang bác sĩ
-                      </Link>
-                    )}
-                    <button onClick={handleLogout} className="btn-ghost w-full text-center text-sm text-red-500 hover:bg-red-50 py-2 font-semibold">
-                      Đăng xuất
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 px-2">
-                    <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="btn-ghost text-center text-sm py-2 font-semibold">
-                      Đăng nhập
-                    </Link>
-                    <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="btn-secondary text-center text-sm py-2 font-semibold">
-                      Đăng ký
-                    </Link>
-                  </div>
-                )}
-                <div className="mt-4 px-2">
-                  <Link to="/booking" onClick={() => setMobileMenuOpen(false)} className="btn-primary w-full text-center text-sm py-2.5 font-bold shadow-md rounded-full block">
-                    Đặt lịch khám ngay
-                  </Link>
+      <AnimatePresence>
+        {mobileMenuOpen && (
+        <motion.div
+          className="fixed inset-0 z-20 bg-slate-950/20 backdrop-blur-sm lg:hidden"
+          onClick={closeMobileMenu}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <motion.div
+            className="absolute inset-x-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,63,65,0.16)]"
+            style={{ top: mobileMenuTop }}
+            onClick={(event) => event.stopPropagation()}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <nav className="space-y-1" aria-label="Điều hướng di động">
+              <NavLink to="/" end className={mobileNavClass} onClick={closeMobileMenu}>Trang chủ</NavLink>
+              <NavLink to="/dich-vu" className={mobileNavClass} onClick={closeMobileMenu}>Dịch vụ</NavLink>
+              <NavLink to="/tin-tuc" className={mobileNavClass} onClick={closeMobileMenu}>Cẩm nang sức khỏe</NavLink>
+              {canAccessPatientProfile && <NavLink to="/profile" className={mobileNavClass} onClick={closeMobileMenu}>Hồ sơ của tôi</NavLink>}
+              {staffArea && <NavLink to={staffArea.to} className={mobileNavClass} onClick={closeMobileMenu}>{staffArea.label}</NavLink>}
+            </nav>
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              {user ? (
+                <div className="flex items-center justify-between gap-3 px-3">
+                  <span className="min-w-0 truncate text-sm font-medium text-slate-700">{user.ho_ten}</span>
+                  <button type="button" onClick={handleLogout} className="shrink-0 text-sm font-semibold text-red-600">Đăng xuất</button>
                 </div>
-              </div>
+              ) : (
+                <Link to="/login" onClick={closeMobileMenu} className="block px-3 py-2 text-sm font-semibold text-slate-700">Đăng nhập</Link>
+              )}
+              <Link to="/booking" onClick={closeMobileMenu} className="btn-primary mt-3 w-full rounded-2xl py-3 text-sm font-semibold">Đặt lịch khám</Link>
+            </div>
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
+
+      <main className="flex-1">
+        <AnimatePresence mode="wait" initial>
+          <RouteTransition key={location.pathname}>{outlet}</RouteTransition>
+        </AnimatePresence>
+      </main>
+
+      <footer className="border-t border-slate-200 bg-slate-950 text-slate-400">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.2fr_0.8fr_0.8fr] lg:px-8">
+          <div className="max-w-sm">
+            <Link to="/" className="inline-flex items-center gap-3 text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-700 font-semibold">V</span>
+              <span className="text-lg font-semibold tracking-[-0.03em]">ViteFamily</span>
+            </Link>
+            <p className="mt-5 text-sm leading-6 text-slate-400">Phòng khám chuyên khoa Tai Mũi Họng dành cho người lớn và trẻ em. Đặt lịch dễ dàng, khám rõ ràng.</p>
+            <a href="tel:0365747888" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-teal-300 hover:text-white"><Phone size={15} aria-hidden="true" /> 0365 747 888</a>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Khám và tìm hiểu</h2>
+            <div className="mt-4 space-y-3 text-sm">
+              <Link to="/dich-vu" className="block hover:text-white">Dịch vụ chuyên khoa</Link>
+              <Link to="/tin-tuc" className="block hover:text-white">Cẩm nang sức khỏe</Link>
+              <Link to="/booking" className="block hover:text-white">Đặt lịch khám</Link>
+            </div>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Phòng khám</h2>
+            <div className="mt-4 space-y-3 text-sm leading-6">
+              <p>123 Nguyễn Trãi, Thanh Xuân, Hà Nội</p>
+              <p>08:00 - 24:00 (theo ca bác sĩ)<br />Thứ 2 - Thứ 7</p>
+              <p>contact@vitefamily.vn</p>
             </div>
           </div>
         </div>
-      )}
-
-      {/* 4. MAIN PAGE CONTENT */}
-      <main className="flex-1">
-        <Outlet />
-      </main>
-
-      {/* 5. DETAILED HOSPITAL FOOTER (Thu Cuc / Hong Ngoc Style) */}
-      <footer className="border-t border-slate-200 bg-slate-900 text-slate-400 text-left">
-        <div className="mx-auto max-w-6xl px-4 py-12">
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Info and Address */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="grid h-8 w-8 place-items-center rounded-lg bg-brand-500">
-                  <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-                  </svg>
-                </div>
-                <span className="text-lg font-bold tracking-tight text-white">VITEFAMILY</span>
-              </div>
-              <p className="text-xs leading-relaxed">
-                Hệ thống chuyên khoa sâu Tai Mũi Họng uy tín hàng đầu, sở hữu trang thiết bị khám chữa bệnh nội soi NBI cao cấp nhất hiện nay.
-              </p>
-              <div className="space-y-2 text-xs">
-                <p><span className="text-slate-200 font-bold">📍 Cơ sở chính:</span> 123 Nguyễn Trãi, Thanh Xuân, Hà Nội</p>
-                <p><span className="text-slate-200 font-bold">📞 Hotline:</span> 0365 747888 (Phục vụ 24/7)</p>
-                <p><span className="text-slate-200 font-bold">✉️ Email:</span> contact@vitefamily.vn</p>
-              </div>
-            </div>
-
-            {/* Quick Links */}
-            <div>
-              <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">Danh mục chuyên ngành</h4>
-              <ul className="space-y-2 text-xs">
-                <li><Link to="/bac-si" className="hover:text-white transition-colors">Đội ngũ bác sĩ trực tiếp khám</Link></li>
-                <li><Link to="/dich-vu" className="hover:text-white transition-colors">Dịch vụ nội soi chuyên sâu</Link></li>
-                <li><Link to="/tin-tuc" className="hover:text-white transition-colors">Cẩm nang sức khỏe Tai Mũi Họng</Link></li>
-                <li><Link to="/booking" className="hover:text-white transition-colors">Đăng ký lịch khám online</Link></li>
-              </ul>
-            </div>
-
-            {/* Specialties */}
-            <div>
-              <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">Các bệnh lý chính điều trị</h4>
-              <ul className="space-y-2 text-xs">
-                <li>Viêm xoang cấp, viêm mũi dị ứng</li>
-                <li>Viêm amidan hốc mủ, phì đại VA</li>
-                <li>Viêm tai giữa cấp tính, viêm tai ngoài</li>
-                <li>Hạt xơ dây thanh, khàn tiếng kéo dài</li>
-                <li>Ù tai, suy giảm thính lực đột ngột</li>
-              </ul>
-            </div>
-
-            {/* Google Map Embed */}
-            <div>
-              <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">Bản đồ chỉ đường</h4>
-              <div className="overflow-hidden rounded-lg bg-slate-800 p-1 border border-slate-700 shadow-inner">
-                <iframe
-                  title="Bản đồ chỉ đường phòng khám ViteFamily"
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3724.8988636128035!2d105.8080353147627!3d21.001695994246838!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135ac9a2cf8b84d%3A0x7d3534d0b0b8e6ef!2zMTIzIE5ndXnhu4VuIFRyw6NpLCBUaGFuaCBYdcOibiwgSMOgIE7hu5lpLCBWaeG7h3QgTmFt!5e0!3m2!1svi!2s!4v1655788329431!5m2!1svi!2s"
-                  width="100%"
-                  height="110"
-                  style={{ border: 0 }}
-                  allowFullScreen={false}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  className="rounded"
-                ></iframe>
-              </div>
-            </div>
-          </div>
-
-          {/* Copyright Bottom Bar */}
-          <div className="mt-12 border-t border-slate-800 pt-6 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p>© 2026 ViteFamily - Phòng khám Tai Mũi Họng Chuyên Khoa. All rights reserved.</p>
-            <p className="text-[10px]">Giấy phép hoạt động khám chữa bệnh số: 1245/SYT-GPHĐ.</p>
+        <div className="border-t border-white/10">
+          <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+            <p>© 2026 ViteFamily. Phòng khám Tai Mũi Họng.</p>
+            <p>Thông tin trên website không thay thế chẩn đoán y khoa trực tiếp.</p>
           </div>
         </div>
       </footer>
+
       <AIChatbot />
     </div>
   )

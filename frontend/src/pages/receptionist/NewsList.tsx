@@ -32,7 +32,7 @@ export default function ReceptionistNewsList() {
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState((location.state as LocationState | null)?.success || '')
+  const [success] = useState((location.state as LocationState | null)?.success || '')
 
   const query = useMemo(
     () => ({ keyword, status, page: pagination.page, limit: pagination.limit }),

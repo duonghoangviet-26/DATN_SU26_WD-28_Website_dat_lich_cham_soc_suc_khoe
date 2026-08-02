@@ -147,6 +147,15 @@ async function loadOwnedPaymentBundle(paymentId, userId, session = null) {
   }
 
   const appointmentQuery = LichHen.findById(payment.appointment_id)
+    .populate({
+      path: 'doctor_id',
+      select: 'user_id specialties phong_kham_mac_dinh',
+      populate: [
+        { path: 'user_id', select: 'ho_ten' },
+        { path: 'specialties', select: 'ten' },
+      ],
+    })
+    .populate('specialty_id', 'ten')
   if (session) appointmentQuery.session(session)
   const appointment = await appointmentQuery
 
@@ -166,6 +175,10 @@ async function loadOwnedPaymentBundle(paymentId, userId, session = null) {
 
 function serializePaymentStatus({ payment, appointment, invoice }) {
   const gateway = getGatewayResponseObject(payment)
+  const doctor = appointment?.doctor_id
+  const doctorName = doctor?.user_id?.ho_ten || null
+  const specialty = appointment?.specialty_id
+    || (Array.isArray(doctor?.specialties) ? doctor.specialties[0] : null)
 
   return {
     payment_id: payment._id,
@@ -177,6 +190,25 @@ function serializePaymentStatus({ payment, appointment, invoice }) {
     appointment_status: appointment?.status ?? null,
     appointment_payment_status: appointment?.payment_status ?? null,
     invoice_status: invoice?.trang_thai_hoa_don ?? null,
+    appointment_info: appointment
+      ? {
+          ma_lich_hen: appointment.ma_lich_hen ?? null,
+          ngay_kham: appointment.ngay_kham ?? null,
+          gio_kham: appointment.gio_kham ?? null,
+          phong_kham: appointment.phong_kham ?? doctor?.phong_kham_mac_dinh ?? null,
+          doctor: doctor
+            ? { id: doctor._id, ho_ten: doctorName }
+            : null,
+          specialty: specialty
+            ? { id: specialty._id, ten: specialty.ten ?? null }
+            : null,
+          patient: {
+            ho_ten: appointment.ten_khach ?? null,
+            so_dien_thoai: appointment.so_dien_thoai_khach ?? null,
+            nam_sinh: appointment.nam_sinh_khach ?? null,
+          },
+        }
+      : null,
     ngay_thanh_toan: payment.ngay_thanh_toan,
     phuong_thuc: payment.phuong_thuc,
     gateway: {
@@ -458,7 +490,7 @@ export async function completeMockVnpayPayment(req, res) {
     if (isGatewaySessionExpired(gateway)) {
       await session.abortTransaction()
       session.endSession()
-      return fail(res, 409, 'Ma QR VNPAY da het han, vui long tao lai ma moi')
+      return fail(res, 409, 'Ma QR VNPAY da het han, vui long huy giao dich neu khong tiep tuc thanh toan')
     }
 
     const previousAppointmentStatus = appointment.status

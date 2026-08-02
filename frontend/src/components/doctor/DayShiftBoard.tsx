@@ -1,4 +1,5 @@
 import Icon from '@/components/admin/icons'
+/* eslint-disable react-refresh/only-export-components -- Shift helpers are part of this component module's public API. */
 import type { DoctorSlot, DoctorLeaveRequest } from '@/types'
 import { findCoveringLeave } from '@/utils/scheduleWeek'
 

@@ -17,6 +17,7 @@ import mongoose from 'mongoose'
 
 export const CA_SANG = 'sang'
 export const CA_CHIEU = 'chieu'
+export const CA_TOI = 'toi'
 export const CAC_CA = [CA_SANG, CA_CHIEU]
 
 // Khung gio (30') thuoc ve ca nao — khop DEFAULT_SLOT_TIMES trong scheduleGenerator.
@@ -29,6 +30,7 @@ export function caCuaKhung(khungIndex) {
 
 // Nghỉ trưa 11:30–13:30, nên mọi khung từ 12:00 trở đi thuộc ca chiều.
 const GIO_BAT_DAU_CA_CHIEU = '12:00'
+const GIO_BAT_DAU_CA_TOI = '18:00'
 
 /**
  * Ca của một khung, suy từ GIỜ thay vì `khung_index`.
@@ -39,6 +41,7 @@ const GIO_BAT_DAU_CA_CHIEU = '12:00'
  */
 export function caTheoGio(gioBatDau) {
   if (!gioBatDau) return CA_SANG
+  if (String(gioBatDau) >= GIO_BAT_DAU_CA_TOI) return CA_TOI
   return String(gioBatDau) >= GIO_BAT_DAU_CA_CHIEU ? CA_CHIEU : CA_SANG
 }
 

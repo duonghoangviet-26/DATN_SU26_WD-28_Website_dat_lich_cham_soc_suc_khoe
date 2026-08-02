@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { notificationService } from '@/services/notification.service'
 import { userService } from '@/services/user.service'
 import type { NotificationItemAPI, NotificationTargetAPI } from '@/types'
@@ -82,7 +82,7 @@ export default function SendNotificationTab() {
   const [logs, setLogs] = useState<any[]>([])
   const [loadingLogs, setLoadingLogs] = useState(false)
 
-  const loadData = async (ignore = false) => {
+  const loadData = useCallback(async (ignore = false) => {
     setLoading(true)
     try {
       const { data, pagination } = await notificationService.getAll(page, 10)
@@ -101,14 +101,13 @@ export default function SendNotificationTab() {
     } finally {
       if (!ignore) setLoading(false)
     }
-  }
+  }, [page])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     let ignore = false
     loadData(ignore)
     return () => { ignore = true }
-  }, [page])
+  }, [loadData])
 
   useEffect(() => {
     if (targetLogs) {

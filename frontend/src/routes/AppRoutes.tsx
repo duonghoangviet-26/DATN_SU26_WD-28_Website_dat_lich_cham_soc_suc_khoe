@@ -73,7 +73,7 @@ export default function AppRoutes() {
         <Route
           path="/booking"
           element={
-            <ProtectedRoute roles={['user']}>
+          <ProtectedRoute roles={['user', 'patient']}>
               <Booking />
             </ProtectedRoute>
           }
@@ -81,7 +81,7 @@ export default function AppRoutes() {
         <Route
           path="/profile"
           element={
-            <ProtectedRoute roles={['user']}>
+            <ProtectedRoute roles={['user', 'patient']}>
               <Profile />
             </ProtectedRoute>
           }

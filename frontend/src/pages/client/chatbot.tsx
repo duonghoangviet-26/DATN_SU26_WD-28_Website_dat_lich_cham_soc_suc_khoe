@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useState, useRef, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Mic, MicOff, Sun, Moon, Move } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
 import type { DoctorProfile } from '@/types'
 import { fallbackLLM } from '@/services/chatbot.service'
 import { patientBookingService } from '@/services/patient-booking.service'
-import { thongKeService } from '@/services/thong-ke.service'
 import { useChatHistory } from '@/hooks/useChatHistory'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useChatTheme } from '@/hooks/useChatTheme'
@@ -14,14 +13,13 @@ import {
   parseDoctorIntent,
   parseDateTimeIntent,
   parsePriceIntent,
-  parseServiceIntent,
   parseNavigationIntent,
   parseAdminReportIntent,
   parseGeneralAvailabilityIntent,
   parseHowToBookIntent,
   parseListServicesIntent
 } from '@/utils/chatbotIntent'
-import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns'
+import { format } from 'date-fns'
 import { parseMarkdownToHTML } from '@/utils/markdownParser'
 import { useTypewriter } from '@/hooks/useTypewriter'
 
@@ -33,23 +31,21 @@ const AnimatedMarkdownText = ({ text, isNewMessage, isDark }: { text: string, is
 
   return (
     <div 
-      className={`prose prose-sm prose-blue max-w-none text-sm ${isDark ? 'prose-invert' : ''}`}
-      dangerouslySetInnerHTML={{ __html: htmlContent + (isTyping ? '<span className="inline-block w-1.5 h-4 ml-0.5 bg-blue-500 animate-pulse align-middle"></span>' : '') }}
+      className={`prose prose-sm max-w-none text-sm ${isDark ? 'prose-invert' : ''}`}
+      dangerouslySetInnerHTML={{ __html: htmlContent + (isTyping ? '<span class="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-teal-600 align-middle"></span>' : '') }}
     />
   )
 }
 
 export default function AIChatbot() {
-  const { user } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
   
   const [isOpen, setIsOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { messages, addMessage, clearHistory, groupedMessages, isLoaded } = useChatHistory()
+  const { messages, addMessage, groupedMessages, isLoaded } = useChatHistory()
   const { text: speechText, state: speechState, startListening, stopListening, resetSpeech, errorMsg: speechError } = useSpeechRecognition()
   const { isDark, toggleTheme } = useChatTheme()
   const { position, isDragging, handleMouseDown } = useDraggable()
@@ -75,10 +71,9 @@ export default function AIChatbot() {
       patientBookingService.getDoctors().then(docs => setDoctorList(docs)).catch(() => {})
     }
     
-    // Khởi tạo tin nhắn chào mừng nếu lịch sử trống
     if (isOpen && isLoaded && messages.length === 0) {
       addMessage({
-        text: '👋 Chào bạn, tôi là Bot Tư Vấn Đặt Lịch của VitaFamily. Bạn cần hỗ trợ tìm bác sĩ, xem giá khám hay đặt lịch?',
+        text: 'Chào bạn, tôi là Trợ lý ảo của ViteFamily. Tôi có thể giúp bạn tìm khung giờ khám Tai Mũi Họng, xem dịch vụ hoặc đặt lịch.',
         sender: 'bot'
       })
     }
@@ -105,16 +100,16 @@ export default function AIChatbot() {
     try {
       // 0. Phân tích How to book
       if (parseHowToBookIntent(text)) {
-        addBotMessage(`Để đặt lịch khám, bạn làm theo 3 bước sau nhé:\n1. Chọn Bác sĩ bạn muốn khám ở phía dưới.\n2. Bấm vào nút **Đặt lịch khám** trên thẻ của bác sĩ.\n3. Chọn ngày, giờ khám, điền thông tin và thanh toán.\n\nBạn có muốn xem danh sách bác sĩ luôn không?`, {
-          label: 'Xem danh sách Bác sĩ',
-          send: 'xem bác sĩ'
+        addBotMessage(`Để đặt lịch khám Tai Mũi Họng, bạn thực hiện 4 bước:\n1. Chọn ngày và khung giờ còn chỗ.\n2. Điền thông tin người khám và mô tả triệu chứng.\n3. Kiểm tra, xác nhận lịch hẹn.\n4. Thanh toán qua VNPAY để giữ chỗ.\n\nBạn không cần chọn bác sĩ. Hệ thống sẽ tự phân công bác sĩ phù hợp đang có lịch trống.`, {
+          label: 'Bắt đầu đặt lịch',
+          route: '/booking'
         })
         return
       }
 
       // 0.5. Phân tích List Services
       if (parseListServicesIntent(text)) {
-        addBotMessage(`VitaFamily hiện đang cung cấp các dịch vụ chuyên khoa chính:\n- Khám Tai\n- Khám Mũi\n- Khám Họng\n- Nội soi Tai Mũi Họng\n- Xét nghiệm và Nội tiết\n\nBạn quan tâm đến dịch vụ nào? Bạn có thể yêu cầu đặt lịch khám ngay!`, {
+        addBotMessage(`VitaFamily chỉ phục vụ chuyên khoa Tai Mũi Họng. Danh mục hiện có gồm khám chuyên khoa và các kỹ thuật Tai Mũi Họng được phòng khám cập nhật theo tình trạng hoạt động. Bạn có thể xem bảng dịch vụ để biết mô tả và chi phí hiện tại.`, {
           label: 'Xem bảng giá dịch vụ',
           route: '/dich-vu'
         })
@@ -124,12 +119,17 @@ export default function AIChatbot() {
       // 1. Phân tích Navigation Intent
       const navIntent = parseNavigationIntent(text)
       if (navIntent) {
-        if (navIntent === 'booking' || navIntent === 'doctors') {
+        if (navIntent === 'booking') {
+          addBotMessage(`Bạn chỉ cần chọn ngày và khung giờ còn chỗ. Hệ thống sẽ tự phân công bác sĩ Tai Mũi Họng phù hợp theo lịch trực thực tế.`, {
+            label: 'Đặt lịch khám',
+            route: '/booking'
+          })
+        } else if (navIntent === 'doctors') {
           let docListText = ''
           doctorList.slice(0, 3).forEach(doc => {
             docListText += `\n- Bác sĩ **${doc.ho_ten}** - Phí khám: ${formatCurrency(doc.gia_kham)}`
           })
-          addBotMessage(`Dưới đây là danh sách các bác sĩ chuyên khoa của chúng tôi. Vui lòng chọn một bác sĩ để xem chi tiết hoặc tiến hành đặt lịch:${docListText}`, {
+          addBotMessage(`Dưới đây là một số bác sĩ Tai Mũi Họng để bạn tham khảo thông tin chuyên môn. Khi đặt lịch, hệ thống vẫn tự phân công bác sĩ theo khung giờ còn trống:${docListText}`, {
             label: 'Xem tất cả Bác sĩ',
             route: '/bac-si'
           }, doctorList.slice(0, 3))
@@ -216,7 +216,9 @@ export default function AIChatbot() {
                 const times = matchedSlots.map(s => s.gio_bat_dau.slice(0, 5)).join(', ')
                 availableDocs.push({ doc, times })
              }
-           } catch(e) {}
+           } catch {
+             // Bỏ qua bác sĩ không tải được lịch để tiếp tục kiểm tra các lịch còn lại.
+           }
         }
 
         if (availableDocs.length === 0) {
@@ -268,14 +270,14 @@ export default function AIChatbot() {
   }
 
   const renderSuggestions = () => {
-    const suggestions = ['Tôi muốn đặt lịch', 'Bác sĩ nào rảnh hôm nay?', 'Khám tai giá dưới 300k', 'Hồ sơ bệnh án của tôi']
+    const suggestions = ['Tôi muốn đặt lịch', 'Khung giờ nào còn trống?', 'Khám tai giá dưới 300k', 'Hồ sơ bệnh án của tôi']
     
     return (
       <div className={`flex flex-wrap gap-2 p-3 border-t transition-colors ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
         {suggestions.map((s, i) => (
-          <button key={i} onClick={() => {
+          <button key={i} type="button" onClick={() => {
             setInputValue(s)
-          }} className={`text-xs px-3 py-1.5 rounded-full transition-colors border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-blue-900/30 hover:text-blue-400 hover:border-blue-500/30' : 'bg-white border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200'}`}>
+          }} className={`min-h-11 rounded-full border px-3 py-2 text-xs transition-colors ${isDark ? 'border-slate-700 bg-slate-800 text-slate-300 hover:border-teal-500/30 hover:bg-teal-900/30 hover:text-teal-300' : 'border-slate-200 bg-white text-slate-600 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700'}`}>
             {s}
           </button>
         ))}
@@ -285,56 +287,84 @@ export default function AIChatbot() {
 
   return (
     <>
-      <button
+      <AnimatePresence>
+      {!isOpen && <motion.button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-50 p-4 bg-blue-600 text-white rounded-full shadow-xl hover:bg-blue-700 transition-transform ${isOpen ? 'scale-0' : 'scale-100'} hover:scale-110 flex items-center justify-center`}
+        className="fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/50"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ type: "spring", stiffness: 260, damping: 20 }}
+        aria-label="Mở trợ lý đặt lịch"
       >
-        <MessageCircle className="w-6 h-6" />
-      </button>
+        <div className="relative h-full w-full rounded-full overflow-hidden border-[3px] border-white shadow-md bg-teal-50">
+           <img src="/images/robot-avatar.png" alt="Trợ lý ảo" className="h-full w-full object-cover" />
+        </div>
+        <span className="absolute -right-1 -top-1 flex h-4 w-4">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+          <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-red-500"></span>
+        </span>
+      </motion.button>}
+      </AnimatePresence>
 
-      <div 
-        className={`fixed bottom-6 right-6 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 origin-bottom-right flex flex-col overflow-hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${isDragging ? 'transition-none opacity-90' : 'transition-all duration-300'}`} 
-        style={{ height: '500px', maxHeight: 'calc(100vh - 48px)', transform: `translate(${position.x}px, ${position.y}px) scale(${isOpen ? 1 : 0})` }}
+      <AnimatePresence>
+      {isOpen && <motion.div
+        className={`fixed bottom-6 right-6 z-50 flex w-80 origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:w-96 ${isDragging ? 'opacity-90' : ''}`}
+        style={{ height: '500px', maxHeight: 'calc(100vh - 48px)' }}
+        initial={{ opacity: 0, scale: 0.96, x: position.x, y: position.y }}
+        animate={{ opacity: isDragging ? 0.9 : 1, scale: 1, x: position.x, y: position.y }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{ duration: isDragging ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
       >
         
         {/* Header */}
         <div 
-          className="bg-blue-600 text-white p-4 flex items-center justify-between shadow-md z-20 cursor-move select-none active:bg-blue-700 transition-colors"
+          className="z-20 flex cursor-move select-none items-center justify-between bg-teal-700 p-4 text-white shadow-md transition-colors active:bg-teal-800"
           onMouseDown={handleMouseDown}
           onTouchStart={handleMouseDown}
         >
           <div className="flex items-center gap-3 pointer-events-none">
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-              <Bot className="w-6 h-6" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.3)] overflow-hidden border-2 border-white/80">
+              <img src="/images/robot-avatar.png" alt="Bot Avatar" className="h-full w-full object-cover" />
+              <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-200 opacity-75"></span>
+                <span className="relative inline-flex h-3 w-3 rounded-full border-2 border-teal-700 bg-teal-400"></span>
+              </span>
             </div>
             <div>
-              <h3 className="font-semibold text-sm">VitaFamily Bot</h3>
-              <p className="text-xs text-blue-100 opacity-90">Tư Vấn Đặt Lịch</p>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-base tracking-wide text-white drop-shadow-sm">Trợ lý ảo ViteFamily</h3>
+                <span className="rounded bg-gradient-to-r from-amber-400 to-orange-500 px-1.5 py-[2px] text-[9px] font-black uppercase tracking-wider text-white shadow-sm">AI</span>
+              </div>
+              <p className="mt-0.5 text-xs font-medium text-teal-50/90">Sẵn sàng hỗ trợ 24/7</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <div className="text-blue-300 mx-1 hidden sm:block pointer-events-none">
+            <div className="pointer-events-none mx-1 hidden text-teal-200 sm:block">
               <Move className="w-4 h-4 opacity-50" />
             </div>
             <button 
+              type="button"
               onClick={toggleTheme} 
-              className="text-blue-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-all"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-teal-50 transition-colors hover:bg-white/10 hover:text-white"
               title="Giao diện"
+              aria-label={isDark ? 'Dùng giao diện sáng' : 'Dùng giao diện tối'}
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
-            <button onClick={() => setIsOpen(false)} className="text-blue-100 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors">
-              <X className="w-5 h-5" />
+            <button type="button" onClick={() => setIsOpen(false)} className="flex h-11 w-11 items-center justify-center rounded-lg text-teal-50 transition-colors hover:bg-white/10 hover:text-white" aria-label="Đóng trợ lý đặt lịch">
+              <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
         </div>
 
 
         {/* Messages */}
-        <div className={`flex-1 overflow-y-auto p-4 space-y-5 transition-colors ${isDark ? 'bg-slate-900' : 'bg-slate-50/50'}`}>
+        <div className={`flex-1 overflow-y-auto p-4 space-y-5 transition-colors ${isDark ? 'bg-slate-900' : 'bg-slate-50/50'}`} role="log" aria-live="polite" aria-relevant="additions text" aria-label="Nội dung trò chuyện">
           {!isLoaded ? (
-            <div className="flex justify-center p-4">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            <div className="flex justify-center p-4" role="status" aria-label="Đang tải nội dung trò chuyện">
+              <Loader2 className="h-6 w-6 animate-spin text-teal-700 motion-reduce:animate-none" />
             </div>
           ) : groupedMessages.map((group, groupIdx) => (
             <div key={groupIdx} className="space-y-4">
@@ -348,12 +378,12 @@ export default function AIChatbot() {
                 <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`flex gap-2 max-w-[85%] ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     
-                    <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.sender === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-blue-100 text-blue-600'}`}>
-                      {msg.sender === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700 overflow-hidden shadow-sm border border-slate-100">
+                      {msg.sender === 'user' ? <UserIcon className="w-4 h-4" /> : <img src="/images/robot-avatar.png" alt="Bot" className="h-full w-full object-cover" />}
                     </div>
 
                     <div className={`flex flex-col gap-1 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                      <div className={`px-4 py-2 text-sm rounded-2xl whitespace-pre-wrap transition-colors ${msg.sender === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : isDark ? 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-sm' : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-sm'}`}>
+                      <div className={`px-4 py-2 text-sm rounded-2xl whitespace-pre-wrap transition-colors ${msg.sender === 'user' ? 'bg-teal-700 text-white rounded-tr-sm' : isDark ? 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-sm' : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-tl-sm'}`}>
                         {msg.sender === 'user' ? (
                           msg.text
                         ) : (
@@ -363,6 +393,7 @@ export default function AIChatbot() {
                       
                       {msg.action && (
                         <button 
+                          type="button"
                           onClick={() => {
                             if (msg.action?.onClickSend) {
                               const text = msg.action.onClickSend
@@ -373,7 +404,7 @@ export default function AIChatbot() {
                               setIsOpen(false)
                             }
                           }} 
-                          className={`mt-1 px-4 py-1.5 rounded-full text-xs font-medium shadow-sm transition-colors border ${isDark ? 'bg-slate-800 border-blue-500/30 text-blue-400 hover:bg-blue-900/30' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-50'}`}
+                          className={`mt-1 min-h-11 rounded-full border px-4 py-2 text-xs font-medium shadow-sm transition-colors ${isDark ? 'border-teal-500/30 bg-slate-800 text-teal-300 hover:bg-teal-900/30' : 'border-teal-200 bg-white text-teal-700 hover:bg-teal-50'}`}
                         >
                           {msg.action.label}
                         </button>
@@ -383,9 +414,9 @@ export default function AIChatbot() {
                         <div className="flex gap-3 overflow-x-auto w-full py-2 max-w-[260px] no-scrollbar">
                           {msg.doctorCards.map((doc, idx) => (
                             <div key={idx} className={`flex-shrink-0 w-[200px] border rounded-xl overflow-hidden shadow-sm flex flex-col transition-colors ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                              <div className="h-20 bg-gradient-to-r from-blue-400 to-teal-500 flex items-center justify-center relative">
+                              <div className="relative flex h-20 items-center justify-center bg-teal-700">
                                 <div className={`absolute -bottom-6 w-12 h-12 rounded-full p-1 shadow-md ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
-                                  <div className={`w-full h-full rounded-full flex items-center justify-center text-blue-600 ${isDark ? 'bg-slate-700' : 'bg-slate-100'} overflow-hidden`}>
+                                  <div className={`flex h-full w-full items-center justify-center overflow-hidden rounded-full text-teal-700 ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>
                                     {doc.anh_dai_dien ? (
                                       <img 
                                         src={doc.anh_dai_dien.startsWith('http') ? doc.anh_dai_dien : `http://localhost:5000${doc.anh_dai_dien.startsWith('/') ? '' : '/'}${doc.anh_dai_dien}`} 
@@ -403,8 +434,9 @@ export default function AIChatbot() {
                                 <p className="text-[10px] text-slate-500 mt-0.5">{doc.chuyen_khoa || 'Chuyên khoa'}</p>
                                 <p className="text-sm font-bold text-orange-600 mt-2">{formatCurrency(doc.gia_kham)}</p>
                                 <button 
-                                  onClick={() => { navigate(`/client/booking?doctorId=${doc.id}`); setIsOpen(false) }}
-                                  className="mt-3 w-full bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white border border-blue-200 hover:border-blue-600 transition-colors py-1.5 rounded-lg text-xs font-medium"
+                                  type="button"
+                                  onClick={() => { navigate('/booking'); setIsOpen(false) }}
+                                  className="mt-3 min-h-11 w-full rounded-lg border border-teal-200 bg-teal-50 py-2 text-xs font-medium text-teal-700 transition-colors hover:border-teal-700 hover:bg-teal-700 hover:text-white"
                                 >
                                   Đặt lịch ngay
                                 </button>
@@ -426,13 +458,12 @@ export default function AIChatbot() {
           {isLoading && (
             <div className="flex justify-start">
               <div className="flex gap-2 max-w-[85%] flex-row">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
-                  <Bot className="w-4 h-4" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-50 text-teal-700 overflow-hidden shadow-sm border border-slate-100">
+                  <img src="/images/robot-avatar.png" alt="Bot" className="h-full w-full object-cover" />
                 </div>
-                <div className="bg-white border border-slate-200 shadow-sm px-4 py-3 rounded-2xl rounded-tl-sm flex gap-1.5 items-center h-[38px]">
-                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="flex h-[38px] items-center gap-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                  <Loader2 className="h-4 w-4 animate-spin text-teal-700 motion-reduce:animate-none" aria-hidden="true" />
+                  <span className="text-xs text-slate-500">Đang phản hồi</span>
                 </div>
               </div>
             </div>
@@ -445,6 +476,7 @@ export default function AIChatbot() {
           {renderSuggestions()}
           <div className="p-3 flex items-end gap-2">
             <button
+              type="button"
               onClick={speechState === 'listening' ? stopListening : startListening}
               className={`p-3 rounded-xl transition-all relative ${
                 speechState === 'listening' 
@@ -452,11 +484,12 @@ export default function AIChatbot() {
                   : isDark ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
               title={speechState === 'listening' ? 'Tắt thu âm' : 'Bật thu âm'}
+              aria-label={speechState === 'listening' ? 'Tắt thu âm' : 'Bật thu âm'}
             >
               {speechState === 'listening' ? (
                 <>
                   <MicOff className="w-5 h-5 relative z-10" />
-                  <span className="absolute inset-0 rounded-xl bg-red-400 animate-ping opacity-20"></span>
+                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" aria-hidden="true" />
                 </>
               ) : (
                 <Mic className="w-5 h-5" />
@@ -472,19 +505,23 @@ export default function AIChatbot() {
                 }
               }}
               placeholder={speechState === 'listening' ? 'Đang nghe...' : 'Nhập tin nhắn...'}
-              className={`flex-1 max-h-32 min-h-[44px] border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none transition-colors ${isDark ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+              className={`flex-1 max-h-32 min-h-[44px] border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 resize-none transition-colors ${isDark ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-400' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+              aria-label="Nội dung tin nhắn"
               rows={1}
             />
             <button
+              type="button"
               onClick={handleSend}
               disabled={!inputValue.trim() || isLoading}
-              className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-700 text-white transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Gửi tin nhắn"
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>}
+      </AnimatePresence>
     </>
   )
 }

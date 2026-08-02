@@ -1,4 +1,6 @@
 import {
+  ChuyenKhoa,
+  DichVu,
   HoaDon,
   LichHen,
   NguoiDung,
@@ -6,6 +8,8 @@ import {
 } from '../models/index.js'
 
 const CLINIC_TIMEZONE = 'Asia/Ho_Chi_Minh'
+const ENT_SPECIALTY_SLUG = 'tai-mui-hong'
+const ENT_SERVICE_NAME_PATTERN = /(tai\s*mũi\s*họng|tai\s*mui\s*hong|tmh|mũi|mui|họng|hong|tai)/i
 
 function dateRangeMatch(field, range = {}) {
   const conditions = {}
@@ -187,7 +191,7 @@ export async function getDoanhThuTheoBacSi(range = {}) {
 }
 
 export async function getBenhNhanMoiTheoThang(yearRange) {
-  return NguoiDung.aggregate([
+  const rows = await NguoiDung.aggregate([
     {
       $match: {
         role: { $in: ['user', 'patient'] },
@@ -198,6 +202,75 @@ export async function getBenhNhanMoiTheoThang(yearRange) {
     { $sort: { _id: 1 } },
     { $project: { _id: 0, thang: { $toInt: '$_id' }, so_luong: 1 } },
   ])
+
+  const countByMonth = new Map(rows.map((item) => [item.thang, item.so_luong]))
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = index + 1
+    return {
+      thang: month,
+      label: `T${month}`,
+      so_luong: countByMonth.get(month) ?? 0,
+    }
+  })
+}
+
+function formatClinicDate(value) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: CLINIC_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(value)
+}
+
+export async function getBenhNhanMoiTheoTuanTrongThang(monthRange) {
+  const rows = await NguoiDung.aggregate([
+    {
+      $match: {
+        role: { $in: ['user', 'patient'] },
+        ngay_tao: { $gte: monthRange.start, $lt: monthRange.end },
+      },
+    },
+    {
+      $set: {
+        _week: {
+          $ceil: {
+            $divide: [
+              {
+                $dayOfMonth: {
+                  date: '$ngay_tao',
+                  timezone: CLINIC_TIMEZONE,
+                },
+              },
+              7,
+            ],
+          },
+        },
+      },
+    },
+    { $group: { _id: '$_week', so_luong: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+    { $project: { _id: 0, tuan: '$_id', so_luong: 1 } },
+  ])
+
+  const countByWeek = new Map(rows.map((item) => [item.tuan, item.so_luong]))
+  const lastDay = new Date(monthRange.end.getTime() - 1)
+  const daysInMonth = Number(formatClinicDate(lastDay).slice(8, 10))
+  const weekCount = Math.ceil(daysInMonth / 7)
+
+  return Array.from({ length: weekCount }, (_, index) => {
+    const week = index + 1
+    const fromDay = (week - 1) * 7 + 1
+    const toDay = Math.min(week * 7, daysInMonth)
+
+    return {
+      tuan: week,
+      label: `Tuần ${week}`,
+      tu: fromDay,
+      den: toDay,
+      so_luong: countByWeek.get(week) ?? 0,
+    }
+  })
 }
 
 export async function getDichVuPhoBien(range = {}) {
@@ -206,8 +279,37 @@ export async function getDichVuPhoBien(range = {}) {
     { $unwind: '$chi_tiet_thu_phi' },
     {
       $match: {
-        'chi_tiet_thu_phi.loai': { $ne: 'giam_tru_bao_hiem' },
+        'chi_tiet_thu_phi.loai': { $in: ['dich_vu', 'thu_thuat'] },
         'chi_tiet_thu_phi.ten': { $type: 'string', $ne: '' },
+      },
+    },
+    {
+      $lookup: {
+        from: DichVu.collection.name,
+        localField: 'chi_tiet_thu_phi.service_id',
+        foreignField: '_id',
+        as: '_service',
+      },
+    },
+    { $unwind: { path: '$_service', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: ChuyenKhoa.collection.name,
+        localField: '_service.specialty_id',
+        foreignField: '_id',
+        as: '_specialty',
+      },
+    },
+    { $unwind: { path: '$_specialty', preserveNullAndEmptyArrays: true } },
+    {
+      $match: {
+        $or: [
+          { '_specialty.slug': ENT_SPECIALTY_SLUG },
+          {
+            'chi_tiet_thu_phi.service_id': null,
+            'chi_tiet_thu_phi.ten': ENT_SERVICE_NAME_PATTERN,
+          },
+        ],
       },
     },
     {

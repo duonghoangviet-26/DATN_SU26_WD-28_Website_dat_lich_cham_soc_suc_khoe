@@ -33,7 +33,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const user = await loginGoogle(credentialResponse.credential)
+      await loginGoogle(credentialResponse.credential)
       const fromLocation = (location.state as { from?: { pathname?: string; search?: string } })?.from
       const from = fromLocation?.pathname ? `${fromLocation.pathname}${fromLocation.search || ''}` : undefined
       navigate(from || '/', { replace: true })

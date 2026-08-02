@@ -13,9 +13,11 @@
     "test:e2e:checkin-billing": "node src/scripts/e2e-offline-intake.js",
     "db:init": "node src/scripts/init-db.js",
     "db:seed": "node src/scripts/seed-all.js",
+    "db:repair-invoice-indexes": "node src/scripts/repair-hoadon-indexes.js",
     "db:test-dbs": "node src/scripts/manage-test-databases.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.5",

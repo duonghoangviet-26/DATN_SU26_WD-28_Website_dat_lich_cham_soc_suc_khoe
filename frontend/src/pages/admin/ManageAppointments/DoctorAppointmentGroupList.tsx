@@ -278,7 +278,7 @@ export default function DoctorAppointmentGroupList({
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-800">Hủy lịch hẹn</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Xác nhận hủy lịch hẹn của "{confirmCancel.benh_nhan}"?
+              Xác nhận hủy lịch hẹn của &ldquo;{confirmCancel.benh_nhan}&rdquo;?
             </p>
             <div className="mt-4">
               <label className="mb-1 block text-sm font-medium text-slate-700">Lý do hủy <span className="text-red-500">*</span></label>

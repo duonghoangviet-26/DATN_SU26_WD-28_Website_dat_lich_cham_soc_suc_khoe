@@ -1,5 +1,3 @@
-import React from 'react'
-
 interface LoadingProps {
   fullPage?: boolean
   message?: string
@@ -14,12 +12,12 @@ export default function Loading({
     : 'flex flex-col items-center justify-center py-12 px-4'
 
   return (
-    <div className={containerStyle}>
+    <div className={containerStyle} role="status" aria-live="polite">
       <div className="relative flex items-center justify-center">
         {/* Medical blue loading spinner */}
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-brand-600" />
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-brand-600 motion-reduce:animate-none" aria-hidden="true" />
         <div className="absolute grid h-5 w-5 place-items-center">
-          <svg className="h-3 w-3 text-brand-600 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+          <svg className="h-3 w-3 animate-pulse text-brand-600 motion-reduce:animate-none" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M19 10.5h-5.5V5c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v5.5H5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5h5.5V19c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-5.5H19c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5z" />
           </svg>
         </div>

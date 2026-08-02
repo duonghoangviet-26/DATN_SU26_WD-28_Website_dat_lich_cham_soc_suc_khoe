@@ -3,8 +3,8 @@ import mongoose from 'mongoose'
 import { BacSi, LichLamViec, NguoiDung } from '../models/index.js'
 import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
 
-const DOCTOR_EMAIL = 'doctor.bao@vitafamily.vn'
-const DEMO_MARKER = '[DEMO-CA-TOI-BS-BAO]'
+const DOCTOR_EMAIL = process.env.DEMO_DOCTOR_EMAIL
+const DEMO_MARKER = '[DEMO-CA-TOI-18H-24H]'
 const EVENING_WINDOWS = [
   ['18:00', '18:30'],
   ['18:30', '19:00'],
@@ -12,10 +12,12 @@ const EVENING_WINDOWS = [
   ['19:30', '20:00'],
   ['20:00', '20:30'],
   ['20:30', '21:00'],
-]
-const LATE_EVENING_WINDOWS = [
-  ['22:45', '23:15'],
-  ['23:15', '23:45'],
+  ['21:00', '21:30'],
+  ['21:30', '22:00'],
+  ['22:00', '22:30'],
+  ['22:30', '23:00'],
+  ['23:00', '23:30'],
+  ['23:30', '24:00'],
 ]
 
 function addDays(date, days) {
@@ -117,6 +119,7 @@ async function main() {
     throw new Error('Không chạy seed demo khi NODE_ENV=production')
   }
   if (!process.env.MONGODB_URI) throw new Error('Thiếu MONGODB_URI')
+  if (!DOCTOR_EMAIL) throw new Error('Thiếu DEMO_DOCTOR_EMAIL — phải truyền đúng email tài khoản bác sĩ Hải, không dùng email tài khoản bệnh nhân')
 
   await mongoose.connect(process.env.MONGODB_URI)
   const user = await NguoiDung.findOne({ email: DOCTOR_EMAIL, role: 'doctor' }).lean()
@@ -125,13 +128,13 @@ async function main() {
   const doctor = await BacSi.findOne({ user_id: user._id }).lean()
   if (!doctor) throw new Error('BS. Lê Quốc Bảo chưa có hồ sơ bác sĩ')
   if (doctor.trang_thai !== 'active' || doctor.trang_thai_duyet !== 'approved' || doctor.la_hien !== true) {
-    throw new Error('BS. Lê Quốc Bảo chưa ở trạng thái active/approved/hiển thị')
+    throw new Error(`${user.ho_ten} chưa ở trạng thái active/approved/hiển thị`)
   }
-  if (!doctor.specialties?.[0]) throw new Error('BS. Lê Quốc Bảo chưa được gắn chuyên khoa')
+  if (!doctor.specialties?.[0]) throw new Error(`${user.ho_ten} chưa được gắn chuyên khoa`)
 
   const now = new Date()
   const today = startOfDayUtc(now)
-  const todayEveningStart = buildSlotDateTime(today, '22:45')
+  const todayEveningStart = buildSlotDateTime(today, '18:00')
   const todayIsUsable = todayEveningStart && todayEveningStart.getTime() > now.getTime()
   const targetDate = dateFromEnvOrDefault(
     process.env.DEMO_DATE,
@@ -141,14 +144,14 @@ async function main() {
   const first = await upsertEveningSchedule({
     doctor,
     date: targetDate,
-    startIndex: targetDate.getTime() === today.getTime() ? 21 : 30,
-    windows: targetDate.getTime() === today.getTime() ? LATE_EVENING_WINDOWS : EVENING_WINDOWS,
+    startIndex: 15,
+    windows: EVENING_WINDOWS,
   })
 
   const tomorrow = addDays(today, 1)
   const second = targetDate.getTime() === tomorrow.getTime()
     ? null
-    : await upsertEveningSchedule({ doctor, date: tomorrow, startIndex: 30, windows: EVENING_WINDOWS })
+    : await upsertEveningSchedule({ doctor, date: tomorrow, startIndex: 15, windows: EVENING_WINDOWS })
 
   const schedules = [first, second].filter(Boolean)
   console.log(JSON.stringify({

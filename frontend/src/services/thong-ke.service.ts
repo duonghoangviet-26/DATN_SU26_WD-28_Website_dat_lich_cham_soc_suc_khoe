@@ -3,6 +3,8 @@ import type {
   AppointmentStatusStatistic,
   DoctorRevenueStatistic,
   MonthlyNewPatientStatistic,
+  NewPatientStatistic,
+  NewPatientStatisticMode,
   RevenueDailyStatistic,
   TopServiceStatistic,
 } from '@/types/thong-ke'
@@ -59,6 +61,15 @@ export const thongKeService = {
   getMonthlyNewPatients(nam: string) {
     const url = `/thong-ke/benh-nhan-moi-theo-thang${queryString({ nam })}`
     return getOnce(url, () => getData<MonthlyNewPatientStatistic[]>(url))
+  },
+
+  getNewPatients(mode: NewPatientStatisticMode, value: string) {
+    const url = `/thong-ke/benh-nhan-moi-theo-thang${queryString({
+      mode,
+      thang: mode === 'month' ? value : undefined,
+      nam: mode === 'year' ? value : undefined,
+    })}`
+    return getOnce(url, () => getData<NewPatientStatistic[]>(url))
   },
 
   getTopServices(tu: string, den: string) {

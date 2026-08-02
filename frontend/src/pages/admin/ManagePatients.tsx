@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Badge from '@/components/common/Badge'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
@@ -119,7 +119,7 @@ export default function ManagePatients() {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
 
-  async function loadPatients() {
+  const loadPatients = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -141,11 +141,11 @@ export default function ManagePatients() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [isDeleted, keyword, page, status])
 
   useEffect(() => {
     loadPatients()
-  }, [keyword, status, page, isDeleted])
+  }, [loadPatients])
 
   async function openPatient(patient: AdminPatient, tab: DetailTab = 'info') {
     setSelectedPatient(patient)

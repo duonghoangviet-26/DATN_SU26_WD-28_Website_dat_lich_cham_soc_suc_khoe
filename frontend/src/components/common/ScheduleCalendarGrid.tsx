@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Shared calendar helpers intentionally live beside the renderer. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 

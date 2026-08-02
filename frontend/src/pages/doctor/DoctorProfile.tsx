@@ -6,9 +6,12 @@ import Icon from '@/components/admin/icons'
 import { doctorProfileService } from '@/services/doctor-profile.service'
 import type { DoctorApproval, DoctorSelfProfile } from '@/types'
 import { formatPrice } from '@/utils/format'
+import { resolveMediaUrl } from '@/utils/media'
 
 type ProfileForm = {
   ho_ten: string
+  so_dien_thoai: string
+  anh_dai_dien: string
   so_nam_kinh_nghiem: number
   gia_kham: number
   bang_cap: string
@@ -31,6 +34,8 @@ const approvalColor: Record<DoctorApproval, 'green' | 'red' | 'yellow' | 'gray'>
 
 const emptyForm: ProfileForm = {
   ho_ten: '',
+  so_dien_thoai: '',
+  anh_dai_dien: '',
   so_nam_kinh_nghiem: 0,
   gia_kham: 0,
   bang_cap: '',
@@ -107,6 +112,8 @@ function toUtf8Text(value: string | null | undefined, fallback = 'Chưa cập nh
 function toForm(profile: DoctorSelfProfile): ProfileForm {
   return {
     ho_ten: toUtf8Text(profile.ho_ten, ''),
+    so_dien_thoai: profile.so_dien_thoai ?? '',
+    anh_dai_dien: profile.anh_dai_dien ?? '',
     so_nam_kinh_nghiem: profile.so_nam_kinh_nghiem ?? 0,
     gia_kham: profile.gia_kham ?? 0,
     bang_cap: toUtf8Text(profile.bang_cap, ''),
@@ -159,6 +166,8 @@ export default function DoctorProfile() {
     try {
       const updated = await doctorProfileService.update({
         ho_ten: form.ho_ten.trim(),
+        so_dien_thoai: form.so_dien_thoai.trim() || null,
+        anh_dai_dien: form.anh_dai_dien.trim() || null,
         so_nam_kinh_nghiem: form.so_nam_kinh_nghiem,
         gia_kham: form.gia_kham,
         bang_cap: form.bang_cap.trim(),
@@ -205,7 +214,7 @@ export default function DoctorProfile() {
 
       <PageHeader
         title="Hồ sơ bác sĩ"
-        description="Quản lý thông tin hành nghề và trạng thái phê duyệt của bạn."
+        description="Thông tin chuyên môn hiển thị trên hệ thống đặt lịch và hồ sơ khám."
       >
         {!editing && (
           <button onClick={() => setEditing(true)} className="btn-primary">
@@ -214,6 +223,27 @@ export default function DoctorProfile() {
           </button>
         )}
       </PageHeader>
+
+      <section className="mb-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_18px_50px_-28px_rgba(15,118,110,0.45)]">
+        <div className="flex flex-col gap-5 bg-[linear-gradient(120deg,#f0fdfa_0%,#ffffff_55%,#f8fafc_100%)] p-6 sm:flex-row sm:items-center sm:p-8">
+          <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl border-4 border-white bg-teal-100 text-3xl font-black text-teal-700 shadow-sm">
+            {resolveMediaUrl(profile.anh_dai_dien) ? (
+              <img src={resolveMediaUrl(profile.anh_dai_dien) || undefined} alt={`Ảnh đại diện ${toUtf8Text(profile.ho_ten, 'bác sĩ')}`} className="h-full w-full object-cover" />
+            ) : (
+              toUtf8Text(profile.ho_ten, 'BS').split(' ').pop()?.charAt(0)
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">Hồ sơ chuyên môn</p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">{toUtf8Text(profile.ho_ten)}</h1>
+            <p className="mt-1 text-sm text-slate-600">{specialtyText} · {profile.phong_kham_mac_dinh || 'Chưa cập nhật phòng khám'}</p>
+          </div>
+          <div className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 text-left shadow-sm sm:min-w-44">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng thái hồ sơ</p>
+            <div className="mt-1"><Badge color={statusColor}>{statusLabel}</Badge></div>
+          </div>
+        </div>
+      </section>
 
       {profile.trang_thai_duyet === 'pending' && (
         <div className="mb-5 flex items-center gap-3 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
@@ -256,7 +286,7 @@ export default function DoctorProfile() {
       )}
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <div className="card p-6 lg:col-span-2">
+        <div className="card rounded-3xl p-6 lg:col-span-2">
           <div className="mb-5 flex items-center justify-between gap-4">
             <h2 className="font-semibold text-slate-800">Thông tin hành nghề</h2>
             <Badge color={statusColor}>{statusLabel}</Badge>
@@ -281,6 +311,26 @@ export default function DoctorProfile() {
                   <p className="mt-1 text-xs text-slate-400">
                     Chuyên khoa do Admin gán khi duyệt hồ sơ. Liên hệ Admin để thay đổi.
                   </p>
+                </div>
+
+                <div>
+                  <label className="input-label">Số điện thoại</label>
+                  <input
+                    className="input"
+                    value={form.so_dien_thoai}
+                    onChange={(event) => setForm({ ...form, so_dien_thoai: event.target.value })}
+                    placeholder="Nhập số điện thoại liên hệ"
+                  />
+                </div>
+
+                <div>
+                  <label className="input-label">Đường dẫn ảnh đại diện</label>
+                  <input
+                    className="input"
+                    value={form.anh_dai_dien}
+                    onChange={(event) => setForm({ ...form, anh_dai_dien: event.target.value })}
+                    placeholder="https://... hoặc /uploads/..."
+                  />
                 </div>
 
                 <div>
@@ -361,7 +411,7 @@ export default function DoctorProfile() {
         </div>
 
         <div className="space-y-4">
-          <div className="card p-5">
+          <div className="card rounded-3xl p-5">
             <h3 className="mb-4 text-sm font-semibold text-slate-700">Chỉ số đánh giá</h3>
             <div className="flex flex-col items-center gap-1">
               <p className="text-5xl font-black text-amber-500">{(profile.diem_danh_gia ?? 0).toFixed(1)}</p>
@@ -381,7 +431,7 @@ export default function DoctorProfile() {
             </div>
           </div>
 
-          <div className="card p-5">
+          <div className="card rounded-3xl p-5">
             <h3 className="mb-3 text-sm font-semibold text-slate-700">Thông tin tài khoản</h3>
             <dl className="space-y-2.5 text-sm">
               <div className="flex justify-between">

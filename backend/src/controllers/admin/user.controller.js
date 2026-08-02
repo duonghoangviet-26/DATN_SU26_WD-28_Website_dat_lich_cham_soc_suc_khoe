@@ -7,6 +7,7 @@ import { emitDashboardNewPatient } from '../../realtime/socket.js'
 const ADMIN_ID = "000000000000000000000099"
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ADMIN_MANAGED_ROLES = ['user', 'patient', 'doctor', 'admin', 'receptionist']
+const DEFAULT_RESET_PASSWORD = '123456'
 
 function buildDefaultDoctorProfile(userId) {
   return {
@@ -326,6 +327,52 @@ export async function toggleStatus(req, res) {
     return ok(res, user, `Đã ${user.status === 'active' ? 'mở khóa' : 'khóa'} tài khoản thành công`)
   } catch (error) {
     return fail(res, 500, 'Lỗi server: ' + error.message)
+  }
+}
+
+/**
+ * Reset mật khẩu người dùng về mật khẩu mặc định.
+ */
+export async function resetUserPassword(req, res) {
+  try {
+    const user = await NguoiDung.findById(req.params.id).select('+mat_khau')
+    if (!user) {
+      return fail(res, 404, 'Khong tim thay nguoi dung')
+    }
+
+    if (user.ngay_xoa !== null) {
+      return fail(res, 400, 'Khong the reset mat khau tai khoan da nam trong thung rac')
+    }
+
+    const salt = await bcrypt.genSalt(10)
+    user.mat_khau = await bcrypt.hash(DEFAULT_RESET_PASSWORD, salt)
+    user.reset_password_token = null
+    user.reset_password_expire = null
+
+    if (!Array.isArray(user.providers)) {
+      user.providers = ['local']
+    } else if (!user.providers.includes('local')) {
+      user.providers.push('local')
+    }
+
+    await user.save()
+    await logActivity(
+      req,
+      'RESET_PASSWORD',
+      user._id,
+      null,
+      { password_reset: true, default_password_applied: true },
+      'Admin reset password to default value'
+    )
+
+    const safeUser = await NguoiDung.findById(user._id)
+    return ok(
+      res,
+      { user: safeUser, default_password: DEFAULT_RESET_PASSWORD },
+      'Da reset mat khau ve mac dinh 123456'
+    )
+  } catch (error) {
+    return fail(res, 500, 'Loi server: ' + error.message)
   }
 }
 

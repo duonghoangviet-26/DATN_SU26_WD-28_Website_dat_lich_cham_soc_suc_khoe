@@ -431,16 +431,19 @@ function formatAppointmentItem(appointment) {
 function resolveAppointmentPaymentStatus({ appointment, invoice, payments }) {
   const currentStatus = appointment.payment_status ?? 'unpaid'
   const linkedPayments = Array.isArray(payments) ? payments : []
+  const prepaymentPayments = linkedPayments.filter((payment) => ['phi_dat_lich', 'dat_coc'].includes(payment.loai_thanh_toan))
   const hasLinkedFinancialRecord = Boolean(invoice) || linkedPayments.length > 0
 
-  if (!hasLinkedFinancialRecord) {
+  // Lịch hẹn chỉ hiển thị khoản phí đặt lịch/phí khám trả trước. Các khoản
+  // `thanh_toan_bo_sung` thuộc hóa đơn sau khám và không được làm đổi nhãn này.
+  if (!hasLinkedFinancialRecord || prepaymentPayments.length === 0) {
     return currentStatus
   }
 
-  const paidPayments = linkedPayments.filter((payment) => payment.status === 'paid')
-  const refundedPayments = linkedPayments.filter((payment) => payment.status === 'refunded')
+  const paidPayments = prepaymentPayments.filter((payment) => payment.status === 'paid')
+  const refundedPayments = prepaymentPayments.filter((payment) => payment.status === 'refunded')
   const totalPaid = paidPayments.reduce((sum, payment) => sum + Number(payment.so_tien || 0), 0)
-  const totalDue = Number(invoice?.tong_thanh_toan || appointment.gia_kham || 0)
+  const totalDue = Number(appointment.gia_kham || 0)
 
   if (refundedPayments.length > 0 && paidPayments.length === 0) {
     return 'refunded'
@@ -495,7 +498,7 @@ async function enrichAppointmentsWithPaymentData(appointments, { persist = false
   }
 
   const payments = await ThanhToan.find({ $or: paymentOrConditions })
-    .select('appointment_id hoa_don_id so_tien status')
+    .select('appointment_id hoa_don_id so_tien status loai_thanh_toan')
     .lean()
 
   const paymentsByAppointmentId = new Map()

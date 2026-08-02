@@ -32,7 +32,7 @@ export default function DoctorHeader({ onToggleSidebar }: Props) {
       <div className="hidden sm:flex items-center gap-2 text-sm text-slate-500">
         <span className="font-medium text-brand-600">Cổng Bác sĩ</span>
         <span className="text-slate-300">/</span>
-        <span>VitaFamily</span>
+        <span>ViteFamily</span>
       </div>
 
       {/* Right */}
