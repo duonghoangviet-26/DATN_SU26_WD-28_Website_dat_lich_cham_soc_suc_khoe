@@ -9,6 +9,7 @@ const receptionistMenu = [
   { path: '/receptionist', label: 'Tổng quan', icon: 'dashboard', end: true },
   { path: '/receptionist/appointments', label: 'Lịch hẹn (Phòng khám)', icon: 'calendar' },
   { path: '/receptionist/patient-intake', label: 'Tiếp nhận tại quầy', icon: 'person' },
+  { path: '/receptionist/doctor-day-view', label: 'Lịch bác sĩ trong ngày', icon: 'calendar' },
   { path: '/receptionist/payments', label: 'Thanh toán & Thu ngân', icon: 'payment' },
   { path: '/receptionist/news', label: 'Tin tức', icon: 'file-text' },
 ];
