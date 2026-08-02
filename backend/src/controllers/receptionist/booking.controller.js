@@ -40,6 +40,72 @@ function addDays(date, days) {
     return new Date(date.getTime() + days * 86400000);
 }
 
+const TRANG_THAI_LICH_CON_HIEU_LUC = [
+    "pending",
+    "confirmed",
+    "checked_in",
+    "in_progress",
+    "waiting_record",
+    "waiting_doctor_confirm",
+];
+
+function normalizeBookingPhone(value) {
+    const digits = String(value ?? "").replace(/\D/g, "");
+    if (!digits) return "";
+    return digits.startsWith("84") ? `0${digits.slice(2)}` : digits;
+}
+
+function normalizeBookingName(value) {
+    return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export function buildPatientIdentityFilters({ userId, memberId, tenKhach, soDienThoaiKhach }) {
+    if (memberId) return [{ member_id: memberId }];
+
+    const phone = normalizeBookingPhone(soDienThoaiKhach);
+    const name = normalizeBookingName(tenKhach);
+    if (phone && name) {
+        return [{
+            member_id: null,
+            ten_khach: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+            so_dien_thoai_khach: { $in: [soDienThoaiKhach, phone] },
+        }];
+    }
+
+    if (userId) return [{ user_id: userId, member_id: null, dat_ho: { $ne: true } }];
+    return [{ _id: null }];
+}
+
+async function findPatientScheduleConflict({
+    userId,
+    memberId,
+    tenKhach,
+    soDienThoaiKhach,
+    ngay,
+    gioKham,
+    session,
+}) {
+    const identityFilters = buildPatientIdentityFilters({ userId, memberId, tenKhach, soDienThoaiKhach });
+    const sameDayQuery = {
+        $or: identityFilters,
+        ngay_kham: { $gte: ngay, $lt: addDays(ngay, 1) },
+        status: { $in: TRANG_THAI_LICH_CON_HIEU_LUC },
+    };
+
+    const sameTime = await LichHen.findOne({ ...sameDayQuery, gio_kham: gioKham })
+        .select("ma_lich_hen gio_kham status")
+        .session(session)
+        .lean();
+    if (sameTime) return { blocked: sameTime, sameDay: [] };
+
+    const sameDay = await LichHen.find(sameDayQuery)
+        .select("ma_lich_hen gio_kham status")
+        .sort({ gio_kham: 1 })
+        .session(session)
+        .lean();
+    return { blocked: null, sameDay };
+}
+
 function getTodayDateOnly() {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
@@ -530,6 +596,29 @@ export async function createBooking(req, res) {
             );
 
         // Lễ tân đặt luôn nên slot booked
+        const patientConflict = await findPatientScheduleConflict({
+            userId: finalUserId || null,
+            memberId: member_id || null,
+            tenKhach: ten_khach,
+            soDienThoaiKhach: so_dien_thoai_khach,
+            ngay: appointmentDate,
+            gioKham: slot.gio_bat_dau,
+            session,
+        });
+        if (patientConflict.blocked) {
+            return rollbackFail(
+                409,
+                `Nguoi duoc kham da co lich ${patientConflict.blocked.ma_lich_hen ?? ""} luc ${patientConflict.blocked.gio_kham} trong ngay nay. Khong the dat trung cung khung gio cho cung mot ho so.`,
+            );
+        }
+        const conflictWarnings = patientConflict.sameDay.map((item) => ({
+            appointment_id: item._id,
+            ma_lich_hen: item.ma_lich_hen ?? null,
+            gio_kham: item.gio_kham,
+            status: item.status,
+            message: `Nguoi duoc kham da co lich ${item.ma_lich_hen ?? ""} luc ${item.gio_kham} trong cung ngay; le tan can xac minh ly do dat them.`,
+        }));
+
         const updated = await LichLamViec.findOneAndUpdate(
             {
                 _id: schedule._id,
@@ -655,6 +744,7 @@ export async function createBooking(req, res) {
             status: appointment.status,
             payment_status: payment.status,
             gia_kham: gia_kham,
+            canh_bao_trung_lich: conflictWarnings,
             qr_payload:
                 payment_method === "transfer"
                     ? `FAKE_QR_FOR_RECEPTIONIST_BOOKING_${appointmentCode}`

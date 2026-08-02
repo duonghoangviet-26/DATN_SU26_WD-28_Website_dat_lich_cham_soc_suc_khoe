@@ -106,15 +106,16 @@ function serializeAppointment(appointment) {
 
 function appointmentMatchesProfile(appointment, profile) {
   const profileId = String(profile._id)
-  return [
-    appointment.ho_so_benh_nhan_id,
-    appointment.member_id && profile.member_id,
-    appointment.user_id && profile.tai_khoan_id,
-    appointment.nguoi_dat_ho_id && profile.nguoi_giam_ho_id,
-  ].some((pair) => {
-    if (Array.isArray(pair)) return String(pair[0]) === String(pair[1])
-    return pair && String(pair) === profileId
-  })
+  if (appointment.ho_so_benh_nhan_id && String(appointment.ho_so_benh_nhan_id) === profileId) return true
+  if (appointment.member_id && profile.member_id && String(appointment.member_id) === String(profile.member_id)) return true
+
+  // `user_id` tren lich dat ho la nguoi dat, khong phai nguoi kham. Chi dung no de
+  // gan lich tu dat cho ban than khi lich khong co member/dat_ho rieng.
+  const isProxyAppointment = Boolean(appointment.member_id || appointment.nguoi_dat_ho_id)
+  if (!isProxyAppointment && appointment.user_id && profile.tai_khoan_id
+    && String(appointment.user_id) === String(profile.tai_khoan_id)) return true
+
+  return false
 }
 
 export const searchPatientProfiles = async (req, res) => {

@@ -37,12 +37,13 @@ function normalizeName(value) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
-function appointmentBelongsToProfile(appointment, profile) {
+export function appointmentBelongsToProfile(appointment, profile) {
   const profileId = String(profile._id)
   const exactProfile = appointment.ho_so_benh_nhan_id && String(appointment.ho_so_benh_nhan_id) === profileId
   const memberMatch = appointment.member_id && profile.member_id
     && String(appointment.member_id) === String(profile.member_id)
-  const accountMatch = appointment.user_id && profile.tai_khoan_id
+  const isProxyAppointment = Boolean(appointment.member_id || appointment.nguoi_dat_ho_id || appointment.dat_ho)
+  const accountMatch = !isProxyAppointment && appointment.user_id && profile.tai_khoan_id
     && String(appointment.user_id) === String(profile.tai_khoan_id)
 
   if (exactProfile || memberMatch || accountMatch) return true
