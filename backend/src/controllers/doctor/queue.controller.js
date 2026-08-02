@@ -8,10 +8,11 @@ import {
 import { ok, fail } from '../../utils/response.js'
 import { findOrCreateRoomStatus } from './room-status.controller.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
-import { buildSlotDateTime, startOfDayUtc } from '../../utils/clinicTime.js'
+import { buildSlotDateTime } from '../../utils/clinicTime.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 import { layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { traSlotVePool } from '../../services/offlineIntake.service.js'
+import { bacSiDangTrongCaLamViec, getTodayRange } from '../../services/doctorAvailability.service.js'
 
 // ============================================================
 // Hàng đợi động (Bác sĩ) — Routes: /api/doctor/queue
@@ -26,29 +27,6 @@ const DANG_XU_LY = ['dang_cho', 'da_goi', 'trong_phong']
 async function getDocId(userId) {
   const d = await BacSi.findOne({ user_id: userId }).select('_id').lean()
   return d?._id ?? null
-}
-
-function getTodayRange(now = new Date()) {
-  const start = startOfDayUtc(now)
-  const end = new Date(start)
-  end.setUTCDate(end.getUTCDate() + 1)
-  return { start, end }
-}
-
-async function bacSiDangTrongCaLamViec(doctorId, now = new Date()) {
-  const { start, end } = getTodayRange(now)
-  const schedules = await LichLamViec.find({
-    doctor_id: doctorId,
-    ngay: { $gte: start, $lt: end },
-    trang_thai_ngay: 'lam_viec',
-    trang_thai_xac_nhan: { $ne: 'tu_choi' },
-  }).select('ngay slots').lean()
-
-  return schedules.some((schedule) => schedule.slots.some((slot) => {
-    const batDau = buildSlotDateTime(schedule.ngay, slot.gio_bat_dau)
-    const ketThuc = buildSlotDateTime(schedule.ngay, slot.gio_ket_thuc)
-    return batDau && ketThuc && now >= batDau && now < ketThuc
-  }))
 }
 
 /**

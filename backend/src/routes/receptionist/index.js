@@ -12,6 +12,7 @@ import patientIntakeRoutes from './patient-intake.routes.js'
 import offlinePaymentRoutes from './offline-payment.routes.js'
 import billingRoutes from './billing.routes.js'
 import medicalRecordRoutes from './medical-record.routes.js'
+import queueRoutes from './queue.routes.js'
 
 const router = Router()
 
@@ -37,6 +38,7 @@ router.use('/notifications', notificationRoutes)
 router.use('/users', userRoutes)
 router.use('/patient-intake', patientIntakeRoutes)
 router.use('/medical-records', medicalRecordRoutes)
+router.use('/queue', queueRoutes)
 router.use('/payments/offline', offlinePaymentRoutes)
 router.use('/news', newsRoutes)
 
