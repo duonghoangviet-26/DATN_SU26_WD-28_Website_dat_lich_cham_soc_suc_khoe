@@ -188,7 +188,7 @@ export default function ManageNews() {
                         <div className="min-w-0">
                           <p className="font-semibold text-slate-800">{item.title}</p>
                           <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">{item.excerpt}</p>
-                          <p className="mt-1 text-xs text-slate-400">Tác giả: {item.author_name || 'VitaFamily'}</p>
+                          <p className="mt-1 text-xs text-slate-400">Tác giả: {item.author_name || 'ViteFamily'}</p>
                         </div>
                       </div>
                     </td>

@@ -1,4 +1,4 @@
-# VitaFamily — Danh sách đầy đủ toàn bộ Bảng (Collection) trong Database
+# ViteFamily — Danh sách đầy đủ toàn bộ Bảng (Collection) trong Database
 
 > Liệt kê **đầy đủ từng field** của **24 collection** thật trong MongoDB, đúng
 > theo code hiện tại (đã patch). Đây là tài liệu tra cứu schema chi tiết —

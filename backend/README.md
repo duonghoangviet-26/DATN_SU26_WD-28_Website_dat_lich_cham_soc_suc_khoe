@@ -1,6 +1,6 @@
-# VitaFamily — Backend (API)
+# ViteFamily — Backend (API)
 
-Máy chủ API cho hệ thống VitaFamily. **Node.js + Express**.
+Máy chủ API cho hệ thống ViteFamily. **Node.js + Express**.
 
 > ⚠️ Giai đoạn hiện tại: backend mới là **khung mẫu (skeleton)**, chưa kết nối database.
 > Nhóm đang tập trung làm giao diện Admin với dữ liệu fix cứng ở frontend.
@@ -15,7 +15,7 @@ cp .env.example .env      # rồi sửa lại giá trị trong .env
 npm run dev               # chạy ở http://localhost:5000
 ```
 
-Kiểm tra: mở http://localhost:5000 — phải thấy `VitaFamily API đang chạy 🚀`.
+Kiểm tra: mở http://localhost:5000 — phải thấy `ViteFamily API đang chạy 🚀`.
 
 ## Cấu trúc thư mục
 

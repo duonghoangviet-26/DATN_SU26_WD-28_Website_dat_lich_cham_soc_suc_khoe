@@ -5,7 +5,7 @@
 
 | | |
 |---|---|
-| Tên dự án | VitaFamily |
+| Tên dự án | ViteFamily |
 | Nhóm thực hiện | 4 thành viên |
 | Phiên bản | 1.0 |
 | Ngày tạo | 06/06/2026 |
@@ -26,11 +26,11 @@
 
 ## 1. GIỚI THIỆU DỰ ÁN
 
-VitaFamily là một **website quản lý sức khỏe gia đình**, cho phép người dùng đặt lịch khám bệnh online, theo dõi hồ sơ y tế và nhắc nhở uống thuốc cho tất cả thành viên trong gia đình chỉ với một tài khoản duy nhất.
+ViteFamily là một **website quản lý sức khỏe gia đình**, cho phép người dùng đặt lịch khám bệnh online, theo dõi hồ sơ y tế và nhắc nhở uống thuốc cho tất cả thành viên trong gia đình chỉ với một tài khoản duy nhất.
 
 ### Vấn đề đang giải quyết
 
-Hiện nay việc đặt lịch khám tại các phòng khám tư nhân vẫn chủ yếu qua điện thoại, rất bất tiện. Bên cạnh đó người bệnh không có chỗ lưu trữ hồ sơ khám, hay thường quên uống thuốc đúng giờ. VitaFamily ra đời để giải quyết những vấn đề đó.
+Hiện nay việc đặt lịch khám tại các phòng khám tư nhân vẫn chủ yếu qua điện thoại, rất bất tiện. Bên cạnh đó người bệnh không có chỗ lưu trữ hồ sơ khám, hay thường quên uống thuốc đúng giờ. ViteFamily ra đời để giải quyết những vấn đề đó.
 
 ### Phạm vi dự án
 
@@ -365,5 +365,5 @@ Dưới đây là danh sách các bảng trong cơ sở dữ liệu và ý nghĩ
 ---
 
 > **Lưu ý:** Tài liệu này mô tả tổng quan dự án để cả nhóm nắm được bức tranh chung.
-> Chi tiết luồng xử lý, API và cấu trúc database được trình bày riêng trong tài liệu *"Chi tiết chức năng VitaFamily"*.
+> Chi tiết luồng xử lý, API và cấu trúc database được trình bày riêng trong tài liệu *"Chi tiết chức năng ViteFamily"*.
 

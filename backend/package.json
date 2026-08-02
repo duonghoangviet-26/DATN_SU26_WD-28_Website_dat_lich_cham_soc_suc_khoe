@@ -1,7 +1,7 @@
 {
   "name": "vitafamily-backend",
   "version": "1.0.0",
-  "description": "VitaFamily - Máy chủ API (Node.js + Express)",
+  "description": "ViteFamily - Máy chủ API (Node.js + Express)",
   "type": "module",
   "main": "src/index.js",
   "scripts": {

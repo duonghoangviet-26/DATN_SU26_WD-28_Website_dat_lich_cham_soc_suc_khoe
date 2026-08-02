@@ -1,4 +1,4 @@
-# CLAUDE.md — VitaFamily
+# CLAUDE.md — ViteFamily
 
 > File này được Claude Code đọc **tự động** mỗi khi khởi động.
 > Cập nhật khi có thay đổi lớn về stack, cấu trúc hoặc convention.
@@ -9,7 +9,7 @@
 
 | | |
 |---|---|
-| **Tên** | VitaFamily |
+| **Tên** | ViteFamily |
 | **Đề tài** | Website quản lý chăm sóc sức khỏe gia đình |
 | **Nhóm** | 4 thành viên — DATN_SU26_WD-28 |
 | **Phiên bản** | 1.0 |
@@ -58,9 +58,9 @@ DATN_SU26_WD-28_ViteFamily/
 │   ├── features.md          ← 20 chức năng (A1–A7, B1–B5, C1–C8)
 │   └── database.md          ← 27 bảng schema tóm tắt
 ├── Tài liệu dự án/          ← Tài liệu gốc (PDF + SQL — nguồn chính xác nhất)
-│   ├── Đặc tả/              ← Dac_Ta_Du_An_VitaFamily.md
+│   ├── Đặc tả/              ← Dac_Ta_Du_An_ViteFamily.md
 │   ├── Chức Năng Chính/     ← Chi tiết từng chức năng (PDF)
-│   └── Cơ sở dữ liệu/      ← VitaFamily_Database.sql (MySQL schema gốc)
+│   └── Cơ sở dữ liệu/      ← ViteFamily_Database.sql (MySQL schema gốc)
 ├── frontend/src/
 │   ├── mock/                ← Dữ liệu fix cứng (xóa khi có DB thật)
 │   ├── services/            ← axiosInstance + *.service.js (chỗ duy nhất chạm data)
@@ -169,6 +169,6 @@ DATN_SU26_WD-28_ViteFamily/
 
 - `docs/features.md` — chi tiết 20 chức năng
 - `docs/database.md` — 27 bảng schema
-- `Tài liệu dự án/Đặc tả/Dac_Ta_Du_An_VitaFamily.md` — đặc tả gốc đầy đủ
+- `Tài liệu dự án/Đặc tả/Dac_Ta_Du_An_ViteFamily.md` — đặc tả gốc đầy đủ
 - `frontend/README.md` — cách làm trang Admin mới
 - `backend/README.md` — hướng dẫn backend

@@ -114,7 +114,7 @@ async function seedAll() {
         console.log("\n🌱 Đang chèn dữ liệu nền...");
 
         const clinic = await ThongTinPhongKham.create({
-            ten: "Phòng khám đa khoa VitaFamily",
+            ten: "Phòng khám đa khoa ViteFamily",
             trang_thai: "active",
             dia_chi: "12 Nguyễn Văn Bảo, Gò Vấp, TP. Hồ Chí Minh",
             so_dien_thoai: "19001515",
@@ -122,7 +122,7 @@ async function seedAll() {
             gio_lam_viec: "08:00-20:00 Thứ 2-Chủ Nhật",
             mo_ta: "Phòng khám tư một cơ sở, tập trung quản lý lịch khám, bác sĩ và dịch vụ.",
             logo_url: "https://example.com/vitafamily-logo.png",
-            ban_do_url: "https://maps.google.com/?q=VitaFamily",
+            ban_do_url: "https://maps.google.com/?q=ViteFamily",
             bao_hiem: {
                 nha_nuoc: true,
                 bao_lanh: true,
@@ -287,7 +287,7 @@ async function seedAll() {
 
         const users = await NguoiDung.create([
             {
-                ho_ten: "Admin VitaFamily",
+                ho_ten: "Admin ViteFamily",
                 email: "admin@vitafamily.vn",
                 mat_khau: passwordHash,
                 so_dien_thoai: "0901000000",
@@ -587,7 +587,7 @@ async function seedAll() {
                         den_nam: 2019,
                     },
                     {
-                        noi_cong_tac: "VitaFamily",
+                        noi_cong_tac: "ViteFamily",
                         chuc_vu: "Bac si Noi khoa",
                         tu_nam: 2020,
                         den_nam: null,
@@ -621,7 +621,7 @@ async function seedAll() {
                         den_nam: 2021,
                     },
                     {
-                        noi_cong_tac: "VitaFamily",
+                        noi_cong_tac: "ViteFamily",
                         chuc_vu: "Bác sĩ Nhi khoa",
                         tu_nam: 2022,
                         den_nam: null,
@@ -651,7 +651,7 @@ async function seedAll() {
                         den_nam: 2020,
                     },
                     {
-                        noi_cong_tac: "VitaFamily",
+                        noi_cong_tac: "ViteFamily",
                         chuc_vu: "Bác sĩ TMH",
                         tu_nam: 2021,
                         den_nam: null,

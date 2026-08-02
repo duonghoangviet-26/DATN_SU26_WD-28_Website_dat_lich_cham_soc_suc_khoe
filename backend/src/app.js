@@ -12,7 +12,7 @@ app.use(express.json()) // đọc JSON từ body request
 
 // ----- Route kiểm tra sống -----
 app.get('/', (req, res) => {
-  res.json({ success: true, message: 'VitaFamily API đang chạy 🚀' })
+  res.json({ success: true, message: 'ViteFamily API đang chạy 🚀' })
 })
 
 // ----- Toàn bộ API gắn dưới /api -----

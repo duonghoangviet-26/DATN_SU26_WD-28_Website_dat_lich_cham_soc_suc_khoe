@@ -410,7 +410,7 @@ export async function buildDemoDataset() {
   const branches = [
     {
       _id: ids.branches.cauGiay,
-      ten: 'VitaFamily Cau Giay',
+      ten: 'ViteFamily Cau Giay',
       trang_thai: 'active',
       dia_chi: '12 Tran Thai Tong, Cau Giay, Ha Noi',
       so_dien_thoai: '02473001111',
@@ -423,7 +423,7 @@ export async function buildDemoDataset() {
     },
     {
       _id: ids.branches.haDong,
-      ten: 'VitaFamily Ha Dong',
+      ten: 'ViteFamily Ha Dong',
       trang_thai: 'active',
       dia_chi: '88 Quang Trung, Ha Dong, Ha Noi',
       so_dien_thoai: '02473002222',
@@ -859,9 +859,9 @@ export async function buildDemoDataset() {
   })
 
   const medicalRecords = [
-    { _id: fixedObjectId(1701), member_id: ids.members.patient1Self, appointment_id: fixedObjectId(1108), ten_khach: null, ngay_kham: timeline.day0, ten_benh_vien: 'VitaFamily Cau Giay', ten_bac_si: 'BS Tai Demo', ly_do_kham: 'Tai bi ù keo dai', chan_doan: 'Viem ong tai ngoai', ghi_chu: 'Tai kham sau 7 ngay', nguon: 'tu_kham' },
-    { _id: fixedObjectId(1702), member_id: ids.members.patient2Self, appointment_id: fixedObjectId(1109), ten_khach: null, ngay_kham: timeline.day0, ten_benh_vien: 'VitaFamily Ha Dong', ten_bac_si: 'BS Mui Demo', ly_do_kham: 'Viem mui di ung', chan_doan: 'Viem mui di ung theo mua', ghi_chu: 'Ve sinh mui hang ngay', nguon: 'tu_kham' },
-    { _id: fixedObjectId(1703), member_id: ids.members.patient5Self, appointment_id: fixedObjectId(1110), ten_khach: null, ngay_kham: timeline.day0, ten_benh_vien: 'VitaFamily Cau Giay', ten_bac_si: 'BS Hong Demo', ly_do_kham: 'Viem hong cap', chan_doan: 'Viem hong cap do virus', ghi_chu: 'Nghi ngoi 3 ngay', nguon: 'tu_kham' },
+    { _id: fixedObjectId(1701), member_id: ids.members.patient1Self, appointment_id: fixedObjectId(1108), ten_khach: null, ngay_kham: timeline.day0, ten_benh_vien: 'ViteFamily Cau Giay', ten_bac_si: 'BS Tai Demo', ly_do_kham: 'Tai bi ù keo dai', chan_doan: 'Viem ong tai ngoai', ghi_chu: 'Tai kham sau 7 ngay', nguon: 'tu_kham' },
+    { _id: fixedObjectId(1702), member_id: ids.members.patient2Self, appointment_id: fixedObjectId(1109), ten_khach: null, ngay_kham: timeline.day0, ten_benh_vien: 'ViteFamily Ha Dong', ten_bac_si: 'BS Mui Demo', ly_do_kham: 'Viem mui di ung', chan_doan: 'Viem mui di ung theo mua', ghi_chu: 'Ve sinh mui hang ngay', nguon: 'tu_kham' },
+    { _id: fixedObjectId(1703), member_id: ids.members.patient5Self, appointment_id: fixedObjectId(1110), ten_khach: null, ngay_kham: timeline.day0, ten_benh_vien: 'ViteFamily Cau Giay', ten_bac_si: 'BS Hong Demo', ly_do_kham: 'Viem hong cap', chan_doan: 'Viem hong cap do virus', ghi_chu: 'Nghi ngoi 3 ngay', nguon: 'tu_kham' },
   ]
 
   const exams = [

@@ -456,7 +456,7 @@ export default function Booking() {
       <div className="rounded-2xl border border-slate-200 bg-white px-5 py-6 text-left sm:px-7">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div className="max-w-2xl space-y-2">
-            <p className="text-sm font-semibold text-brand-700">Khám Tai Mũi Họng tại VitaFamily</p>
+            <p className="text-sm font-semibold text-brand-700">Khám Tai Mũi Họng tại ViteFamily</p>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Chọn một khung giờ phù hợp</h1>
             <p className="text-sm leading-6 text-slate-600">
               Bạn không cần chọn bác sĩ. Chỉ cần chọn ngày, khung giờ và mô tả triệu chứng, phòng khám sẽ sắp xếp bác sĩ còn lịch phù hợp.

@@ -5,7 +5,7 @@ import mongoose from 'mongoose'
 // Rule: .claude/rules/lich-lam-viec-bac-si.md muc 3 + 10.B
 // ============================================================
 // Truoc day `scheduleGenerator` sinh lich FULL-DAY cho MOI bac si dang hoat dong, moi
-// ngay trong tuan. Sai nghiep vu: bac si cua VitaFamily KHONG full-time — ho dang ky
+// ngay trong tuan. Sai nghiep vu: bac si cua ViteFamily KHONG full-time — ho dang ky
 // theo CA. Bang nay la nguon de generator biet ca nao that su co nguoi truc.
 //
 // ⚠️ HAI RANG BUOC BAT BIEN cua muc 3 duoc dat O DAY, khong dat o `LichLamViec`:

@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "VitaFamily - Giao diện người dùng (React + Vite)",
+  "description": "ViteFamily - Giao diện người dùng (React + Vite)",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
