@@ -14,9 +14,11 @@ import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.servi
 import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
+import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 import { sendNotificationEmail, isMailConfigured } from '../../services/mail.service.js'
 import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../../utils/clinicTime.js'
 import { caCuaKhung } from '../../models/MauLichLamViec.js'
+import { soSanhThuTuHangDoi } from '../../models/HangDoi.js'
 import {
   RECEPTIONIST_APPOINTMENT_ACTIONS,
   assertReceptionistAppointmentAction,
@@ -286,7 +288,7 @@ export const getDoctorOperationalStatuses = async (req, res) => {
       .lean()
 
     const doctorIds = doctors.map((doctor) => doctor._id)
-    const [schedules, rooms, queues] = await Promise.all([
+    const [schedules, rooms, queues, unarrivedAppointments] = await Promise.all([
       doctorIds.length
         ? LichLamViec.find({
           doctor_id: { $in: doctorIds },
@@ -306,7 +308,14 @@ export const getDoctorOperationalStatuses = async (req, res) => {
           doctor_id: { $in: doctorIds },
           checkin_time: { $gte: todayStart, $lt: todayEnd },
           trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu'] },
-        }).select('_id doctor_id trang_thai ten_benh_nhan checkin_time thoi_diem_vao_phong ma_so_thu_tu').lean()
+        }).select('_id appointment_id doctor_id trang_thai ten_benh_nhan checkin_time gio_hen_goc thoi_diem_goi thoi_diem_vao_phong ma_so_thu_tu so_thu_tu_checkin nguon').lean()
+        : [],
+      doctorIds.length
+        ? LichHen.find({
+          doctor_id: { $in: doctorIds },
+          ngay_kham: { $gte: todayStart, $lt: todayEnd },
+          status: { $in: ['pending', 'confirmed'] },
+        }).select('_id doctor_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id').populate('user_id', 'ho_ten so_dien_thoai').lean()
         : [],
     ])
 
@@ -322,8 +331,14 @@ export const getDoctorOperationalStatuses = async (req, res) => {
       if (!queuesByDoctor.has(key)) queuesByDoctor.set(key, [])
       queuesByDoctor.get(key).push(queue)
     }
+    const unarrivedByDoctor = new Map()
+    for (const appointment of unarrivedAppointments) {
+      const key = String(appointment.doctor_id)
+      if (!unarrivedByDoctor.has(key)) unarrivedByDoctor.set(key, [])
+      unarrivedByDoctor.get(key).push(appointment)
+    }
 
-    const data = doctors.map((doctor) => {
+    const data = await Promise.all(doctors.map(async (doctor) => {
       const key = String(doctor._id)
       const schedule = scheduleByDoctor.get(key) ?? null
       const room = roomByDoctor.get(key) ?? null
@@ -334,10 +349,59 @@ export const getDoctorOperationalStatuses = async (req, res) => {
       const currentExamMinutes = currentStartedAt
         ? Math.max(0, Math.floor((now.getTime() - new Date(currentStartedAt).getTime()) / 60000))
         : null
+      const overflow = await kiemTraQuaTai(doctor._id, now)
+      const averageExamMinutes = room?.thoi_gian_kham_tb_phut ?? 20
+      const waitingEntries = doctorQueues
+        .filter((queue) => ['dang_cho', 'da_goi'].includes(queue.trang_thai))
+        .sort((a, b) => soSanhThuTuHangDoi(a, b, now))
+      const affectedUnarrivedAppointments = (unarrivedByDoctor.get(key) ?? [])
+        .filter((appointment) => {
+          const slotTime = buildSlotDateTime(appointment.ngay_kham, appointment.gio_kham)
+          return !slotTime || slotTime.getTime() >= now.getTime()
+        })
+        .sort((a, b) => String(a.gio_kham).localeCompare(String(b.gio_kham)))
+        .slice(0, 5)
+        .map((appointment) => ({
+          appointment_id: appointment._id,
+          ma_lich_hen: appointment.ma_lich_hen ?? null,
+          ten_benh_nhan: appointment.user_id?.ho_ten ?? appointment.ten_khach ?? 'Khach hang',
+          so_dien_thoai: appointment.user_id?.so_dien_thoai ?? appointment.so_dien_thoai_khach ?? null,
+          gio_kham: appointment.gio_kham,
+          status: appointment.status,
+          thoi_gian_tre_uoc_tinh_phut: overflow.doTrePhut,
+          can_goi_bao: Boolean(overflow.ngungBanWalkIn || overflow.chanDatOnline || (currentExamMinutes !== null && currentExamMinutes >= 60)),
+        }))
+      const affectedWaitingSlots = waitingEntries.slice(0, 5).map((queue, index) => {
+        const estimatedWait = Math.max(
+          0,
+          Math.round((currentExamMinutes ?? 0) + (index + 1) * averageExamMinutes),
+        )
+        return {
+          hang_doi_id: queue._id,
+          appointment_id: queue.appointment_id ?? null,
+          ten_benh_nhan: queue.ten_benh_nhan,
+          ma_so_thu_tu: queue.ma_so_thu_tu ?? null,
+          so_thu_tu_checkin: queue.so_thu_tu_checkin ?? null,
+          trang_thai: queue.trang_thai,
+          nguon: queue.nguon,
+          gio_hen_goc: queue.gio_hen_goc ?? null,
+          checkin_time: queue.checkin_time,
+          thoi_gian_cho_uoc_tinh_phut: estimatedWait,
+          can_dieu_phoi: Boolean(overflow.ngungBanWalkIn || overflow.chanDatOnline || (currentExamMinutes !== null && currentExamMinutes >= 60)),
+        }
+      })
 
       let operationalStatus = room?.trang_thai ?? (schedule ? 'san_sang' : 'khong_co_lich')
       if (doctor.trang_thai !== 'active') operationalStatus = doctor.trang_thai
       if (inRoom) operationalStatus = 'dang_kham'
+      if (operationalStatus === 'dang_kham' && (overflow.ngungBanWalkIn || overflow.chanDatOnline)) {
+        operationalStatus = 'qua_tai_tam_thoi'
+      }
+      const canhBaoQuaTai = (
+        (currentExamMinutes !== null && currentExamMinutes >= 60)
+        || overflow.ngungBanWalkIn
+        || overflow.chanDatOnline
+      )
 
       return {
         doctor_id: doctor._id,
@@ -362,9 +426,16 @@ export const getDoctorOperationalStatuses = async (req, res) => {
           }
           : null,
         thoi_gian_kham_hien_tai_phut: currentExamMinutes,
-        canh_bao_qua_tai: operationalStatus === 'dang_kham' && currentExamMinutes !== null && currentExamMinutes >= 60,
+        do_tre_ca_phut: overflow.doTrePhut,
+        nguyen_nhan_do_tre: overflow.nguyenNhanDoTre,
+        ngung_nhan_walkin: overflow.ngungBanWalkIn,
+        chan_dat_online: overflow.chanDatOnline,
+        canh_bao_dieu_phoi: overflow.canhBao,
+        luot_cho_bi_anh_huong: affectedWaitingSlots,
+        lich_chua_checkin_bi_anh_huong: affectedUnarrivedAppointments,
+        canh_bao_qua_tai: canhBaoQuaTai,
       }
-    })
+    }))
 
     res.status(200).json({ success: true, data, checked_at: now })
   } catch (error) {

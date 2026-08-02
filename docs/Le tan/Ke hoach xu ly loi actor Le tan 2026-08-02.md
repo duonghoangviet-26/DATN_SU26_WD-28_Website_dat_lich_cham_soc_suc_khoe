@@ -387,6 +387,8 @@ Khách đến sau giờ hẹn
 
 **Mức ưu tiên:** P0. **Phụ thuộc:** LT-00, LT-06, LT-08, LT-09.
 
+**Tình trạng triển khai 2026-08-02:** đã mở rộng API `/receptionist/appointments/doctor-statuses` để suy ra quá tải tạm thời từ `HangDoi` và `queueOverflow.service.js`, không ghi trạng thái quá tải dài hạn vào `BacSi.trang_thai`. API trả thêm `do_tre_ca_phut`, `nguyen_nhan_do_tre`, `ngung_nhan_walkin`, `chan_dat_online`, `canh_bao_dieu_phoi`, `luot_cho_bi_anh_huong` và `lich_chua_checkin_bi_anh_huong`. Dashboard lễ tân hiển thị bác sĩ quá tải, lượt đang chờ đã check-in, lịch chưa check-in cần gọi báo và thời gian chờ/trễ ước tính. Chức năng này chỉ cảnh báo và hỗ trợ điều phối; không tự động đổi `gio_kham`, không tự tạo slot lịch làm việc mới và không cho sửa lịch đã vào phòng.
+
 **Lỗi/gap hiện tại:** khi một lượt `trong_phong` kéo dài đến một giờ, lịch phía sau có nguy cơ bị “đẩy dây chuyền”. Nếu lễ tân tự sửa giờ của tất cả lịch, hệ thống tạo hàng loạt thay đổi sai cam kết và bùng nổ thông báo.
 
 **Luồng nghiệp vụ đề xuất:**

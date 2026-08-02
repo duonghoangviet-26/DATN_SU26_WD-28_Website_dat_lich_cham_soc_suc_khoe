@@ -35,11 +35,37 @@ interface DoctorOperationalStatus {
   trang_thai_van_hanh: string;
   so_dang_cho: number;
   thoi_gian_kham_hien_tai_phut?: number | null;
+  do_tre_ca_phut?: number;
+  nguyen_nhan_do_tre?: string;
+  ngung_nhan_walkin?: boolean;
+  chan_dat_online?: boolean;
+  canh_bao_dieu_phoi?: string | null;
   canh_bao_qua_tai: boolean;
   benh_nhan_hien_tai?: {
     ten_benh_nhan: string;
     ma_so_thu_tu?: string | null;
   } | null;
+  luot_cho_bi_anh_huong?: Array<{
+    hang_doi_id: string;
+    appointment_id?: string | null;
+    ten_benh_nhan: string;
+    ma_so_thu_tu?: string | null;
+    trang_thai: string;
+    nguon: string;
+    gio_hen_goc?: string | null;
+    thoi_gian_cho_uoc_tinh_phut?: number | null;
+    can_dieu_phoi?: boolean;
+  }>;
+  lich_chua_checkin_bi_anh_huong?: Array<{
+    appointment_id: string;
+    ma_lich_hen?: string | null;
+    ten_benh_nhan: string;
+    so_dien_thoai?: string | null;
+    gio_kham: string;
+    status: string;
+    thoi_gian_tre_uoc_tinh_phut?: number;
+    can_goi_bao?: boolean;
+  }>;
 }
 
 export default function Dashboard() {
@@ -136,6 +162,7 @@ export default function Dashboard() {
 
   const doctorStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
+      qua_tai_tam_thoi: 'Quá tải',
       san_sang: 'Sẵn sàng',
       dang_kham: 'Đang khám',
       dang_don_phong: 'Đang dọn phòng',
@@ -149,10 +176,18 @@ export default function Dashboard() {
 
   const doctorStatusClass = (status: string, overloaded?: boolean) => {
     if (overloaded) return 'border-red-200 bg-red-50 text-red-700';
+    if (status === 'qua_tai_tam_thoi') return 'border-red-200 bg-red-50 text-red-700';
     if (status === 'dang_kham') return 'border-blue-200 bg-blue-50 text-blue-700';
     if (status === 'san_sang') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
     if (status === 'dang_don_phong') return 'border-amber-200 bg-amber-50 text-amber-700';
     return 'border-slate-200 bg-slate-50 text-slate-600';
+  };
+
+  const formatQueueTime = (value?: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return format(date, 'HH:mm');
   };
 
   return (
@@ -190,7 +225,7 @@ export default function Dashboard() {
           {doctorStatuses.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-4">Chưa có dữ liệu trạng thái bác sĩ hôm nay.</p>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {doctorStatuses.map((doctor) => (
                 <div key={doctor.doctor_id} className={`rounded-xl border p-3 ${doctorStatusClass(doctor.trang_thai_van_hanh, doctor.canh_bao_qua_tai)}`}>
                   <div className="flex items-start justify-between gap-3">
@@ -210,8 +245,59 @@ export default function Dashboard() {
                   {doctor.thoi_gian_kham_hien_tai_phut !== null && doctor.thoi_gian_kham_hien_tai_phut !== undefined && (
                     <p className="mt-1 text-xs">Thời gian hiện tại: {doctor.thoi_gian_kham_hien_tai_phut} phút</p>
                   )}
+                  {(doctor.do_tre_ca_phut ?? 0) > 0 && (
+                    <p className="mt-1 text-xs">
+                      Ca đang trễ: <span className="font-semibold">{doctor.do_tre_ca_phut} phút</span>
+                      {doctor.nguyen_nhan_do_tre === 'trong_phong' ? ' do lượt trong phòng' : ' do hàng đợi'}
+                    </p>
+                  )}
                   {doctor.canh_bao_qua_tai && (
-                    <p className="mt-2 rounded-lg bg-white/70 px-2 py-1 text-xs font-semibold">Ca khám đã kéo dài từ 60 phút, cần theo dõi điều phối.</p>
+                    <div className="mt-2 rounded-lg bg-white/70 px-2 py-1 text-xs font-semibold">
+                      <p>{doctor.canh_bao_dieu_phoi || 'Ca khám đã kéo dài từ 60 phút, cần theo dõi điều phối.'}</p>
+                      {(doctor.ngung_nhan_walkin || doctor.chan_dat_online) && (
+                        <p className="mt-1 text-[11px]">
+                          {doctor.chan_dat_online ? 'Tạm chặn đặt online khung còn lại.' : 'Tạm ngưng nhận walk-in khung còn lại.'}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {(doctor.luot_cho_bi_anh_huong?.length ?? 0) > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">Slot chờ cần theo dõi</p>
+                      {doctor.luot_cho_bi_anh_huong?.slice(0, 3).map((queue) => (
+                        <div key={queue.hang_doi_id} className="rounded-lg bg-white/75 px-2 py-1.5 text-xs">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-semibold text-slate-800">
+                              {queue.ma_so_thu_tu ? `${queue.ma_so_thu_tu} · ` : ''}{queue.ten_benh_nhan}
+                            </span>
+                            <span className="whitespace-nowrap text-[11px] font-bold">
+                              ~{queue.thoi_gian_cho_uoc_tinh_phut ?? 0}p
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] opacity-80">
+                            {queue.nguon === 'online' ? 'Online' : 'Tại quầy'}
+                            {formatQueueTime(queue.gio_hen_goc) ? ` · hẹn ${formatQueueTime(queue.gio_hen_goc)}` : ''}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(doctor.lich_chua_checkin_bi_anh_huong?.length ?? 0) > 0 && doctor.canh_bao_qua_tai && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">Lịch chưa check-in cần báo</p>
+                      {doctor.lich_chua_checkin_bi_anh_huong?.slice(0, 3).map((appointment) => (
+                        <div key={appointment.appointment_id} className="rounded-lg bg-white/75 px-2 py-1.5 text-xs">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-semibold text-slate-800">{appointment.ten_benh_nhan}</span>
+                            <span className="whitespace-nowrap text-[11px] font-bold">{appointment.gio_kham}</span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] opacity-80">
+                            {appointment.so_dien_thoai || 'Chưa có SĐT'}
+                            {(appointment.thoi_gian_tre_uoc_tinh_phut ?? 0) > 0 ? ` · trễ ~${appointment.thoi_gian_tre_uoc_tinh_phut}p` : ''}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               ))}
