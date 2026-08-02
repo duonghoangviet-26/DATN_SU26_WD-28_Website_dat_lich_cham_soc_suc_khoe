@@ -58,6 +58,8 @@ const appointmentHistorySchema = new mongoose.Schema(
     ngay_kham_moi: { type: Date, default: null },
     gio_kham_cu: { type: String, default: null },
     gio_kham_moi: { type: String, default: null },
+    phong_kham_cu: { type: String, default: null },
+    phong_kham_moi: { type: String, default: null },
 
     nguoi_thay_doi_id: {
       type: mongoose.Schema.Types.ObjectId,

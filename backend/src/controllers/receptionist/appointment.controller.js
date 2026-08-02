@@ -4,14 +4,17 @@ import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
 import LichSuLichHen from '../../models/LichSuLichHen.js'
 import ThanhToan from '../../models/ThanhToan.js'
+import ThongBao from '../../models/ThongBao.js'
+import BacSi from '../../models/BacSi.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
+import { sendNotificationEmail, isMailConfigured } from '../../services/mail.service.js'
 import { cacMocCuaKhung } from '../../utils/clinicTime.js'
 
 export const getAppointments = async (req, res) => {
   try {
-    const { date, status, timeframe, search, page = 1, limit = 10 } = req.query
+    const { date, status, timeframe, search, doctor_id, page = 1, limit = 10 } = req.query
     const pageNum = parseInt(page) || 1
     const limitNum = parseInt(limit) || 10
     const query = { loai_kham: 'clinic' }
@@ -59,6 +62,7 @@ export const getAppointments = async (req, res) => {
     }
     
     if (status) query.status = status
+    if (doctor_id) query.doctor_id = doctor_id
 
     let sortOption = { ngay_kham: 1, gio_kham: 1 }
     if (timeframe === 'past') {
@@ -191,7 +195,7 @@ export const rescheduleAppointment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Vui lòng cung cấp ngày và giờ khám mới' })
     }
 
-    const appointment = await LichHen.findById(req.params.id)
+    const appointment = await LichHen.findById(req.params.id).populate('user_id', 'email')
     if (!appointment) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
     }
@@ -305,6 +309,16 @@ export const rescheduleAppointment = async (req, res) => {
     const ngayCu = appointment.ngay_kham
     const trangThaiCu = appointment.status
 
+    let phongKhamCu = null
+    if (appointment.schedule_id && appointment.slot_id) {
+      const scheduleCu = await LichLamViec.findById(appointment.schedule_id).lean()
+      if (scheduleCu && scheduleCu.slots) {
+        const slotCu = scheduleCu.slots.find(s => String(s._id) === String(appointment.slot_id))
+        if (slotCu) phongKhamCu = slotCu.phong_kham
+      }
+    }
+    const phongKhamMoi = slotMoi.phong_kham || null
+
     await apDungPhuongAn({
       appointment,
       phuongAn: {
@@ -339,9 +353,39 @@ export const rescheduleAppointment = async (req, res) => {
       ngay_kham_moi: appointment.ngay_kham,
       gio_kham_cu: gioCu,
       gio_kham_moi: appointment.gio_kham,
+      phong_kham_cu: phongKhamCu,
+      phong_kham_moi: phongKhamMoi,
       ly_do: `ly_do_doi=${lyDoDoi}`,
-      nguoi_thay_doi_id: req.user?.id ?? req.user?._id ?? appointment.user_id,
+      nguoi_thay_doi_id: req.user?.id ?? req.user?._id ?? (appointment.user_id?._id || appointment.user_id),
     }])
+
+    const formatDate = (dateStr) => {
+      const d = new Date(dateStr);
+      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+    };
+    const roomStr = phongKhamMoi ? ` tại phòng ${phongKhamMoi}` : '';
+    const noiDungThayDoi = `Phòng khám đã dời lịch hẹn của bạn sang ngày ${formatDate(appointment.ngay_kham)}, lúc ${appointment.gio_kham}${roomStr}.`;
+    const tieuDeThayDoi = 'Lịch hẹn của bạn đã được thay đổi';
+
+    if (appointment.user_id) {
+      await ThongBao.create({
+        user_id: appointment.user_id?._id || appointment.user_id,
+        tieu_de: tieuDeThayDoi,
+        noi_dung: noiDungThayDoi,
+        loai: 'appointment',
+        related_id: appointment._id,
+        related_type: 'LichHen',
+      });
+    }
+
+    const emailNhan = appointment.user_id?.email || appointment.email_khach;
+    if (emailNhan && isMailConfigured()) {
+      sendNotificationEmail({
+        to: emailNhan,
+        title: tieuDeThayDoi,
+        content: noiDungThayDoi,
+      }).catch(err => console.error('Lỗi khi gửi email dời lịch:', err));
+    }
 
     res.status(200).json({
       success: true,
@@ -419,10 +463,240 @@ export const getRescheduleHistory = async (req, res) => {
     const history = await LichSuLichHen.find({
       appointment_id: id,
       loai_thay_doi: 'reschedule'
-    }).sort({ thoi_diem: 1 })
+    }).populate('nguoi_thay_doi_id', 'ho_ten')
+      .sort({ thoi_diem: 1 })
     
     res.status(200).json({ success: true, data: history })
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+export const bulkCancelAppointments = async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+  try {
+    const { ids, reason } = req.body
+    if (!ids || !ids.length) {
+      return res.status(400).json({ success: false, message: 'Không có lịch hẹn nào được chọn' })
+    }
+
+    const appointments = await LichHen.find({ _id: { $in: ids }, status: { $in: ['pending', 'confirmed'] } }).populate('user_id', 'email')
+    
+    for (const appointment of appointments) {
+      const oldStatus = appointment.status
+      appointment.status = 'cancelled'
+      appointment.ly_do_huy = reason || 'Hủy lịch hàng loạt'
+      
+      // Giai phong slot if needed
+      if (appointment.schedule_id && appointment.slot_id) {
+        const schedule = await LichLamViec.findById(appointment.schedule_id).session(session)
+        if (schedule) {
+          const slot = schedule.slots.id(appointment.slot_id)
+          if (slot && String(slot.benh_nhan_id) === String(appointment.user_id?._id || appointment.user_id)) {
+            slot.benh_nhan_id = null
+            slot.benh_nhan_tam_giu_id = null
+            slot.status = 'active'
+            await schedule.save({ session })
+          }
+        }
+      }
+      
+      await appointment.save({ session })
+
+      await LichSuLichHen.create([{
+        appointment_id: appointment._id,
+        tu_trang_thai: oldStatus,
+        den_trang_thai: 'cancelled',
+        loai_thay_doi: 'cancel',
+        ly_do_thay_doi: appointment.ly_do_huy,
+        vai_tro: 'admin',
+        kenh_thay_doi: 'web',
+        nguoi_thay_doi_id: req.user?.id ?? req.user?._id ?? null,
+      }], { session })
+      
+      emitDashboardAppointmentChanged(oldStatus, 'cancelled')
+      
+      // Notification
+      const tieuDe = 'Lịch hẹn của bạn đã bị hủy'
+      const noiDung = `Phòng khám đã hủy lịch hẹn ngày ${appointment.ngay_kham.toLocaleDateString('vi-VN')} lúc ${appointment.gio_kham}. Lý do: ${appointment.ly_do_huy}`
+      
+      if (appointment.user_id) {
+        await ThongBao.create([{
+          user_id: appointment.user_id._id,
+          tieu_de: tieuDe,
+          noi_dung: noiDung,
+          loai: 'appointment',
+          related_id: appointment._id,
+          related_type: 'LichHen',
+        }], { session })
+      }
+      
+      const emailNhan = appointment.user_id?.email || appointment.email_khach
+      if (emailNhan && isMailConfigured()) {
+        sendNotificationEmail({
+          to: emailNhan,
+          title: tieuDe,
+          content: noiDung,
+        }).catch(err => console.error(err))
+      }
+    }
+    
+    await session.commitTransaction()
+    session.endSession()
+    res.status(200).json({ success: true, message: `Đã hủy ${appointments.length} lịch hẹn` })
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+export const bulkRescheduleAppointments = async (req, res) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+  try {
+    const { ids, startDate, startTime, reason } = req.body
+    if (!ids || !ids.length || !startDate) {
+      return res.status(400).json({ success: false, message: 'Thiếu thông tin dời lịch' })
+    }
+
+    const appointments = await LichHen.find({ _id: { $in: ids }, status: { $in: ['pending', 'confirmed'] } })
+      .populate('user_id', 'email')
+      .sort({ ngay_kham: 1, gio_kham: 1 })
+      
+    let assignedCount = 0
+    let startSearchDate = new Date(startDate)
+    startSearchDate.setHours(0, 0, 0, 0)
+    
+    // Find booked slots to avoid conflict
+    const getBookedSlotIds = async () => {
+      const booked = await LichHen.find({ status: { $ne: 'cancelled' } }).select('slot_id').lean()
+      return new Set(booked.filter(a => a.slot_id).map(a => String(a.slot_id)))
+    }
+    
+    const bookedSlots = await getBookedSlotIds()
+    
+    for (const appointment of appointments) {
+      const oldStatus = appointment.status
+      const ngayCu = appointment.ngay_kham
+      const gioCu = appointment.gio_kham
+      
+      // Giải phóng slot cũ trước (cục bộ trong memory/session) để nếu chính nó được xếp lại cùng lịch thì ko bị lỗi
+      if (appointment.schedule_id && appointment.slot_id) {
+        const schedule = await LichLamViec.findById(appointment.schedule_id).session(session)
+        if (schedule) {
+          const slot = schedule.slots.id(appointment.slot_id)
+          if (slot) {
+            slot.benh_nhan_id = null
+            slot.benh_nhan_tam_giu_id = null
+            slot.status = 'active'
+            await schedule.save({ session })
+            bookedSlots.delete(String(slot._id))
+          }
+        }
+      }
+      
+      // Auto-fill spill-over logic
+      let newSlotFound = false
+      let searchDate = new Date(startSearchDate)
+      const maxDaysToSearch = 14 // Try up to 14 days forward
+      
+      for (let dayOffset = 0; dayOffset < maxDaysToSearch; dayOffset++) {
+        const currentDate = new Date(searchDate.getTime() + dayOffset * 86400000)
+        
+        // Lấy tất cả lịch làm việc trong ngày này cho chuyên khoa của appointment
+        const schedules = await LichLamViec.find({
+          ngay: { $gte: currentDate, $lt: new Date(currentDate.getTime() + 86400000) },
+          trang_thai_ngay: 'lam_viec',
+          trang_thai_xac_nhan: { $ne: 'tu_choi' }
+        }).populate('doctor_id').session(session)
+        
+        for (const schedule of schedules) {
+          // Bỏ qua nếu ko đúng chuyên khoa (nếu appointment có specialty_id)
+          if (appointment.specialty_id) {
+             const bacSi = await BacSi.findById(schedule.doctor_id).session(session)
+             if (!bacSi || !bacSi.specialties.includes(appointment.specialty_id)) continue
+          }
+          
+          const availableSlot = schedule.slots.find(s => {
+            if (dayOffset === 0 && startTime && s.gio_bat_dau < startTime) {
+              return false;
+            }
+            return s.status === 'active' && 
+                   !s.benh_nhan_id && 
+                   !s.bi_khoa_boi_nghi_phep &&
+                   !bookedSlots.has(String(s._id));
+          })
+          
+          if (availableSlot) {
+            // Assign this slot
+            availableSlot.benh_nhan_id = appointment.user_id?._id || appointment.user_id
+            await schedule.save({ session })
+            bookedSlots.add(String(availableSlot._id))
+            
+            appointment.schedule_id = schedule._id
+            appointment.slot_id = availableSlot._id
+            appointment.doctor_id = schedule.doctor_id
+            appointment.ngay_kham = schedule.ngay
+            appointment.gio_kham = availableSlot.gio_bat_dau
+            appointment.ly_do_doi_lich = reason || 'Dời lịch hàng loạt (Auto-fill)'
+            
+            // Xử lý phòng khám
+            const phongKhamMoi = availableSlot.phong_id ? (await mongoose.model('MauLichLamViec').findOne({'ca_kham.phong_id': availableSlot.phong_id})).ca_kham.find(c => String(c.phong_id) === String(availableSlot.phong_id))?.ten_phong : null;
+            
+            await appointment.save({ session })
+            
+            await LichSuLichHen.create([{
+              appointment_id: appointment._id,
+              tu_trang_thai: oldStatus,
+              den_trang_thai: appointment.status,
+              loai_thay_doi: 'reschedule',
+              ly_do_thay_doi: appointment.ly_do_doi_lich,
+              vai_tro: 'admin',
+              kenh_thay_doi: 'web',
+              ngay_kham_cu: ngayCu,
+              ngay_kham_moi: appointment.ngay_kham,
+              gio_kham_cu: gioCu,
+              gio_kham_moi: appointment.gio_kham,
+              phong_kham_moi: phongKhamMoi,
+              nguoi_thay_doi_id: req.user?.id ?? req.user?._id ?? null,
+            }], { session })
+            
+            // Notify
+            const tieuDe = 'Lịch hẹn của bạn đã được thay đổi'
+            const noiDung = `Phòng khám đã tự động dời lịch hẹn của bạn sang ngày ${new Date(appointment.ngay_kham).toLocaleDateString('vi-VN')} lúc ${appointment.gio_kham}.`
+            if (appointment.user_id) {
+              await ThongBao.create([{
+                user_id: appointment.user_id._id,
+                tieu_de: tieuDe,
+                noi_dung: noiDung,
+                loai: 'appointment',
+                related_id: appointment._id,
+                related_type: 'LichHen',
+              }], { session })
+            }
+            const emailNhan = appointment.user_id?.email || appointment.email_khach
+            if (emailNhan && isMailConfigured()) {
+               sendNotificationEmail({ to: emailNhan, title: tieuDe, content: noiDung }).catch(console.error)
+            }
+            
+            newSlotFound = true
+            assignedCount++
+            break // Done with this appointment
+          }
+        }
+        
+        if (newSlotFound) break
+      }
+    }
+    
+    await session.commitTransaction()
+    session.endSession()
+    res.status(200).json({ success: true, message: `Đã dời thành công ${assignedCount}/${appointments.length} lịch hẹn` })
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
     res.status(500).json({ success: false, message: error.message })
   }
 }
@@ -433,5 +707,7 @@ export default {
   getPendingCheckin,
   rescheduleAppointment,
   cancelAppointment,
-  getRescheduleHistory
+  getRescheduleHistory,
+  bulkCancelAppointments,
+  bulkRescheduleAppointments
 }
