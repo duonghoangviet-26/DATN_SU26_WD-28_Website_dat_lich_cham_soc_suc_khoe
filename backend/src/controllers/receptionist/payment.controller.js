@@ -62,6 +62,15 @@ function isGatewaySessionExpired(gateway) {
   return expiresAt.getTime() <= Date.now()
 }
 
+function getActorUserId(req) {
+  return req.user?._id ?? req.user?.id ?? null
+}
+
+function getActorRole(req) {
+  if (!getActorUserId(req)) return 'system'
+  return req.user?.role === 'admin' ? 'admin' : 'receptionist'
+}
+
 function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt }) {
   const tmnCode = process.env.VNP_TMNCODE || 'WVZUTWIX'
   const secretKey = process.env.VNP_HASHSECRET || 'MPCYVPEZAQLIXFLZLGWBKOIXOPTHNWVA'
@@ -321,8 +330,8 @@ export const completeMockVnpayPayment = async (req, res) => {
     const previousAppointmentStatus = appointment.status
     await finalizePendingPayment({
       payment, appointment,
-      actorUserId: req.user?._id || appointment.user_id || null, // Fallback to null if guest
-      actorRole: (req.user?._id || appointment.user_id) ? 'admin' : 'system', // Bypass required if system
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
       channel: 'receptionist_vnpay_mock_complete',
       reason: 'Le tan mo phong thanh toan thanh cong qua VNPAY QR',
       providerData: {

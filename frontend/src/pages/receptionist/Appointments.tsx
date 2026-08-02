@@ -30,6 +30,9 @@ interface Appointment {
    */
   so_lan_doi_khach_yeu_cau?: number;
   ly_do_doi?: 'khach_yeu_cau' | 'phong_kham' | null;
+  allowed_actions?: Array<'check_in' | 'reschedule' | 'cancel'>;
+  lock_reason?: string | null;
+  queue_state?: string | null;
 }
 
 interface RescheduleHistory {
@@ -72,6 +75,18 @@ const getStatusBadge = (status: string, isOverdue: boolean = false) => {
         className: isOverdue ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700' 
       };
   }
+};
+
+const hasAction = (appointment: Appointment, action: 'check_in' | 'reschedule' | 'cancel') => {
+  if (Array.isArray(appointment.allowed_actions)) {
+    return appointment.allowed_actions.includes(action);
+  }
+
+  // Fallback cho dữ liệu cũ/mock chưa có contract từ backend.
+  if (action === 'check_in') return appointment.status === 'confirmed';
+  if (action === 'reschedule') return appointment.status === 'pending' || appointment.status === 'confirmed';
+  if (action === 'cancel') return appointment.status === 'pending' || appointment.status === 'confirmed';
+  return false;
 };
 
 export default function Appointments() {
@@ -421,12 +436,12 @@ export default function Appointments() {
                         <div className="flex items-center gap-2">
                           {activeTab !== 'past' && (
                             <>
-                              {activeTab === 'today' && apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
+                              {activeTab === 'today' && hasAction(apt, 'check_in') && (
                                 <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
                                   Tra cứu tại Tiếp nhận
                                 </span>
                               )}
-                              {apt.status !== 'checked_in' && apt.status !== 'cancelled' && (
+                              {hasAction(apt, 'reschedule') && (
                                 <button
                                   title="Dời lịch"
                                   onClick={() => handleReschedule(apt)}
@@ -435,7 +450,7 @@ export default function Appointments() {
                                   <Icon name="calendar" className="w-4 h-4" />
                                 </button>
                               )}
-                              {apt.status !== 'cancelled' && apt.status !== 'checked_in' && (
+                              {hasAction(apt, 'cancel') && (
                                 <button
                                   title="Hủy lịch"
                                   onClick={() => handleCancel(apt._id)}
@@ -443,6 +458,11 @@ export default function Appointments() {
                                 >
                                   <Icon name="ban" className="w-4 h-4" />
                                 </button>
+                              )}
+                              {!hasAction(apt, 'check_in') && !hasAction(apt, 'reschedule') && !hasAction(apt, 'cancel') && apt.lock_reason && (
+                                <span className="max-w-[160px] truncate rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600" title={apt.lock_reason}>
+                                  {apt.lock_reason}
+                                </span>
                               )}
                             </>
                           )}

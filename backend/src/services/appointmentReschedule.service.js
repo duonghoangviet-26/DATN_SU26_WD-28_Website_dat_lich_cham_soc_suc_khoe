@@ -217,6 +217,7 @@ export async function apDungPhuongAn({
   phuongAn,
   lyDoDoi = 'phong_kham',
   actorUserId = null,
+  actorRole = null,
   session = null,
 }) {
   const slotCu = { schedule_id: appointment.schedule_id, slot_id: appointment.slot_id }
@@ -270,7 +271,7 @@ export async function apDungPhuongAn({
 
   await NhatKyThaoTac.create([{
     nguoi_thuc_hien_id: actorUserId,
-    vai_tro: actorUserId ? 'user' : 'system',
+    vai_tro: actorRole ?? (actorUserId ? 'user' : 'system'),
     hanh_dong: 'DOI_LICH_HEN',
     loai_doi_tuong: 'appointment',
     doi_tuong_id: appointment._id,
@@ -335,17 +336,39 @@ export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new 
 
 /** Báo khách kèm ≥2 lựa chọn và hạn phản hồi (mục 15 — quyền của khách). */
 export async function guiThongBaoDeXuat(appointment, session = null) {
-  if (!appointment.user_id) return
   const dx = appointment.de_xuat_doi
   if (!dx?.phuong_an?.length) return
 
   const danhSach = dx.phuong_an.map((pa, i) => `${i + 1}. ${pa.mo_ta}`).join('\n')
+  const noiDung = `Bác sĩ bận đột xuất ở khung ${appointment.gio_kham}. Bạn KHÔNG mất tiền — `
+    + `vui lòng chọn một trong các phương án sau:\n${danhSach}\n`
+    + `Nếu không phản hồi trước ${dx.han_phan_hoi?.toLocaleString('vi-VN')}, chúng tôi giữ sẵn phương án 1 cho bạn.`
+
+  if (!appointment.user_id) {
+    await NhatKyThaoTac.create([{
+      nguoi_thuc_hien_id: null,
+      vai_tro: 'system',
+      hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
+      loai_doi_tuong: 'appointment',
+      doi_tuong_id: appointment._id,
+      ly_do: 'Khach khong co tai khoan, can le tan goi thu cong ve de xuat doi lich',
+      du_lieu_moi: {
+        action: 'reschedule_proposal',
+        appointment_id: appointment._id,
+        ma_lich_hen: appointment.ma_lich_hen ?? null,
+        ten_khach: appointment.ten_khach ?? null,
+        so_dien_thoai_khach: appointment.so_dien_thoai_khach ?? null,
+        email_khach: appointment.email_khach ?? null,
+        noi_dung: noiDung,
+      },
+    }], session ? { session } : {})
+    return
+  }
+
   await ThongBao.create([{
     user_id: appointment.user_id,
     tieu_de: 'Lịch khám của bạn cần đổi',
-    noi_dung: `Bác sĩ bận đột xuất ở khung ${appointment.gio_kham}. Bạn KHÔNG mất tiền — `
-      + `vui lòng chọn một trong các phương án sau:\n${danhSach}\n`
-      + `Nếu không phản hồi trước ${dx.han_phan_hoi?.toLocaleString('vi-VN')}, chúng tôi giữ sẵn phương án 1 cho bạn.`,
+    noi_dung: noiDung,
     loai: 'appointment',
     related_id: appointment._id,
     related_type: 'lich_hen',

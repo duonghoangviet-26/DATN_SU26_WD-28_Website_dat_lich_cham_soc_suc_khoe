@@ -4,10 +4,17 @@ import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
 import LichSuLichHen from '../../models/LichSuLichHen.js'
 import HoSoBenhNhan from '../../models/HoSoBenhNhan.js'
+import HangDoi from '../../models/HangDoi.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
+import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { cacMocCuaKhung } from '../../utils/clinicTime.js'
+import {
+  RECEPTIONIST_APPOINTMENT_ACTIONS,
+  assertReceptionistAppointmentAction,
+  buildReceptionistAppointmentActions,
+} from '../../utils/appointmentStatus.js'
 
 function normalizePhone(value) {
   const digits = String(value ?? '').replace(/\D/g, '')
@@ -36,6 +43,21 @@ function appointmentBelongsToProfile(appointment, profile) {
       && normalizeName(appointment.ten_khach) === normalizeName(profile.ho_ten)
       && normalizePhone(appointment.so_dien_thoai_khach) === normalizePhone(profile.so_dien_thoai_tim_kiem || profile.so_dien_thoai),
   )
+}
+
+function getActorUserId(req) {
+  return req.user?._id ?? req.user?.id ?? null
+}
+
+function getActorRole(req) {
+  return req.user?.role === 'admin' ? 'admin' : 'receptionist'
+}
+
+async function getQueueEntryForAppointment(appointmentId, session = null) {
+  const query = HangDoi.findOne({ appointment_id: appointmentId })
+    .select('_id appointment_id trang_thai checkin_time thoi_diem_vao_phong')
+  if (session) query.session(session)
+  return query.lean()
 }
 
 export const getAppointments = async (req, res) => {
@@ -106,10 +128,25 @@ export const getAppointments = async (req, res) => {
       .sort(sortOption)
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
+      .lean()
+
+    const queueEntries = appointments.length
+      ? await HangDoi.find({ appointment_id: { $in: appointments.map((appointment) => appointment._id) } })
+        .select('_id appointment_id trang_thai checkin_time thoi_diem_vao_phong')
+        .lean()
+      : []
+    const queueByAppointment = new Map(queueEntries.map((entry) => [String(entry.appointment_id), entry]))
+    const data = appointments.map((appointment) => ({
+      ...appointment,
+      ...buildReceptionistAppointmentActions(
+        appointment,
+        queueByAppointment.get(String(appointment._id)) ?? null,
+      ),
+    }))
       
     res.status(200).json({ 
       success: true, 
-      data: appointments,
+      data,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -245,9 +282,12 @@ export const rescheduleAppointment = async (req, res) => {
     if (!appointment) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
     }
-    if (['completed', 'cancelled', 'no_show'].includes(appointment.status)) {
-      return res.status(409).json({ success: false, message: 'Lịch hẹn đã kết thúc, không dời được' })
-    }
+    const queueEntry = await getQueueEntryForAppointment(appointment._id)
+    assertReceptionistAppointmentAction(
+      appointment,
+      queueEntry,
+      RECEPTIONIST_APPOINTMENT_ACTIONS.RESCHEDULE,
+    )
 
     // Đang có đề xuất của phòng khám (bác sĩ nghỉ/bận — mục 14, 15) thì phải xử lý đề xuất đó,
     // không dời tay chồng lên: chỗ của phương án đang được giữ sẵn cho khách.
@@ -354,6 +394,11 @@ export const rescheduleAppointment = async (req, res) => {
     const gioCu = appointment.gio_kham
     const ngayCu = appointment.ngay_kham
     const trangThaiCu = appointment.status
+    const paymentStatusCu = appointment.payment_status
+    const bacSiCuId = appointment.doctor_id
+    const specialtyCuId = appointment.specialty_id
+    const scheduleCuId = appointment.schedule_id
+    const slotCuId = appointment.slot_id
 
     await apDungPhuongAn({
       appointment,
@@ -367,7 +412,8 @@ export const rescheduleAppointment = async (req, res) => {
         lan_walk_in: false,
       },
       lyDoDoi,
-      actorUserId: req.user?.id ?? req.user?._id ?? null,
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
     })
 
     // `ly_do_doi_lich` là mô tả tự do cho lễ tân đọc lại; `ly_do_doi` là phân loại nghiệp vụ.
@@ -379,19 +425,36 @@ export const rescheduleAppointment = async (req, res) => {
       appointment_id: appointment._id,
       tu_trang_thai: trangThaiCu,
       den_trang_thai: appointment.status,
+      tu_payment_status: paymentStatusCu,
+      den_payment_status: appointment.payment_status,
       loai_thay_doi: 'reschedule',
       ly_do_thay_doi: appointment.ly_do_doi_lich,
-      // Enum `vai_tro` chưa có 'receptionist' — giữ 'admin' như code cũ để không đổi schema
-      // của thành viên khác. `nguoi_thay_doi_id` mới là căn cứ truy người thật.
-      vai_tro: 'admin',
-      kenh_thay_doi: 'web',
+      bac_si_cu_id: bacSiCuId,
+      bac_si_moi_id: appointment.doctor_id,
+      specialty_cu_id: specialtyCuId,
+      specialty_moi_id: appointment.specialty_id,
+      schedule_cu_id: scheduleCuId,
+      schedule_moi_id: appointment.schedule_id,
+      slot_cu_id: slotCuId,
+      slot_moi_id: appointment.slot_id,
+      vai_tro: getActorRole(req),
+      kenh_thay_doi: getActorRole(req),
       ngay_kham_cu: ngayCu,
       ngay_kham_moi: appointment.ngay_kham,
       gio_kham_cu: gioCu,
       gio_kham_moi: appointment.gio_kham,
       ly_do: `ly_do_doi=${lyDoDoi}`,
-      nguoi_thay_doi_id: req.user?.id ?? req.user?._id ?? appointment.user_id,
+      nguoi_thay_doi_id: getActorUserId(req) ?? appointment.user_id,
+      nguoi_thuc_hien_id: getActorUserId(req),
     }])
+
+    const notificationResult = await notifyAppointmentCustomerChange({
+      appointment,
+      action: 'reschedule',
+      reason: appointment.ly_do_doi_lich,
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
+    })
 
     res.status(200).json({
       success: true,
@@ -401,6 +464,7 @@ export const rescheduleAppointment = async (req, res) => {
       data: appointment,
       ly_do_doi: lyDoDoi,
       so_lan_doi_khach_yeu_cau: appointment.so_lan_doi_khach_yeu_cau,
+      notification: notificationResult,
     })
   } catch (error) {
     res.status(error.statusCode ?? 500).json({ success: false, message: error.message })
@@ -422,19 +486,36 @@ export const cancelAppointment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
     }
 
-    if (['checked_in', 'in_progress', 'waiting_record', 'waiting_doctor_confirm', 'completed', 'cancelled', 'no_show', 'skipped'].includes(appointment.status)) {
+    const queueEntry = await getQueueEntryForAppointment(appointment._id, session)
+    try {
+      assertReceptionistAppointmentAction(
+        appointment,
+        queueEntry,
+        RECEPTIONIST_APPOINTMENT_ACTIONS.CANCEL,
+      )
+    } catch (error) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(409).json({ success: false, message: `Không thể hủy lịch hẹn ở trạng thái ${appointment.status}` })
+      return res.status(error.statusCode ?? 409).json({
+        success: false,
+        message: error.message,
+        permissions: error.permissions,
+      })
     }
     
     const oldStatus = appointment.status
+    const oldPaymentStatus = appointment.payment_status
+    const oldDoctorId = appointment.doctor_id
+    const oldSpecialtyId = appointment.specialty_id
+    const oldScheduleId = appointment.schedule_id
+    const oldSlotId = appointment.slot_id
+    const oldDate = appointment.ngay_kham
+    const oldTime = appointment.gio_kham
     appointment.status = 'cancelled'
     appointment.ly_do_huy = ly_do_huy || 'Lễ tân hủy lịch'
-    appointment.huy_boi = 'admin'
-    if (req.user && req.user._id) {
-      appointment.nguoi_huy_id = req.user._id
-    }
+    appointment.huy_boi = getActorRole(req)
+    if (getActorUserId(req)) appointment.nguoi_huy_id = getActorUserId(req)
+    appointment.thoi_diem_huy = new Date()
     
     // Giải phóng slot trong LichLamViec
     const { schedule_id, slot_id } = appointment
@@ -450,12 +531,52 @@ export const cancelAppointment = async (req, res) => {
     }
 
     await appointment.save({ session })
+    await LichSuLichHen.create([{
+      appointment_id: appointment._id,
+      tu_trang_thai: oldStatus,
+      den_trang_thai: appointment.status,
+      tu_payment_status: oldPaymentStatus,
+      den_payment_status: appointment.payment_status,
+      loai_thay_doi: 'cancel',
+      ly_do_thay_doi: appointment.ly_do_huy,
+      bac_si_cu_id: oldDoctorId,
+      bac_si_moi_id: appointment.doctor_id,
+      specialty_cu_id: oldSpecialtyId,
+      specialty_moi_id: appointment.specialty_id,
+      schedule_cu_id: oldScheduleId,
+      schedule_moi_id: appointment.schedule_id,
+      slot_cu_id: oldSlotId,
+      slot_moi_id: appointment.slot_id,
+      ngay_kham_cu: oldDate,
+      ngay_kham_moi: appointment.ngay_kham,
+      gio_kham_cu: oldTime,
+      gio_kham_moi: appointment.gio_kham,
+      vai_tro: getActorRole(req),
+      kenh_thay_doi: getActorRole(req),
+      ly_do: appointment.ly_do_huy,
+      nguoi_thay_doi_id: getActorUserId(req) ?? appointment.user_id,
+      nguoi_thuc_hien_id: getActorUserId(req),
+    }], { session })
+
+    const notificationResult = await notifyAppointmentCustomerChange({
+      appointment,
+      action: 'cancel',
+      reason: appointment.ly_do_huy,
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
+      session,
+    })
     await session.commitTransaction()
     session.endSession()
 
     emitDashboardAppointmentChanged(oldStatus, appointment.status)
     
-    res.status(200).json({ success: true, message: 'Đã hủy lịch hẹn', data: appointment })
+    res.status(200).json({
+      success: true,
+      message: 'Đã hủy lịch hẹn',
+      data: appointment,
+      notification: notificationResult,
+    })
   } catch (error) {
     await session.abortTransaction()
     session.endSession()
