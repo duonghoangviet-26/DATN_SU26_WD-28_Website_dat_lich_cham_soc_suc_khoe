@@ -28,12 +28,27 @@ interface PendingCheckin {
   tre_qua_grace?: boolean;
 }
 
+interface DoctorOperationalStatus {
+  doctor_id: string;
+  ten_bac_si: string;
+  phong_kham?: string | null;
+  trang_thai_van_hanh: string;
+  so_dang_cho: number;
+  thoi_gian_kham_hien_tai_phut?: number | null;
+  canh_bao_qua_tai: boolean;
+  benh_nhan_hien_tai?: {
+    ten_benh_nhan: string;
+    ma_so_thu_tu?: string | null;
+  } | null;
+}
+
 export default function Dashboard() {
   const [totalToday, setTotalToday] = useState(0);
   const [waiting, setWaiting] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [pendingCheckins, setPendingCheckins] = useState<PendingCheckin[]>([]);
+  const [doctorStatuses, setDoctorStatuses] = useState<DoctorOperationalStatus[]>([]);
   const [notifications, setNotifications] = useState<VirtualNotification[]>([]);
   
   // Trạng thái cho Tooltip
@@ -71,6 +86,15 @@ export default function Dashboard() {
     }
   };
 
+  const fetchDoctorStatuses = async () => {
+    try {
+      const res = await axiosInstance.get('/receptionist/appointments/doctor-statuses');
+      if (res.data.success) setDoctorStatuses(res.data.data ?? []);
+    } catch (err) {
+      console.error('Loi khi lay trang thai bac si:', err);
+    }
+  };
+
   const fetchNotifications = async () => {
     try {
       const notifs = await receptionistNotificationService.getRecentNotifications();
@@ -83,11 +107,13 @@ export default function Dashboard() {
   useEffect(() => {
     fetchStats();
     fetchPendingCheckins();
+    fetchDoctorStatuses();
     fetchNotifications();
 
     const intervalId = window.setInterval(() => {
       fetchStats();
       fetchPendingCheckins();
+      fetchDoctorStatuses();
     }, 30000);
 
     return () => window.clearInterval(intervalId);
@@ -107,6 +133,27 @@ export default function Dashboard() {
     const diffHours = (aptDate.getTime() - new Date().getTime()) / (1000 * 60 * 60);
     return diffHours >= 0 && diffHours <= 4;
   });
+
+  const doctorStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      san_sang: 'Sẵn sàng',
+      dang_kham: 'Đang khám',
+      dang_don_phong: 'Đang dọn phòng',
+      tam_nghi: 'Tạm nghỉ',
+      khong_co_lich: 'Không có lịch',
+      nghi_phep: 'Nghỉ phép',
+      nghi_viec: 'Nghỉ việc',
+    };
+    return labels[status] || status;
+  };
+
+  const doctorStatusClass = (status: string, overloaded?: boolean) => {
+    if (overloaded) return 'border-red-200 bg-red-50 text-red-700';
+    if (status === 'dang_kham') return 'border-blue-200 bg-blue-50 text-blue-700';
+    if (status === 'san_sang') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    if (status === 'dang_don_phong') return 'border-amber-200 bg-amber-50 text-amber-700';
+    return 'border-slate-200 bg-slate-50 text-slate-600';
+  };
 
   return (
     <div className="p-6">
@@ -128,6 +175,48 @@ export default function Dashboard() {
             {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(todayRevenue)}
           </p>
           <p className="text-xs text-slate-400 mt-1">Hôm nay</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-8">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Icon name="users" className="w-5 h-5 text-brand-500" />
+            <h3 className="font-bold text-slate-800">Trạng thái vận hành bác sĩ</h3>
+          </div>
+          <span className="text-xs font-semibold text-slate-400">Cập nhật mỗi 30 giây</span>
+        </div>
+        <div className="p-4">
+          {doctorStatuses.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">Chưa có dữ liệu trạng thái bác sĩ hôm nay.</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {doctorStatuses.map((doctor) => (
+                <div key={doctor.doctor_id} className={`rounded-xl border p-3 ${doctorStatusClass(doctor.trang_thai_van_hanh, doctor.canh_bao_qua_tai)}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{doctor.ten_bac_si}</p>
+                      <p className="mt-1 text-xs font-medium opacity-80">{doctor.phong_kham || 'Chưa có phòng'} · {doctor.so_dang_cho} đang chờ</p>
+                    </div>
+                    <span className="rounded-full bg-white/70 px-2 py-1 text-[11px] font-bold">
+                      {doctorStatusLabel(doctor.trang_thai_van_hanh)}
+                    </span>
+                  </div>
+                  {doctor.benh_nhan_hien_tai && (
+                    <p className="mt-3 text-xs">
+                      Đang khám: <span className="font-semibold">{doctor.benh_nhan_hien_tai.ma_so_thu_tu ? `${doctor.benh_nhan_hien_tai.ma_so_thu_tu} · ` : ''}{doctor.benh_nhan_hien_tai.ten_benh_nhan}</span>
+                    </p>
+                  )}
+                  {doctor.thoi_gian_kham_hien_tai_phut !== null && doctor.thoi_gian_kham_hien_tai_phut !== undefined && (
+                    <p className="mt-1 text-xs">Thời gian hiện tại: {doctor.thoi_gian_kham_hien_tai_phut} phút</p>
+                  )}
+                  {doctor.canh_bao_qua_tai && (
+                    <p className="mt-2 rounded-lg bg-white/70 px-2 py-1 text-xs font-semibold">Ca khám đã kéo dài từ 60 phút, cần theo dõi điều phối.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

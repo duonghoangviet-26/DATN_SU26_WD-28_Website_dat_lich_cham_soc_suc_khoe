@@ -8,13 +8,14 @@ import ThongBao from '../../models/ThongBao.js'
 import BacSi from '../../models/BacSi.js'
 import HoSoBenhNhan from '../../models/HoSoBenhNhan.js'
 import HangDoi from '../../models/HangDoi.js'
+import TrangThaiPhongKham from '../../models/TrangThaiPhongKham.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
 import { sendNotificationEmail, isMailConfigured } from '../../services/mail.service.js'
-import { cacMocCuaKhung } from '../../utils/clinicTime.js'
+import { cacMocCuaKhung, startOfDayUtc } from '../../utils/clinicTime.js'
 import {
   RECEPTIONIST_APPOINTMENT_ACTIONS,
   assertReceptionistAppointmentAction,
@@ -264,6 +265,109 @@ export const getPendingCheckin = async (req, res) => {
     res.status(200).json({ success: true, data: rows })
   } catch (error) {
     res.status(error.statusCode ?? 500).json({ success: false, message: error.message })
+  }
+}
+
+export const getDoctorOperationalStatuses = async (req, res) => {
+  try {
+    const now = new Date()
+    const todayStart = startOfDayUtc(req.query.date ?? now)
+    const todayEnd = new Date(todayStart)
+    todayEnd.setUTCDate(todayEnd.getUTCDate() + 1)
+
+    const doctors = await BacSi.find({
+      trang_thai_duyet: 'approved',
+      la_hien: true,
+    })
+      .select('_id user_id specialties trang_thai phong_kham_mac_dinh')
+      .populate('user_id', 'ho_ten')
+      .populate('specialties', 'ten')
+      .lean()
+
+    const doctorIds = doctors.map((doctor) => doctor._id)
+    const [schedules, rooms, queues] = await Promise.all([
+      doctorIds.length
+        ? LichLamViec.find({
+          doctor_id: { $in: doctorIds },
+          ngay: { $gte: todayStart, $lt: todayEnd },
+          trang_thai_ngay: 'lam_viec',
+          trang_thai_xac_nhan: { $ne: 'tu_choi' },
+        }).select('_id doctor_id slots').lean()
+        : [],
+      doctorIds.length
+        ? TrangThaiPhongKham.find({
+          doctor_id: { $in: doctorIds },
+          ngay: { $gte: todayStart, $lt: todayEnd },
+        }).lean()
+        : [],
+      doctorIds.length
+        ? HangDoi.find({
+          doctor_id: { $in: doctorIds },
+          checkin_time: { $gte: todayStart, $lt: todayEnd },
+          trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu'] },
+        }).select('_id doctor_id trang_thai ten_benh_nhan checkin_time thoi_diem_vao_phong ma_so_thu_tu').lean()
+        : [],
+    ])
+
+    const scheduleByDoctor = new Map()
+    for (const schedule of schedules) {
+      scheduleByDoctor.set(String(schedule.doctor_id), schedule)
+    }
+
+    const roomByDoctor = new Map(rooms.map((room) => [String(room.doctor_id), room]))
+    const queuesByDoctor = new Map()
+    for (const queue of queues) {
+      const key = String(queue.doctor_id)
+      if (!queuesByDoctor.has(key)) queuesByDoctor.set(key, [])
+      queuesByDoctor.get(key).push(queue)
+    }
+
+    const data = doctors.map((doctor) => {
+      const key = String(doctor._id)
+      const schedule = scheduleByDoctor.get(key) ?? null
+      const room = roomByDoctor.get(key) ?? null
+      const doctorQueues = queuesByDoctor.get(key) ?? []
+      const inRoom = doctorQueues.find((queue) => queue.trang_thai === 'trong_phong') ?? null
+      const waitingCount = doctorQueues.filter((queue) => ['dang_cho', 'da_goi'].includes(queue.trang_thai)).length
+      const currentStartedAt = inRoom?.thoi_diem_vao_phong ?? room?.thoi_diem_doi ?? null
+      const currentExamMinutes = currentStartedAt
+        ? Math.max(0, Math.floor((now.getTime() - new Date(currentStartedAt).getTime()) / 60000))
+        : null
+
+      let operationalStatus = room?.trang_thai ?? (schedule ? 'san_sang' : 'khong_co_lich')
+      if (doctor.trang_thai !== 'active') operationalStatus = doctor.trang_thai
+      if (inRoom) operationalStatus = 'dang_kham'
+
+      return {
+        doctor_id: doctor._id,
+        ten_bac_si: doctor.user_id?.ho_ten ?? 'Bác sĩ',
+        specialties: (doctor.specialties ?? []).map((specialty) => ({
+          id: specialty._id,
+          ten: specialty.ten,
+        })),
+        phong_kham: room?.phong_kham ?? schedule?.slots?.[0]?.phong_kham ?? doctor.phong_kham_mac_dinh ?? null,
+        schedule_id: schedule?._id ?? null,
+        trang_thai_bac_si: doctor.trang_thai,
+        trang_thai_van_hanh: operationalStatus,
+        thoi_diem_doi: room?.thoi_diem_doi ?? null,
+        so_dang_cho: waitingCount,
+        co_benh_nhan_trong_phong: Boolean(inRoom),
+        benh_nhan_hien_tai: inRoom
+          ? {
+            hang_doi_id: inRoom._id,
+            ten_benh_nhan: inRoom.ten_benh_nhan,
+            ma_so_thu_tu: inRoom.ma_so_thu_tu ?? null,
+            thoi_diem_vao_phong: inRoom.thoi_diem_vao_phong ?? null,
+          }
+          : null,
+        thoi_gian_kham_hien_tai_phut: currentExamMinutes,
+        canh_bao_qua_tai: operationalStatus === 'dang_kham' && currentExamMinutes !== null && currentExamMinutes >= 60,
+      }
+    })
+
+    res.status(200).json({ success: true, data, checked_at: now })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
   }
 }
 
@@ -857,6 +961,7 @@ export default {
   getAppointments,
   markAsArrived,
   getPendingCheckin,
+  getDoctorOperationalStatuses,
   rescheduleAppointment,
   cancelAppointment,
   getRescheduleHistory,

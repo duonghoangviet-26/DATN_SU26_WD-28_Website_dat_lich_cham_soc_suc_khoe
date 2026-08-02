@@ -629,6 +629,8 @@ Lễ tân mở hồ sơ cũ
 
 **Mức ưu tiên:** P1. **Phụ thuộc:** LT-00, LT-03, LT-06.
 
+**Tình trạng triển khai 2026-08-02:** đã thêm API đọc-only cho lễ tân tại `/receptionist/appointments/doctor-statuses` để tổng hợp trạng thái vận hành bác sĩ trong ngày từ `BacSi`, `LichLamViec`, `TrangThaiPhongKham` và `HangDoi`. Dashboard lễ tân đã có khung “Trạng thái vận hành bác sĩ”, hiển thị bác sĩ sẵn sàng/đang khám/tạm nghỉ/dọn phòng/không có lịch, số lượt đang chờ, bệnh nhân đang trong phòng và cảnh báo nếu một ca khám kéo dài từ 60 phút. Task này chỉ hiển thị và cảnh báo; không cho lễ tân tự đổi trạng thái bác sĩ, không tự hủy/dời lịch.
+
 **Lỗi/gap hiện tại:** lễ tân cần biết bác sĩ có đang khám, đang quá tải hay tạm dừng tiếp nhận để chọn hành động phù hợp. Chỉ nhìn `BacSi.trang_thai='active'` không phản ánh được tình hình trong ca.
 
 **Giải pháp:** trạng thái hiển thị được suy ra chủ yếu từ `HangDoi` và ca hiện tại:
