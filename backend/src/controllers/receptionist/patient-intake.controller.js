@@ -189,7 +189,62 @@ function serializeProfile(profile) {
     lich_hen_hom_nay: profile.lich_hen_hom_nay ?? [],
     luot_dang_cho_hom_nay: profile.luot_dang_cho_hom_nay ?? null,
     sua_gan_nhat: profile.sua_gan_nhat ?? null,
+    lich_su_kham: profile.lich_su_kham ?? null,
   }
+}
+
+// E-10 — "khám lần thứ N". Gộp HAI nguồn hoàn thành:
+//   - HangDoi.trang_thai='hoan_thanh': mốc bác sĩ bấm "hoàn thành khám", xảy ra cho MỌI lượt
+//     (walk-in lẫn có lịch hẹn) — nguồn chính, không phân biệt appointment_id.
+//   - LichHen.status='completed': chỉ dùng cho lịch hẹn KHÔNG có HangDoi hoàn thành tương ứng
+//     (dữ liệu cũ trước khi luồng check-in hợp nhất — mục 9). Nếu không loại trừ theo
+//     appointment_id đã có trong HangDoi thì MỘT lượt khám qua LichHen sẽ bị đếm hai lần vì
+//     bác sĩ luôn đi qua HangDoi.hoan_thanh trước khi hồ sơ khám mới chuyển 'completed'.
+export function gomLichSuKham(hangDoiHoanThanh, lichHenHoanThanh, profileIds) {
+  const coveredAppointmentIds = new Set(
+    hangDoiHoanThanh.filter((entry) => entry.appointment_id).map((entry) => String(entry.appointment_id)),
+  )
+  const visitsByProfile = new Map(profileIds.map((id) => [String(id), []]))
+
+  for (const entry of hangDoiHoanThanh) {
+    const key = String(entry.ho_so_benh_nhan_id)
+    visitsByProfile.get(key)?.push({
+      ngay: entry.thoi_diem_ket_thuc ?? entry.checkin_time,
+      bac_si: entry.doctor_id?.user_id?.ho_ten ?? null,
+    })
+  }
+  for (const appointment of lichHenHoanThanh) {
+    if (coveredAppointmentIds.has(String(appointment._id))) continue
+    const key = String(appointment.ho_so_benh_nhan_id)
+    visitsByProfile.get(key)?.push({
+      ngay: appointment.ngay_kham,
+      bac_si: appointment.doctor_id?.user_id?.ho_ten ?? null,
+    })
+  }
+
+  const result = new Map()
+  for (const [key, visits] of visitsByProfile) {
+    if (visits.length === 0) { result.set(key, null); continue }
+    visits.sort((a, b) => new Date(b.ngay).getTime() - new Date(a.ngay).getTime())
+    result.set(key, { so_lan: visits.length, lan_gan_nhat: visits[0].ngay, bac_si_gan_nhat: visits[0].bac_si })
+  }
+  return result
+}
+
+async function layLichSuKhamChoNhieuHoSo(profileIds) {
+  if (profileIds.length === 0) return new Map()
+  const doctorPopulate = { path: 'doctor_id', select: 'user_id', populate: { path: 'user_id', select: 'ho_ten' } }
+  const [hangDoiHoanThanh, lichHenHoanThanh] = await Promise.all([
+    HangDoi.find({ ho_so_benh_nhan_id: { $in: profileIds }, trang_thai: 'hoan_thanh' })
+      .select('ho_so_benh_nhan_id appointment_id doctor_id thoi_diem_ket_thuc checkin_time')
+      .populate(doctorPopulate)
+      .lean(),
+    LichHen.find({ ho_so_benh_nhan_id: { $in: profileIds }, status: 'completed' })
+      .select('ho_so_benh_nhan_id doctor_id ngay_kham')
+      .populate(doctorPopulate)
+      .lean(),
+  ])
+  return gomLichSuKham(hangDoiHoanThanh, lichHenHoanThanh, profileIds)
 }
 
 function khoangHomNay(now = new Date()) {
@@ -381,6 +436,8 @@ export const searchPatientProfiles = async (req, res) => {
 
     // Gom "sửa gần nhất" cho CẢ danh sách trong 1 truy vấn — tránh N+1 (E-1).
     const suaGanNhatByProfile = await layDongSuaGanNhatChoNhieuHoSo(profiles)
+    // Gom "khám lần thứ N" cho CẢ danh sách trong 2 truy vấn — tránh N+1 (E-10).
+    const lichSuKhamByProfile = await layLichSuKhamChoNhieuHoSo(profileIds)
 
     for (const profile of profiles) {
       const related = appointments.filter((appointment) => appointmentMatchesProfile(appointment, profile))
@@ -401,6 +458,7 @@ export const searchPatientProfiles = async (req, res) => {
           }
         : null
       profile.sua_gan_nhat = suaGanNhatByProfile.get(String(profile._id)) ?? null
+      profile.lich_su_kham = lichSuKhamByProfile.get(String(profile._id)) ?? null
     }
 
     const ambiguousAppointments = profiles.length > 1
