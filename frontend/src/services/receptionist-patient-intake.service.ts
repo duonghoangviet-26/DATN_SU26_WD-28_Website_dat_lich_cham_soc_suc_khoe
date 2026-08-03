@@ -89,11 +89,6 @@ export interface CreatePatientProfilePayload {
   so_dien_thoai: string
   ngay_sinh?: string
   gioi_tinh?: 'nam' | 'nu' | 'khac'
-  nhom_mau?: 'A' | 'B' | 'AB' | 'O'
-  di_ung?: string
-  benh_nen?: string
-  dia_chi?: string
-  ghi_chu?: string
   tai_khoan_id?: string
 }
 
