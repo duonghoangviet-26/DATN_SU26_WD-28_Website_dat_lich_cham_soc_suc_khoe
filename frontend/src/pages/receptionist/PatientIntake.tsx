@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import {
   CapacityEvidence,
   OfflineAvailability,
@@ -9,6 +9,7 @@ import {
 } from '@/services/receptionist-patient-intake.service'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
+import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
 
 const emptyForm = {
   ho_ten: '',
@@ -116,6 +117,13 @@ export default function PatientIntake() {
   const [editingProfile, setEditingProfile] = useState<PatientProfile | null>(null)
   const [auditProfileId, setAuditProfileId] = useState<string | null>(null)
   const [linkAccount, setLinkAccount] = useState(true)
+  const [printData, setPrintData] = useState<QueueTicketData | null>(null)
+
+  // window.print() la ham dong bo chan UI — phai goi SAU khi QueueTicketTemplate da render
+  // xong voi printData moi, neu khong se in ra phieu trong (E-7).
+  useEffect(() => {
+    if (printData) window.print()
+  }, [printData])
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedId) ?? null
   const selectedAppointment = selectedProfile?.lich_hen_hom_nay.find((appointment) => appointment.id === selectedAppointmentId) ?? null
@@ -260,9 +268,14 @@ export default function PatientIntake() {
         ? { ...profile, luot_dang_cho_hom_nay: { id: response.hang_doi.id, trang_thai: 'dang_cho', doctor_id: response.hang_doi.doctor_id, phong_kham: response.hang_doi.phong_kham, checkin_time: response.hang_doi.checkin_time, so_thu_tu_checkin: response.hang_doi.so_thu_tu_checkin, ma_so_thu_tu: response.hang_doi.ma_so_thu_tu } }
         : profile))
       
-      // Auto-print fake notification
-      alert('Đã xác nhận Check-in và đẩy lệnh in Số thứ tự tới máy in thành công!');
-      
+      setPrintData({
+        patientName: selectedProfile.ho_ten,
+        doctorName: selectedAppointment.doctor?.ho_ten || 'Chưa gán',
+        roomNumber: response.hang_doi.phong_kham || 'Chưa gán',
+        queueNumber: response.hang_doi.ma_so_thu_tu || '—',
+        appointmentTime: selectedAppointment.gio_kham,
+      })
+
       // Reset form để tiếp nhận người tiếp theo
       setPhone('')
       setProfiles([])
@@ -311,6 +324,13 @@ export default function PatientIntake() {
       setAccountAppointments(refreshed.account_appointments || [])
       setPhone(patientPhone)
       setMessage(`Đã tạo hồ sơ và đưa ${patientName} vào hàng đợi của ${appointment.doctor?.ho_ten || 'bác sĩ phụ trách'} theo lịch ${appointment.ma_lich_hen || appointment.id}.`)
+      setPrintData({
+        patientName,
+        doctorName: appointment.doctor?.ho_ten || 'Chưa gán',
+        roomNumber: response.hang_doi.phong_kham || 'Chưa gán',
+        queueNumber: response.hang_doi.ma_so_thu_tu || '—',
+        appointmentTime: appointment.gio_kham,
+      })
       return response
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Không thể tạo hồ sơ hoặc đưa người bệnh vào hàng đợi bác sĩ.')
@@ -355,10 +375,16 @@ export default function PatientIntake() {
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
         ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'dang_cho', doctor_id: String(result.slot.doctor_id), phong_kham: result.slot.phong_kham, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
         : profile))
-        
-      // Auto-print fake notification
-      alert('Đã xác nhận Check-in và đẩy lệnh in Số thứ tự tới máy in thành công!');
-      
+
+      const doctorName = availability?.minh_chung_suc_chua.find((row) => row.doctor_id === selectedSlot.doctor_id)?.bac_si || 'Chưa gán'
+      setPrintData({
+        patientName: selectedProfile.ho_ten,
+        doctorName,
+        roomNumber: result.slot.phong_kham || 'Chưa gán',
+        queueNumber: result.entry.ma_so_thu_tu || '—',
+        appointmentTime: selectedSlot.gio_bat_dau,
+      })
+
       // Reset form để tiếp nhận người tiếp theo
       setPhone('')
       setProfiles([])
@@ -688,6 +714,30 @@ export default function PatientIntake() {
           title="Lịch sử cập nhật hồ sơ"
           onClose={() => setAuditProfileId(null)}
         />
+      )}
+
+      {/* Component In Phiếu Ẩn */}
+      <QueueTicketTemplate data={printData} />
+
+      {/* Nút in lại khi máy in kẹt — không check-in lại, chỉ in lại đúng phiếu vừa rồi */}
+      {printData && (
+        <div className="print:hidden fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-lg">
+          <span className="text-xs text-slate-600">Phiếu số {printData.queueNumber}</span>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
+          >
+            In lại phiếu
+          </button>
+          <button
+            type="button"
+            onClick={() => setPrintData(null)}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            ✕
+          </button>
+        </div>
       )}
     </div>
   )

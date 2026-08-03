@@ -27,7 +27,7 @@ interface CheckInVerifyModalProps {
   maLichHen?: string | null
   searchPhone: string
   onClose: () => void
-  onCheckedIn: (result: { hang_doi: { phong_kham?: string | null; ma_so_thu_tu?: string | null }; canh_bao: string[] }) => void
+  onCheckedIn: (result: { hang_doi: { phong_kham?: string | null; ma_so_thu_tu?: string | null }; canh_bao: string[]; ten_benh_nhan: string }) => void
 }
 
 export default function CheckInVerifyModal({ appointmentId, maLichHen, searchPhone, onClose, onCheckedIn }: CheckInVerifyModalProps) {
@@ -76,7 +76,7 @@ export default function CheckInVerifyModal({ appointmentId, maLichHen, searchPho
         so_dien_thoai: selectedProfile.so_dien_thoai || searchPhone,
         ho_ten: selectedProfile.ho_ten,
       })
-      onCheckedIn({ hang_doi: result.hang_doi, canh_bao: result.canh_bao })
+      onCheckedIn({ hang_doi: result.hang_doi, canh_bao: result.canh_bao, ten_benh_nhan: selectedProfile.ho_ten })
     } catch (requestError: any) {
       const status = requestError?.response?.status
       const message = requestError?.response?.data?.message || ''

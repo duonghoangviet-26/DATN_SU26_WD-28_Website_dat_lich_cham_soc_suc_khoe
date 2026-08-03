@@ -387,13 +387,29 @@ export default function Appointments() {
     setCheckInApt(apt);
   };
 
-  const handleCheckedIn = ({ hang_doi, canh_bao }: { hang_doi: { phong_kham?: string | null }; canh_bao: string[] }) => {
+  const handleCheckedIn = ({ hang_doi, canh_bao, ten_benh_nhan }: { hang_doi: { phong_kham?: string | null; ma_so_thu_tu?: string | null }; canh_bao: string[]; ten_benh_nhan: string }) => {
+    if (checkInApt) {
+      setPrintData({
+        patientName: ten_benh_nhan,
+        doctorName: checkInApt.doctor_id?.user_id?.ho_ten || 'Chưa gán',
+        roomNumber: hang_doi.phong_kham || 'Chưa gán',
+        queueNumber: hang_doi.ma_so_thu_tu || '—',
+        appointmentTime: checkInApt.gio_kham,
+        serviceName: checkInApt.ten_dich_vu,
+      });
+    }
     setCheckInApt(null);
     fetchAppointments();
     if (canh_bao.length > 0) {
       alert(`Đã đưa vào hàng đợi${hang_doi.phong_kham ? ` — phòng ${hang_doi.phong_kham}` : ''}.\n\nLƯU Ý:\n• ${canh_bao.join('\n• ')}`);
     }
   };
+
+  // window.print() la ham dong bo chan UI — phai goi SAU khi QueueTicketTemplate da render
+  // xong voi printData moi, neu khong se in ra phieu trong (canh bao trong tai lieu E-7).
+  useEffect(() => {
+    if (printData) window.print();
+  }, [printData]);
 
   const handleCancel = (id: string) => {
     setSelectedAppointmentId(id);
@@ -1359,6 +1375,27 @@ export default function Appointments() {
 
       {/* Component In Phiếu Ẩn */}
       <QueueTicketTemplate data={printData} />
+
+      {/* Nút in lại khi máy in kẹt — không check-in lại, chỉ in lại đúng phiếu vừa rồi */}
+      {printData && (
+        <div className="print:hidden fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-lg">
+          <span className="text-xs text-slate-600">Phiếu số {printData.queueNumber}</span>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
+          >
+            In lại phiếu
+          </button>
+          <button
+            type="button"
+            onClick={() => setPrintData(null)}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
     </div>
   );
