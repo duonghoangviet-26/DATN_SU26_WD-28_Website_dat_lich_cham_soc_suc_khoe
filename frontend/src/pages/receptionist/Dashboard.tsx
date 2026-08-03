@@ -6,6 +6,7 @@ import Icon from '../../components/admin/icons';
 import { format } from 'date-fns';
 import { receptionistPaymentService } from '../../services/receptionist-payment.service';
 import QueueTransferModal, { QueueTransferCandidate } from '../../components/receptionist/QueueTransferModal';
+import QueueCancelModal from '../../components/receptionist/QueueCancelModal';
 
 interface Appointment {
   _id: string;
@@ -93,6 +94,14 @@ export default function Dashboard() {
     currentDoctorId: string;
   } | null>(null);
   const [transferMessage, setTransferMessage] = useState('');
+
+  // Trạng thái cho modal đóng lượt khi khách bỏ về (E-11)
+  const [cancelTarget, setCancelTarget] = useState<{
+    hangDoiId: string;
+    tenBenhNhan: string;
+    maSoThuTu?: string | null;
+  } | null>(null);
+  const [cancelMessage, setCancelMessage] = useState('');
 
   const fetchStats = async () => {
     try {
@@ -227,10 +236,18 @@ export default function Dashboard() {
     window.setTimeout(() => setTransferMessage(''), 4000);
   };
 
+  const handleCancelled = () => {
+    setCancelTarget(null);
+    setCancelMessage('Đã đóng lượt chờ.');
+    fetchDoctorStatuses();
+    window.setTimeout(() => setCancelMessage(''), 4000);
+  };
+
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold text-slate-800 mb-6">Tổng quan Lễ tân</h2>
       {transferMessage && <p className="mb-6 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{transferMessage}</p>}
+      {cancelMessage && <p className="mb-6 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{cancelMessage}</p>}
 
       {/* Khung Thống Kê */}
       <div className="grid grid-cols-3 gap-6 mb-8">
@@ -322,20 +339,35 @@ export default function Dashboard() {
                             {queue.nguon === 'online' ? 'Online' : 'Tại quầy'}
                             {formatQueueTime(queue.gio_hen_goc) ? ` · hẹn ${formatQueueTime(queue.gio_hen_goc)}` : ''}
                           </p>
-                          {queue.trang_thai === 'dang_cho' && (
-                            <button
-                              type="button"
-                              onClick={() => setTransferTarget({
-                                hangDoiId: queue.hang_doi_id,
-                                tenBenhNhan: queue.ten_benh_nhan,
-                                maSoThuTu: queue.ma_so_thu_tu,
-                                specialtyId: queue.specialty_id ?? null,
-                                currentDoctorId: doctor.doctor_id,
-                              })}
-                              className="mt-1.5 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-brand-700 hover:bg-brand-50"
-                            >
-                              Chuyển bác sĩ
-                            </button>
+                          {(queue.trang_thai === 'dang_cho' || queue.trang_thai === 'da_goi') && (
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              {queue.trang_thai === 'dang_cho' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setTransferTarget({
+                                    hangDoiId: queue.hang_doi_id,
+                                    tenBenhNhan: queue.ten_benh_nhan,
+                                    maSoThuTu: queue.ma_so_thu_tu,
+                                    specialtyId: queue.specialty_id ?? null,
+                                    currentDoctorId: doctor.doctor_id,
+                                  })}
+                                  className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-brand-700 hover:bg-brand-50"
+                                >
+                                  Chuyển bác sĩ
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setCancelTarget({
+                                  hangDoiId: queue.hang_doi_id,
+                                  tenBenhNhan: queue.ten_benh_nhan,
+                                  maSoThuTu: queue.ma_so_thu_tu,
+                                })}
+                                className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+                              >
+                                Đóng lượt
+                              </button>
+                            </div>
                           )}
                         </div>
                       ))}
@@ -474,6 +506,16 @@ export default function Dashboard() {
           candidates={getTransferCandidates(transferTarget.specialtyId, transferTarget.currentDoctorId)}
           onClose={() => setTransferTarget(null)}
           onTransferred={handleTransferred}
+        />
+      )}
+
+      {cancelTarget && (
+        <QueueCancelModal
+          hangDoiId={cancelTarget.hangDoiId}
+          tenBenhNhan={cancelTarget.tenBenhNhan}
+          maSoThuTu={cancelTarget.maSoThuTu}
+          onClose={() => setCancelTarget(null)}
+          onCancelled={handleCancelled}
         />
       )}
     </div>

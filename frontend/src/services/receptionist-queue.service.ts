@@ -8,9 +8,19 @@ export interface QueueTransferResult {
   phong_kham_moi?: string | null
 }
 
+export interface QueueCancelResult {
+  entry: { _id: string; trang_thai: string }
+  appointment: { _id: string; status: string } | null
+}
+
 export const receptionistQueueService = {
   async transfer(entryId: string, payload: { doctor_id_moi: string; ly_do: string }): Promise<QueueTransferResult> {
     const response = await axiosInstance.patch<ApiResponse<QueueTransferResult>>(`/receptionist/queue/${entryId}/transfer`, payload)
+    return response.data.data
+  },
+
+  async cancel(entryId: string, payload: { ly_do: string }): Promise<QueueCancelResult> {
+    const response = await axiosInstance.patch<ApiResponse<QueueCancelResult>>(`/receptionist/queue/${entryId}/cancel`, payload)
     return response.data.data
   },
 }
