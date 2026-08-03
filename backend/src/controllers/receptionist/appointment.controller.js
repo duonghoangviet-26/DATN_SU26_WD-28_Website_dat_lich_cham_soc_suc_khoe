@@ -1504,6 +1504,10 @@ export const reportDoctorUnavailable = async (req, res) => {
           status: appointment.status,
           ten_khach: appointment.ten_khach ?? null,
           gio_kham: appointment.gio_kham,
+          // Doctor bi bao nghi + specialty cua lich nay — de FE dung QueueTransferModal
+          // loc dung bac si cung chuyen khoa khi dieu phoi tai quay (E-4 tai su dung).
+          doctor_id: appointment.doctor_id ?? null,
+          specialty_id: appointment.specialty_id ?? null,
           ly_do_bo_qua: queue?.trang_thai === 'trong_phong'
             ? 'benh_nhan_dang_trong_phong'
             : queue
