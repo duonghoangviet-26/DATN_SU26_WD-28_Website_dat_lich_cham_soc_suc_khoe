@@ -85,6 +85,9 @@ const auditLogSchema = new mongoose.Schema(
 auditLogSchema.index({ nguoi_thuc_hien_id: 1 })
 auditLogSchema.index({ vai_tro: 1 })
 auditLogSchema.index({ hanh_dong: 1 })
+// Ghép thêm ngay_tao — E-3 loc theo hanh_dong ('CUSTOMER_CONTACT_REQUIRED'/'CUSTOMER_CONTACTED')
+// VA khoang thoi gian (mac dinh 7 ngay gan nhat) trong cung mot truy van.
+auditLogSchema.index({ hanh_dong: 1, ngay_tao: -1 })
 auditLogSchema.index({ loai_doi_tuong: 1, doi_tuong_id: 1 }) // tra lịch sử của 1 đối tượng cụ thể
 auditLogSchema.index({ ngay_tao: -1 })
 

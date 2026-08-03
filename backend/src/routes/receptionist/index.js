@@ -14,6 +14,7 @@ import billingRoutes from './billing.routes.js'
 import medicalRecordRoutes from './medical-record.routes.js'
 import queueRoutes from './queue.routes.js'
 import timelineRoutes from './timeline.routes.js'
+import contactTasksRoutes from './contact-tasks.routes.js'
 
 const router = Router()
 
@@ -41,6 +42,7 @@ router.use('/patient-intake', patientIntakeRoutes)
 router.use('/medical-records', medicalRecordRoutes)
 router.use('/queue', queueRoutes)
 router.use('/timeline', timelineRoutes)
+router.use('/contact-tasks', contactTasksRoutes)
 router.use('/payments/offline', offlinePaymentRoutes)
 router.use('/news', newsRoutes)
 
