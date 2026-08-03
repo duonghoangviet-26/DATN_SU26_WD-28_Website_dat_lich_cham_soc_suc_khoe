@@ -17,6 +17,7 @@ import { notifyAppointmentCustomerChange } from '../../services/appointmentCusto
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 import { sendNotificationEmail, isMailConfigured } from '../../services/mail.service.js'
+import { layDongSuaGanNhatChoNhieuLichHen } from '../../services/receptionistTimeline.service.js'
 import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../../utils/clinicTime.js'
 import { caCuaKhung } from '../../models/MauLichLamViec.js'
 import { soSanhThuTuHangDoi } from '../../models/HangDoi.js'
@@ -223,12 +224,17 @@ export const getAppointments = async (req, res) => {
         .lean()
       : []
     const queueByAppointment = new Map(queueEntries.map((entry) => [String(entry.appointment_id), entry]))
+    // E-1: "sửa gần nhất" cho CẢ trang hiện tại trong 2 truy vấn — tránh N+1.
+    const suaGanNhatByAppointment = await layDongSuaGanNhatChoNhieuLichHen(
+      appointments.map((appointment) => appointment._id),
+    )
     const data = appointments.map((appointment) => ({
       ...appointment,
       ...buildReceptionistAppointmentActions(
         appointment,
         queueByAppointment.get(String(appointment._id)) ?? null,
       ),
+      sua_gan_nhat: suaGanNhatByAppointment.get(String(appointment._id)) ?? null,
     }))
 
     res.status(200).json({

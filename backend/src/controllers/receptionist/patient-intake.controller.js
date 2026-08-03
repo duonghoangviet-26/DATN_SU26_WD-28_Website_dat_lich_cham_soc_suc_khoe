@@ -6,6 +6,7 @@ import {
   layKhaNangTiepNhanTaiQuay,
   tiepNhanHoSoVaoHangDoi,
 } from '../../services/offlineIntake.service.js'
+import { layDongSuaGanNhatChoNhieuHoSo } from '../../services/receptionistTimeline.service.js'
 
 function normalizePhone(value) {
   const digits = String(value ?? '').replace(/\D/g, '')
@@ -187,6 +188,7 @@ function serializeProfile(profile) {
     nhom_gia_dinh: profile.nhom_gia_dinh ?? null,
     lich_hen_hom_nay: profile.lich_hen_hom_nay ?? [],
     luot_dang_cho_hom_nay: profile.luot_dang_cho_hom_nay ?? null,
+    sua_gan_nhat: profile.sua_gan_nhat ?? null,
   }
 }
 
@@ -377,6 +379,9 @@ export const searchPatientProfiles = async (req, res) => {
       && normalizePhone(appointment.so_dien_thoai_khach) === phone,
     )
 
+    // Gom "sửa gần nhất" cho CẢ danh sách trong 1 truy vấn — tránh N+1 (E-1).
+    const suaGanNhatByProfile = await layDongSuaGanNhatChoNhieuHoSo(profiles)
+
     for (const profile of profiles) {
       const related = appointments.filter((appointment) => appointmentMatchesProfile(appointment, profile))
       // Chỉ tự gắn lịch cũ theo SĐT khi số này chỉ có đúng một hồ sơ. Nếu có nhiều hồ sơ,
@@ -395,6 +400,7 @@ export const searchPatientProfiles = async (req, res) => {
             ma_so_thu_tu: queue.ma_so_thu_tu ?? null,
           }
         : null
+      profile.sua_gan_nhat = suaGanNhatByProfile.get(String(profile._id)) ?? null
     }
 
     const ambiguousAppointments = profiles.length > 1
@@ -550,46 +556,6 @@ export const updatePatientProfileAdministrative = async (req, res) => {
       return fail(res, 400, error.message)
     }
     return fail(res, error.statusCode ?? 500, error.message)
-  }
-}
-
-export const getPatientProfileAuditLogs = async (req, res) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return fail(res, 400, 'Ma ho so benh nhan khong hop le')
-    }
-
-    const profile = await HoSoBenhNhan.findOne({ _id: req.params.id, trang_thai: 'active' }).select('_id').lean()
-    if (!profile) return fail(res, 404, 'Khong tim thay ho so benh nhan dang hoat dong')
-
-    const logs = await NhatKyThaoTac.find({
-      loai_doi_tuong: 'patient_profile',
-      doi_tuong_id: profile._id,
-      hanh_dong: 'UPDATE_PATIENT_PROFILE_ADMINISTRATIVE',
-    })
-      .populate('nguoi_thuc_hien_id', 'ho_ten email role')
-      .sort({ ngay_tao: -1 })
-      .lean()
-
-    return ok(res, logs.map((log) => ({
-      id: String(log._id),
-      actor: log.nguoi_thuc_hien_id
-        ? {
-            id: String(log.nguoi_thuc_hien_id._id),
-            ho_ten: log.nguoi_thuc_hien_id.ho_ten,
-            email: log.nguoi_thuc_hien_id.email,
-            role: log.nguoi_thuc_hien_id.role,
-          }
-        : null,
-      vai_tro: log.vai_tro,
-      hanh_dong: log.hanh_dong,
-      ly_do: log.ly_do,
-      du_lieu_cu: log.du_lieu_cu,
-      du_lieu_moi: log.du_lieu_moi,
-      ngay_tao: log.ngay_tao,
-    })))
-  } catch (error) {
-    return fail(res, 500, error.message)
   }
 }
 
