@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { receptionistContactTasksService } from '../../services/receptionist-contact-tasks.service';
 
 interface Props {
   open: boolean;
@@ -10,11 +12,27 @@ const receptionistMenu = [
   { path: '/receptionist/appointments', label: 'Lịch hẹn (Phòng khám)', icon: 'calendar' },
   { path: '/receptionist/patient-intake', label: 'Tiếp nhận tại quầy', icon: 'person' },
   { path: '/receptionist/doctor-day-view', label: 'Lịch bác sĩ trong ngày', icon: 'calendar' },
+  { path: '/receptionist/contact-tasks', label: 'Cần gọi khách', icon: 'phone' },
   { path: '/receptionist/payments', label: 'Thanh toán & Thu ngân', icon: 'payment' },
   { path: '/receptionist/news', label: 'Tin tức', icon: 'file-text' },
 ];
 
 export default function Sidebar({ open, onClose }: Props) {
+  const [chuaGoiCount, setChuaGoiCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      receptionistContactTasksService
+        .list({ trang_thai: 'chua_goi' })
+        .then((tasks) => { if (!cancelled) setChuaGoiCount(tasks.length); })
+        .catch(() => {});
+    };
+    load();
+    const timer = window.setInterval(load, 60000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+
   return (
     <>
       {open && (
@@ -57,7 +75,10 @@ export default function Sidebar({ open, onClose }: Props) {
                 }`
               }
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.path === '/receptionist/contact-tasks' && chuaGoiCount > 0 && (
+                <span className="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">{chuaGoiCount}</span>
+              )}
             </NavLink>
           ))}
         </nav>

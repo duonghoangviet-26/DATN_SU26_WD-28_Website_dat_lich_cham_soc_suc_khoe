@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { receptionistPaymentService } from '../../services/receptionist-payment.service';
 import QueueTransferModal, { QueueTransferCandidate } from '../../components/receptionist/QueueTransferModal';
 import QueueCancelModal from '../../components/receptionist/QueueCancelModal';
+import { receptionistContactTasksService } from '../../services/receptionist-contact-tasks.service';
 
 interface Appointment {
   _id: string;
@@ -103,6 +104,9 @@ export default function Dashboard() {
   } | null>(null);
   const [cancelMessage, setCancelMessage] = useState('');
 
+  // So viec "can goi khach" chua xu ly (E-3)
+  const [chuaGoiCount, setChuaGoiCount] = useState(0);
+
   const fetchStats = async () => {
     try {
       const res = await axiosInstance.get('/receptionist/appointments?timeframe=today&limit=1000');
@@ -153,16 +157,27 @@ export default function Dashboard() {
     }
   };
 
+  const fetchContactTaskCount = async () => {
+    try {
+      const tasks = await receptionistContactTasksService.list({ trang_thai: 'chua_goi' });
+      setChuaGoiCount(tasks.length);
+    } catch (err) {
+      console.error('Loi khi lay so viec can goi:', err);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
     fetchPendingCheckins();
     fetchDoctorStatuses();
     fetchNotifications();
+    fetchContactTaskCount();
 
     const intervalId = window.setInterval(() => {
       fetchStats();
       fetchPendingCheckins();
       fetchDoctorStatuses();
+      fetchContactTaskCount();
     }, 30000);
 
     return () => window.clearInterval(intervalId);
@@ -248,6 +263,15 @@ export default function Dashboard() {
       <h2 className="text-2xl font-bold text-slate-800 mb-6">Tổng quan Lễ tân</h2>
       {transferMessage && <p className="mb-6 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{transferMessage}</p>}
       {cancelMessage && <p className="mb-6 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{cancelMessage}</p>}
+      {chuaGoiCount > 0 && (
+        <Link
+          to="/receptionist/contact-tasks"
+          className="mb-6 flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+        >
+          <span>Còn {chuaGoiCount} khách chưa được gọi báo lịch (không có tài khoản online để nhận thông báo trong app).</span>
+          <span className="whitespace-nowrap underline">Xem danh sách →</span>
+        </Link>
+      )}
 
       {/* Khung Thống Kê */}
       <div className="grid grid-cols-3 gap-6 mb-8">
