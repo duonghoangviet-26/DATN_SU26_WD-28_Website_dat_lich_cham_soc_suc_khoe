@@ -26,6 +26,13 @@ export interface PatientProfile {
   lich_hen_hom_nay: TodayAppointment[]
   luot_dang_cho_hom_nay?: ActiveQueue | null
   sua_gan_nhat?: TimelineRow | null
+  lich_su_kham?: VisitHistory | null
+}
+
+export interface VisitHistory {
+  so_lan: number
+  lan_gan_nhat: string
+  bac_si_gan_nhat: string | null
 }
 
 export interface OnlineAccount {

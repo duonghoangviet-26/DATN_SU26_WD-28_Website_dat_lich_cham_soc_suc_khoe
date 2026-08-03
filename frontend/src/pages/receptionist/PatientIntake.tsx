@@ -53,6 +53,13 @@ function suaGanNhatLabel(row?: PatientProfile['sua_gan_nhat']) {
   return `${row.nhan} · ${nguoi} · ${formatDateTime(row.thoi_diem)}`
 }
 
+function lichSuKhamLabel(lichSuKham?: PatientProfile['lich_su_kham']) {
+  if (!lichSuKham) return 'Khách mới · chưa có lượt khám hoàn thành'
+  const ngay = new Date(lichSuKham.lan_gan_nhat).toLocaleDateString('vi-VN')
+  const bacSi = lichSuKham.bac_si_gan_nhat ? ` với ${lichSuKham.bac_si_gan_nhat}` : ''
+  return `Khách cũ · đã khám ${lichSuKham.so_lan} lần · gần nhất ${ngay}${bacSi}`
+}
+
 function paymentLabel(status: string) {
   return ({ paid: 'Đã trả phí khám', partial: 'Đã trả một phần', unpaid: 'Chưa trả phí khám', refunded: 'Đã hoàn phí khám' } as Record<string, string>)[status] ?? status
 }
@@ -521,6 +528,7 @@ export default function PatientIntake() {
                         {profile.nhom_gia_dinh ? ` · Nhóm gia đình: ${profile.nhom_gia_dinh}` : ''}
                       </p>
                       <p className={`mt-1 text-xs font-semibold ${profile.tai_khoan ? 'text-violet-700' : 'text-slate-500'}`}>{profile.tai_khoan ? `Tài khoản: ${profile.tai_khoan.email} · ${profile.tai_khoan.phuong_thuc_dang_nhap === 'google_va_email' ? 'Google + Email' : profile.tai_khoan.phuong_thuc_dang_nhap === 'google' ? 'Google' : 'Email'}` : 'Chưa liên kết tài khoản online'}</p>
+                      <p className="mt-1 text-xs font-medium text-emerald-700">{lichSuKhamLabel(profile.lich_su_kham)}</p>
                       <p className="mt-1 text-xs text-slate-500">Sửa gần nhất: {suaGanNhatLabel(profile.sua_gan_nhat)}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -543,6 +551,7 @@ export default function PatientIntake() {
                     <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">Đã xác nhận hồ sơ</p>
                     <p className="mt-1 text-lg font-bold text-slate-800">{selectedProfile.ho_ten}</p>
                     <p className="mt-1 text-sm text-slate-600">Ngày sinh: {formatDate(selectedProfile.ngay_sinh)} · Số liên hệ: {selectedProfile.so_dien_thoai || phone}</p>
+                    <p className="mt-1 text-xs font-medium text-emerald-700">{lichSuKhamLabel(selectedProfile.lich_su_kham)}</p>
                     <p className="mt-1 text-xs text-slate-500">Sửa gần nhất: {suaGanNhatLabel(selectedProfile.sua_gan_nhat)}</p>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
