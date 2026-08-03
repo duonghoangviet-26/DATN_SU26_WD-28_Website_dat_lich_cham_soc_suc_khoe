@@ -13,6 +13,7 @@ import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 import { layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { traSlotVePool } from '../../services/offlineIntake.service.js'
 import { bacSiDangTrongCaLamViec, getTodayRange } from '../../services/doctorAvailability.service.js'
+import { huyLuotHangDoi } from '../../services/queueCancel.service.js'
 
 // ============================================================
 // Hàng đợi động (Bác sĩ) — Routes: /api/doctor/queue
@@ -435,29 +436,22 @@ export async function skip(req, res) {
 }
 
 // ─── PATCH /api/doctor/queue/:id/cancel ──────────────────────────────────────
+// Dùng chung `huyLuotHangDoi` với lễ tân (E-11) — xem services/queueCancel.service.js.
 export async function cancel(req, res) {
   try {
     const docId = await getDocId(req.user.id)
     if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
-    const { entry, error } = await timEntryCuaMinh(req.params.id, docId)
-    if (error) return fail(res, ...error)
-    if (!CON_HIEN_DIEN.includes(entry.trang_thai)) {
-      return fail(res, 409, 'Chỉ hủy được bệnh nhân đang chờ hoặc đã gọi')
-    }
 
-    const tu = entry.trang_thai
-    entry.trang_thai = 'cancelled'
-    await entry.save()
-    if (!entry.appointment_id) await traSlotVePool(entry)
-
-    if (entry.appointment_id) {
-      await updateAppointmentStatus(entry.appointment_id, 'cancelled')
-    }
-
-    await ghiAuditQueue(req.user.id, 'SKIP_PATIENT', entry._id, { trang_thai: tu }, { trang_thai: 'cancelled' })
+    const { entry } = await huyLuotHangDoi({
+      entryId: req.params.id,
+      lyDo: req.body?.ly_do ?? null,
+      actorUserId: req.user.id,
+      actorRole: 'doctor',
+      restrictToDoctorId: docId,
+    })
 
     return ok(res, { id: entry._id, trang_thai: entry.trang_thai }, 'Đã hủy lượt khám')
   } catch (err) {
-    return fail(res, 500, err.message)
+    return fail(res, err.statusCode ?? 500, err.message)
   }
 }
