@@ -7,6 +7,8 @@ import { receptionistBookingService, ReceptionistBookingSlot } from '../../servi
 import Icon from '../../components/admin/icons';
 import QueueTicketTemplate, { QueueTicketData } from '../../components/receptionist/QueueTicketTemplate';
 import CheckInVerifyModal from '../../components/receptionist/CheckInVerifyModal';
+import TimelinePanel from '../../components/receptionist/TimelinePanel';
+import { TimelineRow } from '../../services/receptionist-timeline.service';
 
 interface Appointment {
   _id: string;
@@ -36,6 +38,7 @@ interface Appointment {
   allowed_actions?: Array<'check_in' | 'reschedule' | 'late_reschedule' | 'cancel'>;
   lock_reason?: string | null;
   queue_state?: string | null;
+  sua_gan_nhat?: TimelineRow | null;
 }
 
 interface RescheduleHistory {
@@ -155,6 +158,9 @@ export default function Appointments() {
   // States cho Modal Chi tiết
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedDetailAppointment, setSelectedDetailAppointment] = useState<Appointment | null>(null);
+
+  // State cho modal timeline hop nhat cua lich hen dang xem chi tiet (E-1)
+  const [timelineAptId, setTimelineAptId] = useState<string | null>(null);
 
   // State cho modal xac minh dung benh nhan truoc khi check-in (LT-07)
   const [checkInApt, setCheckInApt] = useState<Appointment | null>(null);
@@ -1145,6 +1151,24 @@ export default function Appointments() {
                       {selectedDetailAppointment.ly_do_kham || <span className="text-slate-400 italic">Bệnh nhân không ghi chú gì thêm.</span>}
                     </div>
                   </div>
+
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Lịch sử thao tác</h4>
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 flex items-center justify-between gap-3">
+                      <p className="text-sm text-slate-600">
+                        {selectedDetailAppointment.sua_gan_nhat
+                          ? `${selectedDetailAppointment.sua_gan_nhat.nhan} · ${selectedDetailAppointment.sua_gan_nhat.nguoi.ho_ten || 'Không rõ người thực hiện'}`
+                          : 'Chưa có thao tác nào được ghi nhận.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setTimelineAptId(selectedDetailAppointment._id)}
+                        className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                      >
+                        Xem đầy đủ
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -1161,6 +1185,16 @@ export default function Appointments() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal timeline hop nhat cua lich hen (E-1) */}
+      {timelineAptId && (
+        <TimelinePanel
+          loai="lich_hen"
+          id={timelineAptId}
+          title="Lịch sử thao tác lịch hẹn"
+          onClose={() => setTimelineAptId(null)}
+        />
       )}
 
       {/* Modal xac minh dung benh nhan truoc khi check-in (LT-07) */}

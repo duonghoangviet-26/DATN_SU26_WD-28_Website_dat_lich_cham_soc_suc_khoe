@@ -8,7 +8,7 @@ import {
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
-import ProfileAuditPanel from '@/components/receptionist/ProfileAuditPanel'
+import TimelinePanel from '@/components/receptionist/TimelinePanel'
 
 const emptyForm = {
   ho_ten: '',
@@ -44,6 +44,12 @@ function genderLabel(value?: string | null) {
 function formatDateTime(value?: string | null) {
   if (!value) return 'Chưa có dữ liệu'
   return new Date(value).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function suaGanNhatLabel(row?: PatientProfile['sua_gan_nhat']) {
+  if (!row) return 'Chưa từng chỉnh sửa'
+  const nguoi = row.nguoi.ho_ten || 'Không rõ người thực hiện'
+  return `${row.nhan} · ${nguoi} · ${formatDateTime(row.thoi_diem)}`
 }
 
 function paymentLabel(status: string) {
@@ -489,6 +495,7 @@ export default function PatientIntake() {
                         {profile.nhom_gia_dinh ? ` · Nhóm gia đình: ${profile.nhom_gia_dinh}` : ''}
                       </p>
                       <p className={`mt-1 text-xs font-semibold ${profile.tai_khoan ? 'text-violet-700' : 'text-slate-500'}`}>{profile.tai_khoan ? `Tài khoản: ${profile.tai_khoan.email} · ${profile.tai_khoan.phuong_thuc_dang_nhap === 'google_va_email' ? 'Google + Email' : profile.tai_khoan.phuong_thuc_dang_nhap === 'google' ? 'Google' : 'Email'}` : 'Chưa liên kết tài khoản online'}</p>
+                      <p className="mt-1 text-xs text-slate-500">Sửa gần nhất: {suaGanNhatLabel(profile.sua_gan_nhat)}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className={`rounded-full px-2 py-1 text-xs font-semibold ${profile.lich_hen_hom_nay.length ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
@@ -510,6 +517,7 @@ export default function PatientIntake() {
                     <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">Đã xác nhận hồ sơ</p>
                     <p className="mt-1 text-lg font-bold text-slate-800">{selectedProfile.ho_ten}</p>
                     <p className="mt-1 text-sm text-slate-600">Ngày sinh: {formatDate(selectedProfile.ngay_sinh)} · Số liên hệ: {selectedProfile.so_dien_thoai || phone}</p>
+                    <p className="mt-1 text-xs text-slate-500">Sửa gần nhất: {suaGanNhatLabel(selectedProfile.sua_gan_nhat)}</p>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <button type="button" onClick={() => setEditingProfile(selectedProfile)} className="min-h-9 rounded-lg border border-brand-300 bg-white px-3 text-xs font-semibold text-brand-800 hover:bg-brand-50">
@@ -673,7 +681,14 @@ export default function PatientIntake() {
           onSaved={handleProfileSaved}
         />
       )}
-      {auditProfileId && <ProfileAuditPanel profileId={auditProfileId} onClose={() => setAuditProfileId(null)} />}
+      {auditProfileId && (
+        <TimelinePanel
+          loai="ho_so"
+          id={auditProfileId}
+          title="Lịch sử cập nhật hồ sơ"
+          onClose={() => setAuditProfileId(null)}
+        />
+      )}
     </div>
   )
 }

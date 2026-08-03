@@ -1,5 +1,6 @@
 import axiosInstance from '@/services/axiosInstance'
 import type { ApiResponse } from '@/types'
+import type { TimelineRow } from '@/services/receptionist-timeline.service'
 
 export interface PatientProfile {
   id: string
@@ -24,6 +25,7 @@ export interface PatientProfile {
   nhom_gia_dinh?: string | null
   lich_hen_hom_nay: TodayAppointment[]
   luot_dang_cho_hom_nay?: ActiveQueue | null
+  sua_gan_nhat?: TimelineRow | null
 }
 
 export interface OnlineAccount {
@@ -101,17 +103,6 @@ export interface UpdateProfileAdministrativePayload {
   dia_chi?: string | null
   ghi_chu?: string | null
   ly_do_cap_nhat: string
-}
-
-export interface ProfileAuditLog {
-  id: string
-  actor: { id: string; ho_ten: string; email?: string | null; role?: string | null } | null
-  vai_tro: string
-  hanh_dong: string
-  ly_do?: string | null
-  du_lieu_cu: Record<string, unknown>
-  du_lieu_moi: Record<string, unknown>
-  ngay_tao: string
 }
 
 export interface OfflineIntakeSlot {
@@ -275,11 +266,6 @@ export const receptionistPatientIntakeService = {
       payload,
     )
     return response.data.data
-  },
-
-  async getProfileAuditLogs(id: string): Promise<ProfileAuditLog[]> {
-    const response = await axiosInstance.get<ApiResponse<ProfileAuditLog[]>>(`/receptionist/patient-intake/profiles/${id}/audit`)
-    return response.data.data ?? []
   },
 
   async getAvailability(): Promise<OfflineAvailability> {
