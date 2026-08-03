@@ -51,6 +51,12 @@ const auditLogSchema = new mongoose.Schema(
     },
     vai_tro: {
       type: String,
+      // 'nurse': deprecated (actor Y tá đã bị xoá khỏi hệ thống — xem ADR
+      // commit 0184a63). KHÔNG dùng cho bản ghi mới; giữ trong enum chỉ để
+      // đọc được ~195 bản ghi audit lịch sử trước ngày xoá actor — đổi các
+      // bản ghi đó sang 'doctor'/'receptionist' sẽ làm sai lịch sử vì hành
+      // động (CALL_PATIENT, SKIP_PATIENT, CHANGE_DOCTOR_STATUS) khi đó thật
+      // sự do tài khoản y tá thực hiện, không phải bác sĩ hay lễ tân.
       enum: ['admin', 'doctor', 'user', 'system', 'nurse', 'receptionist'],
       required: true,
     },
