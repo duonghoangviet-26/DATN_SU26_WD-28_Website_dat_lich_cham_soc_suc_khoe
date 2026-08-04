@@ -40,6 +40,72 @@ function addDays(date, days) {
     return new Date(date.getTime() + days * 86400000);
 }
 
+const TRANG_THAI_LICH_CON_HIEU_LUC = [
+    "pending",
+    "confirmed",
+    "checked_in",
+    "in_progress",
+    "waiting_record",
+    "waiting_doctor_confirm",
+];
+
+function normalizeBookingPhone(value) {
+    const digits = String(value ?? "").replace(/\D/g, "");
+    if (!digits) return "";
+    return digits.startsWith("84") ? `0${digits.slice(2)}` : digits;
+}
+
+function normalizeBookingName(value) {
+    return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export function buildPatientIdentityFilters({ userId, memberId, tenKhach, soDienThoaiKhach }) {
+    if (memberId) return [{ member_id: memberId }];
+
+    const phone = normalizeBookingPhone(soDienThoaiKhach);
+    const name = normalizeBookingName(tenKhach);
+    if (phone && name) {
+        return [{
+            member_id: null,
+            ten_khach: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+            so_dien_thoai_khach: { $in: [soDienThoaiKhach, phone] },
+        }];
+    }
+
+    if (userId) return [{ user_id: userId, member_id: null, dat_ho: { $ne: true } }];
+    return [{ _id: null }];
+}
+
+async function findPatientScheduleConflict({
+    userId,
+    memberId,
+    tenKhach,
+    soDienThoaiKhach,
+    ngay,
+    gioKham,
+    session,
+}) {
+    const identityFilters = buildPatientIdentityFilters({ userId, memberId, tenKhach, soDienThoaiKhach });
+    const sameDayQuery = {
+        $or: identityFilters,
+        ngay_kham: { $gte: ngay, $lt: addDays(ngay, 1) },
+        status: { $in: TRANG_THAI_LICH_CON_HIEU_LUC },
+    };
+
+    const sameTime = await LichHen.findOne({ ...sameDayQuery, gio_kham: gioKham })
+        .select("ma_lich_hen gio_kham status")
+        .session(session)
+        .lean();
+    if (sameTime) return { blocked: sameTime, sameDay: [] };
+
+    const sameDay = await LichHen.find(sameDayQuery)
+        .select("ma_lich_hen gio_kham status")
+        .sort({ gio_kham: 1 })
+        .session(session)
+        .lean();
+    return { blocked: null, sameDay };
+}
+
 function getTodayDateOnly() {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
@@ -164,6 +230,91 @@ export async function getDoctorById(req, res) {
         });
     } catch (err) {
         return fail(res, 500, err.message);
+    }
+}
+
+// ─── E-5: Ma trận bác sĩ x khung giờ trong ngày ("Lịch bác sĩ trong ngày") ────
+// Gộp slot theo khung_index thành 1 dòng — không đánh đồng slot = khung (rule mục 1).
+// Thuần tính toán, không chạm DB — export để unit test không cần Mongo.
+export function buildDoctorKhungRows(schedule) {
+    if (!schedule) return [];
+    const bySlot = new Map();
+    for (const slot of schedule.slots || []) {
+        if (slot.khung_index === null || slot.khung_index === undefined) continue;
+        if (!bySlot.has(slot.khung_index)) {
+            bySlot.set(slot.khung_index, {
+                khung_index: slot.khung_index,
+                gio_bat_dau: slot.gio_bat_dau,
+                gio_ket_thuc: slot.gio_ket_thuc,
+                tong_slot: 0,
+                con_trong: 0,
+                khoa_boi_nghi_phep: false,
+            });
+        }
+        const row = bySlot.get(slot.khung_index);
+        row.tong_slot += 1;
+        const conTrong = slot.status === "active"
+            && !slot.benh_nhan_id
+            && !slot.benh_nhan_tam_giu_id
+            && !slot.bi_khoa_boi_nghi_phep;
+        if (conTrong) row.con_trong += 1;
+        if (slot.bi_khoa_boi_nghi_phep) row.khoa_boi_nghi_phep = true;
+    }
+    return [...bySlot.values()].sort((a, b) => a.khung_index - b.khung_index);
+}
+
+// Ca sáng 08:00–11:30, ca chiều 13:30–17:30, nghỉ trưa ở giữa không sinh khung nào (rule mục 1)
+// — chỉ cần so `gio_bat_dau` với mốc 13:30 là tách đúng ca, không cần biết trước số khung/ca.
+export function chiaCaSangChieu(khungRows) {
+    return {
+        ca_sang: khungRows.filter((row) => row.gio_bat_dau < "13:30"),
+        ca_chieu: khungRows.filter((row) => row.gio_bat_dau >= "13:30"),
+    };
+}
+
+// GET /api/receptionist/booking/day-overview?date=
+export async function getDoctorDayOverview(req, res) {
+    try {
+        const ngayDate = parseDateOnly(req.query.date);
+        if (!ngayDate) return fail(res, 400, "Tham số date là bắt buộc (YYYY-MM-DD)");
+
+        const doctors = await BacSi.find({ trang_thai_duyet: "approved", la_hien: true })
+            .select("_id user_id trang_thai")
+            .populate("user_id", "ho_ten")
+            .lean();
+        const doctorIds = doctors.map((d) => d._id);
+
+        const schedules = doctorIds.length
+            ? await LichLamViec.find({
+                doctor_id: { $in: doctorIds },
+                ngay: { $gte: ngayDate, $lt: addDays(ngayDate, 1) },
+            }).lean()
+            : [];
+        const scheduleByDoctor = new Map(schedules.map((s) => [String(s.doctor_id), s]));
+
+        const data = doctors.map((doctor) => {
+            const schedule = scheduleByDoctor.get(String(doctor._id)) ?? null;
+            // Phan biet "khong dang ky ca nao" (khong co ban ghi lich) voi "co dang ky nhung
+            // nghi/nghi phep hom do" — hai tinh huong khac nhau, khong duoc gop chung thanh
+            // mot nhan "het cho" (kiem thu E-5 yeu cau tach ro).
+            const trangThaiNgay = schedule ? schedule.trang_thai_ngay : "khong_co_lich";
+            const dangLamViec = schedule?.trang_thai_ngay === "lam_viec"
+                && schedule?.trang_thai_xac_nhan !== "tu_choi";
+            const khungRows = dangLamViec ? buildDoctorKhungRows(schedule) : [];
+            const { ca_sang, ca_chieu } = chiaCaSangChieu(khungRows);
+            return {
+                doctor_id: doctor._id,
+                ten_bac_si: doctor.user_id?.ho_ten ?? "Bác sĩ",
+                trang_thai_bac_si: doctor.trang_thai,
+                trang_thai_ngay: trangThaiNgay,
+                ca_sang,
+                ca_chieu,
+            };
+        });
+
+        return ok(res, { ngay: ngayDate, doctors: data });
+    } catch (error) {
+        return fail(res, error.statusCode ?? 500, error.message);
     }
 }
 
@@ -530,6 +681,29 @@ export async function createBooking(req, res) {
             );
 
         // Lễ tân đặt luôn nên slot booked
+        const patientConflict = await findPatientScheduleConflict({
+            userId: finalUserId || null,
+            memberId: member_id || null,
+            tenKhach: ten_khach,
+            soDienThoaiKhach: so_dien_thoai_khach,
+            ngay: appointmentDate,
+            gioKham: slot.gio_bat_dau,
+            session,
+        });
+        if (patientConflict.blocked) {
+            return rollbackFail(
+                409,
+                `Nguoi duoc kham da co lich ${patientConflict.blocked.ma_lich_hen ?? ""} luc ${patientConflict.blocked.gio_kham} trong ngay nay. Khong the dat trung cung khung gio cho cung mot ho so.`,
+            );
+        }
+        const conflictWarnings = patientConflict.sameDay.map((item) => ({
+            appointment_id: item._id,
+            ma_lich_hen: item.ma_lich_hen ?? null,
+            gio_kham: item.gio_kham,
+            status: item.status,
+            message: `Nguoi duoc kham da co lich ${item.ma_lich_hen ?? ""} luc ${item.gio_kham} trong cung ngay; le tan can xac minh ly do dat them.`,
+        }));
+
         const updated = await LichLamViec.findOneAndUpdate(
             {
                 _id: schedule._id,
@@ -655,6 +829,7 @@ export async function createBooking(req, res) {
             status: appointment.status,
             payment_status: payment.status,
             gia_kham: gia_kham,
+            canh_bao_trung_lich: conflictWarnings,
             qr_payload:
                 payment_method === "transfer"
                     ? `FAKE_QR_FOR_RECEPTIONIST_BOOKING_${appointmentCode}`

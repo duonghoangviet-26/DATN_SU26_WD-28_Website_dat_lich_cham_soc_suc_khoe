@@ -1,5 +1,6 @@
 import axiosInstance from '@/services/axiosInstance'
 import type { ApiResponse } from '@/types'
+import type { TimelineRow } from '@/services/receptionist-timeline.service'
 
 export interface PatientProfile {
   id: string
@@ -24,6 +25,14 @@ export interface PatientProfile {
   nhom_gia_dinh?: string | null
   lich_hen_hom_nay: TodayAppointment[]
   luot_dang_cho_hom_nay?: ActiveQueue | null
+  sua_gan_nhat?: TimelineRow | null
+  lich_su_kham?: VisitHistory | null
+}
+
+export interface VisitHistory {
+  so_lan: number
+  lan_gan_nhat: string
+  bac_si_gan_nhat: string | null
 }
 
 export interface OnlineAccount {
@@ -60,6 +69,8 @@ export interface ActiveQueue {
   doctor_id?: string | null
   phong_kham?: string | null
   checkin_time: string
+  so_thu_tu_checkin?: number | null
+  ma_so_thu_tu?: string | null
 }
 
 interface PatientSearchResult {
@@ -78,12 +89,22 @@ export interface CreatePatientProfilePayload {
   so_dien_thoai: string
   ngay_sinh?: string
   gioi_tinh?: 'nam' | 'nu' | 'khac'
-  nhom_mau?: 'A' | 'B' | 'AB' | 'O'
-  di_ung?: string
-  benh_nen?: string
-  dia_chi?: string
-  ghi_chu?: string
   tai_khoan_id?: string
+}
+
+// 9 trường hành chính lễ tân được sửa (LT-10). Không có trường chuyên môn —
+// gửi thêm trường lạ sẽ bị backend từ chối 403.
+export interface UpdateProfileAdministrativePayload {
+  ho_ten?: string
+  so_dien_thoai?: string
+  ngay_sinh?: string | null
+  gioi_tinh?: 'nam' | 'nu' | 'khac' | null
+  nhom_mau?: 'A' | 'B' | 'AB' | 'O' | null
+  di_ung?: string | null
+  benh_nen?: string | null
+  dia_chi?: string | null
+  ghi_chu?: string | null
+  ly_do_cap_nhat: string
 }
 
 export interface OfflineIntakeSlot {
@@ -225,6 +246,23 @@ export interface BillingCase {
   da_xac_nhan_thu_ngan: boolean
 }
 
+/**
+ * Lịch hẹn theo tài khoản online mà CHƯA gắn được vào hồ sơ nào trong kết quả tìm kiếm.
+ *
+ * Xảy ra khi số điện thoại trùng với một hồ sơ tại quầy có sẵn nhưng KHÔNG liên kết tài
+ * khoản (`tai_khoan_id: null`) — vd khách đã khám vãng lai trước khi có tài khoản online.
+ * Trước đây UI chỉ hiện khối "Lịch hẹn online của tài khoản" khi `profiles.length === 0`,
+ * nên lịch đã thanh toán của tài khoản online bị ẩn hoàn toàn ngay khi có bất kỳ hồ sơ nào
+ * trùng số điện thoại — lễ tân thấy hồ sơ "chưa có lịch" dù khách đã đặt và trả tiền online.
+ */
+export function getUnlinkedAccountAppointments(
+  profiles: PatientProfile[],
+  accountAppointments: TodayAppointment[],
+): TodayAppointment[] {
+  const linkedIds = new Set(profiles.flatMap((profile) => profile.lich_hen_hom_nay.map((appointment) => appointment.id)))
+  return accountAppointments.filter((appointment) => !linkedIds.has(appointment.id))
+}
+
 export const receptionistPatientIntakeService = {
   async searchByPhone(phone: string): Promise<PatientSearchResult> {
     const response = await axiosInstance.get<ApiResponse<PatientSearchResult>>('/receptionist/patient-intake/search', {
@@ -241,13 +279,21 @@ export const receptionistPatientIntakeService = {
     return response.data.data.profile
   },
 
+  async updateProfileAdministrative(id: string, payload: UpdateProfileAdministrativePayload): Promise<{ profile: PatientProfile; audit_id: string; changed_fields: string[] }> {
+    const response = await axiosInstance.patch<ApiResponse<{ profile: PatientProfile; audit_id: string; changed_fields: string[] }>>(
+      `/receptionist/patient-intake/profiles/${id}`,
+      payload,
+    )
+    return response.data.data
+  },
+
   async getAvailability(): Promise<OfflineAvailability> {
     const response = await axiosInstance.get<ApiResponse<OfflineAvailability>>('/receptionist/patient-intake/availability')
     return response.data.data as OfflineAvailability
   },
 
   async checkIn(payload: { ho_so_benh_nhan_id: string; schedule_id: string; slot_id: string }) {
-    const response = await axiosInstance.post<ApiResponse<{ entry: { _id: string }; slot: OfflineIntakeSlot }>>(
+    const response = await axiosInstance.post<ApiResponse<{ entry: { _id: string; checkin_time?: string; so_thu_tu_checkin?: number | null; ma_so_thu_tu?: string | null }; slot: OfflineIntakeSlot }>>(
       '/receptionist/patient-intake/check-in',
       payload,
     )
@@ -255,12 +301,20 @@ export const receptionistPatientIntakeService = {
   },
 
   async checkInAppointment(appointmentId: string, patient: { ho_so_benh_nhan_id: string; so_dien_thoai: string; ho_ten: string }) {
-    const response = await axiosInstance.patch<ApiResponse<{
-      appointment: TodayAppointment
-      hang_doi: { id: string; doctor_id: string; phong_kham?: string | null; gio_hen_goc?: string | null; checkin_time: string }
+    // Luu y: backend tra hang_doi/canh_bao la anh em cung cap voi `data`, KHONG long ben trong
+    // `data` (markAsArrived tra { success, message, data: appointment, hang_doi, canh_bao }).
+    const response = await axiosInstance.patch<{
+      success: boolean
+      message?: string
+      data: TodayAppointment
+      hang_doi: { id: string; doctor_id: string; phong_kham?: string | null; gio_hen_goc?: string | null; checkin_time: string; so_thu_tu_checkin?: number | null; ma_so_thu_tu?: string | null }
       canh_bao?: string[]
-    }>>(`/receptionist/appointments/${appointmentId}/arrived`, patient)
-    return response.data
+    }>(`/receptionist/appointments/${appointmentId}/arrived`, patient)
+    return {
+      appointment: response.data.data,
+      hang_doi: response.data.hang_doi,
+      canh_bao: response.data.canh_bao ?? [],
+    }
   },
 
   async getOfflineInvoice(queueId: string): Promise<{ invoice: OfflineInvoice | null; pending_payment: OfflinePendingPayment | null; hang_doi: unknown }> {

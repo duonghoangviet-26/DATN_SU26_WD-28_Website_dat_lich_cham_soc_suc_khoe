@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 
 import { LichHen } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
-import { guiThongBaoDeXuat, nhaChoDaGiu } from '../../services/appointmentReschedule.service.js'
+import { guiThongBaoDeXuat, nhaChoDaGiu, GIO_HAN_PHAN_HOI } from '../../services/appointmentReschedule.service.js'
 
 // ============================================================
 // DUYỆT PHƯƠNG ÁN DỜI LỊCH — phía Admin
@@ -76,6 +76,9 @@ export async function approve(req, res) {
     appointment.de_xuat_doi.trang_thai = 'cho_khach_chon'
     appointment.de_xuat_doi.nguoi_duyet_id = req.user.id
     appointment.de_xuat_doi.thoi_diem_duyet = new Date()
+    // Cap lai han phan hoi tu luc nay — khach khong bi tru vao thoi gian admin da giu don
+    // (han cu la han cua trang thai cho_admin_duyet, dai hon va khong con y nghia).
+    appointment.de_xuat_doi.han_phan_hoi = new Date(Date.now() + GIO_HAN_PHAN_HOI * 3600_000)
     if (req.body.ghi_chu) appointment.de_xuat_doi.ghi_chu = String(req.body.ghi_chu).slice(0, 500)
     await appointment.save()
 

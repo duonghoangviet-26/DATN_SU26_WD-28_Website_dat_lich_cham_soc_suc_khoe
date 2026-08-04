@@ -4,6 +4,7 @@ import mongoose from 'mongoose'
 import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen, NguoiDung, BacSi } from '../../models/index.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { sendBookingSuccessEmail } from '../../services/mail.service.js'
+import { xuLyThanhToanTrungLichNghi } from '../../services/appointmentReschedule.service.js'
 import { ok, fail } from '../../utils/response.js'
 import {
   emitAdminRealtime,
@@ -336,7 +337,12 @@ async function finalizePendingPayment({
   if (appointment.schedule_id && appointment.slot_id) {
     const schedule = await LichLamViec.findById(appointment.schedule_id).session(session)
     const slot = schedule?.slots.id(appointment.slot_id)
-    if (slot) {
+    if (slot?.bi_khoa_boi_nghi_phep) {
+      // G3 (2026-08-03): bac si vua bao nghi dung luc khach dang thanh toan slot nay — slot
+      // da bi khoa boi don nghi, KHONG duoc chot 'booked'. Tien van thu (khong hoan tien),
+      // nhung day thang vao luong de xuat doi thay vi booking cho mot bac si da nghi.
+      await xuLyThanhToanTrungLichNghi({ appointment, slot, session })
+    } else if (slot) {
       slot.status = 'booked'
       slot.benh_nhan_id = appointment.user_id ?? null
       slot.benh_nhan_tam_giu_id = null

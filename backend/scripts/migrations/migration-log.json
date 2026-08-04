@@ -124,5 +124,14 @@
     "status": "success",
     "rollbackable": false,
     "error_message": null
+  },
+  {
+    "name": "014-them-nguon-tao-nghi-phep",
+    "started_at": "2026-08-03T15:06:51.083Z",
+    "finished_at": "2026-08-03T15:07:31.276Z",
+    "affected_documents": 525,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
   }
 ]

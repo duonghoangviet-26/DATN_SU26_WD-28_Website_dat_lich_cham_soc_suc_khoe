@@ -8,6 +8,7 @@ const router = Router()
 router.use(verifyToken, requireRole('admin'))
 
 router.get('/exam-results', controller.getExamResults)
+router.patch('/exam-results/:id/override', controller.overrideExamResultById)
 router.get('/exam-results/:id', controller.getExamResultById)
 router.get('/specialty-results/:type', controller.getSpecialtyResults)
 router.get('/prescriptions', controller.getPrescriptions)
