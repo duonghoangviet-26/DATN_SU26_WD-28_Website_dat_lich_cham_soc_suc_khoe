@@ -1,13 +1,26 @@
 import mongoose from 'mongoose'
 
-import { NghiPhepBacSi, BacSi } from '../../models/index.js'
-import { ok, created, fail } from '../../utils/response.js'
+import { NghiPhepBacSi } from '../../models/index.js'
+import { ok, fail } from '../../utils/response.js'
 import {
   duyetDonNghi,
   tuChoiDonNghi,
   findLeaveByIdWithDoctor,
   moTaKetQuaDuyet,
+  laDonNganHanChoLeTan,
 } from '../../services/doctorLeaveApproval.service.js'
+
+// ============================================================
+// Lễ tân duyệt đơn nghỉ NGẮN HẠN của bác sĩ — Routes: /api/receptionist/doctor-leaves
+// Thiết kế: docs/superpowers/specs/2026-08-03-luong-bac-si-nghi-design.md muc 3.1
+//
+// Bác sĩ về sớm / xin nghỉ 1 ca không thể chờ Admin online mới xử lý được — nhưng nghỉ dài
+// ngày ảnh hưởng MauLichLamViec + rang buoc phong/ca thi dung tham quyen Admin. Ranh gioi
+// (laDonNganHanChoLeTan): bat dau cham nhat ngay mai, keo dai toi da 1 ngay.
+//
+// Dung CHUNG doctorLeaveApproval.service.js voi Admin — tranh 2 noi cai dat khac nhau cung
+// mot hanh vi khoa slot + sinh de xuat (nguyen tac muc 7).
+// ============================================================
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
@@ -36,67 +49,18 @@ function formatDoctorLeave(leave) {
     thoi_diem_duyet: leave.thoi_diem_duyet ?? null,
     ghi_chu: leave.ghi_chu ?? null,
     ngay_tao: leave.ngay_tao ?? null,
-    ngay_cap_nhat: leave.ngay_cap_nhat ?? null,
   }
 }
 
-async function ensureDoctorExists(bacSiId) {
-  if (!isValidObjectId(bacSiId)) {
-    throw new Error('bac_si_id khong hop le')
-  }
-
-  const doctor = await BacSi.findById(bacSiId).select('_id')
-  if (!doctor) {
-    throw new Error('Khong tim thay bac si')
-  }
-
-  return doctor
+function getActorUserId(req) {
+  return req.user?._id ?? req.user?.id ?? null
 }
 
-export async function createDoctorLeave(req, res) {
+// Chỉ đơn CHỜ DUYỆT và thuộc thẩm quyền lễ tân — đơn kỳ dài không hiện ở đây, tránh lễ tân
+// tưởng nhầm mình duyệt được rồi bấm phải 403.
+export async function listPendingLeaves(req, res) {
   try {
-    const { bac_si_id, tu_ngay, den_ngay, ly_do, ghi_chu } = req.body
-
-    if (!bac_si_id || !tu_ngay || !den_ngay) {
-      return fail(res, 400, 'bac_si_id, tu_ngay va den_ngay la bat buoc')
-    }
-
-    await ensureDoctorExists(bac_si_id)
-
-    const leave = await NghiPhepBacSi.create({
-      bac_si_id,
-      tu_ngay: new Date(tu_ngay),
-      den_ngay: new Date(den_ngay),
-      ly_do: ly_do ?? null,
-      ghi_chu: ghi_chu ?? null,
-      nguon_tao: 'admin_tao',
-      nguoi_tao_id: req.user.id,
-    })
-
-    const populatedLeave = await findLeaveByIdWithDoctor(leave._id).lean()
-    return created(res, formatDoctorLeave(populatedLeave), 'Tao don nghi phep thanh cong')
-  } catch (error) {
-    return fail(res, 400, error.message)
-  }
-}
-
-export async function listDoctorLeaves(req, res) {
-  try {
-    const { bac_si_id, trang_thai } = req.query
-    const filter = {}
-
-    if (bac_si_id) {
-      if (!isValidObjectId(bac_si_id)) {
-        return fail(res, 400, 'bac_si_id khong hop le')
-      }
-      filter.bac_si_id = bac_si_id
-    }
-
-    if (trang_thai) {
-      filter.trang_thai = trang_thai
-    }
-
-    const leaves = await NghiPhepBacSi.find(filter)
+    const leaves = await NghiPhepBacSi.find({ trang_thai: 'cho_duyet' })
       .populate({
         path: 'bac_si_id',
         select: 'user_id trang_thai',
@@ -105,13 +69,15 @@ export async function listDoctorLeaves(req, res) {
       .sort({ ngay_tao: -1, _id: -1 })
       .lean()
 
-    return ok(res, leaves.map(formatDoctorLeave))
+    const thuocThamQuyen = leaves.filter((leave) => laDonNganHanChoLeTan(leave))
+
+    return ok(res, thuocThamQuyen.map(formatDoctorLeave))
   } catch (error) {
     return fail(res, 500, error.message)
   }
 }
 
-export async function approveDoctorLeave(req, res) {
+export async function approveLeave(req, res) {
   const session = await mongoose.startSession()
   session.startTransaction()
   try {
@@ -129,11 +95,16 @@ export async function approveDoctorLeave(req, res) {
       return fail(res, 404, 'Khong tim thay don nghi phep')
     }
 
-    const ghiChu = Object.prototype.hasOwnProperty.call(req.body, 'ghi_chu') ? req.body.ghi_chu : undefined
+    if (!laDonNganHanChoLeTan(leave)) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 403, 'Don nghi keo dai hoac bat dau xa hon ngay mai — can Admin duyet')
+    }
+
     const { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat } = await duyetDonNghi({
       leave,
-      actorUserId: req.user.id,
-      ghiChu,
+      actorUserId: getActorUserId(req),
+      ghiChu: req.body?.ghi_chu,
       session,
     })
 
@@ -168,7 +139,7 @@ export async function approveDoctorLeave(req, res) {
   }
 }
 
-export async function rejectDoctorLeave(req, res) {
+export async function rejectLeave(req, res) {
   try {
     const { id } = req.params
     if (!isValidObjectId(id)) {
@@ -179,12 +150,21 @@ export async function rejectDoctorLeave(req, res) {
     if (!leave) {
       return fail(res, 404, 'Khong tim thay don nghi phep')
     }
+    if (!laDonNganHanChoLeTan(leave)) {
+      return fail(res, 403, 'Don nghi keo dai hoac bat dau xa hon ngay mai — can Admin duyet')
+    }
 
-    await tuChoiDonNghi({ leave, actorUserId: req.user.id, ghiChu: req.body.ghi_chu })
+    await tuChoiDonNghi({ leave, actorUserId: getActorUserId(req), ghiChu: req.body?.ghi_chu })
 
     const populatedLeave = await findLeaveByIdWithDoctor(id).lean()
     return ok(res, formatDoctorLeave(populatedLeave), 'Tu choi don nghi phep thanh cong')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }
+}
+
+export default {
+  listPendingLeaves,
+  approveLeave,
+  rejectLeave,
 }

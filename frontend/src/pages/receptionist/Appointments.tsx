@@ -106,6 +106,8 @@ export default function Appointments() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  // '' = mac dinh an lich da huy (tranh tran danh sach); 'all' = hien tat ca; con lai = dung 1 status.
+  const [filterStatus, setFilterStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [overloadNotice, setOverloadNotice] = useState('');
@@ -176,6 +178,9 @@ export default function Appointments() {
       }
       if (filterDoctorId) {
         url += `&doctor_id=${filterDoctorId}`;
+      }
+      if (filterStatus) {
+        url += `&status=${filterStatus}`;
       }
       if (searchQuery.trim()) {
         url += `&search=${encodeURIComponent(searchQuery.trim())}`;
@@ -267,7 +272,7 @@ export default function Appointments() {
   useEffect(() => {
     fetchAppointments(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, filterDate, filterDoctorId]); // Re-fetch when tab, date, or doctor changes
+  }, [activeTab, filterDate, filterDoctorId, filterStatus]); // Re-fetch when tab, date, doctor, or status changes
 
   // Thêm một useEffect để fetch với debounce cho search
   useEffect(() => {
@@ -576,6 +581,23 @@ export default function Appointments() {
             </select>
           </div>
           <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Trạng thái:</label>
+            <select
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              <option value="">Đang hoạt động (ẩn đã hủy)</option>
+              <option value="all">Tất cả trạng thái</option>
+              <option value="cancelled">Đã hủy</option>
+              <option value="pending">Chờ xác nhận</option>
+              <option value="confirmed">Chưa đến</option>
+              <option value="checked_in">Đã đến</option>
+              <option value="completed">Hoàn thành</option>
+              <option value="no_show">Không đến</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Ngày khám:</label>
           <input
             type="date"
@@ -583,9 +605,9 @@ export default function Appointments() {
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
           />
-          {filterDate && (
+          {(filterDate || filterStatus) && (
             <button
-              onClick={() => { setFilterDate(''); setFilterDoctorId(''); }}
+              onClick={() => { setFilterDate(''); setFilterDoctorId(''); setFilterStatus(''); }}
               className="px-3 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
             >
               Xóa lọc

@@ -21,6 +21,12 @@ import { daQuaCutoffOnline, isSlotInPast } from '../utils/clinicTime.js'
 /** Hạn khách phản hồi đề xuất, tính bằng giờ. Quá hạn → tự áp phương án đã giữ sẵn. */
 export const GIO_HAN_PHAN_HOI = Number(process.env.DOI_LICH_HAN_PHAN_HOI_GIO || 12)
 
+// G1 (2026-08-03): lịch ĐÃ THANH TOÁN trước đây không có hạn nào — kẹt vĩnh viễn ở
+// cho_admin_duyet nếu admin quên duyệt, vì apDungDeXuatQuaHan chỉ quét cho_khach_chon.
+// Nay cho_admin_duyet cũng có hạn (gấp đôi hạn khách, vì còn phải chờ người duyệt trước),
+// quá hạn cũng tự áp phương án đã giữ sẵn — khách không bao giờ mất chỗ vì admin bận.
+export const GIO_HAN_PHAN_HOI_ADMIN = Number(process.env.DOI_LICH_HAN_PHAN_HOI_ADMIN_GIO || 24)
+
 /** Trần lấn slot walk-in: 1 slot/khung (mục 15). Ngoại lệ DUY NHẤT của "không lấn walk-in". */
 const TRAN_LAN_WALK_IN_MOI_KHUNG = 1
 
@@ -320,10 +326,13 @@ export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new 
     }
 
     const daThanhToan = appointment.payment_status === 'paid'
+    // G1 (2026-08-03): trước đây chỉ khách CHƯA thanh toán được gán han_phan_hoi — khách ĐÃ
+    // thanh toán (nhóm cần bảo vệ nhất dưới chính sách không hoàn tiền) lại không có hạn nào,
+    // kẹt vĩnh viễn ở cho_admin_duyet nếu không ai duyệt. Nay cả hai trạng thái đều có hạn.
     appointment.de_xuat_doi = {
       nghi_phep_id: leave._id,
       trang_thai: daThanhToan ? 'cho_admin_duyet' : 'cho_khach_chon',
-      han_phan_hoi: new Date(now.getTime() + GIO_HAN_PHAN_HOI * 3600_000),
+      han_phan_hoi: new Date(now.getTime() + (daThanhToan ? GIO_HAN_PHAN_HOI_ADMIN : GIO_HAN_PHAN_HOI) * 3600_000),
       phuong_an: phuongAn,
       phuong_an_khach_chon: null,
       ghi_chu: phuongAn.length === 0
@@ -332,31 +341,105 @@ export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new 
     }
     await appointment.save({ session })
 
-    if (!daThanhToan) await guiThongBaoDeXuat(appointment, session)
+    // G1: trước đây `if (!daThanhToan)` chặn thông báo cho khách đã trả tiền — họ không biết
+    // gì cho tới khi admin bấm duyệt. Chính sách không hoàn tiền buộc khách phải được báo NGAY,
+    // admin duyệt chỉ để xác nhận phương án cuối chứ không phải cổng chặn thông tin.
+    await guiThongBaoDeXuat(appointment, session)
     ketQua.push({ appointment_id: appointment._id, so_phuong_an: phuongAn.length, cho_admin_duyet: daThanhToan })
   }
 
   return ketQua
 }
 
-/** Báo khách kèm ≥2 lựa chọn và hạn phản hồi (mục 15 — quyền của khách). */
+/**
+ * G3 (2026-08-03): khách đang ở bước THANH TOÁN cho một slot mà bác sĩ VỪA báo nghỉ (slot đã
+ * bị `lockSlotsForLeave`/`lockSlotsForSuddenLeave` khoá đúng lúc khách bấm xác nhận). Tiền vẫn
+ * được thu (chính sách không hoàn tiền — từ chối thu sau khi đã hứa slot còn tệ hơn), nhưng
+ * KHÔNG được chốt `booked` cho một bác sĩ đã nghỉ. Đẩy thẳng vào luồng đề xuất dời — cùng cách
+ * xử lý một lịch hẹn thường bị ảnh hưởng bởi đơn nghỉ (mục 14/15), chỉ khác là chạy ngay tại
+ * đây thay vì trong `taoDeXuatDoiChoDonNghi` (lịch này chưa kịp tồn tại lúc hàm đó quét DB).
+ */
+export async function xuLyThanhToanTrungLichNghi({ appointment, slot, session }) {
+  // `appointment` o day den tu loadOwnedPaymentBundle, co doctor_id/specialty_id da POPULATE
+  // (Document long, khong phai ObjectId tho). sinhPhuongAnDoi dung 2 truong nay lam dieu kien
+  // query ($ne, membership trong mang specialties) — dua thang Document vao de an toan, chuan
+  // hoa ve ObjectId truoc thay vi dua vao Mongoose tu ep kieu ngam.
+  const appointmentChoDeXuat = {
+    _id: appointment._id,
+    ngay_kham: appointment.ngay_kham,
+    gio_kham: appointment.gio_kham,
+    specialty_id: appointment.specialty_id?._id ?? appointment.specialty_id,
+    doctor_id: appointment.doctor_id?._id ?? appointment.doctor_id,
+  }
+  const phuongAn = await sinhPhuongAnDoi({ appointment: appointmentChoDeXuat, duocLanWalkIn: true, session })
+
+  if (phuongAn.length > 0) {
+    phuongAn[0].da_giu_cho = await giuChoPhuongAn(phuongAn[0], appointment, session)
+  }
+
+  appointment.de_xuat_doi = {
+    nghi_phep_id: slot.nghi_phep_id ?? null,
+    // Khách vừa thanh toán xong (payment_status đã 'paid' trước khi hàm này được gọi) — luôn
+    // là nhóm cho_admin_duyet, không có nhánh cho_khach_chon ở đây.
+    trang_thai: 'cho_admin_duyet',
+    han_phan_hoi: new Date(Date.now() + GIO_HAN_PHAN_HOI_ADMIN * 3600_000),
+    phuong_an: phuongAn,
+    phuong_an_khach_chon: null,
+    ghi_chu: phuongAn.length === 0
+      ? 'Bac si bao nghi dung luc khach thanh toan — khong tim duoc phuong an trong ngay, phai lien he khach.'
+      : 'Bac si bao nghi dung luc khach dang thanh toan — da giu cho phuong an 1, cho Admin duyet.',
+  }
+  await appointment.save({ session })
+  await guiThongBaoDeXuat(appointment, session)
+}
+
+/**
+ * Báo khách kèm ≥2 lựa chọn và hạn phản hồi (mục 15 — quyền của khách).
+ *
+ * G1 (2026-08-03): khách ĐÃ THANH TOÁN (`cho_admin_duyet`) trước đây KHÔNG được gọi hàm này
+ * — im lặng hoàn toàn cho tới khi admin duyệt. Nay luôn báo, nhưng giọng khác: khách chưa
+ * thanh toán được CHỌN ngay; khách đã thanh toán chỉ được báo đã GIỮ SẴN chỗ, chờ admin xác
+ * nhận cuối (nút chọn phía frontend tự khoá khi trang_thai='cho_admin_duyet' — xem
+ * RescheduleModal.tsx). Đồng thời luôn tạo việc "cần liên hệ" cho lễ tân khi cho_admin_duyet,
+ * kể cả khách có tài khoản — vì đây là nhóm cần lễ tân theo dõi tới khi admin duyệt xong,
+ * khác cho_khach_chon vốn khách tự xử lý được qua app.
+ */
 export async function guiThongBaoDeXuat(appointment, session = null) {
   const dx = appointment.de_xuat_doi
   if (!dx?.phuong_an?.length) return
 
+  const choAdminDuyet = dx.trang_thai === 'cho_admin_duyet'
   const danhSach = dx.phuong_an.map((pa, i) => `${i + 1}. ${pa.mo_ta}`).join('\n')
-  const noiDung = `Bác sĩ bận đột xuất ở khung ${appointment.gio_kham}. Bạn KHÔNG mất tiền — `
-    + `vui lòng chọn một trong các phương án sau:\n${danhSach}\n`
-    + `Nếu không phản hồi trước ${dx.han_phan_hoi?.toLocaleString('vi-VN')}, chúng tôi giữ sẵn phương án 1 cho bạn.`
+  const noiDung = choAdminDuyet
+    ? `Bác sĩ bận đột xuất ở khung ${appointment.gio_kham}. Bạn KHÔNG mất tiền — chúng tôi đã `
+      + `GIỮ SẴN chỗ cho bạn:\n${dx.phuong_an[0].mo_ta}\n`
+      + `Đang chờ xác nhận cuối cùng, chúng tôi sẽ báo lại trong ${GIO_HAN_PHAN_HOI_ADMIN}h.`
+    : `Bác sĩ bận đột xuất ở khung ${appointment.gio_kham}. Bạn KHÔNG mất tiền — `
+      + `vui lòng chọn một trong các phương án sau:\n${danhSach}\n`
+      + `Nếu không phản hồi trước ${dx.han_phan_hoi?.toLocaleString('vi-VN')}, chúng tôi giữ sẵn phương án 1 cho bạn.`
 
-  if (!appointment.user_id) {
+  if (appointment.user_id) {
+    await ThongBao.create([{
+      user_id: appointment.user_id,
+      tieu_de: 'Lịch khám của bạn cần đổi',
+      noi_dung: noiDung,
+      loai: 'appointment',
+      related_id: appointment._id,
+      related_type: 'lich_hen',
+      ngay_gui_du_kien: new Date(),
+    }], session ? { session } : {})
+  }
+
+  if (choAdminDuyet || !appointment.user_id) {
     await NhatKyThaoTac.create([{
       nguoi_thuc_hien_id: null,
       vai_tro: 'system',
       hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
       loai_doi_tuong: 'appointment',
       doi_tuong_id: appointment._id,
-      ly_do: 'Khach khong co tai khoan, can le tan goi thu cong ve de xuat doi lich',
+      ly_do: choAdminDuyet
+        ? 'Khach da thanh toan, dang cho Admin duyet phuong an — le tan theo doi va lien he neu can'
+        : 'Khach khong co tai khoan, can le tan goi thu cong ve de xuat doi lich',
       du_lieu_moi: {
         action: 'reschedule_proposal',
         appointment_id: appointment._id,
@@ -367,27 +450,18 @@ export async function guiThongBaoDeXuat(appointment, session = null) {
         noi_dung: noiDung,
       },
     }], session ? { session } : {})
-    return
   }
-
-  await ThongBao.create([{
-    user_id: appointment.user_id,
-    tieu_de: 'Lịch khám của bạn cần đổi',
-    noi_dung: noiDung,
-    loai: 'appointment',
-    related_id: appointment._id,
-    related_type: 'lich_hen',
-    ngay_gui_du_kien: new Date(),
-  }], session ? { session } : {})
 }
 
 /**
- * Quá hạn khách không phản hồi → áp phương án đã giữ sẵn. Khách KHÔNG BAO GIỜ mất chỗ
- * chỉ vì không kịp trả lời (mục 15).
+ * Quá hạn không có ai xử lý → áp phương án đã giữ sẵn. Khách KHÔNG BAO GIỜ mất chỗ chỉ vì
+ * không kịp trả lời (mục 15) — hoặc vì admin bận không kịp duyệt (G1, 2026-08-03: trước đây
+ * chỉ quét 'cho_khach_chon', lịch ĐÃ THANH TOÁN treo ở 'cho_admin_duyet' không có lưới an
+ * toàn nào, có thể kẹt tới ngày khám rồi bị quét thành no_show — mất trắng tiền oan).
  */
 export async function apDungDeXuatQuaHan(now = new Date()) {
   const danhSach = await LichHen.find({
-    'de_xuat_doi.trang_thai': 'cho_khach_chon',
+    'de_xuat_doi.trang_thai': { $in: ['cho_khach_chon', 'cho_admin_duyet'] },
     'de_xuat_doi.han_phan_hoi': { $lte: now },
     status: { $in: ['pending', 'confirmed'] },
   })

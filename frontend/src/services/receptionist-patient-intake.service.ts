@@ -246,6 +246,23 @@ export interface BillingCase {
   da_xac_nhan_thu_ngan: boolean
 }
 
+/**
+ * Lịch hẹn theo tài khoản online mà CHƯA gắn được vào hồ sơ nào trong kết quả tìm kiếm.
+ *
+ * Xảy ra khi số điện thoại trùng với một hồ sơ tại quầy có sẵn nhưng KHÔNG liên kết tài
+ * khoản (`tai_khoan_id: null`) — vd khách đã khám vãng lai trước khi có tài khoản online.
+ * Trước đây UI chỉ hiện khối "Lịch hẹn online của tài khoản" khi `profiles.length === 0`,
+ * nên lịch đã thanh toán của tài khoản online bị ẩn hoàn toàn ngay khi có bất kỳ hồ sơ nào
+ * trùng số điện thoại — lễ tân thấy hồ sơ "chưa có lịch" dù khách đã đặt và trả tiền online.
+ */
+export function getUnlinkedAccountAppointments(
+  profiles: PatientProfile[],
+  accountAppointments: TodayAppointment[],
+): TodayAppointment[] {
+  const linkedIds = new Set(profiles.flatMap((profile) => profile.lich_hen_hom_nay.map((appointment) => appointment.id)))
+  return accountAppointments.filter((appointment) => !linkedIds.has(appointment.id))
+}
+
 export const receptionistPatientIntakeService = {
   async searchByPhone(phone: string): Promise<PatientSearchResult> {
     const response = await axiosInstance.get<ApiResponse<PatientSearchResult>>('/receptionist/patient-intake/search', {

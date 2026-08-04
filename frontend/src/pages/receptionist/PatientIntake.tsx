@@ -5,6 +5,7 @@ import {
   OnlineAccount,
   PatientProfile,
   TodayAppointment,
+  getUnlinkedAccountAppointments,
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
@@ -132,6 +133,11 @@ export default function PatientIntake() {
   const selectedSlot = availability?.slots.find((slot) => slot.slot_id === selectedSlotId) ?? null
   const hasAppointmentToday = Boolean(selectedProfile?.lich_hen_hom_nay.length)
   const hasActiveQueue = Boolean(selectedProfile?.luot_dang_cho_hom_nay)
+  // Lịch của tài khoản online có thể trùng SĐT với 1 hồ sơ tại quầy cũ không liên kết tài
+  // khoản (tai_khoan_id: null) — hồ sơ đó vẫn nằm trong `profiles` nhưng KHÔNG có lịch này
+  // trong `lich_hen_hom_nay`. Trước đây khối này chỉ hiện khi `profiles.length === 0` nên
+  // lịch đã thanh toán bị ẩn hoàn toàn ngay khi có bất kỳ hồ sơ trùng SĐT nào khác.
+  const unlinkedAccountAppointments = getUnlinkedAccountAppointments(profiles, accountAppointments)
 
   const capacitySummary = useMemo(() => {
     if (!availability) return null
@@ -464,12 +470,12 @@ export default function PatientIntake() {
             </div>
           )}
 
-          {profiles.length === 0 && accountAppointments.length > 0 && (
+          {unlinkedAccountAppointments.length > 0 && (
             <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
               <p className="font-semibold">Lịch hẹn online của tài khoản đã chọn</p>
-              <p className="mt-1 text-xs leading-5 text-blue-800">Lịch hẹn đã được tìm thấy theo tài khoản/email. Cần tạo hồ sơ bệnh nhân và xác minh đúng họ tên trước khi check-in vào hàng đợi bác sĩ.</p>
+              <p className="mt-1 text-xs leading-5 text-blue-800">Lịch hẹn đã được tìm thấy theo tài khoản/email nhưng chưa gắn với hồ sơ nào ở trên (có thể do hồ sơ tại quầy cũ chưa liên kết tài khoản). Cần tạo hồ sơ bệnh nhân và xác minh đúng họ tên trước khi check-in vào hàng đợi bác sĩ.</p>
               <div className="mt-3 space-y-2">
-                {accountAppointments.map((appointment) => {
+                {unlinkedAccountAppointments.map((appointment) => {
                   const canCheckIn = appointmentIsCheckinable(appointment)
                   return (
                     <div key={appointment.id} className="rounded-lg border border-blue-100 bg-white p-3">

@@ -83,6 +83,10 @@ function leaveSlotInRange(leave, slot) {
     : slot.gio_bat_dau < leave.gio_ket_thuc && slot.gio_ket_thuc > leave.gio_bat_dau
 }
 
+// G3 (2026-08-03): truoc day chi khoa slot 'active' — slot 'pending_payment' (khach dang giu
+// cho cho tra tien cho chinh bac si vua bao nghi) bi bo qua, van thanh toan duoc va chot
+// 'booked' cho mot bac si da nghi (xem markPaymentPaid trong patient/payments.controller.js,
+// da them kiem tra bi_khoa_boi_nghi_phep truoc khi chot). Nay khoa ca 'pending_payment'.
 async function lockSlotsForSuddenLeave(leave, session) {
   const schedules = await LichLamViec.find({
     doctor_id: leave.bac_si_id,
@@ -93,7 +97,7 @@ async function lockSlotsForSuddenLeave(leave, session) {
   for (const schedule of schedules) {
     let changed = false
     for (const slot of schedule.slots) {
-      if (!leaveSlotInRange(leave, slot) || slot.status !== 'active') continue
+      if (!leaveSlotInRange(leave, slot) || !['active', 'pending_payment'].includes(slot.status)) continue
       slot.status = 'locked'
       slot.bi_khoa_boi_nghi_phep = true
       slot.nghi_phep_id = leave._id
@@ -196,7 +200,15 @@ export const getAppointments = async (req, res) => {
       }
     }
 
-    if (status) query.status = status
+    // Mac dinh AN lich da huy — de tran nhieu lich huy lam kho tim lich con hieu luc.
+    // status=all -> khong loc gi; status=<gia tri cu the> (ke ca 'cancelled') -> loc dung gia tri do.
+    if (status === 'all') {
+      // khong ap dieu kien status
+    } else if (status) {
+      query.status = status
+    } else {
+      query.status = { $ne: 'cancelled' }
+    }
     if (doctor_id) query.doctor_id = doctor_id
 
     let sortOption = { ngay_kham: 1, gio_kham: 1 }
@@ -1476,6 +1488,8 @@ export const reportDoctorUnavailable = async (req, res) => {
       nguoi_duyet_id: getActorUserId(req),
       thoi_diem_duyet: now,
       ghi_chu: ghi_chu || 'Le tan ghi nhan bac si nghi dot xuat va tao de xuat doi lich cho khach',
+      nguon_tao: 'le_tan_ghi_nhan',
+      nguoi_tao_id: getActorUserId(req),
     }], { session })
     const suddenLeave = leave[0]
 

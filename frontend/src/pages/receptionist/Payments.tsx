@@ -54,10 +54,25 @@ function formatCaseDate(value?: string | null) {
   return new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+// Tìm theo tên, SĐT, số hóa đơn hoặc mã giao dịch — đủ để lễ tân đối chiếu lại một ca cũ mà
+// không cần nhớ đang ở tab "Chờ thu" hay "Đã thanh toán" (search lọc trên danh sách đang xem).
+function matchesSearch(caseItem: BillingCase, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const haystacks = [
+    caseItem.ten_benh_nhan,
+    caseItem.so_dien_thoai,
+    caseItem.invoice?.so_hoa_don,
+    ...caseItem.payments.map((p) => p.ma_giao_dich),
+  ]
+  return haystacks.some((value) => value?.toLowerCase().includes(q))
+}
+
 export default function Payments() {
   const [view, setView] = useState<PaymentView>('pending')
   const [pendingScope, setPendingScope] = useState<PendingScope>('today')
   const [cases, setCases] = useState<BillingCase[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
   const [selected, setSelected] = useState<BillingCase | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'tien_mat' | 'chuyen_khoan'>('tien_mat')
   const [loading, setLoading] = useState(true)
@@ -161,6 +176,8 @@ export default function Payments() {
     }
   }
 
+  const filteredCases = cases.filter((caseItem) => matchesSearch(caseItem, searchQuery))
+
   const summary = selected?.billing_summary
   const invoice = selected?.invoice ?? null
   const isPaid = summary?.trang_thai_hoa_don === 'da_thanh_toan_du'
@@ -223,7 +240,24 @@ export default function Payments() {
             Đã thanh toán
           </button>
         </div>
-        <p className="text-sm text-slate-600"><strong className="text-slate-900">{cases.length}</strong> {view === 'pending' ? 'ca cần xử lý' : 'hóa đơn đã hoàn tất'}</p>
+        <p className="text-sm text-slate-600"><strong className="text-slate-900">{filteredCases.length}</strong> {view === 'pending' ? 'ca cần xử lý' : 'hóa đơn đã hoàn tất'}{searchQuery.trim() ? ` / ${cases.length}` : ''}</p>
+      </div>
+
+      <div className="mb-5 print:hidden">
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Tìm theo tên bệnh nhân, SĐT, số hóa đơn hoặc mã giao dịch..."
+            className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          />
+          <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       {message && <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 print:hidden">{message}</p>}
@@ -244,9 +278,14 @@ export default function Payments() {
               <p className="font-medium text-slate-700">{view === 'pending' ? 'Không có ca nào cần thu tiền.' : 'Chưa có hóa đơn đã thanh toán.'}</p>
               <p className="mt-1 text-sm text-slate-500">{view === 'pending' ? 'Các ca sẽ xuất hiện tại đây sau khi bác sĩ xác nhận hồ sơ.' : 'Các hóa đơn hoàn tất sẽ được lưu để tra cứu tại đây.'}</p>
             </div>
+          ) : filteredCases.length === 0 ? (
+            <div className="px-6 py-14 text-center">
+              <p className="font-medium text-slate-700">Không tìm thấy ca nào khớp &ldquo;{searchQuery.trim()}&rdquo;.</p>
+              <p className="mt-1 text-sm text-slate-500">Thử tìm theo tên, SĐT, số hóa đơn hoặc mã giao dịch khác — hoặc kiểm tra đang ở đúng tab &ldquo;{view === 'pending' ? 'Chờ thu' : 'Đã thanh toán'}&rdquo;.</p>
+            </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {cases.map((caseItem) => {
+              {filteredCases.map((caseItem) => {
                 const caseSummary = caseItem.billing_summary
                 const active = selected?.id === caseItem.id && selected.source === caseItem.source
                 return (

@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { DayOverview, DayOverviewDoctor, DayOverviewKhungRow, DoctorDayAppointment, receptionistBookingService } from '@/services/receptionist-booking.service'
+import { receptionistDoctorLeavesService, type PendingDoctorLeave } from '@/services/receptionist-doctor-leaves.service'
 import DoctorUnavailableModal from '@/components/receptionist/DoctorUnavailableModal'
+import DoctorLeaveApprovalModal from '@/components/receptionist/DoctorLeaveApprovalModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 
 function today() {
@@ -73,6 +75,16 @@ export default function DoctorDayView() {
   const [appointmentsCache, setAppointmentsCache] = useState<Record<string, DoctorDayAppointment[]>>({})
   const [unavailableDoctor, setUnavailableDoctor] = useState<{ id: string; name: string } | null>(null)
   const [timelineApptId, setTimelineApptId] = useState<string | null>(null)
+  const [pendingLeaves, setPendingLeaves] = useState<PendingDoctorLeave[]>([])
+  const [approvingLeave, setApprovingLeave] = useState<PendingDoctorLeave | null>(null)
+
+  const loadPendingLeaves = useCallback(() => {
+    receptionistDoctorLeavesService.listPending().then(setPendingLeaves).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadPendingLeaves()
+  }, [loadPendingLeaves])
 
   const loadOverview = (onCancelledCheck?: () => boolean) => {
     setLoading(true)
@@ -134,6 +146,15 @@ export default function DoctorDayView() {
         </label>
       </div>
 
+      {pendingLeaves.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span aria-hidden="true">⚠</span>
+          <span>
+            <strong>{pendingLeaves.length}</strong> bác sĩ đang xin nghỉ — chờ bạn duyệt. Bấm vào huy hiệu &ldquo;Đang xin nghỉ&rdquo; trên thẻ bác sĩ bên dưới để xử lý.
+          </span>
+        </div>
+      )}
+
       {error && <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
       {loading ? (
@@ -142,7 +163,9 @@ export default function DoctorDayView() {
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">Không có bác sĩ nào đang hoạt động.</div>
       ) : (
         <div className="space-y-4">
-          {overview.doctors.map((doctor) => (
+          {overview.doctors.map((doctor) => {
+            const leaveCuaBacSi = pendingLeaves.find((leave) => leave.bac_si_id === doctor.doctor_id)
+            return (
             <div key={doctor.doctor_id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -160,6 +183,15 @@ export default function DoctorDayView() {
                   >
                     {dayStatusLabel(doctor.trang_thai_ngay)}
                   </span>
+                  {leaveCuaBacSi && (
+                    <button
+                      type="button"
+                      onClick={() => setApprovingLeave(leaveCuaBacSi)}
+                      className="min-h-9 animate-pulse rounded-lg border border-amber-300 bg-amber-100 px-3 text-xs font-semibold text-amber-800 hover:bg-amber-200"
+                    >
+                      ⚠ Đang xin nghỉ — bấm để duyệt
+                    </button>
+                  )}
                   {doctor.trang_thai_ngay === 'lam_viec' && (
                     <button
                       type="button"
@@ -191,7 +223,8 @@ export default function DoctorDayView() {
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -238,6 +271,18 @@ export default function DoctorDayView() {
           onDone={() => {
             // Cac slot vua bi khoa/doi — bo cache de lan bam khung ke tiep lay du lieu moi.
             setAppointmentsCache({})
+            loadOverview()
+          }}
+        />
+      )}
+
+      {approvingLeave && (
+        <DoctorLeaveApprovalModal
+          leave={approvingLeave}
+          onClose={() => setApprovingLeave(null)}
+          onDone={() => {
+            setAppointmentsCache({})
+            loadPendingLeaves()
             loadOverview()
           }}
         />

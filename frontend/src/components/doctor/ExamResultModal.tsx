@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Icon from '@/components/admin/icons'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import { examinationService } from '@/services/examination.service'
-import { stripEmptyDrugs } from '@/utils/prescription'
+import { stripEmptyDrugs, normalizeGioUong } from '@/utils/prescription'
 import { formatDate, toLocalDateStr } from '@/utils/format'
 import type { DoctorAppointmentDetail, ExaminationResult, PrescriptionDrug, AppointmentStatus, ExamRelatedService } from '@/types'
 
@@ -152,7 +152,8 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
       huong_dan_dieu_tri: huong_dan || null,
       ghi_chu: ghi_chu || null,
       ngay_tai_kham,
-      thuoc: stripEmptyDrugs(drugs), // H2 — loại dòng thuốc rỗng trước khi gửi
+      // H2 — loại dòng thuốc rỗng; đệm số 0 giờ uống (7:00 -> 07:00) trước khi gửi.
+      thuoc: stripEmptyDrugs(drugs).map((d) => ({ ...d, gio_uong: normalizeGioUong(d.gio_uong) })),
       dich_vu_phat_sinh: selectedServiceIds.map((service_id) => ({ service_id, so_luong: 1 })),
       ...(coSinhHieu ? {
         sinh_hieu: {
@@ -176,8 +177,8 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
         ...buildPayload(),
       })
       onSaved?.(result)
-    } catch {
-      setError('Không lưu được kết quả khám. Vui lòng kiểm tra lại đơn thuốc và thử lại.')
+    } catch (saveError: any) {
+      setError(saveError?.response?.data?.message || 'Không lưu được kết quả khám. Vui lòng kiểm tra lại đơn thuốc và thử lại.')
     } finally {
       setSaving(false)
     }
@@ -190,8 +191,8 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
     try {
       const updated = await doctorAppointmentService.confirmResult(appt.id, buildPayload())
       onConfirmed?.(updated.appointment_status)
-    } catch {
-      setError('Không thể lưu & xác nhận. Kiểm tra chẩn đoán/đơn thuốc (số ngày 1–90, giờ uống HH:MM) rồi thử lại.')
+    } catch (confirmError: any) {
+      setError(confirmError?.response?.data?.message || 'Không thể lưu & xác nhận. Kiểm tra chẩn đoán/đơn thuốc (số ngày 1–90, giờ uống HH:MM) rồi thử lại.')
     } finally {
       setSaving(false)
     }
