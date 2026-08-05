@@ -118,6 +118,8 @@ export async function createLeaveRequest(req, res) {
       gio_bat_dau: gioBatDau,
       gio_ket_thuc: gioKetThuc,
       ly_do: ly_do.trim(),
+      nguon_tao: 'bac_si_tu_gui',
+      nguoi_tao_id: req.user.id,
     })
 
     return created(

@@ -69,7 +69,10 @@
 ## 7. Ràng buộc dữ liệu bất biến
 - Mỗi slot ↔ tối đa **1** `LichHen`. Mỗi `LichHen` ↔ tối đa **1** `HangDoi` đang hoạt động.
 - Kiểm tra capacity phải **nguyên tử** — 2 lễ tân thao tác đồng thời không được vượt trần.
-- Lễ tân & y tá dùng **chung 1 service check-in** — không mỗi vai trò một luồng.
+- Check-in đi qua **duy nhất 1 service** — không mỗi vai trò một luồng.
+- Hệ thống chỉ có **4 vai trò**: khách hàng · bác sĩ · lễ tân · admin.
+  **KHÔNG có vai trò y tá.** Phần việc thường gán cho y tá (check-in, sinh hiệu)
+  do lễ tân và bác sĩ đảm nhiệm.
 - Mô hình hiện thực: **giữ `slots[]` embedded trong `LichLamViec`** (Lựa chọn A), thêm `khung_index` + `loai_slot`; KHÔNG đại phẫu tách collection trừ khi được yêu cầu.
 
 ## 8. Trạng thái bệnh nhân (canonical)

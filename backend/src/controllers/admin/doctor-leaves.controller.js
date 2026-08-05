@@ -1,9 +1,13 @@
 import mongoose from 'mongoose'
 
-import { NghiPhepBacSi, BacSi, LichLamViec, LichHen } from '../../models/index.js'
+import { NghiPhepBacSi, BacSi } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
-import { AFFECTED_BY_LEAVE_STATUSES } from '../../utils/appointmentStatus.js'
-import { taoDeXuatDoiChoDonNghi } from '../../services/appointmentReschedule.service.js'
+import {
+  duyetDonNghi,
+  tuChoiDonNghi,
+  findLeaveByIdWithDoctor,
+  moTaKetQuaDuyet,
+} from '../../services/doctorLeaveApproval.service.js'
 
 function isValidObjectId(value) {
   return mongoose.Types.ObjectId.isValid(value)
@@ -23,8 +27,11 @@ function formatDoctorLeave(leave) {
       : null,
     tu_ngay: leave.tu_ngay,
     den_ngay: leave.den_ngay,
+    gio_bat_dau: leave.gio_bat_dau ?? null,
+    gio_ket_thuc: leave.gio_ket_thuc ?? null,
     ly_do: leave.ly_do ?? null,
     trang_thai: leave.trang_thai,
+    nguon_tao: leave.nguon_tao ?? null,
     nguoi_duyet_id: leave.nguoi_duyet_id ?? null,
     thoi_diem_duyet: leave.thoi_diem_duyet ?? null,
     ghi_chu: leave.ghi_chu ?? null,
@@ -46,77 +53,6 @@ async function ensureDoctorExists(bacSiId) {
   return doctor
 }
 
-function findLeaveByIdWithDoctor(id) {
-  return NghiPhepBacSi.findById(id)
-    .populate({
-      path: 'bac_si_id',
-      select: 'user_id trang_thai',
-      populate: { path: 'user_id', select: 'ho_ten' },
-    })
-}
-
-// Khóa các slot 'active' của bác sĩ trong khoảng ngày nghỉ đã duyệt — dùng field
-// bi_khoa_boi_nghi_phep/nghi_phep_id đã có sẵn trong schema (KHÔNG đổi model).
-// Slot đã booked/pending_payment KHÔNG bị đụng — Admin tự xử lý thủ công (không tự hủy lịch BN).
-// Nghỉ CẢ NGÀY (không giới hạn khung giờ): đánh dấu trang_thai_ngay='nghi_phep' để getSlots
-// (đặt lịch bệnh nhân) loại cả ngày qua điều kiện đã có sẵn — không cần sửa booking.controller.js
-// cho trường hợp này. Nghỉ theo khung giờ: giữ trang_thai_ngay='lam_viec', chỉ khóa slot giao giờ.
-async function lockSlotsForLeave(leave, session) {
-  const endExclusive = new Date(leave.den_ngay)
-  endExclusive.setDate(endExclusive.getDate() + 1)
-
-  const schedules = await LichLamViec.find({
-    doctor_id: leave.bac_si_id,
-    ngay: { $gte: leave.tu_ngay, $lt: endExclusive },
-  }).session(session)
-
-  let slotsLocked = 0
-
-  for (const schedule of schedules) {
-    let changed = false
-
-    for (const slot of schedule.slots) {
-      const inRange = !leave.gio_bat_dau || !leave.gio_ket_thuc
-        ? true
-        : slot.gio_bat_dau < leave.gio_ket_thuc && slot.gio_ket_thuc > leave.gio_bat_dau
-      if (!inRange || slot.status !== 'active') continue
-
-      slot.status = 'locked'
-      slot.bi_khoa_boi_nghi_phep = true
-      slot.nghi_phep_id = leave._id
-      slotsLocked += 1
-      changed = true
-    }
-
-    if (!leave.gio_bat_dau && schedule.trang_thai_ngay === 'lam_viec') {
-      schedule.trang_thai_ngay = 'nghi_phep'
-      changed = true
-    }
-
-    if (changed) await schedule.save({ session })
-  }
-
-  return { slotsLocked }
-}
-
-// Lịch hẹn CÒN HIỆU LỰC trong khoảng nghỉ (+ khung giờ nếu có) — trả cho Admin biết cần
-// liên hệ bệnh nhân xử lý (dời lịch hoặc xử lý theo quy định phòng khám). CHỈ ĐỌC, không tự hủy/sửa lịch hẹn.
-async function findAffectedAppointments(leave, session) {
-  const endExclusive = new Date(leave.den_ngay)
-  endExclusive.setDate(endExclusive.getDate() + 1)
-
-  let appointments = await LichHen.find({
-    doctor_id: leave.bac_si_id,
-    status: { $in: AFFECTED_BY_LEAVE_STATUSES },
-    ngay_kham: { $gte: leave.tu_ngay, $lt: endExclusive },
-  }).select('ma_lich_hen ngay_kham gio_kham status ten_khach').session(session).lean()
-
-  if (leave.gio_bat_dau && leave.gio_ket_thuc) {
-    appointments = appointments.filter((a) => a.gio_kham >= leave.gio_bat_dau && a.gio_kham < leave.gio_ket_thuc)
-  }
-  return appointments
-}
-
 export async function createDoctorLeave(req, res) {
   try {
     const { bac_si_id, tu_ngay, den_ngay, ly_do, ghi_chu } = req.body
@@ -133,6 +69,8 @@ export async function createDoctorLeave(req, res) {
       den_ngay: new Date(den_ngay),
       ly_do: ly_do ?? null,
       ghi_chu: ghi_chu ?? null,
+      nguon_tao: 'admin_tao',
+      nguoi_tao_id: req.user.id,
     })
 
     const populatedLeave = await findLeaveByIdWithDoctor(leave._id).lean()
@@ -173,22 +111,6 @@ export async function listDoctorLeaves(req, res) {
   }
 }
 
-// Nói rõ admin còn phải làm gì, thay vì chỉ báo "duyệt thành công".
-function moTaKetQuaDuyet(soLichAnhHuong, deXuat) {
-  if (soLichAnhHuong === 0) return 'Duyet don nghi phep thanh cong'
-
-  const phan = [`Duyet don nghi phep thanh cong. ${soLichAnhHuong} lich hen bi anh huong.`]
-  const choDuyet = deXuat.filter((d) => d.cho_admin_duyet).length
-  const khongCo = deXuat.filter((d) => d.so_phuong_an === 0).length
-
-  if (choDuyet > 0) phan.push(`${choDuyet} lich DA THANH TOAN dang cho Admin duyet phuong an doi.`)
-  if (khongCo > 0) phan.push(`${khongCo} lich KHONG tim duoc phuong an trong ngay — phai lien he khach.`)
-  const daBaoKhach = deXuat.length - choDuyet - khongCo
-  if (daBaoKhach > 0) phan.push(`${daBaoKhach} lich da gui phuong an cho khach chon.`)
-
-  return phan.join(' ')
-}
-
 export async function approveDoctorLeave(req, res) {
   const session = await mongoose.startSession()
   session.startTransaction()
@@ -206,28 +128,14 @@ export async function approveDoctorLeave(req, res) {
       session.endSession()
       return fail(res, 404, 'Khong tim thay don nghi phep')
     }
-    if (leave.trang_thai !== 'cho_duyet') {
-      await session.abortTransaction()
-      session.endSession()
-      return fail(res, 409, 'Chi duyet duoc don dang cho duyet')
-    }
 
-    leave.trang_thai = 'da_duyet'
-    leave.nguoi_duyet_id = req.user.id
-    leave.thoi_diem_duyet = new Date()
-    if (Object.prototype.hasOwnProperty.call(req.body, 'ghi_chu')) {
-      leave.ghi_chu = req.body.ghi_chu
-    }
-    await leave.save({ session })
-
-    const { slotsLocked } = await lockSlotsForLeave(leave, session)
-    const affectedAppointments = await findAffectedAppointments(leave, session)
-
-    // Rule mục 14/15: KHÔNG HOÀN TIỀN, nên phòng khám phải tự tìm chỗ thay cho khách.
-    // Trước đây chỗ này chỉ LIỆT KÊ lịch bị ảnh hưởng rồi để admin gọi điện thủ công —
-    // khách vừa mất chỗ vừa không lấy lại được tiền. Nay hệ thống sinh phương án và giữ
-    // sẵn chỗ ngay tại đây.
-    const deXuat = await taoDeXuatDoiChoDonNghi(leave, { session })
+    const ghiChu = Object.prototype.hasOwnProperty.call(req.body, 'ghi_chu') ? req.body.ghi_chu : undefined
+    const { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat } = await duyetDonNghi({
+      leave,
+      actorUserId: req.user.id,
+      ghiChu,
+      session,
+    })
 
     await session.commitTransaction()
     session.endSession()
@@ -246,6 +154,7 @@ export async function approveDoctorLeave(req, res) {
           status: a.status,
           ten_khach: a.ten_khach ?? null,
         })),
+        can_dieu_phoi_tai_quay: canDieuPhoiTaiQuay,
         de_xuat_doi: deXuat,
         so_lich_cho_admin_duyet: deXuat.filter((d) => d.cho_admin_duyet).length,
         so_lich_khong_co_phuong_an: deXuat.filter((d) => d.so_phuong_an === 0).length,
@@ -255,7 +164,7 @@ export async function approveDoctorLeave(req, res) {
   } catch (error) {
     await session.abortTransaction().catch(() => {})
     session.endSession()
-    return fail(res, 500, error.message)
+    return fail(res, error.statusCode ?? 500, error.message)
   }
 }
 
@@ -270,19 +179,12 @@ export async function rejectDoctorLeave(req, res) {
     if (!leave) {
       return fail(res, 404, 'Khong tim thay don nghi phep')
     }
-    if (leave.trang_thai !== 'cho_duyet') {
-      return fail(res, 409, 'Chi tu choi duoc don dang cho duyet')
-    }
 
-    leave.trang_thai = 'tu_choi'
-    leave.nguoi_duyet_id = req.user.id
-    leave.thoi_diem_duyet = new Date()
-    leave.ghi_chu = req.body.ghi_chu || leave.ghi_chu
-    await leave.save()
+    await tuChoiDonNghi({ leave, actorUserId: req.user.id, ghiChu: req.body.ghi_chu })
 
     const populatedLeave = await findLeaveByIdWithDoctor(id).lean()
     return ok(res, formatDoctorLeave(populatedLeave), 'Tu choi don nghi phep thanh cong')
   } catch (error) {
-    return fail(res, 500, error.message)
+    return fail(res, error.statusCode ?? 500, error.message)
   }
 }

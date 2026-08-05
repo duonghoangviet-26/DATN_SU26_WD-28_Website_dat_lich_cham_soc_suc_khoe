@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { BacSi, DichVu, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi, SinhHieuKham, HoSoBenhNhan } from '../../models/index.js'
+import { BacSi, DichVu, LichHen, LichLamViec, ThanhVien, NguoiDung, KetQuaKham, DonThuoc, HangDoi, SinhHieuKham, HoSoBenhNhan, NhatKyThaoTac } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
@@ -471,8 +471,51 @@ async function applyResultEdits(result, body, appt, docId, doctorUserId) {
   return { ok: true, prescription }
 }
 
+const MEDICAL_RECORD_AUDIT_FIELDS = [
+  'status',
+  'chan_doan',
+  'huong_dan_dieu_tri',
+  'ghi_chu',
+  'ngay_tai_kham',
+  'dich_vu_phat_sinh',
+  'thuoc',
+]
+
+async function snapshotMedicalRecord(result) {
+  const prescription = await DonThuoc.findOne({ medical_record_id: result._id }).lean()
+  return {
+    status: result.status ?? null,
+    chan_doan: result.chan_doan ?? null,
+    huong_dan_dieu_tri: result.huong_dan_dieu_tri ?? null,
+    ghi_chu: result.ghi_chu ?? null,
+    ngay_tai_kham: result.ngay_tai_kham ?? null,
+    dich_vu_phat_sinh: result.dich_vu_phat_sinh ?? [],
+    thuoc: prescription?.items ?? [],
+  }
+}
+
+function changedMedicalRecordFields(before, after) {
+  return MEDICAL_RECORD_AUDIT_FIELDS.filter((field) => JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null))
+}
+
+async function auditDoctorMedicalRecordRevision({ result, actorUserId, reason, before, after }) {
+  const changed_fields = changedMedicalRecordFields(before, after)
+  if (changed_fields.length === 0) return
+  await NhatKyThaoTac.create({
+    nguoi_thuc_hien_id: actorUserId,
+    vai_tro: 'doctor',
+    hanh_dong: 'DOCTOR_REVISE_MEDICAL_RECORD',
+    loai_doi_tuong: 'examination_result',
+    doi_tuong_id: result._id,
+    ly_do: reason || result.doctor_revision_note || 'Bac si cap nhat ho so kham',
+    du_lieu_cu: { changed_fields, ...Object.fromEntries(changed_fields.map((field) => [field, before[field] ?? null])) },
+    du_lieu_moi: { changed_fields, ...Object.fromEntries(changed_fields.map((field) => [field, after[field] ?? null])) },
+  })
+}
+
 // ─── POST /api/doctor/appointments/:id/result ───────────────────────────────
 export async function createResult(req, res) {
+  let result = null
   try {
     const docId = await getDocId(req.user.id)
     const a = await LichHen.findOne({ _id: req.params.id, doctor_id: docId })
@@ -501,7 +544,7 @@ export async function createResult(req, res) {
     const chiDinh = await taoChiDinhDichVu(dich_vu_phat_sinh, a.specialty_id, docId)
     if (!chiDinh.ok) return fail(res, chiDinh.status, chiDinh.message)
 
-    const result = await KetQuaKham.create({
+    result = await KetQuaKham.create({
       appointment_id:      a._id,
       ho_so_benh_nhan_id:  a.ho_so_benh_nhan_id ?? null,
       nguoi_nhap_id:        req.user.id,
@@ -555,6 +598,16 @@ export async function createResult(req, res) {
       thuoc: prescription?.items ?? [],
     }, 'Đã lưu kết quả khám')
   } catch (err) {
+    // KetQuaKham được tạo TRƯỚC đơn thuốc (DonThuoc.create ở dưới cần result._id). Nếu đơn
+    // thuốc validate fail (gio_uong sai HH:MM, so_ngay ngoài 1-90...) hoặc bất kỳ bước nào sau
+    // đó lỗi, KetQuaKham đã lỡ persist với status='da_xac_nhan' (khóa sửa ngay) mà không có đơn
+    // thuốc — bác sĩ nhận lỗi tưởng chưa lưu gì, nhưng hồ sơ mồ côi đã tồn tại và không thể sửa
+    // lại qua updateResult (chặn bởi status da_xac_nhan) lẫn tạo lại (chặn bởi exists() → 409).
+    // Rollback tại đây, cùng mẫu với createResultByQueue (offline) đã làm đúng từ trước.
+    if (result?._id) {
+      await KetQuaKham.deleteOne({ _id: result._id }).catch(() => {})
+      await DonThuoc.deleteMany({ medical_record_id: result._id }).catch(() => {})
+    }
     // 2 request tạo hồ sơ đồng thời cho cùng 1 appointment (race condition) đều qua được kiểm
     // tra `exists()` ở trên trước khi request đầu ghi xong — request thứ 2 chỉ bị chặn ở tầng DB
     // (index unique appointment_id, KetQuaKham.js:38-42), trả lỗi Mongo thô (11000) thay vì 409
@@ -712,6 +765,8 @@ export async function updateResult(req, res) {
     if (result.status === 'da_xac_nhan') return fail(res, 403, 'Hồ sơ đã xác nhận, không thể sửa trực tiếp')
     if (!result.co_the_sua) return fail(res, 403, 'Kết quả đã khóa, không thể sửa')
 
+    const beforeSnapshot = await snapshotMedicalRecord(result)
+
     // Áp dụng chỉnh sửa (dùng chung applyResultEdits với confirmResult) — validate ngày tái
     // khám + upsert/xóa đơn thuốc. Trước đây updateResult() không đọc `thuoc` nên sửa đơn
     // (kể cả so_ngay) bị bỏ qua — xem docs/Bác sĩ (2026-07-16).
@@ -725,6 +780,14 @@ export async function updateResult(req, res) {
       result.submitted_at = new Date()
     }
     await result.save()
+    const afterSnapshot = await snapshotMedicalRecord(result)
+    await auditDoctorMedicalRecordRevision({
+      result,
+      actorUserId: req.user.id,
+      reason: req.body?.ly_do_chinh_sua ?? req.body?.ly_do ?? null,
+      before: beforeSnapshot,
+      after: afterSnapshot,
+    })
 
     return ok(res, {
       ...result.toObject(),

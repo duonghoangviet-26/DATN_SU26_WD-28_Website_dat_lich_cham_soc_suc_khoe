@@ -62,6 +62,15 @@ function isGatewaySessionExpired(gateway) {
   return expiresAt.getTime() <= Date.now()
 }
 
+function getActorUserId(req) {
+  return req.user?._id ?? req.user?.id ?? null
+}
+
+function getActorRole(req) {
+  if (!getActorUserId(req)) return 'system'
+  return req.user?.role === 'admin' ? 'admin' : 'receptionist'
+}
+
 function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt }) {
   const tmnCode = process.env.VNP_TMNCODE || 'WVZUTWIX'
   const secretKey = process.env.VNP_HASHSECRET || 'MPCYVPEZAQLIXFLZLGWBKOIXOPTHNWVA'
@@ -162,6 +171,9 @@ async function finalizePendingPayment({ payment, appointment, actorUserId, actor
   if (payment.status !== 'pending') {
     throw Object.assign(new Error('Chi co the xac nhan giao dich dang cho thanh toan'), { statusCode: 409 })
   }
+  if (appointment.status !== 'pending') {
+    throw Object.assign(new Error(`Chi co the xac nhan thanh toan cho lich dang cho xu ly (hien tai: ${appointment.status})`), { statusCode: 409 })
+  }
 
   const oldStatus = appointment.status
   const oldPaymentStatus = appointment.payment_status
@@ -237,6 +249,9 @@ export const createMockVnpaySession = async (req, res) => {
 
     const { payment, appointment, invoice } = bundle
     if (payment.status !== 'pending') return fail(res, 409, 'Giao dich nay khong con o trang thai cho thanh toan')
+    if (appointment.status !== 'pending') {
+      return fail(res, 409, `Chi tao QR thanh toan cho lich dang cho xu ly (hien tai: ${appointment.status})`)
+    }
 
     const gateway = getGatewayResponseObject(payment)
     const existingExpiry = toDateOrNull(gateway.expires_at)
@@ -321,8 +336,8 @@ export const completeMockVnpayPayment = async (req, res) => {
     const previousAppointmentStatus = appointment.status
     await finalizePendingPayment({
       payment, appointment,
-      actorUserId: req.user?._id || appointment.user_id || null, // Fallback to null if guest
-      actorRole: (req.user?._id || appointment.user_id) ? 'admin' : 'system', // Bypass required if system
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
       channel: 'receptionist_vnpay_mock_complete',
       reason: 'Le tan mo phong thanh toan thanh cong qua VNPAY QR',
       providerData: {
