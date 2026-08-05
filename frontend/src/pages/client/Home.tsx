@@ -9,6 +9,7 @@ import { newsService } from '@/services/news.service'
 import { serviceService } from '@/services/service.service'
 import { patientBookingService } from '@/services/patient-booking.service'
 import type { NewsArticle, ServiceItem, DoctorProfile } from '@/types'
+import type { PatientBookingDoctor } from '@/services/patient-booking.service'
 import { getNewsImageSrcSet, getNewsImageUrl } from '@/utils/newsImage'
 
 const benefits = [
@@ -49,7 +50,7 @@ function ServiceMark({ index }: { index: number }) {
 export default function Home() {
   const [clinicServices, setClinicServices] = useState<ServiceItem[]>([])
   const [latestNews, setLatestNews] = useState<NewsArticle[]>([])
-  const [doctors, setDoctors] = useState<DoctorProfile[]>([])
+  const [doctors, setDoctors] = useState<PatientBookingDoctor[]>([])
   const [loadingServices, setLoadingServices] = useState(true)
   const [loadingDoctors, setLoadingDoctors] = useState(true)
 
@@ -238,7 +239,7 @@ export default function Home() {
             </div>
           ) : doctors.length > 0 ? (
             <div className="mt-12 flex flex-wrap justify-center gap-8">
-              {doctors.slice(0, 4).map(doctor => (
+              {doctors.slice(0, 3).map(doctor => (
                 <StaggerItem key={doctor.id} className="w-full max-w-[320px]">
                   <div className="h-full rounded-xl border border-transparent bg-[#eef7f5] p-4 text-center transition-transform hover:-translate-y-1 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] flex flex-col">
                     <div className="overflow-hidden rounded-xl bg-white">
