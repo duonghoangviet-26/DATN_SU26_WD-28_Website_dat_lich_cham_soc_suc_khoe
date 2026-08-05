@@ -207,7 +207,21 @@ export default function ReviewTable({
 
                       {/* Điểm số */}
                       <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
-                        <StarDisplay count={r.so_sao} />
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-extrabold text-amber-500 text-sm">{r.so_sao?.toFixed?.(1) || r.so_sao}</span>
+                            <StarDisplay count={Math.round(r.so_sao)} />
+                          </div>
+                          {r.chi_tiet && (
+                            <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md w-fit">
+                              <span title="Lễ tân">🛎️{r.chi_tiet.danh_gia_le_tan}</span>
+                              <span className="text-slate-300">|</span>
+                              <span title="Bác sĩ">🩺{r.chi_tiet.danh_gia_bac_si}</span>
+                              <span className="text-slate-300">|</span>
+                              <span title="Dịch vụ">🏥{r.chi_tiet.danh_gia_dich_vu}</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Nội dung */}
