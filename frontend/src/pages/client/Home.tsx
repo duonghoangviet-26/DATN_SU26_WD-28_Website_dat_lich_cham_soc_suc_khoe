@@ -9,6 +9,7 @@ import { newsService } from '@/services/news.service'
 import { serviceService } from '@/services/service.service'
 import { patientBookingService } from '@/services/patient-booking.service'
 import type { NewsArticle, ServiceItem, DoctorProfile } from '@/types'
+import type { PatientBookingDoctor } from '@/services/patient-booking.service'
 import { getNewsImageSrcSet, getNewsImageUrl } from '@/utils/newsImage'
 
 const benefits = [
@@ -49,7 +50,7 @@ function ServiceMark({ index }: { index: number }) {
 export default function Home() {
   const [clinicServices, setClinicServices] = useState<ServiceItem[]>([])
   const [latestNews, setLatestNews] = useState<NewsArticle[]>([])
-  const [doctors, setDoctors] = useState<DoctorProfile[]>([])
+  const [doctors, setDoctors] = useState<PatientBookingDoctor[]>([])
   const [loadingServices, setLoadingServices] = useState(true)
   const [loadingDoctors, setLoadingDoctors] = useState(true)
 
@@ -238,7 +239,11 @@ export default function Home() {
             </div>
           ) : doctors.length > 0 ? (
             <div className="mt-12 flex flex-wrap justify-center gap-8">
-              {doctors.slice(0, 4).map(doctor => (
+              {doctors.slice(0, 3).map(doctor => {
+                const specialtiesText = doctor.specialties && doctor.specialties.length > 0 
+                  ? doctor.specialties.map(s => s.ten).join(', ') 
+                  : '';
+                return (
                 <StaggerItem key={doctor.id} className="w-full max-w-[320px]">
                   <div className="h-full rounded-xl border border-transparent bg-[#eef7f5] p-4 text-center transition-transform hover:-translate-y-1 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] flex flex-col">
                     <div className="overflow-hidden rounded-xl bg-white">
@@ -251,17 +256,17 @@ export default function Home() {
                     </div>
                     <div className="mt-5 pb-2 flex-1 flex flex-col">
                       <h3 className="text-[17px] font-bold text-[#ea580c]">{doctor.ho_ten}</h3>
-                      {doctor.chuyen_khoa && <p className="mt-1 text-[13px] font-semibold text-[#ea580c]">{doctor.chuyen_khoa}</p>}
+                      {specialtiesText && <p className="mt-1 text-[13px] font-semibold text-[#ea580c]">{specialtiesText}</p>}
                       
                       <div className="mt-4 pt-4 border-t border-slate-100 flex-1">
                         <p className="text-[13px] leading-relaxed text-slate-500 line-clamp-4">
-                          {doctor.kinh_nghiem || `Bác sĩ chuyên khoa tận tâm với ${doctor.so_nam_kinh_nghiem ? `${doctor.so_nam_kinh_nghiem} năm` : 'nhiều năm'} kinh nghiệm trong lĩnh vực khám và điều trị ${doctor.chuyen_khoa || 'Tai Mũi Họng'}.`}
+                          {doctor.kinh_nghiem || `Bác sĩ chuyên khoa tận tâm với ${doctor.so_nam_kinh_nghiem ? `${doctor.so_nam_kinh_nghiem} năm` : 'nhiều năm'} kinh nghiệm trong lĩnh vực khám và điều trị ${specialtiesText || 'Tai Mũi Họng'}.`}
                         </p>
                       </div>
                     </div>
                   </div>
                 </StaggerItem>
-              ))}
+              )})}
             </div>
           ) : null}
         </StaggerContainer>
