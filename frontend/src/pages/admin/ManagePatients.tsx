@@ -72,7 +72,8 @@ function changedFields(log: AdminPatientAuditLog) {
 
 function actionLabel(action: string) {
   const map: Record<string, string> = {
-    UPDATE_PATIENT: 'Cập nhật thông tin bệnh nhân',
+    UPDATE_PATIENT: 'Admin cập nhật thông tin bệnh nhân',
+    CLIENT_UPDATE_PROFILE: 'Bệnh nhân tự cập nhật thông tin cá nhân',
     LOCK_PATIENT: 'Khóa tài khoản bệnh nhân (Ẩn)',
     UNLOCK_PATIENT: 'Mở khóa tài khoản bệnh nhân (Hiển thị)',
     UPDATE_USER: 'Cập nhật tài khoản',

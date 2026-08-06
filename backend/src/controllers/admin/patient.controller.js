@@ -441,6 +441,27 @@ export async function updatePatient(req, res) {
       await ThanhVien.findByIdAndUpdate(primaryMember._id, memberUpdate, { runValidators: true })
     }
 
+    // Đồng bộ sang HoSoBenhNhan để phía Client (Trang hồ sơ bệnh nhân) cập nhật tức thì
+    const profileSyncData = {}
+    if (userUpdate.ho_ten) profileSyncData.ho_ten = userUpdate.ho_ten
+    if (userUpdate.so_dien_thoai) {
+      profileSyncData.so_dien_thoai = userUpdate.so_dien_thoai
+      profileSyncData.so_dien_thoai_tim_kiem = userUpdate.so_dien_thoai
+    }
+    if (memberUpdate.ngay_sinh !== undefined) profileSyncData.ngay_sinh = memberUpdate.ngay_sinh
+    if (memberUpdate.gioi_tinh !== undefined) profileSyncData.gioi_tinh = memberUpdate.gioi_tinh
+    if (memberUpdate.nhom_mau !== undefined) profileSyncData.nhom_mau = memberUpdate.nhom_mau
+    if (memberUpdate.di_ung !== undefined) profileSyncData.di_ung = memberUpdate.di_ung
+    if (memberUpdate.benh_nen !== undefined) profileSyncData.benh_nen = memberUpdate.benh_nen
+
+    if (Object.keys(profileSyncData).length > 0) {
+      await HoSoBenhNhan.findOneAndUpdate(
+        { tai_khoan_id: patient._id, trang_thai: 'active' },
+        { $set: profileSyncData, $setOnInsert: { nguon_tao: 'online', trang_thai: 'active' } },
+        { upsert: true, runValidators: true }
+      )
+    }
+
     const oldLogData = {
       ...(hasUserChanges ? oldUserLog : {}),
       ...(hasMemberChanges ? Object.fromEntries(Object.entries(memberDiff.oldLogData).map(([key, value]) => [`primary_member.${key}`, value])) : {}),

@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { OAuth2Client } from 'google-auth-library'
-import { GiaDinh, HoSoBenhNhan, NguoiDung, ThanhVien, ThongBao, UserSession } from '../../models/index.js'
+import { GiaDinh, HoSoBenhNhan, NguoiDung, NhatKyThaoTac, ThanhVien, ThongBao, UserSession } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { emitDashboardNewPatient } from '../../realtime/socket.js'
 import { sendResetPasswordEmail } from '../../services/mail.service.js'
@@ -697,25 +697,41 @@ export async function updateProfile(req, res) {
       ghi_chu,
     } = req.body ?? {}
     if (!ho_ten?.trim()) return fail(res, 400, 'Họ tên là bắt buộc')
-    if (!so_dien_thoai?.trim()) return fail(res, 400, 'Số điện thoại là bắt buộc')
-    const normalizedPhone = normalizePatientPhone(so_dien_thoai)
-    if (!/^0\d{9,10}$/.test(normalizedPhone)) return fail(res, 400, 'Số điện thoại không đúng định dạng')
+    
+    let normalizedPhone = user.so_dien_thoai || null
+    if (so_dien_thoai !== undefined && so_dien_thoai !== null && String(so_dien_thoai).trim() !== '') {
+      const phoneInput = String(so_dien_thoai).trim()
+      // Nếu SĐT không đổi so với SĐT hiện tại của tài khoản, giữ nguyên và bỏ qua validate trùng/định dạng
+      if (phoneInput !== user.so_dien_thoai) {
+        normalizedPhone = normalizePatientPhone(phoneInput)
+        if (normalizedPhone && !/^(0|\+84)[3|5|7|8|9][0-9]{8}$/.test(normalizedPhone) && !/^0\d{9,10}$/.test(normalizedPhone)) {
+          return fail(res, 400, 'Số điện thoại không đúng định dạng (phải là 10 chữ số hợp lệ)')
+        }
 
-    // Kiểm tra Unique: số điện thoại không được trùng với tài khoản khác
-    const phoneExists = await NguoiDung.findOne({
-      so_dien_thoai: normalizedPhone,
-      _id: { $ne: user._id },
-      ngay_xoa: null,
-    })
-    if (phoneExists) {
-      return fail(res, 400, 'Số điện thoại này đã được sử dụng bởi một tài khoản khác trong hệ thống.')
+        if (normalizedPhone) {
+          const phoneExists = await NguoiDung.findOne({
+            so_dien_thoai: normalizedPhone,
+            _id: { $ne: user._id },
+            ngay_xoa: null,
+          })
+          if (phoneExists) {
+            return fail(res, 400, 'Số điện thoại này đã được sử dụng bởi một tài khoản khác trong hệ thống.')
+          }
+        }
+      }
+    } else if (so_dien_thoai === '') {
+      normalizedPhone = null
     }
 
     if (ngay_sinh && (Number.isNaN(new Date(ngay_sinh).getTime()) || new Date(ngay_sinh) >= new Date())) {
-      return fail(res, 400, 'NgÃ y sinh khÃ´ng há»£p lá»‡')
+      return fail(res, 400, 'Ngày sinh không hợp lệ')
     }
-    if (gioi_tinh && !['nam', 'nu', 'khac'].includes(gioi_tinh)) return fail(res, 400, 'Giá»›i tÃ­nh khÃ´ng há»£p lá»‡')
-    if (nhom_mau && !['A', 'B', 'AB', 'O'].includes(nhom_mau)) return fail(res, 400, 'NhÃ³m mÃ¡u khÃ´ng há»£p lá»‡')
+    if (gioi_tinh && !['nam', 'nu', 'khac'].includes(gioi_tinh)) return fail(res, 400, 'Giới tính không hợp lệ')
+    if (nhom_mau && !['A', 'B', 'AB', 'O'].includes(nhom_mau)) return fail(res, 400, 'Nhóm máu không hợp lệ')
+
+    const oldProfile = await HoSoBenhNhan.findOne({ tai_khoan_id: user._id, trang_thai: 'active' }).lean()
+    const oldUserHoTen = user.ho_ten
+    const oldUserPhone = user.so_dien_thoai
 
     user.ho_ten = ho_ten.trim()
     user.so_dien_thoai = normalizedPhone
@@ -733,6 +749,37 @@ export async function updateProfile(req, res) {
       dia_chi: dia_chi?.trim() || null,
       ghi_chu: ghi_chu?.trim() || null,
     })
+
+    const oldLogData = {}
+    const newLogData = {}
+    const checkFields = [
+      { key: 'ho_ten', oldVal: oldUserHoTen, newVal: ho_ten.trim() },
+      { key: 'so_dien_thoai', oldVal: oldUserPhone, newVal: normalizedPhone },
+      { key: 'primary_member.ngay_sinh', oldVal: oldProfile?.ngay_sinh ? new Date(oldProfile.ngay_sinh).toISOString().split('T')[0] : null, newVal: ngay_sinh || null },
+      { key: 'primary_member.gioi_tinh', oldVal: oldProfile?.gioi_tinh || null, newVal: gioi_tinh || null },
+      { key: 'primary_member.nhom_mau', oldVal: oldProfile?.nhom_mau || null, newVal: nhom_mau || null },
+      { key: 'primary_member.di_ung', oldVal: oldProfile?.di_ung || null, newVal: di_ung?.trim() || null },
+      { key: 'primary_member.benh_nen', oldVal: oldProfile?.benh_nen || null, newVal: benh_nen?.trim() || null },
+    ]
+
+    for (const item of checkFields) {
+      if (String(item.oldVal ?? '') !== String(item.newVal ?? '')) {
+        oldLogData[item.key] = item.oldVal
+        newLogData[item.key] = item.newVal
+      }
+    }
+
+    if (Object.keys(newLogData).length > 0) {
+      await NhatKyThaoTac.create({
+        nguoi_thuc_hien_id: user._id,
+        vai_tro: user.role || 'user',
+        hanh_dong: 'CLIENT_UPDATE_PROFILE',
+        loai_doi_tuong: 'patient',
+        doi_tuong_id: user._id,
+        du_lieu_cu: oldLogData,
+        du_lieu_moi: newLogData,
+      })
+    }
 
     return ok(res, {
       id: String(user._id),
