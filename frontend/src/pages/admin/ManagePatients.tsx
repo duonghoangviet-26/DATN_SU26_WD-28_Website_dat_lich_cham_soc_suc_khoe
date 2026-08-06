@@ -199,6 +199,24 @@ export default function ManagePatients() {
       return
     }
 
+    if (payload.so_dien_thoai) {
+      const phoneTrimmed = payload.so_dien_thoai.trim()
+      const phoneRegex = /^(0|\+84)[3|5|7|8|9][0-9]{8}$/
+      if (!phoneRegex.test(phoneTrimmed)) {
+        setFormError('Số điện thoại không hợp lệ (Phải bao gồm 10 chữ số chuẩn Việt Nam, ví dụ: 0912345678)')
+        return
+      }
+      payload.so_dien_thoai = phoneTrimmed
+    }
+
+    if (payload.ngay_sinh) {
+      const birth = new Date(payload.ngay_sinh)
+      if (Number.isNaN(birth.getTime()) || birth.getTime() >= Date.now()) {
+        setFormError('Ngày sinh không hợp lệ (Không được ở tương lai)')
+        return
+      }
+    }
+
     setSubmitting(true)
     setFormError('')
     try {

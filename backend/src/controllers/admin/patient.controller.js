@@ -340,6 +340,18 @@ export async function updatePatient(req, res) {
     if (userUpdate.ho_ten !== undefined && !String(userUpdate.ho_ten || '').trim()) {
       return fail(res, 400, 'Ho ten benh nhan la bat buoc')
     }
+    if (userUpdate.so_dien_thoai !== undefined && userUpdate.so_dien_thoai !== null) {
+      const phoneStr = String(userUpdate.so_dien_thoai).trim()
+      if (phoneStr) {
+        const phoneRegex = /^(0|\+84)[3|5|7|8|9][0-9]{8}$/
+        if (!phoneRegex.test(phoneStr)) {
+          return fail(res, 400, 'So dien thoai khong hop le (phai la 10 chu so hop le, bat dau bang 03, 05, 07, 08, 09 hoac +84)')
+        }
+        userUpdate.so_dien_thoai = phoneStr
+      } else {
+        userUpdate.so_dien_thoai = null
+      }
+    }
     if (userUpdate.status !== undefined && !['active', 'locked'].includes(userUpdate.status)) {
       return fail(res, 400, 'Trang thai tai khoan khong hop le')
     }
