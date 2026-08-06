@@ -515,6 +515,34 @@ export async function updateDoctorInfo(doctorId, updateData, adminId) {
 
   if (updateData.ho_so_chi_tiet !== undefined && typeof updateData.ho_so_chi_tiet === 'object') {
     const detailPayload = updateData.ho_so_chi_tiet || {}
+    const existingDetail = await HoSoChiTietBacSi.findOne({ doctor_id: doctorId })
+    const oldDetail = existingDetail ? existingDetail.toObject() : {}
+
+    const detailFieldsToTrack = [
+      'chuc_vu_hien_tai',
+      'ma_cchn',
+      'bang_cap_hoc_vi_tags',
+      'ngon_ngu',
+      'qua_trinh_dao_tao',
+      'qua_trinh_cong_tac',
+      'giai_thuong',
+    ]
+
+    for (const key of detailFieldsToTrack) {
+      if (detailPayload[key] !== undefined) {
+        const oldVal = oldDetail[key]
+        const newVal = detailPayload[key]
+        const isSame = Array.isArray(oldVal) || Array.isArray(newVal)
+          ? JSON.stringify(oldVal ?? []) === JSON.stringify(newVal ?? [])
+          : String(oldVal ?? '') === String(newVal ?? '')
+        if (!isSame) {
+          duLieuCu[key] = oldVal ?? null
+          duLieuMoi[key] = newVal ?? null
+          hasChanges = true
+        }
+      }
+    }
+
     await HoSoChiTietBacSi.findOneAndUpdate(
       { doctor_id: doctorId },
       {
@@ -536,7 +564,6 @@ export async function updateDoctorInfo(doctorId, updateData, adminId) {
       },
       { upsert: true, new: true, runValidators: true }
     )
-    hasChanges = true
   }
 
   if (hasChanges || hasUserChanges) {

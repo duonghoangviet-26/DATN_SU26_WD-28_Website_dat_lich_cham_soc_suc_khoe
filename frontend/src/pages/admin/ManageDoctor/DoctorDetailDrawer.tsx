@@ -39,6 +39,13 @@ const FIELD_LABELS: Record<string, string> = {
   ly_do_tu_choi: 'Lý do từ chối',
   specialties: 'Chuyên khoa',
   services: 'Dịch vụ',
+  chuc_vu_hien_tai: 'Chức vụ hiện tại',
+  ma_cchn: 'Mã CCHN',
+  bang_cap_hoc_vi_tags: 'Bằng cấp & Học vị',
+  ngon_ngu: 'Ngôn ngữ giao tiếp',
+  qua_trinh_dao_tao: 'Học vấn & Đào tạo',
+  qua_trinh_cong_tac: 'Quá trình công tác',
+  giai_thuong: 'Giải thưởng & Danh hiệu',
 }
 
 const formatLogValue = (field: string, value: unknown) => {
@@ -47,6 +54,19 @@ const formatLogValue = (field: string, value: unknown) => {
   if (field === 'phi_kham' || field === 'phi_tu_van') return formatPrice(Number(value))
   if (field === 'trang_thai_duyet') return DOCTOR_APPROVAL_LABEL[value as DoctorApproval] || formatAdminValue(field, value)
   if (field === 'la_hien' || typeof value === 'boolean') return value ? 'Có' : 'Không'
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'Trống'
+    if (field === 'bang_cap_hoc_vi_tags' || field === 'ngon_ngu') return value.join(', ')
+    if (field === 'qua_trinh_dao_tao') {
+      return value.map((d: any) => `${d.ten_bang} (${d.truong || 'Cơ sở đào tạo'}${d.tu_nam ? ` ${d.tu_nam}-${d.den_nam || 'nay'}` : ''})`).join('; ')
+    }
+    if (field === 'qua_trinh_cong_tac') {
+      return value.map((c: any) => `${c.chuc_vu || 'Công tác'} - ${c.noi_cong_tac}${c.tu_nam ? ` (${c.tu_nam}-${c.den_nam || 'nay'})` : ''}`).join('; ')
+    }
+    if (field === 'giai_thuong') {
+      return value.map((g: any) => `${g.ten}${g.nam ? ` (${g.nam})` : ''}`).join('; ')
+    }
+  }
   return formatAdminValue(field, value)
 }
 
