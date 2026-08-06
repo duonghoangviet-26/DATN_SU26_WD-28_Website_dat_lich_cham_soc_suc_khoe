@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { OAuth2Client } from 'google-auth-library'
-import { HoSoBenhNhan, NguoiDung, ThongBao, UserSession } from '../../models/index.js'
+import { GiaDinh, HoSoBenhNhan, NguoiDung, ThanhVien, ThongBao, UserSession } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { emitDashboardNewPatient } from '../../realtime/socket.js'
 import { sendResetPasswordEmail } from '../../services/mail.service.js'
@@ -20,20 +20,59 @@ function normalizePatientPhone(value) {
 
 async function syncDirectPatientProfile(userId, hoTen, soDienThoai, extra = {}) {
   const phone = normalizePatientPhone(soDienThoai)
-  if (!phone) return
   const setFields = {
     ho_ten: hoTen.trim(),
-    so_dien_thoai: phone,
-    so_dien_thoai_tim_kiem: phone,
+  }
+  if (phone) {
+    setFields.so_dien_thoai = phone
+    setFields.so_dien_thoai_tim_kiem = phone
   }
   for (const field of ['ngay_sinh', 'gioi_tinh', 'nhom_mau', 'di_ung', 'benh_nen', 'dia_chi', 'ghi_chu']) {
     if (extra[field] !== undefined) setFields[field] = extra[field]
   }
-  return HoSoBenhNhan.findOneAndUpdate(
+  const profile = await HoSoBenhNhan.findOneAndUpdate(
     { tai_khoan_id: userId, trang_thai: 'active' },
     { $set: setFields, $setOnInsert: { nguon_tao: 'online', trang_thai: 'active' } },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
   )
+
+  try {
+    let family = await GiaDinh.findOne({ user_id: userId })
+    if (!family) {
+      family = await GiaDinh.create({
+        user_id: userId,
+        ten_nhom: `Gia đình ${hoTen.trim()}`,
+      })
+    }
+
+    const memberUpdate = {
+      ho_ten: hoTen.trim(),
+      tai_khoan_id: userId,
+      family_id: family._id,
+      ho_so_benh_nhan_id: profile._id,
+      la_chu_ho: true,
+    }
+    if (extra.ngay_sinh !== undefined) memberUpdate.ngay_sinh = extra.ngay_sinh
+    if (extra.gioi_tinh !== undefined) memberUpdate.gioi_tinh = extra.gioi_tinh
+    if (extra.nhom_mau !== undefined) memberUpdate.nhom_mau = extra.nhom_mau
+    if (extra.di_ung !== undefined) memberUpdate.di_ung = extra.di_ung
+    if (extra.benh_nen !== undefined) memberUpdate.benh_nen = extra.benh_nen
+
+    await ThanhVien.findOneAndUpdate(
+      {
+        $or: [
+          { tai_khoan_id: userId, la_chu_ho: true },
+          { family_id: family._id, la_chu_ho: true },
+        ]
+      },
+      { $set: memberUpdate },
+      { upsert: true, new: true }
+    )
+  } catch (err) {
+    console.error('Lỗi đồng bộ ThanhVien từ client profile:', err.message)
+  }
+
+  return profile
 }
 
 // ============================================================

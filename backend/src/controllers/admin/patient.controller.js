@@ -4,6 +4,7 @@ import {
   DonThuoc,
   GiaDinh,
   HangDoi,
+  HoSoBenhNhan,
   KetQuaKham,
   LichHen,
   NguoiDung,
@@ -165,9 +166,23 @@ async function buildPatientSummary(patient) {
       : 0
   }
 
+  let primaryMemberObj = members.find((member) => member.la_chu_ho) || members[0] || null
+  if (primaryMemberObj && (!primaryMemberObj.gioi_tinh || !primaryMemberObj.ngay_sinh)) {
+    const patientProfile = await HoSoBenhNhan.findOne({ tai_khoan_id: patient._id, trang_thai: 'active' })
+      .select('gioi_tinh ngay_sinh nhom_mau di_ung benh_nen')
+      .lean()
+    if (patientProfile) {
+      if (!primaryMemberObj.gioi_tinh && patientProfile.gioi_tinh) primaryMemberObj.gioi_tinh = patientProfile.gioi_tinh
+      if (!primaryMemberObj.ngay_sinh && patientProfile.ngay_sinh) primaryMemberObj.ngay_sinh = patientProfile.ngay_sinh
+      if (!primaryMemberObj.nhom_mau && patientProfile.nhom_mau) primaryMemberObj.nhom_mau = patientProfile.nhom_mau
+      if (!primaryMemberObj.di_ung && patientProfile.di_ung) primaryMemberObj.di_ung = patientProfile.di_ung
+      if (!primaryMemberObj.benh_nen && patientProfile.benh_nen) primaryMemberObj.benh_nen = patientProfile.benh_nen
+    }
+  }
+
   return {
     ...normalizeUser(patient),
-    primary_member: normalizeMember(members.find((member) => member.la_chu_ho) || members[0]),
+    primary_member: normalizeMember(primaryMemberObj),
     family_member_count: members.length,
     appointment_count: appointmentCount,
     medical_record_count: recordCount,
@@ -363,7 +378,7 @@ export async function updatePatient(req, res) {
     )
 
     const { members } = await getPatientMemberIds(patient._id)
-    const primaryMember = members.find((member) => member.la_chu_ho) || members[0] || null
+    let primaryMember = members.find((member) => member.la_chu_ho) || members[0] || null
     const memberUpdate = {}
     for (const field of MEMBER_EDIT_FIELDS) {
       if (field in req.body) {
@@ -384,9 +399,32 @@ export async function updatePatient(req, res) {
       return fail(res, 400, 'Nhom mau benh nhan khong hop le')
     }
 
-    const memberDiff = primaryMember
-      ? pickChangedFields(primaryMember, memberUpdate, MEMBER_EDIT_FIELDS)
-      : { oldLogData: {}, newLogData: {} }
+    if (!primaryMember) {
+      let family = await GiaDinh.findOne({ user_id: patient._id })
+      if (!family) {
+        family = await GiaDinh.create({
+          user_id: patient._id,
+          ten_nhom: `Gia đình ${userUpdate.ho_ten || patient.ho_ten}`,
+        })
+      }
+      primaryMember = await ThanhVien.create({
+        family_id: family._id,
+        tai_khoan_id: patient._id,
+        ho_ten: userUpdate.ho_ten || patient.ho_ten,
+        ngay_sinh: memberUpdate.ngay_sinh || new Date('1995-01-01'),
+        gioi_tinh: memberUpdate.gioi_tinh || 'nam',
+        la_chu_ho: true,
+        nhom_mau: memberUpdate.nhom_mau || null,
+        di_ung: memberUpdate.di_ung || null,
+        benh_nen: memberUpdate.benh_nen || null,
+      })
+    }
+
+    if (userUpdate.ho_ten && primaryMember && primaryMember.ho_ten !== userUpdate.ho_ten) {
+      memberUpdate.ho_ten = userUpdate.ho_ten
+    }
+
+    const memberDiff = pickChangedFields(primaryMember, memberUpdate, ['ho_ten', ...MEMBER_EDIT_FIELDS])
 
     const hasUserChanges = Object.keys(newUserLog).length > 0
     const hasMemberChanges = Object.keys(memberDiff.newLogData).length > 0
