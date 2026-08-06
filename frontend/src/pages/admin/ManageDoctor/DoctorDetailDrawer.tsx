@@ -371,22 +371,6 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                         )}
                       </div>
 
-                      {/* Thế mạnh Chuyên môn Tai Mũi Họng */}
-                      {doctor.ho_so_chi_tiet?.the_manh_chuyen_mon && doctor.ho_so_chi_tiet.the_manh_chuyen_mon.length > 0 && (
-                        <div className="pt-3 border-t border-slate-100 space-y-2">
-                          <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                            Kỹ thuật sâu & Thế mạnh chuyên môn Tai Mũi Họng
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {doctor.ho_so_chi_tiet.the_manh_chuyen_mon.map((tm, idx) => (
-                              <span key={idx} className="px-3 py-1 bg-slate-100 text-slate-800 rounded-md text-xs font-semibold border border-slate-200">
-                                {tm}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
                       {/* Giải thưởng & Danh hiệu */}
                       {doctor.ho_so_chi_tiet?.giai_thuong && doctor.ho_so_chi_tiet.giai_thuong.length > 0 && (
                         <div className="pt-3 border-t border-slate-100 space-y-2">

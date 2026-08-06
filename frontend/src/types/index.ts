@@ -1228,6 +1228,7 @@ export interface DoctorUpdatePayload {
     phi_kham?: number;
     la_hien?: boolean;
     anh_dai_dien?: string | null;
+    ho_so_chi_tiet?: HoSoChiTietBacSi | null;
 }
 
 export interface NotificationUpdatePayload {
