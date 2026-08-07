@@ -177,4 +177,9 @@ export const serviceService = {
     const res = await axiosInstance.patch<ApiResponse<ServiceItem>>(`/admin/services/${id}/toggle`)
     return mapServiceItem(res.data.data ?? {})
   },
+
+  async delete(id: string): Promise<any> {
+    const res = await axiosInstance.delete<ApiResponse<any>>(`/admin/services/${id}`)
+    return res.data.data
+  },
 }

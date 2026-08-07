@@ -25,7 +25,7 @@ interface SpecialtyDoctorItem {
   user_id: string | null
 }
 
-type ServiceTab = 'all' | 'packages' | 'regular'
+type ServiceTab = 'all' | 'packages' | 'regular' | 'hidden'
 type PackageFilter = 'all' | ServicePackageType
 
 const DOI_TUONG_LABEL: Record<string, string> = {
@@ -69,6 +69,7 @@ export default function ManageServiceSpecialtyDetail() {
   const [historyTarget, setHistoryTarget] = useState<ServiceItem | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [toggleTarget, setToggleTarget] = useState<ServiceItem | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ServiceItem | null>(null)
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
@@ -160,6 +161,21 @@ export default function ManageServiceSpecialtyDetail() {
     }
   }
 
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return
+
+    const serviceId = deleteTarget.id
+    setDeleteTarget(null)
+
+    try {
+      await serviceService.delete(serviceId)
+      showToast('Đã xóa dịch vụ vĩnh viễn')
+      triggerReload()
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Không thể xóa dịch vụ', 'error')
+    }
+  }
+
   async function handleView(service: ServiceItem) {
     setViewTarget(service)
     setViewLoading(true)
@@ -194,6 +210,7 @@ export default function ManageServiceSpecialtyDetail() {
   }
 
   const filteredServices = services.filter((service) => {
+    if (activeTab === 'hidden') return service.status === 'inactive'
     if (activeTab === 'packages') {
       if (service.la_goi !== true) return false
       if (packageFilter !== 'all') return service.loai_goi === packageFilter
@@ -207,6 +224,7 @@ export default function ManageServiceSpecialtyDetail() {
   const singlePackageCount = services.filter((service) => service.la_goi === true && service.loai_goi === 'goi_don').length
   const familyPackageCount = services.filter((service) => service.la_goi === true && service.loai_goi === 'goi_gia_dinh').length
   const regularCount = services.filter((service) => service.la_goi !== true).length
+  const hiddenCount = services.filter((service) => service.status === 'inactive').length
   const doctorTotalPages = Math.max(1, Math.ceil(doctors.length / doctorItemsPerPage))
   const serviceTotalPages = Math.max(1, Math.ceil(filteredServices.length / serviceItemsPerPage))
   const visibleDoctors = doctors.slice((doctorPage - 1) * doctorItemsPerPage, doctorPage * doctorItemsPerPage)
@@ -395,6 +413,7 @@ export default function ManageServiceSpecialtyDetail() {
             ['all', `Tất cả (${services.length})`],
             ['packages', `Gói (${packageCount})`],
             ['regular', `Dịch vụ lẻ (${regularCount})`],
+            ['hidden', `Đã ẩn (${hiddenCount})`],
           ].map(([value, label]) => (
             <button
               key={value}
@@ -446,7 +465,9 @@ export default function ManageServiceSpecialtyDetail() {
                   ? `Gói dịch vụ (${filteredServices.length})`
                   : activeTab === 'regular'
                     ? `Dịch vụ lẻ (${filteredServices.length})`
-                    : `Dịch vụ liên quan (${filteredServices.length})`}
+                    : activeTab === 'hidden'
+                      ? `Dịch vụ đã ẩn (${filteredServices.length})`
+                      : `Dịch vụ liên quan (${filteredServices.length})`}
               </h2>
               <p className="mt-0.5 text-xs text-slate-500">
                 Quản lý nội dung, hình ảnh, giá tham khảo và trạng thái hiển thị của từng dịch vụ.
@@ -483,7 +504,9 @@ export default function ManageServiceSpecialtyDetail() {
                         ? 'Chưa có gói dịch vụ nào cho chuyên khoa này'
                         : activeTab === 'regular'
                           ? 'Chưa có dịch vụ lẻ nào cho chuyên khoa này'
-                          : 'Chưa có dịch vụ liên quan nào cho chuyên khoa này'}
+                          : activeTab === 'hidden'
+                            ? 'Chưa có dịch vụ nào bị ẩn'
+                            : 'Chưa có dịch vụ liên quan nào cho chuyên khoa này'}
                     </td>
                   </tr>
                 )}
@@ -571,6 +594,14 @@ export default function ManageServiceSpecialtyDetail() {
                                 : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
                             }
                           />
+                          {service.status === 'inactive' && (
+                            <ActionIconButton
+                              label="Xóa vĩnh viễn"
+                              icon="trash"
+                              onClick={() => setDeleteTarget(service)}
+                              className="hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                            />
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -586,7 +617,7 @@ export default function ManageServiceSpecialtyDetail() {
               totalPages={serviceTotalPages}
               totalItems={filteredServices.length}
               currentItemCount={visibleServices.length}
-              itemLabel={activeTab === 'packages' ? 'gói dịch vụ' : 'dịch vụ'}
+              itemLabel={activeTab === 'packages' ? 'gói dịch vụ' : activeTab === 'hidden' ? 'dịch vụ ẩn' : 'dịch vụ'}
               pageSize={serviceItemsPerPage}
               onPageChange={setServicePage}
             />
@@ -628,6 +659,16 @@ export default function ManageServiceSpecialtyDetail() {
           danger={toggleTarget?.status === 'active'}
           onConfirm={handleToggleConfirm}
           onCancel={() => setToggleTarget(null)}
+        />
+
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          title="Xóa vĩnh viễn dịch vụ?"
+          message={`Xác nhận xóa vĩnh viễn dịch vụ "${deleteTarget?.ten}"? Hành động này không thể hoàn tác!`}
+          confirmText="Xóa vĩnh viễn"
+          danger={true}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
         />
       </div>
     </AdminAutoStagger>
