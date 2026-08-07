@@ -91,12 +91,12 @@ export default function ReviewTable({
   return (
     <div>
       {/* Bảng đánh giá */}
-      <div className="card bg-white rounded-xl shadow-sm border border-slate-100 relative z-10">
-        <div className="overflow-x-auto md:overflow-x-visible">
+      <div className="card bg-white rounded-xl shadow-sm border border-slate-100 relative z-10 overflow-hidden">
+        <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase tracking-wider text-[11px] font-semibold">
               <tr>
-                <th className="px-5 py-4 w-12 text-center">
+                <th className="px-3 py-3 w-10 text-center">
                   <input
                     type="checkbox"
                     checked={reviews.length > 0 && selectedIds.length === reviews.length}
@@ -110,13 +110,13 @@ export default function ReviewTable({
                     className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4 cursor-pointer"
                   />
                 </th>
-                <th className="px-5 py-4">Bệnh nhân</th>
-                <th className="px-5 py-4">Bác sĩ</th>
-                <th className="px-5 py-4">Điểm</th>
-                <th className="px-5 py-4">Nội dung</th>
-                <th className="px-5 py-4">Ngày tạo</th>
-                <th className="px-5 py-4">Trạng thái</th>
-                <th className="px-5 py-4 text-right">Thao tác</th>
+                <th className="px-3.5 py-3 whitespace-nowrap">Bệnh nhân</th>
+                <th className="px-3.5 py-3 whitespace-nowrap">Bác sĩ</th>
+                <th className="px-3.5 py-3 whitespace-nowrap">Điểm</th>
+                <th className="px-3.5 py-3 whitespace-nowrap">Nội dung</th>
+                <th className="px-3.5 py-3 whitespace-nowrap">Ngày tạo</th>
+                <th className="px-3.5 py-3 whitespace-nowrap">Trạng thái</th>
+                <th className="px-3.5 py-3 text-center whitespace-nowrap">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
@@ -145,7 +145,7 @@ export default function ReviewTable({
                         r.ngay_xoa ? 'bg-red-50/20' : r.status === 'hidden' ? 'bg-slate-50/50' : ''
                       }`}
                     >
-                      <td className="px-5 py-4 w-12 text-center">
+                      <td className="px-3 py-3.5 w-10 text-center">
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(r.id)}
@@ -160,24 +160,24 @@ export default function ReviewTable({
                         />
                       </td>
                       {/* Bệnh nhân */}
-                      <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
-                        <div className="flex items-center gap-3">
+                      <td className={`px-3.5 py-3.5 whitespace-nowrap ${fadeClass}`}>
+                        <div className="flex items-center gap-2.5">
                           {r.user?.anh_dai_dien ? (
                             <img
                               src={r.user.anh_dai_dien}
                               alt={r.user.ho_ten}
-                              className="h-9 w-9 rounded-full object-cover ring-1 ring-slate-100"
+                              className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-100"
                             />
                           ) : (
-                            <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 text-sm">
+                            <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 text-xs">
                               {(r.user?.ho_ten || 'U').charAt(0).toUpperCase()}
                             </div>
                           )}
                           <div>
-                            <p className="font-semibold text-slate-800 leading-tight">
+                            <p className="font-semibold text-slate-800 leading-tight text-xs sm:text-sm">
                               {r.user?.ho_ten || 'Không rõ bệnh nhân'}
                             </p>
-                            <p className="text-xs text-slate-400 font-normal">
+                            <p className="text-[11px] text-slate-400 font-normal max-w-[160px] truncate">
                               {r.user?.email || 'Chưa có email'}
                             </p>
                           </div>
@@ -185,20 +185,20 @@ export default function ReviewTable({
                       </td>
 
                       {/* Bác sĩ */}
-                      <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
+                      <td className={`px-3.5 py-3.5 whitespace-nowrap ${fadeClass}`}>
                         {r.doctor ? (
                           <button
                             onClick={() => onSelectDoctor?.(r.doctor!.id)}
-                            className="flex items-center gap-1.5 hover:text-brand-600 transition-colors text-left group"
+                            className="flex items-center gap-1 hover:text-brand-600 transition-colors text-left group"
                             title={`Lọc tất cả đánh giá của BS. ${r.doctor.ho_ten}`}
                           >
                             <Icon name="doctor" className="h-3.5 w-3.5 text-slate-400 group-hover:text-brand-500" />
-                            <span className="text-slate-700 font-semibold underline decoration-slate-300 hover:decoration-brand-500">
+                            <span className="text-slate-700 font-semibold underline decoration-slate-300 hover:decoration-brand-500 text-xs sm:text-sm">
                               {r.doctor.ho_ten || 'Không rõ bác sĩ'}
                             </span>
                           </button>
                         ) : (
-                          <div className="flex items-center gap-1.5 text-slate-400">
+                          <div className="flex items-center gap-1 text-slate-400 text-xs">
                             <Icon name="doctor" className="h-3.5 w-3.5" />
                             <span>Không rõ bác sĩ</span>
                           </div>
@@ -206,14 +206,14 @@ export default function ReviewTable({
                       </td>
 
                       {/* Điểm số */}
-                      <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-extrabold text-amber-500 text-sm">{r.so_sao?.toFixed?.(1) || r.so_sao}</span>
+                      <td className={`px-3.5 py-3.5 whitespace-nowrap ${fadeClass}`}>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1">
+                            <span className="font-extrabold text-amber-500 text-xs sm:text-sm">{r.so_sao?.toFixed?.(1) || r.so_sao}</span>
                             <StarDisplay count={Math.round(r.so_sao)} />
                           </div>
                           {r.chi_tiet && (
-                            <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md w-fit">
+                            <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 px-1 py-0.5 rounded-md w-fit">
                               <span title="Lễ tân">🛎️{r.chi_tiet.danh_gia_le_tan}</span>
                               <span className="text-slate-300">|</span>
                               <span title="Bác sĩ">🩺{r.chi_tiet.danh_gia_bac_si}</span>
@@ -225,9 +225,9 @@ export default function ReviewTable({
                       </td>
 
                       {/* Nội dung */}
-                      <td className={`px-5 py-4 max-w-[300px] ${fadeClass}`}>
+                      <td className={`px-3.5 py-3.5 max-w-[180px] lg:max-w-[240px] ${fadeClass}`}>
                         <p
-                          className={`text-sm truncate hover:text-clip hover:whitespace-normal font-normal ${
+                          className={`text-xs sm:text-sm truncate hover:text-clip hover:whitespace-normal font-normal ${
                             r.so_sao <= 2 ? 'text-red-600/90 font-medium' : 'text-slate-600'
                           }`}
                           title={r.noi_dung || ''}
@@ -237,12 +237,12 @@ export default function ReviewTable({
                       </td>
 
                       {/* Ngày tạo */}
-                      <td className={`px-5 py-4 whitespace-nowrap text-slate-400 font-normal ${fadeClass}`}>
+                      <td className={`px-3.5 py-3.5 whitespace-nowrap text-slate-400 font-normal text-xs sm:text-sm ${fadeClass}`}>
                         {formatDate(r.ngay_tao)}
                       </td>
 
                       {/* Trạng thái */}
-                      <td className={`px-5 py-4 whitespace-nowrap ${fadeClass}`}>
+                      <td className={`px-3.5 py-3.5 whitespace-nowrap ${fadeClass}`}>
                         {r.ngay_xoa ? (
                           <Badge color="red">🔴 Đã xóa</Badge>
                         ) : r.status === 'visible' ? (
@@ -253,7 +253,7 @@ export default function ReviewTable({
                       </td>
 
                     {/* Thao tác */}
-                    <td className={`px-5 py-4 text-right whitespace-nowrap ${openMenuId === r.id ? 'relative z-50' : 'relative'}`}>
+                    <td className={`px-3.5 py-3.5 text-center whitespace-nowrap ${openMenuId === r.id ? 'relative z-50' : 'relative'}`}>
                       <div className="inline-block text-left">
                         <button
                           onClick={(e) => {
