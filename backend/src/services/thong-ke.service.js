@@ -204,12 +204,56 @@ export async function getBenhNhanMoiTheoThang(yearRange) {
   ])
 
   const countByMonth = new Map(rows.map((item) => [item.thang, item.so_luong]))
+
+  const appointments = await LichHen.aggregate([
+    {
+      $match: {
+        ngay_kham: { $gte: yearRange.start, $lt: yearRange.end },
+        status: { $nin: ['cancelled', 'no_show', 'skipped'] },
+        user_id: { $ne: null }
+      }
+    },
+    {
+      $lookup: {
+        from: NguoiDung.collection.name,
+        localField: 'user_id',
+        foreignField: '_id',
+        as: 'user'
+      }
+    },
+    { $unwind: { path: '$user', preserveNullAndEmptyArrays: false } },
+    {
+      $group: {
+        _id: {
+          thang: dateLabel('$ngay_kham', '%m'),
+          user_id: '$user_id',
+          ngay_tao: '$user.ngay_tao'
+        }
+      }
+    }
+  ])
+
+  const countOldByMonth = new Map()
+  for (const item of appointments) {
+    const monthStr = item._id.thang
+    if (!monthStr) continue
+    const month = parseInt(monthStr, 10)
+    
+    const year = yearRange.start.getFullYear()
+    const startOfMonth = new Date(`${year}-${monthStr}-01T00:00:00+07:00`)
+    
+    if (item._id.ngay_tao && item._id.ngay_tao < startOfMonth) {
+      countOldByMonth.set(month, (countOldByMonth.get(month) ?? 0) + 1)
+    }
+  }
+
   return Array.from({ length: 12 }, (_, index) => {
     const month = index + 1
     return {
       thang: month,
       label: `T${month}`,
       so_luong: countByMonth.get(month) ?? 0,
+      so_luong_cu: countOldByMonth.get(month) ?? 0,
     }
   })
 }
@@ -254,6 +298,57 @@ export async function getBenhNhanMoiTheoTuanTrongThang(monthRange) {
   ])
 
   const countByWeek = new Map(rows.map((item) => [item.tuan, item.so_luong]))
+
+  const appointments = await LichHen.aggregate([
+    {
+      $match: {
+        ngay_kham: { $gte: monthRange.start, $lt: monthRange.end },
+        status: { $nin: ['cancelled', 'no_show', 'skipped'] },
+        user_id: { $ne: null }
+      }
+    },
+    {
+      $set: {
+        _week: {
+          $ceil: { $divide: [{ $dayOfMonth: { date: '$ngay_kham', timezone: CLINIC_TIMEZONE } }, 7] }
+        }
+      }
+    },
+    {
+      $lookup: {
+        from: NguoiDung.collection.name,
+        localField: 'user_id',
+        foreignField: '_id',
+        as: 'user'
+      }
+    },
+    { $unwind: { path: '$user', preserveNullAndEmptyArrays: false } },
+    {
+      $group: {
+        _id: {
+          tuan: '$_week',
+          user_id: '$user_id',
+          ngay_tao: '$user.ngay_tao'
+        }
+      }
+    }
+  ])
+
+  const countOldByWeek = new Map()
+  for (const item of appointments) {
+    const week = item._id.tuan
+    if (!week) continue
+    
+    const startDay = (week - 1) * 7 + 1
+    const year = monthRange.start.getFullYear()
+    const month = String(monthRange.start.getMonth() + 1).padStart(2, '0')
+    const startOfWeek = new Date(`${year}-${month}-${String(startDay).padStart(2, '0')}T00:00:00+07:00`)
+    
+    if (item._id.ngay_tao && item._id.ngay_tao < startOfWeek) {
+      countOldByWeek.set(week, (countOldByWeek.get(week) ?? 0) + 1)
+    }
+  }
+
   const lastDay = new Date(monthRange.end.getTime() - 1)
   const daysInMonth = Number(formatClinicDate(lastDay).slice(8, 10))
   const weekCount = Math.ceil(daysInMonth / 7)
@@ -269,6 +364,7 @@ export async function getBenhNhanMoiTheoTuanTrongThang(monthRange) {
       tu: fromDay,
       den: toDay,
       so_luong: countByWeek.get(week) ?? 0,
+      so_luong_cu: countOldByWeek.get(week) ?? 0,
     }
   })
 }

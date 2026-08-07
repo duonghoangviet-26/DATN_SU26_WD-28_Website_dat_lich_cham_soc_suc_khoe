@@ -17,5 +17,6 @@ router.get('/:id',       services.getById)   // GET  /api/admin/services/:id
 router.post('/',         services.create)    // POST /api/admin/services
 router.put('/:id',       services.update)    // PUT  /api/admin/services/:id
 router.patch('/:id/toggle', services.toggle) // PATCH /api/admin/services/:id/toggle
+router.delete('/:id',       services.destroy)// DELETE /api/admin/services/:id
 
 export default router
