@@ -1,7 +1,7 @@
 import mongoose from 'mongoose'
 import {
   BacSi, LichLamViec, LichHen,
-  ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan, DanhGia, NguoiDung,
+  ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan, DanhGia, NguoiDung, HoSoChiTietBacSi,
 } from '../../models/index.js'
 import {
   cancelAppointmentWithPaymentSync,
@@ -268,11 +268,14 @@ export async function getDoctors(req, res) {
 // ─── GET /api/patient/booking/doctors/:id ───────────────────────────────────
 export async function getDoctorById(req, res) {
   try {
-    const doc = await BacSi.findOne({ _id: req.params.id, trang_thai_duyet: 'approved', la_hien: true })
-      .populate('user_id',    'ho_ten anh_dai_dien so_dien_thoai')
-      .populate('specialties','ten mo_ta icon_url slug')
-      .populate('services',   'ten gia mo_ta_ngan khu_vuc')
-      .lean()
+    const [doc, detailedProfile] = await Promise.all([
+      BacSi.findOne({ _id: req.params.id, trang_thai_duyet: 'approved', la_hien: true })
+        .populate('user_id',    'ho_ten anh_dai_dien so_dien_thoai')
+        .populate('specialties','ten mo_ta icon_url slug')
+        .populate('services',   'ten gia mo_ta_ngan khu_vuc')
+        .lean(),
+      HoSoChiTietBacSi.findOne({ doctor_id: req.params.id }).lean(),
+    ])
 
     if (!doc) return fail(res, 404, 'Không tìm thấy bác sĩ')
 
@@ -292,6 +295,7 @@ export async function getDoctorById(req, res) {
       phong_kham_mac_dinh: doc.phong_kham_mac_dinh,
       specialties: (doc.specialties ?? []).map((s) => ({ id: s._id, ten: s.ten, slug: s.slug })),
       services:    [],
+      ho_so_chi_tiet:      detailedProfile || null,
     })
   } catch (err) {
     return fail(res, 500, err.message)
@@ -1044,7 +1048,7 @@ export async function createDoctorReview(req, res) {
       {
         $group: {
           _id: '$doctor_id',
-          trungBinhSao: { $avg: '$so_sao' },
+          trungBinhSao: { $avg: { $ifNull: ['$chi_tiet.danh_gia_bac_si', '$so_sao'] } },
           tongSo: { $sum: 1 },
         },
       },

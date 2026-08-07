@@ -17,6 +17,11 @@ export interface ReviewItem {
   user: ReviewUser | null
   doctor: ReviewDoctor | null
   so_sao: number
+  chi_tiet?: {
+    danh_gia_le_tan: number
+    danh_gia_bac_si: number
+    danh_gia_dich_vu: number
+  }
   noi_dung: string | null
   status: 'visible' | 'hidden'
   ngay_tao: string

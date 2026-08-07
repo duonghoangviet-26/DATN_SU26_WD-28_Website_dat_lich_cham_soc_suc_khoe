@@ -36,7 +36,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL.replace(/\/ap
 let socket: Socket | null = null
 
 function getSocket() {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   if (!socket) {
     socket = io(SOCKET_URL, {

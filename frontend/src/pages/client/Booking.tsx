@@ -55,24 +55,65 @@ export default function Booking() {
     }
   }, [user, authLoading, searchParams, navigate])
 
-  const [step, setStep] = useState<BookingStep>(1)
-  const [selectedDate, setSelectedDate] = useState<string>('')
+  // ── Helpers đọc/ghi sessionStorage cho booking ──
+  const BOOKING_SS_KEY = 'booking_draft'
+
+  function readBookingDraft() {
+    try {
+      const raw = sessionStorage.getItem(BOOKING_SS_KEY)
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  }
+
+  const draft = readBookingDraft()
+
+  // ── Xóa draft khi người dùng rời trang Booking bằng SPA Navigation (chuyển qua Bác sĩ, Dịch vụ...), 
+  // nhưng GIỮ LẠI draft nếu người dùng chỉ bấm F5 (reload trang) ──
+  useEffect(() => {
+    let isUnloading = false
+
+    const handleBeforeUnload = () => {
+      isUnloading = true
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // Nếu unmount do chuyển trang SPA (isUnloading === false), tiến hành xóa nháp.
+      if (!isUnloading) {
+        sessionStorage.removeItem(BOOKING_SS_KEY)
+      }
+    }
+  }, [])
+
+  const [step, setStep] = useState<BookingStep>(() => {
+    const saved = draft?.step as BookingStep | undefined
+    if (saved && saved >= 2 && saved <= 5) {
+      if (saved === 5 && !draft?.createdBooking) return 1
+      return saved
+    }
+    return 1
+  })
+  const [selectedDate, setSelectedDate] = useState<string>(draft?.selectedDate || '')
   // Bằng chứng đồng ý điều khoản không hoàn tiền — backend từ chối tạo lịch nếu thiếu
   // (rule mục 5: không có bằng chứng thì không được thu tiền).
   const [dongYDieuKhoan, setDongYDieuKhoan] = useState(false)
 
   const [khungTheoChuyenKhoa, setKhungTheoChuyenKhoa] = useState<SpecialtySlotsResult | null>(null)
   const [dangTaiKhungCK, setDangTaiKhungCK] = useState(false)
-  const [khungGioDaChon, setKhungGioDaChon] = useState<string>('')
+  const [khungGioDaChon, setKhungGioDaChon] = useState<string>(draft?.khungGioDaChon || '')
 
   // Booking target states
-  const [bookingFor, setBookingFor] = useState<'self' | 'member' | 'other'>('self')
+  const [bookingFor, setBookingFor] = useState<'self' | 'member' | 'other'>(draft?.bookingFor || 'self')
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
-  const [selectedMemberId, setSelectedMemberId] = useState<string>('')
+  const [selectedMemberId, setSelectedMemberId] = useState<string>(draft?.selectedMemberId || '')
 
-  const [patientName, setPatientName] = useState(user?.ho_ten || '')
-  const [patientPhone, setPatientPhone] = useState(user?.so_dien_thoai || '')
-  const [symptoms, setSymptoms] = useState('')
+  const [patientName, setPatientName] = useState(draft?.patientName || user?.ho_ten || '')
+  const [patientPhone, setPatientPhone] = useState(draft?.patientPhone || user?.so_dien_thoai || '')
+  const [symptoms, setSymptoms] = useState(draft?.symptoms || '')
 
   const [toast, setToast] = useState<string | null>(null)
   const [submittingBooking, setSubmittingBooking] = useState(false)
@@ -81,14 +122,36 @@ export default function Booking() {
 
   // Specialty filters
   const [specialties, setSpecialties] = useState<{ id: string; ten: string }[]>([])
-  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('all')
+  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>(draft?.selectedSpecialtyId || 'all')
   const [loadingSpecialties, setLoadingSpecialties] = useState(false)
 
   const [dates, setDates] = useState<{ value: string; label: string }[]>([])
-  const [createdBooking, setCreatedBooking] = useState<CreatedBookingResult | null>(null)
+  const [createdBooking, setCreatedBooking] = useState<CreatedBookingResult | null>(draft?.createdBooking || null)
   const [paymentSnapshot, setPaymentSnapshot] = useState<PatientPaymentStatusResult | null>(null)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
   const [nowMs, setNowMs] = useState(() => Date.now())
+
+  // ── Ghi lại trạng thái booking vào sessionStorage khi thay đổi ──
+  useEffect(() => {
+    // Không lưu bước 1 (chưa bắt đầu)
+    if (step <= 1) {
+      sessionStorage.removeItem(BOOKING_SS_KEY)
+      return
+    }
+    const data = {
+      step,
+      selectedSpecialtyId,
+      selectedDate,
+      khungGioDaChon,
+      bookingFor,
+      selectedMemberId,
+      patientName,
+      patientPhone,
+      symptoms,
+      createdBooking,
+    }
+    sessionStorage.setItem(BOOKING_SS_KEY, JSON.stringify(data))
+  }, [step, selectedSpecialtyId, selectedDate, khungGioDaChon, bookingFor, selectedMemberId, patientName, patientPhone, symptoms, createdBooking])
 
   useEffect(() => {
     const datesList: { value: string; label: string }[] = []
@@ -111,14 +174,14 @@ export default function Booking() {
     }
     setDates(datesList)
     if (datesList.length > 0) {
-      setSelectedDate(datesList[0].value)
+      setSelectedDate((prev) => prev || draft?.selectedDate || datesList[0].value)
     }
   }, [])
 
   useEffect(() => {
     if (user) {
-      setPatientName(user.ho_ten)
-      setPatientPhone(user.so_dien_thoai || '')
+      setPatientName((prev) => prev || draft?.patientName || user.ho_ten)
+      setPatientPhone((prev) => prev || draft?.patientPhone || user.so_dien_thoai || '')
 
       let ignore = false
       patientBookingService.getFamilyGroup()
@@ -143,8 +206,8 @@ export default function Booking() {
         if (!ignore) {
           setSpecialties(data)
           if (data.length > 0) {
-            setSelectedSpecialtyId(data[0].id)
-            setStep(2)
+            setSelectedSpecialtyId((prev) => (prev && prev !== 'all' ? prev : draft?.selectedSpecialtyId || data[0].id))
+            setStep((prevStep) => (prevStep && prevStep >= 2 ? prevStep : draft?.step && draft.step >= 2 ? draft.step : 2))
           }
         }
       })
@@ -168,7 +231,6 @@ export default function Booking() {
 
     let ignore = false
     setDangTaiKhungCK(true)
-    setKhungGioDaChon('')
     patientBookingService.getSpecialtySlots(selectedSpecialtyId, selectedDate)
       .then((data) => { if (!ignore) setKhungTheoChuyenKhoa(data) })
       .catch((error: any) => {
@@ -266,6 +328,7 @@ export default function Booking() {
 
   useEffect(() => {
     if (step === 5 && paymentSnapshot?.payment_status === 'paid' && paymentSnapshot.appointment_status === 'confirmed') {
+      sessionStorage.removeItem(BOOKING_SS_KEY)
       navigate(`/profile?booked=true&id=${createdBooking?.id || createdBooking?.appointment_id || ''}`, { replace: true })
     }
   }, [step, paymentSnapshot?.payment_status, paymentSnapshot?.appointment_status, createdBooking, navigate])
@@ -411,6 +474,7 @@ export default function Booking() {
     setCancellingPayment(true)
     try {
       await patientBookingService.cancelBooking(createdBooking.appointment_id, 'Khách hàng hủy thanh toán tại bước thanh toán')
+      sessionStorage.removeItem(BOOKING_SS_KEY)
       navigate('/profile?cancelled=true', { replace: true })
     } catch (error: any) {
       setToast(error.response?.data?.message || error.message || 'Không thể hủy thanh toán')
@@ -438,7 +502,10 @@ export default function Booking() {
       return
     }
 
-    setSelectedDate(dateValue)
+    if (selectedDate !== dateValue) {
+      setSelectedDate(dateValue)
+      setKhungGioDaChon('')
+    }
   }
 
   if (authLoading || loadingSpecialties) {
@@ -528,7 +595,12 @@ export default function Booking() {
                 <button
                   key={date.value}
                   type="button"
-                  onClick={() => setSelectedDate(date.value)}
+                  onClick={() => {
+                    if (selectedDate !== date.value) {
+                      setSelectedDate(date.value)
+                      setKhungGioDaChon('')
+                    }
+                  }}
                   aria-pressed={selectedDate === date.value}
                   className={`flex w-24 shrink-0 flex-col items-center justify-center rounded-xl border py-2.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                     selectedDate === date.value
