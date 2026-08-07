@@ -17,7 +17,7 @@ async function updateDoctorRating(doctorId) {
     {
       $group: {
         _id: '$doctor_id',
-        trungBinhSao: { $avg: '$so_sao' },
+        trungBinhSao: { $avg: { $ifNull: ['$chi_tiet.danh_gia_bac_si', '$so_sao'] } },
         tongSo: { $sum: 1 },
       },
     },

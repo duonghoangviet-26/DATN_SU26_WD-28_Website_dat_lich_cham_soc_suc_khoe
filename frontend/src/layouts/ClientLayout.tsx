@@ -80,6 +80,7 @@ export default function ClientLayout() {
           <nav className="hidden items-center gap-8 lg:flex" aria-label="Điều hướng chính">
             <NavLink to="/" end className={navClass}>Trang chủ</NavLink>
             <NavLink to="/dich-vu" className={navClass}>Dịch vụ</NavLink>
+            <NavLink to="/bac-si" className={navClass}>Bác sĩ</NavLink>
             <NavLink to="/tin-tuc" className={navClass}>Cẩm nang sức khỏe</NavLink>
             {canAccessPatientProfile && <NavLink to="/profile" className={navClass}>Hồ sơ của tôi</NavLink>}
           </nav>
@@ -127,6 +128,7 @@ export default function ClientLayout() {
             <nav className="space-y-1" aria-label="Điều hướng di động">
               <NavLink to="/" end className={mobileNavClass} onClick={closeMobileMenu}>Trang chủ</NavLink>
               <NavLink to="/dich-vu" className={mobileNavClass} onClick={closeMobileMenu}>Dịch vụ</NavLink>
+              <NavLink to="/bac-si" className={mobileNavClass} onClick={closeMobileMenu}>Bác sĩ</NavLink>
               <NavLink to="/tin-tuc" className={mobileNavClass} onClick={closeMobileMenu}>Cẩm nang sức khỏe</NavLink>
               {canAccessPatientProfile && <NavLink to="/profile" className={mobileNavClass} onClick={closeMobileMenu}>Hồ sơ của tôi</NavLink>}
               {staffArea && <NavLink to={staffArea.to} className={mobileNavClass} onClick={closeMobileMenu}>{staffArea.label}</NavLink>}

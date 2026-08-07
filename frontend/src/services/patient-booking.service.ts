@@ -1,6 +1,35 @@
 import axiosInstance from '@/services/axiosInstance'
 import type { ApiResponse } from '@/types'
 
+export interface DoctorExtendedProfile {
+  chuc_danh?: string | null
+  chuc_vu?: string | null
+  chuc_vu_hien_tai?: string | null
+  ma_cchn?: string | null
+  gioi_thieu_ngan?: string | null
+  bang_cap_hoc_vi_tags?: string[]
+  ngon_ngu?: string[]
+  the_manh_chuyen_mon?: string[]
+  benh_ly_dieu_tri?: string[]
+  qua_trinh_cong_tac?: Array<{
+    noi_cong_tac: string
+    chuc_vu?: string | null
+    tu_nam?: number | null
+    den_nam?: number | null
+  }>
+  qua_trinh_dao_tao?: Array<{
+    ten_bang: string
+    truong?: string | null
+    tu_nam?: number | null
+    den_nam?: number | null
+  }>
+  thanh_vien_hoi?: string[]
+  giai_thuong?: Array<{
+    ten: string
+    nam?: number | null
+  }>
+}
+
 export interface PatientBookingDoctor {
   id: string
   ho_ten: string
@@ -15,6 +44,7 @@ export interface PatientBookingDoctor {
   kinh_nghiem?: string | null
   phong_kham_mac_dinh?: string | null
   specialties: { id: string; ten: string }[]
+  ho_so_chi_tiet?: DoctorExtendedProfile | null
 }
 
 export interface PatientBookingSlot {
