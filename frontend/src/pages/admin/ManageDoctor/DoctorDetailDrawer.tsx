@@ -164,19 +164,19 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
   return (
     <div className="fixed inset-0 z-40 overflow-hidden">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-slate-900/50 transition-opacity backdrop-blur-sm" 
+      <div
+        className="absolute inset-0 bg-slate-900/50 transition-opacity backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       {/* Drawer Panel */}
       <div className="absolute inset-y-0 right-0 max-w-full flex">
         <div className="w-screen max-w-2xl bg-white shadow-2xl flex flex-col h-full transform transition-transform">
-          
+
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">
             <h2 className="text-xl font-bold text-slate-800">Chi tiết Bác sĩ</h2>
-            <button 
+            <button
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
             >
@@ -192,30 +192,27 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
             <>
               {/* Tabs */}
               <div className="px-6 border-b border-slate-100 flex gap-6 bg-slate-50/50">
-                <button 
+                <button
                   onClick={() => setActiveTab('profile')}
-                  className={`py-3 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'profile' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                  className={`py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'profile' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
                 >
                   Thông tin hồ sơ
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveTab('logs')}
-                  className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                    activeTab === 'logs' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                  className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'logs' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
                 >
                   Lịch sử thao tác
                   <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">
                     {logs.length}
                   </span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveTab('appointments')}
-                  className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                    activeTab === 'appointments' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                  className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'appointments' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
                 >
                   Ca khám hôm nay
                 </button>
@@ -227,9 +224,9 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                   <div className="space-y-6">
                     {/* Basic Info */}
                     <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-start gap-5">
-                      <img 
-                        src={doctor.user_id.anh_dai_dien || 'https://ui-avatars.com/api/?name=' + doctor.user_id.ho_ten} 
-                        alt="Avatar" 
+                      <img
+                        src={doctor.user_id.anh_dai_dien || 'https://ui-avatars.com/api/?name=' + doctor.user_id.ho_ten}
+                        alt="Avatar"
                         className="w-20 h-20 rounded-full object-cover border border-slate-100 bg-slate-50"
                       />
                       <div className="flex-1">
@@ -444,7 +441,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                         const isReject = log.hanh_dong === 'REJECT_DOCTOR'
                         const isSuspend = log.hanh_dong === 'SUSPEND_DOCTOR'
                         const changedFields = getChangedFields(log)
-                        
+
                         let icon = 'check'
                         let bg = 'bg-green-100 text-green-600'
                         if (isReject) { icon = 'x'; bg = 'bg-red-100 text-red-600' }
@@ -505,9 +502,9 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                     <form onSubmit={handleSearch} className="flex gap-3 mb-4">
                       <div className="relative flex-1">
                         <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input 
-                          type="text" 
-                          placeholder="Tìm theo tên hoặc SĐT bệnh nhân..." 
+                        <input
+                          type="text"
+                          placeholder="Tìm theo tên hoặc SĐT bệnh nhân..."
                           className="input w-full pl-9 bg-white"
                           value={searchInput}
                           onChange={(e) => setSearchInput(e.target.value)}
@@ -547,9 +544,8 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                                     <p className="text-xs font-medium text-brand-600">{apt.gio_kham}</p>
                                   </td>
                                   <td className="px-5 py-3 whitespace-nowrap">
-                                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
-                                      apt.loai_kham === 'home' ? 'bg-purple-50 text-purple-700' : 'bg-slate-100 text-slate-700'
-                                    }`}>
+                                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${apt.loai_kham === 'home' ? 'bg-purple-50 text-purple-700' : 'bg-slate-100 text-slate-700'
+                                      }`}>
                                       <Icon name={apt.loai_kham === 'home' ? 'home' : 'map-pin'} className="w-3 h-3" />
                                       {apt.loai_kham === 'home' ? 'Tại nhà' : 'Phòng khám'}
                                     </span>
@@ -569,22 +565,22 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                         </table>
                       </div>
                     </div>
-                    
+
                     {/* Pagination */}
                     {!aptLoading && appointments.length > 0 && (
                       <div className="flex items-center justify-between mt-4 px-1">
                         <p className="text-sm text-slate-500">Trang {aptPage} / {aptTotalPages}</p>
                         {aptTotalPages > 1 && (
                           <div className="flex gap-2">
-                            <button 
-                              disabled={aptPage === 1} 
+                            <button
+                              disabled={aptPage === 1}
                               onClick={() => setAptPage(p => p - 1)}
                               className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
                             >
                               Trước
                             </button>
-                            <button 
-                              disabled={aptPage === aptTotalPages} 
+                            <button
+                              disabled={aptPage === aptTotalPages}
                               onClick={() => setAptPage(p => p + 1)}
                               className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
                             >
