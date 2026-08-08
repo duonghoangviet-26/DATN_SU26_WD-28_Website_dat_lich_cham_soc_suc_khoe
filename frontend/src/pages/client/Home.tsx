@@ -7,8 +7,8 @@ import { Reveal, StaggerContainer, StaggerItem } from '@/components/client/Clien
 import HeroBanner from '@/components/client/HeroBanner'
 import { newsService } from '@/services/news.service'
 import { serviceService } from '@/services/service.service'
-import { patientBookingService } from '@/services/patient-booking.service'
-import type { NewsArticle, ServiceItem, DoctorProfile } from '@/types'
+import { patientBookingService, type PatientBookingDoctor } from '@/services/patient-booking.service'
+import type { NewsArticle, ServiceItem } from '@/types'
 import { getNewsImageSrcSet, getNewsImageUrl } from '@/utils/newsImage'
 
 const benefits = [
@@ -49,7 +49,7 @@ function ServiceMark({ index }: { index: number }) {
 export default function Home() {
   const [clinicServices, setClinicServices] = useState<ServiceItem[]>([])
   const [latestNews, setLatestNews] = useState<NewsArticle[]>([])
-  const [doctors, setDoctors] = useState<DoctorProfile[]>([])
+  const [doctors, setDoctors] = useState<PatientBookingDoctor[]>([])
   const [loadingServices, setLoadingServices] = useState(true)
   const [loadingDoctors, setLoadingDoctors] = useState(true)
 
@@ -251,11 +251,11 @@ export default function Home() {
                     </div>
                     <div className="mt-5 pb-2 flex-1 flex flex-col">
                       <h3 className="text-[17px] font-bold text-[#ea580c]">{doctor.ho_ten}</h3>
-                      {doctor.chuyen_khoa && <p className="mt-1 text-[13px] font-semibold text-[#ea580c]">{doctor.chuyen_khoa}</p>}
+                      {doctor.specialties && doctor.specialties.length > 0 && <p className="mt-1 text-[13px] font-semibold text-[#ea580c]">{doctor.specialties.map(s => s.ten).join(', ')}</p>}
                       
                       <div className="mt-4 pt-4 border-t border-slate-100 flex-1">
                         <p className="text-[13px] leading-relaxed text-slate-500 line-clamp-4">
-                          {doctor.kinh_nghiem || `Bác sĩ chuyên khoa tận tâm với ${doctor.so_nam_kinh_nghiem ? `${doctor.so_nam_kinh_nghiem} năm` : 'nhiều năm'} kinh nghiệm trong lĩnh vực khám và điều trị ${doctor.chuyen_khoa || 'Tai Mũi Họng'}.`}
+                          {doctor.kinh_nghiem || `Bác sĩ chuyên khoa tận tâm với ${doctor.so_nam_kinh_nghiem ? `${doctor.so_nam_kinh_nghiem} năm` : 'nhiều năm'} kinh nghiệm trong lĩnh vực khám và điều trị ${(doctor.specialties && doctor.specialties.length > 0) ? doctor.specialties.map(s => s.ten).join(', ') : 'Tai Mũi Họng'}.`}
                         </p>
                       </div>
                     </div>
