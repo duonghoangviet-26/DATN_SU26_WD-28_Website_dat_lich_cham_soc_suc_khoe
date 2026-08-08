@@ -30,7 +30,8 @@
     "react-router-dom": "^6.24.0",
     "recharts": "^3.9.2",
     "socket.io-client": "^4.8.1",
-    "vitafamily": "file:.."
+    "vitafamily": "file:..",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

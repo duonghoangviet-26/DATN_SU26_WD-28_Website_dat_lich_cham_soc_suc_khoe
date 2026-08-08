@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 import { thongKeService } from '@/services/thong-ke.service'
@@ -19,6 +20,7 @@ const PERIOD_OPTIONS: Array<{ value: DoctorRevenuePeriod; label: string }> = [
 ]
 
 export default function DoctorRevenueChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
+  const navigate = useNavigate()
   const [period, setPeriod] = useState<DoctorRevenuePeriod>('month')
   const [data, setData] = useState<DoctorRevenueStatistic[]>([])
   const [loading, setLoading] = useState(true)
@@ -111,6 +113,13 @@ export default function DoctorRevenueChart({ refreshVersion = 0 }: { refreshVers
               isAnimationActive
               animationDuration={500}
               animationEasing="ease-out"
+              className="cursor-pointer transition-opacity hover:opacity-80"
+              onClick={(data: any) => {
+                const id = data?.bac_si_id || data?.payload?.bac_si_id
+                if (id) {
+                  navigate(`/admin/doanh-thu-bac-si/${id}`)
+                }
+              }}
             />
           </BarChart>
         </ResponsiveContainer>

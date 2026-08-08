@@ -10,6 +10,7 @@ router.use(verifyToken, requireRole('admin'))
 router.get('/doanh-thu-theo-ngay', thongKe.doanhThuTheoNgay)
 router.get('/lich-hen-theo-trang-thai', thongKe.lichHenTheoTrangThai)
 router.get('/doanh-thu-theo-bac-si', thongKe.doanhThuTheoBacSi)
+router.get('/doanh-thu-bac-si/:id', thongKe.chiTietDoanhThuBacSi)
 router.get('/benh-nhan-moi-theo-thang', thongKe.benhNhanMoiTheoThang)
 router.get('/dich-vu-pho-bien', thongKe.dichVuPhoBien)
 

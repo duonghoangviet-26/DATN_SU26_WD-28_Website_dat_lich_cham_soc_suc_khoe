@@ -46,3 +46,23 @@ export interface TopServiceStatistic {
   so_luot_dung: number
   doanh_thu: number
 }
+
+export interface DoctorRevenueDetail {
+  chartData: {
+    ngay: string
+    doanh_thu: number
+    so_luot_kham: number
+  }[]
+  topServices: TopServiceStatistic[]
+  rating: {
+    trung_binh: number
+    so_luong: number
+  }
+  summary: {
+    doanh_thu: number
+    so_luot_kham: number
+    benh_nhan_moi: number
+    benh_nhan_cu: number
+    tong_benh_nhan: number
+  }
+}

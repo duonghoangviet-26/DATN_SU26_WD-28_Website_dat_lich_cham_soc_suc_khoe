@@ -6,6 +6,7 @@ import {
   getDoanhThuTheoNgay,
   getLichHenTheoTrangThai,
   getBenhNhanMoiTheoNam,
+  getChiTietDoanhThuBacSi,
 } from '../services/thong-ke.service.js'
 import { fail, ok } from '../utils/response.js'
 
@@ -118,4 +119,12 @@ export async function dichVuPhoBien(req, res) {
   const range = parseDateRange(req.query)
   if (range.error) return fail(res, 400, range.error)
   return respond(res, () => getDichVuPhoBien(range), 'Thống kê dịch vụ phổ biến')
+}
+
+export async function chiTietDoanhThuBacSi(req, res) {
+  const { id } = req.params
+  if (!id) return fail(res, 400, 'Thiếu ID bác sĩ')
+  const range = parseDateRange(req.query)
+  if (range.error) return fail(res, 400, range.error)
+  return respond(res, () => getChiTietDoanhThuBacSi(id, range), 'Chi tiết doanh thu bác sĩ')
 }

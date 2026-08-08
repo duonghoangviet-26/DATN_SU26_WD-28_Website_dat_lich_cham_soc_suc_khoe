@@ -7,6 +7,7 @@ import type {
   NewPatientStatisticMode,
   RevenueDailyStatistic,
   TopServiceStatistic,
+  DoctorRevenueDetail,
 } from '@/types/thong-ke'
 
 interface ApiResponse<T> {
@@ -76,4 +77,9 @@ export const thongKeService = {
     const url = `/thong-ke/dich-vu-pho-bien${queryString({ tu, den })}`
     return getOnce(url, () => getData<TopServiceStatistic[]>(url))
   },
+
+  getDoctorRevenueDetail(doctorId: string, tu: string, den: string) {
+    const url = `/thong-ke/doanh-thu-bac-si/${doctorId}${queryString({ tu, den })}`
+    return getOnce(url, () => getData<DoctorRevenueDetail>(url))
+  }
 }
