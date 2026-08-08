@@ -7,6 +7,7 @@ import statsRoutes        from './stats.routes.js'
 import leavesRoutes       from './leaves.routes.js'
 import queueRoutes        from './queue.routes.js'
 import roomStatusRoutes   from './room-status.routes.js'
+import examSessionRoutes  from './exam-session.routes.js'
 import { list as queueEntriesList } from '../../controllers/doctor/queue.controller.js'
 
 // ============================================================
@@ -20,6 +21,8 @@ router.use(verifyToken, requireRole('doctor'))
 // /api/doctor/queue: GET (Hồ sơ chờ khám, giữ nguyên contract cũ) + check-in/call/into-room/
 // finish/skip/cancel (hàng đợi động — trước đây do y tá đảm nhiệm, nay bác sĩ tự thao tác).
 router.use('/queue',         queueRoutes)
+// WS-1 — Phiên khám 4 bước. `verifyToken` + `requireRole('doctor')` đã áp ở đầu file.
+router.use('/exam-session',  examSessionRoutes)
 // Hàng đợi động chi tiết (kèm thời gian chờ ước tính) — dùng cho action gọi/vào phòng/kết thúc.
 router.get('/queue-entries', queueEntriesList)
 router.use('/room-status',   roomStatusRoutes)
