@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { DichVu, DonThuoc, HangDoi, KetQuaKham, LichHen, SinhHieuKham } from '../models/index.js'
+import { DichVu, DonThuoc, HangDoi, KetQuaKham, LichHen, NhatKyThaoTac, SinhHieuKham } from '../models/index.js'
 import { soSanhThuTuHangDoi } from '../models/HangDoi.js'
 import {
   CAC_BUOC,
@@ -272,4 +272,120 @@ export async function luuBuoc({ queueId, docId, doctorUserId, buoc, payload = {}
 
   await KetQuaKham.updateOne({ _id: hoSo._id }, { $set: capNhat })
   return layPhienKham({ queueId, docId })
+}
+
+/**
+ * Bệnh nhân kế tiếp trong hàng đợi của bác sĩ, theo đúng thứ tự ưu tiên ĐỘNG (rule mục 6).
+ *
+ * Trả kèm khi hoàn tất ca để bác sĩ bấm "Gọi" ngay tại chỗ. Không có nó, bác sĩ phải quay
+ * về trang hàng đợi sau mỗi ca — thao tác thừa lặp lại 30 lần một ngày.
+ */
+async function timBenhNhanKeTiep(docId, now = new Date()) {
+  const dangCho = await HangDoi.find({
+    doctor_id: docId,
+    trang_thai: { $in: ['dang_cho', 'da_goi'] },
+  }).lean()
+  if (dangCho.length === 0) return null
+
+  const [ke] = [...dangCho].sort((a, b) => soSanhThuTuHangDoi(a, b, now))
+  return {
+    queue_id: String(ke._id),
+    ten_benh_nhan: ke.ten_benh_nhan,
+    ma_so_thu_tu: ke.ma_so_thu_tu ?? null,
+    nguon: ke.nguon,
+    trang_thai: ke.trang_thai,
+  }
+}
+
+/**
+ * Chốt ca khám: hồ sơ → `da_xac_nhan`, lượt → `hoan_thanh`, lịch hẹn → `completed`.
+ *
+ * Ba bản ghi này phải cùng đúng hoặc cùng sai. Chốt hồ sơ mà lượt còn `trong_phong` sẽ
+ * khóa phòng vĩnh viễn; chốt lượt mà lịch hẹn còn `checked_in` sẽ khiến cron `no_show`
+ * cuối ca hiểu nhầm — nên gói trong MỘT transaction.
+ */
+export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new Date() }) {
+  const entry = await getOwnedOfflineQueue(queueId, docId)
+  const hoSo = await KetQuaKham.findOne({ hang_doi_id: entry._id })
+  if (!hoSo) throw loi(409, 'Chưa có hồ sơ khám cho lượt này')
+
+  // Không cho chốt khi chưa đi qua chẩn đoán — đúng lỗi hội đồng nêu.
+  if (!hoSo.chan_doan || hoSo.chan_doan === '(đang khám)') {
+    throw loi(400, 'Chưa nhập chẩn đoán, không chốt được ca khám')
+  }
+  if (!hoSo.trieu_chung_ban_dau) {
+    throw loi(400, 'Chưa ghi triệu chứng ở bước tiếp nhận')
+  }
+
+  const coDichVu = Array.isArray(hoSo.dich_vu_phat_sinh) && hoSo.dich_vu_phat_sinh.length > 0
+  const tongTienDichVu = coDichVu
+    ? hoSo.dich_vu_phat_sinh.reduce((s, d) => s + (d.thanh_tien ?? 0), 0)
+    : 0
+
+  const session = await mongoose.startSession()
+  try {
+    await session.withTransaction(async () => {
+      await KetQuaKham.updateOne(
+        { _id: hoSo._id },
+        {
+          $set: {
+            status: 'da_xac_nhan',
+            buoc_hien_tai: 'hoan_tat',
+            nguoi_xac_nhan_id: doctorUserId,
+            thoi_diem_xac_nhan: now,
+          },
+          $push: {
+            lich_su_sua: {
+              nguoi_sua_id: doctorUserId,
+              thoi_diem_sua: now,
+              noi_dung: 'Bác sĩ hoàn tất phiên khám 4 bước',
+            },
+          },
+        },
+        { session },
+      )
+
+      await HangDoi.updateOne(
+        { _id: entry._id },
+        { $set: { trang_thai: 'hoan_thanh', thoi_diem_ket_thuc: now } },
+        { session },
+      )
+
+      // ⚠️ updateOne chứ KHÔNG phải .save(): `LichHen.pre('validate')` kiểm cả những field
+      // ca khám không hề chạm, và với bản ghi cũ thiếu field nào đó sẽ ném lỗi vô nghĩa —
+      // cùng cái bẫy đã ghi ở `doiTrangThaiLichHen` trong queue.controller.js.
+      if (entry.appointment_id) {
+        await LichHen.updateOne(
+          { _id: entry.appointment_id },
+          { $set: { status: 'completed' } },
+          { session },
+        )
+      }
+    })
+  } finally {
+    await session.endSession()
+  }
+
+  // Ghi nhật ký NGOÀI transaction, nuốt lỗi: cùng nguyên tắc "audit không được làm hỏng
+  // nghiệp vụ" đã áp dụng ở `ghiNhatKyLeTan` (WS-4). Ba bản ghi nghiệp vụ đã chốt xong ở
+  // trên — audit thất bại không được phép kéo cả việc hoàn tất ca khám thất bại theo.
+  try {
+    await NhatKyThaoTac.create({
+      nguoi_thuc_hien_id: doctorUserId,
+      vai_tro: 'doctor',
+      hanh_dong: 'DOCTOR_COMPLETE_EXAM',
+      loai_doi_tuong: 'examination_result',
+      doi_tuong_id: hoSo._id,
+    })
+  } catch (err) {
+    console.error('[examSession] Không ghi được nhật ký DOCTOR_COMPLETE_EXAM:', err.message)
+  }
+
+  return {
+    ho_so_id: String(hoSo._id),
+    benh_nhan_ke_tiep: await timBenhNhanKeTiep(docId, now),
+    co_dich_vu_can_thu: coDichVu,
+    tong_tien_dich_vu: tongTienDichVu,
+    ten_benh_nhan: entry.ten_benh_nhan,
+  }
 }
