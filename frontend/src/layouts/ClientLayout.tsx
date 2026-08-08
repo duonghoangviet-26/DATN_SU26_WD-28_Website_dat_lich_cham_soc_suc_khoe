@@ -164,6 +164,26 @@ export default function ClientLayout() {
             </Link>
             <p className="mt-5 text-sm leading-6 text-slate-400">Phòng khám chuyên khoa Tai Mũi Họng dành cho người lớn và trẻ em. Đặt lịch dễ dàng, khám rõ ràng.</p>
             <a href="tel:0365747888" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-teal-300 hover:text-white"><Phone size={15} aria-hidden="true" /> 0365 747 888</a>
+            
+            <div className="mt-6 flex items-center gap-4">
+              <a href="https://www.facebook.com/" className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-slate-400 transition-all hover:bg-[#1877F2] hover:text-white" aria-label="Facebook">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3.65l.35-4H14V7a1 1 0 0 1 1-1h3z" />
+                </svg>
+              </a>
+              <a href="https://www.instagram.com/" className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-slate-400 transition-all hover:bg-[#E1306C] hover:text-white" aria-label="Instagram">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                  <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+                </svg>
+              </a>
+              <a href="https://zalo.me/vi/" className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-slate-400 transition-all hover:bg-[#0068FF] hover:text-white" aria-label="Zalo">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                </svg>
+              </a>
+            </div>
           </div>
           <div>
             <h2 className="text-sm font-semibold text-white">Khám và tìm hiểu</h2>
