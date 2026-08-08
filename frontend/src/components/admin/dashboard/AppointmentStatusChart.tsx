@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 
 import { thongKeService } from '@/services/thong-ke.service'
@@ -22,6 +23,7 @@ const STATUS_META = {
 }
 
 export default function AppointmentStatusChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
+  const navigate = useNavigate()
   const [period, setPeriod] = useState<AppointmentStatusPeriod>('month')
   const [data, setData] = useState<AppointmentStatusStatistic[]>([])
   const [loading, setLoading] = useState(true)
@@ -106,6 +108,8 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
               isAnimationActive
               animationDuration={500}
               animationEasing="ease-out"
+              onClick={(data: any) => data?.payload?.trang_thai && navigate(`/admin/appointments?status=${data.payload.trang_thai}`)}
+              style={{ cursor: 'pointer' }}
             >
               {chartData.map((item) => <Cell key={item.trang_thai} fill={item.color} />)}
             </Pie>
@@ -123,7 +127,11 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {chartData.map((item) => (
-          <div key={item.trang_thai} className="flex min-w-0 items-center gap-2 text-xs">
+          <div
+            key={item.trang_thai}
+            className="flex min-w-0 items-center gap-2 text-xs cursor-pointer hover:bg-slate-50 transition-colors p-1.5 -m-1.5 rounded-md"
+            onClick={() => navigate(`/admin/appointments?status=${item.trang_thai}`)}
+          >
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
             <span className="truncate text-slate-600">{item.name}</span>
             <strong className="ml-auto text-slate-800">{item.so_luong}</strong>

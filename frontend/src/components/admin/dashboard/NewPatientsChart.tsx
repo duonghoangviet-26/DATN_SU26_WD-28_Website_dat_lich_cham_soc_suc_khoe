@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 import { thongKeService } from '@/services/thong-ke.service'
@@ -13,6 +14,7 @@ const VIEW_OPTIONS: Array<{ mode: NewPatientStatisticMode; label: string }> = [
 ]
 
 export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
+  const navigate = useNavigate()
   const [mode, setMode] = useState<NewPatientStatisticMode>('month')
   const [data, setData] = useState<NewPatientStatistic[]>([])
   const [loading, setLoading] = useState(true)
@@ -138,22 +140,28 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
             <Bar
               dataKey="so_luong_cu"
               name="Bệnh nhân cũ"
-              fill="#94a3b8"
-              radius={[5, 5, 0, 0]}
+              fill="#f59e0b"
+              stackId="a"
+              radius={[0, 0, 0, 0]}
               maxBarSize={38}
               isAnimationActive
               animationDuration={500}
               animationEasing="ease-out"
+              onClick={() => navigate('/admin/users?role=patient')}
+              style={{ cursor: 'pointer' }}
             />
             <Bar
               dataKey="so_luong"
               name="Bệnh nhân mới"
               fill="#3b82f6"
+              stackId="a"
               radius={[5, 5, 0, 0]}
               maxBarSize={38}
               isAnimationActive
               animationDuration={500}
               animationEasing="ease-out"
+              onClick={() => navigate('/admin/users?role=patient')}
+              style={{ cursor: 'pointer' }}
             />
           </BarChart>
         </ResponsiveContainer>

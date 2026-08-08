@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { thongKeService } from '@/services/thong-ke.service'
 import type { TopServiceStatistic } from '@/types/thong-ke'
@@ -6,6 +7,7 @@ import ChartCard from './ChartCard'
 import { clinicDate, formatCurrency, getErrorMessage } from './chart-utils'
 
 export default function TopServicesTable({ refreshVersion = 0 }: { refreshVersion?: number }) {
+  const navigate = useNavigate()
   const [data, setData] = useState<TopServiceStatistic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -44,7 +46,8 @@ export default function TopServicesTable({ refreshVersion = 0 }: { refreshVersio
             return (
               <li
                 key={item.ten_dich_vu}
-                className="grid gap-3 bg-white px-4 py-4 sm:grid-cols-[minmax(0,1fr)_120px_150px] sm:items-center sm:gap-6"
+                className="grid gap-3 bg-white px-4 py-4 sm:grid-cols-[minmax(0,1fr)_120px_150px] sm:items-center sm:gap-6 cursor-pointer hover:bg-slate-50 transition-colors"
+                onClick={() => navigate('/admin/services')}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
