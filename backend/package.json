@@ -11,6 +11,7 @@
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
     "test:e2e:offline": "node src/scripts/e2e-offline-intake.js",
     "test:e2e:checkin-billing": "node src/scripts/e2e-offline-intake.js",
+    "test:e2e:nhat-ky": "node src/scripts/e2e-nhat-ky-le-tan.js",
     "db:init": "node src/scripts/init-db.js",
     "db:seed": "node src/scripts/seed-all.js",
     "db:repair-invoice-indexes": "node src/scripts/repair-hoadon-indexes.js",
