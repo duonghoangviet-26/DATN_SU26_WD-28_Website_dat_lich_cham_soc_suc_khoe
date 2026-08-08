@@ -54,6 +54,7 @@ const DoctorSchedule = lazy(() => import('@/pages/doctor/DoctorSchedule'))
 const DoctorAppointments = lazy(() => import('@/pages/doctor/DoctorAppointments'))
 const DoctorExamQueue = lazy(() => import('@/pages/doctor/DoctorExamQueue'))
 const DoctorLeaveRequests = lazy(() => import('@/pages/doctor/DoctorLeaveRequests'))
+const DoctorExamSession = lazy(() => import('@/pages/doctor/ExamSessionPage'))
 
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
@@ -160,6 +161,7 @@ export default function AppRoutes() {
         <Route index element={<DoctorDashboard />} />                  {/* B5 */}
         <Route path="appointments" element={<DoctorAppointments />} /> {/* B3+B4 */}
         <Route path="pending-records" element={<DoctorExamQueue />} /> {/* B4 — hồ sơ chờ khám (online + offline) */}
+        <Route path="exam/:queueId" element={<DoctorExamSession />} /> {/* B4 — phiên khám 5 bước */}
         <Route path="schedule" element={<DoctorSchedule />} />         {/* B2 */}
         <Route path="leave-requests" element={<DoctorLeaveRequests />} /> {/* B8 — xin nghỉ */}
         <Route path="profile" element={<DoctorProfile />} />           {/* B1 */}
