@@ -1,82 +1,96 @@
 import axiosInstance from '@/services/axiosInstance'
 import type { ApiResponse } from '@/types'
 
-export interface ReceptionistBookingDoctor {
-  id: string
-  ho_ten: string
-  anh_dai_dien?: string | null
-  gia_kham: number
-  so_nam_kinh_nghiem: number
-  diem_danh_gia: number
-  tong_danh_gia: number
-  tuoi_nhan_kham_tu: number
-  tieu_su?: string | null
-  specialties: { id: string; ten: string }[]
-}
-
 export interface ReceptionistBookingSlot {
   id: string
   schedule_id: string
   gio_bat_dau: string
   gio_ket_thuc: string
   phong_kham?: string | null
+  is_full?: boolean
 }
 
-export interface CreateReceptionistBookingPayload {
+export interface DayOverviewKhungRow {
+  khung_index: number
+  gio_bat_dau: string
+  gio_ket_thuc: string
+  tong_slot: number
+  con_trong: number
+  khoa_boi_nghi_phep: boolean
+}
+
+export interface DayOverviewDoctor {
   doctor_id: string
-  schedule_id: string
-  slot_id: string
-  ngay_kham: string
-  ten_khach: string
-  so_dien_thoai_khach: string
-  ly_do_kham?: string
-  payment_method: 'cash' | 'transfer'
-  user_id?: string
+  ten_bac_si: string
+  trang_thai_bac_si: string
+  trang_thai_ngay: 'lam_viec' | 'nghi' | 'nghi_phep' | 'khong_co_lich'
+  ca_sang: DayOverviewKhungRow[]
+  ca_chieu: DayOverviewKhungRow[]
 }
 
-export interface CreatedReceptionistBookingResult {
+export interface DayOverview {
+  ngay: string
+  doctors: DayOverviewDoctor[]
+}
+
+export interface DoctorDayAppointment {
+  _id: string
+  ma_lich_hen?: string | null
+  gio_kham: string
+  status: string
+  ten_khach?: string | null
+  so_dien_thoai_khach?: string | null
+  nguon?: 'online' | 'tai_cho'
+  user_id?: { ho_ten?: string | null; so_dien_thoai?: string | null } | null
+}
+
+export interface DoctorOperationalStatus {
+  doctor_id: string
+  ten_bac_si: string
+  phong_kham?: string | null
+  specialties?: Array<{ id: string; ten: string | null }>
+  trang_thai_van_hanh: string
+  so_dang_cho: number
+}
+
+export interface ReportDoctorUnavailablePayload {
+  doctor_id: string
+  tu_ngay: string
+  den_ngay: string
+  gio_bat_dau?: string
+  gio_ket_thuc?: string
+  reason: string
+}
+
+export interface SuddenLeaveProposalSummary {
   appointment_id: string
-  payment_id: string
-  qr_payload: string | null
+  so_phuong_an: number
+  cho_admin_duyet: boolean
+  can_lien_he_thu_cong: boolean
 }
 
-export interface ReceptionistPaymentGatewaySnapshot {
-  provider: string | null
-  mode: string | null
-  payment_url: string | null
-  qr_payload: string | null
-  expires_at: string | null
-  vnp_txn_ref: string | null
-  bank_code: string | null
-  locale: string | null
-  merchant_name: string | null
-  merchant_code: string | null
-  note: string | null
-  mock_status: string | null
-  is_expired: boolean
-}
-
-export interface ReceptionistPaymentStatusResult {
-  payment_id: string
+export interface SuddenLeaveSkippedAppointment {
   appointment_id: string
-  hoa_don_id: string | null
-  ma_giao_dich: string
-  so_tien: number
-  payment_status: string
-  appointment_status: string | null
-  appointment_payment_status: string | null
-  invoice_status: string | null
-  ngay_thanh_toan: string | null
-  phuong_thuc: string
-  gateway: ReceptionistPaymentGatewaySnapshot
+  ma_lich_hen?: string | null
+  status: string
+  ten_khach?: string | null
+  gio_kham: string
+  doctor_id?: string | null
+  specialty_id?: string | null
+  ly_do_bo_qua: 'benh_nhan_dang_trong_phong' | 'da_checkin_can_dieu_phoi_tai_quay' | 'dang_co_de_xuat_doi_mo' | 'trang_thai_khong_cho_phep_tao_de_xuat'
+  hang_doi?: { hang_doi_id: string; trang_thai: string; ma_so_thu_tu?: string | null } | null
+}
+
+export interface ReportDoctorUnavailableResult {
+  leave_id: string
+  so_lich_bi_anh_huong: number
+  so_slot_da_khoa: number
+  de_xuat_doi: SuddenLeaveProposalSummary[]
+  can_dieu_phoi_tai_quay: SuddenLeaveSkippedAppointment[]
+  so_luot_can_le_tan_lien_he: number
 }
 
 export const receptionistBookingService = {
-  async getDoctors(): Promise<ReceptionistBookingDoctor[]> {
-    const res = await axiosInstance.get<ApiResponse<ReceptionistBookingDoctor[]>>('/receptionist/booking/doctors')
-    return Array.isArray(res.data.data) ? res.data.data : []
-  },
-
   async getSlots(doctorId: string, date: string): Promise<ReceptionistBookingSlot[]> {
     const res = await axiosInstance.get<ApiResponse<ReceptionistBookingSlot[]>>(`/receptionist/booking/doctors/${doctorId}/slots`, {
       params: { date },
@@ -84,32 +98,29 @@ export const receptionistBookingService = {
     return Array.isArray(res.data.data) ? res.data.data : []
   },
 
-  async createBooking(payload: CreateReceptionistBookingPayload): Promise<CreatedReceptionistBookingResult> {
-    const res = await axiosInstance.post<ApiResponse<CreatedReceptionistBookingResult>>('/receptionist/booking', payload)
-    return res.data.data as CreatedReceptionistBookingResult
-  },
-
-  async createVnpaySession(paymentId: string): Promise<ReceptionistPaymentStatusResult> {
-    const res = await axiosInstance.post<ApiResponse<ReceptionistPaymentStatusResult>>(`/receptionist/payments/${paymentId}/vnpay-session`)
-    return res.data.data
-  },
-
-  async getPaymentStatus(paymentId: string): Promise<ReceptionistPaymentStatusResult> {
-    const res = await axiosInstance.get<ApiResponse<ReceptionistPaymentStatusResult>>(`/receptionist/payments/${paymentId}/status`)
-    return res.data.data
-  },
-
-  async completeMockVnpayPayment(paymentId: string): Promise<ReceptionistPaymentStatusResult> {
-    const res = await axiosInstance.post<ApiResponse<ReceptionistPaymentStatusResult>>(
-      `/receptionist/payments/${paymentId}/vnpay/mock-complete`
-    )
-    return res.data.data
-  },
-
-  async lookupUserByPhone(phone: string): Promise<{ found: boolean; user: any | null }> {
-    const res = await axiosInstance.get<ApiResponse<{ found: boolean; user: any | null }>>('/receptionist/users/lookup', {
-      params: { phone }
+  async getDayOverview(date: string): Promise<DayOverview> {
+    const res = await axiosInstance.get<ApiResponse<DayOverview>>('/receptionist/booking/day-overview', {
+      params: { date },
     })
     return res.data.data
-  }
+  },
+
+  // Dung cho panel "ai da dat khung nay" tren luoi Lich bac si trong ngay — goi 1 lan
+  // moi bac si/ngay, loc theo gio_kham o client thay vi them endpoint moi.
+  async getAppointmentsForDoctorDay(doctorId: string, date: string): Promise<DoctorDayAppointment[]> {
+    const res = await axiosInstance.get<ApiResponse<DoctorDayAppointment[]>>('/receptionist/appointments', {
+      params: { doctor_id: doctorId, date, limit: 100 },
+    })
+    return Array.isArray(res.data.data) ? res.data.data : []
+  },
+
+  async getDoctorOperationalStatuses(): Promise<DoctorOperationalStatus[]> {
+    const res = await axiosInstance.get<ApiResponse<DoctorOperationalStatus[]>>('/receptionist/appointments/doctor-statuses')
+    return Array.isArray(res.data.data) ? res.data.data : []
+  },
+
+  async reportDoctorUnavailable(payload: ReportDoctorUnavailablePayload): Promise<ReportDoctorUnavailableResult> {
+    const res = await axiosInstance.post<ApiResponse<ReportDoctorUnavailableResult>>('/receptionist/appointments/doctor-unavailable', payload)
+    return res.data.data
+  },
 }

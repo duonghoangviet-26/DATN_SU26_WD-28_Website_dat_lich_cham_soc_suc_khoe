@@ -16,5 +16,122 @@
     "status": "success",
     "rollbackable": false,
     "error_message": null
+  },
+  {
+    "name": "010-backfill-chuyen-khoa-slot-config",
+    "started_at": "2026-07-25T18:46:26.136Z",
+    "finished_at": "2026-07-25T18:46:26.843Z",
+    "affected_documents": 1,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
+  },
+  {
+    "name": "011-seed-mau-lich-lam-viec",
+    "started_at": "2026-07-25T19:17:00.063Z",
+    "finished_at": "2026-07-25T19:17:00.981Z",
+    "affected_documents": 56,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
+  },
+  {
+    "name": "011-seed-mau-lich-lam-viec",
+    "started_at": "2026-07-25T19:20:31.067Z",
+    "finished_at": "2026-07-25T19:20:31.866Z",
+    "affected_documents": 42,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
+  },
+  {
+    "name": "012-backfill-nguon-lich-hen",
+    "started_at": "2026-07-26T02:30:43.602Z",
+    "finished_at": "2026-07-26T02:30:44.486Z",
+    "affected_documents": 34,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
+  },
+  {
+    "name": "012-backfill-nguon-lich-hen",
+    "started_at": "2026-07-26T02:32:27.804Z",
+    "finished_at": "2026-07-26T02:32:28.790Z",
+    "affected_documents": 246,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
+  },
+  {
+    "name": "013-backfill-ho-so-benh-nhan-offline",
+    "started_at": "2026-07-28T07:44:35.007Z",
+    "finished_at": "2026-07-28T07:44:40.716Z",
+    "affected_documents": 0,
+    "status": "fail",
+    "rollbackable": false,
+    "error_message": "E11000 duplicate key error collection: DATN_VITAFAMILY.ho_so_benh_nhan index: khach_vang_lai_id_1 dup key: { khach_vang_lai_id: null }"
+  },
+  {
+    "name": "013-backfill-ho-so-benh-nhan-offline",
+    "started_at": "2026-07-28T07:45:57.127Z",
+    "finished_at": "2026-07-28T07:46:10.308Z",
+    "affected_documents": 0,
+    "status": "fail",
+    "rollbackable": false,
+    "error_message": "Index already exists with a different name: hang_doi_id_1"
+  },
+  {
+    "name": "013-backfill-ho-so-benh-nhan-offline",
+    "started_at": "2026-07-28T07:47:24.376Z",
+    "finished_at": "2026-07-28T07:47:27.462Z",
+    "affected_documents": 0,
+    "status": "fail",
+    "rollbackable": false,
+    "error_message": "An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: { v: 2, unique: true, key: { appointment_id: 1 }, name: \"uniq_hoa_don_theo_appointment\", partialFilterExpression: { appointment_id: { $type: \"objectId\" } } }, existing index: { v: 2, unique: true, key: { appointment_id: 1 }, name: \"uniq_hoa_don_theo_appointment\", sparse: true }"
+  },
+  {
+    "name": "013-backfill-ho-so-benh-nhan-offline",
+    "started_at": "2026-07-28T07:47:38.834Z",
+    "finished_at": "2026-07-28T07:47:43.335Z",
+    "affected_documents": 46,
+    "status": "success",
+    "rollbackable": false,
+    "error_message": null
+  },
+  {
+    "name": "013-backfill-ho-so-benh-nhan-offline",
+    "started_at": "2026-07-28T07:50:04.775Z",
+    "finished_at": "2026-07-28T07:50:08.993Z",
+    "affected_documents": 12,
+    "status": "success",
+    "rollbackable": false,
+    "error_message": null
+  },
+  {
+    "name": "013-backfill-ho-so-benh-nhan-offline",
+    "started_at": "2026-07-28T07:56:02.846Z",
+    "finished_at": "2026-07-28T07:56:07.062Z",
+    "affected_documents": 0,
+    "status": "fail",
+    "rollbackable": false,
+    "error_message": "Index already exists with a different name: ho_so_benh_nhan_id_1"
+  },
+  {
+    "name": "013-backfill-ho-so-benh-nhan-offline",
+    "started_at": "2026-07-28T07:56:18.286Z",
+    "finished_at": "2026-07-28T07:56:22.084Z",
+    "affected_documents": 0,
+    "status": "success",
+    "rollbackable": false,
+    "error_message": null
+  },
+  {
+    "name": "014-them-nguon-tao-nghi-phep",
+    "started_at": "2026-08-03T15:06:51.083Z",
+    "finished_at": "2026-08-03T15:07:31.276Z",
+    "affected_documents": 525,
+    "status": "success",
+    "rollbackable": true,
+    "error_message": null
   }
 ]

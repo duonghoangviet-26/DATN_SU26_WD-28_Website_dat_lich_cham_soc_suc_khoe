@@ -23,7 +23,7 @@ function mockLocalStorage(role: string | null) {
     store.set('user', JSON.stringify({ role }))
   }
 
-  vi.stubGlobal('localStorage', {
+  vi.stubGlobal('sessionStorage', {
     getItem: vi.fn((key: string) => store.get(key) ?? null),
     setItem: vi.fn((key: string, value: string) => store.set(key, value)),
     removeItem: vi.fn((key: string) => store.delete(key)),

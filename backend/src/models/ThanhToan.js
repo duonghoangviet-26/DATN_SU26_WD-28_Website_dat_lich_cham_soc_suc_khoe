@@ -14,6 +14,16 @@ const paymentSchema = new mongoose.Schema(
       index: true,
       default: null,
     },
+    hang_doi_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HangDoi',
+      default: null,
+    },
+    ho_so_benh_nhan_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HoSoBenhNhan',
+      default: null,
+    },
     benh_nhan_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'NguoiDung',

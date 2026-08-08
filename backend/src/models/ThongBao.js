@@ -51,10 +51,11 @@ const notificationSchema = new mongoose.Schema(
 
 notificationSchema.index({ user_id: 1, da_doc: 1 })
 notificationSchema.index({ ngay_tao: 1 })
+notificationSchema.index({ user_id: 1, 'du_lieu_dinh_kem.reminder_type': 1, 'du_lieu_dinh_kem.reminder_key': 1 })
 
 notificationSchema.pre('validate', function () {
   if (this.isNew && !this.ngay_gui_du_kien) {
-    throw new Error('Thong bao moi bat buoc co ngay_gui_du_kien')
+    this.ngay_gui_du_kien = new Date()
   }
 })
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { doctorService } from '@/services/doctor.service'
 import type { DoctorProfileAPI, DoctorDetailAPI, DoctorApproval } from '@/types'
 import { DOCTOR_APPROVAL_LABEL } from '@/utils/constants'
@@ -14,17 +14,6 @@ import DoctorActionModal, { ActionType } from './DoctorActionModal'
 const APPROVAL_COLOR: Record<string, 'green' | 'yellow' | 'red' | 'gray'> = {
   approved: 'green', pending: 'yellow', rejected: 'red', suspended: 'gray',
 }
-
-const STATUS_TABS: { value: DoctorApproval | ''; label: string; color: string }[] = [
-  { value: '', label: 'Tất cả', color: 'text-slate-600' },
-  { value: 'pending', label: 'Chờ duyệt', color: 'text-yellow-600' },
-  { value: 'approved', label: 'Đã duyệt', color: 'text-green-600' },
-  { value: 'rejected', label: 'Từ chối', color: 'text-red-600' },
-  { value: 'suspended', label: 'Tạm ngưng', color: 'text-slate-500' },
-]
-
-// HARDCODED ADMIN ID FOR NOW (Dùng tạm cho tới khi có JWT auth hoàn chỉnh)
-const CURRENT_ADMIN_ID = "000000000000000000000099"
 
 export default function ManageDoctors() {
   const [doctors, setDoctors] = useState<DoctorProfileAPI[]>([])
@@ -51,7 +40,7 @@ export default function ManageDoctors() {
   }, [keyword])
 
   // Load data
-  const loadData = async (ignore = false) => {
+  const loadData = useCallback(async (ignore = false) => {
     setLoading(true)
     try {
       const { doctors: data, pagination } = await doctorService.getAll({
@@ -70,13 +59,13 @@ export default function ManageDoctors() {
     } finally {
       if (!ignore) setLoading(false)
     }
-  }
+  }, [activeTab, debouncedKeyword, page])
 
   useEffect(() => {
     let ignore = false
     loadData(ignore)
     return () => { ignore = true }
-  }, [activeTab, debouncedKeyword, page])
+  }, [loadData])
 
   // Reset page when tab/keyword changes
   useEffect(() => { setPage(1) }, [activeTab, debouncedKeyword])
@@ -95,32 +84,32 @@ export default function ManageDoctors() {
         />
       </AdminMotionItem>
 
-      {/* Tìm kiếm & Lọc */}
-      <AdminMotionItem className="card mb-4 flex flex-col items-center justify-between gap-4 rounded-xl bg-white p-4 shadow-sm sm:flex-row">
-        <div className="flex gap-2 overflow-x-auto w-full sm:w-auto">
-          {STATUS_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setActiveTab(tab.value)}
-              className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.value
-                  ? 'bg-brand-500 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <div className="relative w-full sm:w-72">
-          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+      {/* Tìm kiếm (Bên trái) & Bộ lọc Đang hiển thị / Đã ẩn (Bên phải) */}
+      <AdminMotionItem className="card mb-4 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-xl bg-white p-4 shadow-sm">
+        {/* Ô tìm kiếm đặt bên trái, độ rộng kéo dài */}
+        <div className="relative w-full sm:w-[420px] md:w-[480px]">
+          <Icon name="search" className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input 
             type="text" 
-            placeholder="Tìm theo tên, email..." 
-            className="input w-full pl-9 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+            placeholder="Tìm kiếm theo tên bác sĩ, email..." 
+            className="input w-full pl-10 pr-4 bg-slate-50 border-slate-200 focus:bg-white focus:border-brand-500 transition-all text-sm rounded-xl py-2.5"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
+        </div>
+
+        {/* Bộ lọc trạng thái đặt bên phải (Đang hiển thị / Đã ẩn) */}
+        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-start sm:justify-end">
+          <span className="text-xs font-semibold text-slate-500 shrink-0">Trạng thái:</span>
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as DoctorApproval | '')}
+            className="select text-sm bg-slate-50 border-slate-200 focus:bg-white transition-colors rounded-xl py-2 px-3 text-slate-700 font-medium cursor-pointer w-full sm:w-auto min-w-[170px]"
+          >
+            <option value="">Tất cả trạng thái</option>
+            <option value="approved">Đang hiển thị</option>
+            <option value="suspended">Đã ẩn (Tạm ngưng)</option>
+          </select>
         </div>
       </AdminMotionItem>
 
@@ -212,7 +201,7 @@ export default function ManageDoctors() {
                         <button
                           onClick={() => openAction(doc, 'suspend')}
                           className="inline-flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 p-1.5 text-orange-600 transition-colors hover:bg-orange-100"
-                          title="Tạm ngưng"
+                          title="Ẩn bác sĩ (Tạm ngưng)"
                         >
                           <Icon name="ban" className="h-4 w-4" />
                         </button>
@@ -222,19 +211,11 @@ export default function ManageDoctors() {
                         <button
                           onClick={() => openAction(doc, 'restore')}
                           className="inline-flex items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 p-1.5 text-indigo-600 transition-colors hover:bg-indigo-100"
-                          title="Khôi phục"
+                          title="Hiển thị lại (Khôi phục)"
                         >
                           <Icon name="sync" className="h-4 w-4" />
                         </button>
                       )}
-
-                      <button
-                        onClick={() => openAction(doc, 'delete')}
-                        className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100"
-                        title="Xóa vĩnh viễn"
-                      >
-                        <Icon name="trash" className="h-4 w-4" />
-                      </button>
                     </div>
                   </td>
                 </tr>

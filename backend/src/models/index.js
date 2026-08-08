@@ -6,6 +6,8 @@
 
 export { default as NguoiDung }          from './NguoiDung.js'
 export { default as DatLaiMatKhau }      from './DatLaiMatKhau.js'
+export { default as UserSession }        from './UserSession.js'
+export { default as LichSuDangNhap }     from './LichSuDangNhap.js'
 
 export { default as ThongTinPhongKham }  from './ThongTinPhongKham.js'
 export { default as CauHinhPhongKham }   from './CauHinhPhongKham.js'
@@ -16,11 +18,13 @@ export { default as CaiDatThanhToan }    from './CaiDatThanhToan.js'
 export { default as GiaDinh }            from './GiaDinh.js'
 export { default as ThanhVien }          from './ThanhVien.js'
 export { default as KhachVangLai }       from './KhachVangLai.js'
+export { default as HoSoBenhNhan }       from './HoSoBenhNhan.js'
 
 export { default as BacSi }              from './BacSi.js'
 export { default as NghiPhepBacSi }      from './NghiPhepBacSi.js'
 export { default as HoSoChiTietBacSi }   from './HoSoChiTietBacSi.js'
 export { default as LichLamViec }        from './LichLamViec.js'
+export { default as MauLichLamViec }     from './MauLichLamViec.js'
 export { default as LichSuChinhSuaLichLamViec } from './LichSuChinhSuaLichLamViec.js'
 export { default as PhongKham }          from './PhongKham.js'
 export { default as TrangThaiPhongKham } from './TrangThaiPhongKham.js'
@@ -42,6 +46,7 @@ export { default as DonThuoc }           from './DonThuoc.js'
 export { default as NhacNho }            from './NhacNho.js'
 
 export { default as DanhGia }            from './DanhGia.js'
+export { default as TinTuc }             from './TinTuc.js'
 
 export { default as ThongBao }           from './ThongBao.js'
 export { default as ThongBaoHeThong }    from './ThongBaoHeThong.js'

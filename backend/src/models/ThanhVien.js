@@ -14,6 +14,11 @@ const memberSchema = new mongoose.Schema(
       ref: 'NguoiDung',
       default: null,
     },
+    ho_so_benh_nhan_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HoSoBenhNhan',
+      default: null,
+    },
     ho_ten: {
       type: String,
       required: [true, 'Ho ten thanh vien la bat buoc'],
@@ -22,16 +27,16 @@ const memberSchema = new mongoose.Schema(
     },
     ngay_sinh: {
       type: Date,
-      required: [true, 'Ngay sinh la bat buoc'],
+      default: null,
       validate: {
-        validator: (value) => value instanceof Date && value.getTime() < Date.now(),
+        validator: (value) => !value || (value instanceof Date && value.getTime() < Date.now()),
         message: 'Ngay sinh phai la ngay trong qua khu',
       },
     },
     gioi_tinh: {
       type: String,
-      enum: ['nam', 'nu', 'khac'],
-      required: [true, 'Gioi tinh la bat buoc'],
+      enum: ['nam', 'nu', 'khac', null],
+      default: null,
     },
     quan_he: {
       type: String,

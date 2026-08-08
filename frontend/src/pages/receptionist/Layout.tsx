@@ -118,7 +118,8 @@ export default function ReceptionistLayout() {
                             key={notif.id} 
                             onClick={() => {
                               setShowDropdown(false);
-                              navigate('/receptionist/appointments');
+                              const targetUrl = notif.du_lieu_dinh_kem?.url;
+                              navigate(typeof targetUrl === 'string' && targetUrl ? targetUrl : '/receptionist/appointments');
                             }}
                             className={`p-4 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors ${isUnread ? 'bg-brand-50/30' : ''}`}
                           >

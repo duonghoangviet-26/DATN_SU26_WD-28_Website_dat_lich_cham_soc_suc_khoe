@@ -4,6 +4,10 @@ import jwt from 'jsonwebtoken'
 let io = null
 const DASHBOARD_REVENUE_TYPES = new Set(['thanh_toan', 'hoa_don'])
 
+function doctorRoom(userId) {
+  return `doctor:${String(userId)}`
+}
+
 function clinicDate(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value)
   return new Intl.DateTimeFormat('en-CA', {
@@ -61,6 +65,10 @@ export function initRealtime(server) {
       socket.join('admin')
     }
 
+    if (user?.role === 'doctor' && user?.id) {
+      socket.join(doctorRoom(user.id))
+    }
+
     socket.emit('realtime:ready', {
       connected: true,
       role: user?.role ?? null,
@@ -75,6 +83,15 @@ export function emitAdminRealtime(event, payload = {}) {
   if (!io) return
 
   io.to('admin').emit(event, {
+    ...payload,
+    emitted_at: new Date().toISOString(),
+  })
+}
+
+export function emitDoctorQueueChanged(doctorUserId, payload = {}) {
+  if (!io || !doctorUserId) return
+
+  io.to(doctorRoom(doctorUserId)).emit('doctor:queue_updated', {
     ...payload,
     emitted_at: new Date().toISOString(),
   })
@@ -95,7 +112,11 @@ export function emitDashboardAppointmentChanged(trang_thai_cu, trang_thai_moi) {
 }
 
 export function emitDashboardNewPatient(ngayTao = new Date()) {
-  emitAdminRealtime('thongke:benh_nhan_moi', { thang: clinicMonth(ngayTao) })
+  const createdAt = ngayTao?.ngay_tao || ngayTao?.created_at || ngayTao || new Date()
+  emitAdminRealtime('thongke:benh_nhan_moi', {
+    ngay: clinicDate(createdAt),
+    thang: clinicMonth(createdAt),
+  })
 }
 
 export function getRealtimeServer() {

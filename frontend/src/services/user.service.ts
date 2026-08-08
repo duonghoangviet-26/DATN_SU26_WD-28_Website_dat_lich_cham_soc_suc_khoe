@@ -1,7 +1,7 @@
 // ============================================================
 // SERVICE: Quản lý người dùng (chức năng C1 của Admin)
 // ============================================================
-import type { User, ApiResponse } from '@/types'
+import type { User } from '@/types'
 import axios from './axiosInstance'
 
 interface UserFilters {
@@ -54,6 +54,12 @@ export const userService = {
   // Khóa / mở khóa một tài khoản
   async toggleStatus(id: string): Promise<User> {
     const { data } = await axios.patch(`/admin/users/${id}/toggle-lock`)
+    return data.data
+  },
+
+  // Reset mật khẩu người dùng về mặc định 123456
+  async resetPassword(id: string): Promise<{ user: User; default_password: string }> {
+    const { data } = await axios.patch(`/admin/users/${id}/reset-password`)
     return data.data
   },
 

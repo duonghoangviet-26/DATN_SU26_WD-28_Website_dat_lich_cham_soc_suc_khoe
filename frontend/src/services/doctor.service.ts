@@ -1,17 +1,15 @@
-import axios from 'axios'
+import axios from './axiosInstance'
 import { mockDoctors } from '@/mock/doctors'
 import { mockSpecialties } from '@/mock/hospitals'
 import type { DoctorApproval, DoctorProfileAPI, DoctorDetailAPI, DoctorAuditLog, DoctorProfile } from '@/types'
 
-// Note: Ensure your environment variable VITE_API_URL is set correctly (e.g. http://localhost:5000/api)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-const BASE_URL = `${API_URL}/admin/doctors`
+const BASE_URL = '/admin/doctors'
 
 const delay = (ms = 300) => new Promise<void>(r => setTimeout(r, ms))
 
 // Mock state — chỉ dùng cho updateServiceFields/getBySpecialtySlug bên dưới, 2 hàm này
 // chưa có endpoint backend thật (xem docs/DB_CHANGES_MAIN_VS_QUANLYDICHVU.md).
-let mockDoctorsState = [...mockDoctors]
+const mockDoctorsState = [...mockDoctors]
 
 export const doctorService = {
   // Lấy danh sách bác sĩ (có phân trang, tìm kiếm, lọc)
@@ -39,26 +37,26 @@ export const doctorService = {
   },
 
   // Duyệt hồ sơ bác sĩ
-  async approve(id: string, adminId: string): Promise<DoctorDetailAPI> {
-    const { data } = await axios.put(`${BASE_URL}/${id}/approve`, { admin_id: adminId })
+  async approve(id: string): Promise<DoctorDetailAPI> {
+    const { data } = await axios.put(`${BASE_URL}/${id}/approve`)
     return data.data
   },
 
   // Từ chối hồ sơ bác sĩ
-  async reject(id: string, adminId: string, ly_do: string): Promise<DoctorDetailAPI> {
-    const { data } = await axios.put(`${BASE_URL}/${id}/reject`, { admin_id: adminId, ly_do })
+  async reject(id: string, ly_do: string): Promise<DoctorDetailAPI> {
+    const { data } = await axios.put(`${BASE_URL}/${id}/reject`, { ly_do })
     return data.data
   },
 
   // Tạm ngưng bác sĩ
-  async suspend(id: string, adminId: string, ly_do: string): Promise<DoctorDetailAPI & { canh_bao?: string | null }> {
-    const { data } = await axios.put(`${BASE_URL}/${id}/suspend`, { admin_id: adminId, ly_do })
+  async suspend(id: string, ly_do: string): Promise<DoctorDetailAPI & { canh_bao?: string | null }> {
+    const { data } = await axios.put(`${BASE_URL}/${id}/suspend`, { ly_do })
     return data.data
   },
 
   // Khôi phục bác sĩ
-  async restore(id: string, adminId: string): Promise<DoctorDetailAPI> {
-    const { data } = await axios.put(`${BASE_URL}/${id}/restore`, { admin_id: adminId })
+  async restore(id: string): Promise<DoctorDetailAPI> {
+    const { data } = await axios.put(`${BASE_URL}/${id}/restore`)
     return data.data
   },
 

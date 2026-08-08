@@ -38,6 +38,11 @@ const khachVangLaiSchema = new mongoose.Schema(
       ref: 'NguoiDung',
       default: null,
     },
+    ho_so_benh_nhan_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HoSoBenhNhan',
+      default: null,
+    },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },

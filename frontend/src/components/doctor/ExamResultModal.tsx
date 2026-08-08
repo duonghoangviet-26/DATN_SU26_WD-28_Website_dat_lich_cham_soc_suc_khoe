@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from 'react'
 import Icon from '@/components/admin/icons'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import { examinationService } from '@/services/examination.service'
-import { stripEmptyDrugs } from '@/utils/prescription'
+import { stripEmptyDrugs, normalizeGioUong } from '@/utils/prescription'
 import { formatDate, toLocalDateStr } from '@/utils/format'
-import type { DoctorAppointmentDetail, ExaminationResult, PrescriptionDrug, AppointmentStatus } from '@/types'
+import type { DoctorAppointmentDetail, ExaminationResult, PrescriptionDrug, AppointmentStatus, ExamRelatedService } from '@/types'
 
 const EMPTY_DRUG: Omit<PrescriptionDrug, 'id'> = {
   ten_thuoc: '', lieu_luong: '', tan_suat: '2 lần/ngày',
@@ -13,6 +13,7 @@ const EMPTY_DRUG: Omit<PrescriptionDrug, 'id'> = {
 
 interface ExamResultModalProps {
   appt: DoctorAppointmentDetail
+  queueId?: string
   // 'edit'   — trang Lịch hẹn: nhập/sửa kết quả (Lưu/Cập nhật).
   // 'confirm'— trang Hồ sơ chờ xác nhận: bác sĩ sửa trực tiếp rồi "Lưu & Xác nhận" 1 thao tác.
   mode?: 'edit' | 'confirm'
@@ -51,9 +52,29 @@ function PatientInfoBlock({ appt, result }: { appt: DoctorAppointmentDetail; res
         </div>
       )}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Ngày sinh</p>
+          <p className="mt-0.5 text-slate-700">{appt.ngay_sinh ? formatDate(appt.ngay_sinh) : 'Chưa cập nhật'}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Nhóm máu</p>
+          <p className="mt-0.5 text-slate-700">{appt.nhom_mau || 'Chưa cập nhật'}</p>
+        </div>
         {canhBao('Dị ứng', appt.di_ung)}
         {canhBao('Bệnh nền', appt.benh_nen)}
       </div>
+      {appt.dia_chi && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Địa chỉ</p>
+          <p className="mt-0.5 text-slate-700">{appt.dia_chi}</p>
+        </div>
+      )}
+      {appt.ghi_chu && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Ghi chú tiếp nhận</p>
+          <p className="mt-0.5 whitespace-pre-wrap text-amber-900">{appt.ghi_chu}</p>
+        </div>
+      )}
       {result?.trieu_chung_ban_dau && (
         <div className="mt-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Triệu chứng ban đầu</p>
@@ -64,7 +85,7 @@ function PatientInfoBlock({ appt, result }: { appt: DoctorAppointmentDetail; res
   )
 }
 
-export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved, onConfirmed, onRevisionRequested }: ExamResultModalProps) {
+export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose, onSaved, onConfirmed, onRevisionRequested }: ExamResultModalProps) {
   const [loading, setLoading] = useState(true)
   const [existing, setExisting] = useState<ExaminationResult | null>(null)
   const [revisionReason, setRevisionReason] = useState('') // lý do đánh dấu hồ sơ "cần chỉnh sửa"
@@ -81,12 +102,21 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
   const [nhip_tim, setNhipTim] = useState('')
   // Đơn thuốc không bắt buộc — mặc định rỗng, bác sĩ bấm "Thêm thuốc" khi cần (2026-07-16).
   const [drugs, setDrugs] = useState<Omit<PrescriptionDrug, 'id'>[]>([])
+  const [relatedServices, setRelatedServices] = useState<ExamRelatedService[]>([])
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const topRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    examinationService.getByAppointment(appt.id).then((res) => {
+    const loadResult = queueId
+      ? examinationService.getByQueue(queueId)
+      : examinationService.getByAppointment(appt.id)
+    Promise.all([
+      loadResult,
+      examinationService.getRelatedServices(queueId ? { queue_id: queueId } : { appointment_id: appt.id }),
+    ]).then(([res, services]) => {
+      setRelatedServices(services)
       if (res) {
         setExisting(res)
         setChanDoan(res.chan_doan)
@@ -97,9 +127,11 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
         setDrugs(res.thuoc.map(({ ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu }) => ({
           ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu,
         })))
+        setSelectedServiceIds((res.dich_vu_phat_sinh ?? []).map((service) => String(service.service_id)))
       }
-    }).finally(() => setLoading(false))
-  }, [appt.id])
+    }).catch(() => setError('Không tải được danh mục dịch vụ chỉ định. Vui lòng thử lại.'))
+      .finally(() => setLoading(false))
+  }, [appt.id, queueId])
 
   // Hồ sơ đã xác nhận là CHỐT — khóa ngay lập tức (khớp backend updateResult, GAP-001).
   const isReadOnly = existing !== null && (existing.status === 'da_xac_nhan' || !existing.co_the_sua)
@@ -120,7 +152,9 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
       huong_dan_dieu_tri: huong_dan || null,
       ghi_chu: ghi_chu || null,
       ngay_tai_kham,
-      thuoc: stripEmptyDrugs(drugs), // H2 — loại dòng thuốc rỗng trước khi gửi
+      // H2 — loại dòng thuốc rỗng; đệm số 0 giờ uống (7:00 -> 07:00) trước khi gửi.
+      thuoc: stripEmptyDrugs(drugs).map((d) => ({ ...d, gio_uong: normalizeGioUong(d.gio_uong) })),
+      dich_vu_phat_sinh: selectedServiceIds.map((service_id) => ({ service_id, so_luong: 1 })),
       ...(coSinhHieu ? {
         sinh_hieu: {
           can_nang: can_nang.trim() ? Number(can_nang) : null,
@@ -138,10 +172,13 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
     setError(null)
     setSaving(true)
     try {
-      const result = await examinationService.save({ appointment_id: appt.id, ...buildPayload() })
+      const result = await examinationService.save({
+        ...(queueId ? { queue_id: queueId } : { appointment_id: appt.id }),
+        ...buildPayload(),
+      })
       onSaved?.(result)
-    } catch {
-      setError('Không lưu được kết quả khám. Vui lòng kiểm tra lại đơn thuốc và thử lại.')
+    } catch (saveError: any) {
+      setError(saveError?.response?.data?.message || 'Không lưu được kết quả khám. Vui lòng kiểm tra lại đơn thuốc và thử lại.')
     } finally {
       setSaving(false)
     }
@@ -154,8 +191,8 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
     try {
       const updated = await doctorAppointmentService.confirmResult(appt.id, buildPayload())
       onConfirmed?.(updated.appointment_status)
-    } catch {
-      setError('Không thể lưu & xác nhận. Kiểm tra chẩn đoán/đơn thuốc (số ngày 1–90, giờ uống HH:MM) rồi thử lại.')
+    } catch (confirmError: any) {
+      setError(confirmError?.response?.data?.message || 'Không thể lưu & xác nhận. Kiểm tra chẩn đoán/đơn thuốc (số ngày 1–90, giờ uống HH:MM) rồi thử lại.')
     } finally {
       setSaving(false)
     }
@@ -185,6 +222,11 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
     i: number, key: K, val: Omit<PrescriptionDrug, 'id'>[K],
   ) {
     setDrugs((prev) => prev.map((d, idx) => idx === i ? { ...d, [key]: val } : d))
+  }
+  function toggleService(id: string) {
+    setSelectedServiceIds((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id])
   }
 
   const primaryLabel = canConfirm
@@ -361,6 +403,29 @@ export default function ExamResultModal({ appt, mode = 'edit', onClose, onSaved,
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="input-label mb-0">Dịch vụ phát sinh <span className="font-normal text-slate-400">(chỉ định thu phí)</span></label>
+                <span className="text-xs text-slate-500">Thu ngân chỉ nhận các mục bác sĩ chọn</span>
+              </div>
+              {relatedServices.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">Chưa có dịch vụ phát sinh đang hoạt động cho chuyên khoa này.</p>
+              ) : (
+                <div className="space-y-2">
+                  {relatedServices.map((service) => (
+                    <label key={service._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm hover:border-brand-300">
+                      <span className="flex items-center gap-2 text-slate-700">
+                        <input type="checkbox" disabled={isReadOnly} checked={selectedServiceIds.includes(service._id)}
+                          onChange={() => toggleService(service._id)} />
+                        {service.ten}
+                      </span>
+                      <strong className="text-slate-800">{new Intl.NumberFormat('vi-VN').format(service.gia)} đ</strong>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Yêu cầu chỉnh sửa: đánh dấu hồ sơ cần sửa lại kèm lý do (song song với "Lưu & Xác nhận"). */}

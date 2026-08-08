@@ -1,7 +1,7 @@
 {
   "name": "vitafamily-backend",
   "version": "1.0.0",
-  "description": "VitaFamily - Máy chủ API (Node.js + Express)",
+  "description": "ViteFamily - Máy chủ API (Node.js + Express)",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -9,16 +9,21 @@
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\"",
+    "test:e2e:offline": "node src/scripts/e2e-offline-intake.js",
+    "test:e2e:checkin-billing": "node src/scripts/e2e-offline-intake.js",
     "db:init": "node src/scripts/init-db.js",
     "db:seed": "node src/scripts/seed-all.js",
+    "db:repair-invoice-indexes": "node src/scripts/repair-hoadon-indexes.js",
     "db:test-dbs": "node src/scripts/manage-test-databases.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "google-auth-library": "^10.9.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.4.0",
     "multer": "^2.2.0",

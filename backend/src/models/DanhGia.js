@@ -23,9 +23,25 @@ const reviewSchema = new mongoose.Schema(
       required: true,
       min: [1, 'Số sao tối thiểu 1'],
       max: [5, 'Số sao tối đa 5'],
-      validate: {
-        validator: Number.isInteger,
-        message: 'Số sao phải là số nguyên 1-5',
+    },
+    chi_tiet: {
+      danh_gia_le_tan: {
+        type: Number,
+        default: 5,
+        min: [1, 'Số sao tối thiểu 1'],
+        max: [5, 'Số sao tối đa 5'],
+      },
+      danh_gia_bac_si: {
+        type: Number,
+        default: 5,
+        min: [1, 'Số sao tối thiểu 1'],
+        max: [5, 'Số sao tối đa 5'],
+      },
+      danh_gia_dich_vu: {
+        type: Number,
+        default: 5,
+        min: [1, 'Số sao tối thiểu 1'],
+        max: [5, 'Số sao tối đa 5'],
       },
     },
     noi_dung: { type: String, default: null, maxlength: 500 },

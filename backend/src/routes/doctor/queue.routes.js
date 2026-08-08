@@ -5,6 +5,8 @@ import { examQueue } from '../../controllers/doctor/appointments.controller.js'
 const router = Router()
 
 router.get('/',              examQueue) // giữ nguyên contract GET /api/doctor/queue (Hồ sơ chờ khám)
+// Khách đã đặt hôm nay, chưa vào hàng đợi — nguồn cho nút "Tiếp nhận" ở trang Hồ sơ chờ khám.
+router.get('/pending-checkin', queue.pendingCheckin)
 router.post('/checkin',       queue.checkin)
 router.patch('/:id/call',      queue.call)
 router.patch('/:id/into-room',  queue.intoRoom)

@@ -4,7 +4,11 @@ import BacSi from '../../models/BacSi.js'
 import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
 import LichSuChinhSuaLichLamViec from '../../models/LichSuChinhSuaLichLamViec.js'
-import { buildDefaultScheduleSlots, generateRollingWindowForAllDoctors } from '../../services/scheduleGenerator.service.js'
+import {
+  buildDefaultScheduleSlots,
+  docMauChoNgay,
+  generateRollingWindowForAllDoctors,
+} from '../../services/scheduleGenerator.service.js'
 import { ok, fail } from '../../utils/response.js'
 
 const APPOINTMENT_CONFLICT_STATUSES = ['pending', 'confirmed', 'checked_in', 'in_progress']
@@ -165,8 +169,18 @@ function buildAppointmentStatsBySchedule(schedules, appointments) {
   return statsByScheduleId
 }
 
-function buildDefaultSlots({ specialtyId = null, phongKham = null } = {}) {
-  return buildDefaultScheduleSlots({ specialtyId, phongKham })
+// Tao slot cho MOT ngay cu the. Uu tien mau dang ky ca cua bac si (rule muc 3) de duong
+// tao lich THU CONG cua admin khong sinh ra lich lech voi duong cron.
+// Bac si chua co mau nao -> giu hanh vi cu (ca 2 ca): day la cua thoat co chu dich cho
+// admin, vd can mo them mot ngay dot xuat truoc khi kip xep ca chinh thuc.
+async function buildDefaultSlots({ specialtyId = null, phongKham = null, doctorId = null, ngay = null } = {}) {
+  const mau = doctorId && ngay ? await docMauChoNgay(doctorId, ngay) : null
+  return buildDefaultScheduleSlots({
+    specialtyId: mau?.chuyenKhoaId ?? specialtyId,
+    phongKham,
+    caLamViec: mau?.caLamViec ?? null,
+    phongTheoCa: mau?.phongTheoCa ?? null,
+  })
 }
 
 function compactSlot(slot) {
@@ -441,6 +455,8 @@ export async function ensureDoctorWorkday(req, res) {
       slots: await buildDefaultSlots({
         specialtyId: fallbackSpecialtyId,
         phongKham: phong_kham ?? doctor.phong_kham_mac_dinh ?? null,
+        doctorId: doctor_id,
+        ngay: workday,
       }),
     })
 

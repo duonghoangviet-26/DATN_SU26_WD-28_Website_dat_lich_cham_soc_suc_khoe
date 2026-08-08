@@ -12,7 +12,7 @@ export const mockNotifications: NotificationItem[] = [
   {
     id: 2,
     tieu_de: 'Cập nhật chính sách thanh toán',
-    noi_dung: 'VitaFamily đã thêm phương thức thanh toán VNPay. Bệnh nhân có thể thanh toán tiện lợi hơn khi đặt lịch.',
+    noi_dung: 'ViteFamily đã thêm phương thức thanh toán VNPay. Bệnh nhân có thể thanh toán tiện lợi hơn khi đặt lịch.',
     doi_tuong: 'benh_nhan',
     so_nguoi_nhan: 1162,
     ngay_gui: '2026-06-08T09:30:00',
@@ -28,7 +28,7 @@ export const mockNotifications: NotificationItem[] = [
   {
     id: 4,
     tieu_de: 'Tính năng mới: Khám tại nhà',
-    noi_dung: 'VitaFamily vừa ra mắt dịch vụ khám tại nhà tại Hà Nội và TP.HCM. Đặt lịch ngay để trải nghiệm!',
+    noi_dung: 'ViteFamily vừa ra mắt dịch vụ khám tại nhà tại Hà Nội và TP.HCM. Đặt lịch ngay để trải nghiệm!',
     doi_tuong: 'benh_nhan',
     so_nguoi_nhan: 1162,
     ngay_gui: '2026-06-01T07:00:00',
@@ -36,7 +36,7 @@ export const mockNotifications: NotificationItem[] = [
   {
     id: 5,
     tieu_de: 'Chúc mừng tháng Bác sĩ',
-    noi_dung: 'Nhân ngày Thầy thuốc Việt Nam 27/02, VitaFamily trân trọng cảm ơn đội ngũ bác sĩ đã đồng hành cùng chúng tôi.',
+    noi_dung: 'Nhân ngày Thầy thuốc Việt Nam 27/02, ViteFamily trân trọng cảm ơn đội ngũ bác sĩ đã đồng hành cùng chúng tôi.',
     doi_tuong: 'bac_si',
     so_nguoi_nhan: 86,
     ngay_gui: '2026-02-27T06:00:00',

@@ -1,4 +1,4 @@
-import { BacSi, NguoiDung, LichHen, NhatKyThaoTac } from '../models/index.js'
+import { BacSi, NguoiDung, LichHen, NhatKyThaoTac, HoSoChiTietBacSi } from '../models/index.js'
 import mongoose from 'mongoose'
 import { generateInitialWindowForDoctor } from './scheduleGenerator.service.js'
 
@@ -168,7 +168,10 @@ export async function createDoctorByAdmin(payload) {
     }
   }
 
-  const existingUser = await NguoiDung.findOne({ email: String(email).trim().toLowerCase() }).lean()
+  const existingUser = await NguoiDung.findOne({
+    email: String(email).trim().toLowerCase(),
+    ngay_xoa: null,
+  }).lean()
   if (existingUser) {
     throw new Error('email da ton tai')
   }
@@ -229,6 +232,8 @@ export async function getDoctorDetail(doctorId) {
 
   if (!doctor) throw new Error('Không tìm thấy bác sĩ')
 
+  const hoSoChiTiet = await HoSoChiTietBacSi.findOne({ doctor_id: doctorId }).lean()
+
   // Thống kê lịch hẹn
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -242,6 +247,7 @@ export async function getDoctorDetail(doctorId) {
 
   return {
     ...doctor,
+    ho_so_chi_tiet: hoSoChiTiet || null,
     thong_ke: {
       tong_lich_hen: tongLichHen,
       lich_hen_sap_toi: lichHenSapToi,
@@ -505,6 +511,59 @@ export async function updateDoctorInfo(doctorId, updateData, adminId) {
       doctor[field] = updateData[field]
       hasChanges = true
     }
+  }
+
+  if (updateData.ho_so_chi_tiet !== undefined && typeof updateData.ho_so_chi_tiet === 'object') {
+    const detailPayload = updateData.ho_so_chi_tiet || {}
+    const existingDetail = await HoSoChiTietBacSi.findOne({ doctor_id: doctorId })
+    const oldDetail = existingDetail ? existingDetail.toObject() : {}
+
+    const detailFieldsToTrack = [
+      'chuc_vu_hien_tai',
+      'ma_cchn',
+      'bang_cap_hoc_vi_tags',
+      'ngon_ngu',
+      'qua_trinh_dao_tao',
+      'qua_trinh_cong_tac',
+      'giai_thuong',
+    ]
+
+    for (const key of detailFieldsToTrack) {
+      if (detailPayload[key] !== undefined) {
+        const oldVal = oldDetail[key]
+        const newVal = detailPayload[key]
+        const isSame = Array.isArray(oldVal) || Array.isArray(newVal)
+          ? JSON.stringify(oldVal ?? []) === JSON.stringify(newVal ?? [])
+          : String(oldVal ?? '') === String(newVal ?? '')
+        if (!isSame) {
+          duLieuCu[key] = oldVal ?? null
+          duLieuMoi[key] = newVal ?? null
+          hasChanges = true
+        }
+      }
+    }
+
+    await HoSoChiTietBacSi.findOneAndUpdate(
+      { doctor_id: doctorId },
+      {
+        $set: {
+          chuc_danh: detailPayload.chuc_danh ?? null,
+          chuc_vu: detailPayload.chuc_vu ?? null,
+          chuc_vu_hien_tai: detailPayload.chuc_vu_hien_tai ?? null,
+          ma_cchn: detailPayload.ma_cchn ?? null,
+          gioi_thieu_ngan: detailPayload.gioi_thieu_ngan ?? null,
+          bang_cap_hoc_vi_tags: Array.isArray(detailPayload.bang_cap_hoc_vi_tags) ? detailPayload.bang_cap_hoc_vi_tags : [],
+          ngon_ngu: Array.isArray(detailPayload.ngon_ngu) ? detailPayload.ngon_ngu : ['Tiếng Việt'],
+          the_manh_chuyen_mon: Array.isArray(detailPayload.the_manh_chuyen_mon) ? detailPayload.the_manh_chuyen_mon : [],
+          benh_ly_dieu_tri: Array.isArray(detailPayload.benh_ly_dieu_tri) ? detailPayload.benh_ly_dieu_tri : [],
+          qua_trinh_cong_tac: Array.isArray(detailPayload.qua_trinh_cong_tac) ? detailPayload.qua_trinh_cong_tac : [],
+          qua_trinh_dao_tao: Array.isArray(detailPayload.qua_trinh_dao_tao) ? detailPayload.qua_trinh_dao_tao : [],
+          thanh_vien_hoi: Array.isArray(detailPayload.thanh_vien_hoi) ? detailPayload.thanh_vien_hoi : [],
+          giai_thuong: Array.isArray(detailPayload.giai_thuong) ? detailPayload.giai_thuong : [],
+        },
+      },
+      { upsert: true, new: true, runValidators: true }
+    )
   }
 
   if (hasChanges || hasUserChanges) {

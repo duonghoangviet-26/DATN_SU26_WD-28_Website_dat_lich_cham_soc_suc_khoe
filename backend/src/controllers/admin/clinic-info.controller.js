@@ -9,6 +9,33 @@ import {
   sanitizeClinicPayload,
 } from '../../services/admin/singleton-clinic.service.js'
 import { ok, fail } from '../../utils/response.js'
+import { kiemTraCauHinhSlot } from '../../utils/slotConfig.js'
+
+// Doc cau hinh nang luc kham (rule muc 2) tu body. Ban song song voi ban trong
+// specialties.controller.js — day la alias legacy cua cung mot nghiep vu, hai duong ghi
+// deu phai kiem cung mot rang buoc, neu khong admin lach qua duong con lai.
+function docCauHinhSlotTuBody(body, hienTai = {}) {
+  const patch = {}
+  for (const truong of [
+    'thoi_gian_kham_trung_binh_phut',
+    'so_slot_moi_khung',
+    'ty_le_online_phan_tram',
+    'gia_kham',
+  ]) {
+    if (body[truong] === undefined) continue
+    patch[truong] = body[truong] === null || body[truong] === '' ? null : Number(body[truong])
+  }
+
+  const loi = kiemTraCauHinhSlot({
+    thoi_gian_kham_trung_binh_phut:
+      patch.thoi_gian_kham_trung_binh_phut ?? hienTai.thoi_gian_kham_trung_binh_phut,
+    so_slot_moi_khung: patch.so_slot_moi_khung ?? hienTai.so_slot_moi_khung,
+    ty_le_online_phan_tram: patch.ty_le_online_phan_tram ?? hienTai.ty_le_online_phan_tram,
+    gia_kham: patch.gia_kham ?? hienTai.gia_kham,
+  })
+
+  return { patch, loi }
+}
 
 const toSlug = (value) =>
   value
@@ -348,12 +375,16 @@ export const createSpecialtyForClinic = async (req, res) => {
       return fail(res, 404, 'Khong tim thay phong kham')
     }
 
+    const { patch: cauHinhSlot, loi } = docCauHinhSlotTuBody(req.body)
+    if (loi) return fail(res, 400, loi)
+
     const specialty = await ChuyenKhoa.create({
       phong_kham_id: clinic._id,
       ten: ten.trim(),
       mo_ta: mo_ta || null,
       icon_url: icon_url || null,
       thu_tu: thu_tu ?? 0,
+      ...cauHinhSlot,
     })
 
     await writeSpecialtyAuditLog(req, 'CREATE_SPECIALTY', specialty._id, `Them chuyen khoa "${specialty.ten}" cho phong kham`)
@@ -375,6 +406,14 @@ export const updateSpecialty = async (req, res) => {
       return fail(res, 400, 'Ten chuyen khoa la bat buoc')
     }
 
+    const hienTai = await ChuyenKhoa.findById(specialtyId).lean()
+    if (!hienTai) return fail(res, 404, 'Khong tim thay chuyen khoa')
+
+    // findByIdAndUpdate KHONG chay pre('validate') cua document -> phai tu kiem tran
+    // so_slot_moi_khung o day, neu khong admin dat 5 slot cho ca kham 15' van lot.
+    const { patch: cauHinhSlot, loi } = docCauHinhSlotTuBody(req.body, hienTai)
+    if (loi) return fail(res, 400, loi)
+
     const updated = await ChuyenKhoa.findByIdAndUpdate(
       specialtyId,
       {
@@ -383,6 +422,7 @@ export const updateSpecialty = async (req, res) => {
         mo_ta: mo_ta || null,
         icon_url: icon_url || null,
         thu_tu: thu_tu ?? 0,
+        ...cauHinhSlot,
       },
       { new: true, runValidators: true }
     ).lean()

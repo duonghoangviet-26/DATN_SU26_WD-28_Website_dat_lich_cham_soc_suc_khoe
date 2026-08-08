@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { receptionistContactTasksService } from '../../services/receptionist-contact-tasks.service';
 
 interface Props {
   open: boolean;
@@ -8,11 +10,29 @@ interface Props {
 const receptionistMenu = [
   { path: '/receptionist', label: 'Tổng quan', icon: 'dashboard', end: true },
   { path: '/receptionist/appointments', label: 'Lịch hẹn (Phòng khám)', icon: 'calendar' },
-  { path: '/receptionist/booking', label: 'Tạo lịch khám', icon: 'add' },
+  { path: '/receptionist/patient-intake', label: 'Tiếp nhận tại quầy', icon: 'person' },
+  { path: '/receptionist/doctor-day-view', label: 'Lịch bác sĩ trong ngày', icon: 'calendar' },
+  { path: '/receptionist/contact-tasks', label: 'Cần gọi khách', icon: 'phone' },
   { path: '/receptionist/payments', label: 'Thanh toán & Thu ngân', icon: 'payment' },
+  { path: '/receptionist/news', label: 'Tin tức', icon: 'file-text' },
 ];
 
 export default function Sidebar({ open, onClose }: Props) {
+  const [chuaGoiCount, setChuaGoiCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      receptionistContactTasksService
+        .list({ trang_thai: 'chua_goi' })
+        .then((tasks) => { if (!cancelled) setChuaGoiCount(tasks.length); })
+        .catch(() => {});
+    };
+    load();
+    const timer = window.setInterval(load, 60000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+
   return (
     <>
       {open && (
@@ -28,13 +48,13 @@ export default function Sidebar({ open, onClose }: Props) {
         }`}
       >
         <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-100 px-5">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 shadow-sm">
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-600 shadow-sm">
             <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </div>
           <div>
-            <p className="text-sm font-bold leading-tight text-slate-800">VitaFamily</p>
+            <p className="text-sm font-bold leading-tight text-slate-800">ViteFamily</p>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Receptionist</p>
           </div>
         </div>
@@ -50,12 +70,15 @@ export default function Sidebar({ open, onClose }: Props) {
               className={({ isActive }) =>
                 `mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                   isActive
-                    ? 'bg-amber-500 text-white shadow-sm'
+                    ? 'bg-brand-600 text-white shadow-sm'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
                 }`
               }
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.path === '/receptionist/contact-tasks' && chuaGoiCount > 0 && (
+                <span className="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">{chuaGoiCount}</span>
+              )}
             </NavLink>
           ))}
         </nav>

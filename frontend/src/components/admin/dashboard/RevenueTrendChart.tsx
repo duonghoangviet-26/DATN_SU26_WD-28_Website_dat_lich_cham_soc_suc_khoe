@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -14,13 +14,52 @@ import type { RevenueDailyStatistic } from '@/types/thong-ke'
 import ChartCard from './ChartCard'
 import {
   clinicDate,
+  clinicDateMonthsAgo,
   formatCompactCurrency,
   formatCurrency,
   formatShortDate,
   getErrorMessage,
 } from './chart-utils'
 
-type Period = 7 | 30
+type RevenuePeriod = '7d' | '30d' | '3m' | '1y'
+
+const PERIOD_OPTIONS: Array<{ value: RevenuePeriod; label: string }> = [
+  { value: '7d', label: '7 ngày' },
+  { value: '30d', label: '30 ngày' },
+  { value: '3m', label: '3 tháng' },
+  { value: '1y', label: '1 năm' },
+]
+
+function revenuePeriodStart(period: RevenuePeriod) {
+  if (period === '7d') return clinicDate(-6)
+  if (period === '30d') return clinicDate(-29)
+  if (period === '3m') return clinicDateMonthsAgo(3)
+  return clinicDateMonthsAgo(12)
+}
+
+function clinicDateFromDate(date: Date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
+function fillDailyRevenueData(start: string, end: string, rows: RevenueDailyStatistic[]) {
+  const valueByDate = new Map(rows.map((item) => [item.ngay, item]))
+  const current = new Date(`${start}T00:00:00+07:00`)
+  const endDate = new Date(`${end}T00:00:00+07:00`)
+  const result: RevenueDailyStatistic[] = []
+
+  while (current <= endDate) {
+    const ngay = clinicDateFromDate(current)
+    result.push(valueByDate.get(ngay) ?? { ngay, da_thu: 0, da_xuat_hoa_don: 0 })
+    current.setDate(current.getDate() + 1)
+  }
+
+  return result
+}
 
 function RevenueTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
@@ -41,18 +80,24 @@ function RevenueTooltip({ active, payload, label }: any) {
 }
 
 export default function RevenueTrendChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
-  const [period, setPeriod] = useState<Period>(7)
+  const [period, setPeriod] = useState<RevenuePeriod>('7d')
   const [data, setData] = useState<RevenueDailyStatistic[]>([])
   const [loading, setLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
+    setLoading(true)
     setError('')
 
-    thongKeService.getRevenueByDay(clinicDate(-(period - 1)), clinicDate())
+    const startDate = revenuePeriodStart(period)
+    thongKeService.getRevenueByDay(startDate, clinicDate())
       .then((rows) => {
-        if (active) setData(rows)
+        if (active) {
+          setData(rows)
+          setHasLoaded(true)
+        }
       })
       .catch((err) => {
         if (active) setError(getErrorMessage(err))
@@ -64,6 +109,10 @@ export default function RevenueTrendChart({ refreshVersion = 0 }: { refreshVersi
     return () => { active = false }
   }, [period, refreshVersion])
 
+  const startDate = revenuePeriodStart(period)
+  const endDate = clinicDate()
+  const chartData = useMemo(() => fillDailyRevenueData(startDate, endDate, data), [data, endDate, startDate])
+
   return (
     <ChartCard
       title="Xu hướng doanh thu"
@@ -71,22 +120,24 @@ export default function RevenueTrendChart({ refreshVersion = 0 }: { refreshVersi
       icon="trending"
       iconBackgroundClassName="bg-blue-100"
       iconClassName="text-blue-600"
-      loading={loading}
-      empty={!data.length}
+      loading={loading && !hasLoaded}
+      empty={!chartData.length}
       error={error}
       action={(
-        <div className="inline-flex rounded-lg bg-slate-100 p-1" aria-label="Khoảng thời gian doanh thu">
-          {([7, 30] as Period[]).map((value) => (
+        <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200" aria-label="Khoảng thời gian doanh thu">
+          {PERIOD_OPTIONS.map((option) => (
             <button
-              key={value}
+              key={option.value}
               type="button"
-              onClick={() => setPeriod(value)}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-brand-300 ${
-                period === value ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              onClick={() => setPeriod(option.value)}
+              className={`min-h-9 rounded-md px-3 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 motion-reduce:transition-none ${
+                period === option.value
+                  ? 'bg-white text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'
               }`}
-              aria-pressed={period === value}
+              aria-pressed={period === option.value}
             >
-              {value} ngày
+              {option.label}
             </button>
           ))}
         </div>
@@ -94,7 +145,7 @@ export default function RevenueTrendChart({ refreshVersion = 0 }: { refreshVersi
     >
       <div className="h-72 w-full" aria-label="Biểu đồ xu hướng doanh thu">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
             <defs>
               <linearGradient id="collectedRevenue" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#2563eb" stopOpacity={0.18} />

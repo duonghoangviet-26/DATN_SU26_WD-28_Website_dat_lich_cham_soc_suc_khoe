@@ -12,6 +12,7 @@ import type {
   QueueCheckinPayload,
   QueueCheckinResult,
   QueueActionResult,
+  LichChoTiepNhan,
   HangDoiTrangThai,
   RoomStatus,
   PhongKhamTrangThai,
@@ -95,6 +96,13 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
+  async getPatientProfileHistory(profileId: string): Promise<{ profile: unknown; visits: unknown[] }> {
+    const res = await axiosInstance.get<ApiResponse<{ profile: unknown; visits: unknown[] }>>(
+      `/doctor/appointments/patient-profiles/${profileId}/history`,
+    )
+    return res.data.data
+  },
+
   // Hàng đợi khám của bác sĩ (online + offline gộp chung, trang "Hồ sơ chờ khám").
   async getExamQueue(date?: string): Promise<DoctorExamQueueRow[]> {
     const res = await axiosInstance.get<ApiResponse<DoctorExamQueueRow[]>>('/doctor/queue', { params: date ? { date } : {} })
@@ -118,6 +126,15 @@ export const doctorAppointmentService = {
   async checkinQueue(payload: QueueCheckinPayload): Promise<QueueCheckinResult> {
     const res = await axiosInstance.post<ApiResponse<QueueCheckinResult>>('/doctor/queue/checkin', payload)
     return res.data.data
+  },
+
+  // Khách đã đặt lịch hôm nay nhưng chưa vào hàng đợi — nguồn cho nút "Tiếp nhận".
+  async getPendingCheckin(date?: string): Promise<LichChoTiepNhan[]> {
+    const res = await axiosInstance.get<ApiResponse<LichChoTiepNhan[]>>(
+      '/doctor/queue/pending-checkin',
+      { params: date ? { date } : {} },
+    )
+    return Array.isArray(res.data.data) ? res.data.data : []
   },
 
   async callQueuePatient(id: string): Promise<QueueActionResult> {

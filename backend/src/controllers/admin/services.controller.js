@@ -213,7 +213,7 @@ export async function getById(req, res) {
 export async function create(req, res) {
   try {
     const {
-      ten, loai, gia, mo_ta_ngan, mo_ta, hinh_anh,
+      ten, loai, gia, mo_ta_ngan, mo_ta, hinh_anh, image_url,
       gio_dat_truoc_toi_thieu, specialty_id, khu_vuc, chuan_bi_truoc, la_goi, doi_tuong_ap_dung,
       loai_goi, so_nguoi_ap_dung, dich_vu_con, phan_tram_giam_gia,
     } = req.body
@@ -250,7 +250,8 @@ export async function create(req, res) {
       gia:            parseInt(gia, 10),
       mo_ta_ngan:     mo_ta_ngan?.trim() || null,
       mo_ta:          mo_ta?.trim()      || null,
-      hinh_anh:       hinh_anh?.trim()   || null,
+      hinh_anh:       hinh_anh?.trim()   || image_url?.trim() || null,
+      image_url:      image_url?.trim()  || hinh_anh?.trim() || null,
       thoi_gian_phut: null,
       gio_dat_truoc_toi_thieu: undefined,
       ngay_ap_dung:   null,
@@ -335,8 +336,8 @@ export async function update(req, res) {
     }
 
     // ── Cập nhật các trường còn lại ──────────────────────────────────────────
-    const STR_OR_NULL = new Set(['mo_ta_ngan', 'mo_ta', 'hinh_anh'])
-    const EDITABLE    = ['mo_ta_ngan', 'mo_ta', 'hinh_anh']
+    const STR_OR_NULL = new Set(['mo_ta_ngan', 'mo_ta', 'hinh_anh', 'image_url'])
+    const EDITABLE    = ['mo_ta_ngan', 'mo_ta', 'hinh_anh', 'image_url']
     for (const f of EDITABLE) {
       if (req.body[f] === undefined) continue
       service[f] = STR_OR_NULL.has(f) ? (req.body[f]?.trim() || null) : req.body[f]
@@ -416,6 +417,41 @@ export async function toggle(req, res) {
 
     const formatted = await populateService(service)
     return ok(res, formatted, wasActive ? 'Đã ẩn dịch vụ' : 'Đã hiện dịch vụ')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── DELETE /api/admin/services/:id ─────────────────────────────────────────
+export async function destroy(req, res) {
+  try {
+    const service = await DichVu.findById(req.params.id)
+    if (!service) return fail(res, 404, 'Không tìm thấy dịch vụ')
+    if (service.loai === 'home') return fail(res, 410, SERVICE_HOME_DISABLED_MESSAGE)
+
+    const activeCount = await LichHen.countDocuments({
+      service_id: service._id,
+      status: { $in: ['pending', 'confirmed'] },
+    })
+    if (activeCount > 0)
+      return fail(res, 400, `Không thể xóa — đang có ${activeCount} lịch hẹn đang xử lý`)
+
+    // Xoá tham chiếu dịch vụ trong bác sĩ
+    await BacSi.updateMany(
+      { related_services: service._id },
+      { $pull: { related_services: service._id } }
+    )
+    await BacSi.updateMany(
+      { services: service._id },
+      { $pull: { services: service._id } }
+    )
+
+    await DichVu.findByIdAndDelete(service._id)
+    
+    // Xoá log lịch sử thao tác của dịch vụ này
+    await NhatKyThaoTac.deleteMany({ loai_doi_tuong: 'service', doi_tuong_id: service._id })
+
+    return ok(res, null, 'Đã xóa dịch vụ vĩnh viễn')
   } catch (err) {
     return fail(res, 500, err.message)
   }

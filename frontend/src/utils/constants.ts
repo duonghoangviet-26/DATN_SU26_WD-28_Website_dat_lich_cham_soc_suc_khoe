@@ -1,16 +1,19 @@
 // Các hằng số dùng chung toàn hệ thống.
-// Khớp với ENUM trong cơ sở dữ liệu (xem VitaFamily_Database.sql).
+// Khớp với ENUM trong cơ sở dữ liệu (xem ViteFamily_Database.sql).
 
 // Vai trò người dùng
 export const ROLES = {
     USER: "user", // bệnh nhân
     DOCTOR: "doctor", // bác sĩ đã được duyệt
+    RECEPTIONIST: "receptionist", // lễ tân
     ADMIN: "admin", // quản trị viên
 };
 
 export const ROLE_LABEL = {
     user: "Bệnh nhân",
+    patient: "Bệnh nhân",
     doctor: "Bác sĩ",
+    receptionist: "Lễ tân",
     admin: "Quản trị viên",
 };
 

@@ -58,6 +58,8 @@ const appointmentHistorySchema = new mongoose.Schema(
     ngay_kham_moi: { type: Date, default: null },
     gio_kham_cu: { type: String, default: null },
     gio_kham_moi: { type: String, default: null },
+    phong_kham_cu: { type: String, default: null },
+    phong_kham_moi: { type: String, default: null },
 
     nguoi_thay_doi_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -80,7 +82,7 @@ const appointmentHistorySchema = new mongoose.Schema(
     },
     vai_tro: {
       type: String,
-      enum: ['admin', 'doctor', 'user', 'system'],
+      enum: ['admin', 'doctor', 'user', 'receptionist', 'system'],
       required: true,
     },
     ly_do: { type: String, default: null },

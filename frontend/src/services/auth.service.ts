@@ -45,4 +45,70 @@ export const authService = {
       so_dien_thoai: data.so_dien_thoai,
     })
   },
+
+  /**
+   * Quên mật khẩu - Yêu cầu cấp mã reset
+   */
+  async forgotPassword(email: string): Promise<any> {
+    const res = await axiosInstance.post<ApiResponse<any>>('/auth/forgot-password', {
+      email,
+    })
+    return res.data
+  },
+
+  /**
+   * Đặt lại mật khẩu mới với token
+   */
+  async resetPassword(token: string, matKhauMoi: string): Promise<any> {
+    const res = await axiosInstance.post<ApiResponse<any>>('/auth/reset-password', {
+      token,
+      mat_khau_moi: matKhauMoi,
+    })
+    return res.data
+  },
+
+  /**
+   * Đăng nhập / Đăng ký bằng Google OAuth 2.0
+   */
+  async loginWithGoogle(credential: string): Promise<LoginResult> {
+    const res = await axiosInstance.post<ApiResponse<LoginResult>>('/auth/google', {
+      credential,
+    })
+    return res.data.data
+  },
+
+  /**
+   * Cập nhật thông tin Onboarding (Bổ sung SĐT cho tài khoản Google)
+   */
+  async updateOnboarding(data: { so_dien_thoai: string; ho_ten?: string }): Promise<User> {
+    const res = await axiosInstance.post<ApiResponse<User>>('/auth/update-onboarding', data)
+    return res.data.data
+  },
+
+  async getProfile(): Promise<User> {
+    const res = await axiosInstance.get<ApiResponse<User>>('/auth/profile')
+    return res.data.data
+  },
+
+  async updateProfile(data: {
+    ho_ten: string
+    so_dien_thoai: string
+    ngay_sinh?: string | null
+    gioi_tinh?: 'nam' | 'nu' | 'khac' | null
+    nhom_mau?: 'A' | 'B' | 'AB' | 'O' | null
+    di_ung?: string | null
+    benh_nen?: string | null
+    dia_chi?: string | null
+    ghi_chu?: string | null
+  }): Promise<User> {
+    const res = await axiosInstance.put<ApiResponse<User>>('/auth/profile', data)
+    return res.data.data
+  },
+
+  /**
+   * Đăng xuất hệ thống & thu hồi session
+   */
+  async logout(): Promise<void> {
+    await axiosInstance.post<ApiResponse<void>>('/auth/logout')
+  },
 }

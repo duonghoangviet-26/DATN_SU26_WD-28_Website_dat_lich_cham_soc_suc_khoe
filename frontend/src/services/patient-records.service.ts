@@ -44,6 +44,7 @@ export interface PatientRecordDetail extends PatientRecordListItem {
       lieu_luong?: string
       tan_suat?: string
       gio_uong?: string[]
+      so_ngay?: number
       ngay_bat_dau?: string
       ngay_ket_thuc?: string
       ghi_chu?: string | null
@@ -58,6 +59,46 @@ interface PatientRecordListResponse {
   data: PatientRecordListItem[]
 }
 
+export interface MedicalResultItem {
+  id: string
+  ngay_kham: string
+  gio_kham: string
+  ten_dich_vu: string
+  phong_kham?: string | null
+  dia_chi_kham?: string | null
+  ten_khach?: string | null
+  member_id?: string | null
+  bac_si: {
+    ho_ten: string
+    anh_dai_dien?: string | null
+  }
+  ket_qua: {
+    id: string
+    chan_doan: string
+    huong_dan_dieu_tri: string
+    ghi_chu?: string | null
+    ngay_tai_kham?: string | null
+    ngay_tao: string
+    thuoc: Array<{
+      ten_thuoc?: string
+      lieu_luong?: string
+      tan_suat?: string
+      gio_uong?: string[]
+      so_ngay?: number
+      ngay_bat_dau?: string
+      ngay_ket_thuc?: string
+      ghi_chu?: string | null
+    } | string>
+  }
+}
+
+interface MedicalResultListResponse {
+  total: number
+  page: number
+  limit: number
+  data: MedicalResultItem[]
+}
+
 export const patientRecordsService = {
   async getAppointments(status?: string): Promise<PatientRecordListResponse> {
     const res = await axiosInstance.get<ApiResponse<PatientRecordListResponse>>('/patient/records', {
@@ -66,8 +107,23 @@ export const patientRecordsService = {
     return res.data.data
   },
 
+  async getMedicalResults(params?: { page?: number; limit?: number; startDate?: string; endDate?: string }): Promise<MedicalResultListResponse> {
+    const res = await axiosInstance.get<ApiResponse<MedicalResultListResponse>>('/patient/records/medical-results', {
+      params
+    })
+    return res.data.data
+  },
+
   async getAppointmentDetail(id: string): Promise<PatientRecordDetail> {
     const res = await axiosInstance.get<ApiResponse<PatientRecordDetail>>(`/patient/records/${id}`)
+    return res.data.data
+  },
+
+  async updateAppointmentContact(id: string, payload: { ho_ten: string; so_dien_thoai: string }): Promise<Pick<PatientRecordDetail, 'id' | 'ten_khach' | 'so_dien_thoai_khach'>> {
+    const res = await axiosInstance.patch<ApiResponse<Pick<PatientRecordDetail, 'id' | 'ten_khach' | 'so_dien_thoai_khach'>>>(
+      `/patient/records/${id}/contact`,
+      payload,
+    )
     return res.data.data
   },
 

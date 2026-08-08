@@ -19,6 +19,8 @@ const STATUS_COLOR: Record<TransactionStatus, 'green' | 'yellow' | 'gray'> = {
   refunded: 'gray',
 }
 
+const ADMIN_PAYMENTS_REFRESH_MS = 15000
+
 interface ActionIconButtonProps {
   label: string
   icon: string
@@ -219,6 +221,23 @@ export default function ManagePayments() {
     'admin:appointment_updated': () => setRealtimeTick((tick) => tick + 1),
     'admin:payment_updated': () => setRealtimeTick((tick) => tick + 1),
   }), [])
+
+  useEffect(() => {
+    const refresh = () => setRealtimeTick((tick) => tick + 1)
+    const intervalId = window.setInterval(refresh, ADMIN_PAYMENTS_REFRESH_MS)
+    const refreshOnVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refreshOnVisible)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refreshOnVisible)
+    }
+  }, [])
 
   useEffect(() => {
     setPage(1)

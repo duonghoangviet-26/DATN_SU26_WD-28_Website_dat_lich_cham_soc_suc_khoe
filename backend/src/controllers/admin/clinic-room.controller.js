@@ -3,7 +3,6 @@ import {
   BacSi,
   LichHen,
   LichLamViec,
-  NguoiDung,
   NhatKyThaoTac,
   PhongKham,
 } from '../../models/index.js'
@@ -62,11 +61,6 @@ function normalizeRoomPayload(body, { partial = false } = {}) {
   if (body.doctor_ids !== undefined) {
     if (!Array.isArray(body.doctor_ids)) throw new Error('Danh sách bác sĩ không hợp lệ')
     payload.doctor_ids = uniqueIds(body.doctor_ids, 'Bác sĩ')
-  }
-
-  if (body.nurse_ids !== undefined) {
-    if (!Array.isArray(body.nurse_ids)) throw new Error('Danh sách y tá không hợp lệ')
-    payload.nurse_ids = uniqueIds(body.nurse_ids, 'Y tá')
   }
 
   return payload
@@ -134,16 +128,6 @@ function compactDoctor(doctor) {
   }
 }
 
-function compactNurse(nurse) {
-  return {
-    _id: nurse._id,
-    ho_ten: nurse.ho_ten,
-    email: nurse.email,
-    so_dien_thoai: nurse.so_dien_thoai ?? null,
-    status: nurse.status,
-  }
-}
-
 function formatRoom(room, { futureSchedules = 0, activeAppointments = 0 } = {}) {
   const plain = typeof room.toObject === 'function' ? room.toObject({ virtuals: true }) : room
   return {
@@ -155,9 +139,7 @@ function formatRoom(room, { futureSchedules = 0, activeAppointments = 0 } = {}) 
     trang_thai: plain.trang_thai,
     full_name: plain.full_name ?? roomFullName(plain),
     doctor_ids: (plain.doctor_ids ?? []).map(compactDoctor),
-    nurse_ids: (plain.nurse_ids ?? []).map(compactNurse),
     doctor_count: plain.doctor_ids?.length ?? 0,
-    nurse_count: plain.nurse_ids?.length ?? 0,
     future_schedule_count: futureSchedules,
     active_appointment_count: activeAppointments,
     ngay_tao: plain.ngay_tao ?? null,
@@ -165,7 +147,7 @@ function formatRoom(room, { futureSchedules = 0, activeAppointments = 0 } = {}) 
   }
 }
 
-async function validateStaff({ doctor_ids = [], nurse_ids = [] }) {
+async function validateStaff({ doctor_ids = [] }) {
   if (doctor_ids.length > 0) {
     const doctors = await BacSi.find({
       _id: { $in: doctor_ids },
@@ -174,18 +156,6 @@ async function validateStaff({ doctor_ids = [], nurse_ids = [] }) {
     }).select('_id').lean()
     if (doctors.length !== doctor_ids.length) {
       throw new Error('Danh sách bác sĩ có hồ sơ không tồn tại hoặc chưa được duyệt')
-    }
-  }
-
-  if (nurse_ids.length > 0) {
-    const nurses = await NguoiDung.find({
-      _id: { $in: nurse_ids },
-      role: 'nurse',
-      status: 'active',
-      ngay_xoa: null,
-    }).select('_id').lean()
-    if (nurses.length !== nurse_ids.length) {
-      throw new Error('Danh sách y tá có tài khoản không tồn tại hoặc đang bị khóa')
     }
   }
 }
@@ -234,7 +204,7 @@ async function normalizeClinicBuildingData() {
     const possibleOldNames = Array.from(new Set([
       room.full_name,
       `${room.ten}, Tầng ${room.tang}, Tòa ${room.toa}`,
-      `${room.ten}, Tầng ${room.tang}, Tòa VitaFamily`,
+      `${room.ten}, Tầng ${room.tang}, Tòa ViteFamily`,
       `${room.ten}, Tầng ${room.tang}, Tòa A`,
       `${room.ten}, Tầng ${room.tang}, Tòa B`,
     ].flatMap((name) => [name, toWindows1252Mojibake(name)])))
@@ -330,21 +300,14 @@ async function updateFutureEmptySlots(doctorIds, fromRoom, toRoom, start) {
 
 export async function getRoomOptions(_req, res) {
   try {
-    const [doctors, nurses] = await Promise.all([
-      BacSi.find({ trang_thai_duyet: 'approved', la_hien: true })
-        .populate('user_id', 'ho_ten email')
-        .populate('specialties', 'ten')
-        .sort({ ngay_tao: -1 })
-        .lean(),
-      NguoiDung.find({ role: 'nurse', status: 'active', ngay_xoa: null })
-        .select('ho_ten email so_dien_thoai status')
-        .sort({ ho_ten: 1 })
-        .lean(),
-    ])
+    const doctors = await BacSi.find({ trang_thai_duyet: 'approved', la_hien: true })
+      .populate('user_id', 'ho_ten email')
+      .populate('specialties', 'ten')
+      .sort({ ngay_tao: -1 })
+      .lean()
 
     return ok(res, {
       doctors: doctors.map(compactDoctor),
-      nurses: nurses.map(compactNurse),
     })
   } catch (error) {
     return fail(res, 500, 'Không thể tải danh sách nhân sự: ' + error.message)
@@ -370,7 +333,6 @@ export async function getRooms(req, res) {
           { path: 'specialties', select: 'ten' },
         ],
       })
-      .populate('nurse_ids', 'ho_ten email so_dien_thoai status')
       .sort({ toa: 1, tang: 1, ten: 1 })
 
     const data = await Promise.all(
@@ -422,7 +384,6 @@ export async function updateRoom(req, res) {
     const payload = normalizeRoomPayload(req.body, { partial: true })
     await validateStaff({
       doctor_ids: payload.doctor_ids ?? previousDoctorIds,
-      nurse_ids: payload.nurse_ids ?? room.nurse_ids.map(String),
     })
 
     await assertUniqueRoom({
@@ -445,10 +406,6 @@ export async function updateRoom(req, res) {
         previousDoctorIds,
       })
     }
-    if (payload.nurse_ids !== undefined) {
-      await PhongKham.updateMany({ _id: { $ne: room._id } }, { $pull: { nurse_ids: { $in: payload.nurse_ids } } })
-    }
-
     const populated = await populateRoom(room._id)
     await writeRoomAudit(req, 'UPDATE_CLINIC_ROOM', room._id, before, formatRoom(populated), `Cập nhật phòng ${room.full_name}`)
 
@@ -507,5 +464,4 @@ async function populateRoom(id) {
         { path: 'specialties', select: 'ten' },
       ],
     })
-    .populate('nurse_ids', 'ho_ten email so_dien_thoai status')
 }

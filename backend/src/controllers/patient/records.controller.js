@@ -1,16 +1,38 @@
-import { LichHen, KetQuaKham, DonThuoc, BacSi, NguoiDung } from '../../models/index.js'
+import { LichHen, KetQuaKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
+import { buildSlotDateTime } from '../../utils/clinicTime.js'
+import { withOptionalTransaction } from '../../services/bookingPaymentState.service.js'
 
 // ============================================================
 // A3 — Lịch sử khám & Kết quả (Bệnh nhân)
 // Routes: /api/patient/records
 // ============================================================
 
+function ownedByUser(userId) {
+  return {
+    $or: [
+      { user_id: userId },
+      // Hỗ trợ dữ liệu lịch cũ được tạo qua luồng đặt hộ / lễ tân nhưng vẫn
+      // thuộc tài khoản này. Không dùng họ tên vì tên có thể thay đổi.
+      { nguoi_tao_id: userId },
+      { nguoi_dat_ho_id: userId },
+    ],
+  }
+}
+
+const EDITABLE_APPOINTMENT_STATUSES = ['pending', 'confirmed']
+
+function appointmentError(statusCode, message) {
+  const error = new Error(message)
+  error.statusCode = statusCode
+  return error
+}
+
 // ─── GET /api/patient/records?status=&page=&limit= ──────────────────────────
 export async function listRecords(req, res) {
   try {
     const { status, page = 1, limit = 10 } = req.query
-    const filter = { user_id: req.user.id }
+    const filter = ownedByUser(req.user.id)
     if (status) filter.status = status
 
     const skip  = (Number(page) - 1) * Number(limit)
@@ -35,7 +57,14 @@ export async function listRecords(req, res) {
     const examResults = await KetQuaKham.find({ appointment_id: { $in: appointmentIds } })
       .select('appointment_id')
       .lean()
-    const resultAppIds = new Set(examResults.map((r) => r.appointment_id.toString()))
+    const completedAppointmentIds = new Set(
+      appointments.filter((a) => a.status === 'completed').map((a) => a._id.toString()),
+    )
+    const resultAppIds = new Set(
+      examResults
+        .map((r) => r.appointment_id?.toString())
+        .filter((id) => id && completedAppointmentIds.has(id)),
+    )
 
     const data = appointments.map((a) => ({
       id:             a._id,
@@ -67,15 +96,120 @@ export async function listRecords(req, res) {
   }
 }
 
+// ─── GET /api/patient/records/medical-results ───────────────────────────────
+export async function listMedicalResults(req, res) {
+  try {
+    const { page = 1, limit = 10, startDate, endDate } = req.query
+    const filter = { ...ownedByUser(req.user.id), status: 'completed' }
+
+    if (startDate || endDate) {
+      filter.ngay_kham = {}
+      if (startDate) filter.ngay_kham.$gte = new Date(`${startDate}T00:00:00.000Z`)
+      if (endDate) filter.ngay_kham.$lte = new Date(`${endDate}T23:59:59.999Z`)
+    }
+
+    // Fetch ALL appointments matching the date and user filter to sort them
+    const allSortedAppointments = await LichHen.find(filter)
+      .sort({ ngay_kham: -1, gio_kham: -1 })
+      .select('_id')
+      .lean()
+      
+    const allAppointmentIds = allSortedAppointments.map((a) => a._id)
+
+    // Fetch ALL exam results for these appointments to know which ones actually have results
+    const allExamResults = await KetQuaKham.find({ appointment_id: { $in: allAppointmentIds } })
+      .select('appointment_id')
+      .lean()
+      
+    const appointmentsWithResultsIds = new Set(allExamResults.map((r) => r.appointment_id.toString()))
+
+    // Filter appointments to only those with results, maintaining sort order
+    const validAppointments = allSortedAppointments.filter((a) => appointmentsWithResultsIds.has(a._id.toString()))
+    
+    const total = validAppointments.length
+    const skip = (Number(page) - 1) * Number(limit)
+    
+    const paginatedAppIds = validAppointments.slice(skip, skip + Number(limit)).map((a) => a._id)
+
+    if (paginatedAppIds.length === 0) {
+      return ok(res, { total, page: Number(page), limit: Number(limit), data: [] })
+    }
+
+    // Now fetch full documents for the paginated page
+    const appointments = await LichHen.find({ _id: { $in: paginatedAppIds } })
+      .sort({ ngay_kham: -1, gio_kham: -1 })
+      .lean()
+
+    const appointmentIds = appointments.map((a) => a._id)
+    const doctorIds = [...new Set(appointments.map((a) => a.doctor_id.toString()))]
+
+    const [docList, examResults] = await Promise.all([
+      BacSi.find({ _id: { $in: doctorIds } })
+        .populate('user_id', 'ho_ten anh_dai_dien')
+        .select('user_id')
+        .lean(),
+      KetQuaKham.find({ appointment_id: { $in: appointmentIds } }).lean()
+    ])
+
+    const docMap = Object.fromEntries(docList.map((d) => [d._id.toString(), d.user_id]))
+    const examResultMap = Object.fromEntries(examResults.map((r) => [r.appointment_id.toString(), r]))
+
+    const resultIds = examResults.map((r) => r._id)
+    const prescriptions = await DonThuoc.find({
+      $or: [
+        { medical_record_id: { $in: resultIds } },
+        { ket_qua_kham_id: { $in: resultIds } }
+      ]
+    }).lean()
+
+    const prescriptionMap = Object.fromEntries(prescriptions.map((p) => {
+      const key = (p.ket_qua_kham_id || p.medical_record_id).toString()
+      return [key, p.items]
+    }))
+
+    const data = appointments.map((a) => {
+      const ketQua = examResultMap[a._id.toString()]
+      const thuoc = ketQua ? (prescriptionMap[ketQua._id.toString()] || []) : []
+      return {
+        id: a._id,
+        ngay_kham: a.ngay_kham,
+        gio_kham: a.gio_kham,
+        ten_dich_vu: a.ten_dich_vu,
+        phong_kham: a.phong_kham || 'Phòng 102 - Tầng 1',
+        dia_chi_kham: a.dia_chi_kham,
+        ten_khach: a.ten_khach || null,
+        member_id: a.member_id || null,
+        bac_si: {
+          ho_ten: docMap[a.doctor_id.toString()]?.ho_ten ?? 'Không rõ',
+          anh_dai_dien: docMap[a.doctor_id.toString()]?.anh_dai_dien ?? null,
+        },
+        ket_qua: ketQua ? {
+          id: ketQua._id,
+          chan_doan: ketQua.chan_doan,
+          huong_dan_dieu_tri: ketQua.huong_dan_dieu_tri,
+          ghi_chu: ketQua.ghi_chu,
+          ngay_tai_kham: ketQua.ngay_tai_kham,
+          ngay_tao: ketQua.ngay_tao,
+          thuoc: thuoc
+        } : null
+      }
+    })
+
+    return ok(res, { total, page: Number(page), limit: Number(limit), data })
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
 // ─── GET /api/patient/records/:id ───────────────────────────────────────────
 export async function getRecord(req, res) {
   try {
-    const a = await LichHen.findOne({ _id: req.params.id, user_id: req.user.id }).lean()
+    const a = await LichHen.findOne({ _id: req.params.id, ...ownedByUser(req.user.id) }).lean()
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
 
     const [doc, ketQua] = await Promise.all([
       BacSi.findById(a.doctor_id).populate('user_id', 'ho_ten anh_dai_dien so_dien_thoai').select('user_id').lean(),
-      KetQuaKham.findOne({ appointment_id: a._id }).lean(),
+      a.status === 'completed' ? KetQuaKham.findOne({ appointment_id: a._id }).lean() : null,
     ])
 
     let prescription = null
@@ -123,5 +257,75 @@ export async function getRecord(req, res) {
     })
   } catch (err) {
     return fail(res, 500, err.message)
+  }
+}
+
+// PATCH /api/patient/records/:id/contact
+// Chỉ sửa snapshot liên hệ của đúng lịch hẹn này; không sửa hồ sơ tài khoản.
+export async function updateAppointmentContact(req, res) {
+  try {
+    const hoTen = String(req.body?.ho_ten ?? '').trim()
+    const soDienThoai = String(req.body?.so_dien_thoai ?? '').trim()
+
+    if (hoTen.length < 2 || hoTen.length > 100) {
+      return fail(res, 400, 'Họ tên phải có từ 2 đến 100 ký tự')
+    }
+    if (!/^[\p{L}\s.'-]+$/u.test(hoTen)) {
+      return fail(res, 400, 'Họ tên chỉ được chứa chữ cái và khoảng trắng')
+    }
+    if (!/^0\d{9}$/.test(soDienThoai)) {
+      return fail(res, 400, 'Số điện thoại phải gồm 10 số và bắt đầu bằng số 0')
+    }
+
+    const updated = await withOptionalTransaction(async (session) => {
+      const appointment = await LichHen.findOne({
+        _id: req.params.id,
+        ...ownedByUser(req.user.id),
+      }).session(session)
+
+      if (!appointment) throw appointmentError(404, 'Không tìm thấy lịch hẹn')
+      if (!EDITABLE_APPOINTMENT_STATUSES.includes(appointment.status)) {
+        throw appointmentError(409, 'Lịch hẹn chỉ được sửa khi đang chờ xác nhận hoặc đã xác nhận')
+      }
+
+      const appointmentTime = buildSlotDateTime(appointment.ngay_kham, appointment.gio_kham)
+      if (!appointmentTime || appointmentTime.getTime() <= Date.now()) {
+        throw appointmentError(409, 'Lịch hẹn đã qua thời gian chỉnh sửa')
+      }
+
+      const oldName = appointment.ten_khach ?? null
+      const oldPhone = appointment.so_dien_thoai_khach ?? null
+      appointment.ten_khach = hoTen
+      appointment.so_dien_thoai_khach = soDienThoai
+      await appointment.save({ session })
+
+      await LichSuLichHen.create([{
+        appointment_id: appointment._id,
+        tu_trang_thai: appointment.status,
+        den_trang_thai: appointment.status,
+        loai_thay_doi: 'patient_contact_update',
+        ly_do_thay_doi: 'Bệnh nhân cập nhật thông tin liên hệ cho lịch hẹn',
+        nguoi_thay_doi_id: req.user.id,
+        nguoi_thuc_hien_id: req.user.id,
+        vai_tro: 'user',
+        kenh_thay_doi: 'patient_profile',
+        ly_do: JSON.stringify({
+          ten_khach_cu: oldName,
+          so_dien_thoai_khach_cu: oldPhone,
+          ten_khach_moi: hoTen,
+          so_dien_thoai_khach_moi: soDienThoai,
+        }),
+      }], { session })
+
+      return appointment
+    })
+
+    return ok(res, {
+      id: updated._id,
+      ten_khach: updated.ten_khach,
+      so_dien_thoai_khach: updated.so_dien_thoai_khach,
+    }, 'Cập nhật thông tin lịch hẹn thành công')
+  } catch (err) {
+    return fail(res, err.statusCode ?? 500, err.statusCode ? err.message : 'Không thể cập nhật thông tin lịch hẹn')
   }
 }

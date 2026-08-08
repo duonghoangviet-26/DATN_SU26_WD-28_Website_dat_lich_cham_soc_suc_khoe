@@ -4,6 +4,7 @@ import {
   DonThuoc,
   GiaDinh,
   HangDoi,
+  HoSoBenhNhan,
   KetQuaKham,
   LichHen,
   NguoiDung,
@@ -165,9 +166,23 @@ async function buildPatientSummary(patient) {
       : 0
   }
 
+  let primaryMemberObj = members.find((member) => member.la_chu_ho) || members[0] || null
+  if (primaryMemberObj && (!primaryMemberObj.gioi_tinh || !primaryMemberObj.ngay_sinh)) {
+    const patientProfile = await HoSoBenhNhan.findOne({ tai_khoan_id: patient._id, trang_thai: 'active' })
+      .select('gioi_tinh ngay_sinh nhom_mau di_ung benh_nen')
+      .lean()
+    if (patientProfile) {
+      if (!primaryMemberObj.gioi_tinh && patientProfile.gioi_tinh) primaryMemberObj.gioi_tinh = patientProfile.gioi_tinh
+      if (!primaryMemberObj.ngay_sinh && patientProfile.ngay_sinh) primaryMemberObj.ngay_sinh = patientProfile.ngay_sinh
+      if (!primaryMemberObj.nhom_mau && patientProfile.nhom_mau) primaryMemberObj.nhom_mau = patientProfile.nhom_mau
+      if (!primaryMemberObj.di_ung && patientProfile.di_ung) primaryMemberObj.di_ung = patientProfile.di_ung
+      if (!primaryMemberObj.benh_nen && patientProfile.benh_nen) primaryMemberObj.benh_nen = patientProfile.benh_nen
+    }
+  }
+
   return {
     ...normalizeUser(patient),
-    primary_member: normalizeMember(members.find((member) => member.la_chu_ho) || members[0]),
+    primary_member: normalizeMember(primaryMemberObj),
     family_member_count: members.length,
     appointment_count: appointmentCount,
     medical_record_count: recordCount,
@@ -340,6 +355,18 @@ export async function updatePatient(req, res) {
     if (userUpdate.ho_ten !== undefined && !String(userUpdate.ho_ten || '').trim()) {
       return fail(res, 400, 'Ho ten benh nhan la bat buoc')
     }
+    if (userUpdate.so_dien_thoai !== undefined && userUpdate.so_dien_thoai !== null) {
+      const phoneStr = String(userUpdate.so_dien_thoai).trim()
+      if (phoneStr) {
+        const phoneRegex = /^(0|\+84)[3|5|7|8|9][0-9]{8}$/
+        if (!phoneRegex.test(phoneStr)) {
+          return fail(res, 400, 'So dien thoai khong hop le (phai la 10 chu so hop le, bat dau bang 03, 05, 07, 08, 09 hoac +84)')
+        }
+        userUpdate.so_dien_thoai = phoneStr
+      } else {
+        userUpdate.so_dien_thoai = null
+      }
+    }
     if (userUpdate.status !== undefined && !['active', 'locked'].includes(userUpdate.status)) {
       return fail(res, 400, 'Trang thai tai khoan khong hop le')
     }
@@ -351,7 +378,7 @@ export async function updatePatient(req, res) {
     )
 
     const { members } = await getPatientMemberIds(patient._id)
-    const primaryMember = members.find((member) => member.la_chu_ho) || members[0] || null
+    let primaryMember = members.find((member) => member.la_chu_ho) || members[0] || null
     const memberUpdate = {}
     for (const field of MEMBER_EDIT_FIELDS) {
       if (field in req.body) {
@@ -372,9 +399,32 @@ export async function updatePatient(req, res) {
       return fail(res, 400, 'Nhom mau benh nhan khong hop le')
     }
 
-    const memberDiff = primaryMember
-      ? pickChangedFields(primaryMember, memberUpdate, MEMBER_EDIT_FIELDS)
-      : { oldLogData: {}, newLogData: {} }
+    if (!primaryMember) {
+      let family = await GiaDinh.findOne({ user_id: patient._id })
+      if (!family) {
+        family = await GiaDinh.create({
+          user_id: patient._id,
+          ten_nhom: `Gia đình ${userUpdate.ho_ten || patient.ho_ten}`,
+        })
+      }
+      primaryMember = await ThanhVien.create({
+        family_id: family._id,
+        tai_khoan_id: patient._id,
+        ho_ten: userUpdate.ho_ten || patient.ho_ten,
+        ngay_sinh: memberUpdate.ngay_sinh || new Date('1995-01-01'),
+        gioi_tinh: memberUpdate.gioi_tinh || 'nam',
+        la_chu_ho: true,
+        nhom_mau: memberUpdate.nhom_mau || null,
+        di_ung: memberUpdate.di_ung || null,
+        benh_nen: memberUpdate.benh_nen || null,
+      })
+    }
+
+    if (userUpdate.ho_ten && primaryMember && primaryMember.ho_ten !== userUpdate.ho_ten) {
+      memberUpdate.ho_ten = userUpdate.ho_ten
+    }
+
+    const memberDiff = pickChangedFields(primaryMember, memberUpdate, ['ho_ten', ...MEMBER_EDIT_FIELDS])
 
     const hasUserChanges = Object.keys(newUserLog).length > 0
     const hasMemberChanges = Object.keys(memberDiff.newLogData).length > 0
@@ -389,6 +439,27 @@ export async function updatePatient(req, res) {
     }
     if (hasMemberChanges && primaryMember) {
       await ThanhVien.findByIdAndUpdate(primaryMember._id, memberUpdate, { runValidators: true })
+    }
+
+    // Đồng bộ sang HoSoBenhNhan để phía Client (Trang hồ sơ bệnh nhân) cập nhật tức thì
+    const profileSyncData = {}
+    if (userUpdate.ho_ten) profileSyncData.ho_ten = userUpdate.ho_ten
+    if (userUpdate.so_dien_thoai) {
+      profileSyncData.so_dien_thoai = userUpdate.so_dien_thoai
+      profileSyncData.so_dien_thoai_tim_kiem = userUpdate.so_dien_thoai
+    }
+    if (memberUpdate.ngay_sinh !== undefined) profileSyncData.ngay_sinh = memberUpdate.ngay_sinh
+    if (memberUpdate.gioi_tinh !== undefined) profileSyncData.gioi_tinh = memberUpdate.gioi_tinh
+    if (memberUpdate.nhom_mau !== undefined) profileSyncData.nhom_mau = memberUpdate.nhom_mau
+    if (memberUpdate.di_ung !== undefined) profileSyncData.di_ung = memberUpdate.di_ung
+    if (memberUpdate.benh_nen !== undefined) profileSyncData.benh_nen = memberUpdate.benh_nen
+
+    if (Object.keys(profileSyncData).length > 0) {
+      await HoSoBenhNhan.findOneAndUpdate(
+        { tai_khoan_id: patient._id, trang_thai: 'active' },
+        { $set: profileSyncData, $setOnInsert: { nguon_tao: 'online', trang_thai: 'active' } },
+        { upsert: true, runValidators: true }
+      )
     }
 
     const oldLogData = {

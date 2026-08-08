@@ -1,4 +1,4 @@
-# PROMPT 31 — Kiểm tra cuối & Báo cáo đồ án: Trang Y tá (VitaFamily)
+# PROMPT 31 — Kiểm tra cuối & Báo cáo đồ án: Trang Y tá (ViteFamily)
 
 > Ngày: 2026-07-19 · Nhánh `Bac_si`. **Nguyên tắc: chỉ khẳng định khi có bằng chứng.** Phân loại: ✅ Đã hoàn thành · 🟡 Một phần · ⛔ Chưa hoàn thành · 🧪 Chưa kiểm thử (live) · ⬜ Ngoài phạm vi.
 

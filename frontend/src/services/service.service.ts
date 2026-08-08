@@ -23,7 +23,7 @@ interface PublicHomeServiceItem {
 }
 
 function getCurrentRole(): string | null {
-  const storage = globalThis.localStorage
+  const storage = globalThis.sessionStorage
   if (!storage) return null
 
   try {
@@ -49,7 +49,7 @@ function mapServiceItem(item: Partial<ServiceItem> & { id?: string; _id?: string
     gia: Number(item.gia ?? 0),
     mo_ta_ngan: item.mo_ta_ngan ?? null,
     mo_ta: item.mo_ta ?? null,
-    image_url: item.image_url ?? null,
+    image_url: item.image_url ?? item.hinh_anh ?? null,
     thoi_gian_phut: item.thoi_gian_phut ?? null,
     gio_dat_truoc_toi_thieu: item.gio_dat_truoc_toi_thieu ?? undefined,
     ngay_ap_dung: item.ngay_ap_dung ?? null,
@@ -176,5 +176,10 @@ export const serviceService = {
   async toggle(id: string): Promise<ServiceItem> {
     const res = await axiosInstance.patch<ApiResponse<ServiceItem>>(`/admin/services/${id}/toggle`)
     return mapServiceItem(res.data.data ?? {})
+  },
+
+  async delete(id: string): Promise<any> {
+    const res = await axiosInstance.delete<ApiResponse<any>>(`/admin/services/${id}`)
+    return res.data.data
   },
 }

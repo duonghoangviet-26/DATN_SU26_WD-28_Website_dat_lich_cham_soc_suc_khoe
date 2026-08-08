@@ -29,7 +29,7 @@ export default function ManageClinics() {
   const [sectionTab, setSectionTab] = useState<SectionTab>('specialties')
 
   const [rooms, setRooms] = useState<ClinicRoomItem[]>([])
-  const [roomOptions, setRoomOptions] = useState<ClinicRoomOptions>({ doctors: [], nurses: [] })
+  const [roomOptions, setRoomOptions] = useState<ClinicRoomOptions>({ doctors: [] })
   const [roomLoading, setRoomLoading] = useState(true)
   const [roomError, setRoomError] = useState<string | null>(null)
 
@@ -44,6 +44,7 @@ export default function ManageClinics() {
       const data = await clinicService.getCurrentClinic()
       setClinic(data)
     } catch {
+      setClinic(null)
     } finally {
       setClinicLoading(false)
     }
@@ -55,6 +56,7 @@ export default function ManageClinics() {
       const data = await clinicService.getSpecialties()
       setSpecialties(data)
     } catch {
+      setSpecialties([])
     } finally {
       setSpecialtyLoading(false)
     }
@@ -79,7 +81,7 @@ export default function ManageClinics() {
       const data = await clinicService.getRoomOptions()
       setRoomOptions(data)
     } catch {
-      setRoomOptions({ doctors: [], nurses: [] })
+      setRoomOptions({ doctors: [] })
     }
   }
 
@@ -156,7 +158,6 @@ export default function ManageClinics() {
   const totalDoctorsInSpecialties = specialties.reduce((sum, item) => sum + (item.doctor_count || 0), 0)
   const activeRooms = rooms.filter((item) => item.trang_thai === 'active').length
   const totalRoomDoctors = rooms.reduce((sum, item) => sum + item.doctor_count, 0)
-  const totalRoomNurses = rooms.reduce((sum, item) => sum + item.nurse_count, 0)
 
   return (
     <AdminAutoStagger className="space-y-6">
@@ -166,12 +167,6 @@ export default function ManageClinics() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard
-          title="Cơ sở"
-          value={clinic ? 1 : 0}
-          note={clinic ? 'Đã khởi tạo phòng khám chính' : 'Chưa có dữ liệu phòng khám'}
-          icon="hospital"
-        />
         <SummaryCard
           title="Phòng khám nhỏ"
           value={activeRooms}
@@ -197,9 +192,9 @@ export default function ManageClinics() {
           icon="users"
         />
         <SummaryCard
-          title="Nhân sự phòng"
-          value={totalRoomDoctors + totalRoomNurses}
-          note={`${totalRoomDoctors} bác sĩ, ${totalRoomNurses} y tá`}
+          title="Bác sĩ theo phòng"
+          value={totalRoomDoctors}
+          note="Bác sĩ đang được gán phòng"
           icon="user"
         />
       </div>

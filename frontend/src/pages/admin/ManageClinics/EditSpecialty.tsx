@@ -2,11 +2,29 @@ import { useEffect, useState } from 'react'
 import type { SpecialtyItem } from '@/types'
 import { clinicService } from '@/services/clinic.service'
 import Icon from '@/components/admin/icons'
+import SpecialtyCapacityFields, {
+  CAPACITY_MAC_DINH,
+  capacityPayload,
+  kiemTraCapacity,
+  type CapacityForm,
+} from './SpecialtyCapacityFields'
 
 interface Props {
   specialty: SpecialtyItem
   onSaved: (updated: SpecialtyItem) => void
   onCancel: () => void
+}
+
+// Bản ghi cũ (trước migration 010) chưa có các field cấu hình — rơi về mặc định theo rule.
+function capacityTuSpecialty(specialty: SpecialtyItem): CapacityForm {
+  return {
+    thoi_gian_kham_trung_binh_phut:
+      specialty.thoi_gian_kham_trung_binh_phut ?? CAPACITY_MAC_DINH.thoi_gian_kham_trung_binh_phut,
+    so_slot_moi_khung: specialty.so_slot_moi_khung ?? '',
+    ty_le_online_phan_tram:
+      specialty.ty_le_online_phan_tram ?? CAPACITY_MAC_DINH.ty_le_online_phan_tram,
+    gia_kham: specialty.gia_kham ?? CAPACITY_MAC_DINH.gia_kham,
+  }
 }
 
 export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
@@ -16,6 +34,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
     icon_url: specialty.icon_url || '',
     thu_tu: specialty.thu_tu || 0,
   })
+  const [capacity, setCapacity] = useState<CapacityForm>(() => capacityTuSpecialty(specialty))
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -27,6 +46,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       icon_url: specialty.icon_url ?? '',
       thu_tu: specialty.thu_tu,
     })
+    setCapacity(capacityTuSpecialty(specialty))
     setError(null)
   }, [specialty])
 
@@ -43,7 +63,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       setError(null)
       const url = await clinicService.uploadImage(file)
       setForm((prev) => ({ ...prev, icon_url: url }))
-    } catch (_) {
+    } catch {
       setError('Lỗi khi tải ảnh lên')
     } finally {
       setUploading(false)
@@ -56,6 +76,11 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
       setError('Tên chuyên khoa là bắt buộc')
       return
     }
+    const loiCapacity = kiemTraCapacity(capacity)
+    if (loiCapacity) {
+      setError(loiCapacity)
+      return
+    }
 
     try {
       setSaving(true)
@@ -65,6 +90,7 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
         mo_ta: form.mo_ta || undefined,
         icon_url: form.icon_url || undefined,
         thu_tu: form.thu_tu,
+        ...capacityPayload(capacity),
       })
       onSaved(updated)
     } catch (err: unknown) {
@@ -142,6 +168,11 @@ export default function EditSpecialty({ specialty, onSaved, onCancel }: Props) {
               />
             </div>
           </div>
+
+          <SpecialtyCapacityFields
+            form={capacity}
+            onChange={(patch) => setCapacity((prev) => ({ ...prev, ...patch }))}
+          />
         </div>
 
         <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-5 sm:px-6 lg:border-l lg:border-t-0">

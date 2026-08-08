@@ -7,6 +7,8 @@ interface AuthContextType {
   loading: boolean
   isAuthenticated: boolean
   login: (credentials: { email: string; password: string }) => Promise<User>
+  loginGoogle: (credential: string) => Promise<User>
+  updateUser: (user: User) => void
   logout: () => void
 }
 
@@ -17,12 +19,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const saved = localStorage.getItem('user')
+    const saved = sessionStorage.getItem('user')
     if (saved) {
       try {
         setUser(JSON.parse(saved))
       } catch {
-        localStorage.removeItem('user')
+        sessionStorage.removeItem('user')
       }
     }
     setLoading(false)
@@ -30,19 +32,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function login(credentials: { email: string; password: string }) {
     const { token, user: loggedUser } = await authService.login(credentials)
-    localStorage.setItem('token', token)
-    localStorage.setItem('user', JSON.stringify(loggedUser))
+    sessionStorage.setItem('token', token)
+    sessionStorage.setItem('user', JSON.stringify(loggedUser))
     setUser(loggedUser)
     return loggedUser
   }
 
+  async function loginGoogle(credential: string) {
+    const { token, user: loggedUser } = await authService.loginWithGoogle(credential)
+    sessionStorage.setItem('token', token)
+    sessionStorage.setItem('user', JSON.stringify(loggedUser))
+    setUser(loggedUser)
+    return loggedUser
+  }
+
+  function updateUser(updatedUser: User) {
+    sessionStorage.setItem('user', JSON.stringify(updatedUser))
+    setUser(updatedUser)
+  }
+
   function logout() {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    authService.logout().catch(() => {})
+    sessionStorage.removeItem('token')
+    sessionStorage.removeItem('user')
     setUser(null)
   }
 
-  const value: AuthContextType = { user, loading, login, logout, isAuthenticated: !!user }
+  const value: AuthContextType = { user, loading, login, loginGoogle, updateUser, logout, isAuthenticated: !!user }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

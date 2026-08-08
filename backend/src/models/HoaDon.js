@@ -7,6 +7,11 @@ const chiTietThuPhiSchema = new mongoose.Schema(
       enum: ['phi_kham', 'dich_vu', 'thu_thuat', 'giam_tru_bao_hiem'],
       required: true,
     },
+    service_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'DichVu',
+      default: null,
+    },
     ten: { type: String, default: null },
     so_tien: {
       type: Number,
@@ -37,8 +42,15 @@ const hoaDonSchema = new mongoose.Schema(
     appointment_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'LichHen',
-      unique: true,
-      required: true,
+    },
+    hang_doi_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HangDoi',
+    },
+    ho_so_benh_nhan_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HoSoBenhNhan',
+      default: null,
     },
     so_hoa_don: {
       type: String,
@@ -80,6 +92,12 @@ const hoaDonSchema = new mongoose.Schema(
       enum: ['chua_thanh_toan', 'da_dat_coc', 'da_thanh_toan_du', 'qua_han'],
       default: 'chua_thanh_toan',
     },
+    // Trạng thái tài chính và trạng thái quy trình thu ngân là hai việc khác nhau:
+    // lịch online có thể đã thu phí khám, nhưng vẫn phải chờ lễ tân đối chiếu
+    // dịch vụ phát sinh sau khi bác sĩ hoàn tất hồ sơ.
+    da_xac_nhan_thu_ngan: { type: Boolean, default: false },
+    nguoi_xac_nhan_thu_ngan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
+    thoi_diem_xac_nhan_thu_ngan: { type: Date, default: null },
     ghi_chu_ke_toan: {
       type: String,
       default: null,
@@ -90,5 +108,20 @@ const hoaDonSchema = new mongoose.Schema(
     collection: 'hoa_don',
   }
 )
+
+hoaDonSchema.index(
+  { appointment_id: 1 },
+  { unique: true, name: 'uniq_hoa_don_theo_appointment', partialFilterExpression: { appointment_id: { $type: 'objectId' } } },
+)
+hoaDonSchema.index(
+  { hang_doi_id: 1 },
+  { unique: true, name: 'uniq_hoa_don_theo_hang_doi', partialFilterExpression: { hang_doi_id: { $type: 'objectId' } } },
+)
+
+hoaDonSchema.pre('validate', function () {
+  if (!this.appointment_id && !this.hang_doi_id) {
+    throw new Error('Hoa don phai gan appointment_id hoac hang_doi_id')
+  }
+})
 
 export default mongoose.model('HoaDon', hoaDonSchema)

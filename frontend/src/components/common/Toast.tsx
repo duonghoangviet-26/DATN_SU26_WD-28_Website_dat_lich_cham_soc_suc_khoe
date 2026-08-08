@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface ToastProps {
   message: string
@@ -9,18 +9,23 @@ interface ToastProps {
 
 export default function Toast({ message, type, duration = 4000, onClose }: ToastProps) {
   const [visible, setVisible] = useState(false)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     const showTimer = setTimeout(() => setVisible(true), 10)
     const hideTimer = setTimeout(() => {
       setVisible(false)
-      setTimeout(onClose, 300)
+      window.setTimeout(() => onCloseRef.current(), 300)
     }, duration)
     return () => {
       clearTimeout(showTimer)
       clearTimeout(hideTimer)
     }
-  }, [])
+  }, [duration])
 
   const colorClass =
     type === 'success'
@@ -31,7 +36,7 @@ export default function Toast({ message, type, duration = 4000, onClose }: Toast
 
   function dismiss() {
     setVisible(false)
-    setTimeout(onClose, 300)
+    window.setTimeout(() => onCloseRef.current(), 300)
   }
 
   return (
@@ -39,10 +44,12 @@ export default function Toast({ message, type, duration = 4000, onClose }: Toast
       className={`fixed right-4 top-4 z-50 flex max-w-sm items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg transition-all duration-300 ${colorClass} ${
         visible ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0'
       }`}
+      role={type === 'error' ? 'alert' : 'status'}
+      aria-live={type === 'error' ? 'assertive' : 'polite'}
     >
       <span className="flex-1 leading-5">{message}</span>
-      <button onClick={dismiss} className="mt-0.5 shrink-0 opacity-50 hover:opacity-80">
-        ✕
+      <button type="button" onClick={dismiss} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg opacity-60 hover:bg-black/5 hover:opacity-100" aria-label="Đóng thông báo">
+        <span aria-hidden="true">×</span>
       </button>
     </div>
   )

@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react'
+import React, { forwardRef, useId } from 'react'
 
 interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
@@ -6,19 +6,25 @@ interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
 }
 
 const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ label, error, className = '', id, ...props }, ref) => {
-    const textareaId = id || `textarea-${Math.random().toString(36).substr(2, 9)}`
+  ({ label, error, className = '', id, required, 'aria-describedby': describedBy, ...props }, ref) => {
+    const generatedId = useId()
+    const textareaId = id || `textarea-${generatedId.replace(/:/g, '')}`
+    const errorId = `${textareaId}-error`
+    const visibleLabel = label?.replace(/\s*\*\s*$/, '')
 
     return (
       <div className="w-full space-y-1.5 text-left">
-        {label && (
+        {visibleLabel && (
           <label htmlFor={textareaId} className="text-xs font-semibold text-slate-700">
-            {label}
+            {visibleLabel}{required && <span className="text-red-600" aria-hidden="true"> *</span>}
           </label>
         )}
         <textarea
           id={textareaId}
           ref={ref}
+          required={required}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? [describedBy, errorId].filter(Boolean).join(' ') : describedBy}
           className={`w-full rounded-lg border text-sm transition-all duration-200 outline-none
             px-3.5 py-2.5 min-h-[100px]
             ${
@@ -29,7 +35,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
             placeholder-slate-400 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
           {...props}
         />
-        {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+        {error && <p id={errorId} className="text-xs font-medium text-red-600" role="alert">{error}</p>}
       </div>
     )
   }

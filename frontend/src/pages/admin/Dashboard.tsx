@@ -31,6 +31,8 @@ const QUICK_LINKS = [
   { label: 'Phòng khám & chuyên khoa', to: '/admin/clinics', icon: 'hospital' },
 ]
 
+const ADMIN_DASHBOARD_REFRESH_MS = 15000
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
@@ -81,7 +83,25 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<AdminDashboardSummary>(EMPTY_SUMMARY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [refreshTick, setRefreshTick] = useState(0)
   const { connection, versions } = useDashboardRealtime()
+
+  useEffect(() => {
+    const refresh = () => setRefreshTick((tick) => tick + 1)
+    const intervalId = window.setInterval(refresh, ADMIN_DASHBOARD_REFRESH_MS)
+    const refreshOnVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refreshOnVisible)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refreshOnVisible)
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -106,7 +126,7 @@ export default function Dashboard() {
 
     loadSummary()
     return () => controller.abort()
-  }, [versions.summary])
+  }, [versions.summary, refreshTick])
 
   const stats = [
     {
@@ -186,10 +206,10 @@ export default function Dashboard() {
       <AdminMotionItem>
         <AdminMotionGroup className="mt-6 grid min-w-0 gap-5 lg:grid-cols-3">
         <AdminMotionItem className="min-w-0 lg:col-span-2">
-          <RevenueTrendChart refreshVersion={versions.revenue} />
+          <RevenueTrendChart refreshVersion={versions.revenue + refreshTick} />
         </AdminMotionItem>
         <AdminMotionItem className="min-w-0">
-          <AppointmentStatusChart refreshVersion={versions.appointments} />
+          <AppointmentStatusChart refreshVersion={versions.appointments + refreshTick} />
         </AdminMotionItem>
         </AdminMotionGroup>
       </AdminMotionItem>
@@ -197,16 +217,16 @@ export default function Dashboard() {
       <AdminMotionItem>
         <AdminMotionGroup className="mt-5 grid min-w-0 gap-5 lg:grid-cols-2">
         <AdminMotionItem className="min-w-0">
-          <DoctorRevenueChart refreshVersion={versions.doctors} />
+          <DoctorRevenueChart refreshVersion={versions.doctors + refreshTick} />
         </AdminMotionItem>
         <AdminMotionItem className="min-w-0">
-          <NewPatientsChart refreshVersion={versions.patients} />
+          <NewPatientsChart refreshVersion={versions.patients + refreshTick} />
         </AdminMotionItem>
         </AdminMotionGroup>
       </AdminMotionItem>
 
       <AdminMotionItem className="mt-5 min-w-0">
-        <TopServicesTable refreshVersion={versions.services} />
+        <TopServicesTable refreshVersion={versions.services + refreshTick} />
       </AdminMotionItem>
 
       <AdminMotionItem>

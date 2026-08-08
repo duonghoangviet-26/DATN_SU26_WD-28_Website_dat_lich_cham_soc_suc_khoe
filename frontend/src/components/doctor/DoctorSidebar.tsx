@@ -27,7 +27,7 @@ export default function DoctorSidebar({ open, onClose }: Props) {
             </svg>
           </div>
           <div>
-            <p className="text-sm font-bold leading-tight text-slate-800">VitaFamily</p>
+            <p className="text-sm font-bold leading-tight text-slate-800">ViteFamily</p>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-brand-500">Doctor Panel</p>
           </div>
         </div>
@@ -65,7 +65,7 @@ export default function DoctorSidebar({ open, onClose }: Props) {
 
         {/* Footer */}
         <div className="shrink-0 border-t border-slate-100 px-4 py-3">
-          <p className="text-[10px] text-slate-400">VitaFamily v1.0 · Cổng bác sĩ</p>
+          <p className="text-[10px] text-slate-400">ViteFamily v1.0 · Cổng bác sĩ</p>
         </div>
       </aside>
     </>

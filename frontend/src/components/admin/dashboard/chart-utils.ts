@@ -16,6 +16,28 @@ export function clinicYear() {
   return clinicDate().slice(0, 4)
 }
 
+export function clinicMonthStart() {
+  return `${clinicMonth()}-01`
+}
+
+export function clinicYearStart() {
+  return `${clinicYear()}-01-01`
+}
+
+export function clinicDateMonthsAgo(months: number) {
+  const [year, month, day] = clinicDate().split('-').map(Number)
+  const targetMonthStart = new Date(Date.UTC(year, month - 1 - months, 1))
+  const targetYear = targetMonthStart.getUTCFullYear()
+  const targetMonthIndex = targetMonthStart.getUTCMonth()
+  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonthIndex + 1, 0)).getUTCDate()
+  const target = new Date(Date.UTC(targetYear, targetMonthIndex, Math.min(day, daysInTargetMonth)))
+  target.setUTCDate(target.getUTCDate() + 1)
+
+  const targetMonth = String(target.getUTCMonth() + 1).padStart(2, '0')
+  const targetDay = String(target.getUTCDate()).padStart(2, '0')
+  return `${target.getUTCFullYear()}-${targetMonth}-${targetDay}`
+}
+
 export function formatCurrency(value: number) {
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',

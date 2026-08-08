@@ -51,6 +51,12 @@ const auditLogSchema = new mongoose.Schema(
     },
     vai_tro: {
       type: String,
+      // 'nurse': deprecated (actor Y tá đã bị xoá khỏi hệ thống — xem ADR
+      // commit 0184a63). KHÔNG dùng cho bản ghi mới; giữ trong enum chỉ để
+      // đọc được ~195 bản ghi audit lịch sử trước ngày xoá actor — đổi các
+      // bản ghi đó sang 'doctor'/'receptionist' sẽ làm sai lịch sử vì hành
+      // động (CALL_PATIENT, SKIP_PATIENT, CHANGE_DOCTOR_STATUS) khi đó thật
+      // sự do tài khoản y tá thực hiện, không phải bác sĩ hay lễ tân.
       enum: ['admin', 'doctor', 'user', 'system', 'nurse', 'receptionist'],
       required: true,
     },
@@ -79,6 +85,9 @@ const auditLogSchema = new mongoose.Schema(
 auditLogSchema.index({ nguoi_thuc_hien_id: 1 })
 auditLogSchema.index({ vai_tro: 1 })
 auditLogSchema.index({ hanh_dong: 1 })
+// Ghép thêm ngay_tao — E-3 loc theo hanh_dong ('CUSTOMER_CONTACT_REQUIRED'/'CUSTOMER_CONTACTED')
+// VA khoang thoi gian (mac dinh 7 ngay gan nhat) trong cung mot truy van.
+auditLogSchema.index({ hanh_dong: 1, ngay_tao: -1 })
 auditLogSchema.index({ loai_doi_tuong: 1, doi_tuong_id: 1 }) // tra lịch sử của 1 đối tượng cụ thể
 auditLogSchema.index({ ngay_tao: -1 })
 

@@ -86,7 +86,7 @@ async function resolveActors() {
 async function recomputeRating(doctorId) {
   const result = await DanhGia.aggregate([
     { $match: { doctor_id: doctorId, status: 'visible', ngay_xoa: null } },
-    { $group: { _id: '$doctor_id', trungBinhSao: { $avg: '$so_sao' }, tongSo: { $sum: 1 } } },
+    { $group: { _id: '$doctor_id', trungBinhSao: { $avg: { $ifNull: ['$chi_tiet.danh_gia_bac_si', '$so_sao'] } }, tongSo: { $sum: 1 } } },
   ])
   const info = result[0] || { trungBinhSao: 0, tongSo: 0 }
   const roundedRating = Math.round(info.trungBinhSao * 10) / 10

@@ -22,13 +22,32 @@ function getGatewayResponseObject(payment) {
 }
 
 function formatVnpDate(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  return `${year}${month}${day}${hours}${minutes}${seconds}`
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+
+  const parts = formatter.formatToParts(date)
+  let y = '', m = '', d = '', h = '', min = '', s = ''
+
+  parts.forEach(part => {
+    if (part.type === 'year') y = part.value
+    if (part.type === 'month') m = part.value
+    if (part.type === 'day') d = part.value
+    if (part.type === 'hour') h = part.value
+    if (part.type === 'minute') min = part.value
+    if (part.type === 'second') s = part.value
+  })
+
+  if (h === '24') h = '00'
+
+  return `${y}${m}${d}${h}${min}${s}`
 }
 
 function toDateOrNull(value) {
@@ -41,6 +60,15 @@ function isGatewaySessionExpired(gateway) {
   const expiresAt = toDateOrNull(gateway?.expires_at)
   if (!expiresAt) return false
   return expiresAt.getTime() <= Date.now()
+}
+
+function getActorUserId(req) {
+  return req.user?._id ?? req.user?.id ?? null
+}
+
+function getActorRole(req) {
+  if (!getActorUserId(req)) return 'system'
+  return req.user?.role === 'admin' ? 'admin' : 'receptionist'
 }
 
 function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt }) {
@@ -143,6 +171,9 @@ async function finalizePendingPayment({ payment, appointment, actorUserId, actor
   if (payment.status !== 'pending') {
     throw Object.assign(new Error('Chi co the xac nhan giao dich dang cho thanh toan'), { statusCode: 409 })
   }
+  if (appointment.status !== 'pending') {
+    throw Object.assign(new Error(`Chi co the xac nhan thanh toan cho lich dang cho xu ly (hien tai: ${appointment.status})`), { statusCode: 409 })
+  }
 
   const oldStatus = appointment.status
   const oldPaymentStatus = appointment.payment_status
@@ -218,6 +249,9 @@ export const createMockVnpaySession = async (req, res) => {
 
     const { payment, appointment, invoice } = bundle
     if (payment.status !== 'pending') return fail(res, 409, 'Giao dich nay khong con o trang thai cho thanh toan')
+    if (appointment.status !== 'pending') {
+      return fail(res, 409, `Chi tao QR thanh toan cho lich dang cho xu ly (hien tai: ${appointment.status})`)
+    }
 
     const gateway = getGatewayResponseObject(payment)
     const existingExpiry = toDateOrNull(gateway.expires_at)
@@ -238,7 +272,7 @@ export const createMockVnpaySession = async (req, res) => {
         ...gateway,
         provider: 'vnpay',
         mode: 'mock',
-        merchant_name: 'VitaFamily',
+        merchant_name: 'ViteFamily',
         merchant_code: 'VITAFAMILY',
         note: invoice?.so_hoa_don || payment.ma_giao_dich,
         bank_code: 'VNBANK',
@@ -302,8 +336,8 @@ export const completeMockVnpayPayment = async (req, res) => {
     const previousAppointmentStatus = appointment.status
     await finalizePendingPayment({
       payment, appointment,
-      actorUserId: req.user?._id || appointment.user_id || null, // Fallback to null if guest
-      actorRole: (req.user?._id || appointment.user_id) ? 'admin' : 'system', // Bypass required if system
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
       channel: 'receptionist_vnpay_mock_complete',
       reason: 'Le tan mo phong thanh toan thanh cong qua VNPAY QR',
       providerData: {
@@ -341,15 +375,150 @@ export const completeMockVnpayPayment = async (req, res) => {
 
 export const getPayments = async (req, res) => {
   try {
-    res.status(200).json({ success: true, data: [] })
+    const { status, search, from, to } = req.query
+    const pageNum = parseInt(req.query.page || 1, 10)
+    const limitNum = parseInt(req.query.limit || 20, 10)
+    const skip = (pageNum - 1) * limitNum
+    const filter = {}
+
+    if (status) filter.status = status
+    if (search?.trim()) {
+      filter.$or = [
+        { ma_giao_dich: { $regex: search.trim(), $options: 'i' } }
+      ]
+    }
+    
+    if (from || to) {
+      let startDate, endDate
+      if (from) {
+        startDate = new Date(`${from}T00:00:00.000Z`)
+      }
+      if (to) {
+        const toBase = new Date(`${to}T00:00:00.000Z`)
+        endDate = new Date(toBase.getTime() + 24 * 60 * 60 * 1000)
+      }
+
+      if (startDate || endDate) {
+        const queryTime = {}
+        if (startDate) queryTime.$gte = startDate
+        if (endDate) queryTime.$lt = endDate
+
+        // Find appointments that fall in this date range
+        const appointmentsInDate = await LichHen.find({ ngay_kham: queryTime }).select('_id')
+        const appointmentIds = appointmentsInDate.map(a => a._id)
+
+        filter.$or = [
+          { ngay_tao: queryTime },
+          { ngay_thanh_toan: queryTime },
+          { appointment_id: { $in: appointmentIds } }
+        ]
+
+        // Keep the original search filter logic if present
+        if (search?.trim()) {
+          const searchRegex = { $regex: search.trim(), $options: 'i' }
+          filter.$and = [
+            { $or: filter.$or },
+            { $or: [ { ma_giao_dich: searchRegex } ] }
+          ]
+          delete filter.$or
+        }
+      }
+    }
+
+    const [total, payments] = await Promise.all([
+      ThanhToan.countDocuments(filter),
+      ThanhToan.find(filter)
+        .populate('benh_nhan_id', 'ho_ten email so_dien_thoai')
+        .populate('hoa_don_id', 'so_hoa_don trang_thai_hoa_don')
+        .populate({
+          path: 'appointment_id',
+          select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt',
+          populate: [
+            { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
+            { path: 'user_id', select: 'ho_ten email so_dien_thoai' }
+          ]
+        })
+        .sort({ ngay_tao: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean()
+    ])
+
+    const result = payments.map((p) => {
+      let benh_nhan = 'Không rõ'
+      let so_dien_thoai = null
+      let email = null
+      if (p.benh_nhan_id) {
+        benh_nhan = p.benh_nhan_id.ho_ten
+        so_dien_thoai = p.benh_nhan_id.so_dien_thoai
+        email = p.benh_nhan_id.email
+      } else if (p.appointment_id) {
+        if (p.appointment_id.user_id) {
+          benh_nhan = p.appointment_id.user_id.ho_ten
+          so_dien_thoai = p.appointment_id.user_id.so_dien_thoai
+          email = p.appointment_id.user_id.email
+        } else {
+          benh_nhan = p.appointment_id.ten_khach
+          so_dien_thoai = p.appointment_id.so_dien_thoai_khach
+          email = p.appointment_id.email_khach
+        }
+      }
+
+      return {
+        id: p._id,
+        ma_giao_dich: p.ma_giao_dich,
+        benh_nhan,
+        email,
+        so_dien_thoai,
+        bac_si: p.appointment_id?.doctor_id?.user_id?.ho_ten ?? 'Không rõ',
+        so_tien: p.so_tien,
+        phuong_thuc: p.phuong_thuc,
+        status: p.status,
+        ngay_tao: p.ngay_tao
+      }
+    })
+
+    return res.status(200).json({
+      success: true,
+      message: 'Thành công',
+      data: result,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    return res.status(500).json({ success: false, message: error.message })
   }
 }
 
 export const confirmCashPayment = async (req, res) => {
   try {
-    res.status(200).json({ success: true, message: 'Đã xác nhận thu tiền mặt' })
+    const { id } = req.params
+    const payment = await ThanhToan.findById(id)
+    if (!payment) return res.status(404).json({ success: false, message: 'Không tìm thấy thanh toán' })
+    if (payment.status === 'paid') return res.status(400).json({ success: false, message: 'Thanh toán này đã hoàn tất' })
+
+    payment.status = 'paid'
+    payment.thoi_diem_thanh_toan = new Date()
+    payment.ngay_thanh_toan = new Date()
+    // payment.nguoi_thu_id = req.user.id
+    
+    await payment.save()
+
+    // Sync to LichHen
+    if (payment.appointment_id) {
+       await LichHen.findByIdAndUpdate(payment.appointment_id, { 
+         payment_status: 'paid', 
+         thoi_diem_thanh_toan: payment.thoi_diem_thanh_toan 
+       })
+    }
+
+    emitDashboardRevenueChanged()
+
+    res.status(200).json({ success: true, message: 'Đã xác nhận thu tiền mặt', data: payment })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
