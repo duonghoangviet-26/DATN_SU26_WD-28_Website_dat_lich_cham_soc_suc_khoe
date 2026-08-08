@@ -63,7 +63,7 @@ export async function ghiNhatKyLeTan({
   doiTuongId,
   duLieuMoi = null,
   duLieuCu = null,
-}) {
+} = {}) {
   try {
     if (!hanhDong || !loaiDoiTuong || !doiTuongId) return
     await NhatKyThaoTac.create({
