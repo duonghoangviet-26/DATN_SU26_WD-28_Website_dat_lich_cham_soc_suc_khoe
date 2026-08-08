@@ -7,6 +7,8 @@ import { ok, created, fail } from '../../utils/response.js'
 import { emitDashboardNewPatient } from '../../realtime/socket.js'
 import { sendResetPasswordEmail } from '../../services/mail.service.js'
 import { logAuthActivity } from '../../services/auditLog.service.js'
+import speakeasy from 'speakeasy'
+import QRCode from 'qrcode'
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 
@@ -800,5 +802,73 @@ export async function updateProfile(req, res) {
     }, 'Cập nhật thông tin cá nhân thành công')
   } catch (err) {
     return fail(res, 500, 'Lỗi cập nhật thông tin cá nhân: ' + err.message)
+  }
+}
+
+/**
+ * Tạo mã bí mật và QR Code để cài đặt 2FA
+ */
+export async function setup2FA(req, res) {
+  try {
+    const user = await NguoiDung.findOne({ _id: req.user.id, ngay_xoa: null })
+    if (!user) return fail(res, 404, 'Tài khoản không tồn tại')
+
+    // Bỏ qua nếu đã bật 2FA
+    if (user.is_2fa_enabled) {
+      return fail(res, 400, 'Tài khoản này đã bật 2FA rồi')
+    }
+
+    // Tạo mã bí mật (secret)
+    const secret = speakeasy.generateSecret({ name: 'VitaFamily Admin' })
+    
+    // Tạo URI cho QR Code
+    const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url)
+
+    // Lưu trữ tạm secret vào DB (nhưng chưa kích hoạt)
+    user.totp_secret = secret.base32
+    await user.save()
+
+    return ok(res, { secret: secret.base32, qrCodeUrl }, 'Tạo mã QR thành công')
+  } catch (err) {
+    console.error(err)
+    return fail(res, 500, 'Lỗi tạo mã QR 2FA: ' + err.message)
+  }
+}
+
+/**
+ * Xác thực mã 2FA và hoàn tất cài đặt
+ */
+export async function verify2FA(req, res) {
+  try {
+    const { token } = req.body
+    if (!token) return fail(res, 400, 'Vui lòng cung cấp mã 2FA')
+
+    const user = await NguoiDung.findOne({ _id: req.user.id, ngay_xoa: null }).select('+totp_secret')
+    if (!user) return fail(res, 404, 'Tài khoản không tồn tại')
+
+    if (!user.totp_secret) {
+      return fail(res, 400, 'Bạn chưa khởi tạo 2FA. Vui lòng tạo QR code trước.')
+    }
+
+    // Xác thực mã với secret đã lưu
+    const isValid = speakeasy.totp.verify({
+      secret: user.totp_secret,
+      encoding: 'base32',
+      token: token,
+      window: 1
+    })
+    
+    if (!isValid) {
+      return fail(res, 400, 'Mã 2FA không chính xác hoặc đã hết hạn')
+    }
+
+    // Xác thực thành công -> Bật cờ 2FA
+    user.is_2fa_enabled = true
+    await user.save()
+
+    return ok(res, null, 'Cài đặt xác thực 2 bước (2FA) thành công!')
+  } catch (err) {
+    console.error(err)
+    return fail(res, 500, 'Lỗi xác minh 2FA: ' + err.message)
   }
 }

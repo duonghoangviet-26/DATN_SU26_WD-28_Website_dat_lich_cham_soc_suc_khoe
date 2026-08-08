@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 import { thongKeService } from '@/services/thong-ke.service'
@@ -9,9 +10,11 @@ import { clinicMonth, clinicYear, getErrorMessage } from './chart-utils'
 const VIEW_OPTIONS: Array<{ mode: NewPatientStatisticMode; label: string }> = [
   { mode: 'month', label: '1 tháng' },
   { mode: 'year', label: '1 năm' },
+  { mode: 'all', label: 'Tất cả' },
 ]
 
 export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
+  const navigate = useNavigate()
   const [mode, setMode] = useState<NewPatientStatisticMode>('month')
   const [data, setData] = useState<NewPatientStatistic[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,7 +26,7 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
     setLoading(true)
     setError('')
 
-    const value = mode === 'month' ? clinicMonth() : clinicYear()
+    const value = mode === 'month' ? clinicMonth() : (mode === 'year' ? clinicYear() : '')
     thongKeService.getNewPatients(mode, value)
       .then((rows) => {
         if (active) {
@@ -51,6 +54,14 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
         tooltipLabel: `${item.label} (ngày ${item.tu}-${item.den})`,
       }
     }
+    
+    if ('nam' in item) {
+      return {
+        ...item,
+        label: item.label || String(item.nam),
+        tooltipLabel: `Năm ${item.nam}`,
+      }
+    }
 
     const label = item.label || `T${item.thang}`
     return {
@@ -62,7 +73,9 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
 
   const subtitle = mode === 'month'
     ? 'Số lượng bệnh nhân mới và cũ có hoạt động (đặt lịch/đăng ký) theo từng tuần trong tháng hiện tại.'
-    : 'Số lượng bệnh nhân mới và cũ có hoạt động (đặt lịch/đăng ký) theo từng tháng trong năm hiện tại.'
+    : mode === 'year'
+      ? 'Số lượng bệnh nhân mới và cũ có hoạt động (đặt lịch/đăng ký) theo từng tháng trong năm hiện tại.'
+      : 'Tổng hợp số lượng bệnh nhân mới và cũ có hoạt động theo từng năm từ trước đến nay.'
 
   return (
     <ChartCard
@@ -96,7 +109,7 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
     >
       <div
         className="h-80 w-full"
-        aria-label={mode === 'month' ? 'Biểu đồ bệnh nhân mới theo tuần' : 'Biểu đồ bệnh nhân mới theo tháng'}
+        aria-label={mode === 'month' ? 'Biểu đồ bệnh nhân theo tuần' : mode === 'year' ? 'Biểu đồ bệnh nhân theo tháng' : 'Biểu đồ bệnh nhân theo năm'}
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 6, right: 4, left: -24, bottom: 0 }}>
@@ -127,22 +140,28 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
             <Bar
               dataKey="so_luong_cu"
               name="Bệnh nhân cũ"
-              fill="#94a3b8"
-              radius={[5, 5, 0, 0]}
+              fill="#f59e0b"
+              stackId="a"
+              radius={[0, 0, 0, 0]}
               maxBarSize={38}
               isAnimationActive
               animationDuration={500}
               animationEasing="ease-out"
+              onClick={() => navigate('/admin/users?role=patient')}
+              style={{ cursor: 'pointer' }}
             />
             <Bar
               dataKey="so_luong"
               name="Bệnh nhân mới"
               fill="#3b82f6"
+              stackId="a"
               radius={[5, 5, 0, 0]}
               maxBarSize={38}
               isAnimationActive
               animationDuration={500}
               animationEasing="ease-out"
+              onClick={() => navigate('/admin/users?role=patient')}
+              style={{ cursor: 'pointer' }}
             />
           </BarChart>
         </ResponsiveContainer>

@@ -77,6 +77,8 @@ const userSchema = new mongoose.Schema(
     ngay_xoa: { type: Date, default: null },
     reset_password_token: { type: String, default: null },
     reset_password_expire: { type: Date, default: null },
+    totp_secret: { type: String, default: null, select: false },
+    is_2fa_enabled: { type: Boolean, default: false },
   },
   {
     timestamps: { createdAt: 'ngay_tao', updatedAt: 'ngay_cap_nhat' },

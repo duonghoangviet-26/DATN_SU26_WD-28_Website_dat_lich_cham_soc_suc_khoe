@@ -5,6 +5,8 @@ import {
   getDoanhThuTheoBacSi,
   getDoanhThuTheoNgay,
   getLichHenTheoTrangThai,
+  getBenhNhanMoiTheoNam,
+  getChiTietDoanhThuBacSi,
 } from '../services/thong-ke.service.js'
 import { fail, ok } from '../utils/response.js'
 
@@ -92,12 +94,16 @@ export async function lichHenTheoTrangThai(req, res) {
 }
 
 export async function doanhThuTheoBacSi(req, res) {
-  const range = monthRange(req.query.thang || currentClinicMonth())
-  if (!range) return fail(res, 400, 'Tham số thang phải có định dạng YYYY-MM')
+  const range = parseDateRange(req.query)
+  if (range.error) return fail(res, 400, range.error)
   return respond(res, () => getDoanhThuTheoBacSi(range), 'Thống kê doanh thu theo bác sĩ')
 }
 
 export async function benhNhanMoiTheoThang(req, res) {
+  if (req.query.mode === 'all') {
+    return respond(res, () => getBenhNhanMoiTheoNam({}), 'Thống kê bệnh nhân mới từ trước đến nay')
+  }
+
   if (req.query.mode === 'month') {
     const range = monthRange(req.query.thang || currentClinicMonth())
     if (!range) return fail(res, 400, 'Tham số thang phải có định dạng YYYY-MM')
@@ -113,4 +119,12 @@ export async function dichVuPhoBien(req, res) {
   const range = parseDateRange(req.query)
   if (range.error) return fail(res, 400, range.error)
   return respond(res, () => getDichVuPhoBien(range), 'Thống kê dịch vụ phổ biến')
+}
+
+export async function chiTietDoanhThuBacSi(req, res) {
+  const { id } = req.params
+  if (!id) return fail(res, 400, 'Thiếu ID bác sĩ')
+  const range = parseDateRange(req.query)
+  if (range.error) return fail(res, 400, range.error)
+  return respond(res, () => getChiTietDoanhThuBacSi(id, range), 'Chi tiết doanh thu bác sĩ')
 }

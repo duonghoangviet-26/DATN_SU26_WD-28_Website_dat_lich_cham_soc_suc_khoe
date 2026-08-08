@@ -651,15 +651,46 @@ export interface PaymentItem {
     trang_thai_hoa_don?: string | null;
 }
 
-// Kiểu cho API response chuẩn { success, message, data }
+export interface UpcomingAppointmentItem {
+    _id: string;
+    ten_khach?: string | null;
+    user_id?: string | null;
+    member_id?: string | null;
+    ho_so_benh_nhan_id?: string | null;
+    ngay_kham: string;
+    gio_kham: string;
+    doctor_id?: { _id: string; ho_ten: string } | null;
+    status: string;
+    loai_kham: string;
+}
+
+export interface RecentBadReviewItem {
+    _id: string;
+    so_sao: number;
+    noi_dung: string;
+    doctor_id?: { _id: string; ho_ten: string } | null;
+    user_id?: { _id: string; ho_ten: string } | null;
+    ngay_tao: string;
+    appointment_id?: string | null;
+}
+
 export interface AdminDashboardSummary {
-    appointments_today: number;
-    doctors_active: number;
+    appointments_today: {
+        value: number;
+        growth: number;
+    };
+    doctors_active: {
+        value: number;
+        growth: number;
+    };
     revenue: {
         invoiced_total: number;
         collected_total: number;
         outstanding_total: number;
+        growth: number;
     };
+    upcoming_appointments: UpcomingAppointmentItem[];
+    recent_bad_reviews: RecentBadReviewItem[];
     generated_at: string;
 }
 
