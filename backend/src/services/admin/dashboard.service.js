@@ -116,9 +116,20 @@ export async function getAdminDashboardSummary(now = new Date()) {
     })
     .sort({ ngay_kham: 1, gio_kham: 1 })
     .limit(5)
-    .populate('doctor_id', 'ho_ten')
+    .populate({
+      path: 'doctor_id',
+      select: 'user_id',
+      populate: { path: 'user_id', select: 'ho_ten' }
+    })
     .select('ten_khach user_id member_id ho_so_benh_nhan_id ngay_kham gio_kham doctor_id status loai_kham')
-    .lean(),
+    .lean()
+    .then(items => items.map(item => ({
+      ...item,
+      doctor_id: item.doctor_id ? {
+        _id: item.doctor_id._id,
+        ho_ten: item.doctor_id.user_id?.ho_ten || 'Trống'
+      } : null
+    }))),
     // Đánh giá tệ
     DanhGia.find({
       so_sao: { $lte: 3 },
@@ -126,10 +137,21 @@ export async function getAdminDashboardSummary(now = new Date()) {
     })
     .sort({ ngay_tao: -1 })
     .limit(5)
-    .populate('doctor_id', 'ho_ten')
+    .populate({
+      path: 'doctor_id',
+      select: 'user_id',
+      populate: { path: 'user_id', select: 'ho_ten' }
+    })
     .populate('user_id', 'ho_ten')
     .select('so_sao noi_dung doctor_id user_id ngay_tao appointment_id')
     .lean()
+    .then(items => items.map(item => ({
+      ...item,
+      doctor_id: item.doctor_id ? {
+        _id: item.doctor_id._id,
+        ho_ten: item.doctor_id.user_id?.ho_ten || 'Trống'
+      } : null
+    })))
   ])
 
   return {
