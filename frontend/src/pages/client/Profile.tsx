@@ -404,17 +404,22 @@ export default function Profile() {
     event.preventDefault()
     if (!user) return
 
-    const cleanPhone = soDienThoai.trim().replace(/\D/g, '')
-    if (!/^0\d{9,10}$/.test(cleanPhone)) {
-      setToast('Số điện thoại không hợp lệ (phải bắt đầu bằng số 0 và có 10 chữ số).')
-      return
+    let phonePayload: string = soDienThoai.trim()
+    if (phonePayload) {
+      const digits = phonePayload.replace(/\D/g, '')
+      const cleanPhone = digits.startsWith('84') ? '0' + digits.slice(2) : digits
+      // Chỉ bắt lỗi định dạng nếu người dùng thực sự nhập/thay đổi SĐT khác với SĐT hiện tại của tài khoản
+      if (phonePayload !== user.so_dien_thoai && cleanPhone && !/^0\d{9,10}$/.test(cleanPhone)) {
+        setToast('Số điện thoại không hợp lệ (phải bắt đầu bằng số 0 và có 10 chữ số).')
+        return
+      }
     }
 
     setProfileLoading(true)
     try {
       const updatedUser = await authService.updateProfile({
         ho_ten: hoTen.trim(),
-        so_dien_thoai: cleanPhone,
+        so_dien_thoai: phonePayload,
         ngay_sinh: ngaySinh || null,
         gioi_tinh: gioiTinh || null,
         nhom_mau: nhomMau || null,
@@ -1067,7 +1072,7 @@ export default function Profile() {
               <form onSubmit={handleUpdateProfile} className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Input label="Họ và tên bệnh nhân" value={hoTen} onChange={(event) => setHoTen(event.target.value)} required />
-                  <Input label="Số điện thoại liên hệ" value={soDienThoai} onChange={(event) => setSoDienThoai(event.target.value)} required />
+                  <Input label="Số điện thoại liên hệ" value={soDienThoai} onChange={(event) => setSoDienThoai(event.target.value)} placeholder="Nhập số điện thoại (không bắt buộc)" />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -1281,6 +1286,7 @@ export default function Profile() {
           )}
         </div>
       </div>
+
 
       {memberModalOpen && (
         <Modal

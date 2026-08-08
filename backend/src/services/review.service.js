@@ -17,7 +17,7 @@ async function updateDoctorRating(doctorId) {
     {
       $group: {
         _id: '$doctor_id',
-        trungBinhSao: { $avg: '$so_sao' },
+        trungBinhSao: { $avg: { $ifNull: ['$chi_tiet.danh_gia_bac_si', '$so_sao'] } },
         tongSo: { $sum: 1 },
       },
     },
@@ -161,6 +161,11 @@ export async function getReviewsList(query) {
         email: r.doctor_id.user_id?.email || null,
       } : null,
       so_sao: r.so_sao,
+      chi_tiet: r.chi_tiet || {
+        danh_gia_le_tan: r.so_sao || 5,
+        danh_gia_bac_si: r.so_sao || 5,
+        danh_gia_dich_vu: r.so_sao || 5,
+      },
       noi_dung: r.noi_dung,
       status: r.status,
       ngay_tao: r.ngay_tao,
@@ -223,6 +228,11 @@ export async function getReviewDetail(id) {
         email: review.doctor_id.user_id?.email || null,
       } : null,
       so_sao: review.so_sao,
+      chi_tiet: review.chi_tiet || {
+        danh_gia_le_tan: review.so_sao || 5,
+        danh_gia_bac_si: review.so_sao || 5,
+        danh_gia_dich_vu: review.so_sao || 5,
+      },
       noi_dung: review.noi_dung,
       status: review.status,
       ngay_tao: review.ngay_tao,

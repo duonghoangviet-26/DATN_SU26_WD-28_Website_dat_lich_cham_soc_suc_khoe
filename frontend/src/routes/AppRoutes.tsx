@@ -12,6 +12,8 @@ const ReceptionistDashboard = lazy(() => import('@/pages/receptionist/Dashboard'
 const ReceptionistAppointments = lazy(() => import('@/pages/receptionist/Appointments'))
 const ReceptionistPayments = lazy(() => import('@/pages/receptionist/Payments'))
 const ReceptionistPatientIntake = lazy(() => import('@/pages/receptionist/PatientIntake'))
+const ReceptionistDoctorDayView = lazy(() => import('@/pages/receptionist/DoctorDayView'))
+const ReceptionistContactTasks = lazy(() => import('@/pages/receptionist/ContactTasks'))
 const ReceptionistNewsList = lazy(() => import('@/pages/receptionist/NewsList'))
 const ReceptionistNewsCreate = lazy(() => import('@/pages/receptionist/NewsCreate'))
 const ReceptionistNewsEdit = lazy(() => import('@/pages/receptionist/NewsEdit'))
@@ -136,6 +138,8 @@ export default function AppRoutes() {
         <Route path="appointments" element={<ReceptionistAppointments />} />
         <Route path="payments" element={<ReceptionistPayments />} />
         <Route path="patient-intake" element={<ReceptionistPatientIntake />} />
+        <Route path="doctor-day-view" element={<ReceptionistDoctorDayView />} />
+        <Route path="contact-tasks" element={<ReceptionistContactTasks />} />
         <Route path="booking" element={<ReceptionistPatientIntake />} />
         <Route path="news" element={<ReceptionistNewsList />} />
         <Route path="news/create" element={<ReceptionistNewsCreate />} />

@@ -129,6 +129,9 @@ const queueSchema = new mongoose.Schema(
       required: true,
     },
     gio_hen_goc: { type: Date, default: null },
+    ngay_checkin_key: { type: String, default: null, trim: true },
+    so_thu_tu_checkin: { type: Number, default: null, min: 1 },
+    ma_so_thu_tu: { type: String, default: null, trim: true, maxlength: 32 },
 
     // Vòng đời
     // cho_dich_vu: benh nhan di lam dich vu bo sung (noi soi, xet nghiem...) roi quay lai hang doi
@@ -169,6 +172,16 @@ queueSchema.pre('validate', function () {
 queueSchema.index({ doctor_id: 1, trang_thai: 1 })
 queueSchema.index({ specialty_id: 1, trang_thai: 1 })
 queueSchema.index({ appointment_id: 1 }, { unique: true, sparse: true })
+queueSchema.index(
+  { ngay_checkin_key: 1, so_thu_tu_checkin: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      ngay_checkin_key: { $type: 'string' },
+      so_thu_tu_checkin: { $type: 'number' },
+    },
+  },
+)
 queueSchema.index({ trang_thai: 1, thoi_diem_goi: 1 })
 
 export default mongoose.model('HangDoi', queueSchema)

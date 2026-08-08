@@ -39,6 +39,13 @@ const FIELD_LABELS: Record<string, string> = {
   ly_do_tu_choi: 'Lý do từ chối',
   specialties: 'Chuyên khoa',
   services: 'Dịch vụ',
+  chuc_vu_hien_tai: 'Chức vụ hiện tại',
+  ma_cchn: 'Mã CCHN',
+  bang_cap_hoc_vi_tags: 'Bằng cấp & Học vị',
+  ngon_ngu: 'Ngôn ngữ giao tiếp',
+  qua_trinh_dao_tao: 'Học vấn & Đào tạo',
+  qua_trinh_cong_tac: 'Quá trình công tác',
+  giai_thuong: 'Giải thưởng & Danh hiệu',
 }
 
 const formatLogValue = (field: string, value: unknown) => {
@@ -47,6 +54,19 @@ const formatLogValue = (field: string, value: unknown) => {
   if (field === 'phi_kham' || field === 'phi_tu_van') return formatPrice(Number(value))
   if (field === 'trang_thai_duyet') return DOCTOR_APPROVAL_LABEL[value as DoctorApproval] || formatAdminValue(field, value)
   if (field === 'la_hien' || typeof value === 'boolean') return value ? 'Có' : 'Không'
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'Trống'
+    if (field === 'bang_cap_hoc_vi_tags' || field === 'ngon_ngu') return value.join(', ')
+    if (field === 'qua_trinh_dao_tao') {
+      return value.map((d: any) => `${d.ten_bang} (${d.truong || 'Cơ sở đào tạo'}${d.tu_nam ? ` ${d.tu_nam}-${d.den_nam || 'nay'}` : ''})`).join('; ')
+    }
+    if (field === 'qua_trinh_cong_tac') {
+      return value.map((c: any) => `${c.chuc_vu || 'Công tác'} - ${c.noi_cong_tac}${c.tu_nam ? ` (${c.tu_nam}-${c.den_nam || 'nay'})` : ''}`).join('; ')
+    }
+    if (field === 'giai_thuong') {
+      return value.map((g: any) => `${g.ten}${g.nam ? ` (${g.nam})` : ''}`).join('; ')
+    }
+  }
   return formatAdminValue(field, value)
 }
 
@@ -144,19 +164,19 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
   return (
     <div className="fixed inset-0 z-40 overflow-hidden">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-slate-900/50 transition-opacity backdrop-blur-sm" 
+      <div
+        className="absolute inset-0 bg-slate-900/50 transition-opacity backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       {/* Drawer Panel */}
       <div className="absolute inset-y-0 right-0 max-w-full flex">
         <div className="w-screen max-w-2xl bg-white shadow-2xl flex flex-col h-full transform transition-transform">
-          
+
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">
             <h2 className="text-xl font-bold text-slate-800">Chi tiết Bác sĩ</h2>
-            <button 
+            <button
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
             >
@@ -172,30 +192,27 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
             <>
               {/* Tabs */}
               <div className="px-6 border-b border-slate-100 flex gap-6 bg-slate-50/50">
-                <button 
+                <button
                   onClick={() => setActiveTab('profile')}
-                  className={`py-3 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'profile' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                  className={`py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'profile' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
                 >
                   Thông tin hồ sơ
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveTab('logs')}
-                  className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                    activeTab === 'logs' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                  className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'logs' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
                 >
                   Lịch sử thao tác
                   <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">
                     {logs.length}
                   </span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveTab('appointments')}
-                  className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                    activeTab === 'appointments' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
+                  className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'appointments' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
                 >
                   Ca khám hôm nay
                 </button>
@@ -207,9 +224,9 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                   <div className="space-y-6">
                     {/* Basic Info */}
                     <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-start gap-5">
-                      <img 
-                        src={doctor.user_id.anh_dai_dien || 'https://ui-avatars.com/api/?name=' + doctor.user_id.ho_ten} 
-                        alt="Avatar" 
+                      <img
+                        src={doctor.user_id.anh_dai_dien || 'https://ui-avatars.com/api/?name=' + doctor.user_id.ho_ten}
+                        alt="Avatar"
                         className="w-20 h-20 rounded-full object-cover border border-slate-100 bg-slate-50"
                       />
                       <div className="flex-1">
@@ -252,27 +269,147 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                       </div>
                     </div>
 
-                    {/* Professional Info */}
-                    <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm">
-                      <h4 className="text-sm font-bold text-slate-800 mb-4 uppercase tracking-wide border-b border-slate-100 pb-2">Hồ sơ chuyên môn</h4>
-                      <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
-                        <div>
-                          <p className="text-slate-400 text-xs mb-1">Kinh nghiệm</p>
-                          <p className="font-medium text-slate-800">{doctor.so_nam_kinh_nghiem} năm</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400 text-xs mb-1">Phí tư vấn cơ bản</p>
-                          <p className="font-medium text-brand-600">{formatPrice(doctor.phi_kham)}</p>
-                        </div>
-                        <div className="col-span-2">
-                          <p className="text-slate-400 text-xs mb-1">Bằng cấp</p>
-                          <p className="text-slate-700 whitespace-pre-wrap">{doctor.bang_cap || '—'}</p>
-                        </div>
-                        <div className="col-span-2">
-                          <p className="text-slate-400 text-xs mb-1">Tiểu sử / Chuyên môn chi tiết</p>
-                          <p className="text-slate-700 whitespace-pre-wrap">{doctor.tieu_su || '—'}</p>
-                        </div>
+                    {/* Professional Info (Chuẩn Bệnh viện lớn Hồng Ngọc) */}
+                    <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-5">
+                      <div className="border-b border-slate-100 pb-3">
+                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                          <Icon name="file-text" className="w-4 h-4 text-brand-500" />
+                          Hồ sơ chuyên môn chi tiết
+                        </h4>
                       </div>
+
+                      {/* Các dòng chỉ số chính */}
+                      <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                        {/* Chức vụ hiện tại */}
+                        <div className="col-span-2 sm:col-span-1 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Chức vụ hiện tại</p>
+                          <p className="font-semibold text-slate-800">
+                            {doctor.ho_so_chi_tiet?.chuc_vu_hien_tai || doctor.ho_so_chi_tiet?.chuc_vu || 'Chưa cập nhật'}
+                          </p>
+                        </div>
+
+                        {/* Phí tư vấn & Số năm kinh nghiệm */}
+                        <div className="col-span-2 sm:col-span-1 bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center justify-between">
+                          <div>
+                            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Kinh nghiệm</p>
+                            <p className="font-semibold text-slate-800">{doctor.so_nam_kinh_nghiem} năm</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Phí khám cơ bản</p>
+                            <p className="font-bold text-brand-600">{formatPrice(doctor.phi_kham)}</p>
+                          </div>
+                        </div>
+
+                        {/* Bằng cấp & Học vị tóm tắt */}
+                        <div className="col-span-2">
+                          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">Bằng cấp & Học vị</p>
+                          {doctor.ho_so_chi_tiet?.bang_cap_hoc_vi_tags && doctor.ho_so_chi_tiet.bang_cap_hoc_vi_tags.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {doctor.ho_so_chi_tiet.bang_cap_hoc_vi_tags.map((tag, idx) => (
+                                <span key={idx} className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold border border-slate-200">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-slate-700 text-sm whitespace-pre-wrap">{doctor.bang_cap || '—'}</p>
+                          )}
+                        </div>
+
+                        {/* Ngôn ngữ & Mã CCHN */}
+                        <div className="col-span-2 sm:col-span-1">
+                          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Ngôn ngữ giao tiếp</p>
+                          <p className="text-slate-800 font-medium text-sm">
+                            {doctor.ho_so_chi_tiet?.ngon_ngu?.join(', ') || 'Tiếng Việt'}
+                          </p>
+                        </div>
+
+                        {doctor.ho_so_chi_tiet?.ma_cchn && (
+                          <div className="col-span-2 sm:col-span-1">
+                            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Mã CCHN</p>
+                            <p className="text-slate-800 font-medium text-sm font-mono">{doctor.ho_so_chi_tiet.ma_cchn}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Học vấn & Quá trình đào tạo (Dạng Text & Năm) */}
+                      <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                        <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Học vấn & Quá trình đào tạo
+                        </p>
+                        {doctor.ho_so_chi_tiet?.qua_trinh_dao_tao && doctor.ho_so_chi_tiet.qua_trinh_dao_tao.length > 0 ? (
+                          <div className="space-y-2">
+                            {doctor.ho_so_chi_tiet.qua_trinh_dao_tao.map((dt, idx) => (
+                              <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-start gap-4">
+                                <div className="text-sm">
+                                  <p className="font-bold text-slate-800">{dt.ten_bang}</p>
+                                  {dt.truong && <p className="text-xs text-slate-600 font-medium mt-0.5">{dt.truong}</p>}
+                                </div>
+                                {(dt.tu_nam || dt.den_nam) && (
+                                  <span className="text-xs font-medium px-2.5 py-1 bg-white rounded-md text-slate-600 border border-slate-200 shrink-0 font-mono">
+                                    {dt.tu_nam || ''} {dt.den_nam ? `- ${dt.den_nam}` : ''}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : doctor.bang_cap ? (
+                          <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">{doctor.bang_cap}</p>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">Chưa có thông tin đào tạo chi tiết.</p>
+                        )}
+                      </div>
+
+                      {/* Hoạt động Chuyên ngành & Quá trình công tác (Dạng Text & Năm) */}
+                      <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                        <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Hoạt động chuyên ngành & Quá trình công tác
+                        </p>
+                        {doctor.ho_so_chi_tiet?.qua_trinh_cong_tac && doctor.ho_so_chi_tiet.qua_trinh_cong_tac.length > 0 ? (
+                          <div className="space-y-2">
+                            {doctor.ho_so_chi_tiet.qua_trinh_cong_tac.map((ct, idx) => (
+                              <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-start gap-4">
+                                <div className="text-sm">
+                                  <p className="font-bold text-slate-800">{ct.chuc_vu || 'Bác sĩ chuyên khoa'}</p>
+                                  <p className="text-xs text-slate-600 font-medium mt-0.5">{ct.noi_cong_tac}</p>
+                                </div>
+                                {(ct.tu_nam || ct.den_nam) && (
+                                  <span className="text-xs font-medium px-2.5 py-1 bg-white rounded-md text-slate-600 border border-slate-200 shrink-0 font-mono">
+                                    {ct.tu_nam || ''} {ct.den_nam ? `- ${ct.den_nam}` : 'Đến nay'}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : doctor.kinh_nghiem ? (
+                          <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">{doctor.kinh_nghiem}</p>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">Chưa có thông tin quá trình công tác.</p>
+                        )}
+                      </div>
+
+                      {/* Giải thưởng & Danh hiệu */}
+                      {doctor.ho_so_chi_tiet?.giai_thuong && doctor.ho_so_chi_tiet.giai_thuong.length > 0 && (
+                        <div className="pt-3 border-t border-slate-100 space-y-2">
+                          <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Giải thưởng & Danh hiệu ghi nhận
+                          </p>
+                          <div className="space-y-1.5">
+                            {doctor.ho_so_chi_tiet.giai_thuong.map((gt, idx) => (
+                              <div key={idx} className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-between text-sm">
+                                <span className="font-semibold text-slate-800">
+                                  {gt.ten}
+                                </span>
+                                {gt.nam && (
+                                  <span className="text-xs font-medium px-2 py-0.5 bg-white text-slate-600 rounded-md border border-slate-200 font-mono">
+                                    Năm {gt.nam}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Services */}
@@ -304,7 +441,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                         const isReject = log.hanh_dong === 'REJECT_DOCTOR'
                         const isSuspend = log.hanh_dong === 'SUSPEND_DOCTOR'
                         const changedFields = getChangedFields(log)
-                        
+
                         let icon = 'check'
                         let bg = 'bg-green-100 text-green-600'
                         if (isReject) { icon = 'x'; bg = 'bg-red-100 text-red-600' }
@@ -365,9 +502,9 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                     <form onSubmit={handleSearch} className="flex gap-3 mb-4">
                       <div className="relative flex-1">
                         <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input 
-                          type="text" 
-                          placeholder="Tìm theo tên hoặc SĐT bệnh nhân..." 
+                        <input
+                          type="text"
+                          placeholder="Tìm theo tên hoặc SĐT bệnh nhân..."
                           className="input w-full pl-9 bg-white"
                           value={searchInput}
                           onChange={(e) => setSearchInput(e.target.value)}
@@ -407,9 +544,8 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                                     <p className="text-xs font-medium text-brand-600">{apt.gio_kham}</p>
                                   </td>
                                   <td className="px-5 py-3 whitespace-nowrap">
-                                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
-                                      apt.loai_kham === 'home' ? 'bg-purple-50 text-purple-700' : 'bg-slate-100 text-slate-700'
-                                    }`}>
+                                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${apt.loai_kham === 'home' ? 'bg-purple-50 text-purple-700' : 'bg-slate-100 text-slate-700'
+                                      }`}>
                                       <Icon name={apt.loai_kham === 'home' ? 'home' : 'map-pin'} className="w-3 h-3" />
                                       {apt.loai_kham === 'home' ? 'Tại nhà' : 'Phòng khám'}
                                     </span>
@@ -429,22 +565,22 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                         </table>
                       </div>
                     </div>
-                    
+
                     {/* Pagination */}
                     {!aptLoading && appointments.length > 0 && (
                       <div className="flex items-center justify-between mt-4 px-1">
                         <p className="text-sm text-slate-500">Trang {aptPage} / {aptTotalPages}</p>
                         {aptTotalPages > 1 && (
                           <div className="flex gap-2">
-                            <button 
-                              disabled={aptPage === 1} 
+                            <button
+                              disabled={aptPage === 1}
                               onClick={() => setAptPage(p => p - 1)}
                               className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
                             >
                               Trước
                             </button>
-                            <button 
-                              disabled={aptPage === aptTotalPages} 
+                            <button
+                              disabled={aptPage === aptTotalPages}
                               onClick={() => setAptPage(p => p + 1)}
                               className="px-3 py-1.5 border border-slate-200 rounded text-sm font-medium text-slate-600 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
                             >

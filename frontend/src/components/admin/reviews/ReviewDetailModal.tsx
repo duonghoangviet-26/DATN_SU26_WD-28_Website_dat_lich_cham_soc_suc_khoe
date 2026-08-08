@@ -171,13 +171,52 @@ export default function ReviewDetailModal({ open, review, onClose, onActionSucce
             </div>
           </div>
 
+          {/* Chi tiết 3 tiêu chí đánh giá */}
+          <div className="p-4 bg-white border border-slate-200/80 rounded-xl space-y-3 shadow-xs">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+              Chi tiết đánh giá theo tiêu chí
+            </span>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {/* Lễ tân */}
+              <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100 space-y-1">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                  <span>🛎️ Check-in & Lễ tân</span>
+                  <span className="font-bold text-amber-500">{review.chi_tiet?.danh_gia_le_tan || review.so_sao}⭐</span>
+                </div>
+                <StarDisplay count={review.chi_tiet?.danh_gia_le_tan || Math.round(review.so_sao)} />
+              </div>
+
+              {/* Bác sĩ */}
+              <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100 space-y-1">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                  <span>🩺 Bác sĩ khám</span>
+                  <span className="font-bold text-amber-500">{review.chi_tiet?.danh_gia_bac_si || review.so_sao}⭐</span>
+                </div>
+                <StarDisplay count={review.chi_tiet?.danh_gia_bac_si || Math.round(review.so_sao)} />
+              </div>
+
+              {/* Dịch vụ */}
+              <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100 space-y-1">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                  <span>🏥 Dịch vụ & CSVC</span>
+                  <span className="font-bold text-amber-500">{review.chi_tiet?.danh_gia_dich_vu || review.so_sao}⭐</span>
+                </div>
+                <StarDisplay count={review.chi_tiet?.danh_gia_dich_vu || Math.round(review.so_sao)} />
+              </div>
+            </div>
+          </div>
+
           {/* Điểm & Nội dung đánh giá */}
           <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                 Nội dung đánh giá
               </span>
-              <StarDisplay count={review.so_sao} />
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-500">Điểm tổng quan:</span>
+                <span className="text-sm font-black text-amber-500">{review.so_sao?.toFixed?.(1) || review.so_sao} / 5</span>
+                <StarDisplay count={Math.round(review.so_sao)} />
+              </div>
             </div>
             <p className="text-sm text-slate-700 font-medium leading-relaxed">
               {review.noi_dung || <em className="text-slate-400">Người dùng không viết bình luận</em>}

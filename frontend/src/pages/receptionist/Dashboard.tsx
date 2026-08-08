@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import axiosInstance from '../../services/axiosInstance';
 import { receptionistNotificationService, VirtualNotification } from '../../services/receptionist-notification.service';
 import Icon from '../../components/admin/icons';
 import { format } from 'date-fns';
 import { receptionistPaymentService } from '../../services/receptionist-payment.service';
+import QueueTransferModal, { QueueTransferCandidate } from '../../components/receptionist/QueueTransferModal';
+import QueueCancelModal from '../../components/receptionist/QueueCancelModal';
+import { receptionistContactTasksService } from '../../services/receptionist-contact-tasks.service';
 
 interface Appointment {
   _id: string;
@@ -28,16 +32,80 @@ interface PendingCheckin {
   tre_qua_grace?: boolean;
 }
 
+interface DoctorOperationalStatus {
+  doctor_id: string;
+  ten_bac_si: string;
+  phong_kham?: string | null;
+  specialties?: Array<{ id: string; ten: string | null }>;
+  trang_thai_van_hanh: string;
+  so_dang_cho: number;
+  thoi_gian_kham_hien_tai_phut?: number | null;
+  do_tre_ca_phut?: number;
+  nguyen_nhan_do_tre?: string;
+  ngung_nhan_walkin?: boolean;
+  chan_dat_online?: boolean;
+  canh_bao_dieu_phoi?: string | null;
+  canh_bao_qua_tai: boolean;
+  benh_nhan_hien_tai?: {
+    ten_benh_nhan: string;
+    ma_so_thu_tu?: string | null;
+  } | null;
+  luot_cho_bi_anh_huong?: Array<{
+    hang_doi_id: string;
+    appointment_id?: string | null;
+    specialty_id?: string | null;
+    ten_benh_nhan: string;
+    ma_so_thu_tu?: string | null;
+    trang_thai: string;
+    nguon: string;
+    gio_hen_goc?: string | null;
+    thoi_gian_cho_uoc_tinh_phut?: number | null;
+    can_dieu_phoi?: boolean;
+  }>;
+  lich_chua_checkin_bi_anh_huong?: Array<{
+    appointment_id: string;
+    ma_lich_hen?: string | null;
+    ten_benh_nhan: string;
+    so_dien_thoai?: string | null;
+    gio_kham: string;
+    status: string;
+    thoi_gian_tre_uoc_tinh_phut?: number;
+    can_goi_bao?: boolean;
+  }>;
+}
+
 export default function Dashboard() {
   const [totalToday, setTotalToday] = useState(0);
   const [waiting, setWaiting] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [pendingCheckins, setPendingCheckins] = useState<PendingCheckin[]>([]);
+  const [doctorStatuses, setDoctorStatuses] = useState<DoctorOperationalStatus[]>([]);
   const [notifications, setNotifications] = useState<VirtualNotification[]>([]);
   
   // Trạng thái cho Tooltip
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+
+  // Trạng thái cho modal chuyển bác sĩ (E-4)
+  const [transferTarget, setTransferTarget] = useState<{
+    hangDoiId: string;
+    tenBenhNhan: string;
+    maSoThuTu?: string | null;
+    specialtyId: string | null;
+    currentDoctorId: string;
+  } | null>(null);
+  const [transferMessage, setTransferMessage] = useState('');
+
+  // Trạng thái cho modal đóng lượt khi khách bỏ về (E-11)
+  const [cancelTarget, setCancelTarget] = useState<{
+    hangDoiId: string;
+    tenBenhNhan: string;
+    maSoThuTu?: string | null;
+  } | null>(null);
+  const [cancelMessage, setCancelMessage] = useState('');
+
+  // So viec "can goi khach" chua xu ly (E-3)
+  const [chuaGoiCount, setChuaGoiCount] = useState(0);
 
   const fetchStats = async () => {
     try {
@@ -71,6 +139,15 @@ export default function Dashboard() {
     }
   };
 
+  const fetchDoctorStatuses = async () => {
+    try {
+      const res = await axiosInstance.get('/receptionist/appointments/doctor-statuses');
+      if (res.data.success) setDoctorStatuses(res.data.data ?? []);
+    } catch (err) {
+      console.error('Loi khi lay trang thai bac si:', err);
+    }
+  };
+
   const fetchNotifications = async () => {
     try {
       const notifs = await receptionistNotificationService.getRecentNotifications();
@@ -80,14 +157,27 @@ export default function Dashboard() {
     }
   };
 
+  const fetchContactTaskCount = async () => {
+    try {
+      const tasks = await receptionistContactTasksService.list({ trang_thai: 'chua_goi' });
+      setChuaGoiCount(tasks.length);
+    } catch (err) {
+      console.error('Loi khi lay so viec can goi:', err);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
     fetchPendingCheckins();
+    fetchDoctorStatuses();
     fetchNotifications();
+    fetchContactTaskCount();
 
     const intervalId = window.setInterval(() => {
       fetchStats();
       fetchPendingCheckins();
+      fetchDoctorStatuses();
+      fetchContactTaskCount();
     }, 30000);
 
     return () => window.clearInterval(intervalId);
@@ -108,10 +198,81 @@ export default function Dashboard() {
     return diffHours >= 0 && diffHours <= 4;
   });
 
+  const doctorStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      qua_tai_tam_thoi: 'Quá tải',
+      san_sang: 'Sẵn sàng',
+      dang_kham: 'Đang khám',
+      dang_don_phong: 'Đang dọn phòng',
+      tam_nghi: 'Tạm nghỉ',
+      khong_co_lich: 'Không có lịch',
+      nghi_phep: 'Nghỉ phép',
+      nghi_viec: 'Nghỉ việc',
+    };
+    return labels[status] || status;
+  };
+
+  const doctorStatusClass = (status: string, overloaded?: boolean) => {
+    if (overloaded) return 'border-red-200 bg-red-50 text-red-700';
+    if (status === 'qua_tai_tam_thoi') return 'border-red-200 bg-red-50 text-red-700';
+    if (status === 'dang_kham') return 'border-blue-200 bg-blue-50 text-blue-700';
+    if (status === 'san_sang') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    if (status === 'dang_don_phong') return 'border-amber-200 bg-amber-50 text-amber-700';
+    return 'border-slate-200 bg-slate-50 text-slate-600';
+  };
+
+  const formatQueueTime = (value?: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return format(date, 'HH:mm');
+  };
+
+  // Bác sĩ không thể nhận thêm lượt chuyển đến (khớp nhãn ở doctorStatusLabel).
+  const KHONG_THE_NHAN_CHUYEN = ['khong_co_lich', 'tam_nghi', 'nghi_phep', 'nghi_viec'];
+
+  const getTransferCandidates = (specialtyId: string | null, currentDoctorId: string): QueueTransferCandidate[] => {
+    return doctorStatuses
+      .filter((doctor) => doctor.doctor_id !== currentDoctorId)
+      .filter((doctor) => !KHONG_THE_NHAN_CHUYEN.includes(doctor.trang_thai_van_hanh))
+      .filter((doctor) => !specialtyId || (doctor.specialties ?? []).some((specialty) => specialty.id === specialtyId))
+      .map((doctor) => ({
+        doctor_id: doctor.doctor_id,
+        ten_bac_si: doctor.ten_bac_si,
+        so_dang_cho: doctor.so_dang_cho,
+        phong_kham: doctor.phong_kham,
+      }));
+  };
+
+  const handleTransferred = () => {
+    setTransferTarget(null);
+    setTransferMessage('Đã chuyển lượt sang bác sĩ khác.');
+    fetchDoctorStatuses();
+    window.setTimeout(() => setTransferMessage(''), 4000);
+  };
+
+  const handleCancelled = () => {
+    setCancelTarget(null);
+    setCancelMessage('Đã đóng lượt chờ.');
+    fetchDoctorStatuses();
+    window.setTimeout(() => setCancelMessage(''), 4000);
+  };
+
   return (
     <div className="p-6">
       <h2 className="text-2xl font-bold text-slate-800 mb-6">Tổng quan Lễ tân</h2>
-      
+      {transferMessage && <p className="mb-6 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{transferMessage}</p>}
+      {cancelMessage && <p className="mb-6 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{cancelMessage}</p>}
+      {chuaGoiCount > 0 && (
+        <Link
+          to="/receptionist/contact-tasks"
+          className="mb-6 flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+        >
+          <span>Còn {chuaGoiCount} khách chưa được gọi báo lịch (không có tài khoản online để nhận thông báo trong app).</span>
+          <span className="whitespace-nowrap underline">Xem danh sách →</span>
+        </Link>
+      )}
+
       {/* Khung Thống Kê */}
       <div className="grid grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
@@ -128,6 +289,135 @@ export default function Dashboard() {
             {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(todayRevenue)}
           </p>
           <p className="text-xs text-slate-400 mt-1">Hôm nay</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-8">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Icon name="users" className="w-5 h-5 text-brand-500" />
+            <h3 className="font-bold text-slate-800">Trạng thái vận hành bác sĩ</h3>
+          </div>
+          <span className="text-xs font-semibold text-slate-400">Cập nhật mỗi 30 giây</span>
+        </div>
+        <div className="p-4">
+          {doctorStatuses.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">Chưa có dữ liệu trạng thái bác sĩ hôm nay.</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {doctorStatuses.map((doctor) => (
+                <div key={doctor.doctor_id} className={`rounded-xl border p-3 ${doctorStatusClass(doctor.trang_thai_van_hanh, doctor.canh_bao_qua_tai)}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{doctor.ten_bac_si}</p>
+                      <p className="mt-1 text-xs font-medium opacity-80">{doctor.phong_kham || 'Chưa có phòng'} · {doctor.so_dang_cho} đang chờ</p>
+                    </div>
+                    <span className="rounded-full bg-white/70 px-2 py-1 text-[11px] font-bold">
+                      {doctorStatusLabel(doctor.trang_thai_van_hanh)}
+                    </span>
+                  </div>
+                  {doctor.benh_nhan_hien_tai && (
+                    <p className="mt-3 text-xs">
+                      Đang khám: <span className="font-semibold">{doctor.benh_nhan_hien_tai.ma_so_thu_tu ? `${doctor.benh_nhan_hien_tai.ma_so_thu_tu} · ` : ''}{doctor.benh_nhan_hien_tai.ten_benh_nhan}</span>
+                    </p>
+                  )}
+                  {doctor.thoi_gian_kham_hien_tai_phut !== null && doctor.thoi_gian_kham_hien_tai_phut !== undefined && (
+                    <p className="mt-1 text-xs">Thời gian hiện tại: {doctor.thoi_gian_kham_hien_tai_phut} phút</p>
+                  )}
+                  {(doctor.do_tre_ca_phut ?? 0) > 0 && (
+                    <p className="mt-1 text-xs">
+                      Ca đang trễ: <span className="font-semibold">{doctor.do_tre_ca_phut} phút</span>
+                      {doctor.nguyen_nhan_do_tre === 'trong_phong' ? ' do lượt trong phòng' : ' do hàng đợi'}
+                    </p>
+                  )}
+                  {doctor.canh_bao_qua_tai && (
+                    <div className="mt-2 rounded-lg bg-white/70 px-2 py-1 text-xs font-semibold">
+                      <p>{doctor.canh_bao_dieu_phoi || 'Ca khám đã kéo dài từ 60 phút, cần theo dõi điều phối.'}</p>
+                      {(doctor.ngung_nhan_walkin || doctor.chan_dat_online) && (
+                        <p className="mt-1 text-[11px]">
+                          {doctor.chan_dat_online ? 'Tạm chặn đặt online khung còn lại.' : 'Tạm ngưng nhận walk-in khung còn lại.'}
+                        </p>
+                      )}
+                      <Link
+                        to={`/receptionist/appointments?overload_doctor=${doctor.doctor_id}`}
+                        className="mt-2 inline-block rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
+                      >
+                        Điều phối ca quá tải
+                      </Link>
+                    </div>
+                  )}
+                  {(doctor.luot_cho_bi_anh_huong?.length ?? 0) > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">Slot chờ cần theo dõi</p>
+                      {doctor.luot_cho_bi_anh_huong?.slice(0, 3).map((queue) => (
+                        <div key={queue.hang_doi_id} className="rounded-lg bg-white/75 px-2 py-1.5 text-xs">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-semibold text-slate-800">
+                              {queue.ma_so_thu_tu ? `${queue.ma_so_thu_tu} · ` : ''}{queue.ten_benh_nhan}
+                            </span>
+                            <span className="whitespace-nowrap text-[11px] font-bold">
+                              ~{queue.thoi_gian_cho_uoc_tinh_phut ?? 0}p
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] opacity-80">
+                            {queue.nguon === 'online' ? 'Online' : 'Tại quầy'}
+                            {formatQueueTime(queue.gio_hen_goc) ? ` · hẹn ${formatQueueTime(queue.gio_hen_goc)}` : ''}
+                          </p>
+                          {(queue.trang_thai === 'dang_cho' || queue.trang_thai === 'da_goi') && (
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              {queue.trang_thai === 'dang_cho' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setTransferTarget({
+                                    hangDoiId: queue.hang_doi_id,
+                                    tenBenhNhan: queue.ten_benh_nhan,
+                                    maSoThuTu: queue.ma_so_thu_tu,
+                                    specialtyId: queue.specialty_id ?? null,
+                                    currentDoctorId: doctor.doctor_id,
+                                  })}
+                                  className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-brand-700 hover:bg-brand-50"
+                                >
+                                  Chuyển bác sĩ
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setCancelTarget({
+                                  hangDoiId: queue.hang_doi_id,
+                                  tenBenhNhan: queue.ten_benh_nhan,
+                                  maSoThuTu: queue.ma_so_thu_tu,
+                                })}
+                                className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+                              >
+                                Đóng lượt
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(doctor.lich_chua_checkin_bi_anh_huong?.length ?? 0) > 0 && doctor.canh_bao_qua_tai && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">Lịch chưa check-in cần báo</p>
+                      {doctor.lich_chua_checkin_bi_anh_huong?.slice(0, 3).map((appointment) => (
+                        <div key={appointment.appointment_id} className="rounded-lg bg-white/75 px-2 py-1.5 text-xs">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="font-semibold text-slate-800">{appointment.ten_benh_nhan}</span>
+                            <span className="whitespace-nowrap text-[11px] font-bold">{appointment.gio_kham}</span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] opacity-80">
+                            {appointment.so_dien_thoai || 'Chưa có SĐT'}
+                            {(appointment.thoi_gian_tre_uoc_tinh_phut ?? 0) > 0 ? ` · trễ ~${appointment.thoi_gian_tre_uoc_tinh_phut}p` : ''}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -231,6 +521,27 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {transferTarget && (
+        <QueueTransferModal
+          hangDoiId={transferTarget.hangDoiId}
+          tenBenhNhan={transferTarget.tenBenhNhan}
+          maSoThuTu={transferTarget.maSoThuTu}
+          candidates={getTransferCandidates(transferTarget.specialtyId, transferTarget.currentDoctorId)}
+          onClose={() => setTransferTarget(null)}
+          onTransferred={handleTransferred}
+        />
+      )}
+
+      {cancelTarget && (
+        <QueueCancelModal
+          hangDoiId={cancelTarget.hangDoiId}
+          tenBenhNhan={cancelTarget.tenBenhNhan}
+          maSoThuTu={cancelTarget.maSoThuTu}
+          onClose={() => setCancelTarget(null)}
+          onCancelled={handleCancelled}
+        />
+      )}
     </div>
   );
 }

@@ -1160,7 +1160,37 @@ export interface DoctorProfileAPI {
     ngay_cap_nhat?: string;
 }
 
+export interface HoSoChiTietBacSi {
+    chuc_danh?: string | null;
+    chuc_vu?: string | null;
+    chuc_vu_hien_tai?: string | null;
+    ma_cchn?: string | null;
+    gioi_thieu_ngan?: string | null;
+    bang_cap_hoc_vi_tags?: string[];
+    ngon_ngu?: string[];
+    the_manh_chuyen_mon?: string[];
+    benh_ly_dieu_tri?: string[];
+    qua_trinh_cong_tac?: Array<{
+        noi_cong_tac: string;
+        chuc_vu?: string | null;
+        tu_nam?: number | null;
+        den_nam?: number | null;
+    }>;
+    qua_trinh_dao_tao?: Array<{
+        ten_bang: string;
+        truong?: string | null;
+        tu_nam?: number | null;
+        den_nam?: number | null;
+    }>;
+    thanh_vien_hoi?: string[];
+    giai_thuong?: Array<{
+        ten: string;
+        nam?: number | null;
+    }>;
+}
+
 export interface DoctorDetailAPI extends DoctorProfileAPI {
+    ho_so_chi_tiet?: HoSoChiTietBacSi | null;
     thong_ke: { tong_lich_hen: number; lich_hen_sap_toi: number };
 }
 
@@ -1198,6 +1228,7 @@ export interface DoctorUpdatePayload {
     phi_kham?: number;
     la_hien?: boolean;
     anh_dai_dien?: string | null;
+    ho_so_chi_tiet?: HoSoChiTietBacSi | null;
 }
 
 export interface NotificationUpdatePayload {

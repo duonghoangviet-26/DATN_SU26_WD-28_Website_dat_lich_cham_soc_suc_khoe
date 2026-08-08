@@ -24,6 +24,11 @@ export interface PendingReviewAppointment {
 export interface MyReviewItem {
   id: string
   so_sao: number
+  chi_tiet?: {
+    danh_gia_le_tan: number
+    danh_gia_bac_si: number
+    danh_gia_dich_vu: number
+  }
   noi_dung: string | null
   status: 'visible' | 'hidden'
   ngay_tao: string
@@ -69,14 +74,29 @@ export const patientReviewService = {
     return res.data.data
   },
 
-  /** Tạo đánh giá mới */
+  /** Tạo đánh giá mới (hỗ trợ đa tiêu chí) */
   async create(data: {
     appointment_id: string
-    so_sao: number
+    so_sao?: number
+    danh_gia_le_tan?: number
+    danh_gia_bac_si?: number
+    danh_gia_dich_vu?: number
     noi_dung?: string
-  }): Promise<{ id: string; so_sao: number; noi_dung: string | null; ngay_tao: string }> {
+  }): Promise<{
+    id: string
+    so_sao: number
+    chi_tiet?: { danh_gia_le_tan: number; danh_gia_bac_si: number; danh_gia_dich_vu: number }
+    noi_dung: string | null
+    ngay_tao: string
+  }> {
     const res = await axiosInstance.post<
-      ApiResponse<{ id: string; so_sao: number; noi_dung: string | null; ngay_tao: string }>
+      ApiResponse<{
+        id: string
+        so_sao: number
+        chi_tiet?: { danh_gia_le_tan: number; danh_gia_bac_si: number; danh_gia_dich_vu: number }
+        noi_dung: string | null
+        ngay_tao: string
+      }>
     >('/patient/reviews', data)
     return res.data.data
   },

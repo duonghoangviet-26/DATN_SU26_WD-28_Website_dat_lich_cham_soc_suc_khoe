@@ -61,16 +61,16 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
   }), [data])
 
   const subtitle = mode === 'month'
-    ? 'Số tài khoản bệnh nhân mới được tạo theo từng tuần trong tháng hiện tại.'
-    : 'Số tài khoản bệnh nhân mới được tạo theo từng tháng trong năm hiện tại.'
+    ? 'Số lượng bệnh nhân mới và cũ có hoạt động (đặt lịch/đăng ký) theo từng tuần trong tháng hiện tại.'
+    : 'Số lượng bệnh nhân mới và cũ có hoạt động (đặt lịch/đăng ký) theo từng tháng trong năm hiện tại.'
 
   return (
     <ChartCard
-      title="Bệnh nhân mới"
+      title="Bệnh nhân mới và cũ"
       subtitle={subtitle}
       icon="users"
-      iconBackgroundClassName="bg-emerald-100"
-      iconClassName="text-emerald-600"
+      iconBackgroundClassName="bg-blue-100"
+      iconClassName="text-blue-600"
       loading={loading && !hasLoaded}
       empty={!chartData.length}
       error={error}
@@ -114,16 +114,30 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
               tick={{ fill: '#64748b', fontSize: 11 }}
             />
             <Tooltip
-              formatter={(value: number | string | undefined) => [`${value ?? 0} bệnh nhân`, 'Mới']}
+              formatter={(value: number | string | undefined, name: string) => {
+                if (name === 'Bệnh nhân mới') return [`${value ?? 0} bệnh nhân`, 'Mới']
+                if (name === 'Bệnh nhân cũ') return [`${value ?? 0} bệnh nhân`, 'Cũ']
+                return [value, name]
+              }}
               labelFormatter={(_, payload) => payload?.[0]?.payload?.tooltipLabel ?? ''}
               contentStyle={{ border: 0, borderRadius: 8, background: '#0f172a', color: '#fff', fontSize: 12 }}
               itemStyle={{ color: '#fff' }}
-              cursor={{ fill: '#ecfdf5' }}
+              cursor={{ fill: '#f1f5f9' }}
+            />
+            <Bar
+              dataKey="so_luong_cu"
+              name="Bệnh nhân cũ"
+              fill="#94a3b8"
+              radius={[5, 5, 0, 0]}
+              maxBarSize={38}
+              isAnimationActive
+              animationDuration={500}
+              animationEasing="ease-out"
             />
             <Bar
               dataKey="so_luong"
               name="Bệnh nhân mới"
-              fill="#16a34a"
+              fill="#3b82f6"
               radius={[5, 5, 0, 0]}
               maxBarSize={38}
               isAnimationActive

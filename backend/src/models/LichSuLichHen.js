@@ -82,7 +82,7 @@ const appointmentHistorySchema = new mongoose.Schema(
     },
     vai_tro: {
       type: String,
-      enum: ['admin', 'doctor', 'user', 'system'],
+      enum: ['admin', 'doctor', 'user', 'receptionist', 'system'],
       required: true,
     },
     ly_do: { type: String, default: null },

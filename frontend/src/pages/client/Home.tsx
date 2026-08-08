@@ -7,8 +7,9 @@ import { Reveal, StaggerContainer, StaggerItem } from '@/components/client/Clien
 import HeroBanner from '@/components/client/HeroBanner'
 import { newsService } from '@/services/news.service'
 import { serviceService } from '@/services/service.service'
-import { patientBookingService, type PatientBookingDoctor } from '@/services/patient-booking.service'
-import type { NewsArticle, ServiceItem } from '@/types'
+import { patientBookingService } from '@/services/patient-booking.service'
+import type { NewsArticle, ServiceItem, DoctorProfile } from '@/types'
+import type { PatientBookingDoctor } from '@/services/patient-booking.service'
 import { getNewsImageSrcSet, getNewsImageUrl } from '@/utils/newsImage'
 
 const benefits = [
@@ -238,30 +239,45 @@ export default function Home() {
             </div>
           ) : doctors.length > 0 ? (
             <div className="mt-12 flex flex-wrap justify-center gap-8">
-              {doctors.slice(0, 4).map(doctor => (
+              {doctors.slice(0, 3).map(doctor => {
+                const specialtiesText = doctor.specialties && doctor.specialties.length > 0 
+                  ? doctor.specialties.map(s => s.ten).join(', ') 
+                  : '';
+                return (
                 <StaggerItem key={doctor.id} className="w-full max-w-[320px]">
-                  <div className="h-full rounded-xl border border-transparent bg-[#eef7f5] p-4 text-center transition-transform hover:-translate-y-1 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] flex flex-col">
-                    <div className="overflow-hidden rounded-xl bg-white">
+                  <Link 
+                    to={`/bac-si/${doctor.id}`}
+                    className="group relative block h-full overflow-hidden rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.06)] transition-all hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+                  >
+                    <div className="aspect-[3/4] w-full bg-slate-100">
                       <img 
                         src={doctor.anh_dai_dien ? (doctor.anh_dai_dien.startsWith('http') ? doctor.anh_dai_dien : `http://localhost:5000${doctor.anh_dai_dien.startsWith('/') ? '' : '/'}${doctor.anh_dai_dien}`) : '/images/robot-avatar.png'} 
                         alt={doctor.ho_ten} 
-                        className="aspect-[4/5] w-full object-cover object-top" 
+                        className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105" 
                         loading="lazy"
                       />
                     </div>
-                    <div className="mt-5 pb-2 flex-1 flex flex-col">
-                      <h3 className="text-[17px] font-bold text-[#ea580c]">{doctor.ho_ten}</h3>
-                      {doctor.specialties && doctor.specialties.length > 0 && <p className="mt-1 text-[13px] font-semibold text-[#ea580c]">{doctor.specialties.map(s => s.ten).join(', ')}</p>}
-                      
-                      <div className="mt-4 pt-4 border-t border-slate-100 flex-1">
-                        <p className="text-[13px] leading-relaxed text-slate-500 line-clamp-4">
-                          {doctor.kinh_nghiem || `Bác sĩ chuyên khoa tận tâm với ${doctor.so_nam_kinh_nghiem ? `${doctor.so_nam_kinh_nghiem} năm` : 'nhiều năm'} kinh nghiệm trong lĩnh vực khám và điều trị ${(doctor.specialties && doctor.specialties.length > 0) ? doctor.specialties.map(s => s.ten).join(', ') : 'Tai Mũi Họng'}.`}
-                        </p>
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-transparent opacity-80 transition-opacity duration-300 group-hover:opacity-100"></div>
+
+                    {/* Text Content */}
+                    <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end p-5 text-left text-white">
+                      <div className="transition-all duration-300 ease-out">
+                        <h3 className="text-[17px] sm:text-xl font-bold text-white">{doctor.ho_ten}</h3>
+                        {specialtiesText && <p className="mt-1 text-sm font-semibold text-orange-400">{specialtiesText}</p>}
+                        
+                        <div className="grid grid-rows-[0fr] opacity-0 transition-all duration-300 ease-out group-hover:mt-3 group-hover:grid-rows-[1fr] group-hover:opacity-100">
+                          <div className="overflow-hidden">
+                            <p className="text-sm leading-relaxed text-slate-300 line-clamp-3">
+                              {doctor.kinh_nghiem || `Bác sĩ chuyên khoa tận tâm với ${doctor.so_nam_kinh_nghiem ? `${doctor.so_nam_kinh_nghiem} năm` : 'nhiều năm'} kinh nghiệm trong lĩnh vực khám và điều trị ${specialtiesText || 'Tai Mũi Họng'}.`}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 </StaggerItem>
-              ))}
+              )})}
             </div>
           ) : null}
         </StaggerContainer>
@@ -284,8 +300,11 @@ export default function Home() {
             <div className="mt-10 grid gap-5 md:grid-cols-3">
               {latestNews.map((article) => (
                 <StaggerItem key={article.id}>
-                  <Link to={`/tin-tuc/${article.url_slug || article.id}`} className="block h-full group overflow-hidden rounded-xl bg-gradient-to-br from-brand-50/60 to-white border border-gray-100 shadow-sm transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-500/10">
-                    <div className="aspect-[1.45/1] overflow-hidden bg-slate-100">
+                  <Link 
+                    to={`/tin-tuc/${article.url_slug || article.id}`} 
+                    className="group relative block h-full overflow-hidden rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.06)] transition-all hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+                  >
+                    <div className="aspect-[4/3] w-full bg-slate-100">
                       <img
                         src={getNewsImageUrl(article.image, { width: 720, height: 496 })}
                         srcSet={getNewsImageSrcSet(article.image, [
@@ -295,15 +314,27 @@ export default function Home() {
                         ])}
                         sizes="(min-width: 768px) 33vw, calc(100vw - 32px)"
                         alt={article.title}
-                        className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
                         decoding="async"
                       />
                     </div>
-                    <div className="p-5">
-                      <p className="text-xs font-medium text-slate-400">{new Date(article.created_at).toLocaleDateString('vi-VN')}</p>
-                      <h3 className="mt-3 line-clamp-2 text-base font-semibold leading-6 text-slate-900 group-hover:text-brand-800 transition-colors">{article.title}</h3>
-                      <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{article.excerpt}</p>
+                    
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent opacity-80 transition-opacity duration-300 group-hover:opacity-100"></div>
+
+                    {/* Text Content */}
+                    <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end p-5 text-left text-white">
+                      <div className="transition-all duration-300 ease-out">
+                        <p className="text-xs font-semibold text-teal-300">{new Date(article.created_at).toLocaleDateString('vi-VN')}</p>
+                        <h3 className="mt-2 line-clamp-2 text-[17px] sm:text-lg font-bold leading-6 text-white">{article.title}</h3>
+                        
+                        <div className="grid grid-rows-[0fr] opacity-0 transition-all duration-300 ease-out group-hover:mt-3 group-hover:grid-rows-[1fr] group-hover:opacity-100">
+                          <div className="overflow-hidden">
+                            <p className="text-sm leading-relaxed text-slate-300 line-clamp-3">{article.excerpt}</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </Link>
                 </StaggerItem>
@@ -318,6 +349,17 @@ export default function Home() {
           <StaggerItem className="max-w-2xl">
             <p className="text-sm font-medium text-teal-200">Bạn đang cần được thăm khám?</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">Đặt một khung giờ phù hợp cho hôm nay.</h2>
+            
+            <div className="mt-6 flex flex-wrap gap-x-8 gap-y-3 text-sm text-teal-100/80">
+              <span className="inline-flex items-center gap-2">
+                <MapPin size={16} className="text-teal-400" aria-hidden="true" /> 
+                123 Nguyễn Trãi, Thanh Xuân, Hà Nội
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <Clock3 size={16} className="text-teal-400" aria-hidden="true" /> 
+                08:00 - 24:00 (theo ca bác sĩ), thứ 2 đến thứ 7
+              </span>
+            </div>
           </StaggerItem>
           <StaggerItem>
             <Link to="/booking" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-teal-900 transition-colors hover:bg-teal-50">
@@ -327,11 +369,6 @@ export default function Home() {
           </StaggerItem>
         </StaggerContainer>
       </section>
-
-      <div className="mx-auto flex max-w-7xl flex-wrap gap-x-8 gap-y-3 px-4 py-6 text-xs text-slate-500 sm:px-6 lg:px-8">
-        <span className="inline-flex items-center gap-2"><MapPin size={14} className="text-teal-700" aria-hidden="true" /> 123 Nguyễn Trãi, Thanh Xuân, Hà Nội</span>
-        <span className="inline-flex items-center gap-2"><Clock3 size={14} className="text-teal-700" aria-hidden="true" /> 08:00 - 24:00 (theo ca bác sĩ), thứ 2 đến thứ 7</span>
-      </div>
     </div>
   )
 }

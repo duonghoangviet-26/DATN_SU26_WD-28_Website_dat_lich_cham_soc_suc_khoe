@@ -117,6 +117,11 @@ export async function getMyReviews(req, res) {
     const items = reviews.map((r) => ({
       id: r._id,
       so_sao: r.so_sao,
+      chi_tiet: r.chi_tiet || {
+        danh_gia_le_tan: r.so_sao || 5,
+        danh_gia_bac_si: r.so_sao || 5,
+        danh_gia_dich_vu: r.so_sao || 5,
+      },
       noi_dung: r.noi_dung,
       status: r.status,
       ngay_tao: r.ngay_tao,
@@ -153,18 +158,26 @@ export async function getMyReviews(req, res) {
 }
 
 // ─── POST /api/patient/reviews ───────────────────────────────────────────────
-// Tạo đánh giá mới — bắt buộc truyền appointment_id tường minh
+// Tạo đánh giá mới — hỗ trợ đánh giá đa tiêu chí (lễ tân, bác sĩ, dịch vụ)
 export async function createReview(req, res) {
   try {
     const userId = req.user.id
-    const { appointment_id, so_sao, noi_dung } = req.body
+    const { appointment_id, so_sao, danh_gia_le_tan, danh_gia_bac_si, danh_gia_dich_vu, noi_dung } = req.body
 
     // Validate input
     if (!appointment_id) {
       return fail(res, 400, 'Vui lòng chọn lịch hẹn cần đánh giá.')
     }
-    if (!so_sao || so_sao < 1 || so_sao > 5 || !Number.isInteger(so_sao)) {
-      return fail(res, 400, 'Số sao phải là số nguyên từ 1 đến 5.')
+
+    const leTan = danh_gia_le_tan ? Math.min(5, Math.max(1, parseInt(danh_gia_le_tan))) : (so_sao ? parseInt(so_sao) : 5)
+    const bacSi = danh_gia_bac_si ? Math.min(5, Math.max(1, parseInt(danh_gia_bac_si))) : (so_sao ? parseInt(so_sao) : 5)
+    const dichVu = danh_gia_dich_vu ? Math.min(5, Math.max(1, parseInt(danh_gia_dich_vu))) : (so_sao ? parseInt(so_sao) : 5)
+
+    const calculatedAvg = Math.round(((leTan + bacSi + dichVu) / 3) * 10) / 10
+    const finalSoSao = so_sao ? parseFloat(so_sao) : calculatedAvg
+
+    if (!finalSoSao || finalSoSao < 1 || finalSoSao > 5) {
+      return fail(res, 400, 'Số sao phải nằm trong khoảng từ 1 đến 5.')
     }
     if (noi_dung && noi_dung.length > 500) {
       return fail(res, 400, 'Nội dung đánh giá không được vượt quá 500 ký tự.')
@@ -200,12 +213,17 @@ export async function createReview(req, res) {
       appointment_id,
       user_id: userId,
       doctor_id: doctorId,
-      so_sao: parseInt(so_sao),
+      so_sao: finalSoSao,
+      chi_tiet: {
+        danh_gia_le_tan: leTan,
+        danh_gia_bac_si: bacSi,
+        danh_gia_dich_vu: dichVu,
+      },
       noi_dung: noi_dung?.trim() || null,
       status: 'visible',
     })
 
-    // 5. Cập nhật điểm đánh giá trung bình cho bác sĩ
+    // 5. Cập nhật điểm đánh giá trung bình cho bác sĩ (lấy theo tiêu chí bác sĩ hoặc so_sao)
     const agg = await DanhGia.aggregate([
       {
         $match: {
@@ -237,6 +255,7 @@ export async function createReview(req, res) {
     return created(res, {
       id: review._id,
       so_sao: review.so_sao,
+      chi_tiet: review.chi_tiet,
       noi_dung: review.noi_dung,
       ngay_tao: review.ngay_tao,
     }, 'Đã gửi đánh giá thành công!')

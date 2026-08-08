@@ -44,9 +44,19 @@ function toDateInput(value?: string | null) {
   return date.toISOString().slice(0, 10)
 }
 
+const OBJECT_LABEL: Record<string, string> = {
+  patient: 'Hồ sơ bệnh nhân',
+  user: 'Tài khoản người dùng',
+  doctor: 'Hồ sơ bác sĩ',
+}
+
 function valueText(field: string, value: unknown) {
   if (value === null || value === undefined || value === '') return 'Trống'
-  if (field === 'status') return USER_STATUS_LABEL[value as keyof typeof USER_STATUS_LABEL] || String(value)
+  if (field === 'status') {
+    if (value === 'active') return 'Hoạt động (Hiển thị)'
+    if (value === 'locked') return 'Đã khóa (Ẩn)'
+    return USER_STATUS_LABEL[value as keyof typeof USER_STATUS_LABEL] || String(value)
+  }
   if (field.endsWith('gioi_tinh')) return GENDER_LABEL[String(value)] || String(value)
   if (field.endsWith('ngay_sinh')) return formatDate(String(value))
   if (field === 'anh_dai_dien') return value ? 'Có ảnh' : 'Không có ảnh'
@@ -62,17 +72,14 @@ function changedFields(log: AdminPatientAuditLog) {
 
 function actionLabel(action: string) {
   const map: Record<string, string> = {
-    UPDATE_PATIENT: 'Cập nhật bệnh nhân',
-    SOFT_DELETE_PATIENT: 'Xóa bệnh nhân',
-    RESTORE_PATIENT: 'Khôi phục bệnh nhân',
-    LOCK_PATIENT: 'Khóa bệnh nhân',
-    UNLOCK_PATIENT: 'Mở khóa bệnh nhân',
+    UPDATE_PATIENT: 'Admin cập nhật thông tin bệnh nhân',
+    CLIENT_UPDATE_PROFILE: 'Bệnh nhân tự cập nhật thông tin cá nhân',
+    LOCK_PATIENT: 'Khóa tài khoản bệnh nhân (Ẩn)',
+    UNLOCK_PATIENT: 'Mở khóa tài khoản bệnh nhân (Hiển thị)',
     UPDATE_USER: 'Cập nhật tài khoản',
     CREATE_USER: 'Tạo tài khoản',
-    LOCK_USER: 'Khóa tài khoản',
-    UNLOCK_USER: 'Mở khóa tài khoản',
-    SOFT_DELETE_USER: 'Xóa mềm',
-    RESTORE_USER: 'Khôi phục',
+    LOCK_USER: 'Khóa tài khoản (Ẩn)',
+    UNLOCK_USER: 'Mở khóa tài khoản (Hiển thị)',
   }
   return map[action] || action
 }
@@ -103,7 +110,6 @@ export default function ManagePatients() {
   const [stats, setStats] = useState(EMPTY_STATS)
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState('')
-  const [isDeleted, setIsDeleted] = useState(false)
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
   const [loading, setLoading] = useState(true)
@@ -115,7 +121,7 @@ export default function ManagePatients() {
   const [auditLogs, setAuditLogs] = useState<AdminPatientAuditLog[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [editingPatient, setEditingPatient] = useState<AdminPatient | null>(null)
-  const [confirmAction, setConfirmAction] = useState<{ type: 'delete' | 'restore' | 'lock' | 'unlock'; patient: AdminPatient } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'unlock'; patient: AdminPatient } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -129,7 +135,7 @@ export default function ManagePatients() {
           status,
           page,
           limit: 10,
-          isDeleted: isDeleted ? 'true' : 'false',
+          isDeleted: 'false',
         }),
         adminPatientService.getStatistics(),
       ])
@@ -141,7 +147,7 @@ export default function ManagePatients() {
     } finally {
       setLoading(false)
     }
-  }, [isDeleted, keyword, page, status])
+  }, [keyword, page, status])
 
   useEffect(() => {
     loadPatients()
@@ -194,6 +200,24 @@ export default function ManagePatients() {
       return
     }
 
+    if (payload.so_dien_thoai) {
+      const phoneTrimmed = payload.so_dien_thoai.trim()
+      const phoneRegex = /^(0|\+84)[3|5|7|8|9][0-9]{8}$/
+      if (!phoneRegex.test(phoneTrimmed)) {
+        setFormError('Số điện thoại không hợp lệ (Phải bao gồm 10 chữ số chuẩn Việt Nam, ví dụ: 0912345678)')
+        return
+      }
+      payload.so_dien_thoai = phoneTrimmed
+    }
+
+    if (payload.ngay_sinh) {
+      const birth = new Date(payload.ngay_sinh)
+      if (Number.isNaN(birth.getTime()) || birth.getTime() >= Date.now()) {
+        setFormError('Ngày sinh không hợp lệ (Không được ở tương lai)')
+        return
+      }
+    }
+
     setSubmitting(true)
     setFormError('')
     try {
@@ -214,15 +238,7 @@ export default function ManagePatients() {
     const { type, patient } = confirmAction
     setSubmitting(true)
     try {
-      if (type === 'delete') {
-        await adminPatientService.softDelete(patient.id)
-        if (selectedPatient?.id === patient.id) setSelectedPatient(null)
-      } else if (type === 'restore') {
-        const restored = await adminPatientService.restore(patient.id)
-        if (selectedPatient?.id === patient.id) {
-          await openPatient(restored, activeTab)
-        }
-      } else if (type === 'lock') {
+      if (type === 'lock') {
         const locked = await adminPatientService.lock(patient.id)
         if (selectedPatient?.id === patient.id) {
           await openPatient(locked, activeTab)
@@ -261,8 +277,7 @@ export default function ManagePatients() {
   const summaryCards = useMemo(() => [
     { label: 'Tổng bệnh nhân', value: stats.total, icon: 'users', color: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'Đang hoạt động', value: stats.active, icon: 'check', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Đã khóa', value: stats.locked, icon: 'lock', color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: 'Trong thùng rác', value: stats.deleted, icon: 'trash', color: 'text-red-600', bg: 'bg-red-50' },
+    { label: 'Đã khóa (Ẩn)', value: stats.locked, icon: 'lock', color: 'text-amber-600', bg: 'bg-amber-50' },
   ], [stats])
 
   return (
@@ -272,7 +287,7 @@ export default function ManagePatients() {
         description="Theo dõi hồ sơ bệnh nhân, lịch sử khám bệnh, đơn thuốc và lịch sử chỉnh sửa."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-3">
         {summaryCards.map((item) => (
           <div key={item.label} className="card flex items-center justify-between p-5">
             <div>
@@ -286,12 +301,14 @@ export default function ManagePatients() {
         ))}
       </div>
 
+      {/* Ô tìm kiếm ở bên TÁI kéo dài & Bộ lọc trạng thái ở bên PHẢI */}
       <div className="card p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="relative min-w-0 flex-1">
-            <Icon name="search" className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Ô tìm kiếm kéo dài ở bên trái */}
+          <div className="relative w-full sm:w-[420px] md:w-[480px]">
+            <Icon name="search" className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
-              className="input pl-10"
+              className="input w-full pl-10 pr-4 bg-slate-50 border-slate-200 focus:bg-white focus:border-brand-500 transition-all text-sm rounded-xl py-2.5"
               placeholder="Tìm theo tên, email hoặc số điện thoại..."
               value={keyword}
               onChange={(event) => {
@@ -300,29 +317,23 @@ export default function ManagePatients() {
               }}
             />
           </div>
-          <select
-            className="input md:w-48"
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value)
-              setPage(1)
-            }}
-          >
-            <option value="">Tất cả trạng thái</option>
-            <option value="active">Hoạt động</option>
-            <option value="locked">Đã khóa</option>
-          </select>
-          <button
-            type="button"
-            onClick={() => {
-              setIsDeleted((value) => !value)
-              setPage(1)
-            }}
-            className={`btn border ${isDeleted ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
-          >
-            <Icon name="trash" className="h-4 w-4" />
-            Thùng rác
-          </button>
+
+          {/* Bộ lọc trạng thái ở bên phải */}
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-start sm:justify-end">
+            <span className="text-xs font-semibold text-slate-500 shrink-0">Trạng thái:</span>
+            <select
+              className="select text-sm bg-slate-50 border-slate-200 focus:bg-white transition-colors rounded-xl py-2 px-3 text-slate-700 font-medium cursor-pointer w-full sm:w-auto min-w-[170px]"
+              value={status}
+              onChange={(event) => {
+                setStatus(event.target.value)
+                setPage(1)
+              }}
+            >
+              <option value="">Tất cả trạng thái</option>
+              <option value="active">Hoạt động (Hiển thị)</option>
+              <option value="locked">Đã khóa (Đã ẩn)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -399,28 +410,16 @@ export default function ManagePatients() {
                         <button className="btn-icon" title="Lịch sử khám" onClick={() => openPatient(patient, 'history')}>
                           <Icon name="file-text" className="h-4 w-4" />
                         </button>
-                        {!isDeleted && (
-                          <>
-                            <button className="btn-icon" title="Sửa bệnh nhân" onClick={() => startEdit(patient)}>
-                              <Icon name="edit" className="h-4 w-4" />
-                            </button>
-                            {patient.status === 'locked' ? (
-                              <button className="btn-icon text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" title="Mở khóa bệnh nhân" onClick={() => setConfirmAction({ type: 'unlock', patient })}>
-                                <Icon name="refresh-cw" className="h-4 w-4" />
-                              </button>
-                            ) : (
-                              <button className="btn-icon text-amber-600 hover:bg-amber-50 hover:text-amber-700" title="Khóa bệnh nhân" onClick={() => setConfirmAction({ type: 'lock', patient })}>
-                                <Icon name="lock" className="h-4 w-4" />
-                              </button>
-                            )}
-                            <button className="btn-icon text-red-500 hover:bg-red-50 hover:text-red-700" title="Xóa bệnh nhân" onClick={() => setConfirmAction({ type: 'delete', patient })}>
-                              <Icon name="trash" className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
-                        {isDeleted && (
-                          <button className="btn-icon text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" title="Khôi phục bệnh nhân" onClick={() => setConfirmAction({ type: 'restore', patient })}>
+                        <button className="btn-icon" title="Sửa bệnh nhân" onClick={() => startEdit(patient)}>
+                          <Icon name="edit" className="h-4 w-4" />
+                        </button>
+                        {patient.status === 'locked' ? (
+                          <button className="btn-icon text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" title="Mở khóa (Hiển thị)" onClick={() => setConfirmAction({ type: 'unlock', patient })}>
                             <Icon name="refresh-cw" className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button className="btn-icon text-amber-600 hover:bg-amber-50 hover:text-amber-700" title="Khóa tài khoản (Ẩn)" onClick={() => setConfirmAction({ type: 'lock', patient })}>
+                            <Icon name="lock" className="h-4 w-4" />
                           </button>
                         )}
                       </div>
@@ -460,33 +459,19 @@ export default function ManagePatients() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {!isDeleted && (
-                  <>
-                    <button className="btn-secondary" onClick={() => startEdit(selectedPatient)}>
-                      <Icon name="edit" className="h-4 w-4" />
-                      Sửa
-                    </button>
-                    {selectedPatient.status === 'locked' ? (
-                      <button className="btn-secondary text-emerald-700" onClick={() => setConfirmAction({ type: 'unlock', patient: selectedPatient })}>
-                        <Icon name="refresh-cw" className="h-4 w-4" />
-                        Mở khóa
-                      </button>
-                    ) : (
-                      <button className="btn-secondary text-amber-700" onClick={() => setConfirmAction({ type: 'lock', patient: selectedPatient })}>
-                        <Icon name="lock" className="h-4 w-4" />
-                        Khóa
-                      </button>
-                    )}
-                    <button className="btn-danger" onClick={() => setConfirmAction({ type: 'delete', patient: selectedPatient })}>
-                      <Icon name="trash" className="h-4 w-4" />
-                      Xóa
-                    </button>
-                  </>
-                )}
-                {isDeleted && (
-                  <button className="btn-primary" onClick={() => setConfirmAction({ type: 'restore', patient: selectedPatient })}>
+                <button className="btn-secondary" onClick={() => startEdit(selectedPatient)}>
+                  <Icon name="edit" className="h-4 w-4" />
+                  Sửa
+                </button>
+                {selectedPatient.status === 'locked' ? (
+                  <button className="btn-secondary text-emerald-700" onClick={() => setConfirmAction({ type: 'unlock', patient: selectedPatient })}>
                     <Icon name="refresh-cw" className="h-4 w-4" />
-                    Khôi phục
+                    Mở khóa
+                  </button>
+                ) : (
+                  <button className="btn-secondary text-amber-700" onClick={() => setConfirmAction({ type: 'lock', patient: selectedPatient })}>
+                    <Icon name="lock" className="h-4 w-4" />
+                    Khóa (Ẩn)
                   </button>
                 )}
                 <button className="btn-icon" onClick={() => setSelectedPatient(null)} title="Đóng">
@@ -628,11 +613,13 @@ export default function ManagePatients() {
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <p className="font-bold text-slate-900">{actionLabel(log.hanh_dong)}</p>
-                              <p className="text-sm text-slate-500">
-                                {log.nguoi_thuc_hien_id?.ho_ten || 'Hệ thống'} · {log.nguoi_thuc_hien_id?.email || log.vai_tro} · {formatDateTime(log.ngay_tao)}
+                              <p className="mt-0.5 text-xs text-slate-500">
+                                <span className="font-semibold text-slate-700">Thực hiện bởi:</span> {log.nguoi_thuc_hien_id?.ho_ten || 'Hệ thống'} · <span className="font-semibold text-slate-700">Thời gian:</span> {formatDateTime(log.ngay_tao)}
                               </p>
                             </div>
-                            <Badge color={log.loai_doi_tuong === 'patient' ? 'blue' : 'gray'}>{log.loai_doi_tuong}</Badge>
+                            <Badge color={log.loai_doi_tuong === 'patient' ? 'blue' : 'gray'}>
+                              {OBJECT_LABEL[log.loai_doi_tuong] || log.loai_doi_tuong}
+                            </Badge>
                           </div>
                           {fields.length > 0 && (
                             <div className="mt-3 overflow-x-auto rounded-lg border border-slate-100">
@@ -674,7 +661,7 @@ export default function ManagePatients() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Sửa bệnh nhân</h3>
-                <p className="text-sm text-slate-500">Chỉ chỉnh sửa thông tin hành chính và hồ sơ cơ bản.</p>
+                <p className="text-sm text-slate-500">Chỉnh sửa thông tin hành chính và hồ sơ cơ bản.</p>
               </div>
               <button type="button" className="btn-icon" onClick={() => setEditingPatient(null)}>
                 <Icon name="x" className="h-5 w-5" />
@@ -703,8 +690,8 @@ export default function ManagePatients() {
               <div>
                 <label className="input-label">Trạng thái</label>
                 <select className="input" value={editingPatient.status} onChange={(event) => setEditingPatient({ ...editingPatient, status: event.target.value as 'active' | 'locked' })}>
-                  <option value="active">Hoạt động</option>
-                  <option value="locked">Đã khóa</option>
+                  <option value="active">Hoạt động (Hiển thị)</option>
+                  <option value="locked">Đã khóa (Ẩn)</option>
                 </select>
               </div>
               <div>
@@ -760,24 +747,16 @@ export default function ManagePatients() {
       {confirmAction && createPortal(
         <ConfirmDialog
           open={!!confirmAction}
-          danger={confirmAction.type === 'delete' || confirmAction.type === 'lock'}
+          danger={confirmAction.type === 'lock'}
           confirmDisabled={submitting}
           title={
-            confirmAction.type === 'delete'
-              ? 'Xóa bệnh nhân'
-              : confirmAction.type === 'restore'
-              ? 'Khôi phục bệnh nhân'
-              : confirmAction.type === 'lock'
-              ? 'Khóa bệnh nhân'
-              : 'Mở khóa bệnh nhân'
+            confirmAction.type === 'lock'
+              ? 'Khóa tài khoản bệnh nhân'
+              : 'Mở khóa tài khoản bệnh nhân'
           }
           message={
-            confirmAction.type === 'delete'
-              ? `Bạn có chắc muốn xóa bệnh nhân "${confirmAction.patient.ho_ten}" vào thùng rác? Lịch sử khám và audit log vẫn được giữ lại.`
-              : confirmAction.type === 'restore'
-              ? `Bạn có chắc muốn khôi phục bệnh nhân "${confirmAction.patient.ho_ten}"?`
-              : confirmAction.type === 'lock'
-              ? `Bạn có chắc muốn khóa tài khoản bệnh nhân "${confirmAction.patient.ho_ten}"? Bệnh nhân sẽ không đăng nhập được cho tới khi được mở khóa.`
+            confirmAction.type === 'lock'
+              ? `Bạn có chắc muốn khóa tài khoản bệnh nhân "${confirmAction.patient.ho_ten}"? Bệnh nhân sẽ bị ẩn và không thể đặt lịch khám cho đến khi được mở khóa.`
               : `Bạn có chắc muốn mở khóa tài khoản bệnh nhân "${confirmAction.patient.ho_ten}"?`
           }
           confirmText={submitting ? 'Đang xử lý...' : 'Xác nhận'}

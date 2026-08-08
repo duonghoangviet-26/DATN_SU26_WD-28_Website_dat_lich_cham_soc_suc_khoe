@@ -19,6 +19,7 @@ export interface MonthlyNewPatientStatistic {
   thang: number
   label?: string
   so_luong: number
+  so_luong_cu?: number
 }
 
 export interface WeeklyNewPatientStatistic {
@@ -27,6 +28,7 @@ export interface WeeklyNewPatientStatistic {
   tu: number
   den: number
   so_luong: number
+  so_luong_cu?: number
 }
 
 export type NewPatientStatisticMode = 'month' | 'year'

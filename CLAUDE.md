@@ -14,7 +14,7 @@
 | **Nhóm** | 4 thành viên — DATN_SU26_WD-28 |
 | **Phiên bản** | 1.0 |
 
-**Mô tả ngắn:** Bệnh nhân đặt lịch khám online, quản lý hồ sơ y tế và nhắc uống thuốc cho cả gia đình trong một tài khoản. 3 vai trò: Bệnh nhân · Bác sĩ (cần admin duyệt) · Admin.
+**Mô tả ngắn:** Bệnh nhân đặt lịch khám online, quản lý hồ sơ y tế và nhắc uống thuốc cho cả gia đình trong một tài khoản. 4 vai trò: Bệnh nhân · Bác sĩ (cần admin duyệt) · Lễ tân · Admin.
 
 ---
 
@@ -91,6 +91,7 @@ DATN_SU26_WD-28_ViteFamily/
 |---|---|---|
 | `user` | Bệnh nhân — đăng ký tự do | `/` (client) |
 | `doctor` | Bác sĩ — cần Admin duyệt | `/` (client) |
+| `receptionist` | Lễ tân — tạo sẵn | `/receptionist` |
 | `admin` | Quản trị viên — tạo sẵn | `/admin` |
 
 ---

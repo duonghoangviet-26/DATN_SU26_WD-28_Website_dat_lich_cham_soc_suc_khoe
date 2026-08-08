@@ -44,9 +44,16 @@ const doctorExtendedProfileSchema = new mongoose.Schema(
       unique: true,
     },
     chuc_danh: { type: String, default: null, trim: true, maxlength: 255 }, // "PGS. TS. BSCKII"
-    chuc_vu:   { type: String, default: null, trim: true, maxlength: 255 }, // "Phó chủ tịch hội..."
+    chuc_vu:   { type: String, default: null, trim: true, maxlength: 255 }, // "Trưởng khoa Tai Mũi Họng"
+    chuc_vu_hien_tai: { type: String, default: null, trim: true, maxlength: 255 }, // "Phó Giám đốc - Cơ sở..."
+    ma_cchn:   { type: String, default: null, trim: true, maxlength: 100 }, // Mã chứng chỉ hành nghề
+    gioi_thieu_ngan: { type: String, default: null, trim: true }, // Triết lý/Giới thiệu ngắn
 
-    // "Nhận khám và điều trị" — danh sách bệnh lý cụ thể (khác specialties chung chung)
+    bang_cap_hoc_vi_tags: { type: [String], default: [] }, // ["Phó giáo sư", "Tiến sĩ", "Bác sĩ"]
+    ngon_ngu:             { type: [String], default: ['Tiếng Việt'] }, // ["Tiếng Việt", "Tiếng Anh"]
+    the_manh_chuyen_mon:  { type: [String], default: [] }, // Thế mạnh kỹ thuật Tai Mũi Họng
+
+    // "Nhận khám và điều trị" — danh sách bệnh lý cụ thể
     benh_ly_dieu_tri: { type: [String], default: [] },
 
     qua_trinh_cong_tac: { type: [quaTrinhCongTacSchema], default: [] },
