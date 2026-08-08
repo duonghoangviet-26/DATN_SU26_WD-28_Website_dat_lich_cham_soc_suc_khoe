@@ -2,6 +2,11 @@ import type { ClinicItem, ClinicRoomItem, ClinicRoomOptions, ClinicRoomPayload, 
 import axiosInstance from './axiosInstance'
 
 export const clinicService = {
+  async getPublicClinicInfo(): Promise<ClinicItem | null> {
+    const res = await axiosInstance.get('/clinic-info')
+    return res.data.data
+  },
+
   async getCurrentClinic(): Promise<ClinicItem | null> {
     const res = await axiosInstance.get('/admin/clinics/current')
     return res.data.data

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import Icon from './icons'
 import { notificationService } from '@/services/notification.service'
+import { subscribeAdminRealtime } from '@/services/realtime.service'
 import { formatDateTime } from '@/utils/format'
 
 interface Props {
@@ -37,8 +38,17 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
     loadNotifications()
     
     window.addEventListener('RELOAD_NOTIFICATIONS', loadNotifications)
+    
+    // Subscribe to real-time notification
+    const unsubscribeSocket = subscribeAdminRealtime({
+      'thong_bao:moi': () => {
+        loadNotifications()
+      }
+    })
+
     return () => {
       window.removeEventListener('RELOAD_NOTIFICATIONS', loadNotifications)
+      unsubscribeSocket()
     }
   }, [])
 

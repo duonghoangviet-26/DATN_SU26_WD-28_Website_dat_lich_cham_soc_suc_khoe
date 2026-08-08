@@ -1,15 +1,23 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, Link } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 
 const features = [
-  'Đặt lịch khám online nhanh chóng',
-  'Quản lý hồ sơ y tế cả gia đình',
-  'Nhắc nhở uống thuốc tự động',
-  'Kết nối hàng trăm bác sĩ chuyên khoa',
+  'Đặt lịch khám chuyên khoa nhanh chóng',
+  'Đội ngũ bác sĩ Tai Mũi Họng giỏi, giàu kinh nghiệm',
+  'Tư vấn & điều trị các bệnh lý hô hấp dứt điểm',
+  'Theo dõi hồ sơ bệnh án điện tử tiện lợi',
 ]
 
 export default function AuthLayout() {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen relative">
+      <Link 
+        to="/" 
+        className="absolute top-4 right-4 lg:top-8 lg:right-8 z-10 flex items-center gap-2 rounded-full bg-slate-100/80 px-4 py-2 text-sm font-medium text-slate-600 backdrop-blur-sm transition-all hover:bg-slate-200 hover:text-slate-900 shadow-sm"
+      >
+        <ArrowLeft size={16} />
+        <span>Trang chủ</span>
+      </Link>
       {/* Left brand panel — ẩn trên mobile */}
       <div className="hidden w-[45%] flex-col justify-between bg-gradient-to-br from-brand-700 via-brand-600 to-brand-500 p-10 lg:flex">
         {/* Logo */}
@@ -25,10 +33,10 @@ export default function AuthLayout() {
         {/* Tagline */}
         <div>
           <h2 className="text-3xl font-bold leading-snug text-white">
-            Chăm sóc sức khỏe<br />cả gia đình bạn
+            Chăm sóc sức khỏe<br />Tai Mũi Họng toàn diện
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-brand-100">
-            Một tài khoản để quản lý sức khỏe cho mọi thành viên trong gia đình.
+            Hệ thống quản lý khám chữa bệnh chuyên sâu các bệnh lý về Tai, Mũi và Họng.
           </p>
 
           <ul className="mt-8 space-y-3">
