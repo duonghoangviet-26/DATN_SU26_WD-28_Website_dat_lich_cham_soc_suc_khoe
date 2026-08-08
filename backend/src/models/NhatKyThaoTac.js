@@ -36,6 +36,13 @@ import mongoose from 'mongoose'
 // [Doctor – Queue & Room]
 //   CHANGE_DOCTOR_STATUS | CHECKIN_QUEUE | CALL_PATIENT | SKIP_PATIENT | ASSIGN_DOCTOR
 //   loai_doi_tuong: queue_entry | room_status
+// [Receptionist – WS-4 nhật ký ca trực]
+//   LT_CHECK_IN | LT_HUY_CHECK_IN | LT_TAO_KHACH_VANG_LAI | LT_IN_PHIEU_STT
+//   LT_XAC_NHAN_THANH_TOAN | LT_LAP_HOA_DON
+//   LT_DOI_LICH | LT_HUY_LICH
+//   LT_GOI_KHACH | LT_XU_LY_THONG_BAO_BS
+//   loai_doi_tuong dùng thêm: queue_entry | walk_in_guest | payment | invoice
+//                             | appointment | notification
 // [System – Cron]
 //   AUTO_CANCEL_APPOINTMENT (unpaid timeout)
 //   LOCK_EXAMINATION_RESULT  (co_the_sua → false sau 24h)
