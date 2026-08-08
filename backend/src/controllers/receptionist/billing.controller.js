@@ -348,7 +348,7 @@ export async function createBillingInvoice(req, res) {
     if (due > 0 && method) {
       if (!['tien_mat', 'chuyen_khoan'].includes(method)) throw loi(400, 'Phương thức thanh toán không hợp lệ')
       const paid = method === 'tien_mat'
-      await ThanhToan.create({
+      const payment = await ThanhToan.create({
         hoa_don_id: invoice._id,
         ...(caseItem.source === 'offline' ? { hang_doi_id: caseItem.reference_id } : {}),
         ho_so_benh_nhan_id: caseItem.patient_id,
@@ -360,6 +360,25 @@ export async function createBillingInvoice(req, res) {
         thoi_diem_thanh_toan: paid ? new Date() : null,
         nguoi_thu_id: req.user?._id ?? req.user?.id ?? null,
       })
+
+      // Thanh toán tiền mặt được chốt NGAY lúc lập hóa đơn (không qua bước xác nhận riêng như
+      // chuyển khoản), nên phải ghi nhật ký ở đây — nếu không, nguồn thu tiền mặt (phổ biến nhất
+      // ở quầy) sẽ không có dấu vết ai thu. Chỉ ghi khi ĐÃ thu thật (paid); giao dịch chuyển
+      // khoản `pending` chưa thu, không được ghi LT_XAC_NHAN_THANH_TOAN ở đây.
+      if (paid) {
+        await ghiNhatKyLeTan({
+          hanhDong: 'LT_XAC_NHAN_THANH_TOAN',
+          actorUserId: req.user.id,
+          actorRole: req.user.role,
+          loaiDoiTuong: 'payment',
+          doiTuongId: payment._id,
+          duLieuMoi: {
+            so_tien: payment.so_tien,
+            hinh_thuc: method,
+            hoa_don_id: String(invoice._id),
+          },
+        })
+      }
     }
     const trangThaiHoaDon = await tinhTrangThaiHoaDon(invoice._id)
     if (trangThaiHoaDon.trang_thai_hoa_don === 'da_thanh_toan_du' && !await pendingPayment(invoice._id)) {

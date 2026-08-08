@@ -335,6 +335,25 @@ export async function createOfflineInvoice(req, res) {
         nguoi_thu_id: req.user?._id ?? req.user?.id ?? null,
       })
       if (isPaid) await tinhTrangThaiHoaDon(invoice._id)
+
+      // Thanh toán tiền mặt được chốt NGAY lúc lập hóa đơn (không qua confirmOfflinePayment
+      // như chuyển khoản), nên phải ghi nhật ký ở đây — nếu không, nguồn thu tiền mặt (phổ biến
+      // nhất ở quầy) sẽ không có dấu vết ai thu. Chỉ ghi khi ĐÃ thu thật (isPaid); giao dịch
+      // chuyển khoản `pending` chưa thu, không được ghi LT_XAC_NHAN_THANH_TOAN ở đây.
+      if (isPaid) {
+        await ghiNhatKyLeTan({
+          hanhDong: 'LT_XAC_NHAN_THANH_TOAN',
+          actorUserId: req.user.id,
+          actorRole: req.user.role,
+          loaiDoiTuong: 'payment',
+          doiTuongId: payment._id,
+          duLieuMoi: {
+            so_tien: payment.so_tien,
+            hinh_thuc: paymentMethod,
+            hoa_don_id: String(invoice._id),
+          },
+        })
+      }
     }
 
     const freshInvoice = await HoaDon.findById(invoice._id).lean()
