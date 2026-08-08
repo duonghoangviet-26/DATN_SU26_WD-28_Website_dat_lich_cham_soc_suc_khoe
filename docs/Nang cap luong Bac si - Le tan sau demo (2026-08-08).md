@@ -94,8 +94,9 @@ triệu chứng*      giải pháp         (bỏ qua được)     (bỏ qua đ�
 - **Chặn sang bước 2 khi thiếu triệu chứng.** Thiếu cân nặng/chiều cao → cảnh báo vàng, vẫn cho đi tiếp.
 
 **Bước 2 — Chẩn đoán**
-- `chan_doan` (bắt buộc — schema đã `required`), `huong_dan` (giải pháp), `ghi_chu` (lưu ý),
-  `ngay_tai_kham`.
+- `chan_doan` (bắt buộc — schema đã `required`), `huong_dan_dieu_tri` (giải pháp),
+  `ghi_chu` (lưu ý), `ngay_tai_kham`.
+- ⚠️ Tên field trong `KetQuaKham` là **`huong_dan_dieu_tri`**, không phải `huong_dan`.
 
 **Bước 3 — Dịch vụ**
 - Danh sách checkbox lấy từ `DichVu` với `loai='related'`, lọc theo `specialty_id` của bác sĩ.
@@ -196,7 +197,7 @@ của rule mục 7.
 1. Hành chính: tên, tuổi, giới, SĐT, dị ứng, bệnh nền, nhóm máu
 2. Sinh hiệu (`SinhHieuKham`) + BMI
 3. Triệu chứng ban đầu
-4. Chẩn đoán · Hướng dẫn · Lưu ý · Ngày tái khám
+4. Chẩn đoán (`chan_doan`) · Hướng dẫn (`huong_dan_dieu_tri`) · Lưu ý (`ghi_chu`) · Ngày tái khám
 5. Dịch vụ đã sử dụng + thành tiền (`dich_vu_phat_sinh[]`)
 6. Đơn thuốc (`DonThuoc`) — bảng thuốc, liều, giờ uống, số ngày
 7. Hóa đơn liên quan (`HoaDon`) — trạng thái thanh toán
