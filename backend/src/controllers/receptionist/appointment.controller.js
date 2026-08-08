@@ -18,6 +18,7 @@ import { releaseAppointmentSlot } from '../../services/bookingPaymentState.servi
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
 import { sendNotificationEmail, isMailConfigured } from '../../services/mail.service.js'
 import { layDongSuaGanNhatChoNhieuLichHen } from '../../services/receptionistTimeline.service.js'
+import { ghiNhatKyLeTan } from '../../services/receptionistAudit.service.js'
 import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../../utils/clinicTime.js'
 import { caCuaKhung } from '../../models/MauLichLamViec.js'
 import { soSanhThuTuHangDoi } from '../../models/HangDoi.js'
@@ -1151,6 +1152,17 @@ export const cancelAppointment = async (req, res) => {
     session.endSession()
 
     emitDashboardAppointmentChanged(oldStatus, appointment.status)
+
+    // Ghi ngoai transaction nghiep vu da commit - ghiNhatKyLeTan tu nuot loi, khong throw.
+    await ghiNhatKyLeTan({
+      hanhDong: 'LT_HUY_LICH',
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
+      loaiDoiTuong: 'appointment',
+      doiTuongId: appointment._id,
+      duLieuCu: { status: oldStatus },
+      duLieuMoi: { status: 'cancelled', ly_do: appointment.ly_do_huy ?? null },
+    })
 
     res.status(200).json({
       success: true,
