@@ -309,6 +309,13 @@ export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new
   const hoSo = await KetQuaKham.findOne({ hang_doi_id: entry._id })
   if (!hoSo) throw loi(409, 'Chưa có hồ sơ khám cho lượt này')
 
+  // Phát hiện qua e2e Task 7 (check 10): thiếu chặn này thì gọi complete lần 2 vẫn trả 200,
+  // ghi đè lại đúng những field vừa chốt — vô hại về dữ liệu nhưng im lặng, dễ che giấu bug
+  // ở FE (double-submit) và làm sai lệch `benh_nhan_ke_tiep` trả về lần 2 nếu hàng đợi đã đổi.
+  if (hoSo.status === 'da_xac_nhan') {
+    throw loi(409, 'Ca khám này đã được hoàn tất trước đó')
+  }
+
   // Không cho chốt khi chưa đi qua chẩn đoán — đúng lỗi hội đồng nêu.
   if (!hoSo.chan_doan || hoSo.chan_doan === '(đang khám)') {
     throw loi(400, 'Chưa nhập chẩn đoán, không chốt được ca khám')
