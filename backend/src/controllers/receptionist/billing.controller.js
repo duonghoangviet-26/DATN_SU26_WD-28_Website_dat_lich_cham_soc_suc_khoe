@@ -11,6 +11,7 @@ import {
 } from '../../models/index.js'
 import { layGiaKhamChuyenKhoa } from '../../services/doctorAssignment.service.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
+import { ghiNhatKyLeTan } from '../../services/receptionistAudit.service.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { CLINIC_UTC_OFFSET_HOURS, startOfClinicDayUtc } from '../../utils/clinicTime.js'
 import { created, fail, ok } from '../../utils/response.js'
@@ -365,6 +366,23 @@ export async function createBillingInvoice(req, res) {
       await confirmCashierReview(invoice._id, req.user?._id ?? req.user?.id ?? null)
     }
     await hoanTatLuotKhamOnlineNeuDaThuDu(caseItem, trangThaiHoaDon)
+
+    // Ghi nhật ký thao tác lễ tân (WS-4). Biến thực tế là `invoice` (không phải `hoaDon`), và
+    // các field trên schema HoaDon là `so_hoa_don` / `chi_tiet_thu_phi` (không phải `ma_hoa_don` /
+    // `chi_tiet` như bản mô tả gốc) — dùng đúng tên biến/field sẵn có.
+    await ghiNhatKyLeTan({
+      hanhDong: 'LT_LAP_HOA_DON',
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      loaiDoiTuong: 'invoice',
+      doiTuongId: invoice._id,
+      duLieuMoi: {
+        ma_hoa_don: invoice.so_hoa_don ?? null,
+        tong_tien: invoice.tong_thanh_toan ?? null,
+        so_khoan: Array.isArray(invoice.chi_tiet_thu_phi) ? invoice.chi_tiet_thu_phi.length : 0,
+      },
+    })
+
     return created(res, await serializeCase(caseItem), 'Đã lập hoặc cập nhật hóa đơn')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)

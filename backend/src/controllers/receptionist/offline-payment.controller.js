@@ -8,6 +8,7 @@ import {
 } from '../../models/index.js'
 import { layGiaKhamChuyenKhoa } from '../../services/doctorAssignment.service.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
+import { ghiNhatKyLeTan } from '../../services/receptionistAudit.service.js'
 import { created, fail, ok } from '../../utils/response.js'
 
 const TRANG_THAI_DUOC_LAP_HOA_DON = ['hoan_thanh', 'cho_dich_vu']
@@ -143,6 +144,22 @@ export async function confirmOfflinePayment(req, res) {
 
     await tinhTrangThaiHoaDon(payment.hoa_don_id)
     const invoice = await HoaDon.findById(payment.hoa_don_id).lean()
+
+    // Ghi nhật ký thao tác lễ tân (WS-4). Biến thực tế trong hàm là `payment` (không phải
+    // `thanhToan` như bản mô tả gốc) — dùng đúng tên biến sẵn có.
+    await ghiNhatKyLeTan({
+      hanhDong: 'LT_XAC_NHAN_THANH_TOAN',
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      loaiDoiTuong: 'payment',
+      doiTuongId: payment._id,
+      duLieuMoi: {
+        so_tien: payment.so_tien,
+        hinh_thuc: payment.phuong_thuc ?? 'tien_mat',
+        hoa_don_id: String(payment.hoa_don_id ?? ''),
+      },
+    })
+
     return ok(res, {
       payment: serializePayment(payment),
       invoice: serialize(invoice, await getPaidTotal(payment.hoa_don_id)),
