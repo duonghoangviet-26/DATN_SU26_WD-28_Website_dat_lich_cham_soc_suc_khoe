@@ -1,7 +1,24 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Send, MessageSquare } from 'lucide-react'
+import { Send, MessageSquare, Image as ImageIcon, X } from 'lucide-react'
 
 export default function Feedback() {
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedImage(file)
+      setPreviewUrl(URL.createObjectURL(file))
+    }
+  }
+
+  const removeImage = () => {
+    setSelectedImage(null)
+    setPreviewUrl(null)
+  }
+
   return (
     <div className="min-h-[calc(100vh-200px)] bg-[#f7faf9] py-16 sm:py-24">
       <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
@@ -58,6 +75,38 @@ export default function Feedback() {
                   className="block w-full rounded-xl border-0 px-4 py-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-teal-600 sm:text-sm"
                   placeholder="Chia sẻ trải nghiệm của bạn..."
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Đính kèm hình ảnh (không bắt buộc)</label>
+              <div className="mt-2 flex items-center gap-4">
+                <label htmlFor="image-upload" className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
+                  <ImageIcon size={18} className="text-slate-500" />
+                  <span>Chọn ảnh tải lên</span>
+                  <input
+                    id="image-upload"
+                    name="image-upload"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={handleImageChange}
+                  />
+                </label>
+                
+                {previewUrl && (
+                  <div className="relative h-16 w-16 overflow-hidden rounded-lg border border-slate-200">
+                    <img src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="absolute right-0 top-0 flex h-6 w-6 -translate-y-1/4 translate-x-1/4 items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+                      title="Xóa ảnh"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
