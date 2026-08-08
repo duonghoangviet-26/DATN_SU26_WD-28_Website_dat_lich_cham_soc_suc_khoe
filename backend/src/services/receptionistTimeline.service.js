@@ -59,7 +59,7 @@ const FIELD_WHITELIST = new Set([
   // di_ung, benh_nen vào đây — timeline này hiển thị công khai hơn trang nhật ký ca trực.
   'ma_so_thu_tu', 'so_thu_tu', 'nguon', 'ten_benh_nhan', 'phong_kham',
   'ma_lich_hen', 'payment_status', 'so_tien', 'hinh_thuc', 'ma_hoa_don',
-  'tong_tien', 'ly_do',
+  'tong_tien', 'ly_do', 'ngay_kham',
 ])
 
 export const HANH_DONG_NHAN = {

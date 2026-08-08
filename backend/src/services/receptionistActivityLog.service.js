@@ -21,7 +21,9 @@ import {
  * trắng trơn và người dùng hiểu nhầm là "hôm nay không ai làm gì".
  */
 export function locMaTheoNhom(nhom = null) {
-  if (nhom && NHOM_HANH_DONG[nhom]) return [...NHOM_HANH_DONG[nhom]]
+  // Object.hasOwn — `nhom` là query string tự do (VD `?nhom=constructor`), tra bằng `[nhom]`
+  // trực tiếp sẽ khớp key kế thừa từ prototype (không lặp được) và làm 500 request.
+  if (nhom && Object.hasOwn(NHOM_HANH_DONG, nhom)) return [...NHOM_HANH_DONG[nhom]]
   return [...MA_HANH_DONG_LE_TAN]
 }
 
