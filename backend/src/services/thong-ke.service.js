@@ -427,3 +427,79 @@ export async function getDichVuPhoBien(range = {}) {
     },
   ])
 }
+
+export async function getBenhNhanMoiTheoNam(range = {}) {
+  const rows = await NguoiDung.aggregate([
+    {
+      $match: {
+        role: { $in: ['user', 'patient'] },
+        ...dateRangeMatch('ngay_tao', range),
+      },
+    },
+    { $group: { _id: dateLabel('$ngay_tao', '%Y'), so_luong: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+    { $project: { _id: 0, nam: { $toInt: '$_id' }, so_luong: 1 } },
+  ])
+
+  const countByYear = new Map(rows.map((item) => [item.nam, item.so_luong]))
+
+  const appointments = await LichHen.aggregate([
+    {
+      $match: {
+        status: { $nin: ['cancelled', 'no_show', 'skipped'] },
+        user_id: { $ne: null },
+        ...dateRangeMatch('ngay_kham', range),
+      }
+    },
+    {
+      $lookup: {
+        from: NguoiDung.collection.name,
+        localField: 'user_id',
+        foreignField: '_id',
+        as: 'user'
+      }
+    },
+    { $unwind: { path: '$user', preserveNullAndEmptyArrays: false } },
+    {
+      $group: {
+        _id: {
+          nam: dateLabel('$ngay_kham', '%Y'),
+          user_id: '$user_id',
+          ngay_tao: '$user.ngay_tao'
+        }
+      }
+    }
+  ])
+
+  const countOldByYear = new Map()
+  for (const item of appointments) {
+    const yearStr = item._id.nam
+    if (!yearStr) continue
+    const year = parseInt(yearStr, 10)
+    
+    const startOfYear = new Date(`${yearStr}-01-01T00:00:00+07:00`)
+    
+    if (item._id.ngay_tao && item._id.ngay_tao < startOfYear) {
+      countOldByYear.set(year, (countOldByYear.get(year) ?? 0) + 1)
+    }
+  }
+
+  const allYears = Array.from(new Set([...countByYear.keys(), ...countOldByYear.keys()])).sort((a, b) => a - b)
+  if (allYears.length === 0) {
+    const currentYear = new Date().getFullYear()
+    return [{ nam: currentYear, label: String(currentYear), so_luong: 0, so_luong_cu: 0 }]
+  }
+
+  const minYear = allYears[0]
+  const maxYear = allYears[allYears.length - 1]
+
+  return Array.from({ length: maxYear - minYear + 1 }, (_, index) => {
+    const year = minYear + index
+    return {
+      nam: year,
+      label: String(year),
+      so_luong: countByYear.get(year) ?? 0,
+      so_luong_cu: countOldByYear.get(year) ?? 0,
+    }
+  })
+}

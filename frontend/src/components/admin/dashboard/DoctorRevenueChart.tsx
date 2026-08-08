@@ -4,36 +4,76 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { thongKeService } from '@/services/thong-ke.service'
 import type { DoctorRevenueStatistic } from '@/types/thong-ke'
 import ChartCard from './ChartCard'
-import { clinicMonth, formatCompactCurrency, formatCurrency, getErrorMessage } from './chart-utils'
+import { clinicDate, clinicMonthStart, clinicYearStart, formatCompactCurrency, formatCurrency, getErrorMessage } from './chart-utils'
 
 function shortDoctorName(value: string) {
   return value.length > 20 ? `${value.slice(0, 18)}…` : value
 }
 
+type DoctorRevenuePeriod = 'month' | 'year' | 'all'
+
+const PERIOD_OPTIONS: Array<{ value: DoctorRevenuePeriod; label: string }> = [
+  { value: 'month', label: '1 tháng' },
+  { value: 'year', label: '1 năm' },
+  { value: 'all', label: 'Tất cả' },
+]
+
 export default function DoctorRevenueChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
+  const [period, setPeriod] = useState<DoctorRevenuePeriod>('month')
   const [data, setData] = useState<DoctorRevenueStatistic[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
-    thongKeService.getDoctorRevenue(clinicMonth())
+    setLoading(true)
+    setError('')
+
+    const startDate = period === 'month' ? clinicMonthStart() : (period === 'year' ? clinicYearStart() : '')
+    const endDate = period === 'all' ? '' : clinicDate()
+
+    thongKeService.getDoctorRevenue(startDate, endDate)
       .then((rows) => { if (active) setData(rows) })
       .catch((err) => { if (active) setError(getErrorMessage(err)) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [refreshVersion])
+  }, [period, refreshVersion])
+
+  const subtitle = period === 'month'
+    ? 'Tổng số tiền đã thu theo bác sĩ phụ trách lịch hẹn trong tháng này.'
+    : period === 'year'
+      ? 'Tổng số tiền đã thu theo bác sĩ phụ trách lịch hẹn trong năm nay.'
+      : 'Tổng số tiền đã thu theo bác sĩ phụ trách lịch hẹn từ trước đến nay.'
 
   return (
     <ChartCard
       title="Doanh thu theo bác sĩ"
-      subtitle="Tổng số tiền đã thu theo bác sĩ phụ trách lịch hẹn trong tháng này."
+      subtitle={subtitle}
       icon="doctor"
       iconBackgroundClassName="bg-brand-100"
       iconClassName="text-brand-600"
       loading={loading}
       empty={!data.length}
       error={error}
+      action={
+        <div className="inline-flex rounded-lg bg-slate-100 p-1 ring-1 ring-slate-200" aria-label="Khoảng thời gian doanh thu">
+          {PERIOD_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setPeriod(option.value)}
+              className={`min-h-9 rounded-md px-3 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-brand-300 motion-reduce:transition-none ${
+                period === option.value
+                  ? 'bg-white text-brand-700 shadow-sm'
+                  : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'
+              }`}
+              aria-pressed={period === option.value}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      }
     >
       <div className="h-80 w-full" aria-label="Biểu đồ doanh thu theo bác sĩ">
         <ResponsiveContainer width="100%" height="100%">

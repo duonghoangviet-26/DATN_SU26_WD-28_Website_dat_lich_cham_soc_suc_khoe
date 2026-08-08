@@ -6,11 +6,12 @@ import type { AppointmentStatusStatistic } from '@/types/thong-ke'
 import ChartCard from './ChartCard'
 import { clinicDate, clinicMonthStart, clinicYearStart, getErrorMessage } from './chart-utils'
 
-type AppointmentStatusPeriod = 'month' | 'year'
+type AppointmentStatusPeriod = 'month' | 'year' | 'all'
 
 const PERIOD_OPTIONS: Array<{ value: AppointmentStatusPeriod; label: string }> = [
   { value: 'month', label: '1 tháng' },
   { value: 'year', label: '1 năm' },
+  { value: 'all', label: 'Tất cả' },
 ]
 
 const STATUS_META = {
@@ -32,8 +33,10 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
     setLoading(true)
     setError('')
 
-    const startDate = period === 'month' ? clinicMonthStart() : clinicYearStart()
-    thongKeService.getAppointmentStatuses(startDate, clinicDate())
+    const startDate = period === 'month' ? clinicMonthStart() : (period === 'year' ? clinicYearStart() : '')
+    const endDate = period === 'all' ? '' : clinicDate()
+
+    thongKeService.getAppointmentStatuses(startDate, endDate)
       .then((rows) => {
         if (active) {
           setData(rows)
@@ -53,7 +56,9 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
   const total = data.reduce((sum, item) => sum + item.so_luong, 0)
   const subtitle = period === 'month'
     ? 'Phân bổ lịch hẹn theo trạng thái trong tháng hiện tại.'
-    : 'Phân bổ lịch hẹn theo trạng thái trong năm hiện tại.'
+    : period === 'year'
+      ? 'Phân bổ lịch hẹn theo trạng thái trong năm hiện tại.'
+      : 'Tổng hợp phân bổ lịch hẹn theo trạng thái từ trước đến nay.'
 
   return (
     <ChartCard

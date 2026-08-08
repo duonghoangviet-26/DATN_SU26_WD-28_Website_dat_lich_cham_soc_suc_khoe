@@ -31,8 +31,15 @@ export interface WeeklyNewPatientStatistic {
   so_luong_cu?: number
 }
 
-export type NewPatientStatisticMode = 'month' | 'year'
-export type NewPatientStatistic = MonthlyNewPatientStatistic | WeeklyNewPatientStatistic
+export interface YearlyNewPatientStatistic {
+  nam: number
+  label?: string
+  so_luong: number
+  so_luong_cu?: number
+}
+
+export type NewPatientStatisticMode = 'month' | 'year' | 'all'
+export type NewPatientStatistic = MonthlyNewPatientStatistic | WeeklyNewPatientStatistic | YearlyNewPatientStatistic
 
 export interface TopServiceStatistic {
   ten_dich_vu: string

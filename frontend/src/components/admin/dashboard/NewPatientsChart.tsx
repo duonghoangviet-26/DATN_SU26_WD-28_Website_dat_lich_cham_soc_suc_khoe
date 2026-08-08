@@ -9,6 +9,7 @@ import { clinicMonth, clinicYear, getErrorMessage } from './chart-utils'
 const VIEW_OPTIONS: Array<{ mode: NewPatientStatisticMode; label: string }> = [
   { mode: 'month', label: '1 tháng' },
   { mode: 'year', label: '1 năm' },
+  { mode: 'all', label: 'Tất cả' },
 ]
 
 export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
@@ -23,7 +24,7 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
     setLoading(true)
     setError('')
 
-    const value = mode === 'month' ? clinicMonth() : clinicYear()
+    const value = mode === 'month' ? clinicMonth() : (mode === 'year' ? clinicYear() : '')
     thongKeService.getNewPatients(mode, value)
       .then((rows) => {
         if (active) {
@@ -51,6 +52,14 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
         tooltipLabel: `${item.label} (ngày ${item.tu}-${item.den})`,
       }
     }
+    
+    if ('nam' in item) {
+      return {
+        ...item,
+        label: item.label || String(item.nam),
+        tooltipLabel: `Năm ${item.nam}`,
+      }
+    }
 
     const label = item.label || `T${item.thang}`
     return {
@@ -62,7 +71,9 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
 
   const subtitle = mode === 'month'
     ? 'Số lượng bệnh nhân mới và cũ có hoạt động (đặt lịch/đăng ký) theo từng tuần trong tháng hiện tại.'
-    : 'Số lượng bệnh nhân mới và cũ có hoạt động (đặt lịch/đăng ký) theo từng tháng trong năm hiện tại.'
+    : mode === 'year'
+      ? 'Số lượng bệnh nhân mới và cũ có hoạt động (đặt lịch/đăng ký) theo từng tháng trong năm hiện tại.'
+      : 'Tổng hợp số lượng bệnh nhân mới và cũ có hoạt động theo từng năm từ trước đến nay.'
 
   return (
     <ChartCard
@@ -96,7 +107,7 @@ export default function NewPatientsChart({ refreshVersion = 0 }: { refreshVersio
     >
       <div
         className="h-80 w-full"
-        aria-label={mode === 'month' ? 'Biểu đồ bệnh nhân mới theo tuần' : 'Biểu đồ bệnh nhân mới theo tháng'}
+        aria-label={mode === 'month' ? 'Biểu đồ bệnh nhân theo tuần' : mode === 'year' ? 'Biểu đồ bệnh nhân theo tháng' : 'Biểu đồ bệnh nhân theo năm'}
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 6, right: 4, left: -24, bottom: 0 }}>

@@ -17,6 +17,9 @@ import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Toast from '@/components/common/Toast'
 import Icon from '@/components/admin/icons'
 import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
+import Setup2FAModal from '@/components/admin/Setup2FAModal'
+import BulkDeleteConfirmModal from '@/components/admin/BulkDeleteConfirmModal'
+import BatchReasonModal from '@/components/admin/BatchReasonModal'
 
 const LOG_CONFIG: Record<string, { label: string; color: 'green' | 'red' | 'blue' | 'yellow' | 'gray' }> = {
   CREATE_USER: {
@@ -97,6 +100,9 @@ export default function ManageUsers() {
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null)
+  const [show2FAModal, setShow2FAModal] = useState(false)
+  const [bulkDeleteAction, setBulkDeleteAction] = useState<'delete' | 'hard-delete' | null>(null)
+  const [batchReasonPrompt, setBatchReasonPrompt] = useState<{ action: 'lock' | 'restore' } | null>(null)
 
   // State thống kê ở đầu trang
   const [stats, setStats] = useState({
@@ -269,16 +275,22 @@ export default function ManageUsers() {
       'hard-delete': 'xóa vĩnh viễn'
     }
 
-    let trimmedReason = ''
-    if (action === 'hard-delete') {
-      const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedIds.length} người dùng đã chọn khỏi cơ sở dữ liệu? Thao tác này không thể phục hồi!`)
-      if (!confirmDelete) return
+    if (action === 'hard-delete' || action === 'delete') {
+      setBulkDeleteAction(action)
+      return
     } else if (action === 'unlock') {
-      trimmedReason = ''
+      executeBatchAction('unlock', '')
     } else {
-      const reason = window.prompt(`Nhập lý do ${actionNames[action]} ${selectedIds.length} người dùng đã chọn (không bắt buộc):`, '')
-      if (reason === null) return // Hủy bỏ
-      trimmedReason = reason.trim()
+      setBatchReasonPrompt({ action })
+    }
+  }
+
+  const executeBatchAction = async (action: 'lock' | 'unlock' | 'delete' | 'restore', trimmedReason: string) => {
+    const actionNames: Record<string, string> = {
+      lock: 'khóa',
+      unlock: 'mở khóa',
+      delete: 'xóa',
+      restore: 'khôi phục'
     }
 
     setLoading(true)
@@ -288,16 +300,37 @@ export default function ManageUsers() {
         action,
         ly_do: trimmedReason
       })
-      alert(`Đã thực hiện thành công thao tác ${actionNames[action]} cho ${res.count} người dùng!`)
+      showToast(`Đã thực hiện thành công thao tác ${actionNames[action]} cho ${res.count} người dùng!`)
       setSelectedIds([])
+      setBatchReasonPrompt(null)
+      setBulkDeleteAction(null)
       loadUsers()
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Thao tác hàng loạt thất bại.')
+      showToast(err.response?.data?.message || err.message || 'Thao tác hàng loạt thất bại.', 'error')
       setLoading(false)
     }
   }
 
-
+  const executeBatchHardDelete = async (confirmText: string, totpCode: string) => {
+    if (!bulkDeleteAction) return
+    setLoading(true)
+    try {
+      const res = await userService.batchAction({
+        ids: selectedIds,
+        action: bulkDeleteAction,
+        confirm_text: confirmText,
+        totp_code: totpCode
+      })
+      showToast(`Đã xóa ${res.count} người dùng thành công!`)
+      setSelectedIds([])
+      setBulkDeleteAction(null)
+      loadUsers()
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.message || 'Xóa thất bại', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getLogDescription = (log: any) => {
     if (log.mo_ta) return log.mo_ta
@@ -368,9 +401,14 @@ export default function ManageUsers() {
       )}
 
       <PageHeader title="Quản lý người dùng" description="Quản lý tài khoản, vai trò và trạng thái thành viên.">
-        <button onClick={() => setShowAddModal(true)} className="btn btn-primary flex items-center gap-2">
-          <Icon name="plus" className="h-4 w-4" /> Thêm người dùng
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShow2FAModal(true)} className="btn bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center gap-2 font-medium">
+            <Icon name="shield-check" className="h-4 w-4" /> Bảo mật (2FA)
+          </button>
+          <button onClick={() => setShowAddModal(true)} className="btn btn-primary flex items-center gap-2">
+            <Icon name="plus" className="h-4 w-4" /> Thêm người dùng
+          </button>
+        </div>
       </PageHeader>
 
       {/* Thẻ thống kê tổng quan (Dashboard mini) */}
@@ -700,6 +738,39 @@ export default function ManageUsers() {
       </div>
 
       {/* --- MODALS --- */}
+
+      {/* 2FA Setup Modal */}
+      {show2FAModal && (
+        <Setup2FAModal 
+          onClose={() => setShow2FAModal(false)}
+          onSuccess={() => {
+            setShow2FAModal(false)
+            setToast({ message: 'Bật xác thực 2 bước thành công!', type: 'success' })
+          }}
+        />
+      )}
+
+      {/* Bulk Delete Confirm Modal */}
+      {bulkDeleteAction && (
+        <BulkDeleteConfirmModal
+          count={selectedIds.length}
+          onClose={() => setBulkDeleteAction(null)}
+          onConfirm={executeBatchHardDelete}
+          isSubmitting={loading}
+          isHardDelete={bulkDeleteAction === 'hard-delete'}
+        />
+      )}
+
+      {/* Batch Reason Modal */}
+      {batchReasonPrompt && (
+        <BatchReasonModal
+          action={batchReasonPrompt.action}
+          count={selectedIds.length}
+          onClose={() => setBatchReasonPrompt(null)}
+          onConfirm={(reason) => executeBatchAction(batchReasonPrompt.action, reason)}
+          isSubmitting={loading}
+        />
+      )}
 
       {/* Modal Xem chi tiết */}
       {selectedUser && createPortal(

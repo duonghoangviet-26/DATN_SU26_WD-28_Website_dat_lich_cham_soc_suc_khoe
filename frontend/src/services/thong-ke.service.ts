@@ -53,8 +53,8 @@ export const thongKeService = {
     return getOnce(url, () => getData<AppointmentStatusStatistic[]>(url))
   },
 
-  getDoctorRevenue(thang: string) {
-    const url = `/thong-ke/doanh-thu-theo-bac-si${queryString({ thang })}`
+  getDoctorRevenue(tu: string, den: string) {
+    const url = `/thong-ke/doanh-thu-theo-bac-si${queryString({ tu, den })}`
     return getOnce(url, () => getData<DoctorRevenueStatistic[]>(url))
   },
 

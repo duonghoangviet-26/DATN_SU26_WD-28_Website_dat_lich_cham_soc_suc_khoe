@@ -45,7 +45,7 @@ export async function getAdminDashboardSummary(now = new Date()) {
       },
       status: { $in: ACTIVE_OPERATIONAL_STATUSES },
     }),
-    BacSi.countDocuments({ trang_thai: 'active' }),
+    BacSi.countDocuments({ trang_thai: 'active', la_hien: true, trang_thai_duyet: 'approved' }),
     sumField(HoaDon, 'tong_thanh_toan'),
     sumField(ThanhToan, 'so_tien', { status: 'paid' }),
   ])

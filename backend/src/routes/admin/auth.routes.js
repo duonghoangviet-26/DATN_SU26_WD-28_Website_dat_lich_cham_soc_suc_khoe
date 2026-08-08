@@ -18,4 +18,8 @@ router.post('/update-onboarding', verifyToken, authController.updateOnboarding)
 router.get('/profile', verifyToken, authController.getProfile)
 router.put('/profile', verifyToken, authController.updateProfile)
 
+// 2FA Routes
+router.get('/2fa/setup', verifyToken, authController.setup2FA)
+router.post('/2fa/verify', verifyToken, authController.verify2FA)
+
 export default router
