@@ -100,3 +100,176 @@ export async function getOwnedOfflineQueue(queueId, docId) {
   }
   return entry
 }
+
+/**
+ * Đọc toàn bộ trạng thái một phiên khám: lượt hàng đợi, nháp hồ sơ, sinh hiệu, đơn thuốc,
+ * và danh sách dịch vụ chỉ định được của chuyên khoa.
+ *
+ * Trả một lần đủ dữ liệu cho cả 5 bước: trang khám mở ra là dùng được ngay, không phải
+ * gọi 5 API rời rạc rồi ghép — bác sĩ đang có bệnh nhân ngồi trước mặt.
+ */
+export async function layPhienKham({ queueId, docId }) {
+  const entry = await getOwnedOfflineQueue(queueId, docId)
+
+  const [hoSo, sinhHieu, dichVuKhaDung] = await Promise.all([
+    KetQuaKham.findOne({ hang_doi_id: entry._id }).lean(),
+    SinhHieuKham.findOne({ hang_doi_id: entry._id }).lean(),
+    DichVu.find({ loai: 'related', specialty_id: entry.specialty_id, status: 'active' })
+      .select('_id ten gia ma_dich_vu').sort({ ten: 1 }).lean(),
+  ])
+
+  const thuoc = hoSo
+    ? (await DonThuoc.findOne({ medical_record_id: hoSo._id }).lean())?.items ?? []
+    : []
+
+  return {
+    queue: {
+      id: String(entry._id),
+      ten_benh_nhan: entry.ten_benh_nhan,
+      tuoi: entry.tuoi ?? null,
+      gioi_tinh: entry.gioi_tinh ?? null,
+      nhom_mau: entry.nhom_mau ?? null,
+      di_ung: entry.di_ung ?? null,
+      benh_nen: entry.benh_nen ?? null,
+      ma_so_thu_tu: entry.ma_so_thu_tu ?? null,
+      nguon: entry.nguon,
+      trang_thai: entry.trang_thai,
+      phong_kham: entry.phong_kham ?? null,
+      appointment_id: entry.appointment_id ? String(entry.appointment_id) : null,
+    },
+    ho_so: hoSo
+      ? {
+          id: String(hoSo._id),
+          status: hoSo.status,
+          trieu_chung_ban_dau: hoSo.trieu_chung_ban_dau ?? null,
+          chan_doan: hoSo.chan_doan ?? null,
+          huong_dan_dieu_tri: hoSo.huong_dan_dieu_tri ?? null,
+          ghi_chu: hoSo.ghi_chu ?? null,
+          ngay_tai_kham: hoSo.ngay_tai_kham ?? null,
+          dich_vu_phat_sinh: hoSo.dich_vu_phat_sinh ?? [],
+        }
+      : null,
+    sinh_hieu: sinhHieu
+      ? {
+          can_nang: sinhHieu.can_nang, chieu_cao: sinhHieu.chieu_cao,
+          huyet_ap: sinhHieu.huyet_ap, nhiet_do: sinhHieu.nhiet_do, nhip_tim: sinhHieu.nhip_tim,
+        }
+      : null,
+    buoc_hien_tai: hoSo?.buoc_hien_tai ?? 'tiep_nhan',
+    bmi: tinhBMI(sinhHieu?.can_nang ?? null, sinhHieu?.chieu_cao ?? null),
+    thuoc,
+    dich_vu_kha_dung: dichVuKhaDung.map((d) => ({
+      service_id: String(d._id), ten: d.ten, gia: d.gia, ma_dich_vu: d.ma_dich_vu ?? null,
+    })),
+  }
+}
+
+/** Bảo đảm có bản ghi nháp để gắn dữ liệu bước 1. */
+async function taoNhapNeuChua(entry, doctorUserId, docId) {
+  const daCo = await KetQuaKham.findOne({ hang_doi_id: entry._id })
+  if (daCo) return daCo
+
+  return KetQuaKham.create({
+    hang_doi_id: entry._id,
+    ho_so_benh_nhan_id: entry.ho_so_benh_nhan_id ?? null,
+    nguoi_nhap_id: doctorUserId,
+    bac_si_phu_trach_id: docId,
+    status: 'ban_nhap',
+    buoc_hien_tai: 'tiep_nhan',
+    // `chan_doan` là required ở schema nhưng bước 1 chưa có. Đặt chỗ giữ, bước 2 ghi đè.
+    // Không đặt sẽ ném ValidationError ngay lúc bấm "Tiếp tục" ở bước 1.
+    chan_doan: '(đang khám)',
+  })
+}
+
+/**
+ * Lưu nháp một bước rồi đẩy con trỏ sang bước kế tiếp.
+ *
+ * Không có nút "Lưu" thủ công trên UI — mỗi lần bấm "Tiếp tục" là một lần gọi hàm này.
+ * Bác sĩ đóng tab giữa chừng vẫn mở lại đúng chỗ đang dở.
+ */
+export async function luuBuoc({ queueId, docId, doctorUserId, buoc, payload = {} }) {
+  if (!CAC_BUOC.includes(buoc) || buoc === 'hoan_tat') {
+    throw loi(400, `Bước không hợp lệ: ${buoc}`)
+  }
+
+  const entry = await getOwnedOfflineQueue(queueId, docId)
+  if (entry.trang_thai !== 'trong_phong') {
+    throw loi(409, 'Chỉ nhập hồ sơ khi bệnh nhân đang trong phòng')
+  }
+
+  const hoSo = await taoNhapNeuChua(entry, doctorUserId, docId)
+  if (hoSo.status === 'da_xac_nhan' && hoSo.co_the_sua === false) {
+    throw loi(409, 'Hồ sơ đã khóa, không sửa được')
+  }
+  if (!duocPhepVaoBuoc(buoc, hoSo.buoc_hien_tai ?? 'tiep_nhan')) {
+    throw loi(409, 'Không được bỏ qua bước trước đó')
+  }
+
+  const capNhat = {}
+
+  if (buoc === 'tiep_nhan') {
+    const kq = kiemTraBuocTiepNhan(payload)
+    if (!kq.ok) throw loi(400, kq.loi.join('; '))
+
+    capNhat.trieu_chung_ban_dau = String(payload.trieu_chung_ban_dau).trim()
+    await upsertVitals({
+      hangDoiId: entry._id,
+      memberId: entry.member_id ?? null,
+      doctorUserId,
+      sinhHieu: {
+        can_nang:  payload.can_nang  ?? null,
+        chieu_cao: payload.chieu_cao ?? null,
+        huyet_ap:  payload.huyet_ap  ?? null,
+        nhiet_do:  payload.nhiet_do  ?? null,
+        nhip_tim:  payload.nhip_tim  ?? null,
+      },
+    })
+  }
+
+  if (buoc === 'chan_doan') {
+    const kq = kiemTraBuocChanDoan(payload)
+    if (!kq.ok) throw loi(400, kq.loi.join('; '))
+
+    capNhat.chan_doan = String(payload.chan_doan).trim()
+    capNhat.huong_dan_dieu_tri = payload.huong_dan_dieu_tri?.trim() || null
+    capNhat.ghi_chu = payload.ghi_chu?.trim() || null
+    capNhat.ngay_tai_kham = payload.ngay_tai_kham ? new Date(payload.ngay_tai_kham) : null
+    capNhat.chi_dinh_tai_kham = Boolean(payload.ngay_tai_kham)
+  }
+
+  if (buoc === 'dich_vu') {
+    // Quyết định Q1: bệnh nhân LUÔN ở trong phòng — không đổi trạng thái hàng đợi.
+    // Quyết định Q2: bác sĩ chỉ ghi chỉ định, KHÔNG thu tiền.
+    const chiDinh = await taoChiDinhDichVu(payload.dich_vu_phat_sinh ?? [], entry.specialty_id, docId)
+    if (!chiDinh.ok) throw loi(chiDinh.status ?? 400, chiDinh.message)
+    capNhat.dich_vu_phat_sinh = chiDinh.lines
+  }
+
+  if (buoc === 'ke_don') {
+    const items = Array.isArray(payload.thuoc) ? payload.thuoc : []
+    await DonThuoc.deleteMany({ medical_record_id: hoSo._id })
+    if (items.length) {
+      await DonThuoc.create({
+        ket_qua_kham_id: hoSo._id,
+        medical_record_id: hoSo._id,
+        member_id: entry.member_id ?? null,
+        ten_khach: entry.ten_benh_nhan,
+        doctor_id: docId,
+        nguon: 'bac_si',
+        items,
+      })
+    }
+  }
+
+  // Con trỏ chỉ TIẾN, không lùi: bác sĩ quay lại sửa bước 1 khi đang ở bước 4 thì
+  // vẫn ở bước 4, không bị đẩy ngược về bước 2.
+  const buocSau = buocKeTiep(buoc)
+  const hienTai = hoSo.buoc_hien_tai ?? 'tiep_nhan'
+  if (CAC_BUOC.indexOf(buocSau) > CAC_BUOC.indexOf(hienTai)) {
+    capNhat.buoc_hien_tai = buocSau
+  }
+
+  await KetQuaKham.updateOne({ _id: hoSo._id }, { $set: capNhat })
+  return layPhienKham({ queueId, docId })
+}
