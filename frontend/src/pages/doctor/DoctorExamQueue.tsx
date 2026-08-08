@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
@@ -174,6 +175,7 @@ function BangChoTiepNhan({
 }
 
 export default function DoctorExamQueue() {
+  const navigate = useNavigate()
   const [rows, setRows] = useState<DoctorExamQueueRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -362,9 +364,13 @@ export default function DoctorExamQueue() {
                           </>
                         )}
                         {r.trang_thai_tong_hop === 'trong_phong' && (
-                          <Button size="sm" disabled={actionLoadingId === r.id}
-                            onClick={() => runQueueAction(r.id, doctorAppointmentService.finishQueue, 'Đã kết thúc khám')}
-                            icon={<Icon name="check" className="h-3.5 w-3.5" />}>Kết thúc khám</Button>
+                          // Bệnh nhân đã trong phòng — mở trang khám 4 bước (Task 8/9), KHÔNG còn
+                          // chuyển thẳng "Kết thúc khám" như luồng cũ: kết thúc ca khám giờ đi qua
+                          // màn Xác nhận (StepXacNhan → complete()), tự transaction 3 bản ghi + trả
+                          // bệnh nhân kế tiếp — xem docs task-9-brief.md.
+                          <Button size="sm"
+                            onClick={() => navigate(`/doctor/exam/${r.id}`)}
+                            icon={<Icon name="file-text" className="h-3.5 w-3.5" />}>Vào phòng khám</Button>
                         )}
                         {r.trang_thai_tong_hop === 'cho_nhap_ho_so' && (
                           r.appointment_id

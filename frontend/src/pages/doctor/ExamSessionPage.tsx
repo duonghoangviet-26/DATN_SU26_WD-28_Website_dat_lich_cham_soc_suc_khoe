@@ -7,6 +7,9 @@ import PageHeader from '@/components/common/PageHeader'
 import Icon from '@/components/admin/icons'
 import StepTiepNhan from '@/components/doctor/exam/StepTiepNhan'
 import StepChanDoan from '@/components/doctor/exam/StepChanDoan'
+import StepDichVu from '@/components/doctor/exam/StepDichVu'
+import StepKeDon from '@/components/doctor/exam/StepKeDon'
+import StepXacNhan from '@/components/doctor/exam/StepXacNhan'
 import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
 import type { BuocKham, PhienKham } from '@/services/doctor-exam-session.service'
 
@@ -181,8 +184,10 @@ export default function ExamSessionPage() {
       <div className="card p-6">
         {buocDangXem === 'tiep_nhan' && <StepTiepNhan phien={phien} saving={saving} onNext={handleNext} />}
         {buocDangXem === 'chan_doan' && <StepChanDoan phien={phien} saving={saving} onNext={handleNext} />}
-        {(buocDangXem === 'dich_vu' || buocDangXem === 'ke_don' || buocDangXem === 'hoan_tat') && (
-          <p className="text-sm text-slate-500">Đang xây dựng</p>
+        {buocDangXem === 'dich_vu' && <StepDichVu phien={phien} saving={saving} onNext={handleNext} />}
+        {buocDangXem === 'ke_don' && <StepKeDon phien={phien} saving={saving} onNext={handleNext} />}
+        {buocDangXem === 'hoan_tat' && (
+          <StepXacNhan phien={phien} saving={saving} onNext={handleNext} onEditStep={setBuocDangXem} />
         )}
       </div>
     </div>
