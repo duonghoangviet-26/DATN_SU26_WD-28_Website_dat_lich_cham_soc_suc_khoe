@@ -191,6 +191,21 @@ export default function ReceiveNotificationTab() {
 
               <div className="bg-white text-slate-700 text-sm leading-relaxed p-4 border border-slate-100 rounded-xl whitespace-pre-wrap min-h-[100px]">
                 {detail.noi_dung}
+                {detail.du_lieu_dinh_kem?.noi_dung_phan_hoi && (
+                  <div className="mt-4 bg-slate-50 p-4 border border-slate-200 rounded-xl whitespace-pre-wrap text-sm text-slate-800 italic">
+                    "{detail.du_lieu_dinh_kem.noi_dung_phan_hoi}"
+                  </div>
+                )}
+                {detail.du_lieu_dinh_kem?.hinh_anh && (
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold text-slate-500 mb-2">Ảnh đính kèm:</p>
+                    <img 
+                      src={detail.du_lieu_dinh_kem.hinh_anh} 
+                      alt="Đính kèm" 
+                      className="max-w-full h-auto max-h-64 object-contain rounded-lg border border-slate-200 shadow-sm" 
+                    />
+                  </div>
+                )}
               </div>
               
               <div className="mt-5 pt-4 border-t border-slate-100 flex justify-end">

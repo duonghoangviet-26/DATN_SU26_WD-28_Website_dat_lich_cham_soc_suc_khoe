@@ -32,6 +32,9 @@ const Profile = lazy(() => import('@/pages/client/Profile'))
 const VnpayResult = lazy(() => import('@/pages/client/VnpayResult'))
 const NewsList = lazy(() => import('@/pages/client/NewsList'))
 const NewsDetail = lazy(() => import('@/pages/client/NewsDetail'))
+const AboutUs = lazy(() => import('@/pages/client/AboutUs'))
+const Policy = lazy(() => import('@/pages/client/Policy'))
+const Feedback = lazy(() => import('@/pages/client/Feedback'))
 
 const Dashboard = lazy(() => import('@/pages/admin/Dashboard'))
 const ManageUsers = lazy(() => import('@/pages/admin/ManageUsers'))
@@ -90,6 +93,9 @@ export default function AppRoutes() {
         />
         <Route path="/tin-tuc" element={<NewsList />} />
         <Route path="/tin-tuc/:slug" element={<NewsDetail />} />
+        <Route path="/ve-chung-toi" element={<AboutUs />} />
+        <Route path="/chinh-sach" element={<Policy />} />
+        <Route path="/phan-hoi" element={<Feedback />} />
       </Route>
 
       {/* Khu vực xác thực */}

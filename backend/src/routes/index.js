@@ -13,12 +13,17 @@ import patientRoutes      from './patient/index.js'
 import thongKeRoutes      from './thong-ke.routes.js'
 import newsRoutes         from './news.routes.js'
 import chatbotRoutes      from './chatbot.routes.js'
+import phanHoiRoutes      from './phanHoiRoutes.js'
 
 const router = Router()
+
+import { getCurrentClinic } from '../controllers/admin/clinic-info.controller.js'
 
 router.get('/health', (req, res) => {
   res.status(200).json({ success: true, message: 'API is working fine' })
 })
+
+router.get('/clinic-info', getCurrentClinic)
 
 router.use('/auth', authRoutes)
 router.use('/doctor', doctorRoutes)
@@ -28,6 +33,7 @@ router.use('/admin', adminRoutes)
 router.use('/thong-ke', thongKeRoutes)
 router.use('/chatbot', chatbotRoutes)
 router.use('/admin/upload', uploadRoutes)
+router.use('/phan-hoi', phanHoiRoutes)
 
 // New canonical mounts.
 router.use('/admin/clinics', clinicsRoutes)

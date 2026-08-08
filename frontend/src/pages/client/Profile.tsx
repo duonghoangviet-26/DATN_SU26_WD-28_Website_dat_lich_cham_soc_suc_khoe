@@ -37,7 +37,7 @@ export default function Profile() {
 
   const justBooked = searchParams.get('booked') === 'true'
 
-  const [activeTab, setActiveTab] = useState<'appointments' | 'results' | 'account' | 'family'>('appointments')
+  const [activeTab, setActiveTab] = useState<'appointments' | 'results' | 'account' | 'family' | 'reviews'>('appointments')
   const [appointments, setAppointments] = useState<PatientRecordListItem[]>([])
   const [appointmentsLoading, setAppointmentsLoading] = useState(true)
 
@@ -1286,6 +1286,7 @@ export default function Profile() {
           )}
         </div>
       </div>
+
 
       {memberModalOpen && (
         <Modal

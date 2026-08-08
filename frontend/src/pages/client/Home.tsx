@@ -87,7 +87,7 @@ export default function Home() {
   }, [])
 
   const featuredService = clinicServices[0]
-  const secondaryServices = clinicServices.slice(1, 4)
+  const secondaryServices = clinicServices.slice(1, 5)
 
   return (
     <div className="overflow-hidden bg-[#f7faf9] text-slate-900">
@@ -257,7 +257,6 @@ export default function Home() {
                         loading="lazy"
                       />
                     </div>
-                    
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-transparent opacity-80 transition-opacity duration-300 group-hover:opacity-100"></div>
 
