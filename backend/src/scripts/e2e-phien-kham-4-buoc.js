@@ -10,7 +10,7 @@
  * chua co lan nao chay CA CHUOI 4 buoc that tren DB that. Script nay la mat xich cuoi cung
  * chung minh cac manh ghep hoat dong dung VOI NHAU, khong chi dung rieng le.
  *
- * Kiem 11 nhom (dung dung thu tu brief task-7):
+ * Kiem 12 nhom (1-11 theo brief task-7; nhom 12 them sau final review — xem C1/I2):
  *   1. Mo phien kham moi -> buoc_hien_tai='tiep_nhan', ho_so=null
  *   2. Buoc 1 thieu trieu chung -> loi 400, con tro KHONG tien
  *   3. Buoc 1 du -> buoc_hien_tai='chan_doan', sinh hieu ghi duoc, bmi tinh dung
@@ -21,9 +21,12 @@
  *   7. Buoc 4 ke 2 thuoc -> DonThuoc co 2 items; ke lai 1 thuoc -> con dung 1 (khong cong don)
  *   8. Quay lai buoc 1 sua trieu chung -> buoc_hien_tai VAN LA 'hoan_tat', khong lui
  *   9. Hoan tat -> KetQuaKham.status='da_xac_nhan', HangDoi='hoan_thanh', LichHen='completed',
- *      tra benh_nhan_ke_tiep va co_dich_vu_can_thu=true
- *   10. Hoan tat lan 2 -> loi (luot da xong)
+ *      tra benh_nhan_ke_tiep va co_dich_vu_can_thu=true, VA nha phong (I2):
+ *      TrangThaiPhongKham='dang_don_phong', benh_nhan_hien_tai_id=null, trung binh truot
+ *   10. Hoan tat lan 2 -> loi (luot da xong) VA khong nha oan phong dang phuc vu nguoi khac
  *   11. Bac si khac goi cung queueId -> loi 403/404
+ *   12. Luot DAT ONLINE (nguon='online') chay het 4 buoc + hoan tat (C1); ho so mang ca
+ *       appointment_id lan hang_doi_id; getOwnedOfflineQueue VAN chan luot online
  *
  * ⚠️ CHI chay tren DB TEST. Script tu chan neu bien MONGODB_URI khong chua chu "test".
  *
@@ -36,7 +39,8 @@ import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import {
-  BacSi, DichVu, DonThuoc, HangDoi, KetQuaKham, LichHen, NguoiDung, SinhHieuKham,
+  BacSi, DichVu, DonThuoc, HangDoi, KetQuaKham, LichHen, NguoiDung, NhatKyThaoTac, SinhHieuKham,
+  TrangThaiPhongKham,
 } from '../models/index.js'
 import { hoanTatPhienKham, layPhienKham, luuBuoc } from '../services/examSession.service.js'
 
@@ -55,18 +59,48 @@ function kt(ten, dieuKien, chiTiet = '') {
 }
 function muc(ten) { console.log(`\n${ten}`) }
 
-const daTao = { hangDoi: [], lichHen: [] }
+const daTao = { hangDoi: [], lichHen: [], nhatKy: [], phongTuTao: null, phongGoc: null }
 
 async function donDep() {
   if (daTao.hangDoi.length) {
     await SinhHieuKham.deleteMany({ hang_doi_id: { $in: daTao.hangDoi } })
     const hoSos = await KetQuaKham.find({ hang_doi_id: { $in: daTao.hangDoi } }).select('_id').lean()
     const hoSoIds = hoSos.map((h) => h._id)
-    if (hoSoIds.length) await DonThuoc.deleteMany({ medical_record_id: { $in: hoSoIds } })
+    if (hoSoIds.length) {
+      await DonThuoc.deleteMany({ medical_record_id: { $in: hoSoIds } })
+      await NhatKyThaoTac.deleteMany({ loai_doi_tuong: 'examination_result', doi_tuong_id: { $in: hoSoIds } })
+    }
     await KetQuaKham.deleteMany({ hang_doi_id: { $in: daTao.hangDoi } })
     await HangDoi.deleteMany({ _id: { $in: daTao.hangDoi } })
   }
+  if (daTao.nhatKy.length) await NhatKyThaoTac.deleteMany({ _id: { $in: daTao.nhatKy } })
   if (daTao.lichHen.length) await LichHen.deleteMany({ _id: { $in: daTao.lichHen } })
+  // Tra trang thai phong ve nguyen trang: script nay MUON phong, khong duoc de lai rac.
+  if (daTao.phongTuTao) {
+    await TrangThaiPhongKham.deleteOne({ _id: daTao.phongTuTao })
+  } else if (daTao.phongGoc) {
+    await TrangThaiPhongKham.updateOne({ _id: daTao.phongGoc._id }, { $set: {
+      trang_thai: daTao.phongGoc.trang_thai,
+      benh_nhan_hien_tai_id: daTao.phongGoc.benh_nhan_hien_tai_id ?? null,
+      thoi_gian_kham_tb_phut: daTao.phongGoc.thoi_gian_kham_tb_phut,
+    } })
+  }
+}
+
+/** Dat phong cua bac si ve dung trang thai "dang kham benh nhan nay" truoc khi hoan tat. */
+async function datPhongDangKham(docId, queueId) {
+  const start = new Date(); start.setHours(0, 0, 0, 0)
+  let room = await TrangThaiPhongKham.findOne({ doctor_id: docId, ngay: start })
+  if (!room) {
+    room = await TrangThaiPhongKham.create({ doctor_id: docId, ngay: start })
+    if (!daTao.phongTuTao) daTao.phongTuTao = room._id
+  } else if (!daTao.phongGoc && !daTao.phongTuTao) {
+    daTao.phongGoc = room.toObject()
+  }
+  room.trang_thai = 'dang_kham'
+  room.benh_nhan_hien_tai_id = queueId
+  await room.save()
+  return room
 }
 
 async function main() {
@@ -136,6 +170,8 @@ async function main() {
     doctor_id: bacSiA._id,
     trang_thai: 'trong_phong',
     checkin_time: new Date(),
+    // Co moc vao phong -> kich hoat nhanh cap nhat trung binh truot `thoi_gian_kham_tb_phut`.
+    thoi_diem_vao_phong: new Date(Date.now() - 12 * 60000),
     muc_uu_tien: 'offline',
   })
   daTao.hangDoi.push(hangDoiChinh._id)
@@ -275,6 +311,9 @@ async function main() {
   // ── 9 ──────────────────────────────────────────────────────────────────────────────────
   muc('9. Hoan tat phien kham')
   {
+    const phongTruoc = await datPhongDangKham(docId, queueId)
+    const tbTruoc = phongTruoc.thoi_gian_kham_tb_phut
+
     const ketQua = await hoanTatPhienKham({ queueId, docId, doctorUserId })
     kt('co_dich_vu_can_thu = true', ketQua.co_dich_vu_can_thu === true, `${ketQua.co_dich_vu_can_thu}`)
     kt('tong_tien_dich_vu > 0 (KHONG phai buoc thu tien — chi so dong bo)', ketQua.tong_tien_dich_vu > 0, `${ketQua.tong_tien_dich_vu}`)
@@ -288,6 +327,20 @@ async function main() {
 
     const lichHenSau = await LichHen.findById(lichHenGiaLap._id).lean()
     kt("LichHen.status = 'completed'", lichHenSau.status === 'completed', lichHenSau.status)
+
+    // I2 — nha phong khi hoan tat, neu khong benh nhan ke tiep khong vao phong duoc (409).
+    const phongSau = await TrangThaiPhongKham.findById(phongTruoc._id).lean()
+    kt("TrangThaiPhongKham.trang_thai = 'dang_don_phong'", phongSau.trang_thai === 'dang_don_phong', phongSau.trang_thai)
+    kt('benh_nhan_hien_tai_id da duoc xoa', phongSau.benh_nhan_hien_tai_id == null, `${phongSau.benh_nhan_hien_tai_id}`)
+    const tbMong = Math.round(0.7 * tbTruoc + 0.3 * 12)
+    kt('thoi_gian_kham_tb_phut cap nhat theo trung binh truot', phongSau.thoi_gian_kham_tb_phut === tbMong, `thuc te=${phongSau.thoi_gian_kham_tb_phut} mong doi=${tbMong}`)
+
+    const nhatKyPhong = await NhatKyThaoTac.findOne({
+      hanh_dong: 'CHANGE_DOCTOR_STATUS', loai_doi_tuong: 'room_status', doi_tuong_id: docId,
+    }).sort({ _id: -1 }).lean()
+    kt('co nhat ky CHANGE_DOCTOR_STATUS sau khi hoan tat',
+      nhatKyPhong?.du_lieu_moi?.trang_thai === 'dang_don_phong', `${nhatKyPhong?.du_lieu_moi?.trang_thai}`)
+    if (nhatKyPhong?._id) daTao.nhatKy.push(nhatKyPhong._id)
   }
 
   // ── 10 ─────────────────────────────────────────────────────────────────────────────────
@@ -299,6 +352,17 @@ async function main() {
     } catch (err) { loiBat = err }
     kt('nem loi', !!loiBat, loiBat?.message)
     kt('httpStatus la loi nghiep vu (400/409)', [400, 409].includes(loiBat?.httpStatus), `${loiBat?.httpStatus}`)
+
+    // Chan hoan tat lan 2 phai xay ra TRUOC khi cham vao phong. Neu khong, lan goi thu 2 se
+    // nha oan phong dang phuc vu benh nhan ke tiep. Dat lai phong ve 'dang_kham' voi mot
+    // benh nhan khac roi goi lai — phong phai KHONG doi.
+    await datPhongDangKham(docId, hangDoiKeTiep._id)
+    try { await hoanTatPhienKham({ queueId, docId, doctorUserId }) } catch { /* van phai loi */ }
+    const start = new Date(); start.setHours(0, 0, 0, 0)
+    const phongVanGiu = await TrangThaiPhongKham.findOne({ doctor_id: docId, ngay: start }).lean()
+    kt("phong VAN 'dang_kham', khong bi nha oan", phongVanGiu.trang_thai === 'dang_kham', phongVanGiu.trang_thai)
+    kt('benh_nhan_hien_tai_id van la benh nhan ke tiep',
+      String(phongVanGiu.benh_nhan_hien_tai_id) === String(hangDoiKeTiep._id), `${phongVanGiu.benh_nhan_hien_tai_id}`)
   }
 
   // ── 11 ─────────────────────────────────────────────────────────────────────────────────
@@ -316,6 +380,101 @@ async function main() {
       await luuBuoc({ queueId, docId: bacSiB._id, doctorUserId: userB._id, buoc: 'tiep_nhan', payload: { trieu_chung_ban_dau: 'khong duoc phep' } })
     } catch (err) { loiBatLuuBuoc = err }
     kt('luuBuoc cung bi chan tuong tu', [403, 404].includes(loiBatLuuBuoc?.httpStatus), `${loiBatLuuBuoc?.httpStatus}`)
+  }
+
+  // ── 12 ─────────────────────────────────────────────────────────────────────────────────
+  // C1 — luot DAT ONLINE (nguon='online') phai chay het 4 buoc. Truoc ban va, ca 3 ham deu
+  // loc `nguon:'offline'` nen benh nhan online bam "Vao phong kham" la 404 vinh vien, ma nut
+  // "Ket thuc kham" cu da bi go khoi UI -> khong con duong nao hoan tat ca kham.
+  muc('12. Luot DAT ONLINE — ca chuoi 4 buoc + nha phong')
+  {
+    const lichHenOnline = await LichHen.create({
+      doctor_id: bacSiA._id,
+      schedule_id: new mongoose.Types.ObjectId(),
+      slot_id: new mongoose.Types.ObjectId(),
+      specialty_id: specialtyId,
+      loai_kham: 'clinic',
+      ngay_kham: new Date(),
+      gio_kham: '10:00',
+      status: 'checked_in',
+      payment_status: 'paid',
+      gia_kham: 200000,
+      ten_khach: `${TAG} Online`,
+      ma_lich_hen: `${TAG}${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+    })
+    daTao.lichHen.push(lichHenOnline._id)
+
+    const hangDoiOnline = await HangDoi.create({
+      nguon: 'online',
+      appointment_id: lichHenOnline._id,
+      ten_benh_nhan: `${TAG} Online`,
+      so_dien_thoai: '0900000789',
+      specialty_id: specialtyId,
+      doctor_id: bacSiA._id,
+      trang_thai: 'trong_phong',
+      checkin_time: new Date(),
+      thoi_diem_vao_phong: new Date(Date.now() - 8 * 60000),
+      muc_uu_tien: 'online_uu_tien',
+    })
+    daTao.hangDoi.push(hangDoiOnline._id)
+    const qOnline = hangDoiOnline._id
+
+    const p0 = await layPhienKham({ queueId: qOnline, docId })
+    kt("layPhienKham CHAY DUOC voi nguon='online'", p0.queue.nguon === 'online', p0.queue.nguon)
+    kt("buoc_hien_tai = 'tiep_nhan'", p0.buoc_hien_tai === 'tiep_nhan', p0.buoc_hien_tai)
+
+    const p1 = await luuBuoc({ queueId: qOnline, docId, doctorUserId, buoc: 'tiep_nhan',
+      payload: { trieu_chung_ban_dau: 'Ngat mui 2 ngay', can_nang: 70, chieu_cao: 170 } })
+    kt("buoc 1 luu duoc -> 'chan_doan'", p1.buoc_hien_tai === 'chan_doan', p1.buoc_hien_tai)
+
+    const p2 = await luuBuoc({ queueId: qOnline, docId, doctorUserId, buoc: 'chan_doan',
+      payload: { chan_doan: 'Viêm mũi dị ứng' } })
+    kt("buoc 2 luu duoc -> 'dich_vu'", p2.buoc_hien_tai === 'dich_vu', p2.buoc_hien_tai)
+
+    const p3 = await luuBuoc({ queueId: qOnline, docId, doctorUserId, buoc: 'dich_vu',
+      payload: { dich_vu_phat_sinh: [{ service_id: String(dichVu._id), so_luong: 1 }] } })
+    kt("buoc 3 luu duoc -> 'ke_don'", p3.buoc_hien_tai === 'ke_don', p3.buoc_hien_tai)
+
+    const p4 = await luuBuoc({ queueId: qOnline, docId, doctorUserId, buoc: 'ke_don',
+      payload: { thuoc: [{ ten_thuoc: 'Loratadin 10mg', so_ngay: 7 }] } })
+    kt("buoc 4 luu duoc -> 'hoan_tat'", p4.buoc_hien_tai === 'hoan_tat', p4.buoc_hien_tai)
+
+    // Ho so cua luot online phai mang CA HAI khoa: thieu appointment_id thi benh nhan khong
+    // xem duoc ket qua (patient/records tra theo appointment_id) va le tan khong lap duoc hoa
+    // don dich vu phat sinh (billing tra { appointment_id, status:'da_xac_nhan' }).
+    const hoSoOnline = await KetQuaKham.findOne({ hang_doi_id: qOnline }).lean()
+    kt('KetQuaKham gan dung appointment_id',
+      String(hoSoOnline.appointment_id) === String(lichHenOnline._id), `${hoSoOnline.appointment_id}`)
+    kt('KetQuaKham van gan hang_doi_id', String(hoSoOnline.hang_doi_id) === String(qOnline))
+    const shOnline = await SinhHieuKham.findOne({ hang_doi_id: qOnline }).lean()
+    kt('SinhHieuKham ghi duoc, mang ca hai khoa',
+      !!shOnline && String(shOnline.appointment_id) === String(lichHenOnline._id), shOnline ? 'co' : 'KHONG CO')
+
+    const phongTruocOnline = await datPhongDangKham(docId, qOnline)
+    const tbTruocOnline = phongTruocOnline.thoi_gian_kham_tb_phut
+
+    const kqOnline = await hoanTatPhienKham({ queueId: qOnline, docId, doctorUserId })
+    kt('hoanTatPhienKham chay duoc cho luot online', !!kqOnline.ho_so_id, kqOnline.ho_so_id)
+
+    const hoSoSauOnline = await KetQuaKham.findById(hoSoOnline._id).lean()
+    kt("KetQuaKham.status = 'da_xac_nhan'", hoSoSauOnline.status === 'da_xac_nhan', hoSoSauOnline.status)
+    const hdSauOnline = await HangDoi.findById(qOnline).lean()
+    kt("HangDoi.trang_thai = 'hoan_thanh'", hdSauOnline.trang_thai === 'hoan_thanh', hdSauOnline.trang_thai)
+    const lhSauOnline = await LichHen.findById(lichHenOnline._id).lean()
+    kt("LichHen.status = 'completed'", lhSauOnline.status === 'completed', lhSauOnline.status)
+
+    const phongSauOnline = await TrangThaiPhongKham.findById(phongTruocOnline._id).lean()
+    kt("phong nha ve 'dang_don_phong'", phongSauOnline.trang_thai === 'dang_don_phong', phongSauOnline.trang_thai)
+    kt('benh_nhan_hien_tai_id da xoa', phongSauOnline.benh_nhan_hien_tai_id == null, `${phongSauOnline.benh_nhan_hien_tai_id}`)
+    const tbMongOnline = Math.round(0.7 * tbTruocOnline + 0.3 * 8)
+    kt('trung binh truot cap nhat', phongSauOnline.thoi_gian_kham_tb_phut === tbMongOnline,
+      `thuc te=${phongSauOnline.thoi_gian_kham_tb_phut} mong doi=${tbMongOnline}`)
+
+    // Cac endpoint form phang cu VAN chi nhan offline — khong duoc noi long theo.
+    const { getOwnedOfflineQueue } = await import('../services/examSession.service.js')
+    let loiOffline = null
+    try { await getOwnedOfflineQueue(qOnline, docId) } catch (err) { loiOffline = err }
+    kt('getOwnedOfflineQueue VAN chan luot online (404)', loiOffline?.httpStatus === 404, `${loiOffline?.httpStatus}`)
   }
 
   await donDep()

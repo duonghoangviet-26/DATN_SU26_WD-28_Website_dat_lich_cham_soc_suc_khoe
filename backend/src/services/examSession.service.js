@@ -1,6 +1,12 @@
 import mongoose from 'mongoose'
-import { DichVu, DonThuoc, HangDoi, KetQuaKham, LichHen, NhatKyThaoTac, SinhHieuKham } from '../models/index.js'
+import {
+  DichVu, DonThuoc, HangDoi, KetQuaKham, LichHen, NhatKyThaoTac, SinhHieuKham, TrangThaiPhongKham,
+} from '../models/index.js'
 import { soSanhThuTuHangDoi } from '../models/HangDoi.js'
+// `room-status.controller.js` chỉ import models + utils/response → KHÔNG có vòng import
+// ngược về service này (đã kiểm: không file nào trong nhánh đó nạp examSession.service).
+import { findOrCreateRoomStatus } from '../controllers/doctor/room-status.controller.js'
+import { emitDashboardAppointmentChanged } from '../realtime/socket.js'
 import {
   CAC_BUOC,
   buocKeTiep,
@@ -29,7 +35,16 @@ function loi(statusCode, message) {
 export async function upsertVitals({ appointmentId, hangDoiId, memberId, doctorUserId, sinhHieu }) {
   if (!sinhHieu) return
   const { can_nang, chieu_cao, huyet_ap, nhiet_do, nhip_tim } = sinhHieu
-  const filter = appointmentId ? { appointment_id: appointmentId } : { hang_doi_id: hangDoiId }
+  // Lượt online đi qua phiên khám 4 bước mang CẢ HAI khóa. `SinhHieuKham` có sparse-unique
+  // trên từng khóa, nên lọc theo đúng một khóa rồi upsert có thể đẻ ra bản ghi thứ hai đụng
+  // khóa còn lại (E11000). Tra theo cả hai trước, có thì cập nhật theo `_id`.
+  let filter = appointmentId ? { appointment_id: appointmentId } : { hang_doi_id: hangDoiId }
+  if (appointmentId && hangDoiId) {
+    const daCo = await SinhHieuKham.findOne({
+      $or: [{ appointment_id: appointmentId }, { hang_doi_id: hangDoiId }],
+    }).select('_id').lean()
+    if (daCo) filter = { _id: daCo._id }
+  }
   const setFields = {
     member_id: memberId ?? null,
     can_nang,
@@ -89,16 +104,51 @@ export async function taoChiDinhDichVu(value, specialtyId, doctorId) {
   }
 }
 
-export async function getOwnedOfflineQueue(queueId, docId) {
+// Lõi dùng chung cho hai biến thể dưới. `chiOffline` quyết định có ép `nguon='offline'` hay không.
+async function timLuotKhamCuaBacSi(queueId, docId, { chiOffline }) {
   if (!mongoose.Types.ObjectId.isValid(queueId)) {
     throw Object.assign(new Error('Ma luot kham khong hop le'), { httpStatus: 400 })
   }
-  const entry = await HangDoi.findOne({ _id: queueId, doctor_id: docId, nguon: 'offline' }).lean()
-  if (!entry) throw Object.assign(new Error('Khong tim thay luot kham offline'), { httpStatus: 404 })
+  const filter = { _id: queueId, doctor_id: docId }
+  if (chiOffline) filter.nguon = 'offline'
+  const entry = await HangDoi.findOne(filter).lean()
+  if (!entry) {
+    const msg = chiOffline ? 'Khong tim thay luot kham offline' : 'Khong tim thay luot kham'
+    throw Object.assign(new Error(msg), { httpStatus: 404 })
+  }
   if (!['trong_phong', 'hoan_thanh', 'cho_dich_vu'].includes(entry.trang_thai)) {
     throw Object.assign(new Error('Chi nhap ket qua khi benh nhan dang kham hoac da ket thuc kham'), { httpStatus: 409 })
   }
   return entry
+}
+
+/**
+ * Lượt khám VÃNG LAI của bác sĩ — chỉ `nguon='offline'`.
+ *
+ * GIỮ NGUYÊN hành vi cho các endpoint form phẳng cũ trong `appointments.controller.js`
+ * (`listRelatedServices?queue_id=`, `getResultByQueue`, `createResultByQueue`). Ba endpoint
+ * đó ghi/đọc `KetQuaKham` theo `hang_doi_id`; lượt ONLINE ở luồng cũ đi đường riêng theo
+ * `appointment_id` (`createResult`/`updateResult`/`getResult`), nên nếu bỏ chặn ở đây thì
+ * một lịch hẹn online có thể có HAI hồ sơ song song (một theo appointment_id, một theo
+ * hang_doi_id) — đúng thứ mà index sparse-unique kép của `KetQuaKham` cố tránh.
+ */
+export async function getOwnedOfflineQueue(queueId, docId) {
+  return timLuotKhamCuaBacSi(queueId, docId, { chiOffline: true })
+}
+
+/**
+ * Lượt khám của bác sĩ cho PHIÊN KHÁM 4 BƯỚC — nhận cả `online` lẫn `offline`.
+ *
+ * Luồng 4 bước là đường ghi hồ sơ DUY NHẤT của trang khám mới: trang hàng đợi đẩy MỌI bệnh
+ * nhân `trong_phong` vào đây, không phân biệt nguồn. Dùng `getOwnedOfflineQueue` ở đây khiến
+ * bệnh nhân đặt online bấm "Vào phòng khám" là 404 vĩnh viễn (nút "Kết thúc khám" cũ đã bị gỡ
+ * khỏi UI trong cùng commit, nên họ không còn đường nào hoàn tất ca khám).
+ *
+ * An toàn vì luồng mới gắn hồ sơ theo CẢ HAI khóa cho lượt online (xem `taoNhapNeuChua`):
+ * `appointment_id` + `hang_doi_id`, nên vẫn chỉ có một hồ sơ cho một lịch hẹn.
+ */
+export async function getOwnedQueueForExam(queueId, docId) {
+  return timLuotKhamCuaBacSi(queueId, docId, { chiOffline: false })
 }
 
 /**
@@ -109,7 +159,7 @@ export async function getOwnedOfflineQueue(queueId, docId) {
  * gọi 5 API rời rạc rồi ghép — bác sĩ đang có bệnh nhân ngồi trước mặt.
  */
 export async function layPhienKham({ queueId, docId }) {
-  const entry = await getOwnedOfflineQueue(queueId, docId)
+  const entry = await getOwnedQueueForExam(queueId, docId)
 
   const [hoSo, sinhHieu, dichVuKhaDung] = await Promise.all([
     KetQuaKham.findOne({ hang_doi_id: entry._id }).lean(),
@@ -169,8 +219,24 @@ async function taoNhapNeuChua(entry, doctorUserId, docId) {
   const daCo = await KetQuaKham.findOne({ hang_doi_id: entry._id })
   if (daCo) return daCo
 
+  // Lượt ONLINE: hồ sơ phải mang CẢ `appointment_id`. Thiếu nó thì bệnh nhân không xem được
+  // kết quả (patient/records tra theo `appointment_id`) và lễ tân không lập được hóa đơn dịch
+  // vụ phát sinh (billing.controller tra `{ appointment_id, status:'da_xac_nhan' }` cho ca
+  // online). Schema đã tính sẵn: "online mang cả hai, offline chỉ hang_doi_id".
+  if (entry.appointment_id) {
+    const hoSoTheoLichHen = await KetQuaKham.findOne({ appointment_id: entry.appointment_id }).select('_id').lean()
+    // Đã có hồ sơ nhập bằng form phẳng cũ → tạo thêm sẽ đụng sparse-unique `appointment_id`
+    // và trả lỗi Mongo thô. Chặn sớm với thông báo đọc được.
+    if (hoSoTheoLichHen) {
+      throw loi(409, 'Lịch hẹn này đã có hồ sơ khám nhập bằng luồng cũ, không mở phiên khám mới được')
+    }
+  }
+
   return KetQuaKham.create({
     hang_doi_id: entry._id,
+    // KHÔNG set null: index sparse-unique bỏ qua field VẮNG MẶT, nhưng vẫn đánh chỉ mục
+    // giá trị null → nhiều hồ sơ offline cùng null sẽ đụng nhau.
+    ...(entry.appointment_id ? { appointment_id: entry.appointment_id } : {}),
     ho_so_benh_nhan_id: entry.ho_so_benh_nhan_id ?? null,
     nguoi_nhap_id: doctorUserId,
     bac_si_phu_trach_id: docId,
@@ -193,7 +259,7 @@ export async function luuBuoc({ queueId, docId, doctorUserId, buoc, payload = {}
     throw loi(400, `Bước không hợp lệ: ${buoc}`)
   }
 
-  const entry = await getOwnedOfflineQueue(queueId, docId)
+  const entry = await getOwnedQueueForExam(queueId, docId)
   if (entry.trang_thai !== 'trong_phong') {
     throw loi(409, 'Chỉ nhập hồ sơ khi bệnh nhân đang trong phòng')
   }
@@ -215,6 +281,8 @@ export async function luuBuoc({ queueId, docId, doctorUserId, buoc, payload = {}
     capNhat.trieu_chung_ban_dau = String(payload.trieu_chung_ban_dau).trim()
     await upsertVitals({
       hangDoiId: entry._id,
+      // Lượt online: gắn thêm `appointment_id` cho nhất quán với hồ sơ khám ở trên.
+      appointmentId: entry.appointment_id ?? null,
       memberId: entry.member_id ?? null,
       doctorUserId,
       sinhHieu: {
@@ -305,7 +373,7 @@ async function timBenhNhanKeTiep(docId, now = new Date()) {
  * cuối ca hiểu nhầm — nên gói trong MỘT transaction.
  */
 export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new Date() }) {
-  const entry = await getOwnedOfflineQueue(queueId, docId)
+  const entry = await getOwnedQueueForExam(queueId, docId)
   const hoSo = await KetQuaKham.findOne({ hang_doi_id: entry._id })
   if (!hoSo) throw loi(409, 'Chưa có hồ sơ khám cho lượt này')
 
@@ -329,6 +397,20 @@ export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new
     ? hoSo.dich_vu_phat_sinh.reduce((s, d) => s + (d.thanh_tien ?? 0), 0)
     : 0
 
+  // ── Nhả phòng khám ──────────────────────────────────────────────────────────────────────
+  // Lấy bản ghi phòng NGOÀI transaction (findOrCreateRoomStatus có thể phải `create`, không
+  // nhận session) rồi mới đổi + save {session} bên trong — đúng thứ tự `finish()` cũ đã dùng.
+  // Đặt SAU mọi guard ở trên, đặc biệt là chặn hoàn tất lần 2: gọi complete lần 2 phải 409
+  // trước khi chạm tới phòng, nếu không sẽ nhả oan phòng đang phục vụ bệnh nhân kế tiếp.
+  const room = await findOrCreateRoomStatus(entry.doctor_id)
+  const tuRoom = room?.trang_thai ?? null
+  // Chỉ nhả khi phòng THẬT SỰ đang giữ đúng bệnh nhân này. Khác `finish()` cũ (trả 409 rồi
+  // dừng): ở đây hồ sơ khám đã nhập xong, chặn lại sẽ khóa bác sĩ vĩnh viễn trong khi trạng
+  // thái phòng lệch chỉ là chuyện bên lề — nên bỏ qua bước nhả phòng chứ không hủy cả ca.
+  const nhaPhong = !!room && String(room.benh_nhan_hien_tai_id) === String(entry._id)
+  const tbTruoc = room?.thoi_gian_kham_tb_phut ?? 0
+
+  let apptOldStatus = null
   const session = await mongoose.startSession()
   try {
     await session.withTransaction(async () => {
@@ -358,20 +440,53 @@ export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new
         { session },
       )
 
-      // ⚠️ updateOne chứ KHÔNG phải .save(): `LichHen.pre('validate')` kiểm cả những field
-      // ca khám không hề chạm, và với bản ghi cũ thiếu field nào đó sẽ ném lỗi vô nghĩa —
-      // cùng cái bẫy đã ghi ở `doiTrangThaiLichHen` trong queue.controller.js.
-      if (entry.appointment_id) {
-        await LichHen.updateOne(
-          { _id: entry.appointment_id },
-          { $set: { status: 'completed' } },
+      // Nhả phòng: trạng thái `dang_don_phong` + xóa bệnh nhân hiện tại, y như `finish()` cũ.
+      // Thiếu đoạn này thì phòng kẹt `dang_kham` và bệnh nhân kế tiếp không vào phòng được
+      // ("Phòng chưa sẵn sàng" 409) — bác sĩ hết đường khám tiếp trong ngày.
+      if (nhaPhong) {
+        const datPhong = {
+          trang_thai: 'dang_don_phong',
+          benh_nhan_hien_tai_id: null,
+          thoi_diem_doi: now,
+        }
+        if (entry.thoi_diem_vao_phong) {
+          const phutThucTe = Math.max(1, Math.round((now - entry.thoi_diem_vao_phong) / 60000))
+          // Tính từ `tbTruoc` chụp một lần ngoài transaction. `withTransaction` có thể chạy
+          // lại callback; đọc `room.thoi_gian_kham_tb_phut` sau khi chính lần trước đã sửa sẽ
+          // làm trung bình trượt lệch dần.
+          datPhong.thoi_gian_kham_tb_phut = Math.round(0.7 * tbTruoc + 0.3 * phutThucTe)
+        }
+        // updateOne chứ không `.save()`: giống hai bản ghi trên, và chạy lại được nguyên vẹn
+        // nếu transaction retry (document mongoose đã save một lần sẽ hết `modifiedPaths`).
+        // Điều kiện `benh_nhan_hien_tai_id` lặp lại guard ở trên ngay tại thời điểm ghi.
+        await TrangThaiPhongKham.updateOne(
+          { _id: room._id, benh_nhan_hien_tai_id: entry._id },
+          { $set: datPhong },
           { session },
         )
+      }
+
+      // ⚠️ findOneAndUpdate chứ KHÔNG phải .save(): `LichHen.pre('validate')` kiểm cả những
+      // field ca khám không hề chạm, và với bản ghi cũ thiếu field nào đó sẽ ném lỗi vô nghĩa
+      // — cùng cái bẫy đã ghi ở `doiTrangThaiLichHen` trong queue.controller.js.
+      // `new: false` để lấy trạng thái CŨ, phục vụ emit realtime sau khi commit.
+      if (entry.appointment_id) {
+        const truoc = await LichHen.findOneAndUpdate(
+          { _id: entry.appointment_id },
+          { $set: { status: 'completed' } },
+          { new: false, session },
+        ).select('status').lean()
+        apptOldStatus = truoc?.status ?? null
       }
     })
   } finally {
     await session.endSession()
   }
+
+  // Sau commit mới báo realtime (ngoài transaction để tránh emit lặp nếu withTransaction retry).
+  // `emitDashboardAppointmentChanged` tự bỏ qua khi trạng thái cũ = mới, nên lượt offline
+  // (không có appointment_id → apptOldStatus = null) và lịch vốn đã 'completed' đều không emit.
+  if (apptOldStatus) emitDashboardAppointmentChanged(apptOldStatus, 'completed')
 
   // Ghi nhật ký NGOÀI transaction, nuốt lỗi: cùng nguyên tắc "audit không được làm hỏng
   // nghiệp vụ" đã áp dụng ở `ghiNhatKyLeTan` (WS-4). Ba bản ghi nghiệp vụ đã chốt xong ở
@@ -386,6 +501,24 @@ export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new
     })
   } catch (err) {
     console.error('[examSession] Không ghi được nhật ký DOCTOR_COMPLETE_EXAM:', err.message)
+  }
+
+  // Nhật ký đổi trạng thái phòng — cùng hình dạng bản ghi mà `finish()` cũ ghi, để báo cáo
+  // trạng thái phòng không bị đứt đoạn khi ca khám đi qua luồng 4 bước thay vì luồng cũ.
+  if (nhaPhong) {
+    try {
+      await NhatKyThaoTac.create({
+        nguoi_thuc_hien_id: doctorUserId,
+        vai_tro: 'doctor',
+        hanh_dong: 'CHANGE_DOCTOR_STATUS',
+        loai_doi_tuong: 'room_status',
+        doi_tuong_id: entry.doctor_id,
+        du_lieu_cu: { trang_thai: tuRoom },
+        du_lieu_moi: { trang_thai: 'dang_don_phong' },
+      })
+    } catch (err) {
+      console.error('[examSession] Không ghi được nhật ký CHANGE_DOCTOR_STATUS:', err.message)
+    }
   }
 
   return {
