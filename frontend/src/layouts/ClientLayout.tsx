@@ -156,7 +156,7 @@ export default function ClientLayout() {
       </main>
 
       <footer className="border-t border-slate-200 bg-slate-950 text-slate-400">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.2fr_0.8fr_0.8fr] lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr] lg:px-8">
           <div className="max-w-sm">
             <Link to="/" className="inline-flex items-center gap-3 text-white">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-700 font-semibold">V</span>
@@ -191,6 +191,14 @@ export default function ClientLayout() {
               <Link to="/dich-vu" className="block hover:text-white">Dịch vụ chuyên khoa</Link>
               <Link to="/tin-tuc" className="block hover:text-white">Cẩm nang sức khỏe</Link>
               <Link to="/booking" className="block hover:text-white">Đặt lịch khám</Link>
+            </div>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Chính sách & Phản hồi</h2>
+            <div className="mt-4 space-y-3 text-sm">
+              <Link to="/ve-chung-toi" className="block hover:text-white">Về chúng tôi</Link>
+              <Link to="/chinh-sach" className="block hover:text-white">Chính sách</Link>
+              <Link to="/phan-hoi" className="block hover:text-white">Phản hồi</Link>
             </div>
           </div>
           <div>
