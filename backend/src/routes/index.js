@@ -17,9 +17,13 @@ import phanHoiRoutes      from './phanHoiRoutes.js'
 
 const router = Router()
 
+import { getCurrentClinic } from '../controllers/admin/clinic-info.controller.js'
+
 router.get('/health', (req, res) => {
   res.status(200).json({ success: true, message: 'API is working fine' })
 })
+
+router.get('/clinic-info', getCurrentClinic)
 
 router.use('/auth', authRoutes)
 router.use('/doctor', doctorRoutes)

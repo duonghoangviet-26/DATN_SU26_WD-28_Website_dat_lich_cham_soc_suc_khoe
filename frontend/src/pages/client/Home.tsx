@@ -87,7 +87,7 @@ export default function Home() {
   }, [])
 
   const featuredService = clinicServices[0]
-  const secondaryServices = clinicServices.slice(1, 4)
+  const secondaryServices = clinicServices.slice(1, 5)
 
   return (
     <div className="overflow-hidden bg-[#f7faf9] text-slate-900">
