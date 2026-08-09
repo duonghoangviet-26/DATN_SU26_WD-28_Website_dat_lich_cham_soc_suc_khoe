@@ -23,7 +23,7 @@ interface PublicHomeServiceItem {
 }
 
 function getCurrentRole(): string | null {
-  const storage = globalThis.sessionStorage
+  const storage = globalThis.localStorage
   if (!storage) return null
 
   try {
