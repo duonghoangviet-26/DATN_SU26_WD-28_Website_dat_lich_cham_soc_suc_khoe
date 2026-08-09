@@ -3,6 +3,12 @@ import { useEffect, useState } from 'react'
 import Icon from '@/components/admin/icons'
 import { appointmentService } from '@/services/appointment.service'
 import type { AdminAppointmentDoctorOption } from '@/types'
+import {
+  normalizePersonName,
+  normalizePhoneInput,
+  validatePatientName,
+  validateVietnamesePhone,
+} from '@/utils/patientIdentityValidation'
 
 function formatScheduleDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number)
@@ -69,7 +75,13 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) {
     const { name, value } = event.target
-    setForm((current) => ({ ...current, [name]: value }))
+    setForm((current) => ({
+      ...current,
+      [name]:
+        name === 'so_dien_thoai_khach'
+          ? normalizePhoneInput(value)
+          : value,
+    }))
   }
 
   function handleScheduleChange(event: React.ChangeEvent<HTMLSelectElement>) {
@@ -90,6 +102,21 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
       return
     }
 
+    const normalizedName = normalizePersonName(form.ten_khach)
+    const nameError = validatePatientName(normalizedName)
+    if (nameError) {
+      setError(nameError)
+      return
+    }
+
+    if (form.so_dien_thoai_khach) {
+      const phoneError = validateVietnamesePhone(form.so_dien_thoai_khach)
+      if (phoneError) {
+        setError(phoneError)
+        return
+      }
+    }
+
     if (!form.doctor_id || !form.schedule_id || !form.slot_id) {
       setError('Vui lòng chọn đầy đủ Bác sĩ, Ngày khám và Khung giờ.')
       return
@@ -99,6 +126,8 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
     try {
       await appointmentService.create({
         ...form,
+        ten_khach: normalizedName,
+        so_dien_thoai_khach: normalizePhoneInput(form.so_dien_thoai_khach),
         service_id: undefined,
       })
       onSaved()
@@ -143,6 +172,7 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             name="ten_khach"
             value={form.ten_khach}
             onChange={handleChange}
+            onBlur={() => setForm((current) => ({ ...current, ten_khach: normalizePersonName(current.ten_khach) }))}
             className="input w-full"
             placeholder="Nguyễn Văn A"
             required
@@ -157,6 +187,8 @@ export default function AddAppointment({ onSaved, onCancel }: Props) {
             onChange={handleChange}
             className="input w-full"
             placeholder="090..."
+            inputMode="numeric"
+            maxLength={10}
           />
         </div>
 

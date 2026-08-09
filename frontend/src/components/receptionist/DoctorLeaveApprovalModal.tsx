@@ -170,7 +170,7 @@ export default function DoctorLeaveApprovalModal({ leave, onClose, onDone }: Pro
             {canLienHeThuCong > 0 && (
               <div className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800">
                 {canLienHeThuCong} lượt cần lễ tân liên hệ trực tiếp (khách không có tài khoản, hoặc chờ admin duyệt). Xem tại{' '}
-                <a href="/receptionist/contact-tasks" className="font-semibold underline">Cần gọi khách</a>.
+                <a href="/receptionist/contact-tasks" className="font-semibold underline">Liên Hệ Khách Hàng</a>.
               </div>
             )}
 

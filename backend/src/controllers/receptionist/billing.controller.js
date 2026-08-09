@@ -252,10 +252,10 @@ export async function listBillingCases(req, res) {
   try {
     const view = req.query.view ?? 'pending'
     if (!['pending', 'paid'].includes(view)) return fail(res, 400, 'Bộ lọc thanh toán không hợp lệ')
-    const scope = req.query.scope ?? (view === 'pending' ? 'today' : 'all')
+    const scope = req.query.scope ?? 'today'
     if (!['today', 'all'].includes(scope)) return fail(res, 400, 'Phạm vi ngày thanh toán không hợp lệ')
 
-    const filterToday = view === 'pending' && scope === 'today'
+    const filterToday = scope === 'today'
     const todayDateStart = filterToday ? startOfClinicDayUtc() : null
     const todayDateEnd = todayDateStart ? new Date(todayDateStart) : null
     if (todayDateEnd) todayDateEnd.setUTCDate(todayDateEnd.getUTCDate() + 1)

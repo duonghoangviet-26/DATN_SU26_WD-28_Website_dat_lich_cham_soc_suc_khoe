@@ -14,6 +14,14 @@ import { ContentTransition, RouteTransition } from '@/components/client/ClientMo
 import { useAuth } from '@/context/AuthContext'
 import { authService } from '@/services/auth.service'
 import {
+  getLatestAllowedBirthDateInput,
+  normalizePersonName,
+  normalizePhoneInput,
+  validateBirthDate,
+  validatePatientName,
+  validateVietnamesePhone,
+} from '@/utils/patientIdentityValidation'
+import {
   patientRecordsService,
   type PatientRecordDetail,
   type PatientRecordListItem,
@@ -105,6 +113,7 @@ export default function Profile() {
   const [diaChi, setDiaChi] = useState('')
   const [ghiChu, setGhiChu] = useState('')
   const [profileLoading, setProfileLoading] = useState(false)
+  const latestAllowedBirthDateInput = getLatestAllowedBirthDateInput()
 
   const [toast, setToast] = useState<string | null>(null)
   const [cancelModalId, setCancelModalId] = useState<string | null>(null)
@@ -374,11 +383,24 @@ export default function Profile() {
     event.preventDefault()
     if (!selectedAppointment) return
 
+    const normalizedName = normalizePersonName(contactEditName)
+    const nameError = validatePatientName(normalizedName)
+    if (nameError) {
+      setToast(nameError)
+      return
+    }
+
+    const phoneError = validateVietnamesePhone(contactEditPhone)
+    if (phoneError) {
+      setToast(phoneError)
+      return
+    }
+
     setContactSaving(true)
     try {
       const updated = await patientRecordsService.updateAppointmentContact(selectedAppointment.id, {
-        ho_ten: contactEditName.trim(),
-        so_dien_thoai: contactEditPhone.trim(),
+        ho_ten: normalizedName,
+        so_dien_thoai: normalizePhoneInput(contactEditPhone),
       })
 
       setSelectedAppointment((current) => current ? {
@@ -404,7 +426,28 @@ export default function Profile() {
     event.preventDefault()
     if (!user) return
 
-    let phonePayload: string = soDienThoai.trim()
+    const normalizedName = normalizePersonName(hoTen)
+    const nameError = validatePatientName(normalizedName)
+    if (nameError) {
+      setToast(nameError)
+      return
+    }
+
+    const birthDateError = validateBirthDate(ngaySinh)
+    if (birthDateError) {
+      setToast(birthDateError)
+      return
+    }
+
+    let phonePayload = normalizePhoneInput(soDienThoai)
+    if (phonePayload) {
+      const phoneError = validateVietnamesePhone(phonePayload)
+      if (phoneError) {
+        setToast(phoneError)
+        return
+      }
+    }
+
     if (phonePayload) {
       const digits = phonePayload.replace(/\D/g, '')
       const cleanPhone = digits.startsWith('84') ? '0' + digits.slice(2) : digits
@@ -418,7 +461,7 @@ export default function Profile() {
     setProfileLoading(true)
     try {
       const updatedUser = await authService.updateProfile({
-        ho_ten: hoTen.trim(),
+        ho_ten: normalizedName,
         so_dien_thoai: phonePayload,
         ngay_sinh: ngaySinh || null,
         gioi_tinh: gioiTinh || null,
@@ -455,11 +498,18 @@ export default function Profile() {
     event.preventDefault()
     if (!newFamilyName.trim()) return
 
+    const ownerName = normalizePersonName(user?.ho_ten || 'Chủ hộ')
+    const ownerNameError = validatePatientName(ownerName)
+    if (ownerNameError) {
+      setToast(ownerNameError)
+      return
+    }
+
     setFamilyLoading(true)
     try {
       await patientBookingService.createFamily({
         ten_nhom: newFamilyName.trim(),
-        ho_ten: user?.ho_ten || 'Chủ hộ',
+        ho_ten: ownerName,
       })
       setNewFamilyName('')
       setToast('Tạo nhóm gia đình thành công.')
@@ -478,9 +528,22 @@ export default function Profile() {
       return
     }
 
+    const normalizedName = normalizePersonName(memberFormName)
+    const nameError = validatePatientName(normalizedName)
+    if (nameError) {
+      setToast(nameError)
+      return
+    }
+
+    const birthDateError = validateBirthDate(memberFormDob)
+    if (birthDateError) {
+      setToast(birthDateError)
+      return
+    }
+
     setFamilyLoading(true)
     const payload = {
-      ho_ten: memberFormName.trim(),
+      ho_ten: normalizedName,
       ngay_sinh: memberFormDob,
       gioi_tinh: memberFormGender,
       nhom_mau: memberFormBlood || null,
@@ -1071,12 +1134,31 @@ export default function Profile() {
 
               <form onSubmit={handleUpdateProfile} className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="Họ và tên bệnh nhân" value={hoTen} onChange={(event) => setHoTen(event.target.value)} required />
-                  <Input label="Số điện thoại liên hệ" value={soDienThoai} onChange={(event) => setSoDienThoai(event.target.value)} placeholder="Nhập số điện thoại (không bắt buộc)" />
+                  <Input
+                    label="Họ và tên bệnh nhân"
+                    value={hoTen}
+                    onChange={(event) => setHoTen(event.target.value)}
+                    onBlur={() => setHoTen((current) => normalizePersonName(current))}
+                    required
+                  />
+                  <Input
+                    label="Số điện thoại liên hệ"
+                    value={soDienThoai}
+                    onChange={(event) => setSoDienThoai(normalizePhoneInput(event.target.value))}
+                    placeholder="Nhập số điện thoại (không bắt buộc)"
+                    inputMode="numeric"
+                    maxLength={10}
+                  />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="Ngày sinh" type="date" value={ngaySinh} onChange={(event) => setNgaySinh(event.target.value)} />
+                  <Input
+                    label="Ngày sinh"
+                    type="date"
+                    value={ngaySinh}
+                    onChange={(event) => setNgaySinh(event.target.value)}
+                    max={latestAllowedBirthDateInput}
+                  />
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700">Giới tính</label>
                     <select value={gioiTinh} onChange={(event) => setGioiTinh(event.target.value as typeof gioiTinh)} className="input w-full">
@@ -1303,6 +1385,7 @@ export default function Profile() {
                 placeholder="Nhập họ và tên..."
                 value={memberFormName}
                 onChange={(e) => setMemberFormName(e.target.value)}
+                onBlur={() => setMemberFormName((current) => normalizePersonName(current))}
                 required
               />
               <Input
@@ -1310,6 +1393,7 @@ export default function Profile() {
                 type="date"
                 value={memberFormDob}
                 onChange={(e) => setMemberFormDob(e.target.value)}
+                max={latestAllowedBirthDateInput}
                 required
               />
             </div>
@@ -1421,8 +1505,21 @@ export default function Profile() {
               </div>
               {contactEditOpen ? (
                 <form onSubmit={handleUpdateAppointmentContact} className="space-y-3 pt-2">
-                  <Input label="Họ và tên bệnh nhân" value={contactEditName} onChange={(event) => setContactEditName(event.target.value)} required />
-                  <Input label="Số điện thoại liên hệ" value={contactEditPhone} onChange={(event) => setContactEditPhone(event.target.value)} required />
+                  <Input
+                    label="Họ và tên bệnh nhân"
+                    value={contactEditName}
+                    onChange={(event) => setContactEditName(event.target.value)}
+                    onBlur={() => setContactEditName((current) => normalizePersonName(current))}
+                    required
+                  />
+                  <Input
+                    label="Số điện thoại liên hệ"
+                    value={contactEditPhone}
+                    onChange={(event) => setContactEditPhone(normalizePhoneInput(event.target.value))}
+                    inputMode="numeric"
+                    maxLength={10}
+                    required
+                  />
                   <p className="text-xs leading-5 text-blue-700">Thay đổi này chỉ áp dụng cho lịch hẹn hiện tại, không thay đổi hồ sơ cá nhân.</p>
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="secondary" onClick={() => setContactEditOpen(false)}>Hủy</Button>

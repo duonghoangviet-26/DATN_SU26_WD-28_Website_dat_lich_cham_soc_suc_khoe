@@ -6,9 +6,21 @@ function formatDateTime(value?: string | null) {
   return new Date(value).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+function contactResultLabel(value?: string | null) {
+  return ({
+    khach_xac_nhan_se_den: 'Khách xác nhận sẽ đến',
+    khach_bao_khong_den: 'Khách báo không đến',
+    khong_lien_he_duoc: 'Không liên hệ được',
+    da_thong_bao: 'Đã thông báo',
+    khach_dong_y: 'Khách đồng ý',
+    khac: 'Khác',
+  } as Record<string, string>)[value ?? ''] ?? value
+}
+
 interface DoneModalState {
   auditId: string
   tenKhach: string | null
+  loaiViec: ContactTask['loai_viec']
 }
 
 export default function ContactTasks() {
@@ -18,6 +30,7 @@ export default function ContactTasks() {
   const [error, setError] = useState('')
   const [doneModal, setDoneModal] = useState<DoneModalState | null>(null)
   const [ghiChu, setGhiChu] = useState('')
+  const [ketQua, setKetQua] = useState('khach_xac_nhan_se_den')
   const [submitting, setSubmitting] = useState(false)
 
   const load = () => {
@@ -26,7 +39,7 @@ export default function ContactTasks() {
     receptionistContactTasksService
       .list({ trang_thai: tab })
       .then((result) => setTasks(result))
-      .catch((requestError) => setError(requestError?.response?.data?.message || 'Không thể tải danh sách cần gọi'))
+      .catch((requestError) => setError(requestError?.response?.data?.message || 'Không thể tải danh sách liên hệ khách hàng'))
       .finally(() => setLoading(false))
   }
 
@@ -36,15 +49,16 @@ export default function ContactTasks() {
   }, [tab])
 
   const openDoneModal = (task: ContactTask) => {
-    setDoneModal({ auditId: task.audit_id, tenKhach: task.ten_khach })
+    setDoneModal({ auditId: task.audit_id, tenKhach: task.ten_khach, loaiViec: task.loai_viec })
     setGhiChu('')
+    setKetQua(task.loai_viec === 'xac_nhan_den_muon' ? 'khach_xac_nhan_se_den' : 'da_thong_bao')
   }
 
   const confirmDone = async () => {
     if (!doneModal) return
     setSubmitting(true)
     try {
-      await receptionistContactTasksService.markDone(doneModal.auditId, ghiChu.trim() || undefined)
+      await receptionistContactTasksService.markDone(doneModal.auditId, ghiChu.trim() || undefined, ketQua)
       setDoneModal(null)
       load()
     } catch (requestError: any) {
@@ -57,10 +71,10 @@ export default function ContactTasks() {
   return (
     <div className="min-h-full bg-slate-50 p-4 lg:p-6">
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Vận hành · Khách không có tài khoản online</p>
-        <h2 className="mt-2 text-2xl font-bold text-slate-800">Cần gọi khách</h2>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Vận hành · Xác nhận thông tin khách</p>
+        <h2 className="mt-2 text-2xl font-bold text-slate-800">Liên Hệ Khách Hàng</h2>
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          Khách không có tài khoản online sẽ không nhận được thông báo trong app khi lịch hẹn thay đổi — phải gọi báo trực tiếp.
+          Theo dõi khách cần gọi do thay đổi lịch, không có kênh thông báo app, hoặc đã quá giờ khám 10 phút nhưng chưa check-in tại quầy.
         </p>
       </div>
 
@@ -70,14 +84,14 @@ export default function ContactTasks() {
           onClick={() => setTab('chua_goi')}
           className={`rounded-xl px-4 py-2 text-sm font-semibold ${tab === 'chua_goi' ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
         >
-          Chưa gọi
+          Chưa liên hệ
         </button>
         <button
           type="button"
           onClick={() => setTab('da_goi')}
           className={`rounded-xl px-4 py-2 text-sm font-semibold ${tab === 'da_goi' ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
         >
-          Đã gọi
+          Đã liên hệ
         </button>
       </div>
 
@@ -87,7 +101,7 @@ export default function ContactTasks() {
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">Đang tải danh sách...</div>
       ) : tasks.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-          {tab === 'chua_goi' ? 'Không còn khách nào cần gọi.' : 'Chưa có cuộc gọi nào được ghi nhận.'}
+          {tab === 'chua_goi' ? 'Không còn khách nào cần liên hệ.' : 'Chưa có cuộc gọi nào được ghi nhận.'}
         </div>
       ) : (
         <div className="space-y-3">
@@ -95,7 +109,12 @@ export default function ContactTasks() {
             <div key={task.audit_id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-base font-bold text-slate-800">{task.ten_khach || 'Khách vãng lai'}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-base font-bold text-slate-800">{task.ten_khach || 'Khách vãng lai'}</p>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${task.loai_viec === 'xac_nhan_den_muon' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                      {task.loai_viec === 'xac_nhan_den_muon' ? 'Trễ hẹn' : 'Thông báo'}
+                    </span>
+                  </div>
                   <p className="mt-0.5 text-sm text-slate-500">
                     {task.so_dien_thoai || 'Chưa có số điện thoại'}{task.ma_lich_hen ? ` · ${task.ma_lich_hen}` : ''}
                   </p>
@@ -106,6 +125,11 @@ export default function ContactTasks() {
               <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
                 <p className="font-semibold">{task.tieu_de || 'Cần liên hệ khách'}</p>
                 {task.noi_dung && <p className="mt-1 text-slate-600">{task.noi_dung}</p>}
+                {task.loai_viec === 'xac_nhan_den_muon' && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
+                    Đã quá giờ khám {task.phut_tre ?? 10} phút, chưa có check-in. Cần xác nhận khách có đến hay không trước khi điều phối thêm.
+                  </p>
+                )}
                 {(task.gio_kham_cu || task.gio_kham_moi) && (
                   <p className="mt-2 text-xs text-slate-500">
                     Giờ hẹn: {task.gio_kham_cu || '—'} → {task.gio_kham_moi || '—'}
@@ -121,12 +145,13 @@ export default function ContactTasks() {
                     onClick={() => openDoneModal(task)}
                     className="min-h-10 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700"
                   >
-                    Đã gọi
+                    Đã liên hệ
                   </button>
                 </div>
               ) : (
                 <p className="mt-3 text-xs text-emerald-700">
-                  Đã gọi lúc {formatDateTime(task.da_goi_luc)}{task.da_goi_boi ? ` bởi ${task.da_goi_boi}` : ''}
+                  Đã liên hệ lúc {formatDateTime(task.da_goi_luc)}{task.da_goi_boi ? ` bởi ${task.da_goi_boi}` : ''}
+                  {task.ket_qua_cuoc_goi ? ` · Kết quả: ${contactResultLabel(task.ket_qua_cuoc_goi)}` : ''}
                   {task.ghi_chu_cuoc_goi ? ` — ${task.ghi_chu_cuoc_goi}` : ''}
                 </p>
               )}
@@ -138,8 +163,33 @@ export default function ContactTasks() {
       {doneModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
-            <h3 className="text-xl font-bold text-slate-800">Xác nhận đã gọi</h3>
+            <h3 className="text-xl font-bold text-slate-800">Xác nhận đã liên hệ</h3>
             <p className="mt-1 text-sm text-slate-500">{doneModal.tenKhach || 'Khách vãng lai'}</p>
+
+            <label className="mt-5 block text-sm font-medium text-slate-700">
+              Kết quả cuộc gọi
+              <select
+                value={ketQua}
+                onChange={(event) => setKetQua(event.target.value)}
+                className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              >
+                {doneModal.loaiViec === 'xac_nhan_den_muon' ? (
+                  <>
+                    <option value="khach_xac_nhan_se_den">Khách xác nhận sẽ đến</option>
+                    <option value="khach_bao_khong_den">Khách báo không đến</option>
+                    <option value="khong_lien_he_duoc">Không liên hệ được</option>
+                    <option value="khac">Khác</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="da_thong_bao">Đã thông báo</option>
+                    <option value="khach_dong_y">Khách đồng ý</option>
+                    <option value="khong_lien_he_duoc">Không liên hệ được</option>
+                    <option value="khac">Khác</option>
+                  </>
+                )}
+              </select>
+            </label>
 
             <label className="mt-5 block text-sm font-medium text-slate-700">
               Ghi chú cuộc gọi
@@ -147,7 +197,7 @@ export default function ContactTasks() {
                 rows={2}
                 value={ghiChu}
                 onChange={(event) => setGhiChu(event.target.value)}
-                placeholder="Vd: đã báo lịch mới, khách đồng ý"
+                placeholder={doneModal.loaiViec === 'xac_nhan_den_muon' ? 'Vd: khách đang tới, dự kiến đến sau 5 phút' : 'Vd: đã báo lịch mới, khách đồng ý'}
                 className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               />
             </label>
