@@ -29,7 +29,7 @@ import {
 
 describe('realtime singleton subscriptions', () => {
   beforeAll(() => {
-    vi.stubGlobal('sessionStorage', { getItem: vi.fn(() => 'admin-token') })
+    vi.stubGlobal('localStorage', { getItem: vi.fn(() => 'admin-token') })
   })
 
   it('reuses one socket and removes dashboard plus connection listeners during cleanup', () => {

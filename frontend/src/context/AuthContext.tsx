@@ -19,12 +19,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const saved = sessionStorage.getItem('user')
+    const saved = localStorage.getItem('user')
     if (saved) {
       try {
         setUser(JSON.parse(saved))
       } catch {
-        sessionStorage.removeItem('user')
+        localStorage.removeItem('user')
       }
     }
     setLoading(false)
@@ -32,29 +32,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function login(credentials: { email: string; password: string }) {
     const { token, user: loggedUser } = await authService.login(credentials)
-    sessionStorage.setItem('token', token)
-    sessionStorage.setItem('user', JSON.stringify(loggedUser))
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify(loggedUser))
     setUser(loggedUser)
     return loggedUser
   }
 
   async function loginGoogle(credential: string) {
     const { token, user: loggedUser } = await authService.loginWithGoogle(credential)
-    sessionStorage.setItem('token', token)
-    sessionStorage.setItem('user', JSON.stringify(loggedUser))
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify(loggedUser))
     setUser(loggedUser)
     return loggedUser
   }
 
   function updateUser(updatedUser: User) {
-    sessionStorage.setItem('user', JSON.stringify(updatedUser))
+    localStorage.setItem('user', JSON.stringify(updatedUser))
     setUser(updatedUser)
   }
 
   function logout() {
     authService.logout().catch(() => {})
-    sessionStorage.removeItem('token')
-    sessionStorage.removeItem('user')
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
     setUser(null)
   }
 
