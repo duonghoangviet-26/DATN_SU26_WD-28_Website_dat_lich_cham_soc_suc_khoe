@@ -5,6 +5,7 @@ import { DOCTOR_APPROVAL_LABEL } from '@/utils/constants'
 import { formatPrice, formatDate } from '@/utils/format'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
+import Toast from '@/components/common/Toast'
 import Icon from '@/components/admin/icons'
 import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import DoctorDetailDrawer from './DoctorDetailDrawer'
@@ -31,6 +32,11 @@ export default function ManageDoctors() {
   const [targetEdit, setTargetEdit] = useState<DoctorProfileAPI | DoctorDetailAPI | null>(null)
   const [target, setTarget] = useState<DoctorProfileAPI | DoctorDetailAPI | null>(null)
   const [action, setAction] = useState<ActionType>('approve')
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null)
+
+  function showToast(message: string, type: 'success' | 'error' | 'warning' = 'success') {
+    setToast({ message, type })
+  }
 
   // Debounce search
   const [debouncedKeyword, setDebouncedKeyword] = useState(keyword)
@@ -76,11 +82,19 @@ export default function ManageDoctors() {
   }
 
   return (
-    <AdminMotionGroup>
+    <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <AdminMotionGroup>
       <AdminMotionItem>
         <PageHeader
-          title="Duyệt hồ sơ bác sĩ"
-          description="Xét duyệt, tạm ngưng và quản lý tài khoản bác sĩ trong hệ thống."
+          title="Hồ sơ bác sĩ"
+          description="Quản lý hồ sơ bác sĩ"
         />
       </AdminMotionItem>
 
@@ -208,13 +222,22 @@ export default function ManageDoctors() {
                       )}
 
                       {doc.trang_thai_duyet === 'suspended' && (
-                        <button
-                          onClick={() => openAction(doc, 'restore')}
-                          className="inline-flex items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 p-1.5 text-indigo-600 transition-colors hover:bg-indigo-100"
-                          title="Hiển thị lại (Khôi phục)"
-                        >
-                          <Icon name="sync" className="h-4 w-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => openAction(doc, 'restore')}
+                            className="inline-flex items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 p-1.5 text-indigo-600 transition-colors hover:bg-indigo-100"
+                            title="Hiển thị lại (Khôi phục)"
+                          >
+                            <Icon name="sync" className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => openAction(doc, 'delete')}
+                            className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 p-1.5 text-red-600 transition-colors hover:bg-red-100"
+                            title="Xóa vĩnh viễn"
+                          >
+                            <Icon name="trash" className="h-4 w-4" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -261,6 +284,16 @@ export default function ManageDoctors() {
           onSuccess={() => {
             setTarget(null)
             loadData()
+            
+            let actionName = ''
+            switch (action) {
+              case 'approve': actionName = 'Duyệt hồ sơ'; break;
+              case 'reject': actionName = 'Từ chối hồ sơ'; break;
+              case 'suspend': actionName = 'Tạm ngưng bác sĩ'; break;
+              case 'restore': actionName = 'Khôi phục bác sĩ'; break;
+              case 'delete': actionName = 'Xóa vĩnh viễn bác sĩ'; break;
+            }
+            showToast(`Thực hiện "${actionName}" thành công!`)
           }}
         />
       )}
@@ -284,5 +317,6 @@ export default function ManageDoctors() {
         />
       )}
     </AdminMotionGroup>
+    </>
   )
 }

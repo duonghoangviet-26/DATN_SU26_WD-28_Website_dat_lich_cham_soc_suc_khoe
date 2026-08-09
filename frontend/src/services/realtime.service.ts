@@ -26,6 +26,7 @@ type RealtimeEvent =
   | 'thongke:doanh_thu_thay_doi'
   | 'thongke:lich_hen_thay_doi'
   | 'thongke:benh_nhan_moi'
+  | 'thong_bao:moi'
   | 'doctor:queue_updated'
 
 type RealtimeHandler = (payload: any) => void

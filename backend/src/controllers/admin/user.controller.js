@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { NguoiDung, NhatKyThaoTac, BacSi, ThongBao } from '../../models/index.js'
+import speakeasy from 'speakeasy'
 
 import { ok, fail } from '../../utils/response.js'
 import { emitDashboardNewPatient } from '../../realtime/socket.js'
@@ -536,30 +537,58 @@ export async function getAuditLogs(req, res) {
 /**
  * Thao tác hàng loạt trên nhiều người dùng
  */
-export async function batchActionUsers(req, res) {
-  try {
-    const { ids, action, ly_do } = req.body
-    const adminId = req.user.id
+  export async function batchActionUsers(req, res) {
+    try {
+      const { ids, action, ly_do, totp_code, confirm_text } = req.body
+      const adminId = req.user.id
+  
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return fail(res, 400, 'Danh sách ID người dùng không hợp lệ')
+      }
+  
+      const validActions = ['lock', 'unlock', 'delete', 'restore', 'hard-delete']
+      if (!validActions.includes(action)) {
+        return fail(res, 400, 'Hành động hàng loạt không hợp lệ')
+      }
+  
+      // Lọc bỏ ID của chính admin thực hiện (ngăn tự khóa/xóa chính mình)
+      const targetIds = ids.filter(id => id !== adminId)
+      if (targetIds.length === 0) {
+        return fail(res, 400, 'Không thể thực hiện hành động trên tài khoản của chính mình')
+      }
+  
+      let count = 0
+  
+      if (action === 'hard-delete' || action === 'delete') {
+        // Kiểm tra mã xác nhận (Lớp 1)
+        const expectedConfirm = action === 'hard-delete' ? 'XOA-VINH-VIEN' : 'XOA-TAI-KHOAN'
+        if (confirm_text !== expectedConfirm) {
+          return fail(res, 400, 'Chuỗi xác nhận không chính xác')
+        }
 
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return fail(res, 400, 'Danh sách ID người dùng không hợp lệ')
-    }
+        // Lấy thông tin Admin để kiểm tra 2FA (Lớp 2)
+        const adminUser = await NguoiDung.findById(adminId).select('+totp_secret')
+        if (!adminUser || !adminUser.is_2fa_enabled || !adminUser.totp_secret) {
+          return fail(res, 400, 'Tài khoản của bạn chưa kích hoạt Xác thực 2 bước (2FA). Vui lòng kích hoạt 2FA trước khi thực hiện thao tác này.')
+        }
 
-    const validActions = ['lock', 'unlock', 'delete', 'restore', 'hard-delete']
-    if (!validActions.includes(action)) {
-      return fail(res, 400, 'Hành động hàng loạt không hợp lệ')
-    }
+        if (!totp_code) {
+          return fail(res, 400, 'Vui lòng cung cấp mã Google Authenticator')
+        }
 
-    // Lọc bỏ ID của chính admin thực hiện (ngăn tự khóa/xóa chính mình)
-    const targetIds = ids.filter(id => id !== adminId)
-    if (targetIds.length === 0) {
-      return fail(res, 400, 'Không thể thực hiện hành động trên tài khoản của chính mình')
-    }
+        const isValid = speakeasy.totp.verify({
+          secret: adminUser.totp_secret,
+          encoding: 'base32',
+          token: totp_code,
+          window: 1
+        })
+        if (!isValid) {
+          return fail(res, 400, 'Mã Google Authenticator không chính xác hoặc đã hết hạn')
+        }
+      }
 
-    let count = 0
-
-    if (action === 'hard-delete') {
-      // Chỉ cho phép xóa vĩnh viễn những người dùng đã nằm trong thùng rác (ngay_xoa != null)
+      if (action === 'hard-delete') {
+        // Chỉ cho phép xóa vĩnh viễn những người dùng đã nằm trong thùng rác (ngay_xoa != null)
       const result = await NguoiDung.deleteMany({
         _id: { $in: targetIds },
         ngay_xoa: { $ne: null }
@@ -568,14 +597,15 @@ export async function batchActionUsers(req, res) {
 
       // Ghi nhật ký thao tác hàng loạt
       if (count > 0) {
-        await NhatKyThaoTac.create({
+        const logs = targetIds.map(id => ({
           nguoi_thuc_hien_id: adminId,
           vai_tro: req.user.role,
           hanh_dong: 'HARD_DELETE_USER',
           loai_doi_tuong: 'user',
-          doi_tuong_id: null,
-          ly_do: ly_do || `Xóa vĩnh viễn hàng loạt ${count} tài khoản khỏi hệ thống`,
-        })
+          doi_tuong_id: id,
+          ly_do: ly_do || `Xóa vĩnh viễn tài khoản khỏi hệ thống`,
+        }))
+        await NhatKyThaoTac.insertMany(logs)
       }
     } else {
       let updateFields = {}
@@ -614,14 +644,15 @@ export async function batchActionUsers(req, res) {
       }
 
       if (count > 0) {
-        await NhatKyThaoTac.create({
+        const logs = targetIds.map(id => ({
           nguoi_thuc_hien_id: adminId,
           vai_tro: req.user.role,
           hanh_dong: actionLogNames[action],
           loai_doi_tuong: 'user',
-          doi_tuong_id: null,
-          ly_do: ly_do || `${actionDescriptions[action]} (Số lượng: ${count})`,
-        })
+          doi_tuong_id: id,
+          ly_do: ly_do || `${actionDescriptions[action]}`,
+        }))
+        await NhatKyThaoTac.insertMany(logs)
       }
     }
 

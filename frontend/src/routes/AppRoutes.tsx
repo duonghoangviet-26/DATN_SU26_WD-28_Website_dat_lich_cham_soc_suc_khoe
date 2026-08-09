@@ -33,6 +33,9 @@ const Profile = lazy(() => import('@/pages/client/Profile'))
 const VnpayResult = lazy(() => import('@/pages/client/VnpayResult'))
 const NewsList = lazy(() => import('@/pages/client/NewsList'))
 const NewsDetail = lazy(() => import('@/pages/client/NewsDetail'))
+const AboutUs = lazy(() => import('@/pages/client/AboutUs'))
+const Policy = lazy(() => import('@/pages/client/Policy'))
+const Feedback = lazy(() => import('@/pages/client/Feedback'))
 
 const Dashboard = lazy(() => import('@/pages/admin/Dashboard'))
 const ManageUsers = lazy(() => import('@/pages/admin/ManageUsers'))
@@ -47,6 +50,7 @@ const ManageReviews = lazy(() => import('@/pages/admin/ManageReviews'))
 const ManageNews = lazy(() => import('@/pages/admin/ManageNews'))
 const ManageNotifications = lazy(() => import('@/pages/admin/ManageNotifications/ManageNotifications'))
 const ManagePayments = lazy(() => import('@/pages/admin/ManagePayments'))
+const DoctorRevenueDetail = lazy(() => import('@/pages/admin/DoctorRevenueDetail'))
 
 const DoctorDashboard = lazy(() => import('@/pages/doctor/DoctorDashboard'))
 const DoctorProfile = lazy(() => import('@/pages/doctor/DoctorProfile'))
@@ -92,6 +96,9 @@ export default function AppRoutes() {
         />
         <Route path="/tin-tuc" element={<NewsList />} />
         <Route path="/tin-tuc/:slug" element={<NewsDetail />} />
+        <Route path="/ve-chung-toi" element={<AboutUs />} />
+        <Route path="/chinh-sach" element={<Policy />} />
+        <Route path="/phan-hoi" element={<Feedback />} />
       </Route>
 
       {/* Khu vực xác thực */}
@@ -112,6 +119,7 @@ export default function AppRoutes() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="doanh-thu-bac-si/:id" element={<DoctorRevenueDetail />} />
         <Route path="users" element={<ManageUsers />} />           {/* C1 */}
         <Route path="patients" element={<ManagePatients />} />
         <Route path="doctors" element={<ManageDoctors />} />       {/* C2 */}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 
 import { thongKeService } from '@/services/thong-ke.service'
@@ -6,11 +7,12 @@ import type { AppointmentStatusStatistic } from '@/types/thong-ke'
 import ChartCard from './ChartCard'
 import { clinicDate, clinicMonthStart, clinicYearStart, getErrorMessage } from './chart-utils'
 
-type AppointmentStatusPeriod = 'month' | 'year'
+type AppointmentStatusPeriod = 'month' | 'year' | 'all'
 
 const PERIOD_OPTIONS: Array<{ value: AppointmentStatusPeriod; label: string }> = [
   { value: 'month', label: '1 tháng' },
   { value: 'year', label: '1 năm' },
+  { value: 'all', label: 'Tất cả' },
 ]
 
 const STATUS_META = {
@@ -21,6 +23,7 @@ const STATUS_META = {
 }
 
 export default function AppointmentStatusChart({ refreshVersion = 0 }: { refreshVersion?: number }) {
+  const navigate = useNavigate()
   const [period, setPeriod] = useState<AppointmentStatusPeriod>('month')
   const [data, setData] = useState<AppointmentStatusStatistic[]>([])
   const [loading, setLoading] = useState(true)
@@ -32,8 +35,10 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
     setLoading(true)
     setError('')
 
-    const startDate = period === 'month' ? clinicMonthStart() : clinicYearStart()
-    thongKeService.getAppointmentStatuses(startDate, clinicDate())
+    const startDate = period === 'month' ? clinicMonthStart() : (period === 'year' ? clinicYearStart() : '')
+    const endDate = period === 'all' ? '' : clinicDate()
+
+    thongKeService.getAppointmentStatuses(startDate, endDate)
       .then((rows) => {
         if (active) {
           setData(rows)
@@ -53,7 +58,9 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
   const total = data.reduce((sum, item) => sum + item.so_luong, 0)
   const subtitle = period === 'month'
     ? 'Phân bổ lịch hẹn theo trạng thái trong tháng hiện tại.'
-    : 'Phân bổ lịch hẹn theo trạng thái trong năm hiện tại.'
+    : period === 'year'
+      ? 'Phân bổ lịch hẹn theo trạng thái trong năm hiện tại.'
+      : 'Tổng hợp phân bổ lịch hẹn theo trạng thái từ trước đến nay.'
 
   return (
     <ChartCard
@@ -101,6 +108,8 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
               isAnimationActive
               animationDuration={500}
               animationEasing="ease-out"
+              onClick={(data: any) => data?.payload?.trang_thai && navigate(`/admin/appointments?status=${data.payload.trang_thai}`)}
+              style={{ cursor: 'pointer' }}
             >
               {chartData.map((item) => <Cell key={item.trang_thai} fill={item.color} />)}
             </Pie>
@@ -118,7 +127,11 @@ export default function AppointmentStatusChart({ refreshVersion = 0 }: { refresh
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {chartData.map((item) => (
-          <div key={item.trang_thai} className="flex min-w-0 items-center gap-2 text-xs">
+          <div
+            key={item.trang_thai}
+            className="flex min-w-0 items-center gap-2 text-xs cursor-pointer hover:bg-slate-50 transition-colors p-1.5 -m-1.5 rounded-md"
+            onClick={() => navigate(`/admin/appointments?status=${item.trang_thai}`)}
+          >
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
             <span className="truncate text-slate-600">{item.name}</span>
             <strong className="ml-auto text-slate-800">{item.so_luong}</strong>

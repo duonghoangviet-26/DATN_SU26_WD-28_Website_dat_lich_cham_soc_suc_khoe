@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'
 import {
   ChuyenKhoa,
   DichVu,
@@ -5,6 +6,7 @@ import {
   LichHen,
   NguoiDung,
   ThanhToan,
+  DanhGia,
 } from '../models/index.js'
 
 const CLINIC_TIMEZONE = 'Asia/Ho_Chi_Minh'
@@ -182,6 +184,7 @@ export async function getDoanhThuTheoBacSi(range = {}) {
     {
       $project: {
         _id: 0,
+        bac_si_id: '$_id',
         ten_bac_si: 1,
         doanh_thu: 1,
         so_luot_kham: { $size: '$_appointments' },
@@ -426,4 +429,293 @@ export async function getDichVuPhoBien(range = {}) {
       },
     },
   ])
+}
+
+export async function getBenhNhanMoiTheoNam(range = {}) {
+  const rows = await NguoiDung.aggregate([
+    {
+      $match: {
+        role: { $in: ['user', 'patient'] },
+        ...dateRangeMatch('ngay_tao', range),
+      },
+    },
+    { $group: { _id: dateLabel('$ngay_tao', '%Y'), so_luong: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+    { $project: { _id: 0, nam: { $toInt: '$_id' }, so_luong: 1 } },
+  ])
+
+  const countByYear = new Map(rows.map((item) => [item.nam, item.so_luong]))
+
+  const appointments = await LichHen.aggregate([
+    {
+      $match: {
+        status: { $nin: ['cancelled', 'no_show', 'skipped'] },
+        user_id: { $ne: null },
+        ...dateRangeMatch('ngay_kham', range),
+      }
+    },
+    {
+      $lookup: {
+        from: NguoiDung.collection.name,
+        localField: 'user_id',
+        foreignField: '_id',
+        as: 'user'
+      }
+    },
+    { $unwind: { path: '$user', preserveNullAndEmptyArrays: false } },
+    {
+      $group: {
+        _id: {
+          nam: dateLabel('$ngay_kham', '%Y'),
+          user_id: '$user_id',
+          ngay_tao: '$user.ngay_tao'
+        }
+      }
+    }
+  ])
+
+  const countOldByYear = new Map()
+  for (const item of appointments) {
+    const yearStr = item._id.nam
+    if (!yearStr) continue
+    const year = parseInt(yearStr, 10)
+    
+    const startOfYear = new Date(`${yearStr}-01-01T00:00:00+07:00`)
+    
+    if (item._id.ngay_tao && item._id.ngay_tao < startOfYear) {
+      countOldByYear.set(year, (countOldByYear.get(year) ?? 0) + 1)
+    }
+  }
+
+  const allYears = Array.from(new Set([...countByYear.keys(), ...countOldByYear.keys()])).sort((a, b) => a - b)
+  if (allYears.length === 0) {
+    const currentYear = new Date().getFullYear()
+    return [{ nam: currentYear, label: String(currentYear), so_luong: 0, so_luong_cu: 0 }]
+  }
+
+  const minYear = allYears[0]
+  const maxYear = allYears[allYears.length - 1]
+
+  return Array.from({ length: maxYear - minYear + 1 }, (_, index) => {
+    const year = minYear + index
+    return {
+      nam: year,
+      label: String(year),
+      so_luong: countByYear.get(year) ?? 0,
+      so_luong_cu: countOldByYear.get(year) ?? 0,
+    }
+  })
+}
+
+export async function getChiTietDoanhThuBacSi(doctorId, range = {}) {
+  const doctorObjectId = new mongoose.Types.ObjectId(doctorId)
+  
+  // 1. Doanh thu theo thời gian của bác sĩ này
+  const revenueData = await ThanhToan.aggregate([
+    { $match: { status: 'paid' } },
+    {
+      $set: {
+        _stat_date: {
+          $ifNull: ['$ngay_thanh_toan', { $ifNull: ['$thoi_diem_thanh_toan', '$ngay_tao'] }],
+        },
+      },
+    },
+    { $match: dateRangeMatch('_stat_date', range) },
+    {
+      $lookup: {
+        from: HoaDon.collection.name,
+        localField: 'hoa_don_id',
+        foreignField: '_id',
+        as: '_invoice',
+      },
+    },
+    {
+      $set: {
+        _appointment_id: {
+          $ifNull: ['$appointment_id', { $arrayElemAt: ['$_invoice.appointment_id', 0] }],
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: LichHen.collection.name,
+        localField: '_appointment_id',
+        foreignField: '_id',
+        as: '_appointment',
+      },
+    },
+    { $unwind: '$_appointment' },
+    { $match: { '_appointment.doctor_id': doctorObjectId } },
+    {
+      $group: {
+        _id: dateLabel('$_stat_date'),
+        doanh_thu: { $sum: { $ifNull: ['$so_tien', 0] } },
+        so_luot_kham: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+    {
+      $project: {
+        _id: 0,
+        ngay: '$_id',
+        doanh_thu: 1,
+        so_luot_kham: 1,
+      },
+    },
+  ])
+
+  // 2. Tính số lượng bệnh nhân mới / bệnh nhân cũ
+  const patientsInRange = await LichHen.aggregate([
+    { 
+      $match: { 
+        doctor_id: doctorObjectId, 
+        status: { $nin: ['cancelled', 'no_show', 'skipped'] },
+        user_id: { $ne: null },
+        ...dateRangeMatch('ngay_kham', range)
+      } 
+    },
+    {
+      $group: {
+        _id: '$user_id',
+      }
+    }
+  ])
+
+  let newPatientsCount = 0
+  let oldPatientsCount = 0
+
+  if (patientsInRange.length > 0) {
+    const patientIds = patientsInRange.map(p => p._id)
+    
+    if (range.start) {
+      const pastAppointments = await LichHen.aggregate([
+        {
+          $match: {
+            doctor_id: doctorObjectId,
+            status: { $nin: ['cancelled', 'no_show', 'skipped'] },
+            user_id: { $in: patientIds, $ne: null },
+            ngay_kham: { $lt: range.start }
+          }
+        },
+        {
+          $group: {
+            _id: '$user_id'
+          }
+        }
+      ])
+
+      const pastPatientIds = new Set(pastAppointments.filter(p => p._id).map(p => p._id.toString()))
+      
+      patientIds.filter(id => id).forEach(id => {
+        if (pastPatientIds.has(id.toString())) {
+          oldPatientsCount++
+        } else {
+          newPatientsCount++
+        }
+      })
+    } else {
+      newPatientsCount = patientIds.length
+    }
+  }
+
+  // 3. Top dịch vụ phổ biến của bác sĩ này
+  const topServices = await ThanhToan.aggregate([
+    { $match: { status: 'paid' } },
+    {
+      $set: {
+        _stat_date: {
+          $ifNull: ['$ngay_thanh_toan', { $ifNull: ['$thoi_diem_thanh_toan', '$ngay_tao'] }],
+        },
+      },
+    },
+    { $match: dateRangeMatch('_stat_date', range) },
+    {
+      $lookup: {
+        from: HoaDon.collection.name,
+        localField: 'hoa_don_id',
+        foreignField: '_id',
+        as: '_invoice',
+      },
+    },
+    {
+      $set: {
+        _appointment_id: {
+          $ifNull: ['$appointment_id', { $arrayElemAt: ['$_invoice.appointment_id', 0] }],
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: LichHen.collection.name,
+        localField: '_appointment_id',
+        foreignField: '_id',
+        as: '_appointment',
+      },
+    },
+    { $unwind: '$_appointment' },
+    { $match: { '_appointment.doctor_id': doctorObjectId } },
+    { $unwind: '$_invoice' },
+    { $unwind: '$_invoice.chi_tiet_thu_phi' },
+    {
+      $match: {
+        '_invoice.chi_tiet_thu_phi.loai': { $in: ['dich_vu', 'thu_thuat', 'phi_kham'] },
+        '_invoice.chi_tiet_thu_phi.ten': { $type: 'string', $ne: '' },
+      }
+    },
+    {
+      $group: {
+        _id: '$_invoice.chi_tiet_thu_phi.ten',
+        so_luot_dung: { $sum: { $ifNull: ['$_invoice.chi_tiet_thu_phi.so_luong', 1] } },
+        doanh_thu: { $sum: { $ifNull: ['$_invoice.chi_tiet_thu_phi.thanh_tien', 0] } },
+      },
+    },
+    { $sort: { so_luot_dung: -1, doanh_thu: -1, _id: 1 } },
+    { $limit: 10 },
+    {
+      $project: {
+        _id: 0,
+        ten_dich_vu: '$_id',
+        so_luot_dung: 1,
+        doanh_thu: 1,
+      },
+    },
+  ])
+
+  // 4. Rating của bác sĩ
+  const ratingData = await DanhGia.aggregate([
+    {
+      $match: {
+        doctor_id: doctorObjectId,
+        status: 'visible',
+        ...dateRangeMatch('ngay_tao', range)
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        trung_binh: { $avg: '$so_sao' },
+        so_luong: { $sum: 1 }
+      }
+    }
+  ])
+  const rating = ratingData.length > 0 ? {
+    trung_binh: Math.round(ratingData[0].trung_binh * 10) / 10,
+    so_luong: ratingData[0].so_luong
+  } : { trung_binh: 0, so_luong: 0 }
+
+  const totalRevenue = revenueData.reduce((sum, item) => sum + item.doanh_thu, 0)
+  const totalAppointments = revenueData.reduce((sum, item) => sum + item.so_luot_kham, 0)
+
+  return {
+    chartData: revenueData,
+    topServices,
+    rating,
+    summary: {
+      doanh_thu: totalRevenue,
+      so_luot_kham: totalAppointments,
+      benh_nhan_moi: newPatientsCount,
+      benh_nhan_cu: oldPatientsCount,
+      tong_benh_nhan: newPatientsCount + oldPatientsCount
+    }
+  }
 }

@@ -10,7 +10,7 @@ const d = (offset: number) => {
 export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   // Hôm nay — confirmed, clinic
   {
-    id: 1, benh_nhan: 'Nguyễn Văn An', benh_nhan_id: 1,
+    id: "1", benh_nhan: 'Nguyễn Văn An', benh_nhan_id: "1",
     so_dien_thoai: '0901234567',
     ngay_kham: TODAY, gio_kham: '07:30',
     loai_kham: 'clinic', status: 'confirmed', payment_status: 'paid', gia_kham: 350000,
@@ -21,7 +21,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     da_co_ket_qua: true,
   },
   {
-    id: 2, benh_nhan: 'Trần Thị Bình', benh_nhan_id: 2,
+    id: "2", benh_nhan: 'Trần Thị Bình', benh_nhan_id: "2",
     so_dien_thoai: '0902345678',
     ngay_kham: TODAY, gio_kham: '08:00',
     loai_kham: 'clinic', status: 'confirmed', payment_status: 'paid', gia_kham: 350000,
@@ -34,7 +34,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   // id 3, 4 — HOME pending+paid: BN đã thanh toán trước, CSKH chưa gán nhân viên lấy mẫu.
   // (Luồng home mới 2026-07-02: thanh toán ngay khi đặt, CSKH gán staff sau)
   {
-    id: 3, benh_nhan: 'Hoàng Văn Em', benh_nhan_id: 3,
+    id: "3", benh_nhan: 'Hoàng Văn Em', benh_nhan_id: "3",
     so_dien_thoai: '0903456789',
     ngay_kham: TODAY, gio_kham: '08:30',
     loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 700000,
@@ -45,7 +45,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     da_co_ket_qua: false,
   },
   {
-    id: 4, benh_nhan: 'Võ Thị Hoa', benh_nhan_id: 4,
+    id: "4", benh_nhan: 'Võ Thị Hoa', benh_nhan_id: "4",
     so_dien_thoai: '0904567890',
     ngay_kham: TODAY, gio_kham: '09:00',
     loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 700000,
@@ -57,7 +57,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   },
   // Ngày mai — upcoming
   {
-    id: 5, benh_nhan: 'Phạm Minh Quân', benh_nhan_id: 5,
+    id: "5", benh_nhan: 'Phạm Minh Quân', benh_nhan_id: "5",
     so_dien_thoai: '0905678901',
     ngay_kham: d(1), gio_kham: '08:00',
     loai_kham: 'clinic', status: 'confirmed', payment_status: 'paid', gia_kham: 350000,
@@ -68,7 +68,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     da_co_ket_qua: false,
   },
   {
-    id: 6, benh_nhan: 'Lê Thị Lan', benh_nhan_id: 6,
+    id: "6", benh_nhan: 'Lê Thị Lan', benh_nhan_id: "6",
     so_dien_thoai: '0906789012',
     ngay_kham: d(1), gio_kham: '08:30',
     loai_kham: 'home', status: 'confirmed', payment_status: 'paid', gia_kham: 700000,
@@ -79,7 +79,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     da_co_ket_qua: false,
   },
   {
-    id: 7, benh_nhan: 'Đặng Văn Quân', benh_nhan_id: 7,
+    id: "7", benh_nhan: 'Đặng Văn Quân', benh_nhan_id: "7",
     so_dien_thoai: '0907890123',
     ngay_kham: d(2), gio_kham: '08:00',
     loai_kham: 'clinic', status: 'confirmed', payment_status: 'paid', gia_kham: 350000,
@@ -91,7 +91,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   },
   // Đã qua — completed
   {
-    id: 8, benh_nhan: 'Ngô Thị Tú', benh_nhan_id: 8,
+    id: "8", benh_nhan: 'Ngô Thị Tú', benh_nhan_id: "8",
     so_dien_thoai: '0908901234',
     ngay_kham: d(-1), gio_kham: '09:00',
     loai_kham: 'clinic', status: 'completed', payment_status: 'paid', gia_kham: 350000,
@@ -102,7 +102,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     da_co_ket_qua: true,
   },
   {
-    id: 9, benh_nhan: 'Lý Minh Tuấn', benh_nhan_id: 9,
+    id: "9", benh_nhan: 'Lý Minh Tuấn', benh_nhan_id: "9",
     so_dien_thoai: '0909012345',
     ngay_kham: d(-2), gio_kham: '08:30',
     loai_kham: 'clinic', status: 'completed', payment_status: 'paid', gia_kham: 350000,
@@ -113,7 +113,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
     da_co_ket_qua: true,
   },
   {
-    id: 10, benh_nhan: 'Phan Văn Hải', benh_nhan_id: 10,
+    id: "10", benh_nhan: 'Phan Văn Hải', benh_nhan_id: "10",
     so_dien_thoai: '0900123456',
     ngay_kham: d(-3), gio_kham: '14:00',
     loai_kham: 'clinic', status: 'cancelled', payment_status: 'refunded', gia_kham: 350000,
@@ -126,7 +126,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   },
   // id 11 — HOME pending+paid: đã thanh toán, chờ CSKH gán nhân viên lấy mẫu
   {
-    id: 11, benh_nhan: 'Bùi Thị Cẩm', benh_nhan_id: 11,
+    id: "11", benh_nhan: 'Bùi Thị Cẩm', benh_nhan_id: "11",
     so_dien_thoai: '0911111111',
     ngay_kham: TODAY, gio_kham: '10:00',
     loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 700000,
@@ -138,7 +138,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   },
   // id 12 — test TC-EDG09: home pending đã qua ngày → badge "Hết hạn" (BN đã paid nhưng chưa được gán staff)
   {
-    id: 12, benh_nhan: 'Trương Văn Bình', benh_nhan_id: 12,
+    id: "12", benh_nhan: 'Trương Văn Bình', benh_nhan_id: "12",
     so_dien_thoai: '0912222222',
     ngay_kham: d(-4), gio_kham: '14:00',
     loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 600000,
@@ -150,7 +150,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   },
   // id 13 — test TC-CO03: completed chưa có kết quả → nút "Nhập kết quả"
   {
-    id: 13, benh_nhan: 'Hoàng Thị Dung', benh_nhan_id: 13,
+    id: "13", benh_nhan: 'Hoàng Thị Dung', benh_nhan_id: "13",
     so_dien_thoai: '0913333333',
     ngay_kham: d(-1), gio_kham: '11:00',
     loai_kham: 'clinic', status: 'completed', payment_status: 'paid', gia_kham: 350000,
@@ -162,7 +162,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   },
   // id 14 — HOME pending+paid tương lai: test gán nhân viên trước ngày lấy mẫu
   {
-    id: 14, benh_nhan: 'Vũ Thị Mai', benh_nhan_id: 14,
+    id: "14", benh_nhan: 'Vũ Thị Mai', benh_nhan_id: "14",
     so_dien_thoai: '0914444444',
     ngay_kham: d(3), gio_kham: '09:30',
     loai_kham: 'home', status: 'pending', payment_status: 'paid', gia_kham: 700000,
@@ -174,7 +174,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   },
   // id 15 — test: confirmed + đã qua → nút "Hoàn thành" + "Kết quả" PHẢI hiện, "Hủy" PHẢI hiện (kịch bản bệnh nhân không đến)
   {
-    id: 15, benh_nhan: 'Đinh Văn Sơn', benh_nhan_id: 15,
+    id: "15", benh_nhan: 'Đinh Văn Sơn', benh_nhan_id: "15",
     so_dien_thoai: '0915555555',
     ngay_kham: d(-1), gio_kham: '15:00',
     loai_kham: 'clinic', status: 'confirmed', payment_status: 'paid', gia_kham: 350000,
@@ -186,7 +186,7 @@ export const mockDoctorAppointments: DoctorAppointmentDetail[] = [
   },
   // id 16 — HOME completed + ket_qua_url: test hiển thị link kết quả xét nghiệm PDF
   {
-    id: 16, benh_nhan: 'Nguyễn Thị Phương', benh_nhan_id: 16,
+    id: "16", benh_nhan: 'Nguyễn Thị Phương', benh_nhan_id: "16",
     so_dien_thoai: '0916666666',
     ngay_kham: d(-2), gio_kham: '10:30',
     loai_kham: 'home', status: 'completed', payment_status: 'paid', gia_kham: 700000,
