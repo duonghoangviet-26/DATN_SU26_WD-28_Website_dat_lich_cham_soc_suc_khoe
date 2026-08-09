@@ -27,6 +27,99 @@ function homNayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function text(value: unknown) {
+  if (value === null || value === undefined || value === '') return null
+  return String(value)
+}
+
+function money(value: unknown) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return null
+  return amount.toLocaleString('vi-VN') + ' đ'
+}
+
+function paymentMethod(value: unknown) {
+  const method = text(value)
+  if (method === 'tien_mat') return 'tiền mặt'
+  if (method === 'chuyen_khoan') return 'chuyển khoản'
+  return method
+}
+
+function joinParts(parts: Array<string | null>) {
+  return parts.filter(Boolean).join(', ')
+}
+
+function formatActivityDetail(row: ActivityLogRow) {
+  const detail = row.chi_tiet ?? {}
+  const patientName = row.ten_khach || text(detail.ten_benh_nhan) || text(detail.ten_khach) || 'bệnh nhân'
+  const queueCode = text(detail.ma_so_thu_tu)
+  const room = text(detail.phong_kham)
+  const appointmentCode = text(detail.ma_lich_hen)
+  const invoiceCode = text(detail.ma_hoa_don) || text(detail.so_hoa_don)
+  const total = money(detail.tong_tien)
+  const amount = money(detail.so_tien)
+  const method = paymentMethod(detail.hinh_thuc)
+  const examTime = text(detail.gio_kham)
+  const reason = text(detail.ly_do) || text(detail.ly_do_doi)
+
+  switch (row.hanh_dong) {
+    case 'LT_CHECK_IN':
+      return joinParts([
+        `Tiếp nhận ${patientName} vào hàng đợi khám`,
+        queueCode ? `số thứ tự ${queueCode}` : null,
+        room ? `phòng ${room}` : null,
+        appointmentCode ? `lịch ${appointmentCode}` : null,
+      ])
+    case 'LT_TAO_KHACH_VANG_LAI':
+      return joinParts([
+        `Tạo lượt khám trực tiếp cho ${patientName}`,
+        queueCode ? `số thứ tự ${queueCode}` : null,
+        examTime ? `khung ${examTime}` : null,
+        room ? `phòng ${room}` : null,
+      ])
+    case 'LT_HUY_CHECK_IN':
+      return joinParts([
+        `Hủy lượt tiếp nhận của ${patientName}`,
+        reason ? `lý do: ${reason}` : null,
+      ])
+    case 'LT_LAP_HOA_DON':
+      return joinParts([
+        `Lập hóa đơn${invoiceCode ? ` ${invoiceCode}` : ''} cho ${patientName}`,
+        total ? `tổng ${total}` : null,
+        detail.so_khoan ? `${detail.so_khoan} khoản thu` : null,
+      ])
+    case 'LT_XAC_NHAN_THANH_TOAN':
+      return joinParts([
+        `Xác nhận thu ${amount ?? 'tiền'} của ${patientName}`,
+        method ? `hình thức ${method}` : null,
+        invoiceCode ? `hóa đơn ${invoiceCode}` : null,
+      ])
+    case 'LT_DOI_LICH':
+      return joinParts([
+        `Đổi lịch khám cho ${patientName}`,
+        text(detail.ngay_kham) || examTime ? `sang ${[text(detail.ngay_kham), examTime].filter(Boolean).join(' lúc ')}` : null,
+        reason ? `lý do: ${reason}` : null,
+      ])
+    case 'LT_HUY_LICH':
+      return joinParts([
+        `Hủy lịch khám của ${patientName}`,
+        reason ? `lý do: ${reason}` : null,
+      ])
+    case 'LT_GOI_KHACH':
+      return joinParts([
+        `Gọi điện cho ${patientName}`,
+        text(detail.ket_qua) ? `kết quả: ${text(detail.ket_qua)}` : null,
+      ])
+    case 'LT_IN_PHIEU_STT':
+      return joinParts([
+        `In phiếu số thứ tự cho ${patientName}`,
+        queueCode ? `số ${queueCode}` : null,
+      ])
+    default:
+      return row.nhan_hanh_dong
+  }
+}
+
 export default function ActivityLog() {
   const [rows, setRows] = useState<ActivityLogRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -142,14 +235,8 @@ export default function ActivityLog() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-slate-700">{row.ten_khach ?? '—'}</td>
-                <td className="px-4 py-3 text-xs text-slate-500">
-                  {row.chi_tiet
-                    ? Object.entries(row.chi_tiet)
-                        .filter(([, v]) => v !== null && v !== '' && v !== undefined)
-                        .slice(0, 3)
-                        .map(([k, v]) => `${k}: ${v}`)
-                        .join(' · ')
-                    : '—'}
+                <td className="max-w-xl px-4 py-3 text-xs leading-5 text-slate-600">
+                  {formatActivityDetail(row)}
                 </td>
               </tr>
             ))}

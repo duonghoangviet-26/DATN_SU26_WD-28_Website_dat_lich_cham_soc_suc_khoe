@@ -11,6 +11,7 @@ import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
 import { kiemTraQuaTai } from './queueOverflow.service.js'
 import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
 import { capSoThuTuCheckin } from './checkInNumber.service.js'
+import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
 import { donDepSlotTruocKhiDoc } from './slotRelease.service.js'
 import { cacKhungDuocBanTaiQuay, locSlotBanTaiQuay } from './walkInWindow.service.js'
 
@@ -431,6 +432,23 @@ export async function tiepNhanHoSoVaoHangDoi({
     action: 'checkin',
     queue_id: entry._id,
     nguon: entry.nguon,
+  })
+
+  await ghiNhatKyLeTan({
+    hanhDong: 'LT_TAO_KHACH_VANG_LAI',
+    actorUserId,
+    actorRole,
+    loaiDoiTuong: 'walk_in_guest',
+    doiTuongId: entry._id,
+    duLieuMoi: {
+      ma_so_thu_tu: entry.ma_so_thu_tu ?? null,
+      so_thu_tu: entry.so_thu_tu_checkin ?? null,
+      nguon: 'offline',
+      ten_benh_nhan: entry.ten_benh_nhan,
+      so_dien_thoai: entry.so_dien_thoai ?? null,
+      phong_kham: entry.phong_kham ?? null,
+      gio_kham: requested.gio_bat_dau ?? null,
+    },
   })
 
   return {

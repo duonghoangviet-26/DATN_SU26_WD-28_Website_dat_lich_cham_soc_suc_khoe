@@ -154,9 +154,11 @@ export async function confirmOfflinePayment(req, res) {
       loaiDoiTuong: 'payment',
       doiTuongId: payment._id,
       duLieuMoi: {
+        ten_benh_nhan: entry.ten_benh_nhan,
         so_tien: payment.so_tien,
         hinh_thuc: payment.phuong_thuc ?? 'tien_mat',
         hoa_don_id: String(payment.hoa_don_id ?? ''),
+        ma_hoa_don: invoice?.so_hoa_don ?? null,
       },
     })
 
@@ -348,13 +350,29 @@ export async function createOfflineInvoice(req, res) {
           loaiDoiTuong: 'payment',
           doiTuongId: payment._id,
           duLieuMoi: {
+            ten_benh_nhan: entry.ten_benh_nhan,
             so_tien: payment.so_tien,
             hinh_thuc: paymentMethod,
             hoa_don_id: String(invoice._id),
+            ma_hoa_don: invoice.so_hoa_don ?? null,
           },
         })
       }
     }
+
+    await ghiNhatKyLeTan({
+      hanhDong: 'LT_LAP_HOA_DON',
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      loaiDoiTuong: 'invoice',
+      doiTuongId: invoice._id,
+      duLieuMoi: {
+        ten_benh_nhan: entry.ten_benh_nhan,
+        ma_hoa_don: invoice.so_hoa_don ?? null,
+        tong_tien: invoice.tong_thanh_toan ?? null,
+        so_khoan: Array.isArray(invoice.chi_tiet_thu_phi) ? invoice.chi_tiet_thu_phi.length : 0,
+      },
+    })
 
     const freshInvoice = await HoaDon.findById(invoice._id).lean()
     return created(res, {

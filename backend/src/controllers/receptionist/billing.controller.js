@@ -373,9 +373,11 @@ export async function createBillingInvoice(req, res) {
           loaiDoiTuong: 'payment',
           doiTuongId: payment._id,
           duLieuMoi: {
+            ten_benh_nhan: caseItem.patient_name,
             so_tien: payment.so_tien,
             hinh_thuc: method,
             hoa_don_id: String(invoice._id),
+            ma_hoa_don: invoice.so_hoa_don ?? null,
           },
         })
       }
@@ -396,6 +398,7 @@ export async function createBillingInvoice(req, res) {
       loaiDoiTuong: 'invoice',
       doiTuongId: invoice._id,
       duLieuMoi: {
+        ten_benh_nhan: caseItem.patient_name,
         ma_hoa_don: invoice.so_hoa_don ?? null,
         tong_tien: invoice.tong_thanh_toan ?? null,
         so_khoan: Array.isArray(invoice.chi_tiet_thu_phi) ? invoice.chi_tiet_thu_phi.length : 0,

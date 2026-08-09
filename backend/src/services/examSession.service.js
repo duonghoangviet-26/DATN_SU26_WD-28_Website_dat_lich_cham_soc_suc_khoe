@@ -7,6 +7,7 @@ import { soSanhThuTuHangDoi } from '../models/HangDoi.js'
 // ngược về service này (đã kiểm: không file nào trong nhánh đó nạp examSession.service).
 import { findOrCreateRoomStatus } from '../controllers/doctor/room-status.controller.js'
 import { emitDashboardAppointmentChanged } from '../realtime/socket.js'
+import { startOfDayUtc } from '../utils/clinicTime.js'
 import {
   CAC_BUOC,
   buocKeTiep,
@@ -349,9 +350,14 @@ export async function luuBuoc({ queueId, docId, doctorUserId, buoc, payload = {}
  * về trang hàng đợi sau mỗi ca — thao tác thừa lặp lại 30 lần một ngày.
  */
 async function timBenhNhanKeTiep(docId, now = new Date()) {
+  const ngayHienTai = startOfDayUtc(now)
+  const ngayKeTiep = new Date(ngayHienTai)
+  ngayKeTiep.setUTCDate(ngayKeTiep.getUTCDate() + 1)
+
   const dangCho = await HangDoi.find({
     doctor_id: docId,
     trang_thai: { $in: ['dang_cho', 'da_goi'] },
+    checkin_time: { $gte: ngayHienTai, $lt: ngayKeTiep },
   }).lean()
   if (dangCho.length === 0) return null
 
