@@ -248,6 +248,20 @@ export default function DoctorExamQueue() {
     } catch { setActive(null) }
   }
 
+  async function openViewRecord(r: DoctorExamQueueRow) {
+    setModalMode('edit')
+    setActive(r)
+    setActiveAppt(null)
+    if (!r.appointment_id) {
+      setActiveAppt(taoLichKhamAoChoLuotOffline(r))
+      return
+    }
+    try {
+      const appt = await doctorAppointmentService.getById(r.appointment_id)
+      setActiveAppt(appt)
+    } catch { setActive(null) }
+  }
+
   function closeModal() { setActive(null); setActiveAppt(null) }
 
   async function runQueueAction(id: string, action: (id: string) => Promise<unknown>, successMsg: string) {
@@ -383,7 +397,11 @@ export default function DoctorExamQueue() {
                           <Button variant="success" size="sm" onClick={() => openConfirm(r)}
                             icon={<Icon name="check" className="h-3.5 w-3.5" />}>Xem & xác nhận</Button>
                         )}
-                        {['da_xong', 'bo_luot', 'da_huy'].includes(r.trang_thai_tong_hop) && (
+                        {r.trang_thai_tong_hop === 'da_xong' && (
+                          <Button variant="secondary" size="sm" onClick={() => openViewRecord(r)}
+                            icon={<Icon name="eye" className="h-3.5 w-3.5" />}>Xem hồ sơ</Button>
+                        )}
+                        {['bo_luot', 'da_huy'].includes(r.trang_thai_tong_hop) && (
                           <span className="text-xs text-slate-400">—</span>
                         )}
                       </div>

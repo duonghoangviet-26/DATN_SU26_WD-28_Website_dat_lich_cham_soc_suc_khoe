@@ -14,6 +14,7 @@ import { layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { traSlotVePool } from '../../services/offlineIntake.service.js'
 import { bacSiDangTrongCaLamViec, getTodayRange } from '../../services/doctorAvailability.service.js'
 import { huyLuotHangDoi } from '../../services/queueCancel.service.js'
+import { resolveAndSyncAppointmentPaymentState } from '../../services/appointmentPaymentStatus.service.js'
 
 // ============================================================
 // Hàng đợi động (Bác sĩ) — Routes: /api/doctor/queue
@@ -167,7 +168,7 @@ export async function pendingCheckin(req, res) {
   try {
     const docId = await getDocId(req.user.id)
     if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
-    const rows = await layLichChoTiepNhan({ doctorId: docId, ngay: req.query.date ?? null })
+    const rows = await layLichChoTiepNhan({ doctorId: docId, ngay: req.query.date ?? null, onlyReadyForExam: true })
     return ok(res, rows)
   } catch (err) {
     return fail(res, err.statusCode ?? 500, err.message)
@@ -300,9 +301,10 @@ export async function intoRoom(req, res) {
     // Khách đặt trước có thể check-in để giữ thứ tự, nhưng không được vào phòng khi
     // phí lịch hẹn chưa thanh toán. Walk-in được thu sau khám nên không áp dụng gate này.
     if (entry.appointment_id) {
-      const appointment = await LichHen.findById(entry.appointment_id).select('payment_status').lean()
+      const paymentState = await resolveAndSyncAppointmentPaymentState(entry.appointment_id)
+      const appointment = paymentState?.appointment ?? null
       if (!appointment) return fail(res, 409, 'Lịch hẹn của lượt này không còn tồn tại, không thể cho vào phòng')
-      if (appointment.payment_status !== 'paid') {
+      if (paymentState.payment_status !== 'paid') {
         return fail(res, 409, 'Lịch hẹn chưa thanh toán đủ. Mời thu ngân xác nhận thanh toán trước khi vào phòng.')
       }
     }
