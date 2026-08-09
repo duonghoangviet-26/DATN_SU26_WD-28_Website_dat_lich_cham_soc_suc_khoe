@@ -268,8 +268,8 @@ export default function Dashboard() {
           to="/receptionist/contact-tasks"
           className="mb-6 flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100"
         >
-          <span>Còn {chuaGoiCount} khách chưa được gọi báo lịch (không có tài khoản online để nhận thông báo trong app).</span>
-          <span className="whitespace-nowrap underline">Xem danh sách →</span>
+          <span>Còn {chuaGoiCount} khách cần liên hệ hoặc xác nhận đến khám.</span>
+          <span className="whitespace-nowrap underline">Mở Liên Hệ Khách Hàng →</span>
         </Link>
       )}
 

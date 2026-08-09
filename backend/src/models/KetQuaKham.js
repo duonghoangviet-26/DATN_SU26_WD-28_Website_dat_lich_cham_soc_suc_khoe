@@ -78,6 +78,14 @@ const examinationResultSchema = new mongoose.Schema(
       enum: ['ban_nhap', 'cho_xac_nhan', 'da_xac_nhan', 'yeu_cau_chinh_sua'],
       default: 'cho_xac_nhan',
     },
+    // WS-1 — Bước đang dở của phiên khám 4 bước. Là con trỏ tiến độ, KHÔNG phải trạng thái
+    // duyệt (đó là `status`). Bác sĩ đóng tab giữa chừng thì mở lại vào đúng bước này.
+    // Hồ sơ nhập bằng luồng cũ (một form phẳng) vào thẳng 'hoan_tat'.
+    buoc_hien_tai: {
+      type: String,
+      enum: ['tiep_nhan', 'chan_doan', 'dich_vu', 'ke_don', 'hoan_tat'],
+      default: 'tiep_nhan',
+    },
     // Lý do bác sĩ yêu cầu chỉnh sửa (bản mới nhất) — tách riêng khỏi lich_su_sua để hiển thị
     // nhanh trên UI mà không phải đọc lại toàn bộ mảng lịch sử.
     doctor_revision_note: { type: String, default: null },

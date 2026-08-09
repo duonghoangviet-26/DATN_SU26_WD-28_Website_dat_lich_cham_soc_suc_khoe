@@ -8,6 +8,14 @@ import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import { USER_STATUS_LABEL } from '@/utils/constants'
 import { formatDate, formatDateTime } from '@/utils/format'
 import {
+  getLatestAllowedBirthDateInput,
+  normalizePersonName,
+  normalizePhoneInput,
+  validateBirthDate,
+  validatePatientName,
+  validateVietnamesePhone,
+} from '@/utils/patientIdentityValidation'
+import {
   adminPatientService,
   type AdminPatient,
   type AdminPatientAuditLog,
@@ -18,6 +26,7 @@ import {
 type DetailTab = 'info' | 'history' | 'audit'
 
 const EMPTY_STATS = { total: 0, active: 0, locked: 0, deleted: 0 }
+const latestAllowedBirthDateInput = getLatestAllowedBirthDateInput()
 
 const GENDER_LABEL: Record<string, string> = {
   nam: 'Nam',
@@ -184,8 +193,8 @@ export default function ManagePatients() {
 
     const primaryMember = editingPatient.primary_member
     const payload: AdminPatientUpdatePayload = {
-      ho_ten: editingPatient.ho_ten.trim(),
-      so_dien_thoai: editingPatient.so_dien_thoai || null,
+      ho_ten: normalizePersonName(editingPatient.ho_ten),
+      so_dien_thoai: editingPatient.so_dien_thoai ? normalizePhoneInput(editingPatient.so_dien_thoai) : null,
       anh_dai_dien: editingPatient.anh_dai_dien || null,
       status: editingPatient.status,
       ngay_sinh: primaryMember?.ngay_sinh ? toDateInput(primaryMember.ngay_sinh) : null,
@@ -195,25 +204,24 @@ export default function ManagePatients() {
       benh_nen: primaryMember?.benh_nen || null,
     }
 
-    if (!payload.ho_ten) {
-      setFormError('Họ tên bệnh nhân là bắt buộc')
+    const nameError = validatePatientName(payload.ho_ten)
+    if (nameError) {
+      setFormError(nameError)
       return
     }
 
     if (payload.so_dien_thoai) {
-      const phoneTrimmed = payload.so_dien_thoai.trim()
-      const phoneRegex = /^(0|\+84)[3|5|7|8|9][0-9]{8}$/
-      if (!phoneRegex.test(phoneTrimmed)) {
-        setFormError('Số điện thoại không hợp lệ (Phải bao gồm 10 chữ số chuẩn Việt Nam, ví dụ: 0912345678)')
+      const phoneError = validateVietnamesePhone(payload.so_dien_thoai)
+      if (phoneError) {
+        setFormError(phoneError)
         return
       }
-      payload.so_dien_thoai = phoneTrimmed
     }
 
     if (payload.ngay_sinh) {
-      const birth = new Date(payload.ngay_sinh)
-      if (Number.isNaN(birth.getTime()) || birth.getTime() >= Date.now()) {
-        setFormError('Ngày sinh không hợp lệ (Không được ở tương lai)')
+      const birthDateError = validateBirthDate(payload.ngay_sinh)
+      if (birthDateError) {
+        setFormError(birthDateError)
         return
       }
     }
@@ -677,7 +685,13 @@ export default function ManagePatients() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="input-label">Họ tên *</label>
-                <input className="input" required value={editingPatient.ho_ten} onChange={(event) => setEditingPatient({ ...editingPatient, ho_ten: event.target.value })} />
+                <input
+                  className="input"
+                  required
+                  value={editingPatient.ho_ten}
+                  onChange={(event) => setEditingPatient({ ...editingPatient, ho_ten: event.target.value })}
+                  onBlur={() => setEditingPatient((current) => current ? { ...current, ho_ten: normalizePersonName(current.ho_ten) } : current)}
+                />
               </div>
               <div>
                 <label className="input-label">Email</label>
@@ -685,7 +699,13 @@ export default function ManagePatients() {
               </div>
               <div>
                 <label className="input-label">Số điện thoại</label>
-                <input className="input" value={editingPatient.so_dien_thoai || ''} onChange={(event) => setEditingPatient({ ...editingPatient, so_dien_thoai: event.target.value })} />
+                <input
+                  className="input"
+                  value={editingPatient.so_dien_thoai || ''}
+                  onChange={(event) => setEditingPatient({ ...editingPatient, so_dien_thoai: normalizePhoneInput(event.target.value) })}
+                  inputMode="numeric"
+                  maxLength={10}
+                />
               </div>
               <div>
                 <label className="input-label">Trạng thái</label>
@@ -696,7 +716,13 @@ export default function ManagePatients() {
               </div>
               <div>
                 <label className="input-label">Ngày sinh</label>
-                <input className="input" type="date" value={toDateInput(editingPatient.primary_member?.ngay_sinh)} onChange={(event) => updatePrimaryMember('ngay_sinh', event.target.value)} />
+                <input
+                  className="input"
+                  type="date"
+                  value={toDateInput(editingPatient.primary_member?.ngay_sinh)}
+                  onChange={(event) => updatePrimaryMember('ngay_sinh', event.target.value)}
+                  max={latestAllowedBirthDateInput}
+                />
               </div>
               <div>
                 <label className="input-label">Giới tính</label>

@@ -20,6 +20,7 @@ export const markContactTaskDone = async (req, res) => {
       auditId: req.params.auditId,
       actorUserId: req.user?._id ?? req.user?.id ?? null,
       ghiChu: req.body?.ghi_chu,
+      ketQua: req.body?.ket_qua,
     })
     return ok(res, result, 'Đã ghi nhận cuộc gọi')
   } catch (error) {

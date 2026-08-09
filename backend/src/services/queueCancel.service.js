@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import { HangDoi, LichHen, LichSuLichHen, NhatKyThaoTac } from '../models/index.js'
 import { emitDashboardAppointmentChanged } from '../realtime/socket.js'
 import { traSlotVePool } from './offlineIntake.service.js'
+import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
 
 // ============================================================
 // E-11 — Đóng lượt hàng đợi khi khách bỏ về, dùng CHUNG cho bác sĩ và lễ tân.
@@ -102,6 +103,18 @@ export async function huyLuotHangDoi({ entryId, lyDo = null, actorUserId, actorR
   } else {
     await traSlotVePool(entry)
   }
+
+  // Ghi nhật ký thao tác lễ tân (WS-4) — dùng `reason` (đã chuẩn hóa qua chuanHoaLyDoHuyLuot),
+  // không dùng thẳng tham số `lyDo` thô, để khớp với giá trị đã lưu ở NhatKyThaoTac phía trên.
+  await ghiNhatKyLeTan({
+    hanhDong: 'LT_HUY_CHECK_IN',
+    actorUserId,
+    actorRole,
+    loaiDoiTuong: 'queue_entry',
+    doiTuongId: entry._id,
+    duLieuCu: { trang_thai: trangThaiCu },
+    duLieuMoi: { trang_thai: 'cancelled', ly_do: reason ?? null },
+  })
 
   return { entry: { _id: String(entryId), trang_thai: 'cancelled' }, appointment: appointmentAfter }
 }

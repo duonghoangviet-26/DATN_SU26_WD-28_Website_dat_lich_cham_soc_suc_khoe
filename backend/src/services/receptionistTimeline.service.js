@@ -33,6 +33,16 @@ export const LICH_HEN_WHITELIST_HANH_DONG = [
   'AUTO_MARK_NO_SHOW',
   'UNDO_AUTO_MARK_NO_SHOW',
   'AUTO_CANCEL_APPOINTMENT',
+  // WS-4 — thao tác của lễ tân lên chính lịch hẹn/lượt khám này. Không có nhóm này thì
+  // câu hỏi "ai check-in khách này, ai thu tiền" không trả lời được ở màn chi tiết khách.
+  'LT_CHECK_IN',
+  'LT_HUY_CHECK_IN',
+  'LT_IN_PHIEU_STT',
+  'LT_XAC_NHAN_THANH_TOAN',
+  'LT_LAP_HOA_DON',
+  'LT_DOI_LICH',
+  'LT_HUY_LICH',
+  'LT_GOI_KHACH',
 ]
 
 // Trường an toàn để hiện cho lễ tân trong du_lieu_cu/du_lieu_moi (Mixed — có thể
@@ -44,6 +54,12 @@ const FIELD_WHITELIST = new Set([
   'primary_member.ngay_sinh', 'primary_member.gioi_tinh', 'primary_member.nhom_mau',
   'primary_member.di_ung', 'primary_member.benh_nen',
   'doctor_id', 'gio_kham', 'ly_do_doi', 'trang_thai', 'no_show_confirmed_at',
+  // WS-4 — trường do du_lieu_moi của các hanh_dong LT_* sinh ra (Task 8). Đã có sẵn
+  // gio_kham/ly_do_doi ở trên nên không lặp lại. KHÔNG thêm so_dien_thoai, dia_chi,
+  // di_ung, benh_nen vào đây — timeline này hiển thị công khai hơn trang nhật ký ca trực.
+  'ma_so_thu_tu', 'so_thu_tu', 'nguon', 'ten_benh_nhan', 'phong_kham',
+  'ma_lich_hen', 'payment_status', 'so_tien', 'hinh_thuc', 'ma_hoa_don',
+  'tong_tien', 'ly_do', 'ngay_kham',
 ])
 
 export const HANH_DONG_NHAN = {
@@ -63,6 +79,16 @@ export const HANH_DONG_NHAN = {
   AUTO_MARK_NO_SHOW: 'Hệ thống tự đánh dấu không đến',
   UNDO_AUTO_MARK_NO_SHOW: 'Hoàn tác đánh dấu không đến',
   AUTO_CANCEL_APPOINTMENT: 'Hệ thống tự huỷ lịch (quá hạn thanh toán)',
+  // WS-4 — nhãn khớp nguyên văn HANH_DONG_LE_TAN trong receptionistAudit.service.js (Task 1),
+  // để cùng một mã hành động không hiện hai nhãn khác nhau ở hai màn hình.
+  LT_CHECK_IN: 'Tiếp nhận bệnh nhân',
+  LT_HUY_CHECK_IN: 'Hủy tiếp nhận',
+  LT_IN_PHIEU_STT: 'In phiếu số thứ tự',
+  LT_XAC_NHAN_THANH_TOAN: 'Xác nhận thu tiền',
+  LT_LAP_HOA_DON: 'Lập hóa đơn',
+  LT_DOI_LICH: 'Đổi lịch hẹn',
+  LT_HUY_LICH: 'Hủy lịch hẹn',
+  LT_GOI_KHACH: 'Gọi điện cho khách',
 }
 
 const VAI_TRO_NHAN = {

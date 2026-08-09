@@ -4,6 +4,14 @@ import {
   UpdateProfileAdministrativePayload,
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
+import {
+  getLatestAllowedBirthDateInput,
+  normalizePersonName,
+  normalizePhoneInput,
+  validateBirthDate,
+  validatePatientName,
+  validateVietnamesePhone,
+} from '@/utils/patientIdentityValidation'
 
 const FIELD_LABELS: Record<string, string> = {
   ho_ten: 'Họ tên',
@@ -75,6 +83,7 @@ export default function ProfileAdminEditModal({ profile, onClose, onSaved }: Pro
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [neutralNotice, setNeutralNotice] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<'ho_ten' | 'so_dien_thoai' | 'ngay_sinh', string>>>({})
 
   const changedFields = useMemo(() => {
     const fields: Array<keyof FormState> = ['ho_ten', 'so_dien_thoai', 'ngay_sinh', 'gioi_tinh', 'nhom_mau', 'di_ung', 'benh_nen', 'dia_chi', 'ghi_chu']
@@ -82,6 +91,7 @@ export default function ProfileAdminEditModal({ profile, onClose, onSaved }: Pro
   }, [form, initial])
 
   const canSave = changedFields.length > 0 && reason.trim().length > 0 && !saving
+  const latestAllowedBirthDateInput = getLatestAllowedBirthDateInput()
 
   const buildPayload = (): UpdateProfileAdministrativePayload => {
     const payload: UpdateProfileAdministrativePayload = { ly_do_cap_nhat: reason.trim() }
@@ -101,11 +111,27 @@ export default function ProfileAdminEditModal({ profile, onClose, onSaved }: Pro
 
   const submit = async () => {
     if (!canSave) return
+    const normalizedName = normalizePersonName(form.ho_ten)
+    const normalizedPhone = normalizePhoneInput(form.so_dien_thoai)
+    const nextFieldErrors = {
+      ho_ten: validatePatientName(normalizedName) || undefined,
+      so_dien_thoai: validateVietnamesePhone(normalizedPhone) || undefined,
+      ngay_sinh: validateBirthDate(form.ngay_sinh) || undefined,
+    }
+    setFieldErrors(nextFieldErrors)
+    if (nextFieldErrors.ho_ten || nextFieldErrors.so_dien_thoai || nextFieldErrors.ngay_sinh) {
+      return
+    }
+
     setSaving(true)
     setError('')
     setNeutralNotice('')
     try {
-      const result = await receptionistPatientIntakeService.updateProfileAdministrative(profile.id, buildPayload())
+      const result = await receptionistPatientIntakeService.updateProfileAdministrative(profile.id, {
+        ...buildPayload(),
+        ...(changedFields.includes('ho_ten') ? { ho_ten: normalizedName } : {}),
+        ...(changedFields.includes('so_dien_thoai') ? { so_dien_thoai: normalizedPhone } : {}),
+      })
       onSaved({ profile: result.profile, changed_fields: result.changed_fields })
     } catch (requestError: any) {
       const status = requestError?.response?.status
@@ -136,15 +162,45 @@ export default function ProfileAdminEditModal({ profile, onClose, onSaved }: Pro
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="text-sm font-medium text-slate-700">
             Họ tên
-            <input value={form.ho_ten} onChange={(event) => setForm({ ...form, ho_ten: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+            <input
+              value={form.ho_ten}
+              onChange={(event) => {
+                setForm({ ...form, ho_ten: event.target.value })
+                if (fieldErrors.ho_ten) setFieldErrors((current) => ({ ...current, ho_ten: undefined }))
+              }}
+              className={`mt-1.5 min-h-11 w-full rounded-xl border px-3 outline-none focus:ring-2 ${fieldErrors.ho_ten ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-100' : 'border-slate-300 focus:border-brand-500 focus:ring-brand-100'}`}
+            />
+            {fieldErrors.ho_ten && <span className="mt-1 block text-xs font-medium text-rose-700">{fieldErrors.ho_ten}</span>}
           </label>
           <label className="text-sm font-medium text-slate-700">
             Số điện thoại
-            <input value={form.so_dien_thoai} onChange={(event) => setForm({ ...form, so_dien_thoai: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+            <input
+              value={form.so_dien_thoai}
+              inputMode="tel"
+              maxLength={10}
+              onChange={(event) => {
+                setForm({ ...form, so_dien_thoai: normalizePhoneInput(event.target.value) })
+                if (fieldErrors.so_dien_thoai) setFieldErrors((current) => ({ ...current, so_dien_thoai: undefined }))
+              }}
+              className={`mt-1.5 min-h-11 w-full rounded-xl border px-3 outline-none focus:ring-2 ${fieldErrors.so_dien_thoai ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-100' : 'border-slate-300 focus:border-brand-500 focus:ring-brand-100'}`}
+            />
+            {fieldErrors.so_dien_thoai && <span className="mt-1 block text-xs font-medium text-rose-700">{fieldErrors.so_dien_thoai}</span>}
           </label>
           <label className="text-sm font-medium text-slate-700">
             Ngày sinh
-            <input type="date" value={form.ngay_sinh} onChange={(event) => setForm({ ...form, ngay_sinh: event.target.value })} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+            <input
+              type="date"
+              max={latestAllowedBirthDateInput}
+              value={form.ngay_sinh}
+              onChange={(event) => {
+                setForm({ ...form, ngay_sinh: event.target.value })
+                if (fieldErrors.ngay_sinh) setFieldErrors((current) => ({ ...current, ngay_sinh: undefined }))
+              }}
+              className={`mt-1.5 min-h-11 w-full rounded-xl border px-3 outline-none focus:ring-2 ${fieldErrors.ngay_sinh ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-100' : 'border-slate-300 focus:border-brand-500 focus:ring-brand-100'}`}
+            />
+            {fieldErrors.ngay_sinh
+              ? <span className="mt-1 block text-xs font-medium text-rose-700">{fieldErrors.ngay_sinh}</span>
+              : <span className="mt-1 block text-xs font-medium text-slate-500">Không chọn ngày trong tương lai hoặc trẻ dưới 30 ngày tuổi.</span>}
           </label>
           <label className="text-sm font-medium text-slate-700">
             Giới tính

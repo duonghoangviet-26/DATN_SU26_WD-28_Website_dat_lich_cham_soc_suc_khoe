@@ -11,6 +11,7 @@ import {
 } from '../../models/index.js'
 import { layGiaKhamChuyenKhoa } from '../../services/doctorAssignment.service.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
+import { ghiNhatKyLeTan } from '../../services/receptionistAudit.service.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { CLINIC_UTC_OFFSET_HOURS, startOfClinicDayUtc } from '../../utils/clinicTime.js'
 import { created, fail, ok } from '../../utils/response.js'
@@ -251,10 +252,10 @@ export async function listBillingCases(req, res) {
   try {
     const view = req.query.view ?? 'pending'
     if (!['pending', 'paid'].includes(view)) return fail(res, 400, 'Bộ lọc thanh toán không hợp lệ')
-    const scope = req.query.scope ?? (view === 'pending' ? 'today' : 'all')
+    const scope = req.query.scope ?? 'today'
     if (!['today', 'all'].includes(scope)) return fail(res, 400, 'Phạm vi ngày thanh toán không hợp lệ')
 
-    const filterToday = view === 'pending' && scope === 'today'
+    const filterToday = scope === 'today'
     const todayDateStart = filterToday ? startOfClinicDayUtc() : null
     const todayDateEnd = todayDateStart ? new Date(todayDateStart) : null
     if (todayDateEnd) todayDateEnd.setUTCDate(todayDateEnd.getUTCDate() + 1)
@@ -347,7 +348,7 @@ export async function createBillingInvoice(req, res) {
     if (due > 0 && method) {
       if (!['tien_mat', 'chuyen_khoan'].includes(method)) throw loi(400, 'Phương thức thanh toán không hợp lệ')
       const paid = method === 'tien_mat'
-      await ThanhToan.create({
+      const payment = await ThanhToan.create({
         hoa_don_id: invoice._id,
         ...(caseItem.source === 'offline' ? { hang_doi_id: caseItem.reference_id } : {}),
         ho_so_benh_nhan_id: caseItem.patient_id,
@@ -359,12 +360,51 @@ export async function createBillingInvoice(req, res) {
         thoi_diem_thanh_toan: paid ? new Date() : null,
         nguoi_thu_id: req.user?._id ?? req.user?.id ?? null,
       })
+
+      // Thanh toán tiền mặt được chốt NGAY lúc lập hóa đơn (không qua bước xác nhận riêng như
+      // chuyển khoản), nên phải ghi nhật ký ở đây — nếu không, nguồn thu tiền mặt (phổ biến nhất
+      // ở quầy) sẽ không có dấu vết ai thu. Chỉ ghi khi ĐÃ thu thật (paid); giao dịch chuyển
+      // khoản `pending` chưa thu, không được ghi LT_XAC_NHAN_THANH_TOAN ở đây.
+      if (paid) {
+        await ghiNhatKyLeTan({
+          hanhDong: 'LT_XAC_NHAN_THANH_TOAN',
+          actorUserId: req.user.id,
+          actorRole: req.user.role,
+          loaiDoiTuong: 'payment',
+          doiTuongId: payment._id,
+          duLieuMoi: {
+            ten_benh_nhan: caseItem.patient_name,
+            so_tien: payment.so_tien,
+            hinh_thuc: method,
+            hoa_don_id: String(invoice._id),
+            ma_hoa_don: invoice.so_hoa_don ?? null,
+          },
+        })
+      }
     }
     const trangThaiHoaDon = await tinhTrangThaiHoaDon(invoice._id)
     if (trangThaiHoaDon.trang_thai_hoa_don === 'da_thanh_toan_du' && !await pendingPayment(invoice._id)) {
       await confirmCashierReview(invoice._id, req.user?._id ?? req.user?.id ?? null)
     }
     await hoanTatLuotKhamOnlineNeuDaThuDu(caseItem, trangThaiHoaDon)
+
+    // Ghi nhật ký thao tác lễ tân (WS-4). Biến thực tế là `invoice` (không phải `hoaDon`), và
+    // các field trên schema HoaDon là `so_hoa_don` / `chi_tiet_thu_phi` (không phải `ma_hoa_don` /
+    // `chi_tiet` như bản mô tả gốc) — dùng đúng tên biến/field sẵn có.
+    await ghiNhatKyLeTan({
+      hanhDong: 'LT_LAP_HOA_DON',
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      loaiDoiTuong: 'invoice',
+      doiTuongId: invoice._id,
+      duLieuMoi: {
+        ten_benh_nhan: caseItem.patient_name,
+        ma_hoa_don: invoice.so_hoa_don ?? null,
+        tong_tien: invoice.tong_thanh_toan ?? null,
+        so_khoan: Array.isArray(invoice.chi_tiet_thu_phi) ? invoice.chi_tiet_thu_phi.length : 0,
+      },
+    })
+
     return created(res, await serializeCase(caseItem), 'Đã lập hoặc cập nhật hóa đơn')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)

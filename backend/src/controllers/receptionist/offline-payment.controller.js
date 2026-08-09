@@ -8,6 +8,7 @@ import {
 } from '../../models/index.js'
 import { layGiaKhamChuyenKhoa } from '../../services/doctorAssignment.service.js'
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
+import { ghiNhatKyLeTan } from '../../services/receptionistAudit.service.js'
 import { created, fail, ok } from '../../utils/response.js'
 
 const TRANG_THAI_DUOC_LAP_HOA_DON = ['hoan_thanh', 'cho_dich_vu']
@@ -143,6 +144,24 @@ export async function confirmOfflinePayment(req, res) {
 
     await tinhTrangThaiHoaDon(payment.hoa_don_id)
     const invoice = await HoaDon.findById(payment.hoa_don_id).lean()
+
+    // Ghi nhật ký thao tác lễ tân (WS-4). Biến thực tế trong hàm là `payment` (không phải
+    // `thanhToan` như bản mô tả gốc) — dùng đúng tên biến sẵn có.
+    await ghiNhatKyLeTan({
+      hanhDong: 'LT_XAC_NHAN_THANH_TOAN',
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      loaiDoiTuong: 'payment',
+      doiTuongId: payment._id,
+      duLieuMoi: {
+        ten_benh_nhan: entry.ten_benh_nhan,
+        so_tien: payment.so_tien,
+        hinh_thuc: payment.phuong_thuc ?? 'tien_mat',
+        hoa_don_id: String(payment.hoa_don_id ?? ''),
+        ma_hoa_don: invoice?.so_hoa_don ?? null,
+      },
+    })
+
     return ok(res, {
       payment: serializePayment(payment),
       invoice: serialize(invoice, await getPaidTotal(payment.hoa_don_id)),
@@ -318,7 +337,42 @@ export async function createOfflineInvoice(req, res) {
         nguoi_thu_id: req.user?._id ?? req.user?.id ?? null,
       })
       if (isPaid) await tinhTrangThaiHoaDon(invoice._id)
+
+      // Thanh toán tiền mặt được chốt NGAY lúc lập hóa đơn (không qua confirmOfflinePayment
+      // như chuyển khoản), nên phải ghi nhật ký ở đây — nếu không, nguồn thu tiền mặt (phổ biến
+      // nhất ở quầy) sẽ không có dấu vết ai thu. Chỉ ghi khi ĐÃ thu thật (isPaid); giao dịch
+      // chuyển khoản `pending` chưa thu, không được ghi LT_XAC_NHAN_THANH_TOAN ở đây.
+      if (isPaid) {
+        await ghiNhatKyLeTan({
+          hanhDong: 'LT_XAC_NHAN_THANH_TOAN',
+          actorUserId: req.user.id,
+          actorRole: req.user.role,
+          loaiDoiTuong: 'payment',
+          doiTuongId: payment._id,
+          duLieuMoi: {
+            ten_benh_nhan: entry.ten_benh_nhan,
+            so_tien: payment.so_tien,
+            hinh_thuc: paymentMethod,
+            hoa_don_id: String(invoice._id),
+            ma_hoa_don: invoice.so_hoa_don ?? null,
+          },
+        })
+      }
     }
+
+    await ghiNhatKyLeTan({
+      hanhDong: 'LT_LAP_HOA_DON',
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+      loaiDoiTuong: 'invoice',
+      doiTuongId: invoice._id,
+      duLieuMoi: {
+        ten_benh_nhan: entry.ten_benh_nhan,
+        ma_hoa_don: invoice.so_hoa_don ?? null,
+        tong_tien: invoice.tong_thanh_toan ?? null,
+        so_khoan: Array.isArray(invoice.chi_tiet_thu_phi) ? invoice.chi_tiet_thu_phi.length : 0,
+      },
+    })
 
     const freshInvoice = await HoaDon.findById(invoice._id).lean()
     return created(res, {

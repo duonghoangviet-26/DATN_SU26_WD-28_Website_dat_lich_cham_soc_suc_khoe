@@ -14,6 +14,7 @@ const ReceptionistPayments = lazy(() => import('@/pages/receptionist/Payments'))
 const ReceptionistPatientIntake = lazy(() => import('@/pages/receptionist/PatientIntake'))
 const ReceptionistDoctorDayView = lazy(() => import('@/pages/receptionist/DoctorDayView'))
 const ReceptionistContactTasks = lazy(() => import('@/pages/receptionist/ContactTasks'))
+const ReceptionistActivityLog = lazy(() => import('@/pages/receptionist/ActivityLog'))
 const ReceptionistNewsList = lazy(() => import('@/pages/receptionist/NewsList'))
 const ReceptionistNewsCreate = lazy(() => import('@/pages/receptionist/NewsCreate'))
 const ReceptionistNewsEdit = lazy(() => import('@/pages/receptionist/NewsEdit'))
@@ -57,6 +58,7 @@ const DoctorSchedule = lazy(() => import('@/pages/doctor/DoctorSchedule'))
 const DoctorAppointments = lazy(() => import('@/pages/doctor/DoctorAppointments'))
 const DoctorExamQueue = lazy(() => import('@/pages/doctor/DoctorExamQueue'))
 const DoctorLeaveRequests = lazy(() => import('@/pages/doctor/DoctorLeaveRequests'))
+const DoctorExamSession = lazy(() => import('@/pages/doctor/ExamSessionPage'))
 
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
@@ -148,6 +150,7 @@ export default function AppRoutes() {
         <Route path="patient-intake" element={<ReceptionistPatientIntake />} />
         <Route path="doctor-day-view" element={<ReceptionistDoctorDayView />} />
         <Route path="contact-tasks" element={<ReceptionistContactTasks />} />
+        <Route path="activity-log" element={<ReceptionistActivityLog />} />
         <Route path="booking" element={<ReceptionistPatientIntake />} />
         <Route path="news" element={<ReceptionistNewsList />} />
         <Route path="news/create" element={<ReceptionistNewsCreate />} />
@@ -166,6 +169,7 @@ export default function AppRoutes() {
         <Route index element={<DoctorDashboard />} />                  {/* B5 */}
         <Route path="appointments" element={<DoctorAppointments />} /> {/* B3+B4 */}
         <Route path="pending-records" element={<DoctorExamQueue />} /> {/* B4 — hồ sơ chờ khám (online + offline) */}
+        <Route path="exam/:queueId" element={<DoctorExamSession />} /> {/* B4 — phiên khám 5 bước */}
         <Route path="schedule" element={<DoctorSchedule />} />         {/* B2 */}
         <Route path="leave-requests" element={<DoctorLeaveRequests />} /> {/* B8 — xin nghỉ */}
         <Route path="profile" element={<DoctorProfile />} />           {/* B1 */}

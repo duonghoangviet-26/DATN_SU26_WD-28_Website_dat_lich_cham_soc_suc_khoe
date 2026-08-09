@@ -3,6 +3,7 @@ import {
 } from '../models/index.js'
 import { caCuaKhung } from '../models/MauLichLamViec.js'
 import { daQuaCutoffOnline, isSlotInPast } from '../utils/clinicTime.js'
+import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
 
 // ============================================================
 // ĐIỀU PHỐI DỜI LỊCH — rule mục 14 (bác sĩ nghỉ cả ca) + mục 15 (bận một khung)
@@ -258,6 +259,7 @@ export async function apDungPhuongAn({
   }
 
   const gioCu = appointment.gio_kham
+  const ngayCu = appointment.ngay_kham
   const bacSiCu = appointment.doctor_id
 
   appointment.doctor_id = phuongAn.doctor_id
@@ -286,6 +288,21 @@ export async function apDungPhuongAn({
     ly_do: `Doi lich ${appointment.ma_lich_hen ?? ''} tu ${gioCu} sang ${phuongAn.gio_bat_dau}`
       + (phuongAn.lan_walk_in ? ' (LAN slot walk-in — ngoai le muc 15)' : ''),
   }], session ? { session } : {})
+
+  // Bổ sung cho DOI_LICH_HEN ở trên: DOI_LICH_HEN ghi việc gì xảy ra với lịch hẹn, LT_DOI_LICH
+  // ghi ai ở quầy đã thao tác. Chỉ ghi nhánh lễ tân — khách tự dời trên app không thuộc nhật
+  // ký ca trực. Gọi ngoài transaction nghiệp vụ (ghiNhatKyLeTan tự nuốt lỗi, không throw).
+  if (actorRole === 'receptionist' || actorRole === 'admin') {
+    await ghiNhatKyLeTan({
+      hanhDong: 'LT_DOI_LICH',
+      actorUserId,
+      actorRole,
+      loaiDoiTuong: 'appointment',
+      doiTuongId: appointment._id,
+      duLieuCu: { ngay_kham: ngayCu, gio_kham: gioCu },
+      duLieuMoi: { ngay_kham: phuongAn.ngay, gio_kham: phuongAn.gio_bat_dau, ly_do_doi: lyDoDoi },
+    })
+  }
 
   return appointment
 }

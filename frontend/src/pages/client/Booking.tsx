@@ -156,12 +156,13 @@ export default function Booking() {
   useEffect(() => {
     const datesList: { value: string; label: string }[] = []
     const today = new Date()
-    // Duyệt tối đa 14 ngày tới để lấy ĐỦ 7 ngày LÀM VIỆC (Thứ 2-Thứ 7).
-    // Phòng khám nghỉ Chủ nhật nên bỏ qua ngày có getDay() === 0.
+    // Duyệt tối đa 14 ngày tới để lấy 7 ngày gần nhất có thể chọn.
+    // Backend quyết định ngày đó có slot hay không theo lịch làm việc thực tế của bác sĩ.
     for (let i = 0; i < 14 && datesList.length < 7; i++) {
       const nextDate = new Date(today)
       nextDate.setDate(today.getDate() + i)
-      if (nextDate.getDay() === 0) continue // Bỏ qua Chủ nhật
+      // Demo 09/08/2026: DB co lich lam viec Chu nhat, nen tam thoi khong chan Chu nhat o client.
+      // if (nextDate.getDay() === 0) continue // Bo qua Chu nhat
       const yyyy = nextDate.getFullYear()
       const mm = String(nextDate.getMonth() + 1).padStart(2, '0')
       const dd = String(nextDate.getDate()).padStart(2, '0')
@@ -495,12 +496,12 @@ export default function Booking() {
       return
     }
 
-    // Phòng khám nghỉ Chủ nhật — chặn khi chọn qua ô "Ngày khác"
-    const picked = new Date(dateValue + 'T00:00:00')
-    if (picked.getDay() === 0) {
-      setToast('Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
-      return
-    }
+    // Demo 09/08/2026: DB co lich lam viec Chu nhat, nen tam thoi khong chan Chu nhat o client.
+    // const picked = new Date(dateValue + 'T00:00:00')
+    // if (picked.getDay() === 0) {
+    //   setToast('Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
+    //   return
+    // }
 
     if (selectedDate !== dateValue) {
       setSelectedDate(dateValue)

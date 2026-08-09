@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import Icon from '@/components/admin/icons';
 import { receptionistContactTasksService } from '../../services/receptionist-contact-tasks.service';
 
 interface Props {
@@ -8,13 +9,14 @@ interface Props {
 }
 
 const receptionistMenu = [
-  { path: '/receptionist', label: 'Tổng quan', icon: 'dashboard', end: true },
-  { path: '/receptionist/appointments', label: 'Lịch hẹn (Phòng khám)', icon: 'calendar' },
-  { path: '/receptionist/patient-intake', label: 'Tiếp nhận tại quầy', icon: 'person' },
-  { path: '/receptionist/doctor-day-view', label: 'Lịch bác sĩ trong ngày', icon: 'calendar' },
-  { path: '/receptionist/contact-tasks', label: 'Cần gọi khách', icon: 'phone' },
-  { path: '/receptionist/payments', label: 'Thanh toán & Thu ngân', icon: 'payment' },
-  { path: '/receptionist/news', label: 'Tin tức', icon: 'file-text' },
+  { path: '/receptionist', label: 'Tổng quan tiếp đón', icon: 'dashboard', end: true },
+  { path: '/receptionist/appointments', label: 'Lịch khám phòng khám', icon: 'calendar' },
+  { path: '/receptionist/patient-intake', label: 'Tiếp nhận bệnh nhân', icon: 'user-check' },
+  { path: '/receptionist/doctor-day-view', label: 'Điều phối bác sĩ', icon: 'stethoscope' },
+  { path: '/receptionist/contact-tasks', label: 'Liên hệ bệnh nhân', icon: 'phone-call' },
+  { path: '/receptionist/activity-log', label: 'Nhật ký ca trực', icon: 'clipboard-list' },
+  { path: '/receptionist/payments', label: 'Viện phí & hóa đơn', icon: 'receipt' },
+  { path: '/receptionist/news', label: 'Tin sức khỏe', icon: 'newspaper' },
 ];
 
 export default function Sidebar({ open, onClose }: Props) {
@@ -75,7 +77,8 @@ export default function Sidebar({ open, onClose }: Props) {
                 }`
               }
             >
-              <span>{item.label}</span>
+              <Icon name={item.icon} className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {item.path === '/receptionist/contact-tasks' && chuaGoiCount > 0 && (
                 <span className="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">{chuaGoiCount}</span>
               )}

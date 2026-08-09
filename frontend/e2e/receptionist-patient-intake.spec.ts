@@ -2,7 +2,7 @@ import { expect, test } from 'playwright/test'
 
 const profileA = {
   id: 'profile-a',
-  ho_ten: 'E2E Browser Patient A',
+  ho_ten: 'Nguyen An Binh',
   so_dien_thoai: '0907770000',
   ngay_sinh: null,
   gioi_tinh: 'nam',
@@ -11,9 +11,11 @@ const profileA = {
   nguoi_giam_ho_id: null,
   member_id: null,
   trang_thai: 'active',
+  lich_hen_hom_nay: [],
 }
 
 test('receptionist can create a profile and check in a patient', async ({ page }) => {
+  let profileCreated = false
   await page.route('**/api/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -26,12 +28,13 @@ test('receptionist can create a profile and check in a patient', async ({ page }
       return route.fulfill({
         json: {
           success: true,
-          data: { phone: '0907770000', profiles: [], total: 0, can_tao_moi: true, ambiguous_appointments: [], checked_at: '2026-07-28T08:00:00.000Z' },
+          data: { phone: '0907770000', profiles: profileCreated ? [profileA] : [], total: profileCreated ? 1 : 0, can_tao_moi: true, ambiguous_appointments: [], account_appointments: [], checked_at: '2026-07-28T08:00:00.000Z' },
         },
       })
     }
 
     if (url.pathname.endsWith('/receptionist/patient-intake/profiles') && request.method() === 'POST') {
+      profileCreated = true
       return route.fulfill({
         status: 201,
         json: { success: true, data: { profile: profileA } },
@@ -81,8 +84,8 @@ test('receptionist can create a profile and check in a patient', async ({ page }
   })
 
   await page.addInitScript(() => {
-    localStorage.setItem('token', 'browser-e2e-token')
-    localStorage.setItem('user', JSON.stringify({
+    sessionStorage.setItem('token', 'browser-e2e-token')
+    sessionStorage.setItem('user', JSON.stringify({
       id: 'receptionist-1',
       email: 'receptionist@example.test',
       ho_ten: 'Le tan E2E',
@@ -92,20 +95,18 @@ test('receptionist can create a profile and check in a patient', async ({ page }
   })
 
   await page.goto('/receptionist/patient-intake')
-  await page.locator('input[placeholder="Số điện thoại người liên hệ"]').fill(profileA.so_dien_thoai)
-  await page.getByRole('button', { name: 'Tra cứu hôm nay' }).click()
-  await expect(page.getByRole('heading', { name: 'Tiếp nhận tại quầy' })).toBeVisible()
+  await page.locator('input[inputmode="tel"]').fill(profileA.so_dien_thoai)
+  await page.getByRole('button', { name: 'Tra cứu hồ sơ' }).click()
+  await expect(page.getByRole('heading', { name: 'Xác nhận đúng người, rồi mới mở thao tác tiếp theo' })).toBeVisible()
 
-  const forms = page.locator('form')
-  await forms.nth(1).locator('input').nth(0).fill(profileA.ho_ten)
-  await forms.nth(1).locator('button[type="submit"]').click()
+  await page.locator('input[required]').fill(profileA.ho_ten)
+  await page.getByRole('button', { name: 'Tạo hồ sơ và chọn hồ sơ này' }).click()
   await expect(page.getByText(profileA.ho_ten).first()).toBeVisible()
 
-  await page.getByText(profileA.ho_ten, { exact: true }).first().click()
-  await page.getByRole('button', { name: /Kiểm tra lịch bác sĩ và sức chứa/ }).click()
-  await expect(page.getByRole('button', { name: /15:30.16:00/ })).toBeVisible()
-  await page.getByRole('button', { name: /Xác nhận tiếp nhận E2E Browser Patient A/ }).click()
-  await expect(page.getByText(/Đã tiếp nhận walk-in E2E Browser Patient A vào hàng đợi/)).toBeVisible()
+  await page.getByRole('button', { name: 'Khám bệnh' }).click()
+  await expect(page.getByRole('button', { name: /15:30-16:00/ })).toBeVisible()
+  await page.getByRole('button', { name: /Xác nhận khám bệnh cho Nguyen An Binh/ }).click()
+  await expect(page.getByText(/Đã tiếp nhận walk-in Nguyen An Binh vào hàng đợi/)).toBeVisible()
 })
 
 test('receptionist checks in a booked appointment without using walk-in capacity', async ({ page }) => {
@@ -134,19 +135,20 @@ test('receptionist checks in a booked appointment without using walk-in capacity
     const url = new URL(request.url())
     if (url.pathname.endsWith('/receptionist/notifications/recent')) return route.fulfill({ json: { success: true, data: [] } })
     if (url.pathname.endsWith('/receptionist/patient-intake/search')) return route.fulfill({ json: { success: true, data: { phone: bookedProfile.so_dien_thoai, profiles: [bookedProfile], total: 1, can_tao_moi: true, ambiguous_appointments: [], checked_at: '2026-07-28T08:00:00.000Z' } } })
-    if (url.pathname.endsWith('/receptionist/appointments/appointment-online-1/arrived') && request.method() === 'PATCH') return route.fulfill({ json: { success: true, data: { appointment: { ...bookedAppointment, status: 'checked_in' }, hang_doi: { id: 'queue-online-1', doctor_id: 'doctor-1', phong_kham: 'TMH 01', checkin_time: '2026-07-28T08:05:00.000Z' }, canh_bao: [] } } })
+    if (url.pathname.endsWith('/receptionist/appointments/appointment-online-1/arrived') && request.method() === 'PATCH') return route.fulfill({ json: { success: true, data: { ...bookedAppointment, status: 'checked_in' }, hang_doi: { id: 'queue-online-1', doctor_id: 'doctor-1', phong_kham: 'TMH 01', checkin_time: '2026-07-28T08:05:00.000Z' }, canh_bao: [] } })
     if (url.pathname.endsWith('/receptionist/patient-intake/availability')) return route.fulfill({ json: { success: true, data: { slots: [], slot_de_xuat: null, ly_do_de_xuat: null, minh_chung_suc_chua: [], trang_thai_kiem_tra: 'co_the_tiep_nhan', checked_at: '2026-07-28T08:00:00.000Z', goi_y_quay_lai: null, slot_cho_xu_ly: [], bi_chan_qua_tai: false, thong_bao: null } } })
     return route.fulfill({ json: { success: true, data: [] } })
   })
 
   await page.addInitScript(() => {
-    localStorage.setItem('token', 'browser-e2e-token')
-    localStorage.setItem('user', JSON.stringify({ id: 'receptionist-1', email: 'receptionist@example.test', ho_ten: 'Le tan E2E', role: 'receptionist', status: 'active' }))
+    sessionStorage.setItem('token', 'browser-e2e-token')
+    sessionStorage.setItem('user', JSON.stringify({ id: 'receptionist-1', email: 'receptionist@example.test', ho_ten: 'Le tan E2E', role: 'receptionist', status: 'active' }))
   })
   await page.goto('/receptionist/patient-intake')
-  await page.locator('input[placeholder="Số điện thoại người liên hệ"]').fill(bookedProfile.so_dien_thoai)
-  await page.getByRole('button', { name: 'Tra cứu hôm nay' }).click()
+  await page.locator('input[inputmode="tel"]').fill(bookedProfile.so_dien_thoai)
+  await page.getByRole('button', { name: 'Tra cứu hồ sơ' }).click()
   await page.getByText(bookedProfile.ho_ten, { exact: true }).click()
+  await page.getByRole('button', { name: 'Check-in' }).click()
   await page.getByText('LH-E2E-001', { exact: false }).click()
   await page.getByRole('button', { name: /Check-in lịch hẹn/ }).click()
   await expect(page.getByText(/Đã check-in lịch hẹn LH-E2E-001/)).toBeVisible()
@@ -187,8 +189,8 @@ test('receptionist reviews the doctor-approved billing preview before collecting
     }
     return route.fulfill({ json: { success: true, data: [] } })
   })
-  await page.addInitScript(() => localStorage.setItem('user', JSON.stringify({ id: 'receptionist-1', email: 'receptionist@example.test', ho_ten: 'Le tan E2E', role: 'receptionist', status: 'active' })))
-  await page.addInitScript(() => localStorage.setItem('token', 'browser-e2e-token'))
+  await page.addInitScript(() => sessionStorage.setItem('user', JSON.stringify({ id: 'receptionist-1', email: 'receptionist@example.test', ho_ten: 'Le tan E2E', role: 'receptionist', status: 'active' })))
+  await page.addInitScript(() => sessionStorage.setItem('token', 'browser-e2e-token'))
   await page.goto('/receptionist/payments')
   await page.getByRole('button').filter({ hasText: 'E2E Cashier Patient' }).click()
   await expect(page.getByText(/số tiền xem trước từ hồ sơ bệnh án/i)).toBeVisible()
@@ -245,8 +247,8 @@ test('receptionist can confirm a pending transfer and review it in payment histo
     }
     return route.fulfill({ json: { success: true, data: [] } })
   })
-  await page.addInitScript(() => localStorage.setItem('user', JSON.stringify({ id: 'receptionist-1', email: 'receptionist@example.test', ho_ten: 'Le tan E2E', role: 'receptionist', status: 'active' })))
-  await page.addInitScript(() => localStorage.setItem('token', 'browser-e2e-token'))
+  await page.addInitScript(() => sessionStorage.setItem('user', JSON.stringify({ id: 'receptionist-1', email: 'receptionist@example.test', ho_ten: 'Le tan E2E', role: 'receptionist', status: 'active' })))
+  await page.addInitScript(() => sessionStorage.setItem('token', 'browser-e2e-token'))
   await page.goto('/receptionist/payments')
   await page.getByRole('button').filter({ hasText: 'E2E Transfer Patient' }).click()
   await expect(page.getByText('Chờ xác nhận chuyển khoản')).toBeVisible()
@@ -271,8 +273,8 @@ test('doctor can open and save an offline examination result', async ({ page }) 
     }
     return route.fulfill({ json: { success: true, data: [] } })
   })
-  await page.addInitScript(() => localStorage.setItem('user', JSON.stringify({ id: 'doctor-1', email: 'doctor@example.test', ho_ten: 'Bac si E2E', role: 'doctor', status: 'active' })))
-  await page.addInitScript(() => localStorage.setItem('token', 'browser-e2e-token'))
+  await page.addInitScript(() => sessionStorage.setItem('user', JSON.stringify({ id: 'doctor-1', email: 'doctor@example.test', ho_ten: 'Bac si E2E', role: 'doctor', status: 'active' })))
+  await page.addInitScript(() => sessionStorage.setItem('token', 'browser-e2e-token'))
   await page.goto('/doctor/pending-records')
   await page.getByRole('button', { name: 'Nhập hồ sơ' }).click()
   await page.locator('textarea').first().fill('Viem mui hong cap')

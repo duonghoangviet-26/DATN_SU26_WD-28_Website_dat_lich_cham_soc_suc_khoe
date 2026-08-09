@@ -5,6 +5,7 @@ import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../utils/clini
 import { kiemTraQuaTai } from './queueOverflow.service.js'
 import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
 import { capSoThuTuCheckin } from './checkInNumber.service.js'
+import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
 
 // ============================================================
 // CHECK-IN — MỘT service dùng chung cho MỌI vai trò (rule mục 7)
@@ -64,11 +65,31 @@ async function timPhongKham(appt, session = null) {
 }
 
 /** Tuổi từ ngày sinh thành viên, thiếu thì suy từ `nam_sinh_khach` của lịch khách lẻ. */
-function tinhTuoi(member, profile, appt, now) {
+export function tinhTuoi(member, profile, appt, now) {
   if (member?.ngay_sinh) return now.getFullYear() - new Date(member.ngay_sinh).getFullYear()
   if (profile?.ngay_sinh) return now.getFullYear() - new Date(profile.ngay_sinh).getFullYear()
   if (appt?.nam_sinh_khach) return now.getFullYear() - Number(appt.nam_sinh_khach)
   return null
+}
+
+/**
+ * Dựng `du_lieu_moi` cho bản ghi nhật ký check-in.
+ *
+ * Tách thành hàm thuần để test được mà không cần Mongo, và để hai nhánh check-in
+ * (lịch hẹn / khách vãng lai) dùng chung đúng một cấu trúc — nhật ký lệch cấu trúc
+ * giữa hai nhánh thì trang "Nhật ký ca trực" không hiển thị thống nhất được.
+ */
+export function moTaCheckIn(entry, appt) {
+  return {
+    ma_so_thu_tu:   entry?.ma_so_thu_tu ?? null,
+    so_thu_tu:      entry?.so_thu_tu_checkin ?? null,
+    nguon:          entry?.nguon ?? null,
+    ten_benh_nhan:  entry?.ten_benh_nhan ?? null,
+    phong_kham:     entry?.phong_kham ?? null,
+    gio_kham:       appt?.gio_kham ?? null,
+    ma_lich_hen:    appt?.ma_lich_hen ?? null,
+    payment_status: appt?.payment_status ?? null,
+  }
 }
 
 // `LichHen.gioi_tinh_khach` dùng male/female, `HangDoi.gioi_tinh` dùng nam/nu/khac.
@@ -234,6 +255,17 @@ export async function checkInLichHen({
     nguon: entry.nguon,
   })
 
+  // Ngoài transaction — xem chú thích "KHÔNG BAO GIỜ THROW" ở receptionistAudit.service.js
+  await ghiNhatKyLeTan({
+    hanhDong: 'LT_CHECK_IN',
+    actorUserId,
+    actorRole: actorRole ?? 'receptionist',
+    loaiDoiTuong: 'queue_entry',
+    doiTuongId: entry._id,
+    duLieuMoi: { ...moTaCheckIn(entry, appt), appointment_id: String(appt._id) },
+    duLieuCu: { status: trangThaiCu },
+  })
+
   return { entry, appointment: appt, trang_thai_cu: trangThaiCu, canh_bao: canhBao }
 }
 
@@ -292,6 +324,15 @@ export async function checkInVangLai({
     action: 'checkin',
     queue_id: entry._id,
     nguon: entry.nguon,
+  })
+
+  await ghiNhatKyLeTan({
+    hanhDong: 'LT_TAO_KHACH_VANG_LAI',
+    actorUserId,
+    actorRole: actorRole ?? 'receptionist',
+    loaiDoiTuong: 'walk_in_guest',
+    doiTuongId: entry._id,
+    duLieuMoi: { ...moTaCheckIn(entry, null), so_dien_thoai: entry.so_dien_thoai },
   })
 
   return { entry, canh_bao: canhBao }
@@ -354,7 +395,10 @@ export async function layLichChoTiepNhan({ doctorId = null, ngay = null, now = n
         ma_lich_hen: a.ma_lich_hen ?? null,
         ten_benh_nhan: member?.ho_ten ?? a.ten_khach ?? chuTaiKhoan?.ho_ten ?? 'Không rõ',
         so_dien_thoai: a.so_dien_thoai_khach ?? chuTaiKhoan?.so_dien_thoai ?? null,
-        tuoi: tinhTuoi(member, a, now),
+        // `a` là LỊCH HẸN, không phải hồ sơ — truyền đúng vị trí tham số `appt`.
+        // Trước đây gọi thiếu một tham số nên `appt` nhận giá trị `now`, nhánh
+        // `nam_sinh_khach` không bao giờ chạy và tuổi khách lẻ luôn ra null.
+        tuoi: tinhTuoi(member, null, a, now),
         gioi_tinh: member?.gioi_tinh ?? GIOI_TINH_KHACH_SANG_HANG_DOI[a.gioi_tinh_khach] ?? null,
         doctor_id: a.doctor_id,
         chuyen_khoa: a.specialty_id?.ten ?? null,
