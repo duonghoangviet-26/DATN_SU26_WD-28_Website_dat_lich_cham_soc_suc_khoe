@@ -4,6 +4,7 @@ import { receptionistDoctorLeavesService, type PendingDoctorLeave } from '@/serv
 import DoctorUnavailableModal from '@/components/receptionist/DoctorUnavailableModal'
 import DoctorLeaveApprovalModal from '@/components/receptionist/DoctorLeaveApprovalModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
+import { EmptyBlock, LoadingBlock, PageShell, Panel, ReceptionistHeader, StatusBadge } from '@/components/receptionist/ReceptionistUI'
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -133,18 +134,18 @@ export default function DoctorDayView() {
   }
 
   return (
-    <div className="min-h-full bg-slate-50 p-4 lg:p-6">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Điều phối · Xem lịch, xử lý bác sĩ nghỉ đột xuất</p>
-          <h2 className="mt-2 text-2xl font-bold text-slate-800">Lịch bác sĩ trong ngày</h2>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">Mỗi ô là 1 khung giờ 30 phút, số hiển thị là số slot còn trống / tổng slot của khung đó. Bấm vào ô để xem ai đã đặt.</p>
-        </div>
-        <label className="text-sm font-medium text-slate-700">
-          Ngày
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-1.5 block min-h-11 rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-        </label>
-      </div>
+    <PageShell>
+      <ReceptionistHeader
+        eyebrow="Điều phối · Lịch bác sĩ"
+        title="Lịch bác sĩ trong ngày"
+        description="Mỗi ô là 1 khung giờ 30 phút, số hiển thị là số slot còn trống / tổng slot của khung đó. Bấm vào ô để xem ai đã đặt."
+        actions={
+          <label className="grid gap-1 text-sm font-semibold text-slate-700">
+            Ngày
+            <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="min-h-10 rounded-lg border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+          </label>
+        }
+      />
 
       {pendingLeaves.length > 0 && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -158,45 +159,45 @@ export default function DoctorDayView() {
       {error && <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
       {loading ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">Đang tải lịch bác sĩ...</div>
+        <LoadingBlock>Đang tải lịch bác sĩ...</LoadingBlock>
       ) : !overview || overview.doctors.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">Không có bác sĩ nào đang hoạt động.</div>
+        <EmptyBlock>Không có bác sĩ nào đang hoạt động.</EmptyBlock>
       ) : (
-        <div className="space-y-4">
+        <div className="grid gap-4 xl:grid-cols-2">
           {overview.doctors.map((doctor) => {
             const leaveCuaBacSi = pendingLeaves.find((leave) => leave.bac_si_id === doctor.doctor_id)
             return (
-            <div key={doctor.doctor_id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <Panel key={doctor.doctor_id} bodyClassName="p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-base font-bold text-slate-800">{doctor.ten_bac_si}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-bold text-slate-900">{doctor.ten_bac_si}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  <StatusBadge
+                    tone={
                       doctor.trang_thai_ngay === 'lam_viec'
-                        ? 'bg-emerald-100 text-emerald-800'
+                        ? 'success'
                         : doctor.trang_thai_ngay === 'nghi_phep'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-slate-100 text-slate-600'
-                    }`}
+                          ? 'danger'
+                          : 'neutral'
+                    }
                   >
                     {dayStatusLabel(doctor.trang_thai_ngay)}
-                  </span>
+                  </StatusBadge>
                   {leaveCuaBacSi && (
                     <button
                       type="button"
                       onClick={() => setApprovingLeave(leaveCuaBacSi)}
-                      className="min-h-9 animate-pulse rounded-lg border border-amber-300 bg-amber-100 px-3 text-xs font-semibold text-amber-800 hover:bg-amber-200"
+                      className="min-h-9 rounded-lg border border-amber-300 bg-amber-100 px-3 text-xs font-semibold text-amber-900 hover:bg-amber-200"
                     >
-                      ⚠ Đang xin nghỉ — bấm để duyệt
+                      Đang xin nghỉ
                     </button>
                   )}
                   {doctor.trang_thai_ngay === 'lam_viec' && (
                     <button
                       type="button"
                       onClick={() => setUnavailableDoctor({ id: doctor.doctor_id, name: doctor.ten_bac_si })}
-                      className="min-h-9 rounded-lg border border-orange-200 bg-orange-50 px-3 text-xs font-semibold text-orange-700 hover:bg-orange-100"
+                      className="min-h-9 rounded-lg border border-orange-200 bg-orange-50 px-3 text-xs font-semibold text-orange-800 hover:bg-orange-100"
                     >
                       Báo nghỉ đột xuất
                     </button>
@@ -222,7 +223,7 @@ export default function DoctorDayView() {
                   />
                 </div>
               </div>
-            </div>
+            </Panel>
             )
           })}
         </div>
@@ -230,7 +231,7 @@ export default function DoctorDayView() {
 
       {selectedKhung && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-5 shadow-lg">
             <h3 className="text-lg font-bold text-slate-800">{selectedKhung.doctorName} · {selectedKhung.row.gio_bat_dau}</h3>
             <p className="mt-1 text-sm text-slate-500">
               {selectedKhung.row.khoa_boi_nghi_phep ? 'Khung này đang bị khoá vì bác sĩ nghỉ phép.' : `${selectedKhung.row.con_trong}/${selectedKhung.row.tong_slot} slot còn trống.`}
@@ -296,6 +297,6 @@ export default function DoctorDayView() {
           onClose={() => setTimelineApptId(null)}
         />
       )}
-    </div>
+    </PageShell>
   )
 }

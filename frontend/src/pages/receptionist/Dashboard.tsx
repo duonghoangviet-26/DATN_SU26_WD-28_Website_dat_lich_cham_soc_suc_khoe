@@ -8,6 +8,7 @@ import { receptionistPaymentService } from '../../services/receptionist-payment.
 import QueueTransferModal, { QueueTransferCandidate } from '../../components/receptionist/QueueTransferModal';
 import QueueCancelModal from '../../components/receptionist/QueueCancelModal';
 import { receptionistContactTasksService } from '../../services/receptionist-contact-tasks.service';
+import { EmptyBlock, MetricCard, PageShell, Panel, ReceptionistHeader, StatusBadge } from '@/components/receptionist/ReceptionistUI';
 
 interface Appointment {
   _id: string;
@@ -259,60 +260,59 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold text-slate-800 mb-6">Tổng quan Lễ tân</h2>
-      {transferMessage && <p className="mb-6 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{transferMessage}</p>}
-      {cancelMessage && <p className="mb-6 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">{cancelMessage}</p>}
+    <PageShell>
+      <ReceptionistHeader
+        eyebrow="Bàn điều phối"
+        title="Tổng quan lễ tân"
+        description="Theo dõi lịch trong ngày, trạng thái bác sĩ, khách chờ tiếp nhận và các thông báo cần xử lý."
+        metrics={
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <MetricCard label="Ca khám hôm nay" value={totalToday} tone="brand" />
+            <MetricCard label="Đang chờ khám" value={waiting} tone="warning" />
+            <MetricCard
+              label="Doanh thu tại quầy"
+              value={new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(todayRevenue)}
+              detail="Hôm nay"
+              tone="success"
+            />
+          </div>
+        }
+      />
+
+      {(transferMessage || cancelMessage) && (
+        <div className="grid gap-3">
+          {transferMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900">{transferMessage}</p>}
+          {cancelMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900">{cancelMessage}</p>}
+        </div>
+      )}
       {chuaGoiCount > 0 && (
         <Link
           to="/receptionist/contact-tasks"
-          className="mb-6 flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+          className="flex flex-col justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 sm:flex-row sm:items-center"
         >
           <span>Còn {chuaGoiCount} khách cần liên hệ hoặc xác nhận đến khám.</span>
-          <span className="whitespace-nowrap underline">Mở Liên Hệ Khách Hàng →</span>
+          <span className="shrink-0 underline">Mở liên hệ khách hàng</span>
         </Link>
       )}
 
-      {/* Khung Thống Kê */}
-      <div className="grid grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-          <p className="text-slate-500 text-sm font-medium">Ca khám hôm nay</p>
-          <p className="text-3xl font-bold text-brand-600 mt-2">{totalToday}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-          <p className="text-slate-500 text-sm font-medium">Đang chờ khám</p>
-          <p className="text-3xl font-bold text-brand-600 mt-2">{waiting}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-          <p className="text-slate-500 text-sm font-medium">Doanh thu tại quầy</p>
-          <p className="text-3xl font-bold text-brand-600 mt-2">
-            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(todayRevenue)}
-          </p>
-          <p className="text-xs text-slate-400 mt-1">Hôm nay</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-8">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Icon name="users" className="w-5 h-5 text-brand-500" />
-            <h3 className="font-bold text-slate-800">Trạng thái vận hành bác sĩ</h3>
-          </div>
-          <span className="text-xs font-semibold text-slate-400">Cập nhật mỗi 30 giây</span>
-        </div>
-        <div className="p-4">
+      <Panel
+        title="Trạng thái vận hành bác sĩ"
+        description="Các ca quá tải, lượt đang chờ và lịch chưa check-in cần điều phối."
+        action={<span className="text-xs font-semibold text-slate-500">Cập nhật mỗi 30 giây</span>}
+        bodyClassName="p-4"
+      >
           {doctorStatuses.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-4">Chưa có dữ liệu trạng thái bác sĩ hôm nay.</p>
+            <EmptyBlock>Chưa có dữ liệu trạng thái bác sĩ hôm nay.</EmptyBlock>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
               {doctorStatuses.map((doctor) => (
-                <div key={doctor.doctor_id} className={`rounded-xl border p-3 ${doctorStatusClass(doctor.trang_thai_van_hanh, doctor.canh_bao_qua_tai)}`}>
+                <article key={doctor.doctor_id} className={`min-w-0 rounded-lg border p-3 ${doctorStatusClass(doctor.trang_thai_van_hanh, doctor.canh_bao_qua_tai)}`}>
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">{doctor.ten_bac_si}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-slate-900">{doctor.ten_bac_si}</p>
                       <p className="mt-1 text-xs font-medium opacity-80">{doctor.phong_kham || 'Chưa có phòng'} · {doctor.so_dang_cho} đang chờ</p>
                     </div>
-                    <span className="rounded-full bg-white/70 px-2 py-1 text-[11px] font-bold">
+                    <span className="shrink-0 rounded-md bg-white/75 px-2 py-1 text-[11px] font-bold">
                       {doctorStatusLabel(doctor.trang_thai_van_hanh)}
                     </span>
                   </div>
@@ -340,7 +340,7 @@ export default function Dashboard() {
                       )}
                       <Link
                         to={`/receptionist/appointments?overload_doctor=${doctor.doctor_id}`}
-                        className="mt-2 inline-block rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
+                        className="mt-2 inline-block rounded-md bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-rose-700"
                       >
                         Điều phối ca quá tải
                       </Link>
@@ -352,7 +352,7 @@ export default function Dashboard() {
                       {doctor.luot_cho_bi_anh_huong?.slice(0, 3).map((queue) => (
                         <div key={queue.hang_doi_id} className="rounded-lg bg-white/75 px-2 py-1.5 text-xs">
                           <div className="flex items-start justify-between gap-2">
-                            <span className="font-semibold text-slate-800">
+                            <span className="min-w-0 font-semibold text-slate-800">
                               {queue.ma_so_thu_tu ? `${queue.ma_so_thu_tu} · ` : ''}{queue.ten_benh_nhan}
                             </span>
                             <span className="whitespace-nowrap text-[11px] font-bold">
@@ -387,7 +387,7 @@ export default function Dashboard() {
                                   tenBenhNhan: queue.ten_benh_nhan,
                                   maSoThuTu: queue.ma_so_thu_tu,
                                 })}
-                                className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+                                className="rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-50"
                               >
                                 Đóng lượt
                               </button>
@@ -403,7 +403,7 @@ export default function Dashboard() {
                       {doctor.lich_chua_checkin_bi_anh_huong?.slice(0, 3).map((appointment) => (
                         <div key={appointment.appointment_id} className="rounded-lg bg-white/75 px-2 py-1.5 text-xs">
                           <div className="flex items-start justify-between gap-2">
-                            <span className="font-semibold text-slate-800">{appointment.ten_benh_nhan}</span>
+                            <span className="min-w-0 font-semibold text-slate-800">{appointment.ten_benh_nhan}</span>
                             <span className="whitespace-nowrap text-[11px] font-bold">{appointment.gio_kham}</span>
                           </div>
                           <p className="mt-0.5 text-[11px] opacity-80">
@@ -414,78 +414,57 @@ export default function Dashboard() {
                       ))}
                     </div>
                   )}
-                </div>
+                </article>
               ))}
             </div>
           )}
-        </div>
-      </div>
+      </Panel>
 
-      {/* Grid 3 Khung Mới */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid gap-4 xl:grid-cols-3">
         
         {/* Khung 1: Thông báo */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-[400px]">
-          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-            <Icon name="bell" className="w-5 h-5 text-brand-500" />
-            <h3 className="font-bold text-slate-800">Thông báo mới</h3>
-          </div>
-          <div className="p-4 overflow-y-auto flex-1 space-y-3">
+        <Panel title="Thông báo mới" bodyClassName="max-h-[28rem] space-y-3 overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Không có thông báo mới.</p>
+              <EmptyBlock>Không có thông báo mới.</EmptyBlock>
             ) : (
               notifications.map(notif => (
-                <div key={notif.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                  <p className="text-sm font-semibold text-slate-700">{notif.tieu_de}</p>
+                <div key={notif.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <p className="line-clamp-2 text-sm font-semibold text-slate-800">{notif.tieu_de}</p>
                   <p className="text-xs text-slate-500 mt-1">{notif.noi_dung}</p>
                   <p className="text-[10px] text-slate-400 mt-2">{format(new Date(notif.ngay_tao), 'HH:mm dd/MM')}</p>
                 </div>
               ))
             )}
-          </div>
-        </div>
+        </Panel>
 
         {/* Khung 2: Lịch đã đặt, chờ tiếp nhận */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-[400px]">
-          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-            <Icon name="users" className="w-5 h-5 text-blue-500" />
-            <h3 className="font-bold text-slate-800">Chờ tiếp nhận</h3>
-          </div>
-          <div className="p-4 overflow-y-auto flex-1 space-y-3">
+        <Panel title="Chờ tiếp nhận" bodyClassName="max-h-[28rem] space-y-3 overflow-y-auto">
             {pendingCheckins.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Không có lịch đang chờ tiếp nhận.</p>
+              <EmptyBlock>Không có lịch đang chờ tiếp nhận.</EmptyBlock>
             ) : (
               pendingCheckins.map((apt) => (
-                <div key={apt.appointment_id} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between hover:bg-slate-50">
-                  <div>
-                    <p className="text-sm font-bold text-slate-700">{apt.ten_benh_nhan}</p>
+                <div key={apt.appointment_id} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 hover:bg-slate-50 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-sm font-bold text-slate-800">{apt.ten_benh_nhan}</p>
                     <p className="text-xs text-slate-500 font-medium">{apt.gio_kham}{apt.phong_kham ? ` · ${apt.phong_kham}` : ''}</p>
                     {apt.tre_qua_grace && <p className="text-[10px] font-semibold text-amber-600">Trễ hơn 15 phút · vẫn được tiếp nhận</p>}
                   </div>
-                  <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
-                    Tra cứu tại Tiếp nhận
-                  </span>
+                  <StatusBadge tone="warning" className="shrink-0">Tra cứu tại tiếp nhận</StatusBadge>
                 </div>
               ))
             )}
-          </div>
-        </div>
+        </Panel>
 
         {/* Khung 3: Lịch sắp tới (4h) */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-[400px]">
-          <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-            <Icon name="clock" className="w-5 h-5 text-emerald-500" />
-            <h3 className="font-bold text-slate-800">Sắp tới (4h)</h3>
-          </div>
-          <div className="p-4 overflow-y-auto flex-1 space-y-3">
+        <Panel title="Sắp tới (4h)" bodyClassName="max-h-[28rem] space-y-3 overflow-y-auto">
             {upcomingAppointments.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-4">Không có lịch trong 4h tới.</p>
+              <EmptyBlock>Không có lịch trong 4h tới.</EmptyBlock>
             ) : (
               upcomingAppointments.map(apt => (
-                <div key={apt._id} className="p-3 border border-slate-200 rounded-lg flex flex-col gap-2 hover:bg-slate-50">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm font-bold text-slate-700">
+                <div key={apt._id} className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-sm font-bold text-slate-800">
                         {apt.user_id?.ho_ten || apt.ten_khach || 'Khách vãng lai'}
                       </p>
                       <p className="text-xs text-slate-500 font-medium flex items-center gap-1">
@@ -497,18 +476,18 @@ export default function Dashboard() {
                     <div className="relative">
                       <button 
                         onClick={() => setActiveTooltip(activeTooltip === apt._id ? null : apt._id)}
-                        className="flex items-center gap-1 text-xs font-semibold text-brand-600 bg-brand-50 px-2 py-1 rounded border border-brand-100 hover:bg-brand-100 transition-colors"
+                        className="flex items-center gap-1 rounded-md border border-brand-100 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-100"
                       >
-                        📞 Liên hệ
+                        Liên hệ
                       </button>
                       
                       {/* Tooltip */}
                       {activeTooltip === apt._id && (
-                        <div className="absolute right-0 top-8 w-56 bg-slate-800 text-white text-xs rounded shadow-lg p-3 z-10">
+                        <div className="absolute right-0 top-8 z-10 w-56 rounded-lg bg-slate-900 p-3 text-xs text-white shadow-lg">
                           <p className="mb-1"><span className="text-slate-400">Khám:</span> {apt.user_id?.ho_ten || apt.ten_khach}</p>
                           <p className="mb-1"><span className="text-slate-400">Đặt hộ:</span> {apt.nguoi_dat_ho_ten || 'Không'}</p>
-                          <p className="mt-2 font-bold text-brand-400 flex items-center gap-1">
-                            📞 {apt.user_id?.so_dien_thoai || apt.so_dien_thoai_khach || apt.nguoi_dat_sdt || 'Chưa cập nhật'}
+                          <p className="mt-2 flex items-center gap-1 font-bold text-brand-200">
+                            {apt.user_id?.so_dien_thoai || apt.so_dien_thoai_khach || apt.nguoi_dat_sdt || 'Chưa cập nhật'}
                           </p>
                         </div>
                       )}
@@ -517,8 +496,7 @@ export default function Dashboard() {
                 </div>
               ))
             )}
-          </div>
-        </div>
+        </Panel>
 
       </div>
 
@@ -542,6 +520,6 @@ export default function Dashboard() {
           onCancelled={handleCancelled}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -11,6 +11,9 @@ import {
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
+import CheckInVerifyModal from '@/components/receptionist/CheckInVerifyModal'
+import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI'
+import axiosInstance from '@/services/axiosInstance'
 import {
   getLatestAllowedBirthDateInput,
   normalizePersonName,
@@ -19,6 +22,23 @@ import {
   validatePatientName,
   validateVietnamesePhone,
 } from '@/utils/patientIdentityValidation'
+
+interface ReceptionistTodayAppointment {
+  _id: string
+  ngay_kham: string
+  gio_kham: string
+  status: string
+  payment_status: string
+  user_id: { ho_ten?: string | null; so_dien_thoai?: string | null } | null
+  doctor_id: { _id?: string; user_id?: { ho_ten?: string | null } } | null
+  ten_khach?: string | null
+  so_dien_thoai_khach?: string | null
+  ma_lich_hen?: string | null
+  ten_dich_vu?: string | null
+  allowed_actions?: Array<'check_in' | 'reschedule' | 'late_reschedule' | 'cancel'>
+  lock_reason?: string | null
+  sua_gan_nhat?: { nhan: string; thoi_diem: string; nguoi?: { ho_ten?: string | null } } | null
+}
 
 const emptyForm = {
   ho_ten: '',
@@ -108,6 +128,259 @@ function appointmentIsCheckinable(appointment: TodayAppointment) {
   return appointment.status === 'confirmed'
 }
 
+function todayAppointmentIsCheckinable(appointment: ReceptionistTodayAppointment) {
+  if (Array.isArray(appointment.allowed_actions)) return appointment.allowed_actions.includes('check_in')
+  return appointment.status === 'confirmed'
+}
+
+function appointmentStatusTone(status: string) {
+  if (status === 'checked_in') return 'bg-emerald-100 text-emerald-800'
+  if (status === 'completed') return 'bg-blue-100 text-blue-800'
+  if (status === 'cancelled') return 'bg-rose-100 text-rose-800'
+  if (status === 'no_show') return 'bg-slate-200 text-slate-700'
+  if (status === 'pending') return 'bg-amber-100 text-amber-800'
+  return 'bg-brand-100 text-brand-800'
+}
+
+function TodayAppointmentTab({
+  onTicketReady,
+}: {
+  onTicketReady: (data: QueueTicketData) => void
+}) {
+  const [appointments, setAppointments] = useState<ReceptionistTodayAppointment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<'active' | 'confirmed' | 'checked_in' | 'changed' | 'all'>('active')
+  const [checkInAppointment, setCheckInAppointment] = useState<ReceptionistTodayAppointment | null>(null)
+  const [timelineApptId, setTimelineApptId] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
+
+  const loadAppointments = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await axiosInstance.get('/receptionist/appointments', {
+        params: {
+          timeframe: 'today',
+          limit: 100,
+          status: status === 'all' || status === 'active' || status === 'changed' ? undefined : status,
+          search: query.trim() || undefined,
+        },
+      })
+      const rows = Array.isArray(response.data?.data) ? response.data.data : []
+      setAppointments(rows)
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.message || 'Không thể tải lịch hẹn hôm nay')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadAppointments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status])
+
+  const filteredAppointments = useMemo(() => {
+    let rows = appointments
+    if (status === 'active') rows = rows.filter((appointment) => appointment.status !== 'cancelled')
+    if (status === 'changed') rows = rows.filter((appointment) => Boolean(appointment.sua_gan_nhat) || appointment.status === 'cancelled')
+    return [...rows].sort((a, b) => b.gio_kham.localeCompare(a.gio_kham))
+  }, [appointments, status])
+
+  const summary = useMemo(() => ({
+    total: appointments.length,
+    waiting: appointments.filter((appointment) => appointment.status === 'confirmed' || appointment.status === 'pending').length,
+    checkedIn: appointments.filter((appointment) => appointment.status === 'checked_in').length,
+    changed: appointments.filter((appointment) => Boolean(appointment.sua_gan_nhat) || appointment.status === 'cancelled').length,
+  }), [appointments])
+
+  const handleCheckedIn = (
+    result: { hang_doi: { phong_kham?: string | null; ma_so_thu_tu?: string | null }; canh_bao: string[]; ten_benh_nhan: string },
+  ) => {
+    if (checkInAppointment) {
+      onTicketReady({
+        patientName: result.ten_benh_nhan,
+        doctorName: checkInAppointment.doctor_id?.user_id?.ho_ten || 'Chưa gán',
+        roomNumber: result.hang_doi.phong_kham || 'Chưa gán',
+        queueNumber: result.hang_doi.ma_so_thu_tu || '-',
+        appointmentTime: checkInAppointment.gio_kham,
+        serviceName: checkInAppointment.ten_dich_vu || undefined,
+      })
+    }
+    setNotice(`Đã check-in ${result.ten_benh_nhan}${result.hang_doi.ma_so_thu_tu ? ` - số thứ tự ${result.hang_doi.ma_so_thu_tu}` : ''}.`)
+    setCheckInAppointment(null)
+    void loadAppointments()
+    if (result.canh_bao.length) setError(result.canh_bao.join(' '))
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-slate-950">Lịch hẹn hôm nay</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+            Tab này dùng để xem tổng quan trong ngày, kiểm tra lịch vừa thay đổi và check-in nhanh khi khách online đến quầy.
+          </p>
+        </div>
+        <button type="button" onClick={loadAppointments} disabled={loading} className="min-h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+          {loading ? 'Đang tải...' : 'Làm mới'}
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold text-slate-500">Tổng lịch</p>
+          <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}</p>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold text-amber-700">Chưa đến</p>
+          <p className="mt-1 text-xl font-bold text-amber-950">{summary.waiting}</p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-xs font-semibold text-emerald-700">Đã check-in</p>
+          <p className="mt-1 text-xl font-bold text-emerald-950">{summary.checkedIn}</p>
+        </div>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+          <p className="text-xs font-semibold text-blue-700">Có thay đổi</p>
+          <p className="mt-1 text-xl font-bold text-blue-950">{summary.changed}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'active', label: 'Đang hoạt động' },
+            { key: 'confirmed', label: 'Chưa đến' },
+            { key: 'checked_in', label: 'Đã check-in' },
+            { key: 'changed', label: 'Có thay đổi' },
+            { key: 'all', label: 'Tất cả' },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setStatus(item.key as typeof status)}
+              className={`min-h-10 rounded-xl px-3 text-xs font-bold transition ${status === item.key ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <form className="flex min-w-0 flex-1 gap-2" onSubmit={(event) => { event.preventDefault(); void loadAppointments() }}>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Tìm tên, SĐT hoặc mã lịch"
+            className="min-h-10 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          />
+          <button type="submit" className="min-h-10 rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800">
+            Tìm
+          </button>
+        </form>
+      </div>
+
+      {(notice || error) && (
+        <div className="mt-4 grid gap-2">
+          {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">{notice}</p>}
+          {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-900">{error}</p>}
+        </div>
+      )}
+
+      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Giờ</th>
+                <th className="px-4 py-3">Bệnh nhân</th>
+                <th className="px-4 py-3">Bác sĩ</th>
+                <th className="px-4 py-3">Thanh toán / trạng thái</th>
+                <th className="px-4 py-3">Thay đổi</th>
+                <th className="px-4 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Đang tải lịch hẹn...</td></tr>
+              ) : filteredAppointments.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Không có lịch hẹn phù hợp.</td></tr>
+              ) : filteredAppointments.map((appointment) => {
+                const patientName = appointment.user_id?.ho_ten || appointment.ten_khach || 'Khách vãng lai'
+                const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
+                const canCheckIn = todayAppointmentIsCheckinable(appointment)
+                return (
+                  <tr key={appointment._id} className="align-top hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <p className="font-bold tabular-nums text-slate-950">{appointment.gio_kham}</p>
+                      <p className="mt-1 font-mono text-xs text-slate-400">{appointment.ma_lich_hen || appointment._id}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-slate-900">{patientName}</p>
+                      <p className="mt-1 text-xs text-slate-500">{patientPhone || 'Chưa có SĐT'}</p>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{appointment.doctor_id?.user_id?.ho_ten || 'Chưa gán'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-start gap-1.5">
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{paymentLabel(appointment.payment_status)}</span>
+                        <span className={`rounded-full px-2 py-1 text-xs font-bold ${appointmentStatusTone(appointment.status)}`}>{appointmentStatusLabel(appointment.status)}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {appointment.sua_gan_nhat ? (
+                        <button type="button" onClick={() => setTimelineApptId(appointment._id)} className="max-w-[220px] text-left text-xs font-semibold text-brand-700 hover:underline">
+                          {appointment.sua_gan_nhat.nhan} - {formatDateTime(appointment.sua_gan_nhat.thoi_diem)}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">Chưa có thay đổi</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setTimelineApptId(appointment._id)} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                          Lịch sử
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCheckInAppointment(appointment)}
+                          disabled={!canCheckIn || !patientPhone}
+                          className="min-h-9 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          title={!patientPhone ? 'Lịch chưa có số điện thoại để xác minh hồ sơ' : undefined}
+                        >
+                          Check-in
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {checkInAppointment && (
+        <CheckInVerifyModal
+          appointmentId={checkInAppointment._id}
+          maLichHen={checkInAppointment.ma_lich_hen}
+          searchPhone={checkInAppointment.user_id?.so_dien_thoai || checkInAppointment.so_dien_thoai_khach || ''}
+          onClose={() => setCheckInAppointment(null)}
+          onCheckedIn={handleCheckedIn}
+        />
+      )}
+
+      {timelineApptId && (
+        <TimelinePanel
+          loai="lich_hen"
+          id={timelineApptId}
+          title="Lịch sử thao tác lịch hẹn"
+          onClose={() => setTimelineApptId(null)}
+        />
+      )}
+    </section>
+  )
+}
+
 function DetailItem({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
     <div>
@@ -158,6 +431,7 @@ export default function PatientIntake() {
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
   const [searchPhoneError, setSearchPhoneError] = useState('')
   const [formErrors, setFormErrors] = useState<{ ho_ten?: string; ngay_sinh?: string }>({})
+  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'today'>('lookup')
 
   useEffect(() => {
     if (printData) window.print()
@@ -466,24 +740,40 @@ export default function PatientIntake() {
   const age = calcAge(selectedProfile?.ngay_sinh)
 
   return (
-    <div className="min-h-full bg-slate-50 p-4 text-slate-900 lg:p-6">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-brand-700">Tiếp nhận tại quầy</p>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Xác nhận đúng người, rồi mới mở thao tác tiếp theo</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                Số điện thoại có thể dùng chung cho nhiều hồ sơ. Màn hình này chỉ mở từng phần sau khi lễ tân hoàn tất bước trước đó.
-              </p>
-            </div>
+    <PageShell>
+        <ReceptionistHeader
+          eyebrow="Tiếp nhận & lịch hẹn"
+          title="Tra cứu trước, chọn đúng luồng sau"
+          description="Tab tra cứu là luồng chính khi khách đến quầy; tab lịch hẹn hôm nay dùng để xem tổng quan, kiểm tra thay đổi và check-in nhanh."
+          metrics={
             <div className="grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-3 lg:min-w-[560px]">
               <StepIndicator step={1} label="Tra số điện thoại" state={lookupState} />
               <StepIndicator step={2} label="Chọn hồ sơ" state={profileState} />
               <StepIndicator step={3} label="Khám/Check-in" state={actionState} />
             </div>
+          }
+        />
+
+        <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('lookup')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'lookup' ? 'bg-brand-700 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+            >
+              Tra cứu & tiếp nhận
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'lookup' ? 'text-brand-50' : 'text-slate-500'}`}>Nhập số điện thoại, kiểm tra hồ sơ, check-in online hoặc khám tại quầy</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('today')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'today' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+            >
+              Lịch hẹn hôm nay
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today' ? 'text-slate-200' : 'text-slate-500'}`}>Xem số lượng, trạng thái, thay đổi gần đây và check-in nhanh</span>
+            </button>
           </div>
-        </header>
+        </div>
 
         {(message || error) && (
           <div className="mb-4 grid gap-3">
@@ -492,6 +782,7 @@ export default function PatientIntake() {
           </div>
         )}
 
+        {workspaceTab === 'lookup' ? (
         <main className="grid gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.35fr)]">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
@@ -903,6 +1194,9 @@ export default function PatientIntake() {
             )}
           </section>
         </main>
+        ) : (
+          <TodayAppointmentTab onTicketReady={setPrintData} />
+        )}
 
         {editingProfile && (
           <ProfileAdminEditModal
@@ -942,7 +1236,6 @@ export default function PatientIntake() {
             </button>
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   )
 }

@@ -86,7 +86,13 @@ export const userService = {
   },
 
   // Thao tác hàng loạt trên nhiều người dùng
-  async batchAction(payload: { ids: string[]; action: 'lock' | 'unlock' | 'delete' | 'restore' | 'hard-delete'; ly_do?: string }): Promise<{ count: number }> {
+  async batchAction(payload: {
+    ids: string[]
+    action: 'lock' | 'unlock' | 'delete' | 'restore' | 'hard-delete'
+    ly_do?: string
+    confirm_text?: string
+    totp_code?: string
+  }): Promise<{ count: number }> {
     const { data } = await axios.post('/admin/users/batch', payload)
     return data.data
   },

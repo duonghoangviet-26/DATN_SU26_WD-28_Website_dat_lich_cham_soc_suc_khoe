@@ -8,6 +8,10 @@ body,
   height: 100%;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -15,10 +19,39 @@ html {
 body {
   margin: 0;
   font-family: 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background-color: #f7faf9;
+  background-color: #f8fafc;
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+dt,
+dd,
+td,
+th,
+button,
+a,
+span {
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p,
+li {
+  text-wrap: pretty;
 }
 
 ::selection {
@@ -32,6 +65,23 @@ input,
 textarea,
 select {
   -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
 }
 
 @keyframes rise-in {
@@ -66,13 +116,13 @@ select {
 @layer components {
   /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-brand-600 text-white shadow-sm hover:-translate-y-0.5 hover:bg-brand-700 active:translate-y-0 active:bg-brand-800;
+    @apply btn bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800;
   }
   .btn-secondary {
-    @apply btn border border-slate-300 bg-white text-slate-700 shadow-sm hover:-translate-y-0.5 hover:border-brand-300 hover:bg-brand-50 active:translate-y-0;
+    @apply btn border border-slate-300 bg-white text-slate-700 hover:border-brand-300 hover:bg-brand-50;
   }
   .btn-danger {
     @apply btn bg-red-500 text-white hover:bg-red-600 active:bg-red-700 shadow-sm;
@@ -86,7 +136,7 @@ select {
 
   /* Inputs */
   .input {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow duration-200 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+    @apply w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-shadow duration-200 placeholder:text-slate-500 focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
   }
   .input-label {
     @apply mb-1 block text-sm font-medium text-slate-700;
@@ -94,7 +144,7 @@ select {
 
   /* Cards */
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-card;
+    @apply rounded-lg border border-slate-200 bg-white shadow-card;
   }
   .card-hover {
     @apply card transition-shadow duration-200 hover:shadow-card-md;

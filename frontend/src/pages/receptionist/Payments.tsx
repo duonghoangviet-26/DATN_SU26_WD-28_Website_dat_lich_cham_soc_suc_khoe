@@ -15,6 +15,7 @@ import {
   BillingCase,
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
+import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI'
 
 type PaymentView = 'pending' | 'paid'
 type BillingScope = 'today' | 'all'
@@ -252,10 +253,14 @@ export default function Payments() {
 
   const summary = selected?.billing_summary
   const invoice = selected?.invoice ?? null
-  const isPaid = summary?.trang_thai_hoa_don === 'da_thanh_toan_du'
   const isCashierConfirmed = selected?.da_xac_nhan_thu_ngan === true || summary?.da_xac_nhan_thu_ngan === true
   const needsCashierConfirmation = Boolean(summary && !isCashierConfirmed)
-  const todayLabel = 'Thứ Bảy, 08/08/2026'
+  const todayLabel = new Date().toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
   const pendingCount = filteredCases.filter((item) => !item.billing_summary.da_xac_nhan_thu_ngan).length
   const transferCount = filteredCases.filter((item) => Boolean(item.pending_payment)).length
   const remainingTotal = filteredCases.reduce((sum, item) => sum + Number(item.billing_summary.con_phai_thu || 0), 0)
@@ -268,20 +273,13 @@ export default function Payments() {
         : `Tạo yêu cầu chuyển khoản ${money(summary.con_phai_thu)}`
 
   return (
-    <div className="min-h-full bg-slate-50 p-4 text-slate-900 lg:p-6">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-2xl">
-              <h1 className="text-[34px] font-bold leading-tight tracking-[-0.02em] text-slate-950">
-                Thanh toán tại quầy
-              </h1>
-              <p className="mt-2 text-sm leading-5 text-slate-500">
-                Tra cứu hóa đơn, đối chiếu khoản thu và xác nhận thanh toán.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[620px]">
+    <PageShell>
+        <ReceptionistHeader
+          eyebrow="Viện phí & hóa đơn"
+          title="Thanh toán tại quầy"
+          description="Tra cứu hóa đơn, đối chiếu khoản thu và xác nhận thanh toán."
+          metrics={
+            <div className="grid gap-3 sm:grid-cols-3">
               <MetricTile
                 label={scope === 'today' ? `Ca đang xem · ${todayLabel}` : 'Ca đang xem'}
                 value={`${pendingCount} ca`}
@@ -297,19 +295,19 @@ export default function Payments() {
                 tone="border-cyan-200 bg-cyan-50/80"
               />
             </div>
-          </div>
-        </header>
+          }
+        />
 
         {(message || error) && (
-          <div className="mb-4 grid gap-3">
+          <div className="grid gap-3">
             {message && <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">{message}</p>}
             {error && <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900">{error}</p>}
           </div>
         )}
 
-        <section className="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <label className="relative min-w-[280px] flex-1">
+            <label className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -448,7 +446,6 @@ export default function Payments() {
             </>
           )}
         </section>
-      </div>
 
       {selected && summary && (
         <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/20 backdrop-blur-[1px] print:hidden" onMouseDown={() => setSelected(null)}>
@@ -626,6 +623,6 @@ export default function Payments() {
           </aside>
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }
