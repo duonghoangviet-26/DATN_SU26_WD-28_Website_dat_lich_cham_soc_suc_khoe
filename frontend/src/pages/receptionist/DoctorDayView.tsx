@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DayOverview, DayOverviewDoctor, DayOverviewKhungRow, DoctorDayAppointment, receptionistBookingService } from '@/services/receptionist-booking.service'
 import { receptionistDoctorLeavesService, type PendingDoctorLeave } from '@/services/receptionist-doctor-leaves.service'
+import { DispatchSuggestion, OfflineQueueRow, receptionistOfflineQueueService } from '@/services/receptionist-offline-queue.service'
 import DoctorUnavailableModal from '@/components/receptionist/DoctorUnavailableModal'
 import DoctorLeaveApprovalModal from '@/components/receptionist/DoctorLeaveApprovalModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
-import { EmptyBlock, LoadingBlock, PageShell, Panel, ReceptionistHeader, StatusBadge } from '@/components/receptionist/ReceptionistUI'
+import { EmptyBlock, LoadingBlock, MetricCard, PageShell, Panel, ReceptionistHeader, StatusBadge } from '@/components/receptionist/ReceptionistUI'
 
 function today() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function isTodayDate(date: string) {
+  return date === today()
 }
 
 function dayStatusLabel(status: DayOverviewDoctor['trang_thai_ngay']) {
@@ -69,6 +74,10 @@ export default function DoctorDayView() {
   const [overview, setOverview] = useState<DayOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [offlineRows, setOfflineRows] = useState<OfflineQueueRow[]>([])
+  const [offlineSuggestions, setOfflineSuggestions] = useState<DispatchSuggestion[]>([])
+  const [offlineLoading, setOfflineLoading] = useState(false)
+  const [offlineError, setOfflineError] = useState('')
   const [selectedKhung, setSelectedKhung] = useState<SelectedKhung | null>(null)
   const [khungAppointments, setKhungAppointments] = useState<DoctorDayAppointment[]>([])
   const [khungLoading, setKhungLoading] = useState(false)
@@ -103,14 +112,55 @@ export default function DoctorDayView() {
       })
   }
 
+  const loadOfflineSignal = useCallback((onCancelledCheck?: () => boolean) => {
+    if (!isTodayDate(date)) {
+      setOfflineRows([])
+      setOfflineSuggestions([])
+      setOfflineError('')
+      setOfflineLoading(false)
+      return
+    }
+    setOfflineLoading(true)
+    setOfflineError('')
+    Promise.all([
+      receptionistOfflineQueueService.list({ status: 'cho_dieu_phoi,dang_cho' }),
+      receptionistOfflineQueueService.suggestions(),
+    ])
+      .then(([rows, suggestionResult]) => {
+        if (onCancelledCheck?.()) return
+        setOfflineRows(rows)
+        setOfflineSuggestions(suggestionResult.suggestions)
+      })
+      .catch((requestError) => {
+        if (!onCancelledCheck?.()) setOfflineError(requestError?.response?.data?.message || 'Không thể tải tín hiệu hàng đợi vãng lai')
+      })
+      .finally(() => {
+        if (!onCancelledCheck?.()) setOfflineLoading(false)
+      })
+  }, [date])
+
   useEffect(() => {
     let cancelled = false
     loadOverview(() => cancelled)
+    loadOfflineSignal(() => cancelled)
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date])
+  }, [date, loadOfflineSignal])
+
+  const offlineSignal = useMemo(() => {
+    const centralRows = offlineRows.filter((row) => row.trang_thai === 'cho_dieu_phoi')
+    const assignedRows = offlineRows.filter((row) => row.trang_thai === 'dang_cho')
+    const readySuggestions = offlineSuggestions.filter((item) => item.de_xuat_tot_nhat)
+    const byDoctor = new Map<string, DispatchSuggestion[]>()
+    for (const suggestion of readySuggestions) {
+      const doctorId = suggestion.de_xuat_tot_nhat?.doctor_id
+      if (!doctorId) continue
+      byDoctor.set(doctorId, [...(byDoctor.get(doctorId) ?? []), suggestion])
+    }
+    return { centralRows, assignedRows, readySuggestions, byDoctor }
+  }, [offlineRows, offlineSuggestions])
 
   const openKhung = async (doctorId: string, doctorName: string, row: DayOverviewKhungRow) => {
     setSelectedKhung({ doctorId, doctorName, row })
@@ -156,6 +206,41 @@ export default function DoctorDayView() {
         </div>
       )}
 
+      {isTodayDate(date) && (
+        <Panel
+          title="Tín hiệu hàng đợi vãng lai"
+          description="Dùng để cân nhanh bác sĩ nào có khoảng an toàn trước khi đưa khách vãng lai từ hàng đợi trung tâm vào phòng khám."
+          action={(
+            <button
+              type="button"
+              onClick={() => loadOfflineSignal()}
+              disabled={offlineLoading}
+              className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {offlineLoading ? 'Đang tải...' : 'Làm mới'}
+            </button>
+          )}
+        >
+          {offlineError && <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">{offlineError}</p>}
+          <div className="grid gap-3 md:grid-cols-3">
+            <MetricCard label="Chờ điều phối" value={offlineSignal.centralRows.length} tone={offlineSignal.centralRows.length ? 'warning' : 'default'} />
+            <MetricCard label="Đã gán bác sĩ" value={offlineSignal.assignedRows.length} tone="info" />
+            <MetricCard label="Có gợi ý an toàn" value={offlineSignal.readySuggestions.length} tone={offlineSignal.readySuggestions.length ? 'success' : 'default'} />
+          </div>
+          {offlineSignal.centralRows.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {offlineSignal.centralRows.slice(0, 6).map((row) => (
+                <span key={row.id} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-950">
+                  <span className="shrink-0">{row.ma_so_thu_tu || '-'}</span>
+                  <span className="min-w-0 truncate">{row.ten_benh_nhan}</span>
+                  <span className="shrink-0 text-amber-700">{row.specialty?.ten || 'Chưa rõ chuyên khoa'}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </Panel>
+      )}
+
       {error && <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
       {loading ? (
@@ -166,13 +251,22 @@ export default function DoctorDayView() {
         <div className="grid gap-4 xl:grid-cols-2">
           {overview.doctors.map((doctor) => {
             const leaveCuaBacSi = pendingLeaves.find((leave) => leave.bac_si_id === doctor.doctor_id)
+            const offlineChoBacSi = offlineSignal.byDoctor.get(doctor.doctor_id) ?? []
             return (
             <Panel key={doctor.doctor_id} bodyClassName="p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-base font-bold text-slate-900">{doctor.ten_bac_si}</p>
+                  {offlineChoBacSi.length > 0 && (
+                    <p className="mt-1 text-xs font-semibold text-emerald-700">
+                      Có {offlineChoBacSi.length} khách vãng lai phù hợp để điều phối khi phòng sẵn sàng
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {offlineChoBacSi.length > 0 && (
+                    <StatusBadge tone="success">{offlineChoBacSi.length} vãng lai sẵn sàng</StatusBadge>
+                  )}
                   <StatusBadge
                     tone={
                       doctor.trang_thai_ngay === 'lam_viec'
