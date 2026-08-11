@@ -90,7 +90,17 @@ async function findOrCreateDoctorUser() {
 
 async function findOrCreateDoctorProfile(userId) {
   let doc = await BacSi.findOne({ user_id: userId })
-  if (doc) return { doc, created: false }
+  if (doc) {
+    const repair = {}
+    if (doc.trang_thai_duyet !== 'approved') repair.trang_thai_duyet = 'approved'
+    if (doc.trang_thai !== 'active') repair.trang_thai = 'active'
+    if (doc.la_hien !== true) repair.la_hien = true
+    if (Object.keys(repair).length > 0) {
+      doc.set(repair)
+      await doc.save()
+    }
+    return { doc, created: false }
+  }
 
   // Tái sử dụng 1 chuyên khoa đã có sẵn (không tạo mới — đây là dữ liệu Admin quản lý)
   const specialty = await ChuyenKhoa.findOne({ ten: 'Tai Mũi Họng' }) || await ChuyenKhoa.findOne({})
@@ -108,6 +118,8 @@ async function findOrCreateDoctorProfile(userId) {
     phi_kham: 220000,
     tuoi_nhan_kham_tu: 0,
     trang_thai_duyet: 'approved',
+    trang_thai: 'active',
+    la_hien: true,
     phong_kham_mac_dinh: phongKhamMacDinh,
   })
   return { doc, created: true }
