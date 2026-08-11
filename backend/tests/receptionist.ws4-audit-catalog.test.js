@@ -9,9 +9,9 @@ import {
   nhomCuaHanhDong,
 } from '../src/services/receptionistAudit.service.js'
 
-test('WS-4 danh mục có đúng 10 hành động lễ tân', () => {
-  assert.equal(MA_HANH_DONG_LE_TAN.length, 10)
-  assert.equal(new Set(MA_HANH_DONG_LE_TAN).size, 10)
+test('WS-4 danh mục có đúng 15 hành động lễ tân', () => {
+  assert.equal(MA_HANH_DONG_LE_TAN.length, 15)
+  assert.equal(new Set(MA_HANH_DONG_LE_TAN).size, 15)
 })
 
 test('WS-4 mọi mã đều bắt đầu bằng LT_ và không quá 100 ký tự (giới hạn schema)', () => {

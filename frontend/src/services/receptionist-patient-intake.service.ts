@@ -66,6 +66,7 @@ export interface TodayAppointment {
 export interface ActiveQueue {
   id: string
   trang_thai: string
+  specialty_id?: string | null
   doctor_id?: string | null
   phong_kham?: string | null
   checkin_time: string
@@ -152,6 +153,44 @@ export interface CapacityEvidence {
   nguong_dung_walk_in_phut: number
   ket_luan: 'co_the_tiep_nhan' | 'tam_dung_qua_tai' | 'da_day_walk_in' | 'khong_co_lich_bac_si' | 'khong_co_khung_gan'
   ly_do: string
+}
+
+export interface CentralOfflineCapacity {
+  trang_thai: 'co_the_nhan' | 'canh_bao_day' | 'tam_dung_nhan'
+  co_the_nhan: boolean
+  can_xac_nhan_qua_tai: boolean
+  ly_do: string | null
+  specialty_id: string | null
+  checked_at: string
+  cau_hinh: {
+    maxOfflineWaitMinutes: number
+    offlineWarningWaitMinutes: number
+    maxCentralOfflineQueueSize: number
+    maxOfflinePerShiftPerSpecialty: number
+    minOnlineProtectionMinutes: number
+    dispatchBufferMinutes: number
+    shiftClosingBufferMinutes: number
+    offlineAgingMinutes: number
+    autoDispatchEnabled: boolean
+  }
+  thong_ke: {
+    so_khach_cho_trung_tam: number
+    suc_chua_trung_tam_con_lai: number
+    suc_chua_ca_con_lai: number
+    so_bac_si_co_lich: number
+    so_bac_si_co_the_dieu_phoi: number
+    thoi_gian_kham_trung_binh_phut: number
+    thoi_gian_cho_uoc_tinh_phut: number | null
+  }
+  minh_chung: {
+    bac_si_bi_bao_ve_online: string[]
+    tai_theo_bac_si: Array<{
+      doctor_id: string
+      bac_si?: string | null
+      tai_uoc_tinh_phut: number
+      ket_thuc_ca?: string | null
+    }>
+  }
 }
 
 export interface OfflineInvoice {
@@ -290,6 +329,33 @@ export const receptionistPatientIntakeService = {
   async getAvailability(): Promise<OfflineAvailability> {
     const response = await axiosInstance.get<ApiResponse<OfflineAvailability>>('/receptionist/patient-intake/availability')
     return response.data.data as OfflineAvailability
+  },
+
+  async getCentralOfflineCapacity(specialtyId: string): Promise<CentralOfflineCapacity> {
+    const response = await axiosInstance.get<ApiResponse<CentralOfflineCapacity>>('/receptionist/offline-queue/capacity', {
+      params: { specialty_id: specialtyId },
+    })
+    return response.data.data as CentralOfflineCapacity
+  },
+
+  async intakeCentralOffline(payload: {
+    ho_so_benh_nhan_id: string
+    specialty_id: string
+    xac_nhan_canh_bao?: boolean
+  }) {
+    const response = await axiosInstance.post<ApiResponse<{
+      entry: {
+        _id: string
+        trang_thai: 'cho_dieu_phoi'
+        checkin_time?: string
+        so_thu_tu_checkin?: number | null
+        ma_so_thu_tu?: string | null
+        thoi_gian_cho_uoc_tinh_phut?: number | null
+      }
+      capacity: CentralOfflineCapacity
+      phieu_cho: { ma_so_thu_tu?: string | null; trang_thai: string; thong_bao: string }
+    }>>('/receptionist/offline-queue/intake', payload)
+    return response.data.data
   },
 
   async checkIn(payload: { ho_so_benh_nhan_id: string; schedule_id: string; slot_id: string }) {

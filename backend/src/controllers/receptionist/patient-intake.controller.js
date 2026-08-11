@@ -6,6 +6,10 @@ import {
   layKhaNangTiepNhanTaiQuay,
   tiepNhanHoSoVaoHangDoi,
 } from '../../services/offlineIntake.service.js'
+import {
+  tinhSucChuaHangDoiOfflineTrungTam,
+  tiepNhanOfflineVaoHangDoiTrungTam,
+} from '../../services/centralOfflineQueue.service.js'
 import { layDongSuaGanNhatChoNhieuHoSo } from '../../services/receptionistTimeline.service.js'
 
 function normalizePhone(value) {
@@ -407,8 +411,8 @@ export const searchPatientProfiles = async (req, res) => {
         ? HangDoi.find({
             ho_so_benh_nhan_id: { $in: profileIds },
             checkin_time: { $gte: start, $lt: end },
-            trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu'] },
-        }).select('_id ho_so_benh_nhan_id appointment_id trang_thai doctor_id phong_kham gio_hen_goc checkin_time so_thu_tu_checkin ma_so_thu_tu').lean()
+            trang_thai: { $in: ['cho_dieu_phoi', 'dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu'] },
+        }).select('_id ho_so_benh_nhan_id appointment_id trang_thai specialty_id doctor_id phong_kham gio_hen_goc checkin_time so_thu_tu_checkin ma_so_thu_tu').lean()
         : [],
       accountIds.length
         ? appointmentPopulate(LichHen.find({
@@ -450,6 +454,7 @@ export const searchPatientProfiles = async (req, res) => {
         ? {
             id: String(queue._id),
             trang_thai: queue.trang_thai,
+            specialty_id: queue.specialty_id ? String(queue.specialty_id) : null,
             doctor_id: queue.doctor_id ? String(queue.doctor_id) : null,
             phong_kham: queue.phong_kham ?? null,
             checkin_time: queue.checkin_time,
@@ -623,6 +628,36 @@ export const getOfflineAvailability = async (req, res) => {
       specialtyId: req.query.specialty_id ?? null,
     })
     return ok(res, data)
+  } catch (error) {
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
+export const getCentralOfflineCapacity = async (req, res) => {
+  try {
+    const data = await tinhSucChuaHangDoiOfflineTrungTam({
+      specialtyId: req.query.specialty_id ?? null,
+      includeNewPatient: String(req.query.include_new_patient ?? 'true') !== 'false',
+    })
+    return ok(res, data)
+  } catch (error) {
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
+export const intakeCentralOfflineQueue = async (req, res) => {
+  try {
+    const result = await tiepNhanOfflineVaoHangDoiTrungTam({
+      hoSoBenhNhanId: req.body.ho_so_benh_nhan_id,
+      specialtyId: req.body.specialty_id,
+      bacSiUuTienId: req.body.bac_si_uu_tien_id ?? null,
+      lyDoUuTien: req.body.ly_do_uu_tien ?? null,
+      mucUuTienTiepNhan: req.body.muc_uu_tien_tiep_nhan ?? 'binh_thuong',
+      xacNhanCanhBao: Boolean(req.body.xac_nhan_canh_bao),
+      actorUserId: req.user?._id ?? req.user?.id ?? null,
+      actorRole: 'receptionist',
+    })
+    return created(res, result, 'Da tiep nhan khach vang lai vao hang doi trung tam')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }

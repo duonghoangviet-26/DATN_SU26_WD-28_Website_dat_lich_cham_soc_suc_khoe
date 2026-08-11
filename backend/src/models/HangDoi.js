@@ -115,6 +115,13 @@ const queueSchema = new mongoose.Schema(
     // Điều phối — KHÔNG lưu thu_tu (thứ tự đổi liên tục, tính động lúc query)
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', required: true },
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
+    bac_si_uu_tien_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
+    ly_do_uu_tien: { type: String, default: null, maxlength: 500 },
+    muc_uu_tien_tiep_nhan: {
+      type: String,
+      enum: ['binh_thuong', 'uu_tien', 'cap_cuu', null],
+      default: 'binh_thuong',
+    },
     phong_kham: { type: String, default: null },
     schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', default: null },
     slot_id: { type: mongoose.Schema.Types.ObjectId, default: null },
@@ -139,10 +146,22 @@ const queueSchema = new mongoose.Schema(
     // nay — chi mo enum truoc, wiring workflow la tinh nang rieng, ngoai pham vi plan nay.
     trang_thai: {
       type: String,
-      enum: ['dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu', 'skipped', 'cancelled', 'hoan_thanh'],
+      enum: ['cho_dieu_phoi', 'dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu', 'skipped', 'cancelled', 'hoan_thanh'],
       default: 'dang_cho',
     },
     checkin_time: { type: Date, required: true },
+    thoi_diem_vao_hang_doi_trung_tam: { type: Date, default: null },
+    thoi_diem_duoc_dieu_phoi: { type: Date, default: null },
+    so_lan_dieu_phoi: { type: Number, default: 0, min: 0 },
+    dieu_phoi_cuoi: {
+      doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
+      schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', default: null },
+      slot_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+      phong_kham: { type: String, default: null },
+      thoi_diem: { type: Date, default: null },
+      nguoi_dieu_phoi_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
+      ly_do: { type: String, default: null, maxlength: 500 },
+    },
     so_lan_goi: { type: Number, default: 0, min: 0 },
     thoi_diem_goi: { type: Date, default: null },
     thoi_diem_vao_phong: { type: Date, default: null },
@@ -167,10 +186,25 @@ queueSchema.pre('validate', function () {
   if (this.nguon === 'offline' && !this.so_dien_thoai) {
     throw new Error('Hang doi offline bat buoc co so_dien_thoai')
   }
+  if (this.trang_thai === 'cho_dieu_phoi' && this.nguon !== 'offline') {
+    throw new Error('Chi luot offline moi duoc o trang thai cho_dieu_phoi')
+  }
+  if (this.trang_thai === 'cho_dieu_phoi') {
+    this.doctor_id = null
+    this.phong_kham = null
+    this.schedule_id = null
+    this.slot_id = null
+    this.khung_index = null
+    this.gio_hen_goc = null
+    this.thoi_diem_vao_hang_doi_trung_tam ??= this.checkin_time
+  }
 })
 
 queueSchema.index({ doctor_id: 1, trang_thai: 1 })
 queueSchema.index({ specialty_id: 1, trang_thai: 1 })
+queueSchema.index({ nguon: 1, trang_thai: 1, thoi_diem_vao_hang_doi_trung_tam: 1 })
+queueSchema.index({ specialty_id: 1, nguon: 1, trang_thai: 1, checkin_time: 1 })
+queueSchema.index({ bac_si_uu_tien_id: 1, trang_thai: 1 })
 queueSchema.index({ appointment_id: 1 }, { unique: true, sparse: true })
 queueSchema.index(
   { ngay_checkin_key: 1, so_thu_tu_checkin: 1 },

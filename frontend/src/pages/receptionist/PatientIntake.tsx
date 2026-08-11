@@ -1,13 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import {
-  CapacityEvidence,
-  OfflineAvailability,
+  CentralOfflineCapacity,
   OnlineAccount,
   PatientProfile,
   TodayAppointment,
   getUnlinkedAccountAppointments,
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
+import { SpecialtyOption, specialtyService } from '@/services/specialty.service'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
@@ -90,38 +90,6 @@ function paymentLabel(status: string) {
 
 function appointmentStatusLabel(status: string) {
   return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã tiếp nhận', in_progress: 'Đang khám', completed: 'Hoàn thành', cancelled: 'Đã hủy', no_show: 'Không đến' } as Record<string, string>)[status] ?? status
-}
-
-function capacityLabel(row: CapacityEvidence) {
-  return ({
-    co_the_tiep_nhan: 'Có thể tiếp nhận',
-    tam_dung_qua_tai: 'Tạm ngưng tiếp nhận',
-    da_day_walk_in: 'Đã hết suất tiếp nhận',
-    khong_co_lich_bac_si: 'Không có lịch bác sĩ',
-    khong_co_khung_gan: 'Ngoài giờ tiếp nhận',
-  } as Record<string, string>)[row.ket_luan] ?? row.ket_luan
-}
-
-function capacityTone(row: CapacityEvidence) {
-  if (row.ket_luan === 'co_the_tiep_nhan') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
-  if (row.ket_luan === 'tam_dung_qua_tai') return 'border-amber-200 bg-amber-50 text-amber-800'
-  return 'border-slate-200 bg-slate-50 text-slate-700'
-}
-
-function availabilityLabel(status: OfflineAvailability['trang_thai_kiem_tra']) {
-  return ({
-    co_the_tiep_nhan: 'Có thể tiếp nhận',
-    tam_dung_qua_tai: 'Tạm ngưng tiếp nhận do ca khám đang trễ',
-    da_day_walk_in: 'Đã hết suất tiếp nhận trong khung khám',
-    khong_co_lich_bac_si: 'Không có lịch bác sĩ hợp lệ',
-    khong_co_khung_gan: 'Hiện không trong giờ tiếp nhận',
-  } as Record<string, string>)[status] ?? 'Chưa thể đánh giá khả năng tiếp nhận'
-}
-
-function availabilityTone(status: OfflineAvailability['trang_thai_kiem_tra']) {
-  if (status === 'co_the_tiep_nhan') return 'border-emerald-200 bg-emerald-50 text-emerald-900'
-  if (status === 'tam_dung_qua_tai') return 'border-amber-200 bg-amber-50 text-amber-900'
-  return 'border-slate-200 bg-slate-50 text-slate-800'
 }
 
 function appointmentIsCheckinable(appointment: TodayAppointment) {
@@ -422,8 +390,10 @@ export default function PatientIntake() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [availability, setAvailability] = useState<OfflineAvailability | null>(null)
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
+  const [centralCapacity, setCentralCapacity] = useState<CentralOfflineCapacity | null>(null)
+  const [specialties, setSpecialties] = useState<SpecialtyOption[]>([])
+  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('')
+  const [confirmLongWait, setConfirmLongWait] = useState(false)
   const [checkingIn, setCheckingIn] = useState(false)
   const [editingProfile, setEditingProfile] = useState<PatientProfile | null>(null)
   const [auditProfileId, setAuditProfileId] = useState<string | null>(null)
@@ -439,25 +409,16 @@ export default function PatientIntake() {
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedId) ?? null
   const selectedAppointment = selectedProfile?.lich_hen_hom_nay.find((appointment) => appointment.id === selectedAppointmentId) ?? null
-  const selectedSlot = availability?.slots.find((slot) => slot.slot_id === selectedSlotId) ?? null
   const hasAppointmentToday = Boolean(selectedProfile?.lich_hen_hom_nay.length)
   const hasActiveQueue = Boolean(selectedProfile?.luot_dang_cho_hom_nay)
   const unlinkedAccountAppointments = getUnlinkedAccountAppointments(profiles, accountAppointments)
 
-  const capacitySummary = useMemo(() => {
-    if (!availability) return null
-    const rows = availability.minh_chung_suc_chua || []
-    return {
-      availableDoctors: rows.filter((row) => row.ket_luan === 'co_the_tiep_nhan').length,
-      availableSlots: rows.reduce((total, row) => total + row.walk_in_con_lai, 0),
-    }
-  }, [availability])
-
   const latestAllowedBirthDateInput = getLatestAllowedBirthDateInput()
 
   const clearDecision = () => {
-    setAvailability(null)
-    setSelectedSlotId(null)
+    setCentralCapacity(null)
+    setSelectedSpecialtyId('')
+    setConfirmLongWait(false)
     setSelectedAppointmentId(null)
     setMode('idle')
   }
@@ -571,15 +532,36 @@ export default function PatientIntake() {
     setError('')
     setMessage('')
     setMode('walk_in')
-    setAvailability(null)
-    setSelectedSlotId(null)
+    setCentralCapacity(null)
+    setConfirmLongWait(false)
     try {
-      const result = await receptionistPatientIntakeService.getAvailability()
-      setAvailability(result)
-      setSelectedSlotId(result.slot_de_xuat?.slot_id || result.slots[0]?.slot_id || null)
-      if (!result.slots.length) setMessage(result.thong_bao || 'Hiện chưa thể tiếp nhận người bệnh chưa có lịch hẹn')
+      const specialtyRows = specialties.length ? specialties : await specialtyService.getAllActive()
+      setSpecialties(specialtyRows)
+      const specialtyId = selectedSpecialtyId || specialtyRows[0]?.id || ''
+      setSelectedSpecialtyId(specialtyId)
+      if (!specialtyId) {
+        setMessage('Chua co chuyen khoa dang hoat dong de tiep nhan khach vang lai.')
+        return
+      }
+      const result = await receptionistPatientIntakeService.getCentralOfflineCapacity(specialtyId)
+      setCentralCapacity(result)
+      if (!result.co_the_nhan) setMessage(result.ly_do || 'Tam dung nhan khach vang lai cho chuyen khoa nay.')
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Không thể xác minh sức chứa. Chưa thể kết luận phòng khám đã hết chỗ.')
+      setError(requestError?.response?.data?.message || 'Khong the xac minh suc chua hang doi trung tam.')
+    }
+  }
+
+  const changeWalkInSpecialty = async (specialtyId: string) => {
+    setSelectedSpecialtyId(specialtyId)
+    setCentralCapacity(null)
+    setConfirmLongWait(false)
+    if (!specialtyId) return
+    try {
+      const result = await receptionistPatientIntakeService.getCentralOfflineCapacity(specialtyId)
+      setCentralCapacity(result)
+      setMessage(result.co_the_nhan ? '' : result.ly_do || 'Tam dung nhan khach vang lai cho chuyen khoa nay.')
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.message || 'Khong the cap nhat suc chua chuyen khoa.')
     }
   }
 
@@ -691,29 +673,28 @@ export default function PatientIntake() {
   }
 
   const checkInWalkIn = async () => {
-    if (!selectedProfile || !selectedSlot) return
+    if (!selectedProfile || !selectedSpecialtyId || !centralCapacity) return
     setCheckingIn(true)
     setError('')
     try {
-      const result = await receptionistPatientIntakeService.checkIn({
+      const result = await receptionistPatientIntakeService.intakeCentralOffline({
         ho_so_benh_nhan_id: selectedProfile.id,
-        schedule_id: selectedSlot.schedule_id,
-        slot_id: selectedSlot.slot_id,
+        specialty_id: selectedSpecialtyId,
+        xac_nhan_canh_bao: confirmLongWait,
       })
-      setAvailability(null)
-      setSelectedSlotId(null)
+      setCentralCapacity(null)
+      setConfirmLongWait(false)
       setMessage(`Đã tiếp nhận walk-in ${selectedProfile.ho_ten} vào hàng đợi khám. Số thứ tự: ${result.entry.ma_so_thu_tu || result.entry._id}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
-        ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'dang_cho', doctor_id: String(result.slot.doctor_id), phong_kham: result.slot.phong_kham, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
+        ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'cho_dieu_phoi', specialty_id: selectedSpecialtyId, doctor_id: null, phong_kham: null, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
         : profile))
 
-      const doctorName = availability?.minh_chung_suc_chua.find((row) => row.doctor_id === selectedSlot.doctor_id)?.bac_si || 'Chưa gán'
       setPrintData({
         patientName: selectedProfile.ho_ten,
-        doctorName,
-        roomNumber: result.slot.phong_kham || 'Chưa gán',
+        doctorName: 'Cho dieu phoi',
+        roomNumber: 'Cho dieu phoi',
         queueNumber: result.entry.ma_so_thu_tu || '-',
-        appointmentTime: selectedSlot.gio_bat_dau,
+        appointmentTime: result.entry.thoi_gian_cho_uoc_tinh_phut ? `Uoc tinh ${result.entry.thoi_gian_cho_uoc_tinh_phut} phut` : 'Cho dieu phoi',
       })
 
       setPhone('')
@@ -1089,107 +1070,99 @@ export default function PatientIntake() {
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <h4 className="text-base font-bold text-slate-950">Khám bệnh ngay</h4>
-                        <p className="mt-1 text-sm text-slate-600">Chỉ hiển thị bác sĩ/khung khám còn có thể tiếp nhận để lễ tân chọn nhanh.</p>
+                        <h4 className="text-base font-bold text-slate-950">Khach vang lai - hang doi trung tam</h4>
+                        <p className="mt-1 text-sm text-slate-600">Le tan chon chuyen khoa, kiem tra suc chua, roi dua khach vao hang doi cho dieu phoi bac si.</p>
                       </div>
                       <button type="button" onClick={loadAvailability} disabled={hasActiveQueue} className="min-h-10 rounded-xl border border-brand-300 px-4 text-sm font-bold text-brand-800 hover:bg-brand-50 disabled:opacity-60">
-                        Kiểm tra lại
+                        Kiem tra lai
                       </button>
                     </div>
 
-                    {!availability && (
+                    <label className="mt-4 block text-sm font-bold text-slate-800">
+                      Chuyen khoa can kham
+                      <select
+                        value={selectedSpecialtyId}
+                        onChange={(event) => void changeWalkInSpecialty(event.target.value)}
+                        disabled={hasActiveQueue || checkingIn}
+                        className="mt-1.5 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:opacity-60"
+                      >
+                        <option value="">Chon chuyen khoa</option>
+                        {specialties.map((specialty) => (
+                          <option key={specialty.id} value={specialty.id}>{specialty.ten}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {!centralCapacity && (
                       <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
-                        Đang chờ dữ liệu lịch làm việc và hàng đợi bác sĩ.
+                        Chon chuyen khoa de kiem tra suc chua hang doi trung tam.
                       </div>
                     )}
 
-                    {availability && (
+                    {centralCapacity && (
                       <>
-                        <div className={`mt-4 rounded-xl border p-4 ${availabilityTone(availability.trang_thai_kiem_tra)}`}>
+                        <div className={`mt-4 rounded-xl border p-4 ${
+                          centralCapacity.trang_thai === 'co_the_nhan'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                            : centralCapacity.trang_thai === 'canh_bao_day'
+                              ? 'border-amber-200 bg-amber-50 text-amber-950'
+                              : 'border-rose-200 bg-rose-50 text-rose-950'
+                        }`}>
                           <p className="font-bold">
-                            {availability.trang_thai_kiem_tra === 'co_the_tiep_nhan'
-                              ? `${availabilityLabel(availability.trang_thai_kiem_tra)} - ${capacitySummary?.availableDoctors || 0} bác sĩ, còn ${capacitySummary?.availableSlots || 0} suất`
-                              : availabilityLabel(availability.trang_thai_kiem_tra)}
+                            {centralCapacity.trang_thai === 'co_the_nhan'
+                              ? 'Co the tiep nhan'
+                              : centralCapacity.trang_thai === 'canh_bao_day'
+                                ? 'Hang doi dang day - can bao truoc voi khach'
+                                : 'Tam dung tiep nhan'}
                           </p>
-                          <p className="mt-1 text-xs opacity-80">Kiểm tra lúc {formatDateTime(availability.checked_at)}</p>
+                          {centralCapacity.ly_do && <p className="mt-1 text-sm">{centralCapacity.ly_do}</p>}
+                          <p className="mt-2 text-xs opacity-80">Kiem tra luc {formatDateTime(centralCapacity.checked_at)}</p>
                         </div>
 
-                        {availability.slot_de_xuat && (
-                          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4">
-                            <p className="text-sm font-bold text-brand-950">Đề xuất gần nhất</p>
-                            <p className="mt-1 text-base font-bold text-slate-950">
-                              {availability.minh_chung_suc_chua.find((row) => row.doctor_id === availability.slot_de_xuat?.doctor_id)?.bac_si || 'Bác sĩ đang trực'} - {availability.slot_de_xuat.gio_bat_dau}-{availability.slot_de_xuat.gio_ket_thuc}
-                            </p>
-                            <p className="mt-1 text-sm text-brand-800">{availability.slot_de_xuat.phong_kham || 'Phòng sẽ được điều phối'} - {availability.ly_do_de_xuat}</p>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-semibold text-slate-500">Dang cho trung tam</p>
+                            <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.so_khach_cho_trung_tam}</p>
                           </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-semibold text-slate-500">Bac si co the dieu phoi</p>
+                            <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.so_bac_si_co_the_dieu_phoi}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-semibold text-slate-500">Cho uoc tinh</p>
+                            <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.thoi_gian_cho_uoc_tinh_phut ?? '-'}'</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-semibold text-slate-500">Con nhan</p>
+                            <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.suc_chua_trung_tam_con_lai}</p>
+                          </div>
+                        </div>
+
+                        {centralCapacity.can_xac_nhan_qua_tai && (
+                          <label className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-950">
+                            <input
+                              type="checkbox"
+                              checked={confirmLongWait}
+                              onChange={(event) => setConfirmLongWait(event.target.checked)}
+                              className="mt-1 h-4 w-4 rounded border-amber-300 text-amber-700 focus:ring-amber-500"
+                            />
+                            <span>Da thong bao thoi gian cho uoc tinh cho khach va khach dong y tiep tuc cho dieu phoi.</span>
+                          </label>
                         )}
 
-                        {availability.slots.length > 0 && !hasActiveQueue && (
-                          <>
-                            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                              {availability.slots.map((slot) => {
-                                const doctor = availability.minh_chung_suc_chua.find((row) => row.doctor_id === slot.doctor_id)
-                                return (
-                                  <button
-                                    key={slot.slot_id}
-                                    type="button"
-                                    onClick={() => setSelectedSlotId(slot.slot_id)}
-                                    className={`rounded-xl border p-4 text-left transition ${selectedSlotId === slot.slot_id ? 'border-brand-600 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300'}`}
-                                  >
-                                    <p className="text-base font-bold text-slate-950">{doctor?.bac_si || 'Bác sĩ đang trực'}</p>
-                                    <p className="mt-1 text-sm text-slate-600">{slot.gio_bat_dau}-{slot.gio_ket_thuc} - {slot.phong_kham || doctor?.phong_mac_dinh || 'Chưa gán phòng'}</p>
-                                    <p className="mt-2 text-xs font-semibold text-slate-500">Đang chờ: {doctor?.dang_cho ?? 0}{doctor && doctor.do_tre_phut > 0 ? ` - trễ ${doctor.do_tre_phut} phút` : ''}</p>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                            {selectedSlot && (
-                              <button type="button" onClick={checkInWalkIn} disabled={checkingIn} className="mt-4 min-h-12 w-full rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60">
-                                {checkingIn ? 'Đang giữ suất khám...' : `Xác nhận khám bệnh cho ${selectedProfile.ho_ten}`}
-                              </button>
-                            )}
-                          </>
-                        )}
-
-                        {availability.minh_chung_suc_chua?.length > 0 && (
-                          <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <summary className="cursor-pointer text-sm font-bold text-slate-700">Xem chi tiết tải bác sĩ</summary>
-                            <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                              <table className="min-w-full text-left text-xs">
-                                <thead className="bg-slate-50 text-slate-500">
-                                  <tr>
-                                    <th className="px-3 py-3 font-bold">Bác sĩ / khung khám</th>
-                                    <th className="px-3 py-3 font-bold">Online</th>
-                                    <th className="px-3 py-3 font-bold">Walk-in</th>
-                                    <th className="px-3 py-3 font-bold">Hàng đợi</th>
-                                    <th className="px-3 py-3 font-bold">Đánh giá</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {availability.minh_chung_suc_chua.map((row) => (
-                                    <tr key={`${row.schedule_id}-${row.doctor_id}`}>
-                                      <td className="px-3 py-3"><p className="font-bold text-slate-800">{row.bac_si}</p><p className="mt-1 text-slate-500">{row.khung_gan_nhat ? `${row.khung_gan_nhat.gio_bat_dau}-${row.khung_gan_nhat.gio_ket_thuc}` : 'Không có khung gần'}</p></td>
-                                      <td className="px-3 py-3 text-slate-700">{row.online_da_dat}/{row.tong_slot_trong_khung}</td>
-                                      <td className="px-3 py-3"><span className="font-bold text-slate-800">{row.walk_in_con_lai}</span><span className="text-slate-500">/{row.walk_in_tong}</span></td>
-                                      <td className="px-3 py-3 text-slate-700">{row.dang_cho} {row.do_tre_phut > 0 ? `(+${row.do_tre_phut}')` : ''}</td>
-                                      <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-2 py-1 font-bold ${capacityTone(row)}`}>{capacityLabel(row)}</span></td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </details>
-                        )}
-
-                        {availability.goi_y_quay_lai && (
-                          <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                            Có thể tiếp nhận lại: <strong>{availability.goi_y_quay_lai.gio_bat_dau}-{availability.goi_y_quay_lai.gio_ket_thuc}</strong>.
-                          </p>
-                        )}
+                        <button
+                          type="button"
+                          onClick={checkInWalkIn}
+                          disabled={checkingIn || hasActiveQueue || !centralCapacity.co_the_nhan || (centralCapacity.can_xac_nhan_qua_tai && !confirmLongWait)}
+                          className="mt-4 min-h-12 w-full rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {checkingIn ? 'Dang dua vao hang doi...' : `Dua ${selectedProfile.ho_ten} vao hang doi trung tam`}
+                        </button>
                       </>
                     )}
                   </div>
                 )}
+
               </div>
             )}
           </section>
