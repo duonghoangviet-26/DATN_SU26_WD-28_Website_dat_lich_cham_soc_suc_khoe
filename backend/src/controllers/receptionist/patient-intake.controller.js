@@ -663,6 +663,9 @@ export const intakeCentralOfflineQueue = async (req, res) => {
   }
 }
 
+// Mô hình walk-in CŨ (claim slot ngay, không qua hàng đợi trung tâm) — xem chú thích đầy đủ
+// ở `tiepNhanHoSoVaoHangDoi()` trong `offlineIntake.service.js`. UI hiện tại dùng
+// `intakeCentralOfflineQueue` bên dưới; hàm này giữ lại vì vẫn có `test:e2e:offline` phụ thuộc.
 export const checkInPatientProfile = async (req, res) => {
   try {
     const result = await tiepNhanHoSoVaoHangDoi({
