@@ -566,7 +566,17 @@ export async function layGoiYDieuPhoiOffline({
 
   const suggestions = []
   for (const entry of entries.slice(0, 20)) {
-    const candidates = await layUngVienBacSiChoDieuPhoi(entry, now)
+    // `entry.specialty_id`/`bac_si_uu_tien_id` da bi populate() thanh object {_id, ten}
+    // o tren de phuc vu hien thi ben duoi. Neu truyen thang entry nay vao
+    // layUngVienBacSiChoDieuPhoi(), moi so sanh String(specialtyId) trong slotPhuHop se
+    // ra "[object Object]" va KHONG BAO GIO khop — goi y dieu phoi luon rong. Phai go lai
+    // ve ObjectId thuan truoc khi dua vao logic ghep bac si.
+    const rawEntry = {
+      ...entry,
+      specialty_id: entry.specialty_id?._id ?? entry.specialty_id,
+      bac_si_uu_tien_id: entry.bac_si_uu_tien_id?._id ?? entry.bac_si_uu_tien_id,
+    }
+    const candidates = await layUngVienBacSiChoDieuPhoi(rawEntry, now)
     suggestions.push({
       queue_id: String(entry._id),
       ten_benh_nhan: entry.ten_benh_nhan,
