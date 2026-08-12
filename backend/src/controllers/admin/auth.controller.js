@@ -655,7 +655,7 @@ export async function updateOnboarding(req, res) {
 export async function getProfile(req, res) {
   try {
     const user = await NguoiDung.findOne({ _id: req.user.id, ngay_xoa: null }).lean()
-    if (!user) return fail(res, 404, 'TÃ i khoáº£n khÃ´ng tá»“n táº¡i')
+    if (!user) return fail(res, 404, 'Tài khoản không tồn tại')
     const profile = await HoSoBenhNhan.findOne({ tai_khoan_id: user._id, trang_thai: 'active' })
       .select('ngay_sinh gioi_tinh nhom_mau di_ung benh_nen dia_chi ghi_chu')
       .lean()
@@ -678,7 +678,7 @@ export async function getProfile(req, res) {
       ghi_chu: profile?.ghi_chu ?? null,
     })
   } catch (err) {
-    return fail(res, 500, 'Lá»—i táº£i há»“ sÆ¡: ' + err.message)
+    return fail(res, 500, 'Lỗi tải hồ sơ: ' + err.message)
   }
 }
 

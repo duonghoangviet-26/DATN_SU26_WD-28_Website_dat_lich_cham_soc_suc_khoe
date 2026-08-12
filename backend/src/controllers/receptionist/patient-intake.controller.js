@@ -509,7 +509,7 @@ export const createPatientProfile = async (req, res) => {
     }
 
     if (nhom_mau && !['A', 'B', 'AB', 'O'].includes(nhom_mau)) {
-      return fail(res, 400, 'NhÃ³m mÃ¡u khÃ´ng há»£p lá»‡')
+      return fail(res, 400, 'Nhóm máu không hợp lệ')
     }
 
     if (ngay_sinh && Number.isNaN(new Date(ngay_sinh).getTime())) {

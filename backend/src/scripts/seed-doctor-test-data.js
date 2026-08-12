@@ -560,11 +560,11 @@ async function main() {
       existingRx.doctor_id = docId
       existingRx.items = [{
         ten_thuoc: '(TEST) Paracetamol 500mg',
-        lieu_luong: '1 viÃªn',
-        tan_suat: '3 láº§n/ngÃ y',
+        lieu_luong: '1 viên',
+        tan_suat: '3 lần/ngày',
         gio_uong: ['07:00', '12:00', '19:00'],
         so_ngay: 5,
-        ghi_chu: 'Uá»‘ng sau Äƒn (dá»¯ liá»‡u test)',
+        ghi_chu: 'Uống sau ăn (dữ liệu test)',
       }]
       await existingRx.save()
       bump('existed', 'prescription')
