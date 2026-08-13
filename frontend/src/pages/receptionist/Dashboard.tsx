@@ -486,7 +486,7 @@ export default function Dashboard() {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-sm font-bold text-slate-700">
-                        {apt.user_id?.ho_ten || apt.ten_khach || 'Khách vãng lai'}
+                        {apt.ten_khach || apt.user_id?.ho_ten || 'Khách vãng lai'}
                       </p>
                       <p className="text-xs text-slate-500 font-medium flex items-center gap-1">
                         <Icon name="calendar" className="w-3 h-3" />
@@ -505,10 +505,10 @@ export default function Dashboard() {
                       {/* Tooltip */}
                       {activeTooltip === apt._id && (
                         <div className="absolute right-0 top-8 w-56 bg-slate-800 text-white text-xs rounded shadow-lg p-3 z-10">
-                          <p className="mb-1"><span className="text-slate-400">Khám:</span> {apt.user_id?.ho_ten || apt.ten_khach}</p>
+                          <p className="mb-1"><span className="text-slate-400">Khám:</span> {apt.ten_khach || apt.user_id?.ho_ten}</p>
                           <p className="mb-1"><span className="text-slate-400">Đặt hộ:</span> {apt.nguoi_dat_ho_ten || 'Không'}</p>
                           <p className="mt-2 font-bold text-brand-400 flex items-center gap-1">
-                            📞 {apt.user_id?.so_dien_thoai || apt.so_dien_thoai_khach || apt.nguoi_dat_sdt || 'Chưa cập nhật'}
+                            📞 {apt.so_dien_thoai_khach || apt.user_id?.so_dien_thoai || apt.nguoi_dat_sdt || 'Chưa cập nhật'}
                           </p>
                         </div>
                       )}
