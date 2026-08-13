@@ -428,6 +428,10 @@ export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new
             buoc_hien_tai: 'hoan_tat',
             nguoi_xac_nhan_id: doctorUserId,
             thoi_diem_xac_nhan: now,
+            // Khóa hồ sơ ngay khi chốt ca — trước đây co_the_sua chưa từng bị đặt false ở
+            // đường ghi thật nào, nên guard ở luuBuoc (dòng ~269) là code chết. Sửa sau xác
+            // nhận phải đi qua endpoint đính chính (xem amendment), không sửa đè trực tiếp.
+            co_the_sua: false,
           },
           $push: {
             lich_su_sua: {
