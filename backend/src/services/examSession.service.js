@@ -14,6 +14,7 @@ import {
   duocPhepVaoBuoc,
   kiemTraBuocChanDoan,
   kiemTraBuocTiepNhan,
+  kiemTraKetCuc,
   tinhBMI,
 } from './examStepRules.js'
 import { kiemTraDiUngThuoc } from './drugAllergyCheck.service.js'
@@ -199,6 +200,8 @@ export async function layPhienKham({ queueId, docId }) {
           ghi_chu: hoSo.ghi_chu ?? null,
           ngay_tai_kham: hoSo.ngay_tai_kham ?? null,
           dich_vu_phat_sinh: hoSo.dich_vu_phat_sinh ?? [],
+          ket_cuc: hoSo.ket_cuc ?? 'dieu_tri_thuong',
+          chuyen_vien_thong_tin: hoSo.chuyen_vien_thong_tin ?? null,
         }
       : null,
     sinh_hieu: sinhHieu
@@ -300,12 +303,19 @@ export async function luuBuoc({ queueId, docId, doctorUserId, buoc, payload = {}
   if (buoc === 'chan_doan') {
     const kq = kiemTraBuocChanDoan(payload)
     if (!kq.ok) throw loi(400, kq.loi.join('; '))
+    const ketCucKq = kiemTraKetCuc(payload)
+    if (!ketCucKq.ok) throw loi(400, ketCucKq.loi.join('; '))
 
     capNhat.chan_doan = String(payload.chan_doan).trim()
     capNhat.huong_dan_dieu_tri = payload.huong_dan_dieu_tri?.trim() || null
     capNhat.ghi_chu = payload.ghi_chu?.trim() || null
     capNhat.ngay_tai_kham = payload.ngay_tai_kham ? new Date(payload.ngay_tai_kham) : null
     capNhat.chi_dinh_tai_kham = Boolean(payload.ngay_tai_kham)
+    // D78/D80 — luôn ghi đè cả hai field cùng lúc: nếu bác sĩ sửa lại từ 'chuyen_vien' về
+    // 'dieu_tri_thuong', thong_tin_chuyen cũ (null từ kiemTraKetCuc) phải xóa theo, không để
+    // sót thông tin chuyển viện của một quyết định đã bị đổi ý.
+    capNhat.ket_cuc = ketCucKq.ketCuc
+    capNhat.chuyen_vien_thong_tin = ketCucKq.thongTinChuyen
   }
 
   if (buoc === 'dich_vu') {

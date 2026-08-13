@@ -14,7 +14,7 @@
 |---|---|---|---|
 | C1 | Khóa `co_the_sua=false` khi hoàn tất | ✅ Đã xong | `Fix_demo` |
 | C2 | Cảnh báo dị ứng khi kê thuốc (B47) | ✅ Đã xong | `Fix_demo` |
-| C3 | Outcome `ket_cuc` + chuyển viện (D78/D80) | ⏳ Chưa làm | — |
+| C3 | Outcome `ket_cuc` + chuyển viện (D78/D80) | ✅ Đã xong (phần D80; D78 nút cấp cứu ở C6) | `Fix_demo` |
 | C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ⏳ Chưa làm | — |
 | C5 | Hồ sơ tạm không SĐT (D81) | ⏳ Chưa làm | — |
 | C6 | Nút cấp cứu + thông báo khẩn (D78) | ⏳ Chưa làm | — |

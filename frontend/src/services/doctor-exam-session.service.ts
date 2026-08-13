@@ -26,6 +26,17 @@ export interface CanhBaoDiUngItem {
   tu_khoa_trung: string[]
 }
 
+// D78/D80 — kết cục ca khám, khớp enum backend/src/services/examStepRules.js (KET_CUC).
+export type KetCuc = 'dieu_tri_thuong' | 'chuyen_chuyen_khoa' | 'chuyen_vien' | 'cap_cuu_ngoai_vien'
+
+export interface ChuyenVienThongTin {
+  noi_chuyen_den: string
+  ly_do: string
+  tinh_trang_luc_chuyen: string | null
+  giay_to_kem_theo: string | null
+  thoi_diem: string
+}
+
 export interface PhienKham {
   queue: {
     id: string
@@ -50,6 +61,8 @@ export interface PhienKham {
     ghi_chu: string | null
     ngay_tai_kham: string | null
     dich_vu_phat_sinh: DichVuChiDinh[]
+    ket_cuc: KetCuc
+    chuyen_vien_thong_tin: ChuyenVienThongTin | null
   } | null
   sinh_hieu: {
     can_nang: number | null

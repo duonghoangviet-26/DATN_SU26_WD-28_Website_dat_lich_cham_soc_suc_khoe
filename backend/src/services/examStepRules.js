@@ -91,6 +91,44 @@ export function kiemTraBuocChanDoan(payload = {}) {
   return { ok: loi.length === 0, loi }
 }
 
+// D78/D80 — kết cục ca khám. 'dieu_tri_thuong' mặc định, không cần thông tin thêm.
+// 'chuyen_vien'/'cap_cuu_ngoai_vien' bắt buộc kèm nơi chuyển + lý do (hồ sơ y tế phải ghi
+// lại được ca chuyển đi, không chỉ nằm trong ô ghi chú tự do).
+export const KET_CUC = ['dieu_tri_thuong', 'chuyen_chuyen_khoa', 'chuyen_vien', 'cap_cuu_ngoai_vien']
+const KET_CUC_CAN_THONG_TIN_CHUYEN = ['chuyen_vien', 'cap_cuu_ngoai_vien']
+
+/**
+ * Kiểm + chuẩn hóa kết cục ca khám (bước 'chan_doan').
+ * @returns {{ok: boolean, loi: string[], ketCuc: string, thongTinChuyen: object|null}}
+ */
+export function kiemTraKetCuc(payload = {}) {
+  const loi = []
+  const ketCuc = payload.ket_cuc || 'dieu_tri_thuong'
+  if (!KET_CUC.includes(ketCuc)) {
+    return { ok: false, loi: ['Kết cục khám không hợp lệ'], ketCuc: 'dieu_tri_thuong', thongTinChuyen: null }
+  }
+
+  let thongTinChuyen = null
+  if (KET_CUC_CAN_THONG_TIN_CHUYEN.includes(ketCuc)) {
+    const tt = payload.chuyen_vien_thong_tin ?? {}
+    const noiChuyenDen = String(tt.noi_chuyen_den ?? '').trim()
+    const lyDo = String(tt.ly_do ?? '').trim()
+    if (!noiChuyenDen) loi.push('Cần nhập nơi chuyển đến')
+    if (!lyDo) loi.push('Cần nhập lý do chuyển viện / cấp cứu ngoài viện')
+    if (loi.length === 0) {
+      thongTinChuyen = {
+        noi_chuyen_den: noiChuyenDen,
+        ly_do: lyDo,
+        tinh_trang_luc_chuyen: String(tt.tinh_trang_luc_chuyen ?? '').trim() || null,
+        giay_to_kem_theo: String(tt.giay_to_kem_theo ?? '').trim() || null,
+        thoi_diem: new Date(),
+      }
+    }
+  }
+
+  return { ok: loi.length === 0, loi, ketCuc, thongTinChuyen }
+}
+
 /** BMI = kg / m². Trả null khi thiếu dữ liệu — KHÔNG trả 0 (0 trông như một chỉ số thật). */
 export function tinhBMI(canNang, chieuCao) {
   const kg = Number(canNang)
