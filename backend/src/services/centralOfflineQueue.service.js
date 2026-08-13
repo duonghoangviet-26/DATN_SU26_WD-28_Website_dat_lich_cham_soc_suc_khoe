@@ -383,7 +383,8 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
 
   const profile = await HoSoBenhNhan.findOne({ _id: normalizedProfileId, trang_thai: 'active' }).lean()
   if (!profile) throw loi(404, 'Ho so benh nhan khong hop le')
-  if (!profile.so_dien_thoai) throw loi(400, 'Ho so benh nhan chua co so dien thoai')
+  // D81 — ho so tam (khong SDT) duoc nhan neu co ma_tam thay the (xem HangDoi.pre('validate')).
+  if (!profile.so_dien_thoai && !profile.ma_tam) throw loi(400, 'Ho so benh nhan chua co so dien thoai')
 
   const { start, end } = khoangNgay(now)
   const activeVisit = await HangDoi.findOne({
@@ -431,6 +432,7 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
         ho_so_benh_nhan_id: profile._id,
         ten_benh_nhan: profile.ho_ten,
         so_dien_thoai: profile.so_dien_thoai,
+        ma_tam: profile.ma_tam ?? null,
         ngay_sinh: profile.ngay_sinh,
         tuoi: profile.ngay_sinh ? Math.max(0, now.getUTCFullYear() - new Date(profile.ngay_sinh).getUTCFullYear()) : null,
         gioi_tinh: profile.gioi_tinh,

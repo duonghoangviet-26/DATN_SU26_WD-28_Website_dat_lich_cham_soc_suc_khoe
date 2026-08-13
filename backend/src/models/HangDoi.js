@@ -103,6 +103,9 @@ const queueSchema = new mongoose.Schema(
     ho_so_benh_nhan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'HoSoBenhNhan', default: null },
     ten_benh_nhan: { type: String, required: true, trim: true, maxlength: 255 },
     so_dien_thoai: { type: String, default: null, maxlength: 20 },
+    // D81 — sao chép từ HoSoBenhNhan.ma_tam khi lượt gắn hồ sơ tạm (không có so_dien_thoai).
+    // Cho phép pre('validate') dưới đây chấp nhận lượt offline thiếu SĐT khi có mã tạm thay thế.
+    ma_tam: { type: String, default: null, maxlength: 40 },
     ngay_sinh: { type: Date, default: null },
     tuoi: { type: Number, default: null, min: 0 },
     gioi_tinh: { type: String, enum: ['nam', 'nu', 'khac'], default: null },
@@ -183,8 +186,8 @@ queueSchema.pre('validate', function () {
   if (this.nguon === 'online' && !this.appointment_id) {
     throw new Error('Hang doi online bat buoc co appointment_id')
   }
-  if (this.nguon === 'offline' && !this.so_dien_thoai) {
-    throw new Error('Hang doi offline bat buoc co so_dien_thoai')
+  if (this.nguon === 'offline' && !this.so_dien_thoai && !this.ma_tam) {
+    throw new Error('Hang doi offline bat buoc co so_dien_thoai hoac ma_tam (ho so tam)')
   }
   if (this.trang_thai === 'cho_dieu_phoi' && this.nguon !== 'offline') {
     throw new Error('Chi luot offline moi duoc o trang thai cho_dieu_phoi')

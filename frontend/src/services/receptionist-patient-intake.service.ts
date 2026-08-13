@@ -27,6 +27,9 @@ export interface PatientProfile {
   luot_dang_cho_hom_nay?: ActiveQueue | null
   sua_gan_nhat?: TimelineRow | null
   lich_su_kham?: VisitHistory | null
+  // D81 — hồ sơ tạm cho bệnh nhân không có số điện thoại.
+  la_ho_so_tam?: boolean
+  ma_tam?: string | null
 }
 
 export interface VisitHistory {
@@ -91,6 +94,19 @@ export interface CreatePatientProfilePayload {
   ngay_sinh?: string
   gioi_tinh?: 'nam' | 'nu' | 'khac'
   tai_khoan_id?: string
+}
+
+// D81 — hồ sơ tạm: bù số điện thoại bằng 3 thứ nhận diện bắt buộc (ngày sinh, giới tính,
+// ghi chú đặc điểm). Không có tai_khoan_id — không xác minh được chủ tài khoản qua SĐT.
+export interface CreateTempProfilePayload {
+  ho_ten: string
+  ngay_sinh: string
+  gioi_tinh: 'nam' | 'nu' | 'khac'
+  ghi_chu: string
+  nhom_mau?: 'A' | 'B' | 'AB' | 'O'
+  di_ung?: string
+  benh_nen?: string
+  dia_chi?: string
 }
 
 // 9 trường hành chính lễ tân được sửa (LT-10). Không có trường chuyên môn —
@@ -314,6 +330,24 @@ export const receptionistPatientIntakeService = {
     const response = await axiosInstance.post<ApiResponse<{ profile: PatientProfile }>>(
       '/receptionist/patient-intake/profiles',
       payload,
+    )
+    return response.data.data.profile
+  },
+
+  // D81 — cùng endpoint tạo hồ sơ, chỉ khác cờ khong_co_so_dien_thoai để backend chuyển
+  // sang nhánh hồ sơ tạm (sinh ma_tam thay vì bắt buộc SĐT).
+  async createTempProfile(payload: CreateTempProfilePayload): Promise<PatientProfile> {
+    const response = await axiosInstance.post<ApiResponse<{ profile: PatientProfile }>>(
+      '/receptionist/patient-intake/profiles',
+      { ...payload, khong_co_so_dien_thoai: true },
+    )
+    return response.data.data.profile
+  },
+
+  async searchByTempCode(maTam: string): Promise<PatientProfile> {
+    const response = await axiosInstance.get<ApiResponse<{ profile: PatientProfile }>>(
+      '/receptionist/patient-intake/search-temp',
+      { params: { ma_tam: maTam } },
     )
     return response.data.data.profile
   },

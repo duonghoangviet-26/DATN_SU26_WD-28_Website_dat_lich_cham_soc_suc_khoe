@@ -9,6 +9,7 @@ import {
 } from '@/services/receptionist-patient-intake.service'
 import { SpecialtyOption, specialtyService } from '@/services/specialty.service'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
+import TempProfileModal from '@/components/receptionist/TempProfileModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
 import CheckInVerifyModal from '@/components/receptionist/CheckInVerifyModal'
@@ -402,6 +403,8 @@ export default function PatientIntake() {
   const [searchPhoneError, setSearchPhoneError] = useState('')
   const [formErrors, setFormErrors] = useState<{ ho_ten?: string; ngay_sinh?: string }>({})
   const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'today'>('lookup')
+  // D81 — modal tự trị, không đụng state tra cứu-theo-SĐT ở trên.
+  const [showTempProfileModal, setShowTempProfileModal] = useState(false)
 
   useEffect(() => {
     if (printData) window.print()
@@ -793,6 +796,14 @@ export default function PatientIntake() {
 
             {searchPhoneError && <p className="mt-2 text-sm font-medium text-rose-700">{searchPhoneError}</p>}
 
+            <button
+              type="button"
+              onClick={() => setShowTempProfileModal(true)}
+              className="mt-3 text-xs font-semibold text-slate-500 underline decoration-dotted hover:text-brand-700"
+            >
+              Bệnh nhân không có số điện thoại?
+            </button>
+
             {!hasSearched && (
               <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
                 Sau khi tra cứu, hệ thống sẽ hiển thị hồ sơ đang gắn với số điện thoại này hoặc mở form tạo hồ sơ mới.
@@ -980,9 +991,19 @@ export default function PatientIntake() {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-brand-800">Hồ sơ đang thao tác</p>
-                      <h3 className="mt-1 text-xl font-bold text-slate-950">{selectedProfile.ho_ten}</h3>
+                      <h3 className="mt-1 text-xl font-bold text-slate-950">
+                        {selectedProfile.ho_ten}
+                        {selectedProfile.la_ho_so_tam && (
+                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                            Hồ sơ tạm — {selectedProfile.ma_tam}
+                          </span>
+                        )}
+                      </h3>
                       <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        <DetailItem label="Số liên hệ" value={selectedProfile.so_dien_thoai || phone} />
+                        <DetailItem
+                          label="Số liên hệ"
+                          value={selectedProfile.so_dien_thoai || (selectedProfile.la_ho_so_tam ? 'Chưa có — hồ sơ tạm' : phone)}
+                        />
                         <DetailItem label="Ngày sinh" value={`${formatDate(selectedProfile.ngay_sinh)}${age !== null ? ` (${age} tuổi)` : ''}`} />
                         <DetailItem label="Giới tính" value={genderLabel(selectedProfile.gioi_tinh)} />
                         <DetailItem label="Lượt khám" value={lichSuKhamLabel(selectedProfile.lich_su_kham)} />
@@ -1186,6 +1207,25 @@ export default function PatientIntake() {
             onClose={() => setAuditProfileId(null)}
           />
         )}
+
+        <TempProfileModal
+          open={showTempProfileModal}
+          onClose={() => setShowTempProfileModal(false)}
+          onProfileReady={(profile) => {
+            setError('')
+            setPhone('')
+            setAccounts([])
+            setSelectedAccountId(null)
+            setAmbiguousAppointments([])
+            setAccountAppointments([])
+            setProfiles([profile])
+            setSelectedId(profile.id)
+            setHasSearched(true)
+            setShowCreateForm(false)
+            clearDecision()
+            setMessage(`Đang dùng hồ sơ tạm ${profile.ma_tam ?? ''} — chọn chuyên khoa để tiếp nhận.`)
+          }}
+        />
 
         <QueueTicketTemplate data={printData} />
 

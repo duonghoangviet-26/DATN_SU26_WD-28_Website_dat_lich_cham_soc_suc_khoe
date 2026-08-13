@@ -16,7 +16,7 @@
 | C2 | Cảnh báo dị ứng khi kê thuốc (B47) | ✅ Đã xong | `Fix_demo` |
 | C3 | Outcome `ket_cuc` + chuyển viện (D78/D80) | ✅ Đã xong (phần D80; D78 nút cấp cứu ở C6) | `Fix_demo` |
 | C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ✅ Backend xong; **FE chưa có UI** (xem ghi chú) | `Fix_demo` |
-| C5 | Hồ sơ tạm không SĐT (D81) | ⏳ Chưa làm | — |
+| C5 | Hồ sơ tạm không SĐT (D81) | ✅ Đã xong cả 3 tầng + UI lễ tân | `Fix_demo` |
 | C6 | Nút cấp cứu + thông báo khẩn (D78) | ⏳ Chưa làm | — |
 
 **Ghi chú C4:** `PATCH /api/doctor/exam-session/:queueId/amendment` (`dinhChinhHoSo` trong
@@ -26,6 +26,16 @@ bước gốc (`kiemTraKetCuc`, `taoChiDinhDichVu`), ghi lịch sử có cấu t
 sửa đè). **Chưa có màn hình bác sĩ nào gọi endpoint này** — cần một trang "Danh sách hồ sơ đã
 khám" để làm điểm vào cho việc đính chính sau khi đã hoàn tất, đây là việc UI riêng chưa nằm
 trong phạm vi C4 đã lập ban đầu.
+
+**Ghi chú C5:** nới có điều kiện qua `la_ho_so_tam`/`ma_tam` ở đúng 3 tầng đã nêu ở §3.3
+(`patient-intake.controller.js`, `centralOfflineQueue.service.js:386`, `HangDoi.js` pre-validate)
+— hành vi cũ (bắt buộc SĐT) giữ nguyên 100% khi không có `ma_tam`. Mã tạm sinh qua
+`Counter.nextSeq` (atomic, tái dùng cơ chế `capSoThuTuCheckin` đã có) nên không đụng nhau khi
+nhiều lễ tân tạo cùng lúc. Endpoint tra cứu mới `GET .../search-temp` **tách riêng**
+khỏi `searchPatientProfiles` (không sửa hàm tra cứu theo SĐT đang chạy). FE: modal
+`TempProfileModal.tsx` **cô lập hoàn toàn** với state tra cứu-theo-SĐT của `PatientIntake.tsx`
+— chỉ trả hồ sơ ra qua callback rồi tái dùng nguyên luồng chọn chuyên khoa/tiếp nhận vào hàng
+đợi trung tâm đã có sẵn, không viết lại logic đó.
 
 Kiểm thử: **không chạy** `npm test` / `test:e2e:*` toàn bộ vì `.env` trỏ `MONGODB_URI` vào DB
 chung `DATN_VITAFAMILY` (không có DB test riêng) và các file `tests/*.test.js` kết nối thẳng

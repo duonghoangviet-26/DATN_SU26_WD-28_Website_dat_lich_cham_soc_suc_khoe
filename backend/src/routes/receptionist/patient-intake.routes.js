@@ -5,6 +5,7 @@ import {
   getCentralOfflineCapacity,
   getOfflineAvailability,
   intakeCentralOfflineQueue,
+  searchPatientProfileByTempCode,
   searchPatientProfiles,
   updatePatientProfileAdministrative,
 } from '../../controllers/receptionist/patient-intake.controller.js'
@@ -12,6 +13,9 @@ import {
 const router = Router()
 
 router.get('/search', searchPatientProfiles)
+// D81 — tra cứu hồ sơ tạm (không SĐT) bằng mã TEMP-YYYYMMDD-xxx. Đứng TRƯỚC '/search' để rõ
+// ràng, dù path khác nhau nên thứ tự không ảnh hưởng — giữ cùng chỗ cho dễ đọc.
+router.get('/search-temp', searchPatientProfileByTempCode)
 router.get('/availability', getOfflineAvailability)
 router.get('/offline-queue/capacity', getCentralOfflineCapacity)
 router.post('/profiles', createPatientProfile)
