@@ -206,7 +206,17 @@ export default function DoctorExamQueue() {
   }
   useEffect(() => {
     load()
-    const unsubscribe = subscribeDoctorQueueRealtime(() => load())
+    // D78 — 'central_offline_cap_cuu' bắn từ tiepNhanOfflineVaoHangDoiTrungTam ngay lúc lễ
+    // tân tiếp nhận cấp cứu, TRƯỚC cả lúc điều phối bác sĩ cụ thể — báo sớm hơn thay vì chờ
+    // bác sĩ tự thấy trong danh sách chờ khi refetch.
+    const unsubscribe = subscribeDoctorQueueRealtime((payload) => {
+      load()
+      if (payload?.action === 'central_offline_cap_cuu') {
+        const ten = payload.ten_benh_nhan ?? 'Bệnh nhân'
+        const lyDo = payload.ly_do_uu_tien ? ` — ${payload.ly_do_uu_tien}` : ''
+        showToast(`CẤP CỨU: ${ten} vừa được lễ tân tiếp nhận${lyDo}`, 'error')
+      }
+    })
     const fallbackRefresh = window.setInterval(load, 15000)
 
     return () => {

@@ -395,6 +395,10 @@ export default function PatientIntake() {
   const [specialties, setSpecialties] = useState<SpecialtyOption[]>([])
   const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('')
   const [confirmLongWait, setConfirmLongWait] = useState(false)
+  // D78 — cấp cứu/ưu tiên khẩn cho walk-in. Bắt buộc lý do/dấu hiệu, backend cũng chặn lại
+  // ở tiepNhanOfflineVaoHangDoiTrungTam (không tin riêng validate FE).
+  const [capCuu, setCapCuu] = useState(false)
+  const [lyDoCapCuu, setLyDoCapCuu] = useState('')
   const [checkingIn, setCheckingIn] = useState(false)
   const [editingProfile, setEditingProfile] = useState<PatientProfile | null>(null)
   const [auditProfileId, setAuditProfileId] = useState<string | null>(null)
@@ -424,6 +428,8 @@ export default function PatientIntake() {
     setConfirmLongWait(false)
     setSelectedAppointmentId(null)
     setMode('idle')
+    setCapCuu(false)
+    setLyDoCapCuu('')
   }
 
   const search = async (event?: FormEvent) => {
@@ -677,6 +683,10 @@ export default function PatientIntake() {
 
   const checkInWalkIn = async () => {
     if (!selectedProfile || !selectedSpecialtyId || !centralCapacity) return
+    if (capCuu && !lyDoCapCuu.trim()) {
+      setError('Cần nhập lý do / dấu hiệu cấp cứu trước khi tiếp nhận')
+      return
+    }
     setCheckingIn(true)
     setError('')
     try {
@@ -684,9 +694,12 @@ export default function PatientIntake() {
         ho_so_benh_nhan_id: selectedProfile.id,
         specialty_id: selectedSpecialtyId,
         xac_nhan_canh_bao: confirmLongWait,
+        ...(capCuu ? { muc_uu_tien_tiep_nhan: 'cap_cuu' as const, ly_do_uu_tien: lyDoCapCuu.trim() } : {}),
       })
       setCentralCapacity(null)
       setConfirmLongWait(false)
+      setCapCuu(false)
+      setLyDoCapCuu('')
       setMessage(`Đã tiếp nhận walk-in ${selectedProfile.ho_ten} vào hàng đợi khám. Số thứ tự: ${result.entry.ma_so_thu_tu || result.entry._id}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
         ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'cho_dieu_phoi', specialty_id: selectedSpecialtyId, doctor_id: null, phong_kham: null, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
@@ -1171,13 +1184,36 @@ export default function PatientIntake() {
                           </label>
                         )}
 
+                        <label className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-950">
+                          <input
+                            type="checkbox"
+                            checked={capCuu}
+                            onChange={(event) => setCapCuu(event.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-rose-300 text-rose-700 focus:ring-rose-500"
+                          />
+                          <span>Cấp cứu / ưu tiên khẩn — xếp trước toàn bộ hàng đợi, báo ngay cho bác sĩ trong ca.</span>
+                        </label>
+                        {capCuu && (
+                          <textarea
+                            value={lyDoCapCuu}
+                            onChange={(event) => setLyDoCapCuu(event.target.value)}
+                            rows={2}
+                            placeholder="Lý do / dấu hiệu cấp cứu (bắt buộc) — vd: đau ngực dữ dội, khó thở, chảy máu nhiều"
+                            className="mt-2 w-full rounded-xl border border-rose-300 px-3 py-2 text-sm outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
+                          />
+                        )}
+
                         <button
                           type="button"
                           onClick={checkInWalkIn}
-                          disabled={checkingIn || hasActiveQueue || !centralCapacity.co_the_nhan || (centralCapacity.can_xac_nhan_qua_tai && !confirmLongWait)}
-                          className="mt-4 min-h-12 w-full rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={checkingIn || hasActiveQueue || !centralCapacity.co_the_nhan || (centralCapacity.can_xac_nhan_qua_tai && !confirmLongWait) || (capCuu && !lyDoCapCuu.trim())}
+                          className={`mt-4 min-h-12 w-full rounded-xl px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 ${capCuu ? 'bg-rose-700 hover:bg-rose-800' : 'bg-brand-700 hover:bg-brand-800'}`}
                         >
-                          {checkingIn ? 'Dang dua vao hang doi...' : `Dua ${selectedProfile.ho_ten} vao hang doi trung tam`}
+                          {checkingIn
+                            ? 'Dang dua vao hang doi...'
+                            : capCuu
+                              ? `Tiếp nhận CẤP CỨU: ${selectedProfile.ho_ten}`
+                              : `Dua ${selectedProfile.ho_ten} vao hang doi trung tam`}
                         </button>
                       </>
                     )}

@@ -17,7 +17,7 @@
 | C3 | Outcome `ket_cuc` + chuyển viện (D78/D80) | ✅ Đã xong (phần D80; D78 nút cấp cứu ở C6) | `Fix_demo` |
 | C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ✅ Backend xong; **FE chưa có UI** (xem ghi chú) | `Fix_demo` |
 | C5 | Hồ sơ tạm không SĐT (D81) | ✅ Đã xong cả 3 tầng + UI lễ tân | `Fix_demo` |
-| C6 | Nút cấp cứu + thông báo khẩn (D78) | ⏳ Chưa làm | — |
+| C6 | Nút cấp cứu + thông báo khẩn (D78) | ✅ Đã xong (nút + validate + realtime + audit); **biên bản ca khẩn cuối ngày chưa có màn hình riêng** | `Fix_demo` |
 
 **Ghi chú C4:** `PATCH /api/doctor/exam-session/:queueId/amendment` (`dinhChinhHoSo` trong
 `examSession.service.js`) đã hoạt động đầy đủ ở backend — nhận `{ thay_doi, ly_do }`, chỉ cho
@@ -36,6 +36,19 @@ khỏi `searchPatientProfiles` (không sửa hàm tra cứu theo SĐT đang ch�
 `TempProfileModal.tsx` **cô lập hoàn toàn** với state tra cứu-theo-SĐT của `PatientIntake.tsx`
 — chỉ trả hồ sơ ra qua callback rồi tái dùng nguyên luồng chọn chuyên khoa/tiếp nhận vào hàng
 đợi trung tâm đã có sẵn, không viết lại logic đó.
+
+**Ghi chú C6:** trước đây `muc_uu_tien_tiep_nhan`/`ly_do_uu_tien` tồn tại sẵn ở backend
+(`tiepNhanOfflineVaoHangDoiTrungTam`) nhưng **FE chưa từng gửi** — mọi lượt walk-in luôn mặc
+định `binh_thuong`, tức là lễ tân **không có cách nào** đánh dấu cấp cứu từ giao diện dù
+model/service đã hỗ trợ. Đã thêm: (1) BE bắt buộc `ly_do_uu_tien` khi chọn `cap_cuu`; (2) audit
+`LT_OFFLINE_INTAKE_CENTRAL` giờ lưu kèm mức ưu tiên + lý do (trước đây không lưu, nên dù chọn
+cấp cứu cũng không lọc lại được — đây là điều kiện cần cho "báo cáo ca khẩn cuối ngày"); (3)
+báo realtime tới **mọi bác sĩ đang trong ca cùng chuyên khoa** ngay lúc tiếp nhận (sớm hơn mốc
+điều phối `ganKhachOfflineChoBacSi`, vốn chỉ báo đúng 1 bác sĩ sau khi đã chọn xong); (4) FE
+lễ tân có nút "Cấp cứu / ưu tiên khẩn" bắt buộc lý do; (5) FE bác sĩ (`DoctorExamQueue.tsx`)
+hiện toast đỏ khi nhận được tín hiệu này. **Còn thiếu:** một màn hình lọc/xuất báo cáo ca khẩn
+cuối ngày — dữ liệu đã đủ để làm (lọc `NhatKyThaoTac` theo `hanh_dong='LT_OFFLINE_INTAKE_CENTRAL'`
++ `du_lieu_moi.muc_uu_tien_tiep_nhan='cap_cuu'`), nhưng chưa có UI/endpoint tổng hợp riêng.
 
 Kiểm thử: **không chạy** `npm test` / `test:e2e:*` toàn bộ vì `.env` trỏ `MONGODB_URI` vào DB
 chung `DATN_VITAFAMILY` (không có DB test riêng) và các file `tests/*.test.js` kết nối thẳng
