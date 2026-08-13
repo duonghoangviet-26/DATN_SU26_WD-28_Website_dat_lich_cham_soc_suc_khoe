@@ -1,0 +1,28 @@
+# C. Phối hợp bác sĩ - lễ tân
+
+Mục tiêu file này: chuẩn bị câu trả lời cho các tình huống cần phối hợp giữa bác sĩ và lễ tân, đặc biệt các luồng đi qua lịch hẹn, hàng đợi, phiên khám, dịch vụ phát sinh và thanh toán.
+
+Nguồn đối chiếu chính:
+- `docs/Tom tat chuc nang - Tiep nhan tai quay va ket noi voi Bac si (2026-08-08).md`
+- `docs/Nang cap luong Bac si - Le tan sau demo (2026-08-08).md`
+- `docs/Review cuoi ky WS-1 - Luong kham 4 buoc (2026-08-08).md`
+- Code: `centralOfflineQueue.service.js`, `queueTransfer.service.js`, `doctorQueueRealtime.service.js`, route `/api/receptionist/*`, `/api/doctor/*`
+
+| Mã | Câu hỏi hội đồng | Câu trả lời bảo vệ hợp lý | Đáp ứng | Bằng chứng đối chiếu | Bổ sung/đã ghi nhận |
+|---|---|---|---|---|---|
+| C61 | Lễ tân check-in xong thì bác sĩ nhận bệnh nhân bằng cơ chế nào? | Lễ tân tạo/đẩy bệnh nhân vào hàng đợi. Bác sĩ xem hàng đợi của mình, gọi bệnh nhân và chuyển vào phòng. | Đã có | `HangDoi`, `/api/receptionist/patient-intake`, `/api/doctor/queue`. | Không cần bổ sung. |
+| C62 | Nếu lễ tân check-in nhầm bác sĩ thì xử lý thế nào? | Nếu bệnh nhân chưa vào phòng, cần chuyển hàng đợi sang bác sĩ phù hợp, lưu lý do và audit. Nếu đã vào phòng thì phải dừng quy trình chuyên môn trước khi điều chỉnh. | Một phần | Có `queueTransfer.service.js`; guard khi in-room. | Cần kiểm chứng UI chuyển bác sĩ/hàng đợi cho mọi nguồn online/offline. |
+| C63 | Nếu bệnh nhân offline chưa biết khám bác sĩ nào thì sao? | Lễ tân có thể đưa vào hàng đợi trung tâm/chờ điều phối theo chuyên khoa, sau đó phân về bác sĩ còn khả năng tiếp nhận. | Đã có | `centralOfflineQueue.service.js`, tài liệu offline queue. | Không cần bổ sung. |
+| C64 | Nếu bệnh nhân online đã đến nhưng bác sĩ chưa sẵn sàng thì sao? | Bệnh nhân vẫn ở trạng thái chờ khám. Lễ tân theo dõi hàng đợi; bác sĩ gọi khi sẵn sàng. | Đã có | Queue status, dashboard lễ tân, doctor queue. | Không cần bổ sung. |
+| C65 | Nếu bác sĩ chỉ định dịch vụ phát sinh, lễ tân biết bằng cách nào? | Khi bác sĩ hoàn tất/ghi nhận dịch vụ, hệ thống gửi thông báo hoặc tạo ca thanh toán/dịch vụ cho lễ tân xử lý. | Đã có | Review WS-1: notification cho receptionist nếu added service; payment cases. | Không cần bổ sung. |
+| C66 | Nếu dịch vụ phát sinh chưa thanh toán, bệnh nhân có được kết thúc toàn bộ quy trình không? | Về nghiệp vụ, hồ sơ khám có thể hoàn tất chuyên môn nhưng ca hành chính/thanh toán vẫn còn pending để lễ tân xử lý. | Đã có | Payments/cases, trạng thái thanh toán riêng với kết quả khám. | Không cần bổ sung. |
+| C67 | Nếu bác sĩ hoàn tất khám nhưng lễ tân không thấy cập nhật thì sao? | Lễ tân refresh dashboard/payment cases. Dữ liệu chuẩn đã nằm trong database; realtime chỉ hỗ trợ hiển thị nhanh. | Đã có | DB source of truth, `doctorQueueRealtime.service.js`. | Không cần bổ sung. |
+| C68 | Nếu lễ tân hủy lịch trong khi bác sĩ đang thao tác phiên khám thì sao? | Hệ thống phải chặn hủy/đổi khi bệnh nhân đã vào phòng hoặc đang khám để bảo toàn phiên khám. | Đã có | Tài liệu lễ tân: lock action when in-room. | Không cần bổ sung. |
+| C69 | Nếu bác sĩ cần lễ tân gọi bệnh nhân quay lại phòng thì hệ thống có hỗ trợ không? | Có thể phối hợp qua trạng thái hàng đợi/contact task/thông báo nội bộ. Tuy nhiên quy trình gọi quay lại sau khi đã ra khỏi phòng cần rõ hơn nếu phòng khám muốn dùng thường xuyên. | Một phần | Có queue/contact/notification; chưa thấy flow riêng “gọi quay lại phòng”. | Đã ghi nhận cần thêm: trạng thái callback/re-call sau khám, lý do, người yêu cầu, thông báo lễ tân. |
+| C70 | Nếu bệnh nhân không đủ tiền thanh toán dịch vụ phát sinh thì xử lý thế nào? | Lễ tân ghi nhận trạng thái chưa thanh toán/hủy dịch vụ theo quy định; bác sĩ không xử lý tiền. Nếu dịch vụ chưa thực hiện, cần đánh dấu từ chối/chưa thực hiện. | Một phần | Có payment pending/cancel; thiếu bằng chứng rõ cho nợ/từ chối dịch vụ phát sinh. | Đã ghi nhận cần thêm: trạng thái “chưa thanh toán/từ chối dịch vụ” và ảnh hưởng lên kết quả khám/hóa đơn. |
+| C71 | Nếu bệnh nhân đặt lịch online nhưng muốn chuyển sang khám trực tiếp không theo giờ đã đặt thì sao? | Lễ tân xem trạng thái lịch, khả năng tiếp nhận và chuyển thành lượt chờ hợp lệ nếu được phép; không tạo song song hai lượt. | Đã có | Check-in online, late arrival, offline intake duplicate guard. | Không cần bổ sung. |
+| C72 | Nếu bác sĩ yêu cầu nghỉ, lễ tân có tự động biết lịch nào bị ảnh hưởng không? | Có. Hệ thống xác định các lịch trong ca/ngày bị ảnh hưởng để lễ tân liên hệ và đổi lịch. | Đã có | Doctor leaves/unavailable, contact tasks. | Không cần bổ sung. |
+| C73 | Nếu bác sĩ khám xong mà quên bấm hoàn tất thì lễ tân thấy gì? | Ca vẫn treo ở hàng đợi/đang khám. Lễ tân có thể nhận biết trên dashboard nhưng không tự sửa kết quả chuyên môn; cần nhắc bác sĩ hoàn tất. | Đã có | Dashboard/queue status; bác sĩ là người complete exam. | Không cần bổ sung. |
+| C74 | Nếu một bệnh nhân vừa có lịch online vừa được người nhà đưa đến đăng ký offline thì hệ thống tránh trùng thế nào? | Hệ thống kiểm tra hồ sơ bệnh nhân, ngày khám và trạng thái để ưu tiên lịch đã đặt, không tạo hàng đợi trùng. | Đã có | Duplicate guard trong tài liệu lễ tân; `HangDoi` là điểm hợp nhất. | Không cần bổ sung. |
+| C75 | Nếu lễ tân chọn sai hồ sơ nhưng bác sĩ phát hiện trước khi khám thì xử lý thế nào? | Dừng đưa vào khám, trả lại lễ tân kiểm tra hồ sơ. Nếu chưa nhập dữ liệu chuyên môn, có thể hủy/chuyển lượt sai và tạo đúng lượt có audit. | Một phần | Có thông tin định danh, queue cancel/transfer; chưa thấy flow “sửa hồ sơ gắn với hàng đợi do chọn nhầm” rõ ràng. | Đã ghi nhận cần thêm: chức năng thay hồ sơ cho lượt chờ trước khi vào phòng, hoặc hủy tạo lại có audit bắt buộc. |
+
