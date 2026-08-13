@@ -34,6 +34,7 @@ import mongoose from 'mongoose'
 // [Doctor – ExaminationResult]
 //   UPDATE_EXAMINATION_RESULT
 //   KE_THUOC_BAT_CHAP_CANH_BAO_DI_UNG (bác sĩ override cảnh báo dị ứng thuốc — B47)
+//   DINH_CHINH_ANH_HUONG_HOA_DON (đính chính hồ sơ đã xác nhận có đổi dich_vu_phat_sinh — B54/B55)
 // [Doctor – Queue & Room]
 //   CHANGE_DOCTOR_STATUS | CHECKIN_QUEUE | CALL_PATIENT | SKIP_PATIENT | ASSIGN_DOCTOR
 //   loai_doi_tuong: queue_entry | room_status

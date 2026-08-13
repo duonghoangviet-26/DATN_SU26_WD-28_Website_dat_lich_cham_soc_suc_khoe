@@ -1,5 +1,6 @@
 import { BacSi } from '../../models/index.js'
 import {
+  dinhChinhHoSo,
   hoanTatPhienKham,
   layPhienKham,
   luuBuoc,
@@ -53,5 +54,23 @@ export async function complete(req, res) {
     return ok(res, ketQua, 'Đã hoàn tất ca khám')
   } catch (err) {
     return fail(res, err.httpStatus ?? err.statusCode ?? 500, err.message)
+  }
+}
+
+// PATCH /api/doctor/exam-session/:queueId/amendment
+export async function amend(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+    const phien = await dinhChinhHoSo({
+      queueId: req.params.queueId,
+      docId,
+      doctorUserId: req.user.id,
+      thayDoi: req.body?.thay_doi ?? {},
+      lyDo: req.body?.ly_do,
+    })
+    return ok(res, phien, 'Đã đính chính hồ sơ')
+  } catch (err) {
+    return fail(res, err.httpStatus ?? err.statusCode ?? 500, err.message, err.data ?? null)
   }
 }

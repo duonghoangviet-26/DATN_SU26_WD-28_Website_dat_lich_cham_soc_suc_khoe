@@ -15,9 +15,17 @@
 | C1 | Khóa `co_the_sua=false` khi hoàn tất | ✅ Đã xong | `Fix_demo` |
 | C2 | Cảnh báo dị ứng khi kê thuốc (B47) | ✅ Đã xong | `Fix_demo` |
 | C3 | Outcome `ket_cuc` + chuyển viện (D78/D80) | ✅ Đã xong (phần D80; D78 nút cấp cứu ở C6) | `Fix_demo` |
-| C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ⏳ Chưa làm | — |
+| C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ✅ Backend xong; **FE chưa có UI** (xem ghi chú) | `Fix_demo` |
 | C5 | Hồ sơ tạm không SĐT (D81) | ⏳ Chưa làm | — |
 | C6 | Nút cấp cứu + thông báo khẩn (D78) | ⏳ Chưa làm | — |
+
+**Ghi chú C4:** `PATCH /api/doctor/exam-session/:queueId/amendment` (`dinhChinhHoSo` trong
+`examSession.service.js`) đã hoạt động đầy đủ ở backend — nhận `{ thay_doi, ly_do }`, chỉ cho
+sửa 7 trường lâm sàng (không đụng sinh hiệu/đơn thuốc), validate lại qua đúng rule đã dùng ở
+bước gốc (`kiemTraKetCuc`, `taoChiDinhDichVu`), ghi lịch sử có cấu trúc vào `lich_su_sua` (không
+sửa đè). **Chưa có màn hình bác sĩ nào gọi endpoint này** — cần một trang "Danh sách hồ sơ đã
+khám" để làm điểm vào cho việc đính chính sau khi đã hoàn tất, đây là việc UI riêng chưa nằm
+trong phạm vi C4 đã lập ban đầu.
 
 Kiểm thử: **không chạy** `npm test` / `test:e2e:*` toàn bộ vì `.env` trỏ `MONGODB_URI` vào DB
 chung `DATN_VITAFAMILY` (không có DB test riêng) và các file `tests/*.test.js` kết nối thẳng

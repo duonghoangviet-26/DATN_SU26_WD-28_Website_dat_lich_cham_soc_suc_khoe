@@ -15,6 +15,13 @@ const lichSuSuaSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // B54/B55 — đính chính hồ sơ ĐÃ XÁC NHẬN (status='da_xac_nhan'), qua dinhChinhHoSo() trong
+    // examSession.service.js. Bản ghi cũ (sửa trước khi xác nhận, hoặc do complete tự ghi ở
+    // hoanTatPhienKham) không có các field này — optional, không phá dữ liệu cũ.
+    la_dinh_chinh: { type: Boolean, default: false },
+    truong_thay_doi: { type: [String], default: undefined },
+    gia_tri_cu: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    gia_tri_moi: { type: mongoose.Schema.Types.Mixed, default: undefined },
   },
   { _id: false }
 )

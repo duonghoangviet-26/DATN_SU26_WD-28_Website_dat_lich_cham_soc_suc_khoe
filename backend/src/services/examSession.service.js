@@ -580,3 +580,131 @@ export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new
     ten_benh_nhan: entry.ten_benh_nhan,
   }
 }
+
+// ============================================================
+// B54/B55 — Đính chính hồ sơ ĐÃ XÁC NHẬN (status='da_xac_nhan').
+// ============================================================
+// Từ C1, hồ sơ đã xác nhận bị khóa (co_the_sua=false, luuBuoc chặn theo status). Đây là
+// đường DUY NHẤT sửa hồ sơ sau khi khóa: KHÔNG sửa đè, chỉ set field mới + push một bản ghi
+// có cấu trúc vào lich_su_sua (trường đổi, giá trị cũ/mới, lý do, người sửa, thời điểm) —
+// giữ nguyên toàn bộ lịch sử, không xóa dấu vết bản gốc.
+const TRUONG_DINH_CHINH_DUOC_PHEP = [
+  'chan_doan', 'huong_dan_dieu_tri', 'ghi_chu', 'ngay_tai_kham',
+  'ket_cuc', 'chuyen_vien_thong_tin', 'dich_vu_phat_sinh',
+]
+
+export async function dinhChinhHoSo({ queueId, docId, doctorUserId, thayDoi = {}, lyDo }) {
+  const reason = String(lyDo ?? '').trim()
+  if (!reason) throw loi(400, 'Cần nhập lý do khi đính chính hồ sơ')
+
+  const entry = await getOwnedQueueForExam(queueId, docId)
+  const hoSo = await KetQuaKham.findOne({ hang_doi_id: entry._id })
+  if (!hoSo) throw loi(409, 'Chưa có hồ sơ khám cho lượt này')
+  if (hoSo.status !== 'da_xac_nhan') {
+    throw loi(409, 'Chỉ đính chính hồ sơ đã xác nhận — hồ sơ chưa xác nhận thì sửa trực tiếp qua các bước')
+  }
+
+  const truongGui = Object.keys(thayDoi).filter((t) => TRUONG_DINH_CHINH_DUOC_PHEP.includes(t))
+  if (truongGui.length === 0) throw loi(400, 'Không có trường hợp lệ để đính chính')
+
+  const capNhat = {}
+  const giaTriCu = {}
+  const giaTriMoi = {}
+
+  function ghiNeuDoi(truong, moi) {
+    const cu = hoSo[truong] ?? null
+    if (JSON.stringify(cu) === JSON.stringify(moi ?? null)) return
+    capNhat[truong] = moi
+    giaTriCu[truong] = cu
+    giaTriMoi[truong] = moi ?? null
+  }
+
+  if (truongGui.includes('chan_doan')) {
+    const v = String(thayDoi.chan_doan ?? '').trim()
+    if (!v) throw loi(400, 'Chẩn đoán không được để trống')
+    ghiNeuDoi('chan_doan', v)
+  }
+  if (truongGui.includes('huong_dan_dieu_tri')) {
+    ghiNeuDoi('huong_dan_dieu_tri', String(thayDoi.huong_dan_dieu_tri ?? '').trim() || null)
+  }
+  if (truongGui.includes('ghi_chu')) {
+    ghiNeuDoi('ghi_chu', String(thayDoi.ghi_chu ?? '').trim() || null)
+  }
+  if (truongGui.includes('ngay_tai_kham')) {
+    ghiNeuDoi('ngay_tai_kham', thayDoi.ngay_tai_kham ? new Date(thayDoi.ngay_tai_kham) : null)
+  }
+
+  // ket_cuc + chuyen_vien_thong_tin đi CÙNG NHAU qua rule mục 3.4 — đổi cái này mà không đổi
+  // cái kia (vd đổi 'chuyen_vien' nhưng không gửi kèm nơi chuyển) vẫn phải bị chặn ở đây,
+  // đúng ràng buộc bước 'chan_doan' gốc, không mở ngoại lệ riêng cho luồng đính chính.
+  if (truongGui.includes('ket_cuc') || truongGui.includes('chuyen_vien_thong_tin')) {
+    const kq = kiemTraKetCuc({
+      ket_cuc: thayDoi.ket_cuc ?? hoSo.ket_cuc,
+      chuyen_vien_thong_tin: thayDoi.chuyen_vien_thong_tin ?? hoSo.chuyen_vien_thong_tin,
+    })
+    if (!kq.ok) throw loi(400, kq.loi.join('; '))
+    ghiNeuDoi('ket_cuc', kq.ketCuc)
+    ghiNeuDoi('chuyen_vien_thong_tin', kq.thongTinChuyen)
+  }
+
+  // Đi qua taoChiDinhDichVu như bước 'dich_vu' gốc — không nhận thẳng thanh_tien/gia từ
+  // client, tránh đính chính trở thành đường tắt sửa giá tiền không qua kiểm tra.
+  if (truongGui.includes('dich_vu_phat_sinh')) {
+    const chiDinh = await taoChiDinhDichVu(thayDoi.dich_vu_phat_sinh ?? [], entry.specialty_id, docId)
+    if (!chiDinh.ok) throw loi(chiDinh.status ?? 400, chiDinh.message)
+    ghiNeuDoi('dich_vu_phat_sinh', chiDinh.lines)
+  }
+
+  const truongThayDoi = Object.keys(capNhat)
+  if (truongThayDoi.length === 0) throw loi(400, 'Không có thay đổi nào so với hồ sơ hiện tại')
+
+  await KetQuaKham.updateOne(
+    { _id: hoSo._id },
+    {
+      $set: capNhat,
+      $push: {
+        lich_su_sua: {
+          nguoi_sua_id: doctorUserId,
+          thoi_diem_sua: new Date(),
+          noi_dung: `Đính chính: ${truongThayDoi.join(', ')} — Lý do: ${reason}`,
+          la_dinh_chinh: true,
+          truong_thay_doi: truongThayDoi,
+          gia_tri_cu: giaTriCu,
+          gia_tri_moi: giaTriMoi,
+        },
+      },
+    },
+  )
+
+  await NhatKyThaoTac.create({
+    nguoi_thuc_hien_id: doctorUserId,
+    vai_tro: 'doctor',
+    hanh_dong: 'UPDATE_EXAMINATION_RESULT',
+    loai_doi_tuong: 'examination_result',
+    doi_tuong_id: hoSo._id,
+    ly_do: reason,
+    du_lieu_cu: giaTriCu,
+    du_lieu_moi: giaTriMoi,
+  })
+
+  // Dịch vụ phát sinh đã ảnh hưởng hóa đơn nếu lễ tân đã lập — chỉ MỞ ENUM/ghi nhật ký ở
+  // đây, KHÔNG tự động sửa lại hóa đơn (đó là quyết định nghiệp vụ của lễ tân, ngoài phạm
+  // vi việc bác sĩ đính chính hồ sơ khám). Best-effort, không chặn việc đính chính đã chốt.
+  if (truongThayDoi.includes('dich_vu_phat_sinh')) {
+    try {
+      await NhatKyThaoTac.create({
+        nguoi_thuc_hien_id: doctorUserId,
+        vai_tro: 'doctor',
+        hanh_dong: 'DINH_CHINH_ANH_HUONG_HOA_DON',
+        loai_doi_tuong: 'examination_result',
+        doi_tuong_id: hoSo._id,
+        ly_do: reason,
+        du_lieu_moi: { dich_vu_phat_sinh: giaTriMoi.dich_vu_phat_sinh },
+      })
+    } catch (err) {
+      console.error('[examSession] Không ghi được nhật ký DINH_CHINH_ANH_HUONG_HOA_DON:', err.message)
+    }
+  }
+
+  return layPhienKham({ queueId, docId })
+}
