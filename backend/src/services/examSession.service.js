@@ -16,6 +16,7 @@ import {
   kiemTraBuocTiepNhan,
   tinhBMI,
 } from './examStepRules.js'
+import { kiemTraDiUngThuoc } from './drugAllergyCheck.service.js'
 
 // ============================================================
 // WS-1 — Phiên khám 4 bước. NGUỒN GHI DUY NHẤT cho hồ sơ khám.
@@ -24,8 +25,8 @@ import {
 // vào đây thay vì tự ghi. Có hai đường ghi song song vào cùng `KetQuaKham` là cách chắc
 // chắn nhất để hai luồng lệch nhau — đúng thứ rule mục 7 cấm.
 
-function loi(statusCode, message) {
-  return Object.assign(new Error(message), { statusCode, httpStatus: statusCode })
+function loi(statusCode, message, data = null) {
+  return Object.assign(new Error(message), { statusCode, httpStatus: statusCode, data })
 }
 
 // ─── Helper dùng chung (chuyển từ appointments.controller.js) ────────────────
@@ -317,6 +318,25 @@ export async function luuBuoc({ queueId, docId, doctorUserId, buoc, payload = {}
 
   if (buoc === 'ke_don') {
     const items = Array.isArray(payload.thuoc) ? payload.thuoc : []
+
+    // B47 — cảnh báo dị ứng: so khớp CHUỖI mềm (không có danh mục hoạt chất trong hệ thống,
+    // xem docs/Hoi-dong/F-*.md mục 2.1). Phát hiện trùng mà bác sĩ chưa xác nhận bất chấp thì
+    // chặn lưu; xác nhận rồi thì bắt buộc kèm lý do và ghi audit riêng để đối chiếu sau này.
+    const canhBaoDiUng = kiemTraDiUngThuoc({ diUng: entry.di_ung, thuoc: items })
+    const xacNhanBatChap = payload.xac_nhan_bat_chap_di_ung === true
+    if (canhBaoDiUng.length > 0 && !xacNhanBatChap) {
+      throw loi(
+        409,
+        'Phát hiện thuốc trùng khả nghi với dị ứng đã ghi nhận — cần bác sĩ xác nhận trước khi lưu',
+        { canh_bao_di_ung: canhBaoDiUng },
+      )
+    }
+    let lyDoBatChapDiUng = null
+    if (canhBaoDiUng.length > 0 && xacNhanBatChap) {
+      lyDoBatChapDiUng = String(payload.ly_do_bat_chap_di_ung ?? '').trim()
+      if (!lyDoBatChapDiUng) throw loi(400, 'Cần nhập lý do khi kê thuốc bất chấp cảnh báo dị ứng')
+    }
+
     await DonThuoc.deleteMany({ medical_record_id: hoSo._id })
     if (items.length) {
       await DonThuoc.create({
@@ -327,6 +347,17 @@ export async function luuBuoc({ queueId, docId, doctorUserId, buoc, payload = {}
         doctor_id: docId,
         nguon: 'bac_si',
         items,
+      })
+    }
+    if (lyDoBatChapDiUng) {
+      await NhatKyThaoTac.create({
+        nguoi_thuc_hien_id: doctorUserId,
+        vai_tro: 'doctor',
+        hanh_dong: 'KE_THUOC_BAT_CHAP_CANH_BAO_DI_UNG',
+        loai_doi_tuong: 'examination_result',
+        doi_tuong_id: hoSo._id,
+        ly_do: lyDoBatChapDiUng,
+        du_lieu_moi: { canh_bao_di_ung: canhBaoDiUng },
       })
     }
   }

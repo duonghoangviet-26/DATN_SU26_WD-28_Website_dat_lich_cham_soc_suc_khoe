@@ -33,6 +33,7 @@ import mongoose from 'mongoose'
 //   CREATE_SCHEDULE | CANCEL_SLOT | UPDATE_SLOT
 // [Doctor – ExaminationResult]
 //   UPDATE_EXAMINATION_RESULT
+//   KE_THUOC_BAT_CHAP_CANH_BAO_DI_UNG (bác sĩ override cảnh báo dị ứng thuốc — B47)
 // [Doctor – Queue & Room]
 //   CHANGE_DOCTOR_STATUS | CHECKIN_QUEUE | CALL_PATIENT | SKIP_PATIENT | ASSIGN_DOCTOR
 //   loai_doi_tuong: queue_entry | room_status

@@ -19,6 +19,13 @@ export interface ThuocItem {
   ghi_chu?: string | null
 }
 
+// B47 — cảnh báo dị ứng: so khớp chuỗi mềm, không phải tra cứu hoạt chất y khoa (xem
+// backend/src/services/drugAllergyCheck.service.js). Trả kèm theo lỗi 409 khi lưu bước kê đơn.
+export interface CanhBaoDiUngItem {
+  ten_thuoc: string
+  tu_khoa_trung: string[]
+}
+
 export interface PhienKham {
   queue: {
     id: string

@@ -36,7 +36,7 @@ export async function saveStep(req, res) {
     })
     return ok(res, phien, 'Đã lưu')
   } catch (err) {
-    return fail(res, err.httpStatus ?? err.statusCode ?? 500, err.message)
+    return fail(res, err.httpStatus ?? err.statusCode ?? 500, err.message, err.data ?? null)
   }
 }
 

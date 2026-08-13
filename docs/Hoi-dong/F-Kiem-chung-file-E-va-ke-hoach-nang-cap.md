@@ -5,7 +5,25 @@
 > **Phương pháp:** đọc trực tiếp code trong `backend/src/{routes,controllers,services,models}` và
 > `frontend/src/{pages,services}` để xác nhận từng dẫn chứng file E nêu. Không nhận định nào trong
 > file này dựa trên suy diễn — mỗi kết luận đều kèm file:dòng đã mở ra đọc.
-> **Phạm vi phiên này:** CHỈ tài liệu + kế hoạch. Không sửa code.
+> **Phạm vi lập tài liệu:** kiểm chứng + kế hoạch (2026-08-14). **Triển khai bắt đầu cùng ngày**,
+> theo đúng thứ tự Cao ở §6 — xem "Trạng thái triển khai" đầu mỗi mục §3 để biết mục nào đã code.
+
+## 0. Trạng thái triển khai (cập nhật liên tục)
+
+| # | Mục | Trạng thái | Nhánh/commit |
+|---|---|---|---|
+| C1 | Khóa `co_the_sua=false` khi hoàn tất | ✅ Đã xong | `Fix_demo` |
+| C2 | Cảnh báo dị ứng khi kê thuốc (B47) | ✅ Đã xong | `Fix_demo` |
+| C3 | Outcome `ket_cuc` + chuyển viện (D78/D80) | ⏳ Chưa làm | — |
+| C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ⏳ Chưa làm | — |
+| C5 | Hồ sơ tạm không SĐT (D81) | ⏳ Chưa làm | — |
+| C6 | Nút cấp cứu + thông báo khẩn (D78) | ⏳ Chưa làm | — |
+
+Kiểm thử: **không chạy** `npm test` / `test:e2e:*` toàn bộ vì `.env` trỏ `MONGODB_URI` vào DB
+chung `DATN_VITAFAMILY` (không có DB test riêng) và các file `tests/*.test.js` kết nối thẳng
+DB đó — chạy đại trà có thể ghi/sửa dữ liệu demo của cả nhóm. Đã xác minh bằng: `node --check`
+(cú pháp) trên mọi file sửa, `tsc --noEmit` + `eslint` cho frontend, và unit test **thuần** (không
+chạm DB, ví dụ `tests/drug-allergy-check.test.js`) cho logic mới.
 
 ---
 
