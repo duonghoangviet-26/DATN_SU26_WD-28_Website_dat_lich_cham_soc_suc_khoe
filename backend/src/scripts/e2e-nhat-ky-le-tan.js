@@ -81,7 +81,10 @@ async function main() {
   kt('Nhom khong hop le tra toan bo, khong tra rong', nhomLa.length === homNay.length)
 
   muc('4. Danh muc day du')
-  kt('Co du 10 hanh dong le tan', MA_HANH_DONG_LE_TAN.length === 10)
+  // >= 10 chu khong phai == 10: danh muc da lon them nhieu lan tu luc script nay viet (D78/D81/
+  // hang doi trung tam...) — so bang tuyet doi se gay "fail" gia moi khi co tinh nang moi ghi
+  // audit hop le, dung ra phai kiem tra khong bi THIEU chu khong phai khong bi THEM.
+  kt('Co it nhat 10 hanh dong le tan', MA_HANH_DONG_LE_TAN.length >= 10, `hien co ${MA_HANH_DONG_LE_TAN.length}`)
 
   await NhatKyThaoTac.deleteMany({ nguoi_thuc_hien_id: nguoiLeTan })
   await mongoose.disconnect()
