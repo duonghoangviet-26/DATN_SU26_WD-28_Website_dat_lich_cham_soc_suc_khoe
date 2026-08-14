@@ -376,7 +376,7 @@ export const receptionistPatientIntakeService = {
     ho_so_benh_nhan_id: string
     specialty_id: string
     xac_nhan_canh_bao?: boolean
-    // D78 — cấp cứu/ưu tiên khẩn. Backend bắt buộc ly_do_uu_tien khi muc_uu_tien_tiep_nhan='cap_cuu'.
+    // Cấp cứu — chỉ đẩy lên đầu hàng đợi khám ngay, không bắt buộc lý do, không có màn báo cáo riêng.
     muc_uu_tien_tiep_nhan?: 'binh_thuong' | 'uu_tien' | 'cap_cuu'
     ly_do_uu_tien?: string
   }) {

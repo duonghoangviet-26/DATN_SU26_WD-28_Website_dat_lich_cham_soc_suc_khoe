@@ -17,7 +17,7 @@
 | C3 | Outcome `ket_cuc` + chuyển viện (D78/D80) | ✅ Đã xong (phần D80; D78 nút cấp cứu ở C6) | `Fix_demo` |
 | C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ✅ Đã xong cả BE + FE (trang "Bệnh nhân đã khám") | `Fix_demo` |
 | C5 | Hồ sơ tạm không SĐT (D81) | ✅ Đã xong cả 3 tầng + UI lễ tân | `Fix_demo` |
-| C6 | Nút cấp cứu + thông báo khẩn (D78) | ✅ Đã xong cả nút tiếp nhận + biên bản ca khẩn cuối ngày | `Fix_demo` |
+| C6 | Nút cấp cứu + thông báo khẩn (D78) | ✅ Nút tiếp nhận (tối giản, không bắt buộc lý do). ⛔ **Biên bản ca khẩn cuối ngày ĐÃ BỊ GỠ theo yêu cầu người dùng 2026-08-14** — xem ghi chú | `Fix_demo` |
 
 **Ghi chú C4:** `PATCH /api/doctor/exam-session/:queueId/amendment` (`dinhChinhHoSo` trong
 `examSession.service.js`) nhận `{ thay_doi, ly_do }`, chỉ cho sửa 7 trường lâm sàng (không đụng
@@ -45,20 +45,27 @@ khỏi `searchPatientProfiles` (không sửa hàm tra cứu theo SĐT đang ch�
 **Ghi chú C6:** trước đây `muc_uu_tien_tiep_nhan`/`ly_do_uu_tien` tồn tại sẵn ở backend
 (`tiepNhanOfflineVaoHangDoiTrungTam`) nhưng **FE chưa từng gửi** — mọi lượt walk-in luôn mặc
 định `binh_thuong`, tức là lễ tân **không có cách nào** đánh dấu cấp cứu từ giao diện dù
-model/service đã hỗ trợ. Đã thêm: (1) BE bắt buộc `ly_do_uu_tien` khi chọn `cap_cuu`; (2) audit
-`LT_OFFLINE_INTAKE_CENTRAL` giờ lưu kèm mức ưu tiên + lý do (trước đây không lưu, nên dù chọn
-cấp cứu cũng không lọc lại được — đây là điều kiện cần cho "báo cáo ca khẩn cuối ngày"); (3)
-báo realtime tới **mọi bác sĩ đang trong ca cùng chuyên khoa** ngay lúc tiếp nhận (sớm hơn mốc
-điều phối `ganKhachOfflineChoBacSi`, vốn chỉ báo đúng 1 bác sĩ sau khi đã chọn xong); (4) FE
-lễ tân có nút "Cấp cứu / ưu tiên khẩn" bắt buộc lý do; (5) FE bác sĩ (`DoctorExamQueue.tsx`)
-hiện toast đỏ khi nhận được tín hiệu này. **Biên bản ca khẩn cuối ngày (2026-08-14, tiếp)**:
-`services/emergencyReport.service.js` — lọc đúng `NhatKyThaoTac` theo
-`hanh_dong='LT_OFFLINE_INTAKE_CENTRAL'` + `du_lieu_moi.muc_uu_tien_tiep_nhan='cap_cuu'`, join
-`HangDoi` hiện tại lấy trạng thái xử lý + bác sĩ phụ trách (không tạo bảng mới, đúng như đã ghi
-ở §3). Endpoint mới `GET /api/receptionist/emergency-report?ngay=`, trang FE mới
-`pages/receptionist/EmergencyReport.tsx` ("Biên bản ca khẩn") theo đúng khuôn `ActivityLog.tsx`
-đã có (PageShell/ReceptionistHeader/TableFrame), lọc theo ngày, hiện giờ tiếp nhận/bệnh nhân/lý
-do/người tiếp nhận/bác sĩ phụ trách/trạng thái hiện tại.
+model/service đã hỗ trợ. Đã thêm: audit `LT_OFFLINE_INTAKE_CENTRAL` lưu kèm mức ưu tiên; báo
+realtime tới **mọi bác sĩ đang trong ca cùng chuyên khoa** ngay lúc tiếp nhận (sớm hơn mốc điều
+phối `ganKhachOfflineChoBacSi`, vốn chỉ báo đúng 1 bác sĩ sau khi đã chọn xong); FE lễ tân có nút
+"Cấp cứu" ở tiếp nhận; FE bác sĩ (`DoctorExamQueue.tsx`) hiện toast đỏ khi nhận được tín hiệu này.
+
+⛔ **Đảo ngược 2026-08-14 (cùng ngày, sau khi test xong):** người dùng phản hồi phòng khám nhỏ
+không xử lý cấp cứu thực sự — ca hiếm gặp (dị vật vào tai, phản ứng đột ngột...) sẽ được xử lý
+linh động tại chỗ, không cần thao tác nặng trên hệ thống, và **không cần lưu lại hay tra cứu lịch
+sử**. Theo đó:
+- **Đã gỡ hoàn toàn** "Biên bản ca khẩn cuối ngày": xoá `services/emergencyReport.service.js`,
+  `controllers/receptionist/emergency-report.controller.js`,
+  `routes/receptionist/emergency-report.routes.js`, `pages/receptionist/EmergencyReport.tsx`,
+  `services/receptionist-emergency-report.service.ts`, cùng toàn bộ route/menu liên quan.
+- **Tối giản nút "Cấp cứu"** ở `PatientIntake.tsx`: chỉ còn 1 checkbox gạt "Cấp cứu — khám trước,
+  không phải chờ", **không còn** ô nhập lý do bắt buộc. Backend
+  (`centralOfflineQueue.service.js`) **bỏ** guard 400 bắt buộc `ly_do_uu_tien` khi chọn
+  `cap_cuu`.
+- **Vẫn giữ nguyên**: `muc_uu_tien_tiep_nhan='cap_cuu'` vẫn đẩy bệnh nhân lên đầu hàng đợi
+  (`sapXepHangDoiTrungTam`), toast realtime báo bác sĩ vẫn hoạt động — đúng phần giá trị cốt lõi
+  người dùng xác nhận muốn giữ ("có nút chuyển khẩn cấp là đúng"), chỉ bỏ phần "hệ thống hoá"
+  (bắt buộc lý do + màn báo cáo tra cứu lại) mà người dùng thấy thừa với quy mô phòng khám nhỏ.
 
 Kiểm thử: **không chạy** `npm test` / `test:e2e:*` toàn bộ vì `.env` trỏ `MONGODB_URI` vào DB
 chung `DATN_VITAFAMILY` (không có DB test riêng) và các file `tests/*.test.js` kết nối thẳng

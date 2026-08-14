@@ -380,11 +380,6 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
   const normalizedPreferredDoctorId = normalizeObjectId(bacSiUuTienId, 'bac_si_uu_tien_id')
   if (!normalizedProfileId) throw loi(400, 'Can chon ho so benh nhan')
   if (!normalizedSpecialtyId) throw loi(400, 'Can chon chuyen khoa')
-  // D78 — cap cuu bat buoc phai co ly do/dau hieu ghi lai, khong duoc chon muc khan ma
-  // khong giai trinh gi (tranh lam dung de vuot hang doi).
-  if (mucUuTienTiepNhan === 'cap_cuu' && !String(lyDoUuTien ?? '').trim()) {
-    throw loi(400, 'Can nhap ly do / dau hieu cap cuu truoc khi tiep nhan')
-  }
 
   const profile = await HoSoBenhNhan.findOne({ _id: normalizedProfileId, trang_thai: 'active' }).lean()
   if (!profile) throw loi(404, 'Ho so benh nhan khong hop le')
@@ -479,17 +474,16 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
       specialty_id: String(entry.specialty_id),
       thoi_gian_cho_uoc_tinh_phut: entry.thoi_gian_cho_uoc_tinh_phut ?? null,
       trang_thai: entry.trang_thai,
-      // D78 — trước đây audit tiếp nhận KHÔNG lưu mức ưu tiên/lý do, nên dù lễ tân có chọn
-      // 'cap_cuu' cũng không lọc lại được cuối ngày. Ghi kèm ở đây để báo cáo ca khẩn dùng
-      // được ngay bằng cách lọc theo hai field này, không cần action mới trong catalog.
+      // Mức ưu tiên đi kèm nhật ký chung (không phải cơ chế riêng) — phòng khám nhỏ không giữ
+      // biên bản/báo cáo ca khẩn, chỉ cần bệnh nhân được khám trước ngay lúc đó.
       muc_uu_tien_tiep_nhan: entry.muc_uu_tien_tiep_nhan,
       ly_do_uu_tien: entry.ly_do_uu_tien ?? null,
     },
   })
 
-  // D78 — báo khẩn tới bác sĩ đang trong ca CÙNG chuyên khoa, NGAY LÚC TIẾP NHẬN — sớm hơn
-  // mốc điều phối (ganKhachOfflineChoBacSi) vốn chỉ báo đúng MỘT bác sĩ sau khi đã chọn.
-  // Cấp cứu cần được biết sớm để bác sĩ chủ động, không chờ lễ tân điều phối xong mới hay.
+  // Báo khẩn tới bác sĩ đang trong ca CÙNG chuyên khoa, NGAY LÚC TIẾP NHẬN — sớm hơn mốc điều
+  // phối (ganKhachOfflineChoBacSi) vốn chỉ báo đúng MỘT bác sĩ sau khi đã chọn. Cấp cứu cần
+  // được biết sớm để bác sĩ chủ động, không chờ lễ tân điều phối xong mới hay.
   // Best-effort: lỗi ở đây không được phép làm hỏng việc tiếp nhận đã ghi nhận xong.
   if (mucUuTienTiepNhan === 'cap_cuu') {
     try {

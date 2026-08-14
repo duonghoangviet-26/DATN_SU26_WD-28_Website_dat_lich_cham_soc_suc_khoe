@@ -1,10 +1,14 @@
 /**
- * KIEM THU DAU-CUOI: C4 (Benh nhan da kham + dinh chinh ho so) va C6 (Bien ban ca khan)
+ * KIEM THU DAU-CUOI: C4 (Benh nhan da kham + dinh chinh ho so)
  * =========================================================================================
- * Hai tinh nang moi 2026-08-14 (phien 2) CHUA co e2e nao phu:
+ * Tinh nang moi 2026-08-14 CHUA co e2e nao phu:
  *   - C4: GET /doctor/exam-history, GET /doctor/exam-session/:id (field hoa_don moi),
  *     PATCH /doctor/exam-session/:id/amendment
- *   - C6: GET /receptionist/emergency-report
+ *
+ * (C6 "Bien ban ca khan cuoi ngay" da bi GO BO cung ngay theo yeu cau nguoi dung — phong kham
+ * nho khong xu ly cap cuu thuc su, ca kho hiem se duoc chuyen thang len benh vien lon. Muc uu
+ * tien 'cap_cuu' trong hang doi van giu de xep kham truoc, nhung khong con bat buoc ly do va
+ * khong con man bao cao rieng — xem centralOfflineQueue.service.js + PatientIntake.tsx.)
  *
  * Tao ho so kham TRUC TIEP qua examSession.service.js (giong e2e-phien-kham-4-buoc.js — khong
  * phu thuoc gio phong kham), roi goi qua HTTP that (can server dang chay o TEST_API_BASE_URL)
@@ -191,71 +195,6 @@ async function main() {
   // Doi lai HangDoi.trang_thai != 'hoan_thanh' -> amendment phai bi chan (chi sua khi da_xac_nhan)
   const truocKhiHoanThanh = await HangDoi.findById(queueId).select('trang_thai').lean()
   kt('HangDoi.trang_thai VAN la hoan_thanh sau dinh chinh (khong bi mo khoa nham)', truocKhiHoanThanh?.trang_thai === 'hoan_thanh', truocKhiHoanThanh?.trang_thai)
-
-  // ── C6 — Bien ban ca khan ────────────────────────────────────────────────────────────────
-  muc('C6 — GET /receptionist/emergency-report')
-  const receptionist = await NguoiDung.findOne({ role: 'receptionist' }).lean()
-  if (!receptionist) {
-    kt('Co tai khoan le tan tren DB test de kiem C6', false)
-  } else {
-    const loginLT = await api('/auth/login', { method: 'POST', body: { email: receptionist.email, mat_khau: '123456' } })
-    const tokLT = loginLT.body?.data?.token
-    kt('Le tan dang nhap duoc', loginLT.status === 200, `status=${loginLT.status}`)
-
-    // Gia lap 1 ban ghi audit cap cuu (khong di qua HTTP intake — luong intake that phu thuoc
-    // bac si dang truc, da kiem rieng o e2e-hang-doi-vang-lai-trung-tam.js). Muc dich o day
-    // CHI kiem truy van bao cao dung — dung dung hanh vi tiepNhanOfflineVaoHangDoiTrungTam ghi.
-    // trang_thai='dang_cho' (DA duoc dieu phoi) chu khong phai 'cho_dieu_phoi' — model HangDoi
-    // pre('validate') CO Y ep doctor_id=null khi 'cho_dieu_phoi' (bat buoc dung: trang thai do
-    // nghia la CHUA gan bac si), neu dung no o day se luon ra doctor_id=null du co truyen vao.
-    const hangDoiCapCuu = await HangDoi.create({
-      nguon: 'offline',
-      ten_benh_nhan: `${TAG} Cap Cuu Test`,
-      so_dien_thoai: '0900008888',
-      specialty_id: specialtyId,
-      doctor_id: bacSiA._id,
-      muc_uu_tien_tiep_nhan: 'cap_cuu',
-      ly_do_uu_tien: 'Sot cao co giat (E2E)',
-      trang_thai: 'dang_cho',
-      checkin_time: new Date(),
-      muc_uu_tien: 'offline',
-    })
-    daTao.hangDoi.push(hangDoiCapCuu._id)
-    const nhatKyCapCuu = await NhatKyThaoTac.create({
-      nguoi_thuc_hien_id: receptionist._id,
-      vai_tro: 'receptionist',
-      hanh_dong: 'LT_OFFLINE_INTAKE_CENTRAL',
-      loai_doi_tuong: 'central_offline_queue',
-      doi_tuong_id: hangDoiCapCuu._id,
-      du_lieu_moi: {
-        ten_benh_nhan: hangDoiCapCuu.ten_benh_nhan,
-        so_dien_thoai: hangDoiCapCuu.so_dien_thoai,
-        ma_so_thu_tu: null,
-        muc_uu_tien_tiep_nhan: 'cap_cuu',
-        ly_do_uu_tien: hangDoiCapCuu.ly_do_uu_tien,
-      },
-    })
-    daTao.nhatKy.push(nhatKyCapCuu._id)
-
-    const report = await api(`/receptionist/emergency-report?ngay=${todayISO}`, { auth: tokLT })
-    kt('HTTP 200', report.status === 200, `status=${report.status}`)
-    const dongCapCuu = (report.body?.data ?? []).find((r) => r.queue_id === String(hangDoiCapCuu._id))
-    kt('Ca cap cuu vua tao XUAT HIEN trong bao cao', !!dongCapCuu)
-    kt('ten_benh_nhan dung', dongCapCuu?.ten_benh_nhan === hangDoiCapCuu.ten_benh_nhan, dongCapCuu?.ten_benh_nhan)
-    kt('ly_do_cap_cuu dung', dongCapCuu?.ly_do_cap_cuu === 'Sot cao co giat (E2E)', dongCapCuu?.ly_do_cap_cuu)
-    kt('trang_thai_hien_tai = dang_cho (dung trang thai HangDoi hien tai)', dongCapCuu?.trang_thai_hien_tai === 'dang_cho', dongCapCuu?.trang_thai_hien_tai)
-    kt('bac_si_phu_trach dung ten bac si A (da gan doctor_id)', dongCapCuu?.bac_si_phu_trach === userA.ho_ten, dongCapCuu?.bac_si_phu_trach)
-    kt('nguoi_tiep_nhan dung ten le tan', dongCapCuu?.nguoi_tiep_nhan === receptionist.ho_ten, dongCapCuu?.nguoi_tiep_nhan)
-
-    // Ngay khac -> khong thay ca nay (loc dung theo ngay).
-    const homQuaISO = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-    const reportHomQua = await api(`/receptionist/emergency-report?ngay=${homQuaISO}`, { auth: tokLT })
-    kt('Loc theo ngay KHAC -> khong tra ca hom nay', !(reportHomQua.body?.data ?? []).some((r) => r.queue_id === String(hangDoiCapCuu._id)))
-
-    // Bac si (khong phai le tan/admin) khong goi duoc endpoint nay.
-    const bacSiGoiEmergency = await api(`/receptionist/emergency-report?ngay=${todayISO}`, { auth: tokA })
-    kt('Bac si goi endpoint le tan -> 403 (sai role)', bacSiGoiEmergency.status === 403, `status=${bacSiGoiEmergency.status}`)
-  }
 
   console.log(`\n=== ${soDung} dat / ${soSai} khong dat ===`)
   if (loiChiTiet.length) {
