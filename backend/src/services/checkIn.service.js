@@ -6,6 +6,10 @@ import { kiemTraQuaTai } from './queueOverflow.service.js'
 import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
 import { capSoThuTuCheckin } from './checkInNumber.service.js'
 import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
+import {
+  enrichAppointmentsWithPaymentState,
+  resolveAndSyncAppointmentPaymentState,
+} from './appointmentPaymentStatus.service.js'
 
 // ============================================================
 // CHECK-IN — MỘT service dùng chung cho MỌI vai trò (rule mục 7)
@@ -156,6 +160,7 @@ export async function checkInLichHen({
   if (!appt.doctor_id) {
     throw loi(409, 'Lịch hẹn chưa được gán bác sĩ nên chưa vào được hàng đợi')
   }
+  await resolveAndSyncAppointmentPaymentState(appt)
 
   const { start, end } = khoangHomNay(now)
   if (appt.ngay_kham < start || appt.ngay_kham >= end) {
@@ -348,7 +353,7 @@ export async function checkInVangLai({
  * @param {object}  p
  * @param {string?} p.doctorId - giới hạn theo bác sĩ (bác sĩ tự xem); null = cả phòng khám
  */
-export async function layLichChoTiepNhan({ doctorId = null, ngay = null, now = new Date() }) {
+export async function layLichChoTiepNhan({ doctorId = null, ngay = null, now = new Date(), onlyReadyForExam = false }) {
   const moc = ngay ? startOfDayUtc(ngay) : startOfDayUtc(now)
   const ketThuc = new Date(moc)
   ketThuc.setUTCDate(ketThuc.getUTCDate() + 1)
@@ -365,17 +370,22 @@ export async function layLichChoTiepNhan({ doctorId = null, ngay = null, now = n
     .sort({ gio_kham: 1 })
     .lean()
   if (appointments.length === 0) return []
+  const syncedAppointments = await enrichAppointmentsWithPaymentState(appointments, { persist: true })
+  const visibleAppointments = onlyReadyForExam
+    ? syncedAppointments.filter((a) => a.status === 'confirmed' || a.payment_status === 'paid')
+    : syncedAppointments
+  if (visibleAppointments.length === 0) return []
 
   // Lịch đã có lượt trong hàng đợi thì không còn "chờ tiếp nhận" nữa. Lọc bằng một truy vấn
   // thay vì kiểm từng lịch.
   const daVaoHangDoi = new Set(
-    (await HangDoi.find({ appointment_id: { $in: appointments.map((a) => a._id) } })
+    (await HangDoi.find({ appointment_id: { $in: visibleAppointments.map((a) => a._id) } })
       .select('appointment_id').lean())
       .map((e) => String(e.appointment_id)),
   )
 
-  const memberIds = appointments.filter((a) => a.member_id).map((a) => a.member_id)
-  const userIds = appointments.filter((a) => a.user_id).map((a) => a.user_id)
+  const memberIds = visibleAppointments.filter((a) => a.member_id).map((a) => a.member_id)
+  const userIds = visibleAppointments.filter((a) => a.user_id).map((a) => a.user_id)
   const [members, users] = await Promise.all([
     ThanhVien.find({ _id: { $in: memberIds } }).select('ho_ten ngay_sinh gioi_tinh').lean(),
     NguoiDung.find({ _id: { $in: userIds } }).select('ho_ten so_dien_thoai').lean(),
@@ -383,7 +393,7 @@ export async function layLichChoTiepNhan({ doctorId = null, ngay = null, now = n
   const memberById = new Map(members.map((m) => [String(m._id), m]))
   const userById = new Map(users.map((u) => [String(u._id), u]))
 
-  return appointments
+  return visibleAppointments
     .filter((a) => !daVaoHangDoi.has(String(a._id)))
     .map((a) => {
       const member = a.member_id ? memberById.get(String(a.member_id)) : null

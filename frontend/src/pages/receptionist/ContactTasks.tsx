@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ContactTask, receptionistContactTasksService } from '@/services/receptionist-contact-tasks.service'
+import { EmptyBlock, LoadingBlock, PageShell, ReceptionistHeader, StatusBadge } from '@/components/receptionist/ReceptionistUI'
 
 function formatDateTime(value?: string | null) {
   if (!value) return 'Chưa có dữ liệu'
@@ -69,27 +70,25 @@ export default function ContactTasks() {
   }
 
   return (
-    <div className="min-h-full bg-slate-50 p-4 lg:p-6">
-      <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Vận hành · Xác nhận thông tin khách</p>
-        <h2 className="mt-2 text-2xl font-bold text-slate-800">Liên Hệ Khách Hàng</h2>
-        <p className="mt-1 max-w-3xl text-sm text-slate-500">
-          Theo dõi khách cần gọi do thay đổi lịch, không có kênh thông báo app, hoặc đã quá giờ khám 10 phút nhưng chưa check-in tại quầy.
-        </p>
-      </div>
+    <PageShell>
+      <ReceptionistHeader
+        eyebrow="Vận hành · Xác nhận thông tin khách"
+        title="Liên hệ khách hàng"
+        description="Theo dõi khách cần gọi do thay đổi lịch, không có kênh thông báo app, hoặc đã quá giờ khám 10 phút nhưng chưa check-in tại quầy."
+      />
 
-      <div className="mb-4 flex gap-2">
+      <div className="flex w-full flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:w-fit sm:flex-row">
         <button
           type="button"
           onClick={() => setTab('chua_goi')}
-          className={`rounded-xl px-4 py-2 text-sm font-semibold ${tab === 'chua_goi' ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
+          className={`min-h-10 rounded-md px-4 text-sm font-semibold transition ${tab === 'chua_goi' ? 'bg-brand-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
         >
           Chưa liên hệ
         </button>
         <button
           type="button"
           onClick={() => setTab('da_goi')}
-          className={`rounded-xl px-4 py-2 text-sm font-semibold ${tab === 'da_goi' ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
+          className={`min-h-10 rounded-md px-4 text-sm font-semibold transition ${tab === 'da_goi' ? 'bg-brand-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
         >
           Đã liên hệ
         </button>
@@ -98,31 +97,29 @@ export default function ContactTasks() {
       {error && <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
       {loading ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">Đang tải danh sách...</div>
+        <LoadingBlock>Đang tải danh sách...</LoadingBlock>
       ) : tasks.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-          {tab === 'chua_goi' ? 'Không còn khách nào cần liên hệ.' : 'Chưa có cuộc gọi nào được ghi nhận.'}
-        </div>
+        <EmptyBlock>{tab === 'chua_goi' ? 'Không còn khách nào cần liên hệ.' : 'Chưa có cuộc gọi nào được ghi nhận.'}</EmptyBlock>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3 xl:grid-cols-2">
           {tasks.map((task) => (
-            <div key={task.audit_id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <article key={task.audit_id} className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-base font-bold text-slate-800">{task.ten_khach || 'Khách vãng lai'}</p>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${task.loai_viec === 'xac_nhan_den_muon' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                    <p className="line-clamp-2 text-base font-bold text-slate-900">{task.ten_khach || 'Khách vãng lai'}</p>
+                    <StatusBadge tone={task.loai_viec === 'xac_nhan_den_muon' ? 'warning' : 'info'}>
                       {task.loai_viec === 'xac_nhan_den_muon' ? 'Trễ hẹn' : 'Thông báo'}
-                    </span>
+                    </StatusBadge>
                   </div>
                   <p className="mt-0.5 text-sm text-slate-500">
                     {task.so_dien_thoai || 'Chưa có số điện thoại'}{task.ma_lich_hen ? ` · ${task.ma_lich_hen}` : ''}
                   </p>
                 </div>
-                <span className="text-xs text-slate-400">{formatDateTime(task.ngay_tao)}</span>
+                <span className="shrink-0 text-xs text-slate-500">{formatDateTime(task.ngay_tao)}</span>
               </div>
 
-              <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+              <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
                 <p className="font-semibold">{task.tieu_de || 'Cần liên hệ khách'}</p>
                 {task.noi_dung && <p className="mt-1 text-slate-600">{task.noi_dung}</p>}
                 {task.loai_viec === 'xac_nhan_den_muon' && (
@@ -155,14 +152,14 @@ export default function ContactTasks() {
                   {task.ghi_chu_cuoc_goi ? ` — ${task.ghi_chu_cuoc_goi}` : ''}
                 </p>
               )}
-            </div>
+            </article>
           ))}
         </div>
       )}
 
       {doneModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg bg-white p-5 shadow-lg">
             <h3 className="text-xl font-bold text-slate-800">Xác nhận đã liên hệ</h3>
             <p className="mt-1 text-sm text-slate-500">{doneModal.tenKhach || 'Khách vãng lai'}</p>
 
@@ -218,6 +215,6 @@ export default function ContactTasks() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

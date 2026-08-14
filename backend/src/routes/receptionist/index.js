@@ -17,6 +17,8 @@ import timelineRoutes from './timeline.routes.js'
 import activityLogRoutes from './activity-log.routes.js'
 import contactTasksRoutes from './contact-tasks.routes.js'
 import doctorLeavesRoutes from './doctor-leaves.routes.js'
+import offlineQueueRoutes from './offline-queue.routes.js'
+import emergencyReportRoutes from './emergency-report.routes.js'
 
 const router = Router()
 
@@ -43,8 +45,11 @@ router.use('/users', userRoutes)
 router.use('/patient-intake', patientIntakeRoutes)
 router.use('/medical-records', medicalRecordRoutes)
 router.use('/queue', queueRoutes)
+router.use('/offline-queue', offlineQueueRoutes)
 router.use('/timeline', timelineRoutes)
 router.use('/activity-log', activityLogRoutes)
+// C6/D78 — biên bản ca khẩn cuối ngày (lọc từ NhatKyThaoTac, không tạo bảng mới).
+router.use('/emergency-report', emergencyReportRoutes)
 router.use('/contact-tasks', contactTasksRoutes)
 router.use('/doctor-leaves', doctorLeavesRoutes)
 router.use('/payments/offline', offlinePaymentRoutes)

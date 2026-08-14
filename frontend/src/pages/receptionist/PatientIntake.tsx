@@ -1,16 +1,20 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import {
-  CapacityEvidence,
-  OfflineAvailability,
+  CentralOfflineCapacity,
   OnlineAccount,
   PatientProfile,
   TodayAppointment,
   getUnlinkedAccountAppointments,
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
+import { SpecialtyOption, specialtyService } from '@/services/specialty.service'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
+import TempProfileModal from '@/components/receptionist/TempProfileModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
+import CheckInVerifyModal from '@/components/receptionist/CheckInVerifyModal'
+import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI'
+import axiosInstance from '@/services/axiosInstance'
 import {
   getLatestAllowedBirthDateInput,
   normalizePersonName,
@@ -19,6 +23,23 @@ import {
   validatePatientName,
   validateVietnamesePhone,
 } from '@/utils/patientIdentityValidation'
+
+interface ReceptionistTodayAppointment {
+  _id: string
+  ngay_kham: string
+  gio_kham: string
+  status: string
+  payment_status: string
+  user_id: { ho_ten?: string | null; so_dien_thoai?: string | null } | null
+  doctor_id: { _id?: string; user_id?: { ho_ten?: string | null } } | null
+  ten_khach?: string | null
+  so_dien_thoai_khach?: string | null
+  ma_lich_hen?: string | null
+  ten_dich_vu?: string | null
+  allowed_actions?: Array<'check_in' | 'reschedule' | 'late_reschedule' | 'cancel'>
+  lock_reason?: string | null
+  sua_gan_nhat?: { nhan: string; thoi_diem: string; nguoi?: { ho_ten?: string | null } } | null
+}
 
 const emptyForm = {
   ho_ten: '',
@@ -72,40 +93,261 @@ function appointmentStatusLabel(status: string) {
   return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã tiếp nhận', in_progress: 'Đang khám', completed: 'Hoàn thành', cancelled: 'Đã hủy', no_show: 'Không đến' } as Record<string, string>)[status] ?? status
 }
 
-function capacityLabel(row: CapacityEvidence) {
-  return ({
-    co_the_tiep_nhan: 'Có thể tiếp nhận',
-    tam_dung_qua_tai: 'Tạm ngưng tiếp nhận',
-    da_day_walk_in: 'Đã hết suất tiếp nhận',
-    khong_co_lich_bac_si: 'Không có lịch bác sĩ',
-    khong_co_khung_gan: 'Ngoài giờ tiếp nhận',
-  } as Record<string, string>)[row.ket_luan] ?? row.ket_luan
-}
-
-function capacityTone(row: CapacityEvidence) {
-  if (row.ket_luan === 'co_the_tiep_nhan') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
-  if (row.ket_luan === 'tam_dung_qua_tai') return 'border-amber-200 bg-amber-50 text-amber-800'
-  return 'border-slate-200 bg-slate-50 text-slate-700'
-}
-
-function availabilityLabel(status: OfflineAvailability['trang_thai_kiem_tra']) {
-  return ({
-    co_the_tiep_nhan: 'Có thể tiếp nhận',
-    tam_dung_qua_tai: 'Tạm ngưng tiếp nhận do ca khám đang trễ',
-    da_day_walk_in: 'Đã hết suất tiếp nhận trong khung khám',
-    khong_co_lich_bac_si: 'Không có lịch bác sĩ hợp lệ',
-    khong_co_khung_gan: 'Hiện không trong giờ tiếp nhận',
-  } as Record<string, string>)[status] ?? 'Chưa thể đánh giá khả năng tiếp nhận'
-}
-
-function availabilityTone(status: OfflineAvailability['trang_thai_kiem_tra']) {
-  if (status === 'co_the_tiep_nhan') return 'border-emerald-200 bg-emerald-50 text-emerald-900'
-  if (status === 'tam_dung_qua_tai') return 'border-amber-200 bg-amber-50 text-amber-900'
-  return 'border-slate-200 bg-slate-50 text-slate-800'
-}
-
 function appointmentIsCheckinable(appointment: TodayAppointment) {
   return appointment.status === 'confirmed'
+}
+
+function todayAppointmentIsCheckinable(appointment: ReceptionistTodayAppointment) {
+  if (Array.isArray(appointment.allowed_actions)) return appointment.allowed_actions.includes('check_in')
+  return appointment.status === 'confirmed'
+}
+
+function appointmentStatusTone(status: string) {
+  if (status === 'checked_in') return 'bg-emerald-100 text-emerald-800'
+  if (status === 'completed') return 'bg-blue-100 text-blue-800'
+  if (status === 'cancelled') return 'bg-rose-100 text-rose-800'
+  if (status === 'no_show') return 'bg-slate-200 text-slate-700'
+  if (status === 'pending') return 'bg-amber-100 text-amber-800'
+  return 'bg-brand-100 text-brand-800'
+}
+
+function TodayAppointmentTab({
+  onTicketReady,
+}: {
+  onTicketReady: (data: QueueTicketData) => void
+}) {
+  const [appointments, setAppointments] = useState<ReceptionistTodayAppointment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<'active' | 'confirmed' | 'checked_in' | 'changed' | 'all'>('active')
+  const [checkInAppointment, setCheckInAppointment] = useState<ReceptionistTodayAppointment | null>(null)
+  const [timelineApptId, setTimelineApptId] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
+
+  const loadAppointments = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await axiosInstance.get('/receptionist/appointments', {
+        params: {
+          timeframe: 'today',
+          limit: 100,
+          status: status === 'all' || status === 'active' || status === 'changed' ? undefined : status,
+          search: query.trim() || undefined,
+        },
+      })
+      const rows = Array.isArray(response.data?.data) ? response.data.data : []
+      setAppointments(rows)
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.message || 'Không thể tải lịch hẹn hôm nay')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadAppointments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status])
+
+  const filteredAppointments = useMemo(() => {
+    let rows = appointments
+    if (status === 'active') rows = rows.filter((appointment) => appointment.status !== 'cancelled')
+    if (status === 'changed') rows = rows.filter((appointment) => Boolean(appointment.sua_gan_nhat) || appointment.status === 'cancelled')
+    return [...rows].sort((a, b) => b.gio_kham.localeCompare(a.gio_kham))
+  }, [appointments, status])
+
+  const summary = useMemo(() => ({
+    total: appointments.length,
+    waiting: appointments.filter((appointment) => appointment.status === 'confirmed' || appointment.status === 'pending').length,
+    checkedIn: appointments.filter((appointment) => appointment.status === 'checked_in').length,
+    changed: appointments.filter((appointment) => Boolean(appointment.sua_gan_nhat) || appointment.status === 'cancelled').length,
+  }), [appointments])
+
+  const handleCheckedIn = (
+    result: { hang_doi: { phong_kham?: string | null; ma_so_thu_tu?: string | null }; canh_bao: string[]; ten_benh_nhan: string },
+  ) => {
+    if (checkInAppointment) {
+      onTicketReady({
+        patientName: result.ten_benh_nhan,
+        doctorName: checkInAppointment.doctor_id?.user_id?.ho_ten || 'Chưa gán',
+        roomNumber: result.hang_doi.phong_kham || 'Chưa gán',
+        queueNumber: result.hang_doi.ma_so_thu_tu || '-',
+        appointmentTime: checkInAppointment.gio_kham,
+        serviceName: checkInAppointment.ten_dich_vu || undefined,
+      })
+    }
+    setNotice(`Đã check-in ${result.ten_benh_nhan}${result.hang_doi.ma_so_thu_tu ? ` - số thứ tự ${result.hang_doi.ma_so_thu_tu}` : ''}.`)
+    setCheckInAppointment(null)
+    void loadAppointments()
+    if (result.canh_bao.length) setError(result.canh_bao.join(' '))
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-slate-950">Lịch hẹn hôm nay</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+            Tab này dùng để xem tổng quan trong ngày, kiểm tra lịch vừa thay đổi và check-in nhanh khi khách online đến quầy.
+          </p>
+        </div>
+        <button type="button" onClick={loadAppointments} disabled={loading} className="min-h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+          {loading ? 'Đang tải...' : 'Làm mới'}
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold text-slate-500">Tổng lịch</p>
+          <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}</p>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold text-amber-700">Chưa đến</p>
+          <p className="mt-1 text-xl font-bold text-amber-950">{summary.waiting}</p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-xs font-semibold text-emerald-700">Đã check-in</p>
+          <p className="mt-1 text-xl font-bold text-emerald-950">{summary.checkedIn}</p>
+        </div>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+          <p className="text-xs font-semibold text-blue-700">Có thay đổi</p>
+          <p className="mt-1 text-xl font-bold text-blue-950">{summary.changed}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: 'active', label: 'Đang hoạt động' },
+            { key: 'confirmed', label: 'Chưa đến' },
+            { key: 'checked_in', label: 'Đã check-in' },
+            { key: 'changed', label: 'Có thay đổi' },
+            { key: 'all', label: 'Tất cả' },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setStatus(item.key as typeof status)}
+              className={`min-h-10 rounded-xl px-3 text-xs font-bold transition ${status === item.key ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <form className="flex min-w-0 flex-1 gap-2" onSubmit={(event) => { event.preventDefault(); void loadAppointments() }}>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Tìm tên, SĐT hoặc mã lịch"
+            className="min-h-10 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          />
+          <button type="submit" className="min-h-10 rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800">
+            Tìm
+          </button>
+        </form>
+      </div>
+
+      {(notice || error) && (
+        <div className="mt-4 grid gap-2">
+          {notice && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">{notice}</p>}
+          {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-900">{error}</p>}
+        </div>
+      )}
+
+      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Giờ</th>
+                <th className="px-4 py-3">Bệnh nhân</th>
+                <th className="px-4 py-3">Bác sĩ</th>
+                <th className="px-4 py-3">Thanh toán / trạng thái</th>
+                <th className="px-4 py-3">Thay đổi</th>
+                <th className="px-4 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Đang tải lịch hẹn...</td></tr>
+              ) : filteredAppointments.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Không có lịch hẹn phù hợp.</td></tr>
+              ) : filteredAppointments.map((appointment) => {
+                const patientName = appointment.user_id?.ho_ten || appointment.ten_khach || 'Khách vãng lai'
+                const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
+                const canCheckIn = todayAppointmentIsCheckinable(appointment)
+                return (
+                  <tr key={appointment._id} className="align-top hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <p className="font-bold tabular-nums text-slate-950">{appointment.gio_kham}</p>
+                      <p className="mt-1 font-mono text-xs text-slate-400">{appointment.ma_lich_hen || appointment._id}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-slate-900">{patientName}</p>
+                      <p className="mt-1 text-xs text-slate-500">{patientPhone || 'Chưa có SĐT'}</p>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{appointment.doctor_id?.user_id?.ho_ten || 'Chưa gán'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-start gap-1.5">
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{paymentLabel(appointment.payment_status)}</span>
+                        <span className={`rounded-full px-2 py-1 text-xs font-bold ${appointmentStatusTone(appointment.status)}`}>{appointmentStatusLabel(appointment.status)}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {appointment.sua_gan_nhat ? (
+                        <button type="button" onClick={() => setTimelineApptId(appointment._id)} className="max-w-[220px] text-left text-xs font-semibold text-brand-700 hover:underline">
+                          {appointment.sua_gan_nhat.nhan} - {formatDateTime(appointment.sua_gan_nhat.thoi_diem)}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">Chưa có thay đổi</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setTimelineApptId(appointment._id)} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                          Lịch sử
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCheckInAppointment(appointment)}
+                          disabled={!canCheckIn || !patientPhone}
+                          className="min-h-9 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          title={!patientPhone ? 'Lịch chưa có số điện thoại để xác minh hồ sơ' : undefined}
+                        >
+                          Check-in
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {checkInAppointment && (
+        <CheckInVerifyModal
+          appointmentId={checkInAppointment._id}
+          maLichHen={checkInAppointment.ma_lich_hen}
+          searchPhone={checkInAppointment.user_id?.so_dien_thoai || checkInAppointment.so_dien_thoai_khach || ''}
+          onClose={() => setCheckInAppointment(null)}
+          onCheckedIn={handleCheckedIn}
+        />
+      )}
+
+      {timelineApptId && (
+        <TimelinePanel
+          loai="lich_hen"
+          id={timelineApptId}
+          title="Lịch sử thao tác lịch hẹn"
+          onClose={() => setTimelineApptId(null)}
+        />
+      )}
+    </section>
+  )
 }
 
 function DetailItem({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -149,8 +391,14 @@ export default function PatientIntake() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [availability, setAvailability] = useState<OfflineAvailability | null>(null)
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
+  const [centralCapacity, setCentralCapacity] = useState<CentralOfflineCapacity | null>(null)
+  const [specialties, setSpecialties] = useState<SpecialtyOption[]>([])
+  const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('')
+  const [confirmLongWait, setConfirmLongWait] = useState(false)
+  // D78 — cấp cứu/ưu tiên khẩn cho walk-in. Bắt buộc lý do/dấu hiệu, backend cũng chặn lại
+  // ở tiepNhanOfflineVaoHangDoiTrungTam (không tin riêng validate FE).
+  const [capCuu, setCapCuu] = useState(false)
+  const [lyDoCapCuu, setLyDoCapCuu] = useState('')
   const [checkingIn, setCheckingIn] = useState(false)
   const [editingProfile, setEditingProfile] = useState<PatientProfile | null>(null)
   const [auditProfileId, setAuditProfileId] = useState<string | null>(null)
@@ -158,6 +406,9 @@ export default function PatientIntake() {
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
   const [searchPhoneError, setSearchPhoneError] = useState('')
   const [formErrors, setFormErrors] = useState<{ ho_ten?: string; ngay_sinh?: string }>({})
+  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'today'>('lookup')
+  // D81 — modal tự trị, không đụng state tra cứu-theo-SĐT ở trên.
+  const [showTempProfileModal, setShowTempProfileModal] = useState(false)
 
   useEffect(() => {
     if (printData) window.print()
@@ -165,27 +416,20 @@ export default function PatientIntake() {
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedId) ?? null
   const selectedAppointment = selectedProfile?.lich_hen_hom_nay.find((appointment) => appointment.id === selectedAppointmentId) ?? null
-  const selectedSlot = availability?.slots.find((slot) => slot.slot_id === selectedSlotId) ?? null
   const hasAppointmentToday = Boolean(selectedProfile?.lich_hen_hom_nay.length)
   const hasActiveQueue = Boolean(selectedProfile?.luot_dang_cho_hom_nay)
   const unlinkedAccountAppointments = getUnlinkedAccountAppointments(profiles, accountAppointments)
 
-  const capacitySummary = useMemo(() => {
-    if (!availability) return null
-    const rows = availability.minh_chung_suc_chua || []
-    return {
-      availableDoctors: rows.filter((row) => row.ket_luan === 'co_the_tiep_nhan').length,
-      availableSlots: rows.reduce((total, row) => total + row.walk_in_con_lai, 0),
-    }
-  }, [availability])
-
   const latestAllowedBirthDateInput = getLatestAllowedBirthDateInput()
 
   const clearDecision = () => {
-    setAvailability(null)
-    setSelectedSlotId(null)
+    setCentralCapacity(null)
+    setSelectedSpecialtyId('')
+    setConfirmLongWait(false)
     setSelectedAppointmentId(null)
     setMode('idle')
+    setCapCuu(false)
+    setLyDoCapCuu('')
   }
 
   const search = async (event?: FormEvent) => {
@@ -297,15 +541,36 @@ export default function PatientIntake() {
     setError('')
     setMessage('')
     setMode('walk_in')
-    setAvailability(null)
-    setSelectedSlotId(null)
+    setCentralCapacity(null)
+    setConfirmLongWait(false)
     try {
-      const result = await receptionistPatientIntakeService.getAvailability()
-      setAvailability(result)
-      setSelectedSlotId(result.slot_de_xuat?.slot_id || result.slots[0]?.slot_id || null)
-      if (!result.slots.length) setMessage(result.thong_bao || 'Hiện chưa thể tiếp nhận người bệnh chưa có lịch hẹn')
+      const specialtyRows = specialties.length ? specialties : await specialtyService.getAllActive()
+      setSpecialties(specialtyRows)
+      const specialtyId = selectedSpecialtyId || specialtyRows[0]?.id || ''
+      setSelectedSpecialtyId(specialtyId)
+      if (!specialtyId) {
+        setMessage('Chua co chuyen khoa dang hoat dong de tiep nhan khach vang lai.')
+        return
+      }
+      const result = await receptionistPatientIntakeService.getCentralOfflineCapacity(specialtyId)
+      setCentralCapacity(result)
+      if (!result.co_the_nhan) setMessage(result.ly_do || 'Tam dung nhan khach vang lai cho chuyen khoa nay.')
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Không thể xác minh sức chứa. Chưa thể kết luận phòng khám đã hết chỗ.')
+      setError(requestError?.response?.data?.message || 'Khong the xac minh suc chua hang doi trung tam.')
+    }
+  }
+
+  const changeWalkInSpecialty = async (specialtyId: string) => {
+    setSelectedSpecialtyId(specialtyId)
+    setCentralCapacity(null)
+    setConfirmLongWait(false)
+    if (!specialtyId) return
+    try {
+      const result = await receptionistPatientIntakeService.getCentralOfflineCapacity(specialtyId)
+      setCentralCapacity(result)
+      setMessage(result.co_the_nhan ? '' : result.ly_do || 'Tam dung nhan khach vang lai cho chuyen khoa nay.')
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.message || 'Khong the cap nhat suc chua chuyen khoa.')
     }
   }
 
@@ -417,29 +682,35 @@ export default function PatientIntake() {
   }
 
   const checkInWalkIn = async () => {
-    if (!selectedProfile || !selectedSlot) return
+    if (!selectedProfile || !selectedSpecialtyId || !centralCapacity) return
+    if (capCuu && !lyDoCapCuu.trim()) {
+      setError('Cần nhập lý do / dấu hiệu cấp cứu trước khi tiếp nhận')
+      return
+    }
     setCheckingIn(true)
     setError('')
     try {
-      const result = await receptionistPatientIntakeService.checkIn({
+      const result = await receptionistPatientIntakeService.intakeCentralOffline({
         ho_so_benh_nhan_id: selectedProfile.id,
-        schedule_id: selectedSlot.schedule_id,
-        slot_id: selectedSlot.slot_id,
+        specialty_id: selectedSpecialtyId,
+        xac_nhan_canh_bao: confirmLongWait,
+        ...(capCuu ? { muc_uu_tien_tiep_nhan: 'cap_cuu' as const, ly_do_uu_tien: lyDoCapCuu.trim() } : {}),
       })
-      setAvailability(null)
-      setSelectedSlotId(null)
+      setCentralCapacity(null)
+      setConfirmLongWait(false)
+      setCapCuu(false)
+      setLyDoCapCuu('')
       setMessage(`Đã tiếp nhận walk-in ${selectedProfile.ho_ten} vào hàng đợi khám. Số thứ tự: ${result.entry.ma_so_thu_tu || result.entry._id}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
-        ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'dang_cho', doctor_id: String(result.slot.doctor_id), phong_kham: result.slot.phong_kham, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
+        ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'cho_dieu_phoi', specialty_id: selectedSpecialtyId, doctor_id: null, phong_kham: null, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
         : profile))
 
-      const doctorName = availability?.minh_chung_suc_chua.find((row) => row.doctor_id === selectedSlot.doctor_id)?.bac_si || 'Chưa gán'
       setPrintData({
         patientName: selectedProfile.ho_ten,
-        doctorName,
-        roomNumber: result.slot.phong_kham || 'Chưa gán',
+        doctorName: 'Cho dieu phoi',
+        roomNumber: 'Cho dieu phoi',
         queueNumber: result.entry.ma_so_thu_tu || '-',
-        appointmentTime: selectedSlot.gio_bat_dau,
+        appointmentTime: result.entry.thoi_gian_cho_uoc_tinh_phut ? `Uoc tinh ${result.entry.thoi_gian_cho_uoc_tinh_phut} phut` : 'Cho dieu phoi',
       })
 
       setPhone('')
@@ -466,24 +737,40 @@ export default function PatientIntake() {
   const age = calcAge(selectedProfile?.ngay_sinh)
 
   return (
-    <div className="min-h-full bg-slate-50 p-4 text-slate-900 lg:p-6">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-brand-700">Tiếp nhận tại quầy</p>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Xác nhận đúng người, rồi mới mở thao tác tiếp theo</h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                Số điện thoại có thể dùng chung cho nhiều hồ sơ. Màn hình này chỉ mở từng phần sau khi lễ tân hoàn tất bước trước đó.
-              </p>
-            </div>
+    <PageShell>
+        <ReceptionistHeader
+          eyebrow="Tiếp nhận & lịch hẹn"
+          title="Tra cứu trước, chọn đúng luồng sau"
+          description="Tab tra cứu là luồng chính khi khách đến quầy; tab lịch hẹn hôm nay dùng để xem tổng quan, kiểm tra thay đổi và check-in nhanh."
+          metrics={
             <div className="grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-3 lg:min-w-[560px]">
               <StepIndicator step={1} label="Tra số điện thoại" state={lookupState} />
               <StepIndicator step={2} label="Chọn hồ sơ" state={profileState} />
               <StepIndicator step={3} label="Khám/Check-in" state={actionState} />
             </div>
+          }
+        />
+
+        <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('lookup')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'lookup' ? 'bg-brand-700 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+            >
+              Tra cứu & tiếp nhận
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'lookup' ? 'text-brand-50' : 'text-slate-500'}`}>Nhập số điện thoại, kiểm tra hồ sơ, check-in online hoặc khám tại quầy</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('today')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'today' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+            >
+              Lịch hẹn hôm nay
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today' ? 'text-slate-200' : 'text-slate-500'}`}>Xem số lượng, trạng thái, thay đổi gần đây và check-in nhanh</span>
+            </button>
           </div>
-        </header>
+        </div>
 
         {(message || error) && (
           <div className="mb-4 grid gap-3">
@@ -492,6 +779,7 @@ export default function PatientIntake() {
           </div>
         )}
 
+        {workspaceTab === 'lookup' ? (
         <main className="grid gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.35fr)]">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
@@ -520,6 +808,14 @@ export default function PatientIntake() {
             </form>
 
             {searchPhoneError && <p className="mt-2 text-sm font-medium text-rose-700">{searchPhoneError}</p>}
+
+            <button
+              type="button"
+              onClick={() => setShowTempProfileModal(true)}
+              className="mt-3 text-xs font-semibold text-slate-500 underline decoration-dotted hover:text-brand-700"
+            >
+              Bệnh nhân không có số điện thoại?
+            </button>
 
             {!hasSearched && (
               <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
@@ -708,9 +1004,19 @@ export default function PatientIntake() {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-brand-800">Hồ sơ đang thao tác</p>
-                      <h3 className="mt-1 text-xl font-bold text-slate-950">{selectedProfile.ho_ten}</h3>
+                      <h3 className="mt-1 text-xl font-bold text-slate-950">
+                        {selectedProfile.ho_ten}
+                        {selectedProfile.la_ho_so_tam && (
+                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                            Hồ sơ tạm — {selectedProfile.ma_tam}
+                          </span>
+                        )}
+                      </h3>
                       <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        <DetailItem label="Số liên hệ" value={selectedProfile.so_dien_thoai || phone} />
+                        <DetailItem
+                          label="Số liên hệ"
+                          value={selectedProfile.so_dien_thoai || (selectedProfile.la_ho_so_tam ? 'Chưa có — hồ sơ tạm' : phone)}
+                        />
                         <DetailItem label="Ngày sinh" value={`${formatDate(selectedProfile.ngay_sinh)}${age !== null ? ` (${age} tuổi)` : ''}`} />
                         <DetailItem label="Giới tính" value={genderLabel(selectedProfile.gioi_tinh)} />
                         <DetailItem label="Lượt khám" value={lichSuKhamLabel(selectedProfile.lich_su_kham)} />
@@ -798,111 +1104,129 @@ export default function PatientIntake() {
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <h4 className="text-base font-bold text-slate-950">Khám bệnh ngay</h4>
-                        <p className="mt-1 text-sm text-slate-600">Chỉ hiển thị bác sĩ/khung khám còn có thể tiếp nhận để lễ tân chọn nhanh.</p>
+                        <h4 className="text-base font-bold text-slate-950">Khach vang lai - hang doi trung tam</h4>
+                        <p className="mt-1 text-sm text-slate-600">Le tan chon chuyen khoa, kiem tra suc chua, roi dua khach vao hang doi cho dieu phoi bac si.</p>
                       </div>
                       <button type="button" onClick={loadAvailability} disabled={hasActiveQueue} className="min-h-10 rounded-xl border border-brand-300 px-4 text-sm font-bold text-brand-800 hover:bg-brand-50 disabled:opacity-60">
-                        Kiểm tra lại
+                        Kiem tra lai
                       </button>
                     </div>
 
-                    {!availability && (
+                    <label className="mt-4 block text-sm font-bold text-slate-800">
+                      Chuyen khoa can kham
+                      <select
+                        value={selectedSpecialtyId}
+                        onChange={(event) => void changeWalkInSpecialty(event.target.value)}
+                        disabled={hasActiveQueue || checkingIn}
+                        className="mt-1.5 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:opacity-60"
+                      >
+                        <option value="">Chon chuyen khoa</option>
+                        {specialties.map((specialty) => (
+                          <option key={specialty.id} value={specialty.id}>{specialty.ten}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {!centralCapacity && (
                       <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
-                        Đang chờ dữ liệu lịch làm việc và hàng đợi bác sĩ.
+                        Chon chuyen khoa de kiem tra suc chua hang doi trung tam.
                       </div>
                     )}
 
-                    {availability && (
+                    {centralCapacity && (
                       <>
-                        <div className={`mt-4 rounded-xl border p-4 ${availabilityTone(availability.trang_thai_kiem_tra)}`}>
+                        <div className={`mt-4 rounded-xl border p-4 ${
+                          centralCapacity.trang_thai === 'co_the_nhan'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                            : centralCapacity.trang_thai === 'canh_bao_day'
+                              ? 'border-amber-200 bg-amber-50 text-amber-950'
+                              : 'border-rose-200 bg-rose-50 text-rose-950'
+                        }`}>
                           <p className="font-bold">
-                            {availability.trang_thai_kiem_tra === 'co_the_tiep_nhan'
-                              ? `${availabilityLabel(availability.trang_thai_kiem_tra)} - ${capacitySummary?.availableDoctors || 0} bác sĩ, còn ${capacitySummary?.availableSlots || 0} suất`
-                              : availabilityLabel(availability.trang_thai_kiem_tra)}
+                            {centralCapacity.trang_thai === 'co_the_nhan'
+                              ? 'Co the tiep nhan'
+                              : centralCapacity.trang_thai === 'canh_bao_day'
+                                ? 'Hang doi dang day - can bao truoc voi khach'
+                                : 'Tam dung tiep nhan'}
                           </p>
-                          <p className="mt-1 text-xs opacity-80">Kiểm tra lúc {formatDateTime(availability.checked_at)}</p>
+                          {centralCapacity.ly_do && <p className="mt-1 text-sm">{centralCapacity.ly_do}</p>}
+                          <p className="mt-2 text-xs opacity-80">Kiem tra luc {formatDateTime(centralCapacity.checked_at)}</p>
                         </div>
 
-                        {availability.slot_de_xuat && (
-                          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-4">
-                            <p className="text-sm font-bold text-brand-950">Đề xuất gần nhất</p>
-                            <p className="mt-1 text-base font-bold text-slate-950">
-                              {availability.minh_chung_suc_chua.find((row) => row.doctor_id === availability.slot_de_xuat?.doctor_id)?.bac_si || 'Bác sĩ đang trực'} - {availability.slot_de_xuat.gio_bat_dau}-{availability.slot_de_xuat.gio_ket_thuc}
-                            </p>
-                            <p className="mt-1 text-sm text-brand-800">{availability.slot_de_xuat.phong_kham || 'Phòng sẽ được điều phối'} - {availability.ly_do_de_xuat}</p>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-semibold text-slate-500">Dang cho trung tam</p>
+                            <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.so_khach_cho_trung_tam}</p>
                           </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-semibold text-slate-500">Bac si co the dieu phoi</p>
+                            <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.so_bac_si_co_the_dieu_phoi}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-semibold text-slate-500">Cho uoc tinh</p>
+                            <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.thoi_gian_cho_uoc_tinh_phut ?? '-'}'</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-semibold text-slate-500">Con nhan</p>
+                            <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.suc_chua_trung_tam_con_lai}</p>
+                          </div>
+                        </div>
+
+                        {centralCapacity.can_xac_nhan_qua_tai && (
+                          <label className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-950">
+                            <input
+                              type="checkbox"
+                              checked={confirmLongWait}
+                              onChange={(event) => setConfirmLongWait(event.target.checked)}
+                              className="mt-1 h-4 w-4 rounded border-amber-300 text-amber-700 focus:ring-amber-500"
+                            />
+                            <span>Da thong bao thoi gian cho uoc tinh cho khach va khach dong y tiep tuc cho dieu phoi.</span>
+                          </label>
                         )}
 
-                        {availability.slots.length > 0 && !hasActiveQueue && (
-                          <>
-                            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                              {availability.slots.map((slot) => {
-                                const doctor = availability.minh_chung_suc_chua.find((row) => row.doctor_id === slot.doctor_id)
-                                return (
-                                  <button
-                                    key={slot.slot_id}
-                                    type="button"
-                                    onClick={() => setSelectedSlotId(slot.slot_id)}
-                                    className={`rounded-xl border p-4 text-left transition ${selectedSlotId === slot.slot_id ? 'border-brand-600 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300'}`}
-                                  >
-                                    <p className="text-base font-bold text-slate-950">{doctor?.bac_si || 'Bác sĩ đang trực'}</p>
-                                    <p className="mt-1 text-sm text-slate-600">{slot.gio_bat_dau}-{slot.gio_ket_thuc} - {slot.phong_kham || doctor?.phong_mac_dinh || 'Chưa gán phòng'}</p>
-                                    <p className="mt-2 text-xs font-semibold text-slate-500">Đang chờ: {doctor?.dang_cho ?? 0}{doctor && doctor.do_tre_phut > 0 ? ` - trễ ${doctor.do_tre_phut} phút` : ''}</p>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                            {selectedSlot && (
-                              <button type="button" onClick={checkInWalkIn} disabled={checkingIn} className="mt-4 min-h-12 w-full rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60">
-                                {checkingIn ? 'Đang giữ suất khám...' : `Xác nhận khám bệnh cho ${selectedProfile.ho_ten}`}
-                              </button>
-                            )}
-                          </>
+                        <label className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-950">
+                          <input
+                            type="checkbox"
+                            checked={capCuu}
+                            onChange={(event) => setCapCuu(event.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-rose-300 text-rose-700 focus:ring-rose-500"
+                          />
+                          <span>Cấp cứu / ưu tiên khẩn — xếp trước toàn bộ hàng đợi, báo ngay cho bác sĩ trong ca.</span>
+                        </label>
+                        {capCuu && (
+                          <textarea
+                            value={lyDoCapCuu}
+                            onChange={(event) => setLyDoCapCuu(event.target.value)}
+                            rows={2}
+                            placeholder="Lý do / dấu hiệu cấp cứu (bắt buộc) — vd: đau ngực dữ dội, khó thở, chảy máu nhiều"
+                            className="mt-2 w-full rounded-xl border border-rose-300 px-3 py-2 text-sm outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
+                          />
                         )}
 
-                        {availability.minh_chung_suc_chua?.length > 0 && (
-                          <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <summary className="cursor-pointer text-sm font-bold text-slate-700">Xem chi tiết tải bác sĩ</summary>
-                            <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                              <table className="min-w-full text-left text-xs">
-                                <thead className="bg-slate-50 text-slate-500">
-                                  <tr>
-                                    <th className="px-3 py-3 font-bold">Bác sĩ / khung khám</th>
-                                    <th className="px-3 py-3 font-bold">Online</th>
-                                    <th className="px-3 py-3 font-bold">Walk-in</th>
-                                    <th className="px-3 py-3 font-bold">Hàng đợi</th>
-                                    <th className="px-3 py-3 font-bold">Đánh giá</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {availability.minh_chung_suc_chua.map((row) => (
-                                    <tr key={`${row.schedule_id}-${row.doctor_id}`}>
-                                      <td className="px-3 py-3"><p className="font-bold text-slate-800">{row.bac_si}</p><p className="mt-1 text-slate-500">{row.khung_gan_nhat ? `${row.khung_gan_nhat.gio_bat_dau}-${row.khung_gan_nhat.gio_ket_thuc}` : 'Không có khung gần'}</p></td>
-                                      <td className="px-3 py-3 text-slate-700">{row.online_da_dat}/{row.tong_slot_trong_khung}</td>
-                                      <td className="px-3 py-3"><span className="font-bold text-slate-800">{row.walk_in_con_lai}</span><span className="text-slate-500">/{row.walk_in_tong}</span></td>
-                                      <td className="px-3 py-3 text-slate-700">{row.dang_cho} {row.do_tre_phut > 0 ? `(+${row.do_tre_phut}')` : ''}</td>
-                                      <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-2 py-1 font-bold ${capacityTone(row)}`}>{capacityLabel(row)}</span></td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </details>
-                        )}
-
-                        {availability.goi_y_quay_lai && (
-                          <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                            Có thể tiếp nhận lại: <strong>{availability.goi_y_quay_lai.gio_bat_dau}-{availability.goi_y_quay_lai.gio_ket_thuc}</strong>.
-                          </p>
-                        )}
+                        <button
+                          type="button"
+                          onClick={checkInWalkIn}
+                          disabled={checkingIn || hasActiveQueue || !centralCapacity.co_the_nhan || (centralCapacity.can_xac_nhan_qua_tai && !confirmLongWait) || (capCuu && !lyDoCapCuu.trim())}
+                          className={`mt-4 min-h-12 w-full rounded-xl px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 ${capCuu ? 'bg-rose-700 hover:bg-rose-800' : 'bg-brand-700 hover:bg-brand-800'}`}
+                        >
+                          {checkingIn
+                            ? 'Dang dua vao hang doi...'
+                            : capCuu
+                              ? `Tiếp nhận CẤP CỨU: ${selectedProfile.ho_ten}`
+                              : `Dua ${selectedProfile.ho_ten} vao hang doi trung tam`}
+                        </button>
                       </>
                     )}
                   </div>
                 )}
+
               </div>
             )}
           </section>
         </main>
+        ) : (
+          <TodayAppointmentTab onTicketReady={setPrintData} />
+        )}
 
         {editingProfile && (
           <ProfileAdminEditModal
@@ -919,6 +1243,25 @@ export default function PatientIntake() {
             onClose={() => setAuditProfileId(null)}
           />
         )}
+
+        <TempProfileModal
+          open={showTempProfileModal}
+          onClose={() => setShowTempProfileModal(false)}
+          onProfileReady={(profile) => {
+            setError('')
+            setPhone('')
+            setAccounts([])
+            setSelectedAccountId(null)
+            setAmbiguousAppointments([])
+            setAccountAppointments([])
+            setProfiles([profile])
+            setSelectedId(profile.id)
+            setHasSearched(true)
+            setShowCreateForm(false)
+            clearDecision()
+            setMessage(`Đang dùng hồ sơ tạm ${profile.ma_tam ?? ''} — chọn chuyên khoa để tiếp nhận.`)
+          }}
+        />
 
         <QueueTicketTemplate data={printData} />
 
@@ -942,7 +1285,6 @@ export default function PatientIntake() {
             </button>
           </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   )
 }

@@ -15,6 +15,13 @@ const lichSuSuaSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // B54/B55 — đính chính hồ sơ ĐÃ XÁC NHẬN (status='da_xac_nhan'), qua dinhChinhHoSo() trong
+    // examSession.service.js. Bản ghi cũ (sửa trước khi xác nhận, hoặc do complete tự ghi ở
+    // hoanTatPhienKham) không có các field này — optional, không phá dữ liệu cũ.
+    la_dinh_chinh: { type: Boolean, default: false },
+    truong_thay_doi: { type: [String], default: undefined },
+    gia_tri_cu: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    gia_tri_moi: { type: mongoose.Schema.Types.Mixed, default: undefined },
   },
   { _id: false }
 )
@@ -103,6 +110,22 @@ const examinationResultSchema = new mongoose.Schema(
     trieu_chung_ban_dau: { type: String, default: null },
     ghi_chu_dieu_duong: { type: String, default: null },
     ngay_tai_kham: { type: Date, default: null },
+    // D78/D80 — kết cục ca khám. Mặc định 'dieu_tri_thuong' để hồ sơ cũ vẫn hợp lệ, không cần
+    // migration dữ liệu. 'chuyen_vien'/'cap_cuu_ngoai_vien' bắt buộc kèm chuyen_vien_thong_tin.
+    // 'chuyen_chuyen_khoa' chỉ đánh dấu Ý ĐỊNH của bác sĩ trong hồ sơ khám — CHƯA tự động thực
+    // hiện chuyển chuyên khoa ở tầng hàng đợi (đó là việc riêng của lễ tân, xem mục A18/D79).
+    ket_cuc: {
+      type: String,
+      enum: ['dieu_tri_thuong', 'chuyen_chuyen_khoa', 'chuyen_vien', 'cap_cuu_ngoai_vien'],
+      default: 'dieu_tri_thuong',
+    },
+    chuyen_vien_thong_tin: {
+      noi_chuyen_den: { type: String, default: null, maxlength: 255 },
+      ly_do: { type: String, default: null, maxlength: 1000 },
+      tinh_trang_luc_chuyen: { type: String, default: null, maxlength: 1000 },
+      giay_to_kem_theo: { type: String, default: null, maxlength: 500 },
+      thoi_diem: { type: Date, default: null },
+    },
     co_the_sua: { type: Boolean, default: true },
     dich_vu_phat_sinh: {
       type: [dichVuPhatSinhSchema],

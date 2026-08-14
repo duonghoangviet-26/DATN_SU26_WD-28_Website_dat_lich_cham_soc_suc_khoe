@@ -8,6 +8,7 @@ import leavesRoutes       from './leaves.routes.js'
 import queueRoutes        from './queue.routes.js'
 import roomStatusRoutes   from './room-status.routes.js'
 import examSessionRoutes  from './exam-session.routes.js'
+import examHistoryRoutes  from './exam-history.routes.js'
 import { list as queueEntriesList } from '../../controllers/doctor/queue.controller.js'
 
 // ============================================================
@@ -23,6 +24,9 @@ router.use(verifyToken, requireRole('doctor'))
 router.use('/queue',         queueRoutes)
 // WS-1 — Phiên khám 4 bước. `verifyToken` + `requireRole('doctor')` đã áp ở đầu file.
 router.use('/exam-session',  examSessionRoutes)
+// C4 — "Bệnh nhân đã khám": danh sách hồ sơ đã hoàn tất (tách khỏi /queue để trang chờ khám
+// không bị bệnh nhân đã xong chiếm chỗ), tra cứu được nhiều ngày.
+router.use('/exam-history',  examHistoryRoutes)
 // Hàng đợi động chi tiết (kèm thời gian chờ ước tính) — dùng cho action gọi/vào phòng/kết thúc.
 router.get('/queue-entries', queueEntriesList)
 router.use('/room-status',   roomStatusRoutes)

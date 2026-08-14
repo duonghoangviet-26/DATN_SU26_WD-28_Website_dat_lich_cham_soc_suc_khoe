@@ -16,6 +16,11 @@ export const HANH_DONG_LE_TAN = {
   LT_CHECK_IN:            'Tiếp nhận bệnh nhân',
   LT_HUY_CHECK_IN:        'Hủy tiếp nhận',
   LT_TAO_KHACH_VANG_LAI:  'Tạo lượt khách vãng lai',
+  LT_OFFLINE_INTAKE_CENTRAL: 'Tiep nhan khach vang lai vao hang doi trung tam',
+  LT_OFFLINE_ASSIGN_DOCTOR: 'Dieu phoi khach vang lai cho bac si',
+  LT_OFFLINE_RETURN_CENTRAL: 'Tra khach vang lai ve hang doi trung tam',
+  LT_OFFLINE_CANCEL_CENTRAL: 'Huy khach vang lai trong hang doi trung tam',
+  LT_SYSTEM_OFFLINE_ASSIGN_SUGGESTED: 'He thong goi y dieu phoi khach vang lai',
   LT_XAC_NHAN_THANH_TOAN: 'Xác nhận thu tiền',
   LT_LAP_HOA_DON:         'Lập hóa đơn',
   LT_IN_PHIEU_STT:        'In phiếu số thứ tự',
@@ -30,7 +35,17 @@ export const MA_HANH_DONG_LE_TAN = Object.keys(HANH_DONG_LE_TAN)
 // Nhóm để lọc trên UI. Lễ tân nghĩ theo đầu việc ("hôm nay ai thu tiền"), không nghĩ theo
 // từng mã hành động, nên bộ lọc phải theo nhóm.
 export const NHOM_HANH_DONG = {
-  tiep_nhan:  ['LT_CHECK_IN', 'LT_HUY_CHECK_IN', 'LT_TAO_KHACH_VANG_LAI', 'LT_IN_PHIEU_STT'],
+  tiep_nhan:  [
+    'LT_CHECK_IN',
+    'LT_HUY_CHECK_IN',
+    'LT_TAO_KHACH_VANG_LAI',
+    'LT_OFFLINE_INTAKE_CENTRAL',
+    'LT_OFFLINE_ASSIGN_DOCTOR',
+    'LT_OFFLINE_RETURN_CENTRAL',
+    'LT_OFFLINE_CANCEL_CENTRAL',
+    'LT_SYSTEM_OFFLINE_ASSIGN_SUGGESTED',
+    'LT_IN_PHIEU_STT',
+  ],
   thanh_toan: ['LT_XAC_NHAN_THANH_TOAN', 'LT_LAP_HOA_DON'],
   lich_hen:   ['LT_DOI_LICH', 'LT_HUY_LICH'],
   lien_he:    ['LT_GOI_KHACH', 'LT_XU_LY_THONG_BAO_BS'],

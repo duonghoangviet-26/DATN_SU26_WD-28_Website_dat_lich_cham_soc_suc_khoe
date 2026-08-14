@@ -206,7 +206,17 @@ export default function DoctorExamQueue() {
   }
   useEffect(() => {
     load()
-    const unsubscribe = subscribeDoctorQueueRealtime(() => load())
+    // D78 — 'central_offline_cap_cuu' bắn từ tiepNhanOfflineVaoHangDoiTrungTam ngay lúc lễ
+    // tân tiếp nhận cấp cứu, TRƯỚC cả lúc điều phối bác sĩ cụ thể — báo sớm hơn thay vì chờ
+    // bác sĩ tự thấy trong danh sách chờ khi refetch.
+    const unsubscribe = subscribeDoctorQueueRealtime((payload) => {
+      load()
+      if (payload?.action === 'central_offline_cap_cuu') {
+        const ten = payload.ten_benh_nhan ?? 'Bệnh nhân'
+        const lyDo = payload.ly_do_uu_tien ? ` — ${payload.ly_do_uu_tien}` : ''
+        showToast(`CẤP CỨU: ${ten} vừa được lễ tân tiếp nhận${lyDo}`, 'error')
+      }
+    })
     const fallbackRefresh = window.setInterval(load, 15000)
 
     return () => {
@@ -248,6 +258,20 @@ export default function DoctorExamQueue() {
     } catch { setActive(null) }
   }
 
+  async function openViewRecord(r: DoctorExamQueueRow) {
+    setModalMode('edit')
+    setActive(r)
+    setActiveAppt(null)
+    if (!r.appointment_id) {
+      setActiveAppt(taoLichKhamAoChoLuotOffline(r))
+      return
+    }
+    try {
+      const appt = await doctorAppointmentService.getById(r.appointment_id)
+      setActiveAppt(appt)
+    } catch { setActive(null) }
+  }
+
   function closeModal() { setActive(null); setActiveAppt(null) }
 
   async function runQueueAction(id: string, action: (id: string) => Promise<unknown>, successMsg: string) {
@@ -267,16 +291,29 @@ export default function DoctorExamQueue() {
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase()
     return rows.filter((r) => {
-      if (statusFilter && r.trang_thai_tong_hop !== statusFilter) return false
+      if (statusFilter) {
+        if (r.trang_thai_tong_hop !== statusFilter) return false
+      } else if (r.trang_thai_tong_hop === 'da_xong') {
+        // C4 — bệnh nhân đã hoàn tất KHÔNG hiện mặc định ở bảng chờ khám nữa (tránh chiếm chỗ,
+        // đẩy người đang chờ xuống dưới) — xem lại ở trang "Bệnh nhân đã khám", hoặc lọc rõ
+        // "Đã xong" ở đây nếu chỉ cần kiểm tra nhanh trong ca hôm nay.
+        return false
+      }
       if (kw && !r.ten_benh_nhan.toLowerCase().includes(kw)) return false
       return true
     })
   }, [rows, search, statusFilter])
+  const soDaXongHomNay = useMemo(() => rows.filter((r) => r.trang_thai_tong_hop === 'da_xong').length, [rows])
 
   return (
     <div>
       <PageHeader title="Hồ sơ chờ khám"
-        description="Toàn bộ bệnh nhân (đặt online + vãng lai) đã check-in được gán cho bạn — check-in, gọi, vào phòng, kết thúc khám và nhập hồ sơ." />
+        description="Toàn bộ bệnh nhân (đặt online + vãng lai) đã check-in được gán cho bạn — check-in, gọi, vào phòng, kết thúc khám và nhập hồ sơ.">
+        <Button variant="secondary" size="sm" onClick={() => navigate('/doctor/exam-history')}
+          icon={<Icon name="eye" className="h-3.5 w-3.5" />}>
+          Bệnh nhân đã khám{soDaXongHomNay > 0 ? ` (${soDaXongHomNay} hôm nay)` : ''}
+        </Button>
+      </PageHeader>
 
       <RoomStatusWidget refreshKey={roomRefreshKey} />
 
@@ -310,6 +347,11 @@ export default function DoctorExamQueue() {
           {choTiepNhan.length > 0 && (
             <p className="text-xs text-amber-700">
               {choTiepNhan.length} khách đã đặt lịch hôm nay — bấm “Tiếp nhận” ở bảng trên khi họ có mặt.
+            </p>
+          )}
+          {!statusFilter && soDaXongHomNay > 0 && (
+            <p className="text-xs text-slate-400">
+              {soDaXongHomNay} bệnh nhân đã khám xong hôm nay — xem ở “Bệnh nhân đã khám”.
             </p>
           )}
         </div>
@@ -383,7 +425,11 @@ export default function DoctorExamQueue() {
                           <Button variant="success" size="sm" onClick={() => openConfirm(r)}
                             icon={<Icon name="check" className="h-3.5 w-3.5" />}>Xem & xác nhận</Button>
                         )}
-                        {['da_xong', 'bo_luot', 'da_huy'].includes(r.trang_thai_tong_hop) && (
+                        {r.trang_thai_tong_hop === 'da_xong' && (
+                          <Button variant="secondary" size="sm" onClick={() => openViewRecord(r)}
+                            icon={<Icon name="eye" className="h-3.5 w-3.5" />}>Xem hồ sơ</Button>
+                        )}
+                        {['bo_luot', 'da_huy'].includes(r.trang_thai_tong_hop) && (
                           <span className="text-xs text-slate-400">—</span>
                         )}
                       </div>

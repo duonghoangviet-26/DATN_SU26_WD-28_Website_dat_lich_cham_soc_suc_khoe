@@ -100,6 +100,8 @@ function formatBaseExamResult(result) {
     huong_dan_dieu_tri: result.huong_dan_dieu_tri ?? null,
     ghi_chu: result.ghi_chu ?? null,
     ngay_tai_kham: result.ngay_tai_kham ?? null,
+    ket_cuc: result.ket_cuc ?? 'dieu_tri_thuong',
+    chuyen_vien_thong_tin: result.chuyen_vien_thong_tin ?? null,
     co_the_sua: result.co_the_sua,
     dich_vu_phat_sinh: result.dich_vu_phat_sinh ?? [],
     dich_vu_tu_choi: result.dich_vu_tu_choi ?? [],

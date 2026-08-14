@@ -286,6 +286,23 @@ export async function layKhaNangTiepNhanTaiQuay({ specialtyId = null, now = new 
   }
 }
 
+// ============================================================
+// MÔ HÌNH WALK-IN CŨ — claim slot NGAY, không qua hàng đợi trung tâm.
+// ============================================================
+// Đây là luồng offline gốc: tự chọn 1 slot `loai_slot='walk_in'` còn trống trong khung
+// đang diễn ra/kế tiếp (đúng quota 70/30 online-walkin của rule mục 4) và gán bác sĩ NGAY.
+// An toàn theo đúng cơ chế cũ (walk-in chỉ vào slot walk-in, không đụng slot online).
+//
+// Từ 2026-08-11, UI lễ tân (`PatientIntake.tsx`) đã chuyển hẳn sang mô hình MỚI:
+// `POST /offline-queue/intake` → `tiepNhanOfflineVaoHangDoiTrungTam()`
+// (`centralOfflineQueue.service.js`) — khách vào `HangDoi.trang_thai='cho_dieu_phoi'`
+// CHƯA gán bác sĩ, lễ tân dispatch thủ công/bán tự động khi bác sĩ có khoảng trống an toàn.
+// Không component nào trong `frontend/src` còn gọi hàm này nữa (đã grep xác nhận 2026-08-12).
+//
+// VẪN GIỮ NGUYÊN, KHÔNG XOÁ: `backend/src/scripts/e2e-offline-intake.js` (wired vào
+// `npm run test:e2e:offline` / `test:e2e:checkin-billing`) vẫn kiểm thử đúng luồng này.
+// Nếu sau này cần dọn hẳn mô hình cũ, phải sửa/xoá script đó cùng lúc — không xoá route
+// một mình rồi để test đỏ.
 export async function tiepNhanHoSoVaoHangDoi({
   hoSoBenhNhanId,
   scheduleId = null,

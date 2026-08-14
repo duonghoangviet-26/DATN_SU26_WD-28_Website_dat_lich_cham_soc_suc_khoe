@@ -10,6 +10,6 @@ export function created(res, data = null, message = 'Tạo thành công') {
   return res.status(201).json({ success: true, message, data })
 }
 
-export function fail(res, statusCode = 400, message = 'Có lỗi xảy ra') {
-  return res.status(statusCode).json({ success: false, message })
+export function fail(res, statusCode = 400, message = 'Có lỗi xảy ra', data = null) {
+  return res.status(statusCode).json({ success: false, message, ...(data !== null ? { data } : {}) })
 }
