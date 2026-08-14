@@ -15,17 +15,22 @@
 | C1 | Khóa `co_the_sua=false` khi hoàn tất | ✅ Đã xong | `Fix_demo` |
 | C2 | Cảnh báo dị ứng khi kê thuốc (B47) | ✅ Đã xong | `Fix_demo` |
 | C3 | Outcome `ket_cuc` + chuyển viện (D78/D80) | ✅ Đã xong (phần D80; D78 nút cấp cứu ở C6) | `Fix_demo` |
-| C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ✅ Backend xong; **FE chưa có UI** (xem ghi chú) | `Fix_demo` |
+| C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ✅ Đã xong cả BE + FE (trang "Bệnh nhân đã khám") | `Fix_demo` |
 | C5 | Hồ sơ tạm không SĐT (D81) | ✅ Đã xong cả 3 tầng + UI lễ tân | `Fix_demo` |
-| C6 | Nút cấp cứu + thông báo khẩn (D78) | ✅ Đã xong (nút + validate + realtime + audit); **biên bản ca khẩn cuối ngày chưa có màn hình riêng** | `Fix_demo` |
+| C6 | Nút cấp cứu + thông báo khẩn (D78) | ✅ Đã xong cả nút tiếp nhận + biên bản ca khẩn cuối ngày | `Fix_demo` |
 
 **Ghi chú C4:** `PATCH /api/doctor/exam-session/:queueId/amendment` (`dinhChinhHoSo` trong
-`examSession.service.js`) đã hoạt động đầy đủ ở backend — nhận `{ thay_doi, ly_do }`, chỉ cho
-sửa 7 trường lâm sàng (không đụng sinh hiệu/đơn thuốc), validate lại qua đúng rule đã dùng ở
-bước gốc (`kiemTraKetCuc`, `taoChiDinhDichVu`), ghi lịch sử có cấu trúc vào `lich_su_sua` (không
-sửa đè). **Chưa có màn hình bác sĩ nào gọi endpoint này** — cần một trang "Danh sách hồ sơ đã
-khám" để làm điểm vào cho việc đính chính sau khi đã hoàn tất, đây là việc UI riêng chưa nằm
-trong phạm vi C4 đã lập ban đầu.
+`examSession.service.js`) nhận `{ thay_doi, ly_do }`, chỉ cho sửa 7 trường lâm sàng (không đụng
+sinh hiệu/đơn thuốc), validate lại qua đúng rule đã dùng ở bước gốc (`kiemTraKetCuc`,
+`taoChiDinhDichVu`), ghi lịch sử có cấu trúc vào `lich_su_sua` (không sửa đè). **FE (2026-08-14,
+tiếp)**: trang mới `pages/doctor/DoctorExamHistory.tsx` ("Bệnh nhân đã khám") — tách hẳn khỏi
+"Hồ sơ chờ khám" (`DoctorExamQueue.tsx` không còn hiện `da_xong` ở bộ lọc mặc định, tránh chiếm
+chỗ đẩy người đang chờ xuống dưới), lọc theo ngày (mặc định hôm nay) hoặc tìm theo tên/SĐT (tự
+nới 90 ngày gần nhất — endpoint mới `GET /api/doctor/exam-history`). Bấm vào một dòng mở
+`ExamHistoryDetailModal.tsx`: xem đủ chẩn đoán/hướng dẫn điều trị/dịch vụ phát sinh/đơn thuốc/
+kết cục + thông tin thanh toán (`layPhienKham` bổ sung field `hoa_don` đọc từ `HoaDon` theo
+`hang_doi_id`/`appointment_id`) + lịch sử chỉnh sửa, và có form "Đính chính" gọi thẳng
+endpoint amendment (bắt buộc lý do, đúng whitelist trường cho sửa).
 
 **Ghi chú C5:** nới có điều kiện qua `la_ho_so_tam`/`ma_tam` ở đúng 3 tầng đã nêu ở §3.3
 (`patient-intake.controller.js`, `centralOfflineQueue.service.js:386`, `HangDoi.js` pre-validate)
@@ -46,9 +51,14 @@ cấp cứu cũng không lọc lại được — đây là điều kiện cần
 báo realtime tới **mọi bác sĩ đang trong ca cùng chuyên khoa** ngay lúc tiếp nhận (sớm hơn mốc
 điều phối `ganKhachOfflineChoBacSi`, vốn chỉ báo đúng 1 bác sĩ sau khi đã chọn xong); (4) FE
 lễ tân có nút "Cấp cứu / ưu tiên khẩn" bắt buộc lý do; (5) FE bác sĩ (`DoctorExamQueue.tsx`)
-hiện toast đỏ khi nhận được tín hiệu này. **Còn thiếu:** một màn hình lọc/xuất báo cáo ca khẩn
-cuối ngày — dữ liệu đã đủ để làm (lọc `NhatKyThaoTac` theo `hanh_dong='LT_OFFLINE_INTAKE_CENTRAL'`
-+ `du_lieu_moi.muc_uu_tien_tiep_nhan='cap_cuu'`), nhưng chưa có UI/endpoint tổng hợp riêng.
+hiện toast đỏ khi nhận được tín hiệu này. **Biên bản ca khẩn cuối ngày (2026-08-14, tiếp)**:
+`services/emergencyReport.service.js` — lọc đúng `NhatKyThaoTac` theo
+`hanh_dong='LT_OFFLINE_INTAKE_CENTRAL'` + `du_lieu_moi.muc_uu_tien_tiep_nhan='cap_cuu'`, join
+`HangDoi` hiện tại lấy trạng thái xử lý + bác sĩ phụ trách (không tạo bảng mới, đúng như đã ghi
+ở §3). Endpoint mới `GET /api/receptionist/emergency-report?ngay=`, trang FE mới
+`pages/receptionist/EmergencyReport.tsx` ("Biên bản ca khẩn") theo đúng khuôn `ActivityLog.tsx`
+đã có (PageShell/ReceptionistHeader/TableFrame), lọc theo ngày, hiện giờ tiếp nhận/bệnh nhân/lý
+do/người tiếp nhận/bác sĩ phụ trách/trạng thái hiện tại.
 
 Kiểm thử: **không chạy** `npm test` / `test:e2e:*` toàn bộ vì `.env` trỏ `MONGODB_URI` vào DB
 chung `DATN_VITAFAMILY` (không có DB test riêng) và các file `tests/*.test.js` kết nối thẳng
