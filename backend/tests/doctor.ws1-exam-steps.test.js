@@ -3,11 +3,13 @@ import assert from 'node:assert/strict'
 
 import {
   CAC_BUOC,
+  KET_CUC,
   buocKeTiep,
   buocTruoc,
   duocPhepVaoBuoc,
   kiemTraBuocTiepNhan,
   kiemTraBuocChanDoan,
+  kiemTraKetCuc,
   tinhBMI,
 } from '../src/services/examStepRules.js'
 
@@ -83,4 +85,50 @@ test('WS-1 BMI trả null khi thiếu dữ liệu', () => {
   assert.equal(tinhBMI(null, 165), null)
   assert.equal(tinhBMI(60, null), null)
   assert.equal(tinhBMI(60, 0), null)
+})
+
+// ── D78/D80 — kết cục ca khám ─────────────────────────────────────────────
+test('D78/D80 khong truyen ket_cuc -> mac dinh dieu_tri_thuong, khong can thong tin chuyen', () => {
+  const r = kiemTraKetCuc({})
+  assert.equal(r.ok, true)
+  assert.equal(r.ketCuc, 'dieu_tri_thuong')
+  assert.equal(r.thongTinChuyen, null)
+})
+
+test('D78/D80 ket_cuc khong hop le -> loi, khong crash', () => {
+  const r = kiemTraKetCuc({ ket_cuc: 'khong_ton_tai' })
+  assert.equal(r.ok, false)
+  assert.equal(r.ketCuc, 'dieu_tri_thuong')
+})
+
+test('D78/D80 chuyen_chuyen_khoa khong can thong tin chuyen vien', () => {
+  const r = kiemTraKetCuc({ ket_cuc: 'chuyen_chuyen_khoa' })
+  assert.equal(r.ok, true)
+  assert.equal(r.thongTinChuyen, null)
+})
+
+test('D78/D80 chuyen_vien thieu noi_chuyen_den va ly_do -> loi ca hai', () => {
+  const r = kiemTraKetCuc({ ket_cuc: 'chuyen_vien', chuyen_vien_thong_tin: {} })
+  assert.equal(r.ok, false)
+  assert.equal(r.loi.length, 2)
+})
+
+test('D78/D80 chuyen_vien du thong tin -> ok, chuan hoa thong tin chuyen', () => {
+  const r = kiemTraKetCuc({
+    ket_cuc: 'chuyen_vien',
+    chuyen_vien_thong_tin: { noi_chuyen_den: '  BV Bạch Mai  ', ly_do: 'Vượt khả năng chuyên môn' },
+  })
+  assert.equal(r.ok, true)
+  assert.equal(r.thongTinChuyen.noi_chuyen_den, 'BV Bạch Mai')
+  assert.equal(r.thongTinChuyen.ly_do, 'Vượt khả năng chuyên môn')
+  assert.ok(r.thongTinChuyen.thoi_diem instanceof Date)
+})
+
+test('D78/D80 cap_cuu_ngoai_vien cung bat buoc nhu chuyen_vien', () => {
+  const r = kiemTraKetCuc({ ket_cuc: 'cap_cuu_ngoai_vien', chuyen_vien_thong_tin: { noi_chuyen_den: 'BV 108' } })
+  assert.equal(r.ok, false) // thieu ly_do
+})
+
+test('D78/D80 KET_CUC liet ke dung 4 gia tri, dieu_tri_thuong dung dau (mac dinh)', () => {
+  assert.deepEqual(KET_CUC, ['dieu_tri_thuong', 'chuyen_chuyen_khoa', 'chuyen_vien', 'cap_cuu_ngoai_vien'])
 })

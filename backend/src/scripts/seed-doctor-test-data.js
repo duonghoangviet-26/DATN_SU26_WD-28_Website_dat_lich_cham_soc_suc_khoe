@@ -90,7 +90,17 @@ async function findOrCreateDoctorUser() {
 
 async function findOrCreateDoctorProfile(userId) {
   let doc = await BacSi.findOne({ user_id: userId })
-  if (doc) return { doc, created: false }
+  if (doc) {
+    const repair = {}
+    if (doc.trang_thai_duyet !== 'approved') repair.trang_thai_duyet = 'approved'
+    if (doc.trang_thai !== 'active') repair.trang_thai = 'active'
+    if (doc.la_hien !== true) repair.la_hien = true
+    if (Object.keys(repair).length > 0) {
+      doc.set(repair)
+      await doc.save()
+    }
+    return { doc, created: false }
+  }
 
   // Tái sử dụng 1 chuyên khoa đã có sẵn (không tạo mới — đây là dữ liệu Admin quản lý)
   const specialty = await ChuyenKhoa.findOne({ ten: 'Tai Mũi Họng' }) || await ChuyenKhoa.findOne({})
@@ -108,6 +118,8 @@ async function findOrCreateDoctorProfile(userId) {
     phi_kham: 220000,
     tuoi_nhan_kham_tu: 0,
     trang_thai_duyet: 'approved',
+    trang_thai: 'active',
+    la_hien: true,
     phong_kham_mac_dinh: phongKhamMacDinh,
   })
   return { doc, created: true }
@@ -548,11 +560,11 @@ async function main() {
       existingRx.doctor_id = docId
       existingRx.items = [{
         ten_thuoc: '(TEST) Paracetamol 500mg',
-        lieu_luong: '1 viÃªn',
-        tan_suat: '3 láº§n/ngÃ y',
+        lieu_luong: '1 viên',
+        tan_suat: '3 lần/ngày',
         gio_uong: ['07:00', '12:00', '19:00'],
         so_ngay: 5,
-        ghi_chu: 'Uá»‘ng sau Äƒn (dá»¯ liá»‡u test)',
+        ghi_chu: 'Uống sau ăn (dữ liệu test)',
       }]
       await existingRx.save()
       bump('existed', 'prescription')

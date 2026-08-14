@@ -14,7 +14,6 @@ import Counter from './Counter.js'
 // Giá khám clinic (30 phút/slot) lưu trực tiếp ở BacSi.gia_kham — KHÔNG phải DichVu.
 
 async function ensureServiceCounterSeeded() {
-  const counters = mongoose.connection.collection('counters')
   const currentServices = await mongoose.connection
     .collection('dich_vu')
     .find({ ma_dich_vu: /^DV\d+$/ }, { projection: { ma_dich_vu: 1 } })
@@ -25,11 +24,17 @@ async function ensureServiceCounterSeeded() {
     if (!match) return max
     return Math.max(max, Number.parseInt(match[1], 10))
   }, 0)
+  if (maxSeq === 0) return
 
-  const existingCounter = await counters.findOne({ key: 'dich_vu' }, { projection: { seq: 1 } })
-  if (existingCounter?.seq >= maxSeq) return
-
-  await counters.updateOne({ key: 'dich_vu' }, { $set: { seq: maxSeq } }, { upsert: true })
+  // `$max` atomic + idempotent — counter chỉ có thể tăng, KHÔNG BAO GIỜ bị đè lùi xuống.
+  // Bản cũ đọc rồi `$set` không nguyên tử: khi nhiều DichVu được tạo đồng thời (Model.create
+  // với mảng chạy song song từng document — đúng cách `seed-all.js` tạo dịch vụ), nhiều lượt
+  // gọi cùng đọc `maxSeq` TRƯỚC khi bất kỳ document nào commit, tất cả `$set` cùng một giá trị
+  // cũ, có thể đè mất lượt `$inc` mà lượt khác vừa thực hiện xong -> hai document trùng
+  // `ma_dich_vu` (đã tái hiện: seed 20 dịch vụ cùng lúc trên DB rỗng ra 2 bản ghi "DV001").
+  await mongoose.connection
+    .collection('counters')
+    .updateOne({ key: 'dich_vu' }, { $max: { seq: maxSeq } }, { upsert: true })
 }
 
 const serviceSchema = new mongoose.Schema(

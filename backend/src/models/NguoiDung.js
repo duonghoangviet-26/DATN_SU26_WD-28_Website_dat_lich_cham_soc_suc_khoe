@@ -97,10 +97,13 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ role: 1 })
 userSchema.index({ status: 1 })
+// `partialFilterExpression` đã tự loại tài khoản chưa có google_id (khớp $eq null/absent) —
+// mix thêm `sparse: true` bị MongoDB từ chối tạo index ("cannot mix partialFilterExpression
+// and sparse options"), phát hiện khi build index trên DB mới (index cũ trên DB đang chạy có
+// thể đã tồn tại từ trước nên không lộ lỗi này cho tới khi tạo lại từ đầu).
 userSchema.index(
   { google_id: 1 },
   {
-    sparse: true,
     partialFilterExpression: { ngay_xoa: null },
   }
 )

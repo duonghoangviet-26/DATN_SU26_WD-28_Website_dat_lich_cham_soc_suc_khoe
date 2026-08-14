@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DayOverview, DayOverviewDoctor, DayOverviewKhungRow, DoctorDayAppointment, receptionistBookingService } from '@/services/receptionist-booking.service'
 import { receptionistDoctorLeavesService, type PendingDoctorLeave } from '@/services/receptionist-doctor-leaves.service'
+import { DispatchSuggestion, OfflineQueueRow, receptionistOfflineQueueService } from '@/services/receptionist-offline-queue.service'
 import DoctorUnavailableModal from '@/components/receptionist/DoctorUnavailableModal'
 import DoctorLeaveApprovalModal from '@/components/receptionist/DoctorLeaveApprovalModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
+import { EmptyBlock, LoadingBlock, MetricCard, PageShell, Panel, ReceptionistHeader, StatusBadge } from '@/components/receptionist/ReceptionistUI'
 
 function today() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function isTodayDate(date: string) {
+  return date === today()
 }
 
 function dayStatusLabel(status: DayOverviewDoctor['trang_thai_ngay']) {
@@ -68,6 +74,10 @@ export default function DoctorDayView() {
   const [overview, setOverview] = useState<DayOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [offlineRows, setOfflineRows] = useState<OfflineQueueRow[]>([])
+  const [offlineSuggestions, setOfflineSuggestions] = useState<DispatchSuggestion[]>([])
+  const [offlineLoading, setOfflineLoading] = useState(false)
+  const [offlineError, setOfflineError] = useState('')
   const [selectedKhung, setSelectedKhung] = useState<SelectedKhung | null>(null)
   const [khungAppointments, setKhungAppointments] = useState<DoctorDayAppointment[]>([])
   const [khungLoading, setKhungLoading] = useState(false)
@@ -102,14 +112,55 @@ export default function DoctorDayView() {
       })
   }
 
+  const loadOfflineSignal = useCallback((onCancelledCheck?: () => boolean) => {
+    if (!isTodayDate(date)) {
+      setOfflineRows([])
+      setOfflineSuggestions([])
+      setOfflineError('')
+      setOfflineLoading(false)
+      return
+    }
+    setOfflineLoading(true)
+    setOfflineError('')
+    Promise.all([
+      receptionistOfflineQueueService.list({ status: 'cho_dieu_phoi,dang_cho' }),
+      receptionistOfflineQueueService.suggestions(),
+    ])
+      .then(([rows, suggestionResult]) => {
+        if (onCancelledCheck?.()) return
+        setOfflineRows(rows)
+        setOfflineSuggestions(suggestionResult.suggestions)
+      })
+      .catch((requestError) => {
+        if (!onCancelledCheck?.()) setOfflineError(requestError?.response?.data?.message || 'Không thể tải tín hiệu hàng đợi vãng lai')
+      })
+      .finally(() => {
+        if (!onCancelledCheck?.()) setOfflineLoading(false)
+      })
+  }, [date])
+
   useEffect(() => {
     let cancelled = false
     loadOverview(() => cancelled)
+    loadOfflineSignal(() => cancelled)
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date])
+  }, [date, loadOfflineSignal])
+
+  const offlineSignal = useMemo(() => {
+    const centralRows = offlineRows.filter((row) => row.trang_thai === 'cho_dieu_phoi')
+    const assignedRows = offlineRows.filter((row) => row.trang_thai === 'dang_cho')
+    const readySuggestions = offlineSuggestions.filter((item) => item.de_xuat_tot_nhat)
+    const byDoctor = new Map<string, DispatchSuggestion[]>()
+    for (const suggestion of readySuggestions) {
+      const doctorId = suggestion.de_xuat_tot_nhat?.doctor_id
+      if (!doctorId) continue
+      byDoctor.set(doctorId, [...(byDoctor.get(doctorId) ?? []), suggestion])
+    }
+    return { centralRows, assignedRows, readySuggestions, byDoctor }
+  }, [offlineRows, offlineSuggestions])
 
   const openKhung = async (doctorId: string, doctorName: string, row: DayOverviewKhungRow) => {
     setSelectedKhung({ doctorId, doctorName, row })
@@ -133,18 +184,18 @@ export default function DoctorDayView() {
   }
 
   return (
-    <div className="min-h-full bg-slate-50 p-4 lg:p-6">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">Điều phối · Xem lịch, xử lý bác sĩ nghỉ đột xuất</p>
-          <h2 className="mt-2 text-2xl font-bold text-slate-800">Lịch bác sĩ trong ngày</h2>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">Mỗi ô là 1 khung giờ 30 phút, số hiển thị là số slot còn trống / tổng slot của khung đó. Bấm vào ô để xem ai đã đặt.</p>
-        </div>
-        <label className="text-sm font-medium text-slate-700">
-          Ngày
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-1.5 block min-h-11 rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-        </label>
-      </div>
+    <PageShell>
+      <ReceptionistHeader
+        eyebrow="Điều phối · Lịch bác sĩ"
+        title="Lịch bác sĩ trong ngày"
+        description="Mỗi ô là 1 khung giờ 30 phút, số hiển thị là số slot còn trống / tổng slot của khung đó. Bấm vào ô để xem ai đã đặt."
+        actions={
+          <label className="grid gap-1 text-sm font-semibold text-slate-700">
+            Ngày
+            <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="min-h-10 rounded-lg border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+          </label>
+        }
+      />
 
       {pendingLeaves.length > 0 && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -155,48 +206,92 @@ export default function DoctorDayView() {
         </div>
       )}
 
+      {isTodayDate(date) && (
+        <Panel
+          title="Tín hiệu hàng đợi vãng lai"
+          description="Dùng để cân nhanh bác sĩ nào có khoảng an toàn trước khi đưa khách vãng lai từ hàng đợi trung tâm vào phòng khám."
+          action={(
+            <button
+              type="button"
+              onClick={() => loadOfflineSignal()}
+              disabled={offlineLoading}
+              className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {offlineLoading ? 'Đang tải...' : 'Làm mới'}
+            </button>
+          )}
+        >
+          {offlineError && <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">{offlineError}</p>}
+          <div className="grid gap-3 md:grid-cols-3">
+            <MetricCard label="Chờ điều phối" value={offlineSignal.centralRows.length} tone={offlineSignal.centralRows.length ? 'warning' : 'default'} />
+            <MetricCard label="Đã gán bác sĩ" value={offlineSignal.assignedRows.length} tone="info" />
+            <MetricCard label="Có gợi ý an toàn" value={offlineSignal.readySuggestions.length} tone={offlineSignal.readySuggestions.length ? 'success' : 'default'} />
+          </div>
+          {offlineSignal.centralRows.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {offlineSignal.centralRows.slice(0, 6).map((row) => (
+                <span key={row.id} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-950">
+                  <span className="shrink-0">{row.ma_so_thu_tu || '-'}</span>
+                  <span className="min-w-0 truncate">{row.ten_benh_nhan}</span>
+                  <span className="shrink-0 text-amber-700">{row.specialty?.ten || 'Chưa rõ chuyên khoa'}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </Panel>
+      )}
+
       {error && <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
       {loading ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">Đang tải lịch bác sĩ...</div>
+        <LoadingBlock>Đang tải lịch bác sĩ...</LoadingBlock>
       ) : !overview || overview.doctors.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">Không có bác sĩ nào đang hoạt động.</div>
+        <EmptyBlock>Không có bác sĩ nào đang hoạt động.</EmptyBlock>
       ) : (
-        <div className="space-y-4">
+        <div className="grid gap-4 xl:grid-cols-2">
           {overview.doctors.map((doctor) => {
             const leaveCuaBacSi = pendingLeaves.find((leave) => leave.bac_si_id === doctor.doctor_id)
+            const offlineChoBacSi = offlineSignal.byDoctor.get(doctor.doctor_id) ?? []
             return (
-            <div key={doctor.doctor_id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <Panel key={doctor.doctor_id} bodyClassName="p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-base font-bold text-slate-800">{doctor.ten_bac_si}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-bold text-slate-900">{doctor.ten_bac_si}</p>
+                  {offlineChoBacSi.length > 0 && (
+                    <p className="mt-1 text-xs font-semibold text-emerald-700">
+                      Có {offlineChoBacSi.length} khách vãng lai phù hợp để điều phối khi phòng sẵn sàng
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  {offlineChoBacSi.length > 0 && (
+                    <StatusBadge tone="success">{offlineChoBacSi.length} vãng lai sẵn sàng</StatusBadge>
+                  )}
+                  <StatusBadge
+                    tone={
                       doctor.trang_thai_ngay === 'lam_viec'
-                        ? 'bg-emerald-100 text-emerald-800'
+                        ? 'success'
                         : doctor.trang_thai_ngay === 'nghi_phep'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-slate-100 text-slate-600'
-                    }`}
+                          ? 'danger'
+                          : 'neutral'
+                    }
                   >
                     {dayStatusLabel(doctor.trang_thai_ngay)}
-                  </span>
+                  </StatusBadge>
                   {leaveCuaBacSi && (
                     <button
                       type="button"
                       onClick={() => setApprovingLeave(leaveCuaBacSi)}
-                      className="min-h-9 animate-pulse rounded-lg border border-amber-300 bg-amber-100 px-3 text-xs font-semibold text-amber-800 hover:bg-amber-200"
+                      className="min-h-9 rounded-lg border border-amber-300 bg-amber-100 px-3 text-xs font-semibold text-amber-900 hover:bg-amber-200"
                     >
-                      ⚠ Đang xin nghỉ — bấm để duyệt
+                      Đang xin nghỉ
                     </button>
                   )}
                   {doctor.trang_thai_ngay === 'lam_viec' && (
                     <button
                       type="button"
                       onClick={() => setUnavailableDoctor({ id: doctor.doctor_id, name: doctor.ten_bac_si })}
-                      className="min-h-9 rounded-lg border border-orange-200 bg-orange-50 px-3 text-xs font-semibold text-orange-700 hover:bg-orange-100"
+                      className="min-h-9 rounded-lg border border-orange-200 bg-orange-50 px-3 text-xs font-semibold text-orange-800 hover:bg-orange-100"
                     >
                       Báo nghỉ đột xuất
                     </button>
@@ -222,7 +317,7 @@ export default function DoctorDayView() {
                   />
                 </div>
               </div>
-            </div>
+            </Panel>
             )
           })}
         </div>
@@ -230,7 +325,7 @@ export default function DoctorDayView() {
 
       {selectedKhung && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
+          <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-5 shadow-lg">
             <h3 className="text-lg font-bold text-slate-800">{selectedKhung.doctorName} · {selectedKhung.row.gio_bat_dau}</h3>
             <p className="mt-1 text-sm text-slate-500">
               {selectedKhung.row.khoa_boi_nghi_phep ? 'Khung này đang bị khoá vì bác sĩ nghỉ phép.' : `${selectedKhung.row.con_trong}/${selectedKhung.row.tong_slot} slot còn trống.`}
@@ -296,6 +391,6 @@ export default function DoctorDayView() {
           onClose={() => setTimelineApptId(null)}
         />
       )}
-    </div>
+    </PageShell>
   )
 }

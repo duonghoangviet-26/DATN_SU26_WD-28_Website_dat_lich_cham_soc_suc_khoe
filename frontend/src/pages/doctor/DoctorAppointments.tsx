@@ -205,8 +205,8 @@ export default function DoctorAppointments() {
   const hasActiveFilter = Boolean(filterDate || filterStatus || searchTerm.trim())
 
   const displayed = [...filtered].sort((a, b) => {
-    const dateCompare = a.ngay_kham.localeCompare(b.ngay_kham)
-    return dateCompare !== 0 ? dateCompare : a.gio_kham.localeCompare(b.gio_kham)
+    const dateCompare = b.ngay_kham.localeCompare(a.ngay_kham)
+    return dateCompare !== 0 ? dateCompare : b.gio_kham.localeCompare(a.gio_kham)
   })
 
   const emptyMessage = historyLocked

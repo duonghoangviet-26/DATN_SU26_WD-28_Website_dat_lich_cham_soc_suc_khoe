@@ -9,6 +9,7 @@ import QueueTicketTemplate, { QueueTicketData } from '../../components/reception
 import CheckInVerifyModal from '../../components/receptionist/CheckInVerifyModal';
 import TimelinePanel from '../../components/receptionist/TimelinePanel';
 import { TimelineRow } from '../../services/receptionist-timeline.service';
+import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI';
 
 interface Appointment {
   _id: string;
@@ -206,7 +207,9 @@ export default function Appointments() {
       try {
         const res = await axiosInstance.get('/receptionist/booking/doctors');
         if (res.data.success) setDoctorsList(res.data.data);
-      } catch (err) {}
+      } catch {
+        setDoctorsList([]);
+      }
     };
     fetchDoctors();
   }, []);
@@ -264,7 +267,9 @@ export default function Appointments() {
             setBulkStartTime('');
           }
         }
-      } catch (err) {}
+      } catch {
+        setAvailableBulkSlots([]);
+      }
     };
     fetchBulkSlots();
   }, [bulkStartDate, bulkStartTime]);
@@ -494,46 +499,50 @@ export default function Appointments() {
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold text-slate-800 mb-6">Lịch hẹn Phòng khám</h2>
+    <PageShell>
+      <ReceptionistHeader
+        eyebrow="Lịch hẹn"
+        title="Lịch hẹn phòng khám"
+        description="Tra cứu, lọc, check-in, dời lịch hoặc xử lý hàng loạt các lịch khám đang cần điều phối."
+      />
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 mb-6">
+      <div className="flex overflow-x-auto rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
         <button
-          className={`py-3 px-6 font-medium text-sm transition-colors border-b-2 ${
+          className={`min-h-10 shrink-0 rounded-md px-4 text-sm font-semibold transition-colors ${
             activeTab === 'today'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              ? 'bg-brand-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
           }`}
           onClick={() => setActiveTab('today')}
         >
           Hôm nay
         </button>
         <button
-          className={`py-3 px-6 font-medium text-sm transition-colors border-b-2 ${
+          className={`min-h-10 shrink-0 rounded-md px-4 text-sm font-semibold transition-colors ${
             activeTab === 'tomorrow'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              ? 'bg-brand-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
           }`}
           onClick={() => setActiveTab('tomorrow')}
         >
           Ngày mai
         </button>
         <button
-          className={`py-3 px-6 font-medium text-sm transition-colors border-b-2 ${
+          className={`min-h-10 shrink-0 rounded-md px-4 text-sm font-semibold transition-colors ${
             activeTab === 'upcoming'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              ? 'bg-brand-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
           }`}
           onClick={() => setActiveTab('upcoming')}
         >
           Sắp tới
         </button>
         <button
-          className={`py-3 px-6 font-medium text-sm transition-colors border-b-2 ${
+          className={`min-h-10 shrink-0 rounded-md px-4 text-sm font-semibold transition-colors ${
             activeTab === 'past'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              ? 'bg-brand-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
           }`}
           onClick={() => setActiveTab('past')}
         >
@@ -542,35 +551,35 @@ export default function Appointments() {
       </div>
 
       {/* Toolbar: Tìm kiếm & Lọc */}
-      <div className="flex flex-col xl:flex-row gap-4 mb-6">
+      <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm xl:flex-row xl:items-center">
         <button
           onClick={() => {
             setIsBulkMode(!isBulkMode);
             setSelectedApts([]);
           }}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${isBulkMode ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+          className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition-colors whitespace-nowrap ${isBulkMode ? 'bg-brand-100 text-brand-800' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
         >
           {isBulkMode ? 'Hủy chọn nhiều' : 'Chọn nhiều'}
         </button>
-        <div className="flex-1 relative">
+        <div className="relative min-w-0 flex-1">
           <input
             type="text"
             placeholder="Tìm theo tên, SĐT, mã lịch hẹn..."
-            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="min-h-10 w-full rounded-lg border border-slate-300 py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <div className="absolute left-3 top-2.5 text-slate-400">
+            <div className="absolute left-3 top-2.5 text-slate-400">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Bác sĩ:</label>
             <select
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               value={filterDoctorId}
               onChange={(e) => setFilterDoctorId(e.target.value)}
             >
@@ -583,7 +592,7 @@ export default function Appointments() {
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Trạng thái:</label>
             <select
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
@@ -601,7 +610,7 @@ export default function Appointments() {
             <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Ngày khám:</label>
           <input
             type="date"
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
           />
@@ -629,9 +638,9 @@ export default function Appointments() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
+          <table className="min-w-[1120px] w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-slate-800 border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3 font-semibold flex items-center gap-2">
@@ -1335,6 +1344,6 @@ export default function Appointments() {
         </div>
       )}
 
-    </div>
+    </PageShell>
   );
 }

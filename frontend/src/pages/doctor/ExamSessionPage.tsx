@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
 import PageHeader from '@/components/common/PageHeader'
+import Modal from '@/components/common/Modal'
 import Icon from '@/components/admin/icons'
 import StepTiepNhan from '@/components/doctor/exam/StepTiepNhan'
 import StepChanDoan from '@/components/doctor/exam/StepChanDoan'
@@ -11,7 +12,7 @@ import StepDichVu from '@/components/doctor/exam/StepDichVu'
 import StepKeDon from '@/components/doctor/exam/StepKeDon'
 import StepXacNhan from '@/components/doctor/exam/StepXacNhan'
 import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
-import type { BuocKham, PhienKham } from '@/services/doctor-exam-session.service'
+import type { BuocKham, CanhBaoDiUngItem, PhienKham } from '@/services/doctor-exam-session.service'
 
 // Thứ tự 5 bước — PHẢI khớp CAC_BUOC ở backend (examStepRules.js). Không import được
 // file backend vào bundle FE nên khai lại làm hằng số riêng ở đây.
@@ -28,6 +29,16 @@ const TEN_BUOC: Record<BuocKham, string> = {
 function extractApiMessage(err: unknown, fallback: string) {
   const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
   return message?.trim() || fallback
+}
+
+// B47 — lỗi 409 kèm danh sách thuốc khả nghi trùng dị ứng (xem utils/response.js `fail(..., data)`).
+function extractCanhBaoDiUng(err: unknown): CanhBaoDiUngItem[] | null {
+  const data = (err as {
+    response?: { status?: number; data?: { data?: { canh_bao_di_ung?: CanhBaoDiUngItem[] } } }
+  })?.response
+  if (data?.status !== 409) return null
+  const list = data.data?.data?.canh_bao_di_ung
+  return list && list.length > 0 ? list : null
 }
 
 function nhanGioiTinh(gioiTinh: string | null) {
@@ -49,6 +60,11 @@ export default function ExamSessionPage() {
   const [error, setError] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // B47 — khi backend chặn kê đơn vì trùng dị ứng: giữ lại payload đang chờ + danh sách cảnh
+  // báo, để bác sĩ xác nhận bất chấp kèm lý do rồi gửi lại đúng payload đó.
+  const [canhBaoDiUng, setCanhBaoDiUng] = useState<CanhBaoDiUngItem[] | null>(null)
+  const [payloadChoXacNhan, setPayloadChoXacNhan] = useState<Record<string, unknown> | null>(null)
+  const [lyDoBatChap, setLyDoBatChap] = useState('')
 
   function load() {
     if (!queueId) return
@@ -74,13 +90,38 @@ export default function ExamSessionPage() {
     try {
       const phienMoi = await doctorExamSessionService.saveStep(queueId, buocDangXem, payload)
       setPhien(phienMoi)
+      setCanhBaoDiUng(null)
+      setPayloadChoXacNhan(null)
+      setLyDoBatChap('')
       // Sau khi lưu, nhảy tới đúng nơi server xác nhận đã tới — không tự suy đoán "bước kế tiếp".
       setBuocDangXem(phienMoi.buoc_hien_tai)
     } catch (e) {
-      setSaveError(extractApiMessage(e, 'Lưu thất bại, vui lòng thử lại'))
+      const canhBao = extractCanhBaoDiUng(e)
+      if (canhBao) {
+        // Không phải lỗi để hiện đỏ — mở modal xác nhận, giữ nguyên payload để gửi lại.
+        setCanhBaoDiUng(canhBao)
+        setPayloadChoXacNhan(payload)
+      } else {
+        setSaveError(extractApiMessage(e, 'Lưu thất bại, vui lòng thử lại'))
+      }
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleXacNhanBatChapDiUng() {
+    if (!payloadChoXacNhan || !lyDoBatChap.trim()) return
+    void handleNext({
+      ...payloadChoXacNhan,
+      xac_nhan_bat_chap_di_ung: true,
+      ly_do_bat_chap_di_ung: lyDoBatChap.trim(),
+    })
+  }
+
+  function handleHuyCanhBaoDiUng() {
+    setCanhBaoDiUng(null)
+    setPayloadChoXacNhan(null)
+    setLyDoBatChap('')
   }
 
   if (loading) {
@@ -190,6 +231,50 @@ export default function ExamSessionPage() {
           <StepXacNhan phien={phien} saving={saving} onNext={handleNext} onEditStep={setBuocDangXem} />
         )}
       </div>
+
+      {/* B47 — cảnh báo dị ứng khả nghi: chặn lưu cho tới khi bác sĩ xác nhận bất chấp kèm lý do. */}
+      <Modal isOpen={canhBaoDiUng !== null} onClose={handleHuyCanhBaoDiUng} title="Cảnh báo dị ứng thuốc" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Phát hiện thuốc trùng khả nghi với dị ứng đã ghi nhận của bệnh nhân
+            {phien.queue.di_ung ? <> (<span className="font-medium text-red-600">{phien.queue.di_ung}</span>)</> : null}.
+            Đây là cảnh báo theo từ khóa trùng chữ, không phải tra cứu tương tác thuốc chuyên môn —
+            vui lòng xác nhận lại trước khi tiếp tục.
+          </p>
+          <ul className="space-y-1.5 rounded-lg bg-red-50 p-3 text-sm">
+            {(canhBaoDiUng ?? []).map((c) => (
+              <li key={c.ten_thuoc} className="text-red-700">
+                <span className="font-semibold">{c.ten_thuoc}</span> — trùng từ khóa:{' '}
+                {c.tu_khoa_trung.join(', ')}
+              </li>
+            ))}
+          </ul>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-600">
+              Lý do kê thuốc bất chấp cảnh báo <span className="text-red-500">*</span>
+            </span>
+            <textarea
+              value={lyDoBatChap}
+              onChange={(e) => setLyDoBatChap(e.target.value)}
+              rows={3}
+              placeholder="vd: đã hỏi lại bệnh nhân, dị ứng cũ không còn / chỉ trùng tên chứ khác hoạt chất..."
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <div className="flex justify-end gap-3">
+            <button onClick={handleHuyCanhBaoDiUng} className="btn-secondary">
+              Hủy, sửa lại đơn
+            </button>
+            <button
+              onClick={handleXacNhanBatChapDiUng}
+              disabled={saving || !lyDoBatChap.trim()}
+              className="btn-danger disabled:opacity-50"
+            >
+              {saving ? 'Đang lưu...' : 'Xác nhận vẫn kê đơn'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

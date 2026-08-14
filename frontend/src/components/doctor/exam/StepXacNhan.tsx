@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
-import type { BuocKham, KetQuaHoanTat, PhienKham } from '@/services/doctor-exam-session.service'
+import type { BuocKham, KetCuc, KetQuaHoanTat, PhienKham } from '@/services/doctor-exam-session.service'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import { formatPrice } from '@/utils/format'
 
@@ -20,6 +20,13 @@ interface Props {
 function extractApiMessage(err: unknown, fallback: string) {
   const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
   return message?.trim() || fallback
+}
+
+const NHAN_KET_CUC: Record<KetCuc, string> = {
+  dieu_tri_thuong: 'Điều trị thường',
+  chuyen_chuyen_khoa: 'Chuyển chuyên khoa',
+  chuyen_vien: 'Chuyển viện',
+  cap_cuu_ngoai_vien: 'Cấp cứu ngoài viện',
 }
 
 function KhoiTomTat({
@@ -153,6 +160,21 @@ export default function StepXacNhan({ phien, onEditStep }: Props) {
           <p><span className="text-slate-400">Hướng dẫn điều trị: </span><span className="text-slate-800">{hoSo?.huong_dan_dieu_tri || '—'}</span></p>
           <p><span className="text-slate-400">Lưu ý: </span><span className="text-slate-800">{hoSo?.ghi_chu || '—'}</span></p>
           <p><span className="text-slate-400">Tái khám: </span><span className="text-slate-800">{hoSo?.ngay_tai_kham ? new Date(hoSo.ngay_tai_kham).toLocaleDateString('vi-VN') : '—'}</span></p>
+          <p>
+            <span className="text-slate-400">Kết cục: </span>
+            <span className={hoSo?.ket_cuc && hoSo.ket_cuc !== 'dieu_tri_thuong' ? 'font-semibold text-amber-700' : 'text-slate-800'}>
+              {NHAN_KET_CUC[hoSo?.ket_cuc ?? 'dieu_tri_thuong']}
+            </span>
+          </p>
+          {hoSo?.chuyen_vien_thong_tin && (
+            <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <p>Nơi chuyển: {hoSo.chuyen_vien_thong_tin.noi_chuyen_den}</p>
+              <p>Lý do: {hoSo.chuyen_vien_thong_tin.ly_do}</p>
+              {hoSo.chuyen_vien_thong_tin.tinh_trang_luc_chuyen && (
+                <p>Tình trạng: {hoSo.chuyen_vien_thong_tin.tinh_trang_luc_chuyen}</p>
+              )}
+            </div>
+          )}
         </div>
       </KhoiTomTat>
 

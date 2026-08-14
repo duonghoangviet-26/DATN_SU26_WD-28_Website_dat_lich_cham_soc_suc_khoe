@@ -1,0 +1,23 @@
+# D. Tình huống hy hữu, bất trắc, đột ngột
+
+Mục tiêu file này: chuẩn bị câu trả lời cho các tình huống ít gặp nhưng thực tế có thể xảy ra trong phòng khám. Nhóm này giúp bảo vệ dự án ở góc độ vận hành, an toàn dữ liệu và quản trị rủi ro.
+
+Nguồn đối chiếu chính:
+- `docs/Le tan/Kiem thu toan dien trang Le tan - bo kich ban hoi dong (2026-08-12).md`
+- `docs/Review cuoi ky WS-1 - Luong kham 4 buoc (2026-08-08).md`
+- `docs/Nang cap luong Bac si - Le tan sau demo (2026-08-08).md`
+- Code: `backend/src/middlewares/auth.middleware.js`, `backend/src/services/*queue*.service.js`, `backend/src/services/receptionistAudit.service.js`
+
+| Mã | Câu hỏi hội đồng | Câu trả lời bảo vệ hợp lý | Đáp ứng | Bằng chứng đối chiếu | Bổ sung/đã ghi nhận |
+|---|---|---|---|---|---|
+| D76 | Nếu mất realtime/WebSocket trong giờ cao điểm thì bác sĩ và lễ tân có bị tê liệt không? | Không nếu API và database vẫn hoạt động. Người dùng refresh để lấy trạng thái mới nhất; realtime chỉ là lớp hỗ trợ cập nhật tức thời. | Đã có | Tài liệu nêu DB/`HangDoi` là source of truth; `doctorQueueRealtime.service.js`. | Không cần bổ sung. |
+| D77 | Nếu hệ thống tạo số thứ tự nhưng máy in không in được thì sao? | Số thứ tự đã nằm trong database nên không mất. Lễ tân đọc trực tiếp trên màn hình hoặc in lại khi máy in hoạt động. | Đã có | Luồng ticket/print lại, dữ liệu hàng đợi lưu độc lập với in ấn. | Không cần bổ sung. |
+| D78 | Nếu bệnh nhân có dấu hiệu cấp cứu ngay tại quầy thì lễ tân thao tác thế nào? | Về vận hành, lễ tân phải ưu tiên an toàn bệnh nhân, báo nhân sự y tế và đưa vào xử lý khẩn. Hệ thống nên có mức ưu tiên/ghi chú để không bắt đi theo luồng thường. | Một phần | Có mức ưu tiên tiếp nhận/hàng đợi; chưa thấy quy trình cấp cứu riêng. | Đã ghi nhận cần thêm: nút “ưu tiên khẩn/cấp cứu”, lý do, cảnh báo bác sĩ/lễ tân, audit và báo cáo ca khẩn. |
+| D79 | Nếu bệnh nhân đặt sai chuyên khoa nhưng chỉ phát hiện khi gặp bác sĩ thì sao? | Bác sĩ không nên khám sai chuyên môn. Cần kết thúc/đánh dấu chuyển chuyên khoa và lễ tân hỗ trợ đặt lại hoặc chuyển tuyến nội bộ. | Một phần | Có reschedule/queue transfer nền tảng; thiếu flow đổi chuyên khoa sau khi đã vào phòng. | Đã ghi nhận cần thêm: trạng thái “chuyển chuyên khoa”, chọn chuyên khoa mới, xử lý phí/lịch/hàng đợi và audit. |
+| D80 | Nếu bệnh nhân đang khám thì cần chuyển viện/cấp cứu bên ngoài thì hệ thống ghi nhận thế nào? | Bác sĩ phải ghi kết luận và hướng xử trí chuyển viện/cấp cứu; lễ tân không tự hoàn tất như ca khám thường nếu còn giấy tờ/thanh toán đặc biệt. | Chưa có | Chưa thấy bằng chứng về outcome chuyển viện/cấp cứu ngoài phòng khám. | Đã ghi nhận cần thêm: kết quả khám loại “chuyển viện/cấp cứu”, ghi nơi chuyển, lý do, file/giấy tờ kèm theo. |
+| D81 | Nếu bệnh nhân không có số điện thoại hoặc không nhớ thông tin cá nhân thì có tiếp nhận được không? | Về thực tế vẫn có thể cần tiếp nhận tạm. Hệ thống nên cho tạo hồ sơ tạm với định danh tối thiểu, sau đó cập nhật bổ sung. | Chưa có | Tài liệu lễ tân tập trung tìm theo số điện thoại; chưa thấy luồng hồ sơ tạm không có SĐT. | Đã ghi nhận cần thêm: hồ sơ tạm, mã định danh tạm, cờ cần bổ sung thông tin, quy trình hợp nhất sau. |
+| D82 | Nếu người đưa bệnh nhân đi khám không phải người thân hợp pháp thì lễ tân kiểm soát quyền riêng tư thế nào? | Lễ tân chỉ xác nhận thông tin cần thiết để tiếp nhận, hạn chế tiết lộ hồ sơ y tế. Với người đặt hộ/người đi cùng, cần ghi quan hệ và sự đồng ý của bệnh nhân nếu chia sẻ thông tin. | Một phần | Có mô hình người đặt hộ/người bệnh thật; chưa thấy consent/privacy flow chi tiết. | Đã ghi nhận cần thêm: trường quan hệ/người đi cùng, xác nhận đồng ý chia sẻ thông tin, giới hạn hiển thị dữ liệu nhạy cảm. |
+| D83 | Nếu bác sĩ và lễ tân cùng thao tác một bệnh nhân ở hai màn hình khác nhau thì dữ liệu có xung đột không? | Hệ thống phân quyền theo vai trò và trạng thái. Lễ tân xử lý hành chính; bác sĩ xử lý chuyên môn. Các thao tác nhạy cảm phải dựa trên trạng thái mới nhất và có audit. | Đã có | Role guard, lock khi in-room, activity/audit log. | Không cần bổ sung. |
+| D84 | Nếu có nhân viên cố tình thao tác sai để che giấu lỗi thì hệ thống phát hiện thế nào? | Không xóa dấu vết. Nhật ký thao tác ghi ai làm, làm lúc nào, lý do và đối tượng tác động để quản trị viên truy vết. | Đã có | `activity-log`, `receptionistAudit.service.js`, audit hoàn tất khám. | Không cần bổ sung. |
+| D85 | Nếu người ngoài biết URL API lễ tân/bác sĩ thì có gọi được không? | Không nếu không có token và role hợp lệ. Backend dùng `verifyToken` và `requireRole`, nên bảo vệ không chỉ nằm ở giao diện. | Đã có | `backend/src/routes/receptionist/index.js`, `backend/src/routes/doctor/index.js`, `auth.middleware.js`. | Không cần bổ sung. |
+

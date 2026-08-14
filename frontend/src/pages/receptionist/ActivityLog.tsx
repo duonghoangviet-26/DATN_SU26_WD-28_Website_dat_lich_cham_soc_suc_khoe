@@ -3,6 +3,7 @@ import {
   ActivityLogRow,
   receptionistActivityLogService,
 } from '@/services/receptionist-activity-log.service'
+import { EmptyBlock, PageShell, ReceptionistHeader, TableFrame } from '@/components/receptionist/ReceptionistUI'
 
 const NHAN_NHOM: Record<string, string> = {
   tiep_nhan: 'Tiếp nhận',
@@ -148,34 +149,30 @@ export default function ActivityLog() {
   }, [rows])
 
   return (
-    <div className="min-h-full bg-slate-50 p-4 lg:p-6">
-      <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">
-          Vận hành · Bàn giao ca
-        </p>
-        <h1 className="mt-1 text-2xl font-bold text-slate-900">Nhật ký ca trực</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Ai đã thao tác với khách nào, lúc nào. Dùng khi bàn giao ca hoặc làm thay đồng nghiệp nghỉ.
-        </p>
-      </div>
+    <PageShell>
+      <ReceptionistHeader
+        eyebrow="Vận hành · Bàn giao ca"
+        title="Nhật ký ca trực"
+        description="Ai đã thao tác với khách nào, lúc nào. Dùng khi bàn giao ca hoặc làm thay đồng nghiệp nghỉ."
+      />
 
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
-        <label className="text-sm font-medium text-slate-600">
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <label className="grid gap-1 text-sm font-semibold text-slate-700">
           Ngày
           <input
             type="date"
             value={ngay}
             onChange={(e) => setNgay(e.target.value)}
-            className="ml-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           />
         </label>
 
-        <label className="text-sm font-medium text-slate-600">
+        <label className="grid gap-1 text-sm font-semibold text-slate-700">
           Nhóm việc
           <select
             value={nhom}
             onChange={(e) => setNhom(e.target.value)}
-            className="ml-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           >
             <option value="">Tất cả</option>
             {Object.entries(NHAN_NHOM).map(([value, label]) => (
@@ -184,12 +181,12 @@ export default function ActivityLog() {
           </select>
         </label>
 
-        <label className="text-sm font-medium text-slate-600">
+        <label className="grid gap-1 text-sm font-semibold text-slate-700">
           Người trực
           <select
             value={nguoiId}
             onChange={(e) => setNguoiId(e.target.value)}
-            className="ml-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           >
             <option value="">Tất cả</option>
             {nguoiTrong.map(([id, ten]) => (
@@ -205,8 +202,8 @@ export default function ActivityLog() {
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <table className="w-full text-sm">
+      <TableFrame>
+        <table className="min-w-[900px] w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Giờ</th>
@@ -221,13 +218,11 @@ export default function ActivityLog() {
               <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-400">Đang tải...</td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-400">
-                Chưa có thao tác nào trong ngày này.
-              </td></tr>
+              <tr><td colSpan={5} className="px-4 py-6"><EmptyBlock>Chưa có thao tác nào trong ngày này.</EmptyBlock></td></tr>
             )}
             {!loading && rows.map((row) => (
               <tr key={row.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono text-xs text-slate-500">{gioPhut(row.thoi_diem)}</td>
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-500">{gioPhut(row.thoi_diem)}</td>
                 <td className="px-4 py-3 font-medium text-slate-800">{row.nguoi_thuc_hien}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${row.nhom ? MAU_NHOM[row.nhom] : 'bg-slate-100 text-slate-600'}`}>
@@ -242,7 +237,7 @@ export default function ActivityLog() {
             ))}
           </tbody>
         </table>
-      </div>
-    </div>
+      </TableFrame>
+    </PageShell>
   )
 }

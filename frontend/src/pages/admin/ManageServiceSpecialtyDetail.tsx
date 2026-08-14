@@ -198,7 +198,7 @@ export default function ManageServiceSpecialtyDetail() {
       const fullService = await serviceService.getById(service.id)
       setHistoryTarget(fullService)
     } catch {
-      showToast('KhÃ´ng thá»ƒ táº£i lá»‹ch sá»­ thao tÃ¡c', 'error')
+      showToast('Không thể tải lịch sử thao tác', 'error')
     } finally {
       setHistoryLoading(false)
     }

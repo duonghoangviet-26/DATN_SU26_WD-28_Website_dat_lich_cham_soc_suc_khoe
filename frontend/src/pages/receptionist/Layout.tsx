@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { receptionistNotificationService, VirtualNotification } from '@/services/receptionist-notification.service';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { Bell, LogOut, Menu } from 'lucide-react';
 
 export default function ReceptionistLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -66,46 +67,46 @@ export default function ReceptionistLayout() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-slate-50 font-sans text-slate-900">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header tạm thời */}
-        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-6 z-10 shadow-sm relative">
-          <div className="flex items-center gap-4">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="relative z-10 flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 shadow-sm lg:px-6">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-brand-600 hover:bg-slate-50 rounded-lg transition-colors"
+              className="-ml-2 grid h-10 w-10 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-brand-700 lg:hidden"
+              aria-label="Mở menu lễ tân"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              <Menu className="h-5 w-5" />
             </button>
-            <h1 className="text-xl font-bold text-slate-800">Cổng Lễ Tân</h1>
+            <div className="min-w-0">
+              <p className="truncate text-base font-bold text-slate-950">Cổng lễ tân</p>
+              <p className="hidden text-xs font-medium text-slate-500 sm:block">Điều phối lịch hẹn, tiếp nhận và thanh toán</p>
+            </div>
           </div>
           
-          <div className="flex items-center gap-6">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             {/* Notification Bell */}
             <div className="relative" ref={dropdownRef}>
               <button 
                 onClick={handleToggleDropdown}
-                className="relative p-2 text-slate-500 hover:text-brand-600 hover:bg-slate-50 rounded-full transition-colors focus:outline-none"
+                className="relative grid h-10 w-10 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-brand-700"
+                aria-label="Mở thông báo lễ tân"
               >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
+                <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
-                    {unreadCount}
+                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white ring-2 ring-white">
+                    {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </button>
 
               {/* Notification Dropdown */}
               {showDropdown && (
-                <div className="absolute right-0 mt-2 w-80 lg:w-96 rounded-xl bg-white shadow-xl border border-slate-100 py-2 z-50">
-                  <div className="px-4 py-2 border-b border-slate-50 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-800">Thông báo Lễ tân</h3>
-                    <span className="text-xs text-brand-600 bg-brand-50 px-2 py-1 rounded-full font-semibold">Mới nhất</span>
+                <div className="absolute right-0 z-50 mt-2 w-[min(92vw,24rem)] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                    <h3 className="text-sm font-bold text-slate-950">Thông báo lễ tân</h3>
+                    <span className="rounded-md bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-700">Mới nhất</span>
                   </div>
                   <div className="max-h-[60vh] overflow-y-auto">
                     {notifications.length === 0 ? (
@@ -121,11 +122,11 @@ export default function ReceptionistLayout() {
                               const targetUrl = notif.du_lieu_dinh_kem?.url;
                               navigate(typeof targetUrl === 'string' && targetUrl ? targetUrl : '/receptionist/appointments');
                             }}
-                            className={`p-4 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors ${isUnread ? 'bg-brand-50/30' : ''}`}
+                            className={`cursor-pointer border-b border-slate-100 p-4 transition-colors hover:bg-slate-50 ${isUnread ? 'bg-brand-50/40' : ''}`}
                           >
                             <div className="flex gap-3">
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm ${isUnread ? 'font-bold text-slate-800' : 'font-medium text-slate-700'}`}>
+                                <p className={`line-clamp-2 text-sm ${isUnread ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
                                   {notif.tieu_de}
                                 </p>
                                 <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
@@ -135,7 +136,7 @@ export default function ReceptionistLayout() {
                                   {formatDistanceToNow(new Date(notif.ngay_tao), { addSuffix: true, locale: vi })}
                                 </p>
                               </div>
-                              {isUnread && <div className="w-2 h-2 rounded-full bg-brand-500 mt-1.5 shrink-0" />}
+                              {isUnread && <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500" />}
                             </div>
                           </div>
                         )
@@ -146,19 +147,20 @@ export default function ReceptionistLayout() {
               )}
             </div>
 
-            <div className="flex items-center gap-4 border-l border-slate-200 pl-4">
-              <span className="text-sm font-bold text-slate-700">{user?.ho_ten || 'Lễ Tân'}</span>
+            <div className="flex min-w-0 items-center gap-2 border-l border-slate-200 pl-3 sm:gap-3 sm:pl-4">
+              <span className="hidden max-w-44 truncate text-sm font-semibold text-slate-700 sm:inline">{user?.ho_ten || 'Lễ tân'}</span>
               <button 
                 onClick={handleLogout}
-                className="px-3 py-1.5 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-rose-50 px-3 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100"
               >
-                Đăng xuất
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Đăng xuất</span>
               </button>
             </div>
           </div>
         </header>
         {/* Main Content Area */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto relative">
+        <main className="relative flex-1 overflow-x-hidden overflow-y-auto">
           <Outlet />
         </main>
       </div>
