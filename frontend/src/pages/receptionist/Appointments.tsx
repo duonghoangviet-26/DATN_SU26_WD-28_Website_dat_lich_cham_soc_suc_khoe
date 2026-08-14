@@ -687,8 +687,15 @@ export default function Appointments() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800">{apt.user_id?.ho_ten || apt.ten_khach || 'Khách vãng lai'}</div>
-                        <div className="text-xs text-slate-500">{apt.user_id?.so_dien_thoai || apt.so_dien_thoai_khach}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-slate-800">{apt.ten_khach || apt.user_id?.ho_ten || 'Khách vãng lai'}</span>
+                          {apt.dat_ho && (
+                            <span className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700">
+                              Đặt hộ
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500">{apt.so_dien_thoai_khach || apt.user_id?.so_dien_thoai}</div>
                       </td>
                       <td className="px-4 py-3">{apt.doctor_id?.user_id?.ho_ten || 'Chưa gán'}</td>
                       <td className="px-4 py-3">
