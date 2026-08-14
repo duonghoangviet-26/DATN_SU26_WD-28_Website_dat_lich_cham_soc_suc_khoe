@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 import {
-  DichVu, DonThuoc, HangDoi, KetQuaKham, LichHen, NhatKyThaoTac, SinhHieuKham, TrangThaiPhongKham,
+  DichVu, DonThuoc, HangDoi, HoaDon, KetQuaKham, LichHen, NhatKyThaoTac, SinhHieuKham, TrangThaiPhongKham,
 } from '../models/index.js'
 import { soSanhThuTuHangDoi } from '../models/HangDoi.js'
 // `room-status.controller.js` chỉ import models + utils/response → KHÔNG có vòng import
@@ -175,6 +175,12 @@ export async function layPhienKham({ queueId, docId }) {
     ? (await DonThuoc.findOne({ medical_record_id: hoSo._id }).lean())?.items ?? []
     : []
 
+  // C4 — thông tin thu ngân đi kèm hồ sơ, để màn "Bệnh nhân đã khám" xem đủ mà không cần
+  // gọi thêm API riêng. Tra theo hang_doi_id trước (offline chỉ có khóa này), rồi appointment_id.
+  const hoaDon = await HoaDon.findOne({
+    $or: [{ hang_doi_id: entry._id }, ...(entry.appointment_id ? [{ appointment_id: entry.appointment_id }] : [])],
+  }).select('tong_tien_kham tong_tien_phat_sinh tong_thanh_toan trang_thai_hoa_don').lean()
+
   return {
     queue: {
       id: String(entry._id),
@@ -202,6 +208,12 @@ export async function layPhienKham({ queueId, docId }) {
           dich_vu_phat_sinh: hoSo.dich_vu_phat_sinh ?? [],
           ket_cuc: hoSo.ket_cuc ?? 'dieu_tri_thuong',
           chuyen_vien_thong_tin: hoSo.chuyen_vien_thong_tin ?? null,
+          // C4 — lịch sử chỉnh sửa/đính chính, để màn "Bệnh nhân đã khám" biết ai đã sửa gì.
+          lich_su_sua: (hoSo.lich_su_sua ?? []).map((h) => ({
+            thoi_diem_sua: h.thoi_diem_sua,
+            noi_dung: h.noi_dung,
+            la_dinh_chinh: h.la_dinh_chinh ?? false,
+          })),
         }
       : null,
     sinh_hieu: sinhHieu
@@ -213,6 +225,14 @@ export async function layPhienKham({ queueId, docId }) {
     buoc_hien_tai: hoSo?.buoc_hien_tai ?? 'tiep_nhan',
     bmi: tinhBMI(sinhHieu?.can_nang ?? null, sinhHieu?.chieu_cao ?? null),
     thuoc,
+    hoa_don: hoaDon
+      ? {
+          tong_tien_kham: hoaDon.tong_tien_kham,
+          tong_tien_phat_sinh: hoaDon.tong_tien_phat_sinh,
+          tong_thanh_toan: hoaDon.tong_thanh_toan,
+          trang_thai_hoa_don: hoaDon.trang_thai_hoa_don,
+        }
+      : null,
     dich_vu_kha_dung: dichVuKhaDung.map((d) => ({
       service_id: String(d._id), ten: d.ten, gia: d.gia, ma_dich_vu: d.ma_dich_vu ?? null,
     })),

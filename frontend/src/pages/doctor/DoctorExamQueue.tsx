@@ -291,16 +291,29 @@ export default function DoctorExamQueue() {
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase()
     return rows.filter((r) => {
-      if (statusFilter && r.trang_thai_tong_hop !== statusFilter) return false
+      if (statusFilter) {
+        if (r.trang_thai_tong_hop !== statusFilter) return false
+      } else if (r.trang_thai_tong_hop === 'da_xong') {
+        // C4 — bệnh nhân đã hoàn tất KHÔNG hiện mặc định ở bảng chờ khám nữa (tránh chiếm chỗ,
+        // đẩy người đang chờ xuống dưới) — xem lại ở trang "Bệnh nhân đã khám", hoặc lọc rõ
+        // "Đã xong" ở đây nếu chỉ cần kiểm tra nhanh trong ca hôm nay.
+        return false
+      }
       if (kw && !r.ten_benh_nhan.toLowerCase().includes(kw)) return false
       return true
     })
   }, [rows, search, statusFilter])
+  const soDaXongHomNay = useMemo(() => rows.filter((r) => r.trang_thai_tong_hop === 'da_xong').length, [rows])
 
   return (
     <div>
       <PageHeader title="Hồ sơ chờ khám"
-        description="Toàn bộ bệnh nhân (đặt online + vãng lai) đã check-in được gán cho bạn — check-in, gọi, vào phòng, kết thúc khám và nhập hồ sơ." />
+        description="Toàn bộ bệnh nhân (đặt online + vãng lai) đã check-in được gán cho bạn — check-in, gọi, vào phòng, kết thúc khám và nhập hồ sơ.">
+        <Button variant="secondary" size="sm" onClick={() => navigate('/doctor/exam-history')}
+          icon={<Icon name="eye" className="h-3.5 w-3.5" />}>
+          Bệnh nhân đã khám{soDaXongHomNay > 0 ? ` (${soDaXongHomNay} hôm nay)` : ''}
+        </Button>
+      </PageHeader>
 
       <RoomStatusWidget refreshKey={roomRefreshKey} />
 
@@ -334,6 +347,11 @@ export default function DoctorExamQueue() {
           {choTiepNhan.length > 0 && (
             <p className="text-xs text-amber-700">
               {choTiepNhan.length} khách đã đặt lịch hôm nay — bấm “Tiếp nhận” ở bảng trên khi họ có mặt.
+            </p>
+          )}
+          {!statusFilter && soDaXongHomNay > 0 && (
+            <p className="text-xs text-slate-400">
+              {soDaXongHomNay} bệnh nhân đã khám xong hôm nay — xem ở “Bệnh nhân đã khám”.
             </p>
           )}
         </div>
