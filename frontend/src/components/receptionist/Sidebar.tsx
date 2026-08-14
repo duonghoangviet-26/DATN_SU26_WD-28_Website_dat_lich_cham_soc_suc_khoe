@@ -15,6 +15,7 @@ const receptionistMenu = [
   { path: '/receptionist/doctor-day-view', label: 'Điều phối bác sĩ', icon: 'stethoscope' },
   { path: '/receptionist/contact-tasks', label: 'Liên hệ bệnh nhân', icon: 'phone-call' },
   { path: '/receptionist/activity-log', label: 'Nhật ký ca trực', icon: 'clipboard-list' },
+  { path: '/receptionist/emergency-report', label: 'Biên bản ca khẩn', icon: 'alert-circle' },
   { path: '/receptionist/payments', label: 'Viện phí & hóa đơn', icon: 'receipt' },
   { path: '/receptionist/news', label: 'Tin sức khỏe', icon: 'newspaper' },
 ];
