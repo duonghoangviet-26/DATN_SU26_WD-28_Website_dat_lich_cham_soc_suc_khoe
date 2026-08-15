@@ -48,6 +48,23 @@ function nhanGioiTinh(gioiTinh: string | null) {
   return null
 }
 
+function nhanNguon(nguon: string) {
+  return nguon === 'online' ? 'Đặt online' : 'Vãng lai'
+}
+
+function dinhDangNgaySinh(ngaySinh: string | null) {
+  if (!ngaySinh) return null
+  const date = new Date(ngaySinh)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleDateString('vi-VN')
+}
+
+function coGiaTriYTe(value: string | null) {
+  const text = value?.trim()
+  if (!text) return false
+  return !['không', 'khong', 'không có', 'khong co', 'none', 'n/a'].includes(text.toLowerCase())
+}
+
 export default function ExamSessionPage() {
   const { queueId } = useParams<{ queueId: string }>()
   const navigate = useNavigate()
@@ -141,6 +158,15 @@ export default function ExamSessionPage() {
 
   const buocHienTaiIndex = CAC_BUOC.indexOf(phien.buoc_hien_tai)
   const gioiTinh = nhanGioiTinh(phien.queue.gioi_tinh)
+  const ngaySinh = dinhDangNgaySinh(phien.queue.ngay_sinh)
+  const thongTinNhanDien = [
+    phien.queue.tuoi ? `${phien.queue.tuoi} tuổi` : null,
+    ngaySinh ? `Sinh ${ngaySinh}` : null,
+    gioiTinh,
+    phien.queue.nhom_mau ? `Nhóm máu ${phien.queue.nhom_mau}` : null,
+  ].filter(Boolean)
+  const coCanhBaoDiUng = coGiaTriYTe(phien.queue.di_ung)
+  const coBenhNen = coGiaTriYTe(phien.queue.benh_nen)
 
   return (
     <div>
@@ -154,36 +180,57 @@ export default function ExamSessionPage() {
         </Button>
       </PageHeader>
 
-      {/* Header thông tin bệnh nhân */}
-      <div className="card mb-4 flex flex-wrap items-center gap-3 p-4">
-        <div className="flex items-center gap-2">
-          <Icon name="user" className="h-4 w-4 text-slate-400" />
-          <span className="text-sm font-semibold text-slate-800">{phien.queue.ten_benh_nhan}</span>
-        </div>
-        <span className="text-xs text-slate-400">
-          {[phien.queue.tuoi ? `${phien.queue.tuoi} tuổi` : null, gioiTinh, phien.queue.nhom_mau ? `Nhóm máu ${phien.queue.nhom_mau}` : null]
-            .filter(Boolean)
-            .join(' · ') || '—'}
-        </span>
-        <Badge color={phien.queue.nguon === 'online' ? 'blue' : 'yellow'}>
-          {phien.queue.nguon === 'online' ? 'Đặt online' : 'Vãng lai'}
-        </Badge>
-        {phien.queue.phong_kham && <span className="text-xs text-slate-400">Phòng {phien.queue.phong_kham}</span>}
-        {(phien.queue.di_ung || phien.queue.benh_nen) && (
-          <div className="ml-auto flex flex-wrap gap-2">
-            {phien.queue.di_ung && (
-              <span className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+      {/* Tóm tắt bệnh nhân: chỉ giữ thông tin cần cho phiên khám hiện tại. */}
+      <section className="card mb-4 p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Icon name="user" className="h-4 w-4 text-brand-600" />
+              <h2 className="text-sm font-semibold text-slate-900">{phien.queue.ten_benh_nhan}</h2>
+              {phien.queue.ma_so_thu_tu && <Badge color="gray">STT {phien.queue.ma_so_thu_tu}</Badge>}
+              <Badge color={phien.queue.nguon === 'online' ? 'blue' : 'yellow'}>{nhanNguon(phien.queue.nguon)}</Badge>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+              <span>{thongTinNhanDien.join(' · ') || 'Chưa có tuổi/giới tính/nhóm máu'}</span>
+              {phien.queue.so_dien_thoai && (
+                <span className="inline-flex items-center gap-1">
+                  <Icon name="phone" className="h-3.5 w-3.5 text-slate-400" />
+                  {phien.queue.so_dien_thoai}
+                </span>
+              )}
+              {phien.queue.phong_kham && <span>Phòng {phien.queue.phong_kham}</span>}
+            </div>
+            {phien.queue.ghi_chu?.trim() && (
+              <p className="max-w-3xl text-xs leading-5 text-slate-600">
+                <span className="font-medium text-slate-700">Ghi chú hồ sơ:</span> {phien.queue.ghi_chu.trim()}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2 lg:max-w-xl lg:justify-end">
+            {coCanhBaoDiUng ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+                <Icon name="alert-circle" className="h-3.5 w-3.5" />
                 Dị ứng: {phien.queue.di_ung}
               </span>
+            ) : (
+              <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                Chưa ghi nhận dị ứng
+              </span>
             )}
-            {phien.queue.benh_nen && (
-              <span className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
+            {coBenhNen ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
+                <Icon name="clipboard-list" className="h-3.5 w-3.5" />
                 Bệnh nền: {phien.queue.benh_nen}
+              </span>
+            ) : (
+              <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                Chưa ghi nhận bệnh nền
               </span>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      </section>
 
       {/* Thanh 5 bước — chỉ bấm được bước đã tới (không cho nhảy trước, khớp rule backend) */}
       <div className="card mb-4 flex flex-wrap items-center gap-1 p-2">

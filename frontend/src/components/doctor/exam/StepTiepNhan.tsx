@@ -62,7 +62,7 @@ export default function StepTiepNhan({ phien, saving, onNext }: Props) {
 
       <section>
         <h2 className="mb-3 text-base font-semibold text-slate-900">
-          Triệu chứng / lý do khám <span className="text-red-500">*</span>
+          Triệu chứng ghi nhận ban đầu <span className="text-red-500">*</span>
         </h2>
         <textarea
           value={trieuChung}

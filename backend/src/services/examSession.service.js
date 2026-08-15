@@ -184,12 +184,16 @@ export async function layPhienKham({ queueId, docId }) {
   return {
     queue: {
       id: String(entry._id),
+      ho_so_benh_nhan_id: entry.ho_so_benh_nhan_id ? String(entry.ho_so_benh_nhan_id) : null,
       ten_benh_nhan: entry.ten_benh_nhan,
+      so_dien_thoai: entry.so_dien_thoai ?? null,
       tuoi: entry.tuoi ?? null,
+      ngay_sinh: entry.ngay_sinh ?? null,
       gioi_tinh: entry.gioi_tinh ?? null,
       nhom_mau: entry.nhom_mau ?? null,
       di_ung: entry.di_ung ?? null,
       benh_nen: entry.benh_nen ?? null,
+      ghi_chu: entry.ghi_chu ?? null,
       ma_so_thu_tu: entry.ma_so_thu_tu ?? null,
       nguon: entry.nguon,
       trang_thai: entry.trang_thai,

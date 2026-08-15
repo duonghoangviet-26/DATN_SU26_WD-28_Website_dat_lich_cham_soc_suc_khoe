@@ -47,12 +47,16 @@ export interface HoaDonTomTat {
 export interface PhienKham {
   queue: {
     id: string
+    ho_so_benh_nhan_id: string | null
     ten_benh_nhan: string
+    so_dien_thoai: string | null
     tuoi: number | null
+    ngay_sinh: string | null
     gioi_tinh: string | null
     nhom_mau: string | null
     di_ung: string | null
     benh_nen: string | null
+    ghi_chu: string | null
     ma_so_thu_tu: string | null
     nguon: string
     trang_thai: string
