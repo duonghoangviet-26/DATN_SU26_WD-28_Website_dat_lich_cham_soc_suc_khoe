@@ -9,6 +9,7 @@ import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import NewsEditorForm from '@/components/news/NewsEditorForm'
 import { newsService } from '@/services/news.service'
 import type { NewsArticle, NewsPayload, NewsStatus } from '@/types'
+import NewsHistoryModal from '@/components/admin/NewsHistoryModal'
 
 const STATUS_LABEL: Record<NewsStatus, string> = {
   published: 'Đang hiển thị',
@@ -34,6 +35,7 @@ export default function ManageNews() {
   const [editingNews, setEditingNews] = useState<NewsArticle | null | undefined>(undefined)
   const [viewingNews, setViewingNews] = useState<NewsArticle | null>(null)
   const [deletingNews, setDeletingNews] = useState<NewsArticle | null>(null)
+  const [historyArticle, setHistoryArticle] = useState<NewsArticle | null>(null)
 
   const query = useMemo(() => ({ keyword, status, page: pagination.page, limit: pagination.limit }), [keyword, status, pagination.page, pagination.limit])
 
@@ -213,6 +215,9 @@ export default function ManageNews() {
                         <button type="button" onClick={() => setViewingNews(item)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600" title="Xem chi tiết">
                           <Icon name="file-text" className="h-4 w-4" />
                         </button>
+                        <button type="button" onClick={() => setHistoryArticle(item)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600" title="Lịch sử thao tác">
+                          <Icon name="history" className="h-4 w-4" />
+                        </button>
                         <button type="button" onClick={() => setEditingNews(item)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600" title="Sửa">
                           <Icon name="edit" className="h-4 w-4" />
                         </button>
@@ -303,6 +308,14 @@ export default function ManageNews() {
         onConfirm={handleDelete}
         onCancel={() => setDeletingNews(null)}
       />
+
+      {historyArticle && (
+        <NewsHistoryModal
+          article={historyArticle}
+          onClose={() => setHistoryArticle(null)}
+          isAdmin={true}
+        />
+      )}
     </AdminAutoStagger>
   )
 }

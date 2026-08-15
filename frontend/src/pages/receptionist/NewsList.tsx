@@ -6,6 +6,7 @@ import Skeleton from '@/components/common/Skeleton'
 import Icon from '@/components/admin/icons'
 import { newsService } from '@/services/news.service'
 import type { NewsArticle, NewsStatus } from '@/types'
+import NewsHistoryModal from '@/components/admin/NewsHistoryModal'
 
 const STATUS_LABEL: Record<NewsStatus, string> = {
   published: 'Đã xuất bản',
@@ -33,6 +34,7 @@ export default function ReceptionistNewsList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success] = useState((location.state as LocationState | null)?.success || '')
+  const [historyArticle, setHistoryArticle] = useState<NewsArticle | null>(null)
 
   const query = useMemo(
     () => ({ keyword, status, page: pagination.page, limit: pagination.limit }),
@@ -202,6 +204,14 @@ export default function ReceptionistNewsList() {
                           <Icon name="eye" className="h-4 w-4" />
                           Xem
                         </Link>
+                        <button
+                          type="button"
+                          onClick={() => setHistoryArticle(item)}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                        >
+                          <Icon name="history" className="h-4 w-4" />
+                          Lịch sử
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -234,6 +244,14 @@ export default function ReceptionistNewsList() {
           </div>
         </div>
       </section>
+
+      {historyArticle && (
+        <NewsHistoryModal
+          article={historyArticle}
+          onClose={() => setHistoryArticle(null)}
+          isAdmin={false}
+        />
+      )}
     </div>
   )
 }

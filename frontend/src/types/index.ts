@@ -1346,3 +1346,17 @@ export interface AdminNewsListResult extends NewsListResult {
         hidden: number;
     };
 }
+
+export interface NewsHistoryItem {
+    _id: string;
+    vai_tro: string;
+    hanh_dong: string;
+    loai_doi_tuong: string;
+    doi_tuong_id: string;
+    nguoi_thuc_hien: string;
+    nguoi_thuc_hien_email?: string;
+    ly_do?: string | null;
+    du_lieu_cu?: any;
+    du_lieu_moi?: any;
+    thoi_diem: string;
+}

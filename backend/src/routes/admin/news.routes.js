@@ -19,6 +19,7 @@ router.post('/upload', newsUpload.single('image'), (req, res) => {
 
 router.get('/', news.list)
 router.get('/:id', news.detail)
+router.get('/:id/history', news.getNewsHistory)
 router.post('/', news.create)
 router.put('/:id', news.update)
 router.patch('/:id/toggle', news.toggle)
