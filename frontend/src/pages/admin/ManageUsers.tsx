@@ -589,7 +589,7 @@ export default function ManageUsers() {
       {/* Bảng */}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-slate-50 border-b">
               <tr>
                 <th className="px-4 py-3 text-center w-12">

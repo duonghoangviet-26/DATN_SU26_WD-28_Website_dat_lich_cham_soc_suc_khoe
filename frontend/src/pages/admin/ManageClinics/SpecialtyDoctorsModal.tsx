@@ -56,7 +56,7 @@ export default function SpecialtyDoctorsModal({ specialtyId, specialtyName, onCl
             <div className="text-center py-8 text-slate-400">Chưa có bác sĩ nào thuộc khoa này.</div>
           ) : (
             <div className="overflow-hidden rounded-lg border border-slate-200">
-              <table className="w-full text-sm text-left">
+              <table className="w-full text-sm text-left whitespace-nowrap">
                 <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200">
                   <tr>
                     <th className="px-4 py-3">Tên bác sĩ</th>

@@ -170,7 +170,7 @@ export default function ManageNews() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-slate-50 text-slate-500">
               <tr>
                 <th className="px-5 py-3 font-medium">Tin tức</th>

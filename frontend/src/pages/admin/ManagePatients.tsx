@@ -354,7 +354,7 @@ export default function ManagePatients() {
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left text-sm">
+          <table className="w-full min-w-[920px] text-left text-sm whitespace-nowrap">
             <thead className="table-head-row">
               <tr>
                 <th className="table-cell">Bệnh nhân</th>
@@ -580,7 +580,7 @@ export default function ManagePatients() {
                             <p className="text-sm text-slate-500">Không có đơn thuốc trong hồ sơ này.</p>
                           ) : (
                             <div className="overflow-x-auto rounded-lg border border-slate-100">
-                              <table className="w-full min-w-[640px] text-sm">
+                              <table className="w-full min-w-[640px] text-sm whitespace-nowrap">
                                 <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
                                   <tr>
                                     <th className="px-3 py-2 text-left">Thuốc</th>
@@ -631,7 +631,7 @@ export default function ManagePatients() {
                           </div>
                           {fields.length > 0 && (
                             <div className="mt-3 overflow-x-auto rounded-lg border border-slate-100">
-                              <table className="w-full min-w-[560px] text-sm">
+                              <table className="w-full min-w-[560px] text-sm whitespace-nowrap">
                                 <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
                                   <tr>
                                     <th className="px-3 py-2 text-left">Trường</th>
