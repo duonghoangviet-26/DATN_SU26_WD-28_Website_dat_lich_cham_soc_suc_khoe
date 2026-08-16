@@ -36,6 +36,17 @@ export default function ManageNews() {
   const [viewingNews, setViewingNews] = useState<NewsArticle | null>(null)
   const [deletingNews, setDeletingNews] = useState<NewsArticle | null>(null)
   const [historyArticle, setHistoryArticle] = useState<NewsArticle | null>(null)
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (!(event.target as HTMLElement).closest('.action-menu-container')) {
+        setActiveMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const query = useMemo(() => ({ keyword, status, page: pagination.page, limit: pagination.limit }), [keyword, status, pagination.page, pagination.limit])
 
@@ -203,30 +214,68 @@ export default function ManageNews() {
                     <td className="px-5 py-4 font-semibold text-slate-700">{item.view_count.toLocaleString('vi-VN')}</td>
                     <td className="px-5 py-4 text-slate-500">{new Date(item.created_at).toLocaleDateString('vi-VN')}</td>
                     <td className="px-5 py-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <Link
-                          to={`/tin-tuc/${item.url_slug || item.id}`}
-                          target="_blank"
-                          className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600"
-                          title="Mở ngoài trang người dùng"
+                      <div className="relative flex justify-end action-menu-container">
+                        <button
+                          type="button"
+                          onClick={() => setActiveMenuId(activeMenuId === item.id ? null : item.id)}
+                          className={`inline-flex items-center justify-center rounded-lg p-2 transition-colors ${
+                            activeMenuId === item.id ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                          }`}
                         >
-                          <Icon name="eye" className="h-4 w-4" />
-                        </Link>
-                        <button type="button" onClick={() => setViewingNews(item)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600" title="Xem chi tiết">
-                          <Icon name="file-text" className="h-4 w-4" />
+                          <Icon name="more-vertical" className="h-5 w-5" />
                         </button>
-                        <button type="button" onClick={() => setHistoryArticle(item)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600" title="Lịch sử thao tác">
-                          <Icon name="history" className="h-4 w-4" />
-                        </button>
-                        <button type="button" onClick={() => setEditingNews(item)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600" title="Sửa">
-                          <Icon name="edit" className="h-4 w-4" />
-                        </button>
-                        <button type="button" onClick={() => void handleToggle(item)} className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:bg-slate-100" title="Ẩn/hiện">
-                          <Icon name={item.status === 'published' ? 'eye-off' : 'eye'} className="h-4 w-4" />
-                        </button>
-                        <button type="button" onClick={() => setDeletingNews(item)} className="inline-flex items-center justify-center rounded-lg border border-red-100 bg-white p-2 text-red-500 transition-colors hover:bg-red-50" title="Xóa">
-                          <Icon name="trash" className="h-4 w-4" />
-                        </button>
+                        
+                        {activeMenuId === item.id && (
+                          <div className="absolute right-0 top-full z-10 mt-1 w-48 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-xl">
+                            <div className="flex flex-col py-1">
+                              <Link
+                                to={`/tin-tuc/${item.url_slug || item.id}`}
+                                target="_blank"
+                                onClick={() => setActiveMenuId(null)}
+                                className="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-brand-600"
+                              >
+                                <Icon name="eye" className="h-4 w-4" /> Xem ngoài web
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => { setViewingNews(item); setActiveMenuId(null); }}
+                                className="flex items-center gap-3 px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-brand-600"
+                              >
+                                <Icon name="file-text" className="h-4 w-4" /> Xem chi tiết
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setHistoryArticle(item); setActiveMenuId(null); }}
+                                className="flex items-center gap-3 px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-brand-600"
+                              >
+                                <Icon name="rotate-ccw" className="h-4 w-4" /> Lịch sử thao tác
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setEditingNews(item); setActiveMenuId(null); }}
+                                className="flex items-center gap-3 px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-brand-600"
+                              >
+                                <Icon name="edit" className="h-4 w-4" /> Sửa tin tức
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { void handleToggle(item); setActiveMenuId(null); }}
+                                className="flex items-center gap-3 px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-brand-600"
+                              >
+                                <Icon name={item.status === 'published' ? 'eye-off' : 'eye'} className="h-4 w-4" /> 
+                                {item.status === 'published' ? 'Ẩn tin tức' : 'Hiện tin tức'}
+                              </button>
+                              <div className="my-1 border-t border-slate-100"></div>
+                              <button
+                                type="button"
+                                onClick={() => { setDeletingNews(item); setActiveMenuId(null); }}
+                                className="flex items-center gap-3 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <Icon name="trash" className="h-4 w-4" /> Xóa tin tức
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
