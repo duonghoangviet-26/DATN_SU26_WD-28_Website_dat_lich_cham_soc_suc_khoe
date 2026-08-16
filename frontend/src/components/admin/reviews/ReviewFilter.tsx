@@ -50,12 +50,12 @@ export default function ReviewFilter({ filters, onChange, doctors }: Props) {
 
   return (
     <div className="card mb-4 p-4 bg-white rounded-xl shadow-sm border border-slate-100">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         
         {/* Bộ lọc cơ bản bên trái */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center flex-1">
+        <div className="flex flex-wrap gap-3 items-center flex-1">
           {/* Tìm kiếm */}
-          <div className="relative w-full sm:w-80">
+          <div className="relative w-full sm:w-72">
             <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">
               <Icon name="search" className="h-4 w-4" />
             </span>
@@ -114,7 +114,7 @@ export default function ReviewFilter({ filters, onChange, doctors }: Props) {
         </div>
 
         {/* Nút hành động và checkbox bên phải */}
-        <div className="flex items-center justify-between sm:justify-start gap-4 shrink-0 border-t pt-3 md:border-t-0 md:pt-0 border-slate-100">
+        <div className="flex flex-wrap items-center justify-between sm:justify-start gap-4 shrink-0 border-t pt-3 lg:border-t-0 lg:pt-0 border-slate-100">
           
           {/* Checkbox Xem đánh giá đã xóa mềm */}
           <div className="flex items-center gap-2">
