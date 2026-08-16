@@ -61,9 +61,9 @@ export default function DoctorDetail() {
       {/* DOCTOR GENERAL CARD */}
       <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm flex flex-col md:flex-row gap-8 items-start">
         {/* Avatar */}
-        <div className="aspect-square w-full md:w-56 shrink-0 bg-slate-100 rounded-xl overflow-hidden shadow-inner">
+        <div className="aspect-[3/4] w-full md:w-56 shrink-0 bg-slate-100 rounded-xl overflow-hidden shadow-inner">
           {resolveMediaUrl(doctor.anh_dai_dien) ? (
-            <img src={resolveMediaUrl(doctor.anh_dai_dien) || undefined} alt={doctor.ho_ten} className="h-full w-full object-cover" />
+            <img src={resolveMediaUrl(doctor.anh_dai_dien) || undefined} alt={doctor.ho_ten} className="h-full w-full object-cover object-top" />
           ) : (
             <div className="grid h-full w-full place-items-center bg-brand-50 text-brand-600 font-extrabold text-5xl">
               {doctor.ho_ten.split(' ').pop()?.charAt(0)}
