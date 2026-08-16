@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Modal from '@/components/common/Modal'
 import Icon from '@/components/admin/icons'
+import { authService } from '@/services/auth.service'
 
 interface Setup2FAModalProps {
   onClose: () => void
@@ -16,22 +17,14 @@ export default function Setup2FAModal({ onClose, onSuccess }: Setup2FAModalProps
   const [verifying, setVerifying] = useState(false)
 
   useEffect(() => {
-    // Gọi API để lấy secret và QR
-    fetch('/api/auth/2fa/setup', {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    })
-      .then(res => res.json())
+    authService.setup2FA()
       .then(data => {
-        if (data.success) {
-          setQrCodeUrl(data.data.qrCodeUrl)
-          setSecret(data.data.secret)
-        } else {
-          setError(data.message || 'Lỗi tạo QR')
-        }
+        setQrCodeUrl(data.qrCodeUrl)
+        setSecret(data.secret)
       })
-      .catch(() => setError('Lỗi kết nối máy chủ'))
+      .catch(err => {
+        setError(err.response?.data?.message || 'Lỗi kết nối máy chủ')
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -43,22 +36,10 @@ export default function Setup2FAModal({ onClose, onSuccess }: Setup2FAModalProps
     setVerifying(true)
     setError('')
     try {
-      const res = await fetch('/api/auth/2fa/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ token })
-      })
-      const data = await res.json()
-      if (data.success) {
-        onSuccess()
-      } else {
-        setError(data.message || 'Mã không chính xác')
-      }
-    } catch (err) {
-      setError('Lỗi kết nối máy chủ')
+      await authService.verify2FA(token)
+      onSuccess()
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Lỗi kết nối máy chủ')
     } finally {
       setVerifying(false)
     }
