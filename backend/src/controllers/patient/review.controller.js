@@ -8,10 +8,12 @@ export async function getPendingReviews(req, res) {
   try {
     const userId = req.user.id
 
-    // 1. Lấy tất cả lịch hẹn đã hoàn thành của bệnh nhân
+    // 1. Lấy tất cả lịch hẹn đã hoàn thành của bệnh nhân trong vòng 30 ngày
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const completedAppointments = await LichHen.find({
       user_id: userId,
       status: 'completed',
+      ngay_kham: { $gte: thirtyDaysAgo },
     })
       .select('_id ma_lich_hen ngay_kham gio_kham gio_ket_thuc doctor_id specialty_id phong_kham')
       .populate('doctor_id', 'user_id diem_danh_gia tong_danh_gia')
@@ -194,6 +196,11 @@ export async function createReview(req, res) {
     }
     if (appointment.status !== 'completed') {
       return fail(res, 400, 'Chỉ có thể đánh giá lịch hẹn đã hoàn thành.')
+    }
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    if (new Date(appointment.ngay_kham) < thirtyDaysAgo) {
+      return fail(res, 400, 'Lịch hẹn đã quá thời hạn 30 ngày để đánh giá.')
     }
 
     // 2. Kiểm tra chưa có đánh giá cho lịch hẹn này

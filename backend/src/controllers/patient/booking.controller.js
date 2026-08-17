@@ -1001,15 +1001,17 @@ export async function createDoctorReview(req, res) {
     }
 
     // 1. Tìm lịch hẹn ĐÃ HOÀN THÀNH của người dùng này với bác sĩ này
-    //    Chỉ lịch hẹn status='completed' mới đủ điều kiện đánh giá
+    //    Chỉ lịch hẹn status='completed' trong vòng 30 ngày mới đủ điều kiện đánh giá
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const appointments = await LichHen.find({
       user_id: userId,
       doctor_id: doctorId,
       status: 'completed',
-    }).lean()
-
+      ngay_kham: { $gte: thirtyDaysAgo },
+    }).sort({ ngay_kham: -1 })
+    
     if (appointments.length === 0) {
-      return fail(res, 400, 'Bạn cần có ít nhất một lịch hẹn đã hoàn thành với bác sĩ này để viết đánh giá.')
+      return fail(res, 400, 'Bạn cần có ít nhất một lịch hẹn đã hoàn thành trong vòng 30 ngày với bác sĩ này để viết đánh giá.')
     }
 
     // 2. Tìm lịch hẹn chưa được đánh giá

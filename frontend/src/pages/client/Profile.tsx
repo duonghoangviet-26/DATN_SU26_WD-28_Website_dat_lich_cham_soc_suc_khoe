@@ -613,7 +613,7 @@ export default function Profile() {
   }
 
   function getStatusLabel(status: PatientRecordListItem['status']) {
-    if (status === 'completed') return 'Đã khám'
+    if (status === 'completed') return 'Hoàn thành'
     if (status === 'confirmed') return 'Đã xác nhận'
     if (status === 'cancelled') return 'Đã hủy'
     return 'Chờ xác nhận'
@@ -1167,17 +1167,34 @@ export default function Profile() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700">Nhóm máu</label>
-                    <select value={nhomMau} onChange={(event) => setNhomMau(event.target.value as typeof nhomMau)} className="input w-full">
-                      <option value="">Chưa cập nhật</option><option value="A">A</option><option value="B">B</option><option value="AB">AB</option><option value="O">O</option>
+                    <select
+                      value={nhomMau}
+                      onChange={(event) => setNhomMau(event.target.value as typeof nhomMau)}
+                      className="input w-full"
+                    >
+                      <option value="">Chưa cập nhật</option>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="AB">AB</option>
+                      <option value="O">O</option>
                     </select>
                   </div>
                   <Input label="Địa chỉ" value={diaChi} onChange={(event) => setDiaChi(event.target.value)} />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="space-y-1.5 text-sm font-medium text-slate-700">Dị ứng<textarea rows={3} value={diUng} onChange={(event) => setDiUng(event.target.value)} className="input w-full resize-y" placeholder="Ví dụ: dị ứng Penicillin, hải sản..." /></label>
-                  <label className="space-y-1.5 text-sm font-medium text-slate-700">Bệnh nền<textarea rows={3} value={benhNen} onChange={(event) => setBenhNen(event.target.value)} className="input w-full resize-y" placeholder="Ví dụ: tăng huyết áp, tiểu đường..." /></label>
-                  <label className="space-y-1.5 text-sm font-medium text-slate-700 sm:col-span-2">Ghi chú<textarea rows={3} value={ghiChu} onChange={(event) => setGhiChu(event.target.value)} className="input w-full resize-y" placeholder="Thông tin khác muốn lưu cho hồ sơ của bạn" /></label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                    Dị ứng
+                    <textarea rows={3} value={diUng} onChange={(event) => setDiUng(event.target.value)} className="input w-full resize-y" placeholder="Ví dụ: dị ứng Penicillin, hải sản..." />
+                  </label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700">
+                    Bệnh nền
+                    <textarea rows={3} value={benhNen} onChange={(event) => setBenhNen(event.target.value)} className="input w-full resize-y" placeholder="Ví dụ: tăng huyết áp, tiểu đường..." />
+                  </label>
+                  <label className="space-y-1.5 text-sm font-medium text-slate-700 sm:col-span-2">
+                    Ghi chú
+                    <textarea rows={3} value={ghiChu} onChange={(event) => setGhiChu(event.target.value)} className="input w-full resize-y" placeholder="Thông tin khác muốn lưu cho hồ sơ của bạn" />
+                  </label>
                 </div>
 
                 <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -1200,30 +1217,30 @@ export default function Profile() {
                   <div>
                     <h3 className="text-lg font-bold text-slate-800">Lịch hẹn chờ đánh giá</h3>
                     <p className="text-xs text-slate-400">
-                      Các cuộc hẹn đã hoàn thành và cần phản hồi từ bạn.
+                      Đánh giá lượt khám đã hoàn thành để nâng cao chất lượng dịch vụ phòng khám.
                     </p>
                   </div>
                   {pendingReviews.length > 0 && (
-                    <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 border border-amber-200">
+                    <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700 border border-teal-100">
                       {pendingReviews.length} cuộc hẹn
                     </span>
                   )}
                 </div>
 
                 {reviewsLoading ? (
-                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-xs text-slate-400">
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
                     Đang tải danh sách chờ đánh giá...
                   </div>
                 ) : pendingReviews.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-xs text-slate-400">
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
                     Bạn không có lịch hẹn nào đang chờ đánh giá.
                   </div>
                 ) : (
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {pendingReviews.map((item) => (
                       <div
                         key={item.appointment_id}
-                        className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-4"
+                        className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-4 hover:shadow-md transition"
                       >
                         <div className="space-y-2">
                           <div className="flex items-start justify-between gap-2">
@@ -1238,7 +1255,7 @@ export default function Profile() {
                               )}
                             </div>
                             <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold text-emerald-600">
-                              Đã khám
+                              Hoàn thành
                             </span>
                           </div>
 
@@ -1250,17 +1267,19 @@ export default function Profile() {
                               </strong>
                             </p>
                             <p>
-                              🕐 Giờ: <strong className="text-slate-700">{item.gio_kham}</strong>
+                              🕐 Giờ:{' '}
+                              <strong className="text-slate-700">{item.gio_kham}</strong>
                             </p>
                             {item.phong_kham && (
                               <p>
-                                🏠 Phòng: <strong className="text-slate-700">{item.phong_kham}</strong>
+                                🏠 Phòng:{' '}
+                                <strong className="text-slate-700">{item.phong_kham}</strong>
                               </p>
                             )}
                             {item.ma_lich_hen && (
-                              <p className="font-mono text-[10px] text-slate-400">
+                              <span className="font-mono text-slate-400 font-normal">
                                 Mã: {item.ma_lich_hen}
-                              </p>
+                              </span>
                             )}
                           </div>
                         </div>
@@ -1271,7 +1290,7 @@ export default function Profile() {
                             setSelectedReviewApp(item)
                             setReviewModalOpen(true)
                           }}
-                          className="w-full rounded-xl bg-teal-600 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-teal-700 flex items-center justify-center gap-1.5"
+                          className="w-full rounded-xl bg-teal-600 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-teal-700 flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Star size={14} className="fill-amber-300 text-amber-300" />
                           Viết đánh giá
@@ -1287,57 +1306,73 @@ export default function Profile() {
                 <div className="space-y-1 border-b border-slate-100 pb-3">
                   <h3 className="text-lg font-bold text-slate-800">Đánh giá đã gửi</h3>
                   <p className="text-xs text-slate-400">
-                    Lịch sử các nhận xét và số sao bạn đã dành cho bác sĩ.
+                    Lịch sử các đánh giá và nhận xét bạn đã gửi cho phòng khám.
                   </p>
                 </div>
 
                 {reviewsLoading ? (
-                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-xs text-slate-400">
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
                     Đang tải danh sách đánh giá...
                   </div>
                 ) : myReviews.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-xs text-slate-400">
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
                     Bạn chưa gửi đánh giá nào.
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {myReviews.map((r) => (
                       <div
                         key={r.id}
-                        className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-2 text-left"
+                        className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-3"
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="flex gap-0.5 text-amber-400">
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center">
                               {[1, 2, 3, 4, 5].map((s) => (
                                 <Star
                                   key={s}
+                                  className={
+                                    s <= r.so_sao
+                                      ? 'fill-amber-400 text-amber-400'
+                                      : 'fill-none text-slate-200'
+                                  }
                                   size={16}
-                                  className={s <= r.so_sao ? 'fill-amber-400 text-amber-400' : 'fill-none text-slate-200'}
                                 />
                               ))}
                             </div>
                             <span className="text-xs font-bold text-slate-700">({r.so_sao}/5 sao)</span>
                           </div>
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-xs text-slate-400">
                             {new Date(r.ngay_tao).toLocaleDateString('vi-VN')}
                           </span>
                         </div>
 
+                        {/* 3 Chi tiết tiêu chí */}
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+                            🛎️ Lễ tân: <strong className="font-bold text-emerald-800">{r.chi_tiet?.danh_gia_le_tan ?? r.so_sao ?? 5}⭐</strong>
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 border border-teal-100">
+                            🩺 Bác sĩ: <strong className="font-bold text-teal-800">{r.chi_tiet?.danh_gia_bac_si ?? r.so_sao ?? 5}⭐</strong>
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                            🏥 Dịch vụ: <strong className="font-bold text-blue-800">{r.chi_tiet?.danh_gia_dich_vu ?? r.so_sao ?? 5}⭐</strong>
+                          </span>
+                        </div>
+
                         {r.doctor && (
-                          <p className="text-xs font-bold text-slate-800">
+                          <div className="text-xs font-semibold text-slate-600">
                             🩺 {r.doctor.ho_ten}
                             {r.appointment?.specialty && (
-                              <span className="font-normal text-slate-500">
-                                {' '}
-                                · {r.appointment.specialty.ten}
+                              <span className="text-slate-400 font-normal">
+                                {' '}· {r.appointment.specialty.ten}
                               </span>
                             )}
-                          </p>
+                          </div>
                         )}
 
                         {r.noi_dung && (
-                          <p className="text-xs leading-relaxed text-slate-600 italic bg-slate-50 p-3 rounded-xl border border-slate-100">
+                          <p className="text-sm text-slate-700 bg-slate-50 rounded-xl p-3 border border-slate-100">
                             &ldquo;{r.noi_dung}&rdquo;
                           </p>
                         )}
