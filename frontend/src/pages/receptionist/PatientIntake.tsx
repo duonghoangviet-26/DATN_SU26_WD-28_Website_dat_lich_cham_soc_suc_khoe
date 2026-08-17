@@ -374,6 +374,105 @@ function StepIndicator({ step, label, state }: { step: number; label: string; st
   )
 }
 
+function BookingHistoryModal({ profile, onClose }: { profile: PatientProfile; onClose: () => void }) {
+  const [appointments, setAppointments] = useState<TodayAppointment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    receptionistPatientIntakeService.getBookingHistory(profile.id)
+      .then((result) => {
+        if (!cancelled) setAppointments(result.appointments || [])
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(requestError?.response?.data?.message || 'Không thể tải lịch sử đặt lịch')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [profile.id])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-slate-900">Lịch sử đặt lịch</h3>
+            <p className="mt-1 text-sm text-slate-500">{profile.ho_ten}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Đóng lịch sử đặt lịch">
+            x
+          </button>
+        </div>
+
+        {loading && (
+          <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+            Đang tải lịch sử đặt lịch...
+          </div>
+        )}
+        {!loading && error && <p className="mt-6 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
+        {!loading && !error && appointments.length === 0 && (
+          <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+            Hồ sơ này chưa có lịch đặt nào.
+          </div>
+        )}
+
+        {!loading && !error && appointments.length > 0 && (
+          <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Ngày giờ</th>
+                  <th className="px-4 py-3">Mã lịch</th>
+                  <th className="px-4 py-3">Bác sĩ / chuyên khoa</th>
+                  <th className="px-4 py-3">Trạng thái</th>
+                  <th className="px-4 py-3">Thanh toán</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {appointments.map((appointment) => (
+                  <tr key={appointment.id} className="align-top">
+                    <td className="px-4 py-3">
+                      <p className="font-bold text-slate-950">{formatDate(appointment.ngay_kham)}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{appointment.gio_kham}{appointment.gio_ket_thuc ? ` - ${appointment.gio_ket_thuc}` : ''}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-mono text-xs font-semibold text-slate-700">{appointment.ma_lich_hen || appointment.id}</p>
+                      <p className="mt-1 text-xs text-slate-500">{appointment.nguon === 'tai_cho' ? 'Tại quầy' : 'Online'}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-slate-900">{appointment.doctor?.ho_ten || 'Chưa gán bác sĩ'}</p>
+                      <p className="mt-1 text-xs text-slate-500">{appointment.chuyen_khoa?.ten || 'Chưa có chuyên khoa'}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-2 py-1 text-xs font-bold ${appointmentStatusTone(appointment.status)}`}>
+                        {appointmentStatusLabel(appointment.status)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{paymentLabel(appointment.payment_status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PatientIntake() {
   const [phone, setPhone] = useState('')
   const [hasSearched, setHasSearched] = useState(false)
@@ -395,12 +494,9 @@ export default function PatientIntake() {
   const [specialties, setSpecialties] = useState<SpecialtyOption[]>([])
   const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('')
   const [confirmLongWait, setConfirmLongWait] = useState(false)
-  // D78 — cấp cứu/ưu tiên khẩn cho walk-in. Bắt buộc lý do/dấu hiệu, backend cũng chặn lại
-  // ở tiepNhanOfflineVaoHangDoiTrungTam (không tin riêng validate FE).
-  const [capCuu, setCapCuu] = useState(false)
   const [checkingIn, setCheckingIn] = useState(false)
   const [editingProfile, setEditingProfile] = useState<PatientProfile | null>(null)
-  const [auditProfileId, setAuditProfileId] = useState<string | null>(null)
+  const [bookingHistoryProfile, setBookingHistoryProfile] = useState<PatientProfile | null>(null)
   const [linkAccount, setLinkAccount] = useState(true)
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
   const [searchPhoneError, setSearchPhoneError] = useState('')
@@ -427,7 +523,6 @@ export default function PatientIntake() {
     setConfirmLongWait(false)
     setSelectedAppointmentId(null)
     setMode('idle')
-    setCapCuu(false)
   }
 
   const search = async (event?: FormEvent) => {
@@ -547,14 +642,14 @@ export default function PatientIntake() {
       const specialtyId = selectedSpecialtyId || specialtyRows[0]?.id || ''
       setSelectedSpecialtyId(specialtyId)
       if (!specialtyId) {
-        setMessage('Chua co chuyen khoa dang hoat dong de tiep nhan khach vang lai.')
+        setMessage('Chưa có chuyên khoa đang hoạt động để tiếp nhận khách vãng lai.')
         return
       }
       const result = await receptionistPatientIntakeService.getCentralOfflineCapacity(specialtyId)
       setCentralCapacity(result)
-      if (!result.co_the_nhan) setMessage(result.ly_do || 'Tam dung nhan khach vang lai cho chuyen khoa nay.')
+      if (!result.co_the_nhan) setMessage(result.ly_do || 'Tạm dừng nhận khách vãng lai cho chuyên khoa này.')
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Khong the xac minh suc chua hang doi trung tam.')
+      setError(requestError?.response?.data?.message || 'Không thể xác minh sức chứa hàng đợi trung tâm.')
     }
   }
 
@@ -566,9 +661,9 @@ export default function PatientIntake() {
     try {
       const result = await receptionistPatientIntakeService.getCentralOfflineCapacity(specialtyId)
       setCentralCapacity(result)
-      setMessage(result.co_the_nhan ? '' : result.ly_do || 'Tam dung nhan khach vang lai cho chuyen khoa nay.')
+      setMessage(result.co_the_nhan ? '' : result.ly_do || 'Tạm dừng nhận khách vãng lai cho chuyên khoa này.')
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Khong the cap nhat suc chua chuyen khoa.')
+      setError(requestError?.response?.data?.message || 'Không thể cập nhật sức chứa chuyên khoa.')
     }
   }
 
@@ -688,11 +783,9 @@ export default function PatientIntake() {
         ho_so_benh_nhan_id: selectedProfile.id,
         specialty_id: selectedSpecialtyId,
         xac_nhan_canh_bao: confirmLongWait,
-        ...(capCuu ? { muc_uu_tien_tiep_nhan: 'cap_cuu' as const } : {}),
       })
       setCentralCapacity(null)
       setConfirmLongWait(false)
-      setCapCuu(false)
       setMessage(`Đã tiếp nhận walk-in ${selectedProfile.ho_ten} vào hàng đợi khám. Số thứ tự: ${result.entry.ma_so_thu_tu || result.entry._id}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
         ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'cho_dieu_phoi', specialty_id: selectedSpecialtyId, doctor_id: null, phong_kham: null, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
@@ -700,10 +793,10 @@ export default function PatientIntake() {
 
       setPrintData({
         patientName: selectedProfile.ho_ten,
-        doctorName: 'Cho dieu phoi',
-        roomNumber: 'Cho dieu phoi',
+        doctorName: 'Chờ điều phối',
+        roomNumber: 'Chờ điều phối',
         queueNumber: result.entry.ma_so_thu_tu || '-',
-        appointmentTime: result.entry.thoi_gian_cho_uoc_tinh_phut ? `Uoc tinh ${result.entry.thoi_gian_cho_uoc_tinh_phut} phut` : 'Cho dieu phoi',
+        appointmentTime: result.entry.thoi_gian_cho_uoc_tinh_phut ? `Ước tính ${result.entry.thoi_gian_cho_uoc_tinh_phut} phút` : 'Chờ điều phối',
       })
 
       setPhone('')
@@ -1031,7 +1124,7 @@ export default function PatientIntake() {
                   <button type="button" onClick={() => setEditingProfile(selectedProfile)} className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-slate-50">
                     Chỉnh sửa hồ sơ
                   </button>
-                  <button type="button" onClick={() => setAuditProfileId(selectedProfile.id)} className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-slate-50">
+                  <button type="button" onClick={() => setBookingHistoryProfile(selectedProfile)} className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-slate-50">
                     Lịch sử đặt lịch
                   </button>
                   {hasAppointmentToday ? (
@@ -1097,23 +1190,23 @@ export default function PatientIntake() {
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <h4 className="text-base font-bold text-slate-950">Khach vang lai - hang doi trung tam</h4>
-                        <p className="mt-1 text-sm text-slate-600">Le tan chon chuyen khoa, kiem tra suc chua, roi dua khach vao hang doi cho dieu phoi bac si.</p>
+                        <h4 className="text-base font-bold text-slate-950">Khách vãng lai - hàng đợi trung tâm</h4>
+                        <p className="mt-1 text-sm text-slate-600">Lễ tân chọn chuyên khoa, kiểm tra sức chứa, rồi đưa khách vào hàng đợi chờ điều phối bác sĩ.</p>
                       </div>
                       <button type="button" onClick={loadAvailability} disabled={hasActiveQueue} className="min-h-10 rounded-xl border border-brand-300 px-4 text-sm font-bold text-brand-800 hover:bg-brand-50 disabled:opacity-60">
-                        Kiem tra lai
+                        Kiểm tra lại
                       </button>
                     </div>
 
                     <label className="mt-4 block text-sm font-bold text-slate-800">
-                      Chuyen khoa can kham
+                      Chuyên khoa cần khám
                       <select
                         value={selectedSpecialtyId}
                         onChange={(event) => void changeWalkInSpecialty(event.target.value)}
                         disabled={hasActiveQueue || checkingIn}
                         className="mt-1.5 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:opacity-60"
                       >
-                        <option value="">Chon chuyen khoa</option>
+                        <option value="">Chọn chuyên khoa</option>
                         {specialties.map((specialty) => (
                           <option key={specialty.id} value={specialty.id}>{specialty.ten}</option>
                         ))}
@@ -1122,7 +1215,7 @@ export default function PatientIntake() {
 
                     {!centralCapacity && (
                       <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
-                        Chon chuyen khoa de kiem tra suc chua hang doi trung tam.
+                        Chọn chuyên khoa để kiểm tra sức chứa hàng đợi trung tâm.
                       </div>
                     )}
 
@@ -1137,30 +1230,30 @@ export default function PatientIntake() {
                         }`}>
                           <p className="font-bold">
                             {centralCapacity.trang_thai === 'co_the_nhan'
-                              ? 'Co the tiep nhan'
+                              ? 'Có thể tiếp nhận'
                               : centralCapacity.trang_thai === 'canh_bao_day'
-                                ? 'Hang doi dang day - can bao truoc voi khach'
-                                : 'Tam dung tiep nhan'}
+                                ? 'Hàng đợi đang đầy - cần báo trước với khách'
+                                : 'Tạm dừng tiếp nhận'}
                           </p>
                           {centralCapacity.ly_do && <p className="mt-1 text-sm">{centralCapacity.ly_do}</p>}
-                          <p className="mt-2 text-xs opacity-80">Kiem tra luc {formatDateTime(centralCapacity.checked_at)}</p>
+                          <p className="mt-2 text-xs opacity-80">Kiểm tra lúc {formatDateTime(centralCapacity.checked_at)}</p>
                         </div>
 
                         <div className="mt-4 grid gap-3 sm:grid-cols-4">
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs font-semibold text-slate-500">Dang cho trung tam</p>
+                            <p className="text-xs font-semibold text-slate-500">Đang chờ trung tâm</p>
                             <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.so_khach_cho_trung_tam}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs font-semibold text-slate-500">Bac si co the dieu phoi</p>
+                            <p className="text-xs font-semibold text-slate-500">Bác sĩ có thể điều phối</p>
                             <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.so_bac_si_co_the_dieu_phoi}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs font-semibold text-slate-500">Cho uoc tinh</p>
+                            <p className="text-xs font-semibold text-slate-500">Chờ ước tính</p>
                             <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.thoi_gian_cho_uoc_tinh_phut ?? '-'}'</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs font-semibold text-slate-500">Con nhan</p>
+                            <p className="text-xs font-semibold text-slate-500">Còn nhận</p>
                             <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.suc_chua_trung_tam_con_lai}</p>
                           </div>
                         </div>
@@ -1173,31 +1266,19 @@ export default function PatientIntake() {
                               onChange={(event) => setConfirmLongWait(event.target.checked)}
                               className="mt-1 h-4 w-4 rounded border-amber-300 text-amber-700 focus:ring-amber-500"
                             />
-                            <span>Da thong bao thoi gian cho uoc tinh cho khach va khach dong y tiep tuc cho dieu phoi.</span>
+                            <span>Đã thông báo thời gian chờ ước tính cho khách và khách đồng ý tiếp tục chờ điều phối.</span>
                           </label>
                         )}
-
-                        <label className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-950">
-                          <input
-                            type="checkbox"
-                            checked={capCuu}
-                            onChange={(event) => setCapCuu(event.target.checked)}
-                            className="mt-1 h-4 w-4 rounded border-rose-300 text-rose-700 focus:ring-rose-500"
-                          />
-                          <span>Cấp cứu — khám trước, không phải chờ.</span>
-                        </label>
 
                         <button
                           type="button"
                           onClick={checkInWalkIn}
                           disabled={checkingIn || hasActiveQueue || !centralCapacity.co_the_nhan || (centralCapacity.can_xac_nhan_qua_tai && !confirmLongWait)}
-                          className={`mt-4 min-h-12 w-full rounded-xl px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 ${capCuu ? 'bg-rose-700 hover:bg-rose-800' : 'bg-brand-700 hover:bg-brand-800'}`}
+                          className="mt-4 min-h-12 w-full rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {checkingIn
-                            ? 'Dang dua vao hang doi...'
-                            : capCuu
-                              ? `Tiếp nhận CẤP CỨU: ${selectedProfile.ho_ten}`
-                              : `Dua ${selectedProfile.ho_ten} vao hang doi trung tam`}
+                            ? 'Đang đưa vào hàng đợi...'
+                            : `Đưa ${selectedProfile.ho_ten} vào hàng đợi trung tâm`}
                         </button>
                       </>
                     )}
@@ -1219,12 +1300,10 @@ export default function PatientIntake() {
             onSaved={handleProfileSaved}
           />
         )}
-        {auditProfileId && (
-          <TimelinePanel
-            loai="ho_so"
-            id={auditProfileId}
-            title="Lịch sử cập nhật hồ sơ"
-            onClose={() => setAuditProfileId(null)}
+        {bookingHistoryProfile && (
+          <BookingHistoryModal
+            profile={bookingHistoryProfile}
+            onClose={() => setBookingHistoryProfile(null)}
           />
         )}
 
