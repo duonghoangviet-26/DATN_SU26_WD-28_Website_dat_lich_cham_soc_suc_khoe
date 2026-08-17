@@ -358,6 +358,7 @@ export default function Appointments() {
   const handleCheckedIn = ({ hang_doi, canh_bao, ten_benh_nhan }: { hang_doi: { phong_kham?: string | null; ma_so_thu_tu?: string | null }; canh_bao: string[]; ten_benh_nhan: string }) => {
     if (checkInApt) {
       setPrintData({
+        ticketType: 'kham',
         patientName: ten_benh_nhan,
         doctorName: checkInApt.doctor_id?.user_id?.ho_ten || 'Chưa gán',
         roomNumber: hang_doi.phong_kham || 'Chưa gán',

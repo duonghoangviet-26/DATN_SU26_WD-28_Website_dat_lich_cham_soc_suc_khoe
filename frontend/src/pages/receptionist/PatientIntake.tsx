@@ -935,6 +935,7 @@ export default function PatientIntake() {
         : profile))
 
       setPrintData({
+        ticketType: 'kham',
         patientName: selectedProfile.ho_ten,
         doctorName: selectedAppointment.doctor?.ho_ten || 'Chưa gán',
         roomNumber: response.hang_doi.phong_kham || 'Chưa gán',
@@ -992,6 +993,7 @@ export default function PatientIntake() {
       setMode('booked')
       setMessage(`Đã tạo hồ sơ và đưa ${patientName} vào hàng đợi của ${appointment.doctor?.ho_ten || 'bác sĩ phụ trách'} theo lịch ${appointment.ma_lich_hen || appointment.id}.`)
       setPrintData({
+        ticketType: 'kham',
         patientName,
         doctorName: appointment.doctor?.ho_ten || 'Chưa gán',
         roomNumber: response.hang_doi.phong_kham || 'Chưa gán',
@@ -1041,12 +1043,16 @@ export default function PatientIntake() {
         ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'cho_dieu_phoi', specialty_id: selectedSpecialtyId, doctor_id: null, phong_kham: null, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
         : profile))
 
+      const specialtyName = specialties.find((item) => item.id === selectedSpecialtyId)?.ten
       setPrintData({
+        ticketType: 'cho_dieu_phoi',
         patientName: selectedProfile.ho_ten,
-        doctorName: 'Chờ điều phối',
-        roomNumber: 'Chờ điều phối',
         queueNumber: result.entry.ma_so_thu_tu || '-',
-        appointmentTime: result.entry.thoi_gian_cho_uoc_tinh_phut ? `Ước tính ${result.entry.thoi_gian_cho_uoc_tinh_phut} phút` : 'Chờ điều phối',
+        specialtyName,
+        appointmentTime: formatDateTime(result.entry.checkin_time ?? new Date().toISOString()),
+        note: result.entry.thoi_gian_cho_uoc_tinh_phut
+          ? `Thời gian chờ ước tính: ${result.entry.thoi_gian_cho_uoc_tinh_phut} phút. Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.`
+          : 'Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.',
       })
 
       setPhone('')
