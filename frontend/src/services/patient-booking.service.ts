@@ -60,7 +60,9 @@ export interface FamilyMember {
   ho_ten: string
   ngay_sinh: string
   gioi_tinh: 'nam' | 'nu' | 'khac'
+  quan_he?: string | null
   nhom_mau?: string | null
+  so_dien_thoai?: string | null
   di_ung?: string | null
   benh_nen?: string | null
   la_chu_ho: boolean
@@ -299,12 +301,33 @@ export const patientBookingService = {
     return res.data.data
   },
 
-  async addFamilyMember(payload: { ho_ten: string; ngay_sinh: string; gioi_tinh: string; nhom_mau?: string | null; di_ung?: string | null; benh_nen?: string | null }): Promise<FamilyMember> {
+  async addFamilyMember(payload: {
+    ho_ten: string
+    ngay_sinh: string
+    gioi_tinh: string
+    quan_he?: string | null
+    nhom_mau?: string | null
+    so_dien_thoai?: string | null
+    di_ung?: string | null
+    benh_nen?: string | null
+  }): Promise<FamilyMember> {
     const res = await axiosInstance.post<ApiResponse<FamilyMember>>('/patient/family/members', payload)
     return res.data.data
   },
 
-  async updateFamilyMember(id: string, payload: { ho_ten?: string; ngay_sinh?: string; gioi_tinh?: string; nhom_mau?: string | null; di_ung?: string | null; benh_nen?: string | null }): Promise<FamilyMember> {
+  async updateFamilyMember(
+    id: string,
+    payload: {
+      ho_ten?: string
+      ngay_sinh?: string
+      gioi_tinh?: string
+      quan_he?: string | null
+      nhom_mau?: string | null
+      so_dien_thoai?: string | null
+      di_ung?: string | null
+      benh_nen?: string | null
+    }
+  ): Promise<FamilyMember> {
     const res = await axiosInstance.put<ApiResponse<FamilyMember>>(`/patient/family/members/${id}`, payload)
     return res.data.data
   },

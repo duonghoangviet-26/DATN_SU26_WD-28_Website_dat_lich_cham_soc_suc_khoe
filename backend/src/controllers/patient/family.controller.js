@@ -63,7 +63,7 @@ export async function addMember(req, res) {
     const family = await GiaDinh.findOne({ user_id: req.user.id })
     if (!family) return fail(res, 404, 'Chưa có nhóm gia đình')
 
-    const { ho_ten, ngay_sinh, gioi_tinh, nhom_mau, di_ung, benh_nen } = req.body
+    const { ho_ten, ngay_sinh, gioi_tinh, quan_he, nhom_mau, di_ung, benh_nen, so_dien_thoai } = req.body
     if (!ho_ten?.trim())  return fail(res, 400, 'Họ tên là bắt buộc')
     if (!ngay_sinh)       return fail(res, 400, 'Ngày sinh là bắt buộc')
     if (!gioi_tinh)       return fail(res, 400, 'Giới tính là bắt buộc')
@@ -73,9 +73,11 @@ export async function addMember(req, res) {
       ho_ten:     ho_ten.trim(),
       ngay_sinh:  new Date(ngay_sinh),
       gioi_tinh,
+      quan_he:    quan_he   || 'con',
       nhom_mau:   nhom_mau  || null,
       di_ung:     di_ung?.trim()  || null,
       benh_nen:   benh_nen?.trim() || null,
+      so_dien_thoai: so_dien_thoai?.trim() || null,
       la_chu_ho:  false,
     })
 
@@ -94,13 +96,15 @@ export async function updateMember(req, res) {
     const member = await ThanhVien.findOne({ _id: req.params.id, family_id: family._id })
     if (!member) return fail(res, 404, 'Không tìm thấy thành viên')
 
-    const { ho_ten, ngay_sinh, gioi_tinh, nhom_mau, di_ung, benh_nen } = req.body
-    if (ho_ten    !== undefined) member.ho_ten   = ho_ten.trim()
-    if (ngay_sinh !== undefined) member.ngay_sinh = new Date(ngay_sinh)
-    if (gioi_tinh !== undefined) member.gioi_tinh = gioi_tinh
-    if (nhom_mau  !== undefined) member.nhom_mau  = nhom_mau  || null
-    if (di_ung    !== undefined) member.di_ung    = di_ung?.trim()  || null
-    if (benh_nen  !== undefined) member.benh_nen  = benh_nen?.trim() || null
+    const { ho_ten, ngay_sinh, gioi_tinh, quan_he, nhom_mau, di_ung, benh_nen, so_dien_thoai } = req.body
+    if (ho_ten       !== undefined) member.ho_ten       = ho_ten.trim()
+    if (ngay_sinh    !== undefined) member.ngay_sinh    = new Date(ngay_sinh)
+    if (gioi_tinh    !== undefined) member.gioi_tinh    = gioi_tinh
+    if (quan_he      !== undefined) member.quan_he      = quan_he
+    if (nhom_mau     !== undefined) member.nhom_mau     = nhom_mau  || null
+    if (di_ung       !== undefined) member.di_ung       = di_ung?.trim()  || null
+    if (benh_nen     !== undefined) member.benh_nen     = benh_nen?.trim() || null
+    if (so_dien_thoai !== undefined) member.so_dien_thoai = so_dien_thoai?.trim() || null
 
     await member.save()
     return ok(res, { ...member.toObject(), id: member._id }, 'Cập nhật thành viên thành công')

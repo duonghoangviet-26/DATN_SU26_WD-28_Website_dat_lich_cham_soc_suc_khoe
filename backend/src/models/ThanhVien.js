@@ -48,6 +48,7 @@ const memberSchema = new mongoose.Schema(
       enum: ['A', 'B', 'AB', 'O', null],
       default: null,
     },
+    so_dien_thoai: { type: String, default: null, maxlength: 20 },
     di_ung: { type: String, default: null },
     benh_nen: { type: String, default: null },
     la_chu_ho: { type: Boolean, default: false },

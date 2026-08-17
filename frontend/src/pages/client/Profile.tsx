@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Star } from 'lucide-react'
 import Breadcrumb from '@/components/common/Breadcrumb'
@@ -76,6 +76,36 @@ export default function Profile() {
   const [resultsPatientFilter, setResultsPatientFilter] = useState('all')
   const [expandedResultIds, setExpandedResultIds] = useState<Set<string>>(new Set())
 
+  function calculateAge(dateStr?: string | null) {
+    if (!dateStr) return null
+    const dob = new Date(dateStr)
+    if (isNaN(dob.getTime())) return null
+    const now = new Date()
+    let age = now.getFullYear() - dob.getFullYear()
+    const m = now.getMonth() - dob.getMonth()
+    if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) {
+      age--
+    }
+    if (age <= 0) {
+      const months = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth())
+      return months > 0 ? `${months} tháng tuổi` : 'Dưới 1 tháng tuổi'
+    }
+    return `${age} tuổi`
+  }
+
+  function getQuanHeEmoji(quanHe?: string | null) {
+    switch (quanHe) {
+      case 'con': return '👶'
+      case 'me': return '👵'
+      case 'cha': return '👴'
+      case 'vo': return '👩'
+      case 'chong': return '👨'
+      case 'anh_chi_em': return '🧑'
+      case 'ban_than': return '👤'
+      default: return '🧑'
+    }
+  }
+
   function formatQuanHeLabel(quanHe: string) {
     switch (quanHe) {
       case 'con': return 'Con'
@@ -92,11 +122,13 @@ export default function Profile() {
   function matchPatientFilter(
     item: { ho_so_benh_nhan_id?: string | null; member_id?: string | null; ten_khach?: string | null },
     filterValue: string,
-    selfName: string
+    selfName: string,
+    ownerMemberId?: string | null
   ) {
     if (!filterValue || filterValue === 'all') return true
 
     if (filterValue === 'self') {
+      if (ownerMemberId && item.member_id === ownerMemberId) return true
       return !item.member_id && (!item.ten_khach || item.ten_khach.trim().toLowerCase() === selfName.trim().toLowerCase())
     }
 
@@ -165,6 +197,8 @@ export default function Profile() {
   const [memberFormName, setMemberFormName] = useState('')
   const [memberFormDob, setMemberFormDob] = useState('')
   const [memberFormGender, setMemberFormGender] = useState<'nam' | 'nu' | 'khac'>('nam')
+  const [memberFormRelation, setMemberFormRelation] = useState<string>('con')
+  const [memberFormPhone, setMemberFormPhone] = useState('')
   const [memberFormBlood, setMemberFormBlood] = useState('')
   const [memberFormAllergy, setMemberFormAllergy] = useState('')
   const [memberFormBackground, setMemberFormBackground] = useState('')
@@ -190,8 +224,31 @@ export default function Profile() {
   const [rescheduleAppId, setRescheduleAppId] = useState<string | null>(null)
   const [refundHelpAppId, setRefundHelpAppId] = useState<string | null>(null)
 
+  const ownerMemberId = familyGroup?.members?.find((m) => m.la_chu_ho)?.id || null
+  const [appStatusFilter, setAppStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all')
+
+  const statusCounts = useMemo(() => {
+    const counts = {
+      all: appointments.length,
+      pending: 0,
+      confirmed: 0,
+      completed: 0,
+      cancelled: 0,
+    }
+    for (const app of appointments) {
+      if (app.status === 'pending') counts.pending++
+      else if (app.status === 'confirmed') counts.confirmed++
+      else if (app.status === 'completed') counts.completed++
+      else if (app.status === 'cancelled') counts.cancelled++
+    }
+    return counts
+  }, [appointments])
+
   const filteredAppointments = appointments.filter((app) => {
-    if (!matchPatientFilter(app, appPatientFilter, user?.ho_ten || '')) {
+    if (appStatusFilter !== 'all' && app.status !== appStatusFilter) {
+      return false
+    }
+    if (!matchPatientFilter(app, appPatientFilter, user?.ho_ten || '', ownerMemberId)) {
       return false
     }
     if (appSearchDoctor && app.bac_si?.ho_ten) {
@@ -209,7 +266,7 @@ export default function Profile() {
   })
 
   const filteredMedicalResults = medicalResults.filter((result) => {
-    return matchPatientFilter(result, resultsPatientFilter, user?.ho_ten || '')
+    return matchPatientFilter(result, resultsPatientFilter, user?.ho_ten || '', ownerMemberId)
   })
 
   const totalPages = Math.max(1, Math.ceil(filteredAppointments.length / ITEMS_PER_PAGE))
@@ -217,7 +274,7 @@ export default function Profile() {
 
   useEffect(() => {
     setAppCurrentPage(1)
-  }, [appSearchDoctor, appStartDate, appEndDate, appPatientFilter])
+  }, [appSearchDoctor, appStartDate, appEndDate, appPatientFilter, appStatusFilter])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -621,6 +678,8 @@ export default function Profile() {
       ho_ten: normalizedName,
       ngay_sinh: memberFormDob,
       gioi_tinh: memberFormGender,
+      quan_he: memberFormRelation || 'con',
+      so_dien_thoai: memberFormPhone?.trim() ? normalizePhoneInput(memberFormPhone) : null,
       nhom_mau: memberFormBlood || null,
       di_ung: memberFormAllergy || null,
       benh_nen: memberFormBackground || null,
@@ -649,6 +708,8 @@ export default function Profile() {
     setMemberFormName(member.ho_ten)
     setMemberFormDob(new Date(member.ngay_sinh).toISOString().split('T')[0])
     setMemberFormGender(member.gioi_tinh)
+    setMemberFormRelation(member.quan_he || 'con')
+    setMemberFormPhone(member.so_dien_thoai || '')
     setMemberFormBlood(member.nhom_mau || '')
     setMemberFormAllergy(member.di_ung || '')
     setMemberFormBackground(member.benh_nen || '')
@@ -675,6 +736,8 @@ export default function Profile() {
     setMemberFormName('')
     setMemberFormDob('')
     setMemberFormGender('nam')
+    setMemberFormRelation('con')
+    setMemberFormPhone('')
     setMemberFormBlood('')
     setMemberFormAllergy('')
     setMemberFormBackground('')
@@ -739,7 +802,7 @@ export default function Profile() {
             {[
               { key: 'appointments', label: 'Lịch hẹn', meta: 'Theo dõi lịch khám' },
               { key: 'results', label: 'Kết quả y tế', meta: 'Đơn thuốc & chẩn đoán' },
-              { key: 'family', label: 'Gia đình', meta: 'Quản lý người thân' },
+              { key: 'family', label: 'Sổ gia đình', meta: 'Hồ sơ người thân' },
               { key: 'account', label: 'Thông tin cá nhân', meta: 'Tên và số liên hệ' },
               { key: 'reviews', label: 'Đánh giá', meta: 'Lịch sử & chờ đánh giá' },
             ].map((tab) => (
@@ -765,6 +828,40 @@ export default function Profile() {
                 <p className="text-xs text-slate-400">Theo dõi trạng thái lịch hẹn và tình trạng thanh toán từ dữ liệu thật của hệ thống.</p>
               </div>
 
+              {/* Status Filter Tabs / Pills */}
+              {appointments.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { key: 'all', label: 'Tất cả', count: statusCounts.all },
+                    { key: 'pending', label: 'Chờ xác nhận', count: statusCounts.pending },
+                    { key: 'confirmed', label: 'Đã xác nhận', count: statusCounts.confirmed },
+                    { key: 'completed', label: 'Hoàn thành', count: statusCounts.completed },
+                    { key: 'cancelled', label: 'Đã hủy', count: statusCounts.cancelled },
+                  ].map((st) => {
+                    const isActive = appStatusFilter === st.key
+                    return (
+                      <button
+                        key={st.key}
+                        type="button"
+                        onClick={() => setAppStatusFilter(st.key as any)}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition border ${
+                          isActive
+                            ? 'bg-teal-700 text-white border-teal-700 shadow-sm'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>{st.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {st.count}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
               {appointments.length > 0 && (
                 <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm flex flex-col md:flex-row gap-3">
                   <div className="w-full md:w-60">
@@ -775,9 +872,9 @@ export default function Profile() {
                     >
                       <option value="all">👥 Tất cả người khám</option>
                       <option value="self">👤 Bản thân ({user?.ho_ten || 'Tôi'})</option>
-                      {familyGroup?.members?.map((m) => (
+                      {familyGroup?.members?.filter((m) => !m.la_chu_ho).map((m) => (
                         <option key={m.id} value={`member:${m.id}`}>
-                          {m.quan_he === 'con' ? '👶' : m.quan_he === 'me' || m.quan_he === 'cha' ? '👵' : '🧑'} {m.ho_ten} ({formatQuanHeLabel(m.quan_he)})
+                          {getQuanHeEmoji(m.quan_he)} {m.ho_ten} ({formatQuanHeLabel(m.quan_he || 'con')})
                         </option>
                       ))}
                       {otherPatientNames.map((name) => (
@@ -813,13 +910,14 @@ export default function Profile() {
                         onChange={(e) => setAppEndDate(e.target.value)}
                       />
                     </div>
-                    {(appSearchDoctor || appStartDate || appEndDate || appPatientFilter !== 'all') && (
+                    {(appSearchDoctor || appStartDate || appEndDate || appPatientFilter !== 'all' || appStatusFilter !== 'all') && (
                       <button
                         onClick={() => {
                           setAppSearchDoctor('')
                           setAppStartDate('')
                           setAppEndDate('')
                           setAppPatientFilter('all')
+                          setAppStatusFilter('all')
                         }}
                         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                         title="Xóa bộ lọc"
@@ -881,6 +979,11 @@ export default function Profile() {
                             ) : (
                               <span className="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ml-1">
                                 Bản thân
+                              </span>
+                            )}
+                            {appointment.so_dien_thoai_khach && (
+                              <span className="text-slate-500 font-normal ml-2">
+                                • SĐT: <strong className="text-slate-700">{appointment.so_dien_thoai_khach}</strong>
                               </span>
                             )}
                           </p>
@@ -969,9 +1072,9 @@ export default function Profile() {
                   >
                     <option value="all">👥 Tất cả người khám</option>
                     <option value="self">👤 Bản thân ({user?.ho_ten || 'Tôi'})</option>
-                    {familyGroup?.members?.map((m) => (
+                    {familyGroup?.members?.filter((m) => !m.la_chu_ho).map((m) => (
                       <option key={m.id} value={`member:${m.id}`}>
-                        {m.quan_he === 'con' ? '👶' : m.quan_he === 'me' || m.quan_he === 'cha' ? '👵' : '🧑'} {m.ho_ten} ({formatQuanHeLabel(m.quan_he)})
+                        {getQuanHeEmoji(m.quan_he)} {m.ho_ten} ({formatQuanHeLabel(m.quan_he || 'con')})
                       </option>
                     ))}
                     {otherPatientNames.map((name) => (
@@ -1200,59 +1303,110 @@ export default function Profile() {
 
                   {/* Danh sách thành viên card grid */}
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {familyGroup.members.map((member) => (
-                      <div
-                        key={member.id}
-                        className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-4 relative flex flex-col justify-between"
-                      >
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                                {member.ho_ten}
-                                {member.la_chu_ho && (
-                                  <span className="bg-brand-50 text-brand-600 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded">
-                                    Chủ tài khoản
+                    {familyGroup.members.map((member) => {
+                      const ageText = calculateAge(member.ngay_sinh)
+                      const relationText = member.la_chu_ho ? 'Chủ tài khoản' : formatQuanHeLabel(member.quan_he || 'con')
+                      const relationEmoji = member.la_chu_ho ? '👤' : getQuanHeEmoji(member.quan_he)
+                      const phoneDisplay = member.so_dien_thoai || (member.la_chu_ho ? (soDienThoai || user?.so_dien_thoai || 'Chưa cập nhật') : (soDienThoai || user?.so_dien_thoai ? `${soDienThoai || user?.so_dien_thoai} (Theo Chủ hộ)` : 'Chưa cập nhật'))
+
+                      return (
+                        <div
+                          key={member.id}
+                          className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm space-y-4 relative flex flex-col justify-between hover:border-brand-200 transition"
+                        >
+                          <div className="space-y-3">
+                            {/* Header: Name + Relation Badge */}
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-base">{relationEmoji}</span>
+                                  <h4 className="font-bold text-slate-800 text-base">
+                                    {member.ho_ten}
+                                  </h4>
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                  {member.gioi_tinh === 'nam' ? 'Nam' : member.gioi_tinh === 'nu' ? 'Nữ' : 'Khác'}
+                                  {member.ngay_sinh && ` • ${new Date(member.ngay_sinh).toLocaleDateString('vi-VN')}`}
+                                  {ageText && ` (${ageText})`}
+                                </p>
+                              </div>
+                              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${member.la_chu_ho ? 'bg-brand-50 text-brand-700 border-brand-200' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                                {relationText}
+                              </span>
+                            </div>
+
+                            {/* Medical & Contact Details */}
+                            <div className="rounded-xl bg-slate-50/70 p-3 text-xs space-y-2 border border-slate-100 font-medium">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-500">📱 SĐT liên hệ:</span>
+                                <span className="font-bold text-slate-800">{phoneDisplay}</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                                <div>
+                                  <span className="text-slate-500">🩸 Nhóm máu: </span>
+                                  <span className="font-bold text-slate-800">{member.nhom_mau || 'Chưa rõ'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">⚠️ Dị ứng: </span>
+                                  <span className={`font-bold ${member.di_ung ? 'text-amber-700' : 'text-slate-700'}`}>
+                                    {member.di_ung || 'Không có'}
                                   </span>
-                                )}
-                              </h4>
-                              <p className="text-[10px] text-slate-400 uppercase mt-0.5">
-                                Giới tính: {member.gioi_tinh === 'nam' ? 'Nam' : member.gioi_tinh === 'nu' ? 'Nữ' : 'Khác'} • Năm sinh: {new Date(member.ngay_sinh).getFullYear()}
-                              </p>
+                                </div>
+                              </div>
+                              <div className="pt-1 border-t border-slate-100">
+                                <span className="text-slate-500">🏥 Bệnh nền: </span>
+                                <span className="font-semibold text-slate-700">{member.benh_nen || 'Không ghi nhận'}</span>
+                              </div>
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-xs border-t border-slate-50 pt-3 text-slate-500 font-medium">
-                            <p>
-                              <span className="font-bold text-slate-700">Nhóm máu:</span> {member.nhom_mau || '--'}
-                            </p>
-                            <p>
-                              <span className="font-bold text-slate-700">Dị ứng:</span> {member.di_ung || 'Không có'}
-                            </p>
-                            <p className="col-span-2">
-                              <span className="font-bold text-slate-700">Bệnh nền:</span> {member.benh_nen || 'Không ghi nhận'}
-                            </p>
+                          {/* Action Buttons: View Appts, View Results, Edit, Delete */}
+                          <div className="space-y-2 border-t border-slate-100 pt-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAppPatientFilter(member.la_chu_ho ? 'self' : `member:${member.id}`)
+                                  setActiveTab('appointments')
+                                }}
+                                className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-brand-50 hover:text-brand-700 px-2.5 py-2 rounded-lg border border-slate-200 transition text-center"
+                              >
+                                📅 Xem lịch hẹn
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setResultsPatientFilter(member.la_chu_ho ? 'self' : `member:${member.id}`)
+                                  setActiveTab('results')
+                                }}
+                                className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-brand-50 hover:text-brand-700 px-2.5 py-2 rounded-lg border border-slate-200 transition text-center"
+                              >
+                                💊 Xem kết quả
+                              </button>
+                            </div>
+
+                            {!member.la_chu_ho && (
+                              <div className="flex justify-end gap-2 pt-1 border-t border-slate-50">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditMemberClick(member)}
+                                  className="text-xs font-semibold text-slate-600 hover:bg-slate-100 px-2.5 py-1 rounded border border-slate-200 transition"
+                                >
+                                  Sửa
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMember(member.id)}
+                                  className="text-xs font-semibold text-red-600 hover:bg-red-50 px-2.5 py-1 rounded border border-red-200 transition"
+                                >
+                                  Xóa
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
-
-                        {!member.la_chu_ho && (
-                          <div className="flex gap-2 justify-end border-t border-slate-50 pt-3 mt-1">
-                            <button
-                              onClick={() => handleEditMemberClick(member)}
-                              className="text-xs font-bold text-brand-600 hover:bg-brand-50 px-2.5 py-1.5 rounded-lg border border-brand-50 transition"
-                            >
-                              Sửa
-                            </button>
-                            <button
-                              onClick={() => handleRemoveMember(member.id)}
-                              className="text-xs font-bold text-red-550 hover:bg-red-50 px-2.5 py-1.5 rounded-lg border border-red-50 transition"
-                            >
-                              Xóa
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -1570,6 +1724,23 @@ export default function Profile() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Mối quan hệ *</label>
+                <select
+                  value={memberFormRelation}
+                  onChange={(e) => setMemberFormRelation(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  required
+                >
+                  <option value="con">Con</option>
+                  <option value="cha">Bố / Cha</option>
+                  <option value="me">Mẹ</option>
+                  <option value="vo">Vợ</option>
+                  <option value="chong">Chồng</option>
+                  <option value="anh_chi_em">Anh / Chị / Em</option>
+                  <option value="khac">Khác</option>
+                </select>
+              </div>
+              <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-700">Giới tính *</label>
                 <select
                   value={memberFormGender}
@@ -1582,6 +1753,16 @@ export default function Profile() {
                   <option value="khac">Khác</option>
                 </select>
               </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Số điện thoại riêng (tùy chọn)"
+                placeholder="Để trống sẽ dùng SĐT của chủ tài khoản"
+                value={memberFormPhone}
+                onChange={(e) => setMemberFormPhone(normalizePhoneInput(e.target.value))}
+                maxLength={10}
+              />
               <Input
                 label="Nhóm máu (tùy chọn)"
                 placeholder="Ví dụ: A, B, O, AB..."
