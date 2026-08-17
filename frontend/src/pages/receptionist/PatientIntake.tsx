@@ -8,6 +8,8 @@ import {
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
 import { SpecialtyOption, specialtyService } from '@/services/specialty.service'
+import { receptionistBookingService, DoctorFilterOption } from '@/services/receptionist-booking.service'
+import { appointmentStatusLabel, appointmentStatusTone, paymentLabel } from '@/utils/receptionistLabels'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
 import TempProfileModal from '@/components/receptionist/TempProfileModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
@@ -85,14 +87,6 @@ function lichSuKhamLabel(lichSuKham?: PatientProfile['lich_su_kham']) {
   return `Khách cũ, đã khám ${lichSuKham.so_lan} lần, gần nhất ${ngay}${bacSi}`
 }
 
-function paymentLabel(status: string) {
-  return ({ paid: 'Đã trả phí khám', partial: 'Đã trả một phần', unpaid: 'Chưa trả phí khám', refunded: 'Đã hoàn phí khám' } as Record<string, string>)[status] ?? status
-}
-
-function appointmentStatusLabel(status: string) {
-  return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã tiếp nhận', in_progress: 'Đang khám', completed: 'Hoàn thành', cancelled: 'Đã hủy', no_show: 'Không đến' } as Record<string, string>)[status] ?? status
-}
-
 function appointmentIsCheckinable(appointment: TodayAppointment) {
   return appointment.status === 'confirmed'
 }
@@ -102,16 +96,38 @@ function todayAppointmentIsCheckinable(appointment: ReceptionistTodayAppointment
   return appointment.status === 'confirmed'
 }
 
-function appointmentStatusTone(status: string) {
-  if (status === 'checked_in') return 'bg-emerald-100 text-emerald-800'
-  if (status === 'completed') return 'bg-blue-100 text-blue-800'
-  if (status === 'cancelled') return 'bg-rose-100 text-rose-800'
-  if (status === 'no_show') return 'bg-slate-200 text-slate-700'
-  if (status === 'pending') return 'bg-amber-100 text-amber-800'
-  return 'bg-brand-100 text-brand-800'
-}
+type TimeframeFilter = 'all' | 'today' | 'tomorrow' | 'upcoming' | 'past' | 'custom_date' | 'custom_range'
+type AppointmentStatusFilter = 'active' | 'pending' | 'confirmed' | 'checked_in' | 'cancelled' | 'all'
+type AppointmentPaymentFilter = 'all' | 'unpaid' | 'paid' | 'partial' | 'refunded'
 
-function TodayAppointmentTab({
+const TIMEFRAME_OPTIONS: Array<{ value: TimeframeFilter; label: string }> = [
+  { value: 'all', label: 'Tất cả thời gian' },
+  { value: 'today', label: 'Hôm nay' },
+  { value: 'tomorrow', label: 'Ngày mai' },
+  { value: 'upcoming', label: 'Sắp tới' },
+  { value: 'past', label: 'Đã qua' },
+  { value: 'custom_date', label: 'Chọn ngày' },
+  { value: 'custom_range', label: 'Khoảng ngày' },
+]
+
+const STATUS_FILTER_OPTIONS: Array<{ value: AppointmentStatusFilter; label: string }> = [
+  { value: 'active', label: 'Đang hoạt động' },
+  { value: 'pending', label: 'Chờ xác nhận' },
+  { value: 'confirmed', label: 'Đã xác nhận' },
+  { value: 'checked_in', label: 'Đã check-in' },
+  { value: 'cancelled', label: 'Đã hủy' },
+  { value: 'all', label: 'Tất cả trạng thái' },
+]
+
+const PAYMENT_FILTER_OPTIONS: Array<{ value: AppointmentPaymentFilter; label: string }> = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'unpaid', label: 'Chưa thanh toán' },
+  { value: 'paid', label: 'Đã thanh toán' },
+  { value: 'partial', label: 'Thanh toán một phần' },
+  { value: 'refunded', label: 'Đã hoàn tiền' },
+]
+
+function AppointmentsTab({
   onTicketReady,
 }: {
   onTicketReady: (data: QueueTicketData) => void
@@ -119,28 +135,50 @@ function TodayAppointmentTab({
   const [appointments, setAppointments] = useState<ReceptionistTodayAppointment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState<'active' | 'confirmed' | 'checked_in' | 'changed' | 'all'>('active')
+  const [timeframe, setTimeframe] = useState<TimeframeFilter>('all')
+  const [status, setStatus] = useState<AppointmentStatusFilter>('active')
+  const [paymentStatus, setPaymentStatus] = useState<AppointmentPaymentFilter>('all')
+  const [doctorId, setDoctorId] = useState('')
+  const [specialtyId, setSpecialtyId] = useState('')
+  const [customDate, setCustomDate] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [doctors, setDoctors] = useState<DoctorFilterOption[]>([])
+  const [specialties, setSpecialties] = useState<SpecialtyOption[]>([])
   const [checkInAppointment, setCheckInAppointment] = useState<ReceptionistTodayAppointment | null>(null)
   const [timelineApptId, setTimelineApptId] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    void specialtyService.getAllActive().then((rows) => setSpecialties(rows)).catch(() => setSpecialties([]))
+    void receptionistBookingService.listDoctorsForFilter().then(setDoctors).catch(() => setDoctors([]))
+  }, [])
 
   const loadAppointments = async () => {
     setLoading(true)
     setError('')
     try {
-      const response = await axiosInstance.get('/receptionist/appointments', {
-        params: {
-          timeframe: 'today',
-          limit: 100,
-          status: status === 'all' || status === 'active' || status === 'changed' ? undefined : status,
-          search: query.trim() || undefined,
-        },
-      })
+      const params: Record<string, string | number> = { limit: 100 }
+      if (timeframe === 'today' || timeframe === 'tomorrow' || timeframe === 'upcoming' || timeframe === 'past') {
+        params.timeframe = timeframe
+      } else if (timeframe === 'custom_date' && customDate) {
+        params.date = customDate
+      } else if (timeframe === 'custom_range') {
+        if (fromDate) params.from_date = fromDate
+        if (toDate) params.to_date = toDate
+      }
+      if (status !== 'active') params.status = status
+      if (paymentStatus !== 'all') params.payment_status = paymentStatus
+      if (doctorId) params.doctor_id = doctorId
+      if (specialtyId) params.specialty_id = specialtyId
+      if (query.trim()) params.search = query.trim()
+
+      const response = await axiosInstance.get('/receptionist/appointments', { params })
       const rows = Array.isArray(response.data?.data) ? response.data.data : []
       setAppointments(rows)
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Không thể tải lịch hẹn hôm nay')
+      setError(requestError?.response?.data?.message || 'Không thể tải danh sách lịch hẹn')
     } finally {
       setLoading(false)
     }
@@ -149,20 +187,13 @@ function TodayAppointmentTab({
   useEffect(() => {
     void loadAppointments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status])
-
-  const filteredAppointments = useMemo(() => {
-    let rows = appointments
-    if (status === 'active') rows = rows.filter((appointment) => appointment.status !== 'cancelled')
-    if (status === 'changed') rows = rows.filter((appointment) => Boolean(appointment.sua_gan_nhat) || appointment.status === 'cancelled')
-    return [...rows].sort((a, b) => b.gio_kham.localeCompare(a.gio_kham))
-  }, [appointments, status])
+  }, [timeframe, status, paymentStatus, doctorId, specialtyId, customDate, fromDate, toDate])
 
   const summary = useMemo(() => ({
     total: appointments.length,
     waiting: appointments.filter((appointment) => appointment.status === 'confirmed' || appointment.status === 'pending').length,
     checkedIn: appointments.filter((appointment) => appointment.status === 'checked_in').length,
-    changed: appointments.filter((appointment) => Boolean(appointment.sua_gan_nhat) || appointment.status === 'cancelled').length,
+    cancelled: appointments.filter((appointment) => appointment.status === 'cancelled').length,
   }), [appointments])
 
   const handleCheckedIn = (
@@ -170,6 +201,7 @@ function TodayAppointmentTab({
   ) => {
     if (checkInAppointment) {
       onTicketReady({
+        ticketType: 'kham',
         patientName: result.ten_benh_nhan,
         doctorName: checkInAppointment.doctor_id?.user_id?.ho_ten || 'Chưa gán',
         roomNumber: result.hang_doi.phong_kham || 'Chưa gán',
@@ -188,9 +220,9 @@ function TodayAppointmentTab({
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h3 className="text-lg font-bold text-slate-950">Lịch hẹn hôm nay</h3>
+          <h3 className="text-lg font-bold text-slate-950">Lịch hẹn</h3>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-            Tab này dùng để xem tổng quan trong ngày, kiểm tra lịch vừa thay đổi và check-in nhanh khi khách online đến quầy.
+            Mặc định hiển thị mọi lịch hẹn còn hiệu lực, không giới hạn theo ngày. Dùng bộ lọc bên dưới để thu hẹp kết quả.
           </p>
         </div>
         <button type="button" onClick={loadAppointments} disabled={loading} className="min-h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
@@ -200,7 +232,7 @@ function TodayAppointmentTab({
 
       <div className="mt-5 grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold text-slate-500">Tổng lịch</p>
+          <p className="text-xs font-semibold text-slate-500">Kết quả</p>
           <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}</p>
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -211,43 +243,79 @@ function TodayAppointmentTab({
           <p className="text-xs font-semibold text-emerald-700">Đã check-in</p>
           <p className="mt-1 text-xl font-bold text-emerald-950">{summary.checkedIn}</p>
         </div>
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-          <p className="text-xs font-semibold text-blue-700">Có thay đổi</p>
-          <p className="mt-1 text-xl font-bold text-blue-950">{summary.changed}</p>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+          <p className="text-xs font-semibold text-rose-700">Đã hủy</p>
+          <p className="mt-1 text-xl font-bold text-rose-950">{summary.cancelled}</p>
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="flex flex-wrap gap-2">
-          {[
-            { key: 'active', label: 'Đang hoạt động' },
-            { key: 'confirmed', label: 'Chưa đến' },
-            { key: 'checked_in', label: 'Đã check-in' },
-            { key: 'changed', label: 'Có thay đổi' },
-            { key: 'all', label: 'Tất cả' },
-          ].map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setStatus(item.key as typeof status)}
-              className={`min-h-10 rounded-xl px-3 text-xs font-bold transition ${status === item.key ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <form className="flex min-w-0 flex-1 gap-2" onSubmit={(event) => { event.preventDefault(); void loadAppointments() }}>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm tên, SĐT hoặc mã lịch"
-            className="min-h-10 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-          <button type="submit" className="min-h-10 rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800">
-            Tìm
-          </button>
+      <div className="mt-5 grid gap-3 lg:grid-cols-6">
+        <label className="text-xs font-bold text-slate-600">
+          Thời gian
+          <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as TimeframeFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            {TIMEFRAME_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Trạng thái
+          <select value={status} onChange={(event) => setStatus(event.target.value as AppointmentStatusFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            {STATUS_FILTER_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Thanh toán
+          <select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as AppointmentPaymentFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            {PAYMENT_FILTER_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Bác sĩ
+          <select value={doctorId} onChange={(event) => setDoctorId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="">Tất cả bác sĩ</option>
+            {doctors.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.ho_ten}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Chuyên khoa
+          <select value={specialtyId} onChange={(event) => setSpecialtyId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="">Tất cả chuyên khoa</option>
+            {specialties.map((specialty) => <option key={specialty.id} value={specialty.id}>{specialty.ten}</option>)}
+          </select>
+        </label>
+        <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); void loadAppointments() }}>
+          <label className="flex-1 text-xs font-bold text-slate-600">
+            Tìm kiếm
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Mã lịch, tên, SĐT"
+              className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <button type="submit" className="min-h-10 rounded-lg bg-brand-700 px-3 text-sm font-bold text-white hover:bg-brand-800">Tìm</button>
         </form>
       </div>
+
+      {timeframe === 'custom_date' && (
+        <div className="mt-3">
+          <label className="text-xs font-bold text-slate-600">
+            Chọn ngày
+            <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="mt-1 min-h-10 rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+          </label>
+        </div>
+      )}
+      {timeframe === 'custom_range' && (
+        <div className="mt-3 flex flex-wrap gap-3">
+          <label className="text-xs font-bold text-slate-600">
+            Từ ngày
+            <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="mt-1 min-h-10 rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+          </label>
+          <label className="text-xs font-bold text-slate-600">
+            Đến ngày
+            <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="mt-1 min-h-10 rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+          </label>
+        </div>
+      )}
 
       {(notice || error) && (
         <div className="mt-4 grid gap-2">
@@ -261,7 +329,7 @@ function TodayAppointmentTab({
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs font-bold text-slate-500">
               <tr>
-                <th className="px-4 py-3">Giờ</th>
+                <th className="px-4 py-3">Ngày / giờ</th>
                 <th className="px-4 py-3">Bệnh nhân</th>
                 <th className="px-4 py-3">Bác sĩ</th>
                 <th className="px-4 py-3">Thanh toán / trạng thái</th>
@@ -272,16 +340,16 @@ function TodayAppointmentTab({
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Đang tải lịch hẹn...</td></tr>
-              ) : filteredAppointments.length === 0 ? (
+              ) : appointments.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Không có lịch hẹn phù hợp.</td></tr>
-              ) : filteredAppointments.map((appointment) => {
+              ) : appointments.map((appointment) => {
                 const patientName = appointment.user_id?.ho_ten || appointment.ten_khach || 'Khách vãng lai'
                 const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
                 const canCheckIn = todayAppointmentIsCheckinable(appointment)
                 return (
                   <tr key={appointment._id} className="align-top hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <p className="font-bold tabular-nums text-slate-950">{appointment.gio_kham}</p>
+                      <p className="font-bold tabular-nums text-slate-950">{formatDate(appointment.ngay_kham)} - {appointment.gio_kham}</p>
                       <p className="mt-1 font-mono text-xs text-slate-400">{appointment.ma_lich_hen || appointment._id}</p>
                     </td>
                     <td className="px-4 py-3">
@@ -501,7 +569,7 @@ export default function PatientIntake() {
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
   const [searchPhoneError, setSearchPhoneError] = useState('')
   const [formErrors, setFormErrors] = useState<{ ho_ten?: string; ngay_sinh?: string }>({})
-  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'today'>('lookup')
+  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'appointments' | 'today_sessions'>('lookup')
   // D81 — modal tự trị, không đụng state tra cứu-theo-SĐT ở trên.
   const [showTempProfileModal, setShowTempProfileModal] = useState(false)
 
@@ -826,19 +894,12 @@ export default function PatientIntake() {
     <PageShell>
         <ReceptionistHeader
           eyebrow="Tiếp nhận & lịch hẹn"
-          title="Tra cứu trước, chọn đúng luồng sau"
-          description="Tab tra cứu là luồng chính khi khách đến quầy; tab lịch hẹn hôm nay dùng để xem tổng quan, kiểm tra thay đổi và check-in nhanh."
-          metrics={
-            <div className="grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-3 lg:min-w-[560px]">
-              <StepIndicator step={1} label="Tra số điện thoại" state={lookupState} />
-              <StepIndicator step={2} label="Chọn hồ sơ" state={profileState} />
-              <StepIndicator step={3} label="Khám/Check-in" state={actionState} />
-            </div>
-          }
+          title="Tiếp nhận tại quầy"
+          description="Quản lý tra cứu hồ sơ, tiếp nhận khách đến trực tiếp, theo dõi lịch hẹn và ca khám trong ngày."
         />
 
         <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => setWorkspaceTab('lookup')}
@@ -849,11 +910,19 @@ export default function PatientIntake() {
             </button>
             <button
               type="button"
-              onClick={() => setWorkspaceTab('today')}
-              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'today' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+              onClick={() => setWorkspaceTab('appointments')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'appointments' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
             >
-              Lịch hẹn hôm nay
-              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today' ? 'text-slate-200' : 'text-slate-500'}`}>Xem số lượng, trạng thái, thay đổi gần đây và check-in nhanh</span>
+              Lịch hẹn
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'appointments' ? 'text-slate-200' : 'text-slate-500'}`}>Xem và lọc toàn bộ lịch hẹn, không chỉ trong hôm nay</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('today_sessions')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'today_sessions' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+            >
+              Ca khám hôm nay
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today_sessions' ? 'text-slate-200' : 'text-slate-500'}`}>Toàn bộ ca khám trong ngày, cả online lẫn tại quầy</span>
             </button>
           </div>
         </div>
@@ -866,6 +935,12 @@ export default function PatientIntake() {
         )}
 
         {workspaceTab === 'lookup' ? (
+        <div className="grid gap-5">
+          <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-3">
+            <StepIndicator step={1} label="Tra số điện thoại" state={lookupState} />
+            <StepIndicator step={2} label="Chọn hồ sơ" state={profileState} />
+            <StepIndicator step={3} label="Khám/Check-in" state={actionState} />
+          </div>
         <main className="grid gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.35fr)]">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
@@ -1289,8 +1364,11 @@ export default function PatientIntake() {
             )}
           </section>
         </main>
+        </div>
+        ) : workspaceTab === 'appointments' ? (
+          <AppointmentsTab onTicketReady={setPrintData} />
         ) : (
-          <TodayAppointmentTab onTicketReady={setPrintData} />
+          <TodaySessionsTab />
         )}
 
         {editingProfile && (
