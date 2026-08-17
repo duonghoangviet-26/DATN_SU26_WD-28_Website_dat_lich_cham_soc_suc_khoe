@@ -26,6 +26,7 @@ import {
   validatePatientName,
   validateVietnamesePhone,
 } from '@/utils/patientIdentityValidation'
+import { printTicket } from '@/utils/printTicket'
 
 interface ReceptionistTodayAppointment {
   _id: string
@@ -97,6 +98,13 @@ function todayAppointmentIsCheckinable(appointment: ReceptionistTodayAppointment
   return appointment.status === 'confirmed'
 }
 
+function isAppointmentToday(ngayKham: string) {
+  const vnNow = new Date(Date.now() + 7 * 60 * 60 * 1000)
+  const todayKey = vnNow.toISOString().split('T')[0]
+  const apptKey = new Date(ngayKham).toISOString().split('T')[0]
+  return apptKey === todayKey
+}
+
 type TimeframeFilter = 'all' | 'today' | 'tomorrow' | 'upcoming' | 'past' | 'custom_date' | 'custom_range'
 type AppointmentStatusFilter = 'active' | 'pending' | 'confirmed' | 'checked_in' | 'cancelled' | 'all'
 type AppointmentPaymentFilter = 'all' | 'unpaid' | 'paid' | 'partial' | 'refunded'
@@ -134,6 +142,7 @@ function AppointmentsTab({
   onTicketReady: (data: QueueTicketData) => void
 }) {
   const [appointments, setAppointments] = useState<ReceptionistTodayAppointment[]>([])
+  const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -178,6 +187,7 @@ function AppointmentsTab({
       const response = await axiosInstance.get('/receptionist/appointments', { params })
       const rows = Array.isArray(response.data?.data) ? response.data.data : []
       setAppointments(rows)
+      setTotalCount(typeof response.data?.pagination?.totalDocs === 'number' ? response.data.pagination.totalDocs : rows.length)
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Không thể tải danh sách lịch hẹn')
     } finally {
@@ -234,7 +244,10 @@ function AppointmentsTab({
       <div className="mt-5 grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs font-semibold text-slate-500">Kết quả</p>
-          <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}</p>
+          <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}{totalCount > summary.total ? ` / ${totalCount}` : ''}</p>
+          {totalCount > summary.total && (
+            <p className="mt-1 text-[11px] font-medium text-amber-700">Đang hiển thị {summary.total}/{totalCount} — thu hẹp bộ lọc để xem đủ.</p>
+          )}
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-xs font-semibold text-amber-700">Chưa đến</p>
@@ -347,6 +360,7 @@ function AppointmentsTab({
                 const patientName = appointment.user_id?.ho_ten || appointment.ten_khach || 'Khách vãng lai'
                 const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
                 const canCheckIn = todayAppointmentIsCheckinable(appointment)
+                const isToday = isAppointmentToday(appointment.ngay_kham)
                 return (
                   <tr key={appointment._id} className="align-top hover:bg-slate-50">
                     <td className="px-4 py-3">
@@ -381,9 +395,9 @@ function AppointmentsTab({
                         <button
                           type="button"
                           onClick={() => setCheckInAppointment(appointment)}
-                          disabled={!canCheckIn || !patientPhone}
+                          disabled={!canCheckIn || !patientPhone || !isToday}
                           className="min-h-9 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          title={!patientPhone ? 'Lịch chưa có số điện thoại để xác minh hồ sơ' : undefined}
+                          title={!patientPhone ? 'Lịch chưa có số điện thoại để xác minh hồ sơ' : !isToday ? 'Chỉ có thể check-in lịch hẹn của hôm nay' : undefined}
                         >
                           Check-in
                         </button>
@@ -756,7 +770,7 @@ export default function PatientIntake() {
   const [showTempProfileModal, setShowTempProfileModal] = useState(false)
 
   useEffect(() => {
-    if (printData) window.print()
+    if (printData) printTicket()
   }, [printData])
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedId) ?? null
@@ -1599,7 +1613,7 @@ export default function PatientIntake() {
             <span className="text-xs text-slate-600">Phiếu số {printData.queueNumber}</span>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => printTicket()}
               className="rounded-full bg-brand-600 px-3 py-1 text-xs font-bold text-white hover:bg-brand-700"
             >
               In lại phiếu

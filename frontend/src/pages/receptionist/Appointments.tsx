@@ -10,6 +10,7 @@ import CheckInVerifyModal from '../../components/receptionist/CheckInVerifyModal
 import TimelinePanel from '../../components/receptionist/TimelinePanel';
 import { TimelineRow } from '../../services/receptionist-timeline.service';
 import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI';
+import { printTicket } from '@/utils/printTicket';
 
 interface Appointment {
   _id: string;
@@ -377,7 +378,7 @@ export default function Appointments() {
   // window.print() la ham dong bo chan UI — phai goi SAU khi QueueTicketTemplate da render
   // xong voi printData moi, neu khong se in ra phieu trong (canh bao trong tai lieu E-7).
   useEffect(() => {
-    if (printData) window.print();
+    if (printData) printTicket();
   }, [printData]);
 
   const handleCancel = (id: string) => {
@@ -1330,7 +1331,7 @@ export default function Appointments() {
           <span className="text-xs text-slate-600">Phiếu số {printData.queueNumber}</span>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => printTicket()}
             className="rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
           >
             In lại phiếu

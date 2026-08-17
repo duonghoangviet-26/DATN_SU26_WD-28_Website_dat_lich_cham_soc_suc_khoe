@@ -3,6 +3,7 @@ import { EmptyBlock, LoadingBlock, MetricCard, PageShell, Panel, ReceptionistHea
 import { DispatchCandidate, DispatchSuggestion, OfflineQueueRow, receptionistOfflineQueueService } from '@/services/receptionist-offline-queue.service'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
 import { examSessionStatusLabel as statusLabel, examSessionStatusTone as statusTone, dispatchBlockReasonLabel } from '@/utils/receptionistLabels'
+import { printTicket } from '@/utils/printTicket'
 
 function formatTime(value?: string | null) {
   if (!value) return '-'
@@ -20,7 +21,7 @@ export default function OfflineQueue() {
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
 
   useEffect(() => {
-    if (printData) window.print()
+    if (printData) printTicket()
   }, [printData])
 
   const load = async () => {
@@ -202,7 +203,7 @@ export default function OfflineQueue() {
                               <button
                                 type="button"
                                 onClick={() => setConfirmingId(confirmingId === row.id ? null : row.id)}
-                                disabled={actionId === row.id || !best}
+                                disabled={actionId === row.id || !suggestion}
                                 className="min-h-9 rounded-lg bg-brand-700 px-3 text-xs font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 Gán theo gợi ý
@@ -280,7 +281,7 @@ export default function OfflineQueue() {
       {printData && (
         <div className="print:hidden fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-lg">
           <span className="text-xs text-slate-600">Phiếu số {printData.queueNumber}</span>
-          <button type="button" onClick={() => window.print()} className="rounded-full bg-brand-600 px-3 py-1 text-xs font-bold text-white hover:bg-brand-700">
+          <button type="button" onClick={() => printTicket()} className="rounded-full bg-brand-600 px-3 py-1 text-xs font-bold text-white hover:bg-brand-700">
             In lại phiếu
           </button>
           <button type="button" onClick={() => setPrintData(null)} className="text-slate-400 hover:text-slate-600" aria-label="Đóng thông báo in phiếu">
