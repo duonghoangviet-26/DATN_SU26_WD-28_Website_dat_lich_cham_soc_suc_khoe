@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import {
   BacSi, LichLamViec, LichHen,
   ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan, DanhGia, NguoiDung, HoSoChiTietBacSi,
+  HoSoBenhNhan,
 } from '../../models/index.js'
 import {
   cancelAppointmentWithPaymentSync,
@@ -134,6 +135,137 @@ async function timLuotTrungTrongNgay({ userId, memberId, tenKhach, soDienThoaiKh
     ngay_kham: { $gte: ngay, $lt: addDays(ngay, 1) },
     status: { $in: TRANG_THAI_CHIEM_LUOT },
   }).select('ma_lich_hen gio_kham status').session(session).lean()
+}
+
+/**
+ * Chuẩn hóa và xác định hồ sơ bệnh nhân (HoSoBenhNhan) ngay tại thời điểm đặt lịch.
+ * - Case 1: 'self' -> Tìm/tạo HoSoBenhNhan có tai_khoan_id = userId
+ * - Case 2: 'member' -> Tìm/tạo HoSoBenhNhan có member_id = memberId, nguoi_giam_ho_id = userId
+ * - Case 3: 'other' -> Tìm/tạo HoSoBenhNhan có nguoi_giam_ho_id = userId, SĐT và họ tên khớp
+ * - Concurrency: Xử lý E11000 duplicate key trên index sparse member_id
+ * - Transaction: Chạy trong session của createBooking
+ */
+async function resolvePatientProfileForBooking({
+  userId,
+  bookingFor = 'self',
+  memberId = null,
+  tenKhach = '',
+  soDienThoaiKhach = '',
+  namSinhKhach = null,
+  session = null,
+}) {
+  const normalizedPhone = normalizeBookingPhone(soDienThoaiKhach)
+  const normalizedName = tenKhach?.trim().replace(/\s+/g, ' ') || ''
+
+  if (bookingFor === 'self') {
+    let profile = await HoSoBenhNhan.findOne({
+      tai_khoan_id: userId,
+      trang_thai: 'active',
+    }).session(session)
+
+    if (profile) return profile._id
+
+    const user = await NguoiDung.findById(userId).session(session).lean()
+    const rawPhone = soDienThoaiKhach || user?.so_dien_thoai || ''
+    const phoneToSearch = normalizeBookingPhone(rawPhone) || rawPhone
+
+    const [createdProfile] = await HoSoBenhNhan.create([{
+      tai_khoan_id: userId,
+      ho_ten: normalizedName || user?.ho_ten || 'Bệnh nhân',
+      so_dien_thoai: rawPhone,
+      so_dien_thoai_tim_kiem: phoneToSearch,
+      ngay_sinh: user?.ngay_sinh || null,
+      gioi_tinh: user?.gioi_tinh || 'khac',
+      nguon_tao: 'online',
+      trang_thai: 'active',
+    }], { session })
+
+    return createdProfile._id
+  }
+
+  if (bookingFor === 'member' && memberId) {
+    let profile = await HoSoBenhNhan.findOne({
+      member_id: memberId,
+      trang_thai: 'active',
+    }).session(session)
+
+    if (profile) return profile._id
+
+    const member = await ThanhVien.findById(memberId).session(session).lean()
+    if (!member) return null
+
+    const rawPhone = soDienThoaiKhach || member.so_dien_thoai || ''
+    const phoneToSearch = normalizeBookingPhone(rawPhone) || rawPhone
+
+    try {
+      const [createdProfile] = await HoSoBenhNhan.create([{
+        member_id: member._id,
+        nguoi_giam_ho_id: userId,
+        ho_ten: member.ho_ten || normalizedName,
+        so_dien_thoai: rawPhone,
+        so_dien_thoai_tim_kiem: phoneToSearch,
+        ngay_sinh: member.ngay_sinh || null,
+        gioi_tinh: member.gioi_tinh || 'khac',
+        nhom_mau: member.nhom_mau || null,
+        di_ung: member.di_ung || null,
+        benh_nen: member.benh_nen || null,
+        nguon_tao: 'online',
+        trang_thai: 'active',
+      }], { session })
+
+      await ThanhVien.findByIdAndUpdate(
+        member._id,
+        { ho_so_benh_nhan_id: createdProfile._id },
+        { session }
+      )
+
+      return createdProfile._id
+    } catch (err) {
+      if (err.code === 11000 || err.message?.includes('E11000')) {
+        const existing = await HoSoBenhNhan.findOne({
+          member_id: member._id,
+          trang_thai: 'active',
+        }).session(session)
+        if (existing) {
+          await ThanhVien.findByIdAndUpdate(
+            member._id,
+            { ho_so_benh_nhan_id: existing._id },
+            { session }
+          )
+          return existing._id
+        }
+      }
+      throw err
+    }
+  }
+
+  // CASE 3: Đặt cho người khác ('other' hoặc không có member_id)
+  const escapedName = normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let profile = await HoSoBenhNhan.findOne({
+    nguoi_giam_ho_id: userId,
+    so_dien_thoai_tim_kiem: normalizedPhone,
+    ho_ten: { $regex: `^${escapedName}$`, $options: 'i' },
+    trang_thai: 'active',
+  }).session(session)
+
+  if (profile) return profile._id
+
+  let ngaySinh = null
+  if (namSinhKhach && Number(namSinhKhach) > 1900) {
+    ngaySinh = new Date(Date.UTC(Number(namSinhKhach), 0, 1))
+  }
+
+  const [createdProfile] = await HoSoBenhNhan.create([{
+    nguoi_giam_ho_id: userId,
+    ho_ten: normalizedName || 'Bệnh nhân đặt hộ',
+    so_dien_thoai: soDienThoaiKhach || '',
+    so_dien_thoai_tim_kiem: normalizedPhone,
+    ngay_sinh: ngaySinh,
+    nguon_tao: 'online',
+    trang_thai: 'active',
+  }], { session })
+
+  return createdProfile._id
 }
 
 // ============================================================
@@ -781,14 +913,25 @@ export async function createBooking(req, res) {
       }
     }
 
+    const resolvedProfileId = await resolvePatientProfileForBooking({
+      userId: req.user.id,
+      bookingFor: booking_for,
+      memberId: member_id,
+      tenKhach: ten_khach,
+      soDienThoaiKhach: so_dien_thoai_khach,
+      namSinhKhach: nam_sinh_khach,
+      session,
+    })
+
     const booker = booking_for !== 'self'
       ? await NguoiDung.findById(req.user.id).select('ho_ten so_dien_thoai').session(session).lean()
       : null
     const appointmentCode = await nextAppointmentCode(session, new Date(ngay_kham))
 
     const [appointment] = await LichHen.create([{
-      user_id:      req.user.id,
-      member_id:    member_id    || null,
+      user_id:            req.user.id,
+      member_id:          member_id          || null,
+      ho_so_benh_nhan_id: resolvedProfileId  || null,
       doctor_id:    loai_kham === 'clinic' ? doc._id : null,
       schedule_id:  loai_kham === 'clinic' ? schedule_id  : null,
       slot_id:      loai_kham === 'clinic' ? slot_id      : null,
