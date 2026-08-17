@@ -149,29 +149,43 @@ export async function register(req, res) {
     }
 
     // Validate số điện thoại
-    if (
-      so_dien_thoai &&
-      !/^0\d{9}$/.test(so_dien_thoai)
-    ) {
+    if (!so_dien_thoai || !/^0\d{9}$/.test(so_dien_thoai)) {
       return fail(
         res,
         400,
-        'Số điện thoại phải gồm 10 số và bắt đầu bằng số 0',
+        'Số điện thoại là bắt buộc, phải gồm 10 số và bắt đầu bằng số 0',
       )
     }
 
+    const cleanPhone = normalizePatientPhone(so_dien_thoai)
+
     // Kiểm tra email tồn tại
-    const exists =
+    const existsEmail =
       await NguoiDung.findOne({
         email,
         ngay_xoa: null,
       })
 
-    if (exists) {
+    if (existsEmail) {
       return fail(
         res,
         409,
-        'Email đã được sử dụng',
+        'Email đã được sử dụng bởi tài khoản khác',
+      )
+    }
+
+    // Kiểm tra số điện thoại tồn tại
+    const existsPhone =
+      await NguoiDung.findOne({
+        so_dien_thoai: cleanPhone,
+        ngay_xoa: null,
+      })
+
+    if (existsPhone) {
+      return fail(
+        res,
+        409,
+        'Số điện thoại đã được sử dụng bởi tài khoản khác',
       )
     }
 
@@ -188,15 +202,17 @@ export async function register(req, res) {
         email,
         mat_khau: hash,
         ho_ten,
-        so_dien_thoai:
-          so_dien_thoai || null,
+        so_dien_thoai: cleanPhone,
       })
+
+    // Đồng bộ hồ sơ bệnh nhân chính chủ
+    await syncDirectPatientProfile(user._id, user.ho_ten, user.so_dien_thoai)
 
     // Gửi thông báo cho Admin
     await ThongBao.create({
       user_id: ADMIN_ID,
       tieu_de: 'Người dùng mới đăng ký',
-      noi_dung: `Người dùng ${ho_ten} (${email}) vừa tạo tài khoản thành công.`,
+      noi_dung: `Người dùng ${ho_ten} (${email} - SĐT: ${cleanPhone}) vừa tạo tài khoản thành công.`,
       loai: 'system',
       ngay_gui_du_kien: new Date(),
     })
@@ -208,6 +224,7 @@ export async function register(req, res) {
         id: user._id,
         email: user.email,
         ho_ten: user.ho_ten,
+        so_dien_thoai: user.so_dien_thoai,
         role: user.role,
         status: user.status,
         ngay_tao: user.ngay_tao,
@@ -228,21 +245,25 @@ export async function register(req, res) {
 }
 
 /**
- * Đăng nhập (A1)
+ * Đăng nhập (A1) - Hỗ trợ cả Email và Số điện thoại
  */
 export async function login(req, res) {
   try {
     const { email, mat_khau } = req.body
     if (!email || !mat_khau) {
-      return fail(res, 400, 'Vui lòng nhập email và mật khẩu')
+      return fail(res, 400, 'Vui lòng nhập Email / Số điện thoại và mật khẩu')
     }
 
-    const user = await NguoiDung.findOne({ 
-      email: email.toLowerCase().trim(),
-      ngay_xoa: null // Chặn người dùng đã bị xóa mềm
-    }).select('+mat_khau')
+    const inputIdentifier = email.trim()
+    const isPhone = /^0\d{9}$/.test(inputIdentifier) || /^\+?84\d{9}$/.test(inputIdentifier)
+    const cleanPhone = isPhone ? normalizePatientPhone(inputIdentifier) : null
+    const query = isPhone
+      ? { so_dien_thoai: cleanPhone, ngay_xoa: null }
+      : { email: inputIdentifier.toLowerCase(), ngay_xoa: null }
 
-    if (!user) return fail(res, 401, 'Email hoặc mật khẩu không đúng')
+    const user = await NguoiDung.findOne(query).select('+mat_khau')
+
+    if (!user) return fail(res, 401, 'Email / Số điện thoại hoặc mật khẩu không đúng')
     if (user.status === 'locked') return fail(res, 403, 'Tài khoản đã bị khóa')
 
     if (!user.mat_khau) {
@@ -250,7 +271,7 @@ export async function login(req, res) {
     }
 
     const match = await bcrypt.compare(mat_khau, user.mat_khau)
-    if (!match) return fail(res, 401, 'Email hoặc mật khẩu không đúng')
+    if (!match) return fail(res, 401, 'Email / Số điện thoại hoặc mật khẩu không đúng')
 
     const token = jwt.sign(
       { id: user._id, email: user.email, role: user.role },
