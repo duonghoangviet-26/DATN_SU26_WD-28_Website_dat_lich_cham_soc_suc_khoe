@@ -1,6 +1,11 @@
 import axiosInstance from '@/services/axiosInstance'
 import type { ApiResponse } from '@/types'
 
+export interface DoctorFilterOption {
+  id: string
+  ho_ten: string
+}
+
 export interface ReceptionistBookingSlot {
   id: string
   schedule_id: string
@@ -122,5 +127,12 @@ export const receptionistBookingService = {
   async reportDoctorUnavailable(payload: ReportDoctorUnavailablePayload): Promise<ReportDoctorUnavailableResult> {
     const res = await axiosInstance.post<ApiResponse<ReportDoctorUnavailableResult>>('/receptionist/appointments/doctor-unavailable', payload)
     return res.data.data
+  },
+
+  async listDoctorsForFilter(): Promise<DoctorFilterOption[]> {
+    const response = await axiosInstance.get<ApiResponse<Array<{ id: string; ho_ten?: string | null }>>>(
+      '/receptionist/booking/doctors',
+    )
+    return (response.data.data ?? []).map((doctor) => ({ id: doctor.id, ho_ten: doctor.ho_ten || 'Bác sĩ' }))
   },
 }
