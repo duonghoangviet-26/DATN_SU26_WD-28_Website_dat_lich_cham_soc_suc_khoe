@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Star } from 'lucide-react'
@@ -63,6 +63,7 @@ export default function Profile() {
   const [appSearchDoctor, setAppSearchDoctor] = useState('')
   const [appStartDate, setAppStartDate] = useState('')
   const [appEndDate, setAppEndDate] = useState('')
+  const [appPatientFilter, setAppPatientFilter] = useState('all')
   const ITEMS_PER_PAGE = 5
 
   // Medical results states
@@ -72,16 +73,83 @@ export default function Profile() {
   const [resultsTotalPages, setResultsTotalPages] = useState(1)
   const [resultsStartDate, setResultsStartDate] = useState('')
   const [resultsEndDate, setResultsEndDate] = useState('')
+  const [resultsPatientFilter, setResultsPatientFilter] = useState('all')
   const [expandedResultIds, setExpandedResultIds] = useState<Set<string>>(new Set())
+
+  function formatQuanHeLabel(quanHe: string) {
+    switch (quanHe) {
+      case 'con': return 'Con'
+      case 'me': return 'Mẹ'
+      case 'cha': return 'Bố / Cha'
+      case 'vo': return 'Vợ'
+      case 'chong': return 'Chồng'
+      case 'anh_chi_em': return 'Anh / Chị / Em'
+      case 'ban_than': return 'Bản thân'
+      default: return 'Thành viên'
+    }
+  }
+
+  function matchPatientFilter(
+    item: { ho_so_benh_nhan_id?: string | null; member_id?: string | null; ten_khach?: string | null },
+    filterValue: string,
+    selfName: string
+  ) {
+    if (!filterValue || filterValue === 'all') return true
+
+    if (filterValue === 'self') {
+      return !item.member_id && (!item.ten_khach || item.ten_khach.trim().toLowerCase() === selfName.trim().toLowerCase())
+    }
+
+    if (filterValue.startsWith('member:')) {
+      const targetMemberId = filterValue.replace('member:', '')
+      return item.member_id === targetMemberId
+    }
+
+    if (filterValue.startsWith('profile:')) {
+      const targetProfileId = filterValue.replace('profile:', '')
+      return item.ho_so_benh_nhan_id === targetProfileId
+    }
+
+    if (filterValue.startsWith('name:')) {
+      const targetName = filterValue.replace('name:', '').trim().toLowerCase()
+      return (item.ten_khach || '').trim().toLowerCase() === targetName
+    }
+
+    return true
+  }
 
   useEffect(() => {
     setResultsCurrentPage(1)
-  }, [resultsStartDate, resultsEndDate])
+  }, [resultsStartDate, resultsEndDate, resultsPatientFilter])
 
   // Family group states
   const [familyGroup, setFamilyGroup] = useState<FamilyGroup | null>(null)
   const [familyLoading, setFamilyLoading] = useState(false)
   const [newFamilyName, setNewFamilyName] = useState('')
+
+  const otherPatientNames = useMemo(() => {
+    const names = new Set<string>()
+    const selfName = user?.ho_ten?.trim().toLowerCase() || ''
+    const memberNames = new Set(familyGroup?.members?.map((m) => m.ho_ten.trim().toLowerCase()) || [])
+
+    appointments.forEach((app) => {
+      if (app.ten_khach && !app.member_id) {
+        const lower = app.ten_khach.trim().toLowerCase()
+        if (lower !== selfName && !memberNames.has(lower)) {
+          names.add(app.ten_khach.trim())
+        }
+      }
+    })
+    medicalResults.forEach((res) => {
+      if (res.ten_khach && !res.member_id) {
+        const lower = res.ten_khach.trim().toLowerCase()
+        if (lower !== selfName && !memberNames.has(lower)) {
+          names.add(res.ten_khach.trim())
+        }
+      }
+    })
+    return Array.from(names)
+  }, [appointments, medicalResults, user, familyGroup])
 
   // Appointment detail modal states
   const [selectedAppointment, setSelectedAppointment] = useState<PatientRecordDetail | null>(null)
@@ -123,6 +191,9 @@ export default function Profile() {
   const [refundHelpAppId, setRefundHelpAppId] = useState<string | null>(null)
 
   const filteredAppointments = appointments.filter((app) => {
+    if (!matchPatientFilter(app, appPatientFilter, user?.ho_ten || '')) {
+      return false
+    }
     if (appSearchDoctor && app.bac_si?.ho_ten) {
       if (!app.bac_si.ho_ten.toLowerCase().includes(appSearchDoctor.toLowerCase())) {
         return false
@@ -137,12 +208,16 @@ export default function Profile() {
     return true
   })
 
+  const filteredMedicalResults = medicalResults.filter((result) => {
+    return matchPatientFilter(result, resultsPatientFilter, user?.ho_ten || '')
+  })
+
   const totalPages = Math.max(1, Math.ceil(filteredAppointments.length / ITEMS_PER_PAGE))
   const paginatedAppointments = filteredAppointments.slice((appCurrentPage - 1) * ITEMS_PER_PAGE, appCurrentPage * ITEMS_PER_PAGE)
 
   useEffect(() => {
     setAppCurrentPage(1)
-  }, [appSearchDoctor, appStartDate, appEndDate])
+  }, [appSearchDoctor, appStartDate, appEndDate, appPatientFilter])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -692,6 +767,26 @@ export default function Profile() {
 
               {appointments.length > 0 && (
                 <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm flex flex-col md:flex-row gap-3">
+                  <div className="w-full md:w-60">
+                    <select
+                      value={appPatientFilter}
+                      onChange={(e) => setAppPatientFilter(e.target.value)}
+                      className="input w-full text-sm font-medium"
+                    >
+                      <option value="all">👥 Tất cả người khám</option>
+                      <option value="self">👤 Bản thân ({user?.ho_ten || 'Tôi'})</option>
+                      {familyGroup?.members?.map((m) => (
+                        <option key={m.id} value={`member:${m.id}`}>
+                          {m.quan_he === 'con' ? '👶' : m.quan_he === 'me' || m.quan_he === 'cha' ? '👵' : '🧑'} {m.ho_ten} ({formatQuanHeLabel(m.quan_he)})
+                        </option>
+                      ))}
+                      {otherPatientNames.map((name) => (
+                        <option key={name} value={`name:${name}`}>
+                          👤 {name} (Đặt hộ)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="flex-1">
                     <Input
                       label=""
@@ -718,6 +813,20 @@ export default function Profile() {
                         onChange={(e) => setAppEndDate(e.target.value)}
                       />
                     </div>
+                    {(appSearchDoctor || appStartDate || appEndDate || appPatientFilter !== 'all') && (
+                      <button
+                        onClick={() => {
+                          setAppSearchDoctor('')
+                          setAppStartDate('')
+                          setAppEndDate('')
+                          setAppPatientFilter('all')
+                        }}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                        title="Xóa bộ lọc"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -851,9 +960,29 @@ export default function Profile() {
                 <p className="text-xs text-slate-400">Xem lại các chẩn đoán bệnh, hướng dẫn điều trị và đơn thuốc từ bác sĩ.</p>
               </div>
 
-              <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm flex flex-col sm:flex-row gap-3 items-center">
-                <span className="text-sm font-semibold text-slate-600 whitespace-nowrap">Lọc theo ngày khám:</span>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                <div className="w-full md:w-60">
+                  <select
+                    value={resultsPatientFilter}
+                    onChange={(e) => setResultsPatientFilter(e.target.value)}
+                    className="input w-full text-sm font-medium"
+                  >
+                    <option value="all">👥 Tất cả người khám</option>
+                    <option value="self">👤 Bản thân ({user?.ho_ten || 'Tôi'})</option>
+                    {familyGroup?.members?.map((m) => (
+                      <option key={m.id} value={`member:${m.id}`}>
+                        {m.quan_he === 'con' ? '👶' : m.quan_he === 'me' || m.quan_he === 'cha' ? '👵' : '🧑'} {m.ho_ten} ({formatQuanHeLabel(m.quan_he)})
+                      </option>
+                    ))}
+                    {otherPatientNames.map((name) => (
+                      <option key={name} value={`name:${name}`}>
+                        👤 {name} (Đặt hộ)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-sm font-semibold text-slate-600 whitespace-nowrap hidden sm:inline">Từ ngày:</span>
                   <div className="flex-1">
                     <Input
                       label=""
@@ -871,11 +1000,12 @@ export default function Profile() {
                       onChange={(e) => setResultsEndDate(e.target.value)}
                     />
                   </div>
-                  {(resultsStartDate || resultsEndDate) && (
+                  {(resultsStartDate || resultsEndDate || resultsPatientFilter !== 'all') && (
                     <button
                       onClick={() => {
                         setResultsStartDate('')
                         setResultsEndDate('')
+                        setResultsPatientFilter('all')
                       }}
                       className="ml-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                       title="Xóa bộ lọc"
@@ -895,9 +1025,13 @@ export default function Profile() {
                   <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
                     Bạn chưa có kết quả khám nào được ghi nhận.
                   </div>
+                ) : filteredMedicalResults.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
+                    Không tìm thấy kết quả khám phù hợp với người bệnh đã chọn.
+                  </div>
                 ) : (
                   <>
-                    {medicalResults.map((result) => {
+                    {filteredMedicalResults.map((result) => {
                       const isExpanded = expandedResultIds.has(result.id)
                       return (
                         <div
