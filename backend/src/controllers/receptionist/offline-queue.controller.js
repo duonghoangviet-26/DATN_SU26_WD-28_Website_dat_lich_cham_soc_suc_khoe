@@ -40,14 +40,26 @@ export const list = async (req, res) => {
   }
 }
 
+export const listToday = async (req, res) => {
+  try {
+    const data = await layDanhSachHangDoiOffline({
+      specialtyId: req.query.specialty_id ?? null,
+      status: req.query.status ?? null,
+      doctorId: req.query.doctor_id ?? null,
+      search: req.query.search ?? null,
+      nguon: req.query.nguon && req.query.nguon !== 'all' ? req.query.nguon : null,
+    })
+    return ok(res, data)
+  } catch (error) {
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
 export const intake = async (req, res) => {
   try {
     const result = await tiepNhanOfflineVaoHangDoiTrungTam({
       hoSoBenhNhanId: req.body.ho_so_benh_nhan_id,
       specialtyId: req.body.specialty_id,
-      bacSiUuTienId: req.body.bac_si_uu_tien_id ?? null,
-      lyDoUuTien: req.body.ly_do_uu_tien ?? null,
-      mucUuTienTiepNhan: req.body.muc_uu_tien_tiep_nhan ?? 'binh_thuong',
       xacNhanCanhBao: Boolean(req.body.xac_nhan_canh_bao),
       ...actor(req),
     })
@@ -111,6 +123,7 @@ export const cancelCentral = async (req, res) => {
 
 export default {
   list,
+  listToday,
   getCapacity,
   intake,
   dispatchSuggestions,

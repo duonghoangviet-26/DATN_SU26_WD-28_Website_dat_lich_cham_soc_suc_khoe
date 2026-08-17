@@ -4,6 +4,7 @@ import offlineQueueController from '../../controllers/receptionist/offline-queue
 const router = Router()
 
 router.get('/', offlineQueueController.list)
+router.get('/sessions-today', offlineQueueController.listToday)
 router.get('/capacity', offlineQueueController.getCapacity)
 router.post('/intake', offlineQueueController.intake)
 router.get('/dispatch-suggestions', offlineQueueController.dispatchSuggestions)
