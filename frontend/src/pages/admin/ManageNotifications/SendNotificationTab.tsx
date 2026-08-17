@@ -397,7 +397,7 @@ export default function SendNotificationTab() {
       <h2 className="mb-4 text-lg font-bold text-slate-800">Lịch sử đã gửi</h2>
       <div className="card overflow-hidden shadow-sm border border-slate-100">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-slate-50/80 text-left text-slate-500 border-b border-slate-100">
               <tr>
                 <th className="px-5 py-3.5 font-medium whitespace-nowrap">Tiêu đề</th>

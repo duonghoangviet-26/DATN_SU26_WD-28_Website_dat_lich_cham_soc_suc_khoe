@@ -6,6 +6,7 @@ import Skeleton from '@/components/common/Skeleton'
 import Icon from '@/components/admin/icons'
 import { newsService } from '@/services/news.service'
 import type { NewsArticle, NewsStatus } from '@/types'
+import NewsHistoryModal from '@/components/admin/NewsHistoryModal'
 
 const STATUS_LABEL: Record<NewsStatus, string> = {
   published: 'Đã xuất bản',
@@ -33,6 +34,7 @@ export default function ReceptionistNewsList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success] = useState((location.state as LocationState | null)?.success || '')
+  const [historyArticle, setHistoryArticle] = useState<NewsArticle | null>(null)
 
   const query = useMemo(
     () => ({ keyword, status, page: pagination.page, limit: pagination.limit }),
@@ -186,22 +188,30 @@ export default function ReceptionistNewsList() {
                     <td className="px-5 py-4 font-semibold text-slate-700">{item.view_count.toLocaleString('vi-VN')}</td>
                     <td className="px-5 py-4 text-slate-500">{new Date(item.created_at).toLocaleDateString('vi-VN')}</td>
                     <td className="px-5 py-4">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-1">
                         <Link
                           to={`/receptionist/news/${item.id}/edit`}
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-100"
+                          title="Sửa"
+                          className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-brand-50 p-2 text-brand-700 transition-colors hover:bg-brand-100"
                         >
                           <Icon name="edit" className="h-4 w-4" />
-                          Sửa
                         </Link>
                         <Link
                           to={`/tin-tuc/${item.url_slug || item.id}`}
                           target="_blank"
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                          title="Xem trên trang người dùng"
+                          className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
                         >
                           <Icon name="eye" className="h-4 w-4" />
-                          Xem
                         </Link>
+                        <button
+                          type="button"
+                          onClick={() => setHistoryArticle(item)}
+                          title="Lịch sử thao tác"
+                          className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                        >
+                          <Icon name="history" className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -234,6 +244,14 @@ export default function ReceptionistNewsList() {
           </div>
         </div>
       </section>
+
+      {historyArticle && (
+        <NewsHistoryModal
+          article={historyArticle}
+          onClose={() => setHistoryArticle(null)}
+          isAdmin={false}
+        />
+      )}
     </div>
   )
 }

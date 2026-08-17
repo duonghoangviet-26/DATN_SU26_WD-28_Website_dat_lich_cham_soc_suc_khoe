@@ -111,4 +111,13 @@ export const authService = {
   async logout(): Promise<void> {
     await axiosInstance.post<ApiResponse<void>>('/auth/logout')
   },
+
+  async setup2FA(): Promise<{ qrCodeUrl: string; secret: string }> {
+    const res = await axiosInstance.get<ApiResponse<{ qrCodeUrl: string; secret: string }>>('/auth/2fa/setup')
+    return res.data.data
+  },
+
+  async verify2FA(token: string): Promise<void> {
+    await axiosInstance.post<ApiResponse<void>>('/auth/2fa/verify', { token })
+  },
 }

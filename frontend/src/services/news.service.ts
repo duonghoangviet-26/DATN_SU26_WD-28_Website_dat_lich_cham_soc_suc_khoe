@@ -77,6 +77,16 @@ export const newsService = {
     return res.data.data
   },
 
+  async getAdminHistory(id: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/admin/news/${id}/history`)
+    return res.data.data
+  },
+
+  async getReceptionistHistory(id: string): Promise<any[]> {
+    const res = await axiosInstance.get(`/receptionist/news/${id}/history`)
+    return res.data.data
+  },
+
   uploadAdminImage(file: File): Promise<string> {
     return uploadNewsImage('/admin/news/upload', file)
   },

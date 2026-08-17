@@ -292,6 +292,10 @@ export async function update(req, res) {
   try {
     service = await DichVu.findById(req.params.id)
     if (!service) return fail(res, 404, 'Không tìm thấy dịch vụ')
+    
+    // Lưu trạng thái gốc để so sánh chi tiết
+    const originalService = service.toObject()
+    
     if (service.loai === 'home') return fail(res, 410, SERVICE_HOME_DISABLED_MESSAGE)
     const normalizedPackage = normalizePackageFields(req.body)
     if (normalizedPackage.error) return fail(res, 400, normalizedPackage.error)
@@ -379,10 +383,73 @@ export async function update(req, res) {
       service.phan_tram_giam_gia = service.la_goi === false ? null : normalizedPackage.phan_tram_giam_gia
     }
 
+    // -- Xây dựng chi tiết lịch sử thay đổi --
+    const modifiedPaths = service.modifiedPaths()
+    const changedFields = []
+    const fieldLabels = {
+      ten: 'Tên dịch vụ',
+      gia: 'Giá',
+      loai: 'Loại',
+      specialty_id: 'Chuyên khoa',
+      mo_ta_ngan: 'Mô tả ngắn',
+      mo_ta: 'Mô tả chi tiết',
+      hinh_anh: 'Hình ảnh',
+      image_url: 'Đường dẫn ảnh',
+      chuan_bi_truoc: 'Chuẩn bị trước',
+      la_goi: 'Là gói dịch vụ',
+      doi_tuong_ap_dung: 'Đối tượng áp dụng',
+      loai_goi: 'Loại gói',
+      so_nguoi_ap_dung: 'Số người',
+      phan_tram_giam_gia: '% giảm giá',
+    }
+
+    for (const path of modifiedPaths) {
+      if (fieldLabels[path]) {
+        let oldVal = originalService[path]
+        let newVal = service[path]
+        
+        // Convert ObjectIds to string for comparison if needed
+        if (oldVal && oldVal.toString) oldVal = oldVal.toString()
+        if (newVal && newVal.toString) newVal = newVal.toString()
+
+        if (oldVal === newVal) continue
+
+        const displayOld = oldVal == null || oldVal === '' ? 'Trống' : oldVal
+        const displayNew = newVal == null || newVal === '' ? 'Trống' : newVal
+
+        if (path === 'gia') {
+          const oldGia = displayOld !== 'Trống' ? Number(displayOld).toLocaleString('vi-VN') + 'đ' : 'Trống'
+          const newGia = displayNew !== 'Trống' ? Number(displayNew).toLocaleString('vi-VN') + 'đ' : 'Trống'
+          changedFields.push(`${fieldLabels[path]}: ${oldGia} ➔ ${newGia}`)
+        } else if (path === 'la_goi') {
+          changedFields.push(`Loại hình: ${oldVal ? 'Gói' : 'Dịch vụ lẻ'} ➔ ${newVal ? 'Gói' : 'Dịch vụ lẻ'}`)
+        } else if (['mo_ta', 'mo_ta_ngan', 'chuan_bi_truoc'].includes(path)) {
+          changedFields.push(`Đã thay đổi ${fieldLabels[path]}`)
+        } else if (['image_url', 'hinh_anh'].includes(path)) {
+          changedFields.push(`Đã cập nhật ${fieldLabels[path]}`)
+        } else if (path === 'specialty_id') {
+          changedFields.push(`Đã thay đổi ${fieldLabels[path]}`)
+        } else {
+          changedFields.push(`${fieldLabels[path]}: ${displayOld} ➔ ${displayNew}`)
+        }
+      }
+    }
+
+    let defaultChangeNote = `Cập nhật dịch vụ "${service.ten}"`
+    if (changedFields.length > 0) {
+      defaultChangeNote += `\n- Chi tiết: ${changedFields.join(', ')}`
+    } else {
+      defaultChangeNote += ` (Không có thay đổi dữ liệu nào)`
+    }
+
+    const finalChangeNote = req.body.mo_ta_thay_doi?.trim() 
+      ? `${req.body.mo_ta_thay_doi.trim()}\n- Hệ thống ghi nhận: ${changedFields.length > 0 ? changedFields.join(', ') : 'Không thay đổi dữ liệu'}`
+      : defaultChangeNote
+
     await service.save()
     await writeAuditLog(
       req.user.id, req.user.role, 'UPDATE_SERVICE', service._id,
-      req.body.mo_ta_thay_doi?.trim() || `Cập nhật dịch vụ "${service.ten}"`
+      finalChangeNote
     )
 
     const formatted = await populateService(service)

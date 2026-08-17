@@ -140,12 +140,12 @@ export default function DoctorList() {
                   className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md transition-all duration-300"
                 >
                   <div>
-                    <div className="aspect-[4/3] w-full bg-slate-100 relative overflow-hidden">
+                    <div className="aspect-[3/4] w-full bg-slate-100 relative overflow-hidden">
                       {resolveMediaUrl(d.anh_dai_dien) ? (
                         <img
                           src={resolveMediaUrl(d.anh_dai_dien) || undefined}
                           alt={d.ho_ten}
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
                           loading="lazy"
                           decoding="async"
                         />

@@ -331,7 +331,7 @@ export default function ManageServiceSpecialtyDetail() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm whitespace-nowrap">
                 <thead className="bg-slate-50 text-left">
                   <tr>
                     <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -479,7 +479,7 @@ export default function ManageServiceSpecialtyDetail() {
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm whitespace-nowrap">
               <thead className="bg-slate-50 text-left">
                 <tr>
                   <th className="min-w-[380px] px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">

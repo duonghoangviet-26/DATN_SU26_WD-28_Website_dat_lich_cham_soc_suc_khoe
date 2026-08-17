@@ -259,7 +259,7 @@ function SlotEditorModal({
                       {section.label}
                     </h4>
                     <div className="overflow-x-auto rounded-xl border border-slate-100">
-                      <table className="w-full text-sm">
+                      <table className="w-full text-sm whitespace-nowrap">
                         <thead className="bg-slate-50 text-left">
                           <tr>
                             <th className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">Bắt đầu</th>
@@ -591,7 +591,7 @@ function ScheduleAuditModal({
 
                         {changedFields.length > 0 ? (
                           <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
-                            <table className="w-full text-left text-xs">
+                            <table className="w-full text-left text-xs whitespace-nowrap">
                               <thead className="bg-slate-50 text-slate-500">
                                 <tr>
                                   <th className="px-3 py-2 font-semibold">Trường</th>
