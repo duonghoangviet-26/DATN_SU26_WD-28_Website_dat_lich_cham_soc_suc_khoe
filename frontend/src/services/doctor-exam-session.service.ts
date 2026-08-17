@@ -8,6 +8,13 @@ export interface DichVuChiDinh {
   so_luong: number
   don_gia: number
   thanh_tien: number
+  hinh_anh?: DichVuHinhAnh[]
+}
+
+export interface DichVuHinhAnh {
+  url: string
+  mo_ta?: string | null
+  uploaded_at?: string | null
 }
 
 export interface ThuocItem {
@@ -28,6 +35,7 @@ export interface CanhBaoDiUngItem {
 
 // D78/D80 — kết cục ca khám, khớp enum backend/src/services/examStepRules.js (KET_CUC).
 export type KetCuc = 'dieu_tri_thuong' | 'chuyen_chuyen_khoa' | 'chuyen_vien' | 'cap_cuu_ngoai_vien'
+export type MucDoThongBaoLeTan = 'urgent' | 'warning' | 'info'
 
 export interface ChuyenVienThongTin {
   noi_chuyen_den: string
@@ -42,6 +50,23 @@ export interface HoaDonTomTat {
   tong_tien_phat_sinh: number
   tong_thanh_toan: number
   trang_thai_hoa_don: 'chua_thanh_toan' | 'da_dat_coc' | 'da_thanh_toan_du' | 'qua_han'
+  chi_tiet_thu_phi?: {
+    loai: string
+    ten?: string | null
+    so_tien: number
+    so_luong: number
+    thanh_tien: number
+    ghi_chu?: string | null
+  }[]
+  da_xac_nhan_thu_ngan?: boolean
+  tong_da_thu?: number
+  con_thieu?: number
+  thanh_toan?: {
+    so_tien: number
+    loai_thanh_toan: string
+    phuong_thuc: string
+    thoi_diem: string | null
+  }[]
 }
 
 export interface PhienKham {
@@ -62,6 +87,7 @@ export interface PhienKham {
     trang_thai: string
     phong_kham: string | null
     appointment_id: string | null
+    ly_do_kham: string | null
   }
   ho_so: {
     id: string
@@ -122,7 +148,7 @@ export interface DinhChinhHoSoPayload {
   ngay_tai_kham?: string | null
   ket_cuc?: KetCuc
   chuyen_vien_thong_tin?: Partial<ChuyenVienThongTin> | null
-  dich_vu_phat_sinh?: { service_id: string; so_luong: number }[]
+  dich_vu_phat_sinh?: { service_id: string; so_luong: number; hinh_anh?: DichVuHinhAnh[] }[]
 }
 
 export interface KetQuaHoanTat {
@@ -148,9 +174,21 @@ export const doctorExamSessionService = {
     const { data } = await axiosInstance.patch(`/doctor/exam-session/${queueId}/step/${buoc}`, payload)
     return data.data as PhienKham
   },
+  async uploadExamImage(file: File) {
+    const formData = new FormData()
+    formData.append('image', file)
+    const { data } = await axiosInstance.post('/doctor/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return data.data.url as string
+  },
   async complete(queueId: string) {
     const { data } = await axiosInstance.post(`/doctor/exam-session/${queueId}/complete`)
     return data.data as KetQuaHoanTat
+  },
+  async notifyReception(queueId: string, payload: { noi_dung: string; muc_do: MucDoThongBaoLeTan }) {
+    const { data } = await axiosInstance.post(`/doctor/exam-session/${queueId}/notify-reception`, payload)
+    return data.data as { sent: number }
   },
   // B54/B55 — đính chính hồ sơ ĐÃ XÁC NHẬN. `ly_do` bắt buộc (backend chặn 400 nếu rỗng).
   async amend(queueId: string, thayDoi: DinhChinhHoSoPayload, lyDo: string) {

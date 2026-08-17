@@ -12,7 +12,7 @@ import StepDichVu from '@/components/doctor/exam/StepDichVu'
 import StepKeDon from '@/components/doctor/exam/StepKeDon'
 import StepXacNhan from '@/components/doctor/exam/StepXacNhan'
 import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
-import type { BuocKham, CanhBaoDiUngItem, PhienKham } from '@/services/doctor-exam-session.service'
+import type { BuocKham, CanhBaoDiUngItem, MucDoThongBaoLeTan, PhienKham } from '@/services/doctor-exam-session.service'
 
 // Thứ tự 5 bước — PHẢI khớp CAC_BUOC ở backend (examStepRules.js). Không import được
 // file backend vào bundle FE nên khai lại làm hằng số riêng ở đây.
@@ -82,6 +82,12 @@ export default function ExamSessionPage() {
   const [canhBaoDiUng, setCanhBaoDiUng] = useState<CanhBaoDiUngItem[] | null>(null)
   const [payloadChoXacNhan, setPayloadChoXacNhan] = useState<Record<string, unknown> | null>(null)
   const [lyDoBatChap, setLyDoBatChap] = useState('')
+  const [showNotifyReception, setShowNotifyReception] = useState(false)
+  const [notifyPriority, setNotifyPriority] = useState<MucDoThongBaoLeTan>('warning')
+  const [notifyContent, setNotifyContent] = useState('')
+  const [notifySaving, setNotifySaving] = useState(false)
+  const [notifyError, setNotifyError] = useState<string | null>(null)
+  const [notifySuccess, setNotifySuccess] = useState<string | null>(null)
 
   function load() {
     if (!queueId) return
@@ -141,6 +147,29 @@ export default function ExamSessionPage() {
     setLyDoBatChap('')
   }
 
+  async function sendReceptionNotice() {
+    if (!queueId || !notifyContent.trim()) return
+    setNotifySaving(true)
+    setNotifyError(null)
+    setNotifySuccess(null)
+    try {
+      await doctorExamSessionService.notifyReception(queueId, {
+        muc_do: notifyPriority,
+        noi_dung: notifyContent.trim(),
+      })
+      setNotifyContent('')
+      setNotifySuccess('Đã gửi thông báo cho lễ tân')
+      window.setTimeout(() => {
+        setShowNotifyReception(false)
+        setNotifySuccess(null)
+      }, 800)
+    } catch (e) {
+      setNotifyError(extractApiMessage(e, 'Không gửi được thông báo cho lễ tân'))
+    } finally {
+      setNotifySaving(false)
+    }
+  }
+
   if (loading) {
     return <div className="flex h-64 items-center justify-center text-slate-400">Đang tải...</div>
   }
@@ -174,6 +203,10 @@ export default function ExamSessionPage() {
         title={`Khám bệnh — ${phien.queue.ten_benh_nhan}`}
         description={phien.queue.ma_so_thu_tu ? `Số thứ tự ${phien.queue.ma_so_thu_tu}` : undefined}
       >
+        <Button variant="secondary" size="sm" onClick={() => setShowNotifyReception(true)}
+          icon={<Icon name="bell" className="h-3.5 w-3.5" />}>
+          Báo lễ tân
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => navigate('/doctor/pending-records')}
           icon={<Icon name="chevron-right" className="h-3.5 w-3.5 rotate-180" />}>
           Quay lại hàng đợi
@@ -278,6 +311,50 @@ export default function ExamSessionPage() {
           <StepXacNhan phien={phien} saving={saving} onNext={handleNext} onEditStep={setBuocDangXem} />
         )}
       </div>
+
+      {/* Báo lễ tân — nội dung tự do, không giới hạn mẫu cố định (VD: khám nhanh/chậm hơn dự
+          kiến, bác sĩ bận về sớm, sẵn sàng nhận bệnh nhân tiếp theo...). */}
+      <Modal isOpen={showNotifyReception} onClose={() => setShowNotifyReception(false)} title="Báo lễ tân" size="sm">
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-500">Mức độ ưu tiên</label>
+            <select
+              value={notifyPriority}
+              onChange={(event) => setNotifyPriority(event.target.value as MucDoThongBaoLeTan)}
+              className="input w-full"
+            >
+              <option value="urgent">Khẩn — cần lễ tân xử lý ngay</option>
+              <option value="warning">Cần chú ý / điều phối</option>
+              <option value="info">Thông tin, không gấp</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-500">Nội dung gửi lễ tân</label>
+            <textarea
+              value={notifyContent}
+              onChange={(event) => setNotifyContent(event.target.value)}
+              rows={5}
+              placeholder="VD: Khám nhanh hơn dự kiến, có thể gọi bệnh nhân tiếp theo sớm. Hoặc: Ca này trễ khoảng 15-20 phút, nhờ báo trước cho người đang chờ. Hoặc: Tôi có việc bận, 17:00 sẽ về sớm — nhờ chuyển các ca sau cho bác sĩ khác."
+              className="input w-full"
+            />
+          </div>
+          {notifyError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{notifyError}</p>}
+          {notifySuccess && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{notifySuccess}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowNotifyReception(false)} className="btn-secondary">
+              Hủy
+            </button>
+            <button
+              type="button"
+              disabled={notifySaving || !notifyContent.trim()}
+              onClick={sendReceptionNotice}
+              className="btn-primary disabled:opacity-40"
+            >
+              {notifySaving ? 'Đang gửi...' : 'Gửi lễ tân'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* B47 — cảnh báo dị ứng khả nghi: chặn lưu cho tới khi bác sĩ xác nhận bất chấp kèm lý do. */}
       <Modal isOpen={canhBaoDiUng !== null} onClose={handleHuyCanhBaoDiUng} title="Cảnh báo dị ứng thuốc" size="sm">

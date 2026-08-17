@@ -88,6 +88,11 @@ interface PatientSearchResult {
   checked_at: string
 }
 
+export interface PatientBookingHistoryResult {
+  appointments: TodayAppointment[]
+  total: number
+}
+
 export interface CreatePatientProfilePayload {
   ho_ten: string
   so_dien_thoai: string
@@ -360,6 +365,13 @@ export const receptionistPatientIntakeService = {
     return response.data.data
   },
 
+  async getBookingHistory(profileId: string): Promise<PatientBookingHistoryResult> {
+    const response = await axiosInstance.get<ApiResponse<PatientBookingHistoryResult>>(
+      `/receptionist/patient-intake/profiles/${profileId}/booking-history`,
+    )
+    return response.data.data as PatientBookingHistoryResult
+  },
+
   async getAvailability(): Promise<OfflineAvailability> {
     const response = await axiosInstance.get<ApiResponse<OfflineAvailability>>('/receptionist/patient-intake/availability')
     return response.data.data as OfflineAvailability
@@ -376,9 +388,6 @@ export const receptionistPatientIntakeService = {
     ho_so_benh_nhan_id: string
     specialty_id: string
     xac_nhan_canh_bao?: boolean
-    // Cấp cứu — chỉ đẩy lên đầu hàng đợi khám ngay, không bắt buộc lý do, không có màn báo cáo riêng.
-    muc_uu_tien_tiep_nhan?: 'binh_thuong' | 'uu_tien' | 'cap_cuu'
-    ly_do_uu_tien?: string
   }) {
     const response = await axiosInstance.post<ApiResponse<{
       entry: {

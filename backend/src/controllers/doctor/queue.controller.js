@@ -377,7 +377,7 @@ export async function finish(req, res) {
         entry.thoi_diem_ket_thuc = new Date()
         await entry.save({ session })
 
-        room.trang_thai = 'dang_don_phong'
+        room.trang_thai = 'san_sang'
         room.benh_nhan_hien_tai_id = null
         room.thoi_diem_doi = new Date()
         if (entry.thoi_diem_vao_phong) {
@@ -400,7 +400,7 @@ export async function finish(req, res) {
     await NhatKyThaoTac.create({
       nguoi_thuc_hien_id: req.user.id, vai_tro: 'doctor', hanh_dong: 'CHANGE_DOCTOR_STATUS',
       loai_doi_tuong: 'room_status', doi_tuong_id: entry.doctor_id,
-      du_lieu_cu: { trang_thai: tuRoom }, du_lieu_moi: { trang_thai: 'dang_don_phong' },
+      du_lieu_cu: { trang_thai: tuRoom }, du_lieu_moi: { trang_thai: 'san_sang' },
     })
 
     return ok(res, { id: entry._id, trang_thai: entry.trang_thai }, 'Đã kết thúc khám, chờ nhập hồ sơ')

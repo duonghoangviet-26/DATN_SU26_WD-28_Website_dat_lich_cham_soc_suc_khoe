@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   checkInPatientProfile,
   createPatientProfile,
+  getProfileBookingHistory,
   getCentralOfflineCapacity,
   getOfflineAvailability,
   intakeCentralOfflineQueue,
@@ -19,6 +20,7 @@ router.get('/search-temp', searchPatientProfileByTempCode)
 router.get('/availability', getOfflineAvailability)
 router.get('/offline-queue/capacity', getCentralOfflineCapacity)
 router.post('/profiles', createPatientProfile)
+router.get('/profiles/:id/booking-history', getProfileBookingHistory)
 router.patch('/profiles/:id', updatePatientProfileAdministrative)
 // Mô hình walk-in CŨ (claim slot ngay) — UI hiện KHÔNG gọi route này nữa, chỉ còn
 // `test:e2e:offline`/`test:e2e:checkin-billing` phụ thuộc. Xem chú thích ở
