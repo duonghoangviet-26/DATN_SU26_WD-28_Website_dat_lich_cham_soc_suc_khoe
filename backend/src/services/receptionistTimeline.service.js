@@ -196,6 +196,9 @@ export function tuLichSuLichHen(entry) {
     String(entry.bac_si_cu_id ?? '') !== String(entry.bac_si_moi_id ?? '') && (entry.bac_si_cu_id || entry.bac_si_moi_id)
       ? { truong: 'doctor_id', cu: entry.bac_si_cu_id, moi: entry.bac_si_moi_id }
       : null,
+    entry.tu_payment_status !== entry.den_payment_status && (entry.tu_payment_status || entry.den_payment_status)
+      ? { truong: 'payment_status', cu: entry.tu_payment_status, moi: entry.den_payment_status }
+      : null,
   ].filter(Boolean)
   return {
     nguon: 'lich_su_lich_hen',
