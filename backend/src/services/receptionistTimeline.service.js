@@ -120,9 +120,52 @@ export function diffThayDoi(cu, moi) {
   }))
 }
 
+const TRANG_THAI_LICH_HEN_CHUYEN_NHAN = {
+  'pending->confirmed': 'Thanh toán thành công, lịch hẹn đã được xác nhận',
+  'pending->checked_in': 'Bệnh nhân đã đến quầy và được check-in',
+  'confirmed->checked_in': 'Bệnh nhân đã đến quầy và được check-in',
+  'checked_in->in_progress': 'Bệnh nhân bắt đầu được khám',
+  'in_progress->completed': 'Đã hoàn thành khám',
+  'confirmed->completed': 'Đã hoàn thành khám',
+  'confirmed->no_show': 'Lịch hẹn được đánh dấu không đến (quá giờ không tới)',
+  'pending->no_show': 'Lịch hẹn được đánh dấu không đến (quá giờ không tới)',
+}
+
+const PAYMENT_STATUS_CHUYEN_NHAN = {
+  'unpaid->paid': 'Thanh toán thành công',
+  'unpaid->partial': 'Đã thu một phần tiền khám',
+  'partial->paid': 'Đã thu đủ số tiền còn lại',
+  'paid->refunded': 'Đã hoàn tiền',
+  'partial->refunded': 'Đã hoàn tiền',
+}
+
+// Sinh nhan nghiep vu cu the tu danh sach thay_doi (uu tien hon nhan mac dinh theo ma hanh_dong),
+// vi mot ma hanh_dong (vd LT_CHECK_IN) co the ung voi nhieu chuyen doi trang_thai khac nhau va
+// nguoi doc can biet CHINH XAC chuyen gi xay ra, khong chi "co thao tac check-in".
+function nhanTheoNghiepVu(thayDoi, nhanMacDinh) {
+  for (const item of thayDoi) {
+    if (item.truong !== 'trang_thai' && item.truong !== 'status') continue
+    if (item.moi === 'cancelled') return 'Lịch hẹn đã được hủy'
+    const nhan = TRANG_THAI_LICH_HEN_CHUYEN_NHAN[`${item.cu}->${item.moi}`]
+    if (nhan) return nhan
+  }
+  for (const item of thayDoi) {
+    if (item.truong !== 'payment_status') continue
+    const nhan = PAYMENT_STATUS_CHUYEN_NHAN[`${item.cu}->${item.moi}`]
+    if (nhan) return nhan
+  }
+  const doiBacSi = thayDoi.some((item) => item.truong === 'doctor_id')
+  const doiGio = thayDoi.some((item) => item.truong === 'gio_kham' || item.truong === 'ngay_kham')
+  if (doiGio && doiBacSi) return 'Đổi bác sĩ và thời gian khám'
+  if (doiGio) return 'Đổi thời gian khám'
+  if (doiBacSi) return 'Đổi bác sĩ phụ trách'
+  return nhanMacDinh
+}
+
 export function tuNhatKy(log) {
   const cu = locTruongNhayCam(log.du_lieu_cu)
   const moi = locTruongNhayCam(log.du_lieu_moi)
+  const thayDoi = diffThayDoi(cu, moi)
   return {
     nguon: 'nhat_ky',
     thoi_diem: log.ngay_tao,
@@ -131,13 +174,29 @@ export function tuNhatKy(log) {
       vai_tro: VAI_TRO_NHAN[log.vai_tro] ?? log.vai_tro,
     },
     hanh_dong: log.hanh_dong,
-    nhan: HANH_DONG_NHAN[log.hanh_dong] ?? log.hanh_dong,
+    nhan: nhanTheoNghiepVu(thayDoi, HANH_DONG_NHAN[log.hanh_dong] ?? log.hanh_dong),
     ly_do: log.ly_do ?? null,
-    thay_doi: diffThayDoi(cu, moi),
+    thay_doi: thayDoi,
   }
 }
 
 export function tuLichSuLichHen(entry) {
+  const ngayCuMs = entry.ngay_kham_cu ? new Date(entry.ngay_kham_cu).getTime() : null
+  const ngayMoiMs = entry.ngay_kham_moi ? new Date(entry.ngay_kham_moi).getTime() : null
+  const thayDoi = [
+    entry.tu_trang_thai !== entry.den_trang_thai
+      ? { truong: 'trang_thai', cu: entry.tu_trang_thai, moi: entry.den_trang_thai }
+      : null,
+    entry.gio_kham_cu !== entry.gio_kham_moi && (entry.gio_kham_cu || entry.gio_kham_moi)
+      ? { truong: 'gio_kham', cu: entry.gio_kham_cu, moi: entry.gio_kham_moi }
+      : null,
+    ngayCuMs !== null && ngayMoiMs !== null && ngayCuMs !== ngayMoiMs
+      ? { truong: 'ngay_kham', cu: entry.ngay_kham_cu, moi: entry.ngay_kham_moi }
+      : null,
+    String(entry.bac_si_cu_id ?? '') !== String(entry.bac_si_moi_id ?? '') && (entry.bac_si_cu_id || entry.bac_si_moi_id)
+      ? { truong: 'doctor_id', cu: entry.bac_si_cu_id, moi: entry.bac_si_moi_id }
+      : null,
+  ].filter(Boolean)
   return {
     nguon: 'lich_su_lich_hen',
     thoi_diem: entry.thoi_diem,
@@ -146,19 +205,9 @@ export function tuLichSuLichHen(entry) {
       vai_tro: VAI_TRO_NHAN[entry.vai_tro] ?? entry.vai_tro ?? entry.kenh_thay_doi,
     },
     hanh_dong: entry.loai_thay_doi ?? 'UPDATE_APPOINTMENT',
-    nhan: entry.den_trang_thai ? `Chuyển trạng thái sang "${entry.den_trang_thai}"` : 'Cập nhật lịch hẹn',
+    nhan: nhanTheoNghiepVu(thayDoi, 'Cập nhật lịch hẹn'),
     ly_do: entry.ly_do_thay_doi ?? entry.ly_do ?? null,
-    thay_doi: [
-      entry.tu_trang_thai !== entry.den_trang_thai
-        ? { truong: 'trang_thai', cu: entry.tu_trang_thai, moi: entry.den_trang_thai }
-        : null,
-      entry.gio_kham_cu !== entry.gio_kham_moi && (entry.gio_kham_cu || entry.gio_kham_moi)
-        ? { truong: 'gio_kham', cu: entry.gio_kham_cu, moi: entry.gio_kham_moi }
-        : null,
-      String(entry.bac_si_cu_id ?? '') !== String(entry.bac_si_moi_id ?? '') && (entry.bac_si_cu_id || entry.bac_si_moi_id)
-        ? { truong: 'doctor_id', cu: entry.bac_si_cu_id, moi: entry.bac_si_moi_id }
-        : null,
-    ].filter(Boolean),
+    thay_doi: thayDoi,
   }
 }
 
