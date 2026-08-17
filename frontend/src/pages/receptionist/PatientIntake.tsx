@@ -9,13 +9,14 @@ import {
 } from '@/services/receptionist-patient-intake.service'
 import { SpecialtyOption, specialtyService } from '@/services/specialty.service'
 import { receptionistBookingService, DoctorFilterOption } from '@/services/receptionist-booking.service'
-import { appointmentStatusLabel, appointmentStatusTone, paymentLabel } from '@/utils/receptionistLabels'
+import { receptionistOfflineQueueService, OfflineQueueRow } from '@/services/receptionist-offline-queue.service'
+import { appointmentStatusLabel, appointmentStatusTone, paymentLabel, examSessionStatusLabel, examSessionStatusTone, examSessionSourceLabel } from '@/utils/receptionistLabels'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
 import TempProfileModal from '@/components/receptionist/TempProfileModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
 import CheckInVerifyModal from '@/components/receptionist/CheckInVerifyModal'
-import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI'
+import { PageShell, ReceptionistHeader, StatusBadge } from '@/components/receptionist/ReceptionistUI'
 import axiosInstance from '@/services/axiosInstance'
 import {
   getLatestAllowedBirthDateInput,
@@ -414,6 +415,187 @@ function AppointmentsTab({
           onClose={() => setTimelineApptId(null)}
         />
       )}
+    </section>
+  )
+}
+
+type SessionStatusFilter = 'all' | 'cho_dieu_phoi' | 'dang_cho' | 'da_goi' | 'trong_phong' | 'hoan_thanh' | 'cancelled'
+type SessionSourceFilter = 'all' | 'online' | 'offline'
+
+const SESSION_STATUS_OPTIONS: Array<{ value: SessionStatusFilter; label: string }> = [
+  { value: 'all', label: 'Tất cả trạng thái' },
+  { value: 'cho_dieu_phoi', label: 'Chờ điều phối' },
+  { value: 'dang_cho', label: 'Đang chờ gọi' },
+  { value: 'da_goi', label: 'Đã gọi' },
+  { value: 'trong_phong', label: 'Đang khám' },
+  { value: 'hoan_thanh', label: 'Đã khám xong' },
+  { value: 'cancelled', label: 'Đã hủy / bỏ qua' },
+]
+
+function TodaySessionsTab() {
+  const [rows, setRows] = useState<OfflineQueueRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<SessionStatusFilter>('all')
+  const [source, setSource] = useState<SessionSourceFilter>('all')
+  const [doctorId, setDoctorId] = useState('')
+  const [specialtyId, setSpecialtyId] = useState('')
+  const [doctors, setDoctors] = useState<DoctorFilterOption[]>([])
+  const [specialties, setSpecialties] = useState<SpecialtyOption[]>([])
+
+  useEffect(() => {
+    void specialtyService.getAllActive().then((items) => setSpecialties(items)).catch(() => setSpecialties([]))
+    void receptionistBookingService.listDoctorsForFilter().then(setDoctors).catch(() => setDoctors([]))
+  }, [])
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const statusParam = status === 'cancelled' ? 'cancelled,skipped' : status === 'all' ? undefined : status
+      const rows = await receptionistOfflineQueueService.listToday({
+        status: statusParam,
+        nguon: source === 'all' ? undefined : source,
+        doctor_id: doctorId || undefined,
+        specialty_id: specialtyId || undefined,
+        search: query.trim() || undefined,
+      })
+      setRows(rows)
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.message || 'Không thể tải danh sách ca khám hôm nay')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, source, doctorId, specialtyId])
+
+  const summary = useMemo(() => ({
+    total: rows.length,
+    waiting: rows.filter((row) => ['cho_dieu_phoi', 'dang_cho', 'da_goi'].includes(row.trang_thai)).length,
+    inRoom: rows.filter((row) => row.trang_thai === 'trong_phong').length,
+    done: rows.filter((row) => row.trang_thai === 'hoan_thanh').length,
+  }), [rows])
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-slate-950">Ca khám hôm nay</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+            Toàn bộ ca khám trong ngày, gồm cả lượt đặt online lẫn khách đến trực tiếp tại quầy.
+          </p>
+        </div>
+        <button type="button" onClick={load} disabled={loading} className="min-h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+          {loading ? 'Đang tải...' : 'Làm mới'}
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold text-slate-500">Tổng ca hôm nay</p>
+          <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}</p>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold text-amber-700">Đang chờ</p>
+          <p className="mt-1 text-xl font-bold text-amber-950">{summary.waiting}</p>
+        </div>
+        <div className="rounded-xl border border-brand-200 bg-brand-50 p-3">
+          <p className="text-xs font-semibold text-brand-700">Đang khám</p>
+          <p className="mt-1 text-xl font-bold text-brand-950">{summary.inRoom}</p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-xs font-semibold text-emerald-700">Đã khám xong</p>
+          <p className="mt-1 text-xl font-bold text-emerald-950">{summary.done}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 lg:grid-cols-5">
+        <label className="text-xs font-bold text-slate-600">
+          Trạng thái
+          <select value={status} onChange={(event) => setStatus(event.target.value as SessionStatusFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            {SESSION_STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Nguồn
+          <select value={source} onChange={(event) => setSource(event.target.value as SessionSourceFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="all">Tất cả nguồn</option>
+            <option value="online">Online</option>
+            <option value="offline">Tại quầy</option>
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Bác sĩ
+          <select value={doctorId} onChange={(event) => setDoctorId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="">Tất cả bác sĩ</option>
+            {doctors.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.ho_ten}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Chuyên khoa
+          <select value={specialtyId} onChange={(event) => setSpecialtyId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="">Tất cả chuyên khoa</option>
+            {specialties.map((specialty) => <option key={specialty.id} value={specialty.id}>{specialty.ten}</option>)}
+          </select>
+        </label>
+        <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); void load() }}>
+          <label className="flex-1 text-xs font-bold text-slate-600">
+            Tìm kiếm
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Tên, SĐT, mã lượt khám"
+              className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <button type="submit" className="min-h-10 rounded-lg bg-brand-700 px-3 text-sm font-bold text-white hover:bg-brand-800">Tìm</button>
+        </form>
+      </div>
+
+      {error && <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-900">{error}</p>}
+
+      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Số / bệnh nhân</th>
+                <th className="px-4 py-3">Nguồn</th>
+                <th className="px-4 py-3">Chuyên khoa</th>
+                <th className="px-4 py-3">Bác sĩ / phòng</th>
+                <th className="px-4 py-3">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Đang tải ca khám...</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Không có ca khám phù hợp.</td></tr>
+              ) : rows.map((row) => (
+                <tr key={row.id} className="align-top hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    <p className="font-bold text-slate-950">{row.ma_so_thu_tu || '-'}</p>
+                    <p className="mt-1 font-semibold text-slate-900">{row.ten_benh_nhan}</p>
+                    <p className="mt-1 text-xs text-slate-500">{row.so_dien_thoai || 'Chưa có SĐT'}</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">{examSessionSourceLabel(row.nguon || 'offline')}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.specialty?.ten || '-'}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-slate-900">{row.doctor?.ho_ten || 'Chưa gán'}</p>
+                    <p className="mt-1 text-xs text-slate-500">{row.phong_kham || row.doctor?.phong_kham_mac_dinh || '-'}</p>
+                  </td>
+                  <td className="px-4 py-3"><StatusBadge tone={examSessionStatusTone(row.trang_thai)}>{examSessionStatusLabel(row.trang_thai)}</StatusBadge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   )
 }
