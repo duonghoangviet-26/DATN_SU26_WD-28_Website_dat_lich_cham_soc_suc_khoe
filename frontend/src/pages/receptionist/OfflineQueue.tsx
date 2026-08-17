@@ -1,32 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyBlock, LoadingBlock, MetricCard, PageShell, Panel, ReceptionistHeader, StatusBadge, TableFrame } from '@/components/receptionist/ReceptionistUI'
-import { DispatchSuggestion, OfflineQueueRow, receptionistOfflineQueueService } from '@/services/receptionist-offline-queue.service'
+import { DispatchCandidate, DispatchSuggestion, OfflineQueueRow, receptionistOfflineQueueService } from '@/services/receptionist-offline-queue.service'
+import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
+import { examSessionStatusLabel as statusLabel, examSessionStatusTone as statusTone, dispatchBlockReasonLabel } from '@/utils/receptionistLabels'
 
 function formatTime(value?: string | null) {
   if (!value) return '-'
   return new Date(value).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' })
-}
-
-function statusLabel(status: OfflineQueueRow['trang_thai']) {
-  return ({
-    cho_dieu_phoi: 'Chờ điều phối',
-    dang_cho: 'Đã gán bác sĩ',
-    da_goi: 'Đã gọi',
-    trong_phong: 'Trong phòng',
-    cho_dich_vu: 'Chờ dịch vụ',
-    skipped: 'Bỏ lượt',
-    cancelled: 'Đã hủy',
-    hoan_thanh: 'Hoàn thành',
-  } as Record<string, string>)[status] ?? status
-}
-
-function statusTone(status: OfflineQueueRow['trang_thai']) {
-  if (status === 'cho_dieu_phoi') return 'warning'
-  if (status === 'dang_cho' || status === 'da_goi') return 'info'
-  if (status === 'trong_phong') return 'brand'
-  if (status === 'hoan_thanh') return 'success'
-  if (status === 'cancelled' || status === 'skipped') return 'danger'
-  return 'neutral'
 }
 
 export default function OfflineQueue() {
@@ -36,6 +16,12 @@ export default function OfflineQueue() {
   const [actionId, setActionId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [printData, setPrintData] = useState<QueueTicketData | null>(null)
+
+  useEffect(() => {
+    if (printData) window.print()
+  }, [printData])
 
   const load = async () => {
     setLoading(true)
@@ -76,6 +62,16 @@ export default function OfflineQueue() {
     try {
       await receptionistOfflineQueueService.assign(row.id, best.doctor_id, 'Điều phối theo gợi ý hệ thống')
       setMessage(`Đã điều phối ${row.ten_benh_nhan} cho ${best.bac_si || 'bác sĩ phù hợp'}.`)
+      setPrintData({
+        ticketType: 'kham',
+        patientName: row.ten_benh_nhan,
+        queueNumber: row.ma_so_thu_tu || '-',
+        doctorName: best.bac_si || 'Chưa gán',
+        roomNumber: best.phong_kham || 'Chưa gán',
+        appointmentTime: best.gio_bat_dau ? `${best.gio_bat_dau}${best.gio_ket_thuc ? ` - ${best.gio_ket_thuc}` : ''}` : formatTime(new Date().toISOString()),
+        specialtyName: row.specialty?.ten,
+      })
+      setConfirmingId(null)
       await load()
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Không thể điều phối lượt này')
@@ -172,6 +168,7 @@ export default function OfflineQueue() {
                   const suggestion = suggestionByQueueId.get(row.id)
                   const best = suggestion?.de_xuat_tot_nhat
                   return (
+                    <>
                     <tr key={row.id} className="align-top hover:bg-slate-50">
                       <td className="px-4 py-3">
                         <p className="font-bold text-slate-950">{row.ma_so_thu_tu || '-'}</p>
@@ -204,11 +201,11 @@ export default function OfflineQueue() {
                             <>
                               <button
                                 type="button"
-                                onClick={() => assignBest(row)}
+                                onClick={() => setConfirmingId(confirmingId === row.id ? null : row.id)}
                                 disabled={actionId === row.id || !best}
                                 className="min-h-9 rounded-lg bg-brand-700 px-3 text-xs font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                Gán bác sĩ
+                                Gán theo gợi ý
                               </button>
                               <button
                                 type="button"
@@ -236,6 +233,41 @@ export default function OfflineQueue() {
                         </div>
                       </td>
                     </tr>
+                      {confirmingId === row.id && suggestion && (
+                        <tr>
+                          <td colSpan={6} className="bg-slate-50 px-4 py-4">
+                            <p className="text-sm font-bold text-slate-800">Căn cứ gợi ý điều phối cho {row.ten_benh_nhan}</p>
+                            <div className="mt-3 grid gap-2">
+                              {suggestion.ung_vien.map((candidate: DispatchCandidate) => (
+                                <div key={candidate.doctor_id} className={`rounded-lg border p-3 text-xs ${candidate.hop_le ? 'border-emerald-200 bg-white' : 'border-slate-200 bg-slate-100 opacity-80'}`}>
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="font-bold text-slate-900">{candidate.bac_si || 'Bác sĩ'}</span>
+                                    <span className="text-slate-500">Phòng {candidate.phong_kham || '-'} · {candidate.gio_bat_dau || '-'}-{candidate.gio_ket_thuc || '-'} · Đang xử lý {candidate.so_luot_dang_xu_ly} lượt</span>
+                                  </div>
+                                  {candidate.hop_le ? (
+                                    <p className="mt-1 font-semibold text-emerald-700">Phù hợp — còn khung an toàn, phòng sẵn sàng</p>
+                                  ) : (
+                                    <p className="mt-1 font-semibold text-rose-700">
+                                      Bị chặn: {candidate.ly_do_chan.map(dispatchBlockReasonLabel).join('; ')}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                            {best && (
+                              <button
+                                type="button"
+                                onClick={() => assignBest(row)}
+                                disabled={actionId === row.id}
+                                className="mt-3 min-h-9 rounded-lg bg-emerald-600 px-4 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {actionId === row.id ? 'Đang gán...' : `Xác nhận gán ${best.bac_si || 'bác sĩ này'}`}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   )
                 })}
               </tbody>
@@ -243,6 +275,19 @@ export default function OfflineQueue() {
           </TableFrame>
         )}
       </Panel>
+
+      <QueueTicketTemplate data={printData} />
+      {printData && (
+        <div className="print:hidden fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-lg">
+          <span className="text-xs text-slate-600">Phiếu số {printData.queueNumber}</span>
+          <button type="button" onClick={() => window.print()} className="rounded-full bg-brand-600 px-3 py-1 text-xs font-bold text-white hover:bg-brand-700">
+            In lại phiếu
+          </button>
+          <button type="button" onClick={() => setPrintData(null)} className="text-slate-400 hover:text-slate-600" aria-label="Đóng thông báo in phiếu">
+            x
+          </button>
+        </div>
+      )}
     </PageShell>
   )
 }
