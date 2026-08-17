@@ -18,6 +18,7 @@ export interface PatientRecordListItem {
   so_dien_thoai_khach?: string | null
   nam_sinh_khach?: number | string | null
   member_id?: string | null
+  ho_so_benh_nhan_id?: string | null
   bac_si: {
     ho_ten: string
     anh_dai_dien?: string | null
@@ -68,6 +69,7 @@ export interface MedicalResultItem {
   dia_chi_kham?: string | null
   ten_khach?: string | null
   member_id?: string | null
+  ho_so_benh_nhan_id?: string | null
   bac_si: {
     ho_ten: string
     anh_dai_dien?: string | null
