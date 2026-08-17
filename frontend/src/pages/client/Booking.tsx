@@ -107,9 +107,16 @@ export default function Booking() {
   const [khungGioDaChon, setKhungGioDaChon] = useState<string>(draft?.khungGioDaChon || '')
 
   // Booking target states
-  const [bookingFor, setBookingFor] = useState<'self' | 'member' | 'other'>(draft?.bookingFor || 'self')
+  const [bookingFor, setBookingFor] = useState<'self' | 'member' | 'other'>(() => {
+    const qBookingFor = searchParams.get('booking_for')
+    if (qBookingFor === 'member') return 'member'
+    if (searchParams.get('member_id')) return 'member'
+    return draft?.bookingFor || 'self'
+  })
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
-  const [selectedMemberId, setSelectedMemberId] = useState<string>(draft?.selectedMemberId || '')
+  const [selectedMemberId, setSelectedMemberId] = useState<string>(() => {
+    return searchParams.get('member_id') || draft?.selectedMemberId || ''
+  })
 
   const [patientName, setPatientName] = useState(draft?.patientName || user?.ho_ten || '')
   const [patientPhone, setPatientPhone] = useState(draft?.patientPhone || user?.so_dien_thoai || '')
@@ -192,6 +199,25 @@ export default function Booking() {
           if (!ignore && group) {
             const actualMembers = (group.members || []).filter((m) => !m.la_chu_ho)
             setFamilyMembers(actualMembers)
+
+            const qMemberId = searchParams.get('member_id')
+            const qBookingFor = searchParams.get('booking_for')
+            if (qBookingFor === 'member' || qMemberId) {
+              const target = actualMembers.find((m) => m.id === qMemberId) || actualMembers[0]
+              if (target) {
+                setBookingFor('member')
+                setSelectedMemberId(target.id)
+                setPatientName(target.ho_ten)
+                setPatientPhone(target.so_dien_thoai || user.so_dien_thoai || '')
+              }
+            } else if (bookingFor === 'member') {
+              const target = actualMembers.find((m) => m.id === selectedMemberId) || actualMembers[0]
+              if (target) {
+                setSelectedMemberId(target.id)
+                setPatientName(target.ho_ten)
+                setPatientPhone(target.so_dien_thoai || user.so_dien_thoai || '')
+              }
+            }
           }
         })
         .catch(() => {})
@@ -626,11 +652,6 @@ export default function Booking() {
                   <h3 className="font-semibold text-slate-900">Khung giờ còn chỗ</h3>
                   <p className="mt-0.5 text-xs text-slate-500">Ngày {selectedDateLabel}</p>
                 </div>
-                {khungTheoChuyenKhoa && (
-                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                    Phí dự kiến: {formatCurrency(khungTheoChuyenKhoa.gia_kham)}
-                  </span>
-                )}
               </div>
 
               {dangTaiKhungCK ? (
@@ -725,7 +746,7 @@ export default function Booking() {
                     const firstMember = familyMembers[0]
                     setSelectedMemberId(firstMember.id)
                     setPatientName(firstMember.ho_ten)
-                    setPatientPhone(user?.so_dien_thoai || '')
+                    setPatientPhone(firstMember.so_dien_thoai || user?.so_dien_thoai || '')
                   } else {
                     setBookingFor('other')
                     setSelectedMemberId('')
@@ -787,7 +808,7 @@ export default function Booking() {
                           setBookingFor('member')
                           setSelectedMemberId(member.id)
                           setPatientName(member.ho_ten)
-                          setPatientPhone(user?.so_dien_thoai || '')
+                          setPatientPhone(member.so_dien_thoai || user?.so_dien_thoai || '')
                         }}
                         aria-pressed={selectedMemberId === member.id}
                         className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
@@ -804,6 +825,7 @@ export default function Booking() {
                           <p className="text-[11px] text-slate-500">
                             {member.gioi_tinh === 'nam' ? 'Nam' : member.gioi_tinh === 'nu' ? 'Nữ' : 'Khác'}
                             {member.ngay_sinh && ` • ${new Date(member.ngay_sinh).getFullYear()}`}
+                            {member.so_dien_thoai && ` • ${member.so_dien_thoai}`}
                           </p>
                         </div>
                       </button>
