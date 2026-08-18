@@ -114,5 +114,15 @@ userSchema.index(
     partialFilterExpression: { ngay_xoa: null },
   }
 )
+userSchema.index(
+  { so_dien_thoai: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      so_dien_thoai: { $type: 'string' },
+      ngay_xoa: null,
+    },
+  }
+)
 
 export default mongoose.model('NguoiDung', userSchema)

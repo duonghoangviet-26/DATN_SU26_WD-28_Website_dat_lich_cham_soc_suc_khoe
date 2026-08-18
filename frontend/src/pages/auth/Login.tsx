@@ -97,11 +97,11 @@ export default function Login() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="input-label">Email</label>
+          <label className="input-label">Email hoặc Số điện thoại</label>
           <input
-            type="email"
+            type="text"
             className="input"
-            placeholder="admin@vitafamily.vn"
+            placeholder="admin@vitafamily.vn hoặc 0912345678"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required

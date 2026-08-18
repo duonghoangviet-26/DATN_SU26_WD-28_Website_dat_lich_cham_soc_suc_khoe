@@ -83,6 +83,7 @@ export async function listRecords(req, res) {
       so_dien_thoai_khach: a.so_dien_thoai_khach || null,
       nam_sinh_khach:      a.nam_sinh_khach      || null,
       member_id:           a.member_id           || null,
+      ho_so_benh_nhan_id:  a.ho_so_benh_nhan_id  || null,
       bac_si: {
         ho_ten:       docMap[a.doctor_id.toString()]?.ho_ten       ?? 'Không rõ',
         anh_dai_dien: docMap[a.doctor_id.toString()]?.anh_dai_dien ?? null,
@@ -179,6 +180,7 @@ export async function listMedicalResults(req, res) {
         dia_chi_kham: a.dia_chi_kham,
         ten_khach: a.ten_khach || null,
         member_id: a.member_id || null,
+        ho_so_benh_nhan_id: a.ho_so_benh_nhan_id || null,
         bac_si: {
           ho_ten: docMap[a.doctor_id.toString()]?.ho_ten ?? 'Không rõ',
           anh_dai_dien: docMap[a.doctor_id.toString()]?.anh_dai_dien ?? null,
@@ -240,6 +242,7 @@ export async function getRecord(req, res) {
       so_dien_thoai_khach: a.so_dien_thoai_khach || null,
       nam_sinh_khach:      a.nam_sinh_khach      || null,
       member_id:           a.member_id           || null,
+      ho_so_benh_nhan_id:  a.ho_so_benh_nhan_id  || null,
       bac_si: {
         ho_ten:        doc?.user_id?.ho_ten       ?? 'Không rõ',
         anh_dai_dien:  doc?.user_id?.anh_dai_dien ?? null,
