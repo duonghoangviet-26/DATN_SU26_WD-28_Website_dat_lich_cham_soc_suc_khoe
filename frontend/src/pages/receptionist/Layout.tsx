@@ -7,6 +7,32 @@ import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { Bell, LogOut, Menu } from 'lucide-react';
 
+function notificationTone(notification: VirtualNotification) {
+  const priority = notification.du_lieu_dinh_kem?.priority
+  if (priority === 'urgent') {
+    return {
+      label: 'Khẩn',
+      item: 'border-red-200 bg-red-50 hover:bg-red-100',
+      dot: 'bg-red-600',
+      pill: 'bg-red-600 text-white',
+    }
+  }
+  if (priority === 'warning') {
+    return {
+      label: 'Cần xử lý',
+      item: 'border-amber-200 bg-amber-50 hover:bg-amber-100',
+      dot: 'bg-amber-500',
+      pill: 'bg-amber-100 text-amber-800',
+    }
+  }
+  return {
+    label: 'Thông tin',
+    item: 'border-slate-100 bg-white hover:bg-slate-50',
+    dot: 'bg-brand-500',
+    pill: 'bg-slate-100 text-slate-600',
+  }
+}
+
 export default function ReceptionistLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuth();
@@ -114,6 +140,7 @@ export default function ReceptionistLayout() {
                     ) : (
                       notifications.map(notif => {
                         const isUnread = new Date(notif.ngay_tao).getTime() > (localStorage.getItem('receptionist_last_viewed_notification') ? new Date(localStorage.getItem('receptionist_last_viewed_notification')!).getTime() : 0);
+                        const tone = notificationTone(notif);
                         return (
                           <div 
                             key={notif.id} 
@@ -122,13 +149,16 @@ export default function ReceptionistLayout() {
                               const targetUrl = notif.du_lieu_dinh_kem?.url;
                               navigate(typeof targetUrl === 'string' && targetUrl ? targetUrl : '/receptionist/appointments');
                             }}
-                            className={`cursor-pointer border-b border-slate-100 p-4 transition-colors hover:bg-slate-50 ${isUnread ? 'bg-brand-50/40' : ''}`}
+                            className={`cursor-pointer border-b p-4 transition-colors ${tone.item} ${isUnread ? 'ring-1 ring-inset ring-brand-100' : ''}`}
                           >
                             <div className="flex gap-3">
                               <div className="flex-1 min-w-0">
-                                <p className={`line-clamp-2 text-sm ${isUnread ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
-                                  {notif.tieu_de}
-                                </p>
+                                <div className="mb-1 flex items-start justify-between gap-2">
+                                  <p className={`line-clamp-2 text-sm ${isUnread ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+                                    {notif.tieu_de}
+                                  </p>
+                                  <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${tone.pill}`}>{tone.label}</span>
+                                </div>
                                 <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
                                   {notif.noi_dung}
                                 </p>
@@ -136,7 +166,7 @@ export default function ReceptionistLayout() {
                                   {formatDistanceToNow(new Date(notif.ngay_tao), { addSuffix: true, locale: vi })}
                                 </p>
                               </div>
-                              {isUnread && <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500" />}
+                              {isUnread && <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tone.dot}`} />}
                             </div>
                           </div>
                         )

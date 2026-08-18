@@ -1051,7 +1051,7 @@ export interface ExamResultEditPayload {
     ghi_chu?: string | null;
     ngay_tai_kham?: string | null;
     thuoc?: Omit<PrescriptionDrug, 'id'>[];
-    dich_vu_phat_sinh?: Array<{ service_id: string; so_luong: number }>;
+    dich_vu_phat_sinh?: Array<{ service_id: string; so_luong: number; hinh_anh?: ExaminationServiceImage[] }>;
     sinh_hieu?: VitalSigns;
 }
 
@@ -1062,12 +1062,19 @@ export interface ExamRelatedService {
     specialty_id?: string | null;
 }
 
+export interface ExaminationServiceImage {
+    url: string;
+    mo_ta?: string | null;
+    uploaded_at?: string | null;
+}
+
 export interface ExaminationServiceOrder {
     service_id: string;
     ten: string;
     so_luong: number;
     don_gia: number;
     thanh_tien: number;
+    hinh_anh?: ExaminationServiceImage[];
 }
 
 // Sinh hiệu ban đầu — bác sĩ tự đo/nhập ngay khi nhập kết quả khám.

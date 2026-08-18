@@ -16,7 +16,6 @@ const ReceptionistOfflineQueue = lazy(() => import('@/pages/receptionist/Offline
 const ReceptionistDoctorDayView = lazy(() => import('@/pages/receptionist/DoctorDayView'))
 const ReceptionistContactTasks = lazy(() => import('@/pages/receptionist/ContactTasks'))
 const ReceptionistActivityLog = lazy(() => import('@/pages/receptionist/ActivityLog'))
-const ReceptionistEmergencyReport = lazy(() => import('@/pages/receptionist/EmergencyReport'))
 const ReceptionistNewsList = lazy(() => import('@/pages/receptionist/NewsList'))
 const ReceptionistNewsCreate = lazy(() => import('@/pages/receptionist/NewsCreate'))
 const ReceptionistNewsEdit = lazy(() => import('@/pages/receptionist/NewsEdit'))
@@ -155,7 +154,6 @@ export default function AppRoutes() {
         <Route path="doctor-day-view" element={<ReceptionistDoctorDayView />} />
         <Route path="contact-tasks" element={<ReceptionistContactTasks />} />
         <Route path="activity-log" element={<ReceptionistActivityLog />} />
-        <Route path="emergency-report" element={<ReceptionistEmergencyReport />} /> {/* C6/D78 — biên bản ca khẩn cuối ngày */}
         <Route path="booking" element={<ReceptionistPatientIntake />} />
         <Route path="news" element={<ReceptionistNewsList />} />
         <Route path="news/create" element={<ReceptionistNewsCreate />} />

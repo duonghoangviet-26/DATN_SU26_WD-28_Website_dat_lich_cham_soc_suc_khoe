@@ -154,7 +154,7 @@ async function getQueueEntryForAppointment(appointmentId, session = null) {
 
 export const getAppointments = async (req, res) => {
   try {
-    const { date, status, timeframe, search, doctor_id, page = 1, limit = 10 } = req.query
+    const { date, status, timeframe, search, doctor_id, specialty_id, payment_status, from_date, to_date, page = 1, limit = 10 } = req.query
     const pageNum = parseInt(page) || 1
     const limitNum = parseInt(limit) || 10
     const query = { loai_kham: 'clinic' }
@@ -179,6 +179,11 @@ export const getAppointments = async (req, res) => {
 
     if (date) {
       query.ngay_kham = new Date(`${date}T00:00:00.000Z`)
+    } else if (from_date || to_date) {
+      const range = {}
+      if (from_date) range.$gte = new Date(`${from_date}T00:00:00.000Z`)
+      if (to_date) range.$lte = new Date(`${to_date}T00:00:00.000Z`)
+      query.ngay_kham = range
     } else {
       const now = new Date()
       // Ép chuẩn về múi giờ Việt Nam (UTC+7) để Server không bị lạc ngày
@@ -211,6 +216,8 @@ export const getAppointments = async (req, res) => {
       query.status = { $ne: 'cancelled' }
     }
     if (doctor_id) query.doctor_id = doctor_id
+    if (specialty_id) query.specialty_id = specialty_id
+    if (payment_status && payment_status !== 'all') query.payment_status = payment_status
 
     let sortOption = { ngay_kham: 1, gio_kham: 1 }
     if (timeframe === 'past') {

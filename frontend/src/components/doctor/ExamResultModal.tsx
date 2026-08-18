@@ -1,14 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Icon from '@/components/admin/icons'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
+import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
 import { examinationService } from '@/services/examination.service'
 import { stripEmptyDrugs, normalizeGioUong } from '@/utils/prescription'
 import { formatDate, toLocalDateStr } from '@/utils/format'
-import type { DoctorAppointmentDetail, ExaminationResult, PrescriptionDrug, AppointmentStatus, ExamRelatedService } from '@/types'
+import type { DoctorAppointmentDetail, ExaminationResult, PrescriptionDrug, AppointmentStatus, ExamRelatedService, ExaminationServiceImage } from '@/types'
 
 const EMPTY_DRUG: Omit<PrescriptionDrug, 'id'> = {
   ten_thuoc: '', lieu_luong: '', tan_suat: '2 lần/ngày',
   gio_uong: ['07:00'], so_ngay: 7, ghi_chu: '',
+}
+
+const TU_KHOA_DICH_VU_CAN_ANH = ['noi soi', 'x quang', 'x-quang', 'sieu am', 'mri', 'ct']
+
+function normalizeServiceText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+}
+
+function serviceRequiresImage(service: ExamRelatedService) {
+  const haystack = normalizeServiceText(service.ten)
+  return TU_KHOA_DICH_VU_CAN_ANH.some((keyword) => haystack.includes(keyword))
 }
 
 interface ExamResultModalProps {
@@ -104,6 +121,8 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
   const [drugs, setDrugs] = useState<Omit<PrescriptionDrug, 'id'>[]>([])
   const [relatedServices, setRelatedServices] = useState<ExamRelatedService[]>([])
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([])
+  const [serviceImages, setServiceImages] = useState<Record<string, ExaminationServiceImage[]>>({})
+  const [uploadingServiceId, setUploadingServiceId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const topRef = useRef<HTMLDivElement>(null)
@@ -128,6 +147,11 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
           ten_thuoc, lieu_luong, tan_suat, gio_uong, so_ngay, ghi_chu,
         })))
         setSelectedServiceIds((res.dich_vu_phat_sinh ?? []).map((service) => String(service.service_id)))
+        const images: Record<string, ExaminationServiceImage[]> = {}
+        for (const service of res.dich_vu_phat_sinh ?? []) {
+          images[String(service.service_id)] = service.hinh_anh ?? []
+        }
+        setServiceImages(images)
       }
     }).catch(() => setError('Không tải được danh mục dịch vụ chỉ định. Vui lòng thử lại.'))
       .finally(() => setLoading(false))
@@ -145,6 +169,18 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
     return toLocalDateStr(d)
   })()
 
+  const selectedServicesRequireImages = relatedServices.filter(
+    (service) => selectedServiceIds.includes(service._id) && serviceRequiresImage(service),
+  )
+
+  function validateRequiredServiceImages() {
+    const missing = selectedServicesRequireImages.filter((service) => (serviceImages[service._id]?.length ?? 0) === 0)
+    if (missing.length === 0) return true
+    setError(`Cần thêm ảnh kết quả cho dịch vụ: ${missing.map((service) => service.ten).join(', ')}.`)
+    topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    return false
+  }
+
   function buildPayload() {
     const coSinhHieu = [can_nang, chieu_cao, huyet_ap, nhiet_do, nhip_tim].some((v) => v.trim() !== '')
     return {
@@ -154,7 +190,11 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
       ngay_tai_kham,
       // H2 — loại dòng thuốc rỗng; đệm số 0 giờ uống (7:00 -> 07:00) trước khi gửi.
       thuoc: stripEmptyDrugs(drugs).map((d) => ({ ...d, gio_uong: normalizeGioUong(d.gio_uong) })),
-      dich_vu_phat_sinh: selectedServiceIds.map((service_id) => ({ service_id, so_luong: 1 })),
+      dich_vu_phat_sinh: selectedServiceIds.map((service_id) => ({
+        service_id,
+        so_luong: 1,
+        hinh_anh: serviceImages[service_id] ?? [],
+      })),
       ...(coSinhHieu ? {
         sinh_hieu: {
           can_nang: can_nang.trim() ? Number(can_nang) : null,
@@ -170,6 +210,7 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!validateRequiredServiceImages()) return
     setSaving(true)
     try {
       const result = await examinationService.save({
@@ -187,6 +228,7 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
   async function handleConfirm(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!validateRequiredServiceImages()) return
     setSaving(true)
     try {
       const updated = await doctorAppointmentService.confirmResult(appt.id, buildPayload())
@@ -224,9 +266,53 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
     setDrugs((prev) => prev.map((d, idx) => idx === i ? { ...d, [key]: val } : d))
   }
   function toggleService(id: string) {
-    setSelectedServiceIds((current) => current.includes(id)
-      ? current.filter((item) => item !== id)
-      : [...current, id])
+    setSelectedServiceIds((current) => {
+      if (!current.includes(id)) return [...current, id]
+      setServiceImages((prev) => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+      return current.filter((item) => item !== id)
+    })
+  }
+
+  async function handleUploadServiceImage(serviceId: string, event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    if (files.length === 0) return
+
+    const currentCount = serviceImages[serviceId]?.length ?? 0
+    if (currentCount + files.length > 10) {
+      setError('Mỗi dịch vụ chỉ được đính kèm tối đa 10 ảnh.')
+      return
+    }
+
+    setError(null)
+    setUploadingServiceId(serviceId)
+    try {
+      const uploaded = await Promise.all(
+        files.map(async (file) => ({
+          url: await doctorExamSessionService.uploadExamImage(file),
+          mo_ta: null,
+        })),
+      )
+      setServiceImages((prev) => ({
+        ...prev,
+        [serviceId]: [...(prev[serviceId] ?? []), ...uploaded],
+      }))
+    } catch {
+      setError('Không thể tải ảnh lên. Vui lòng kiểm tra file ảnh và thử lại.')
+    } finally {
+      setUploadingServiceId(null)
+    }
+  }
+
+  function removeServiceImage(serviceId: string, url: string) {
+    setServiceImages((prev) => ({
+      ...prev,
+      [serviceId]: (prev[serviceId] ?? []).filter((image) => image.url !== url),
+    }))
   }
 
   const primaryLabel = canConfirm
@@ -426,6 +512,60 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
                   ))}
                 </div>
               )}
+              {selectedServicesRequireImages.length > 0 && (
+                <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-700">Ảnh kết quả dịch vụ</p>
+                  {selectedServicesRequireImages.map((service) => {
+                    const images = serviceImages[service._id] ?? []
+                    const uploading = uploadingServiceId === service._id
+                    return (
+                      <div key={service._id} className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{service.ten}</p>
+                            <p className="text-xs text-slate-500">{images.length} ảnh đã tải lên</p>
+                          </div>
+                          {!isReadOnly && (
+                            <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                              {uploading ? 'Đang tải...' : 'Thêm ảnh'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                disabled={saving || uploading}
+                                onChange={(event) => handleUploadServiceImage(service._id, event)}
+                                className="sr-only"
+                              />
+                            </label>
+                          )}
+                        </div>
+                        {images.length > 0 ? (
+                          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            {images.map((image) => (
+                              <div key={image.url} className="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                                <img src={image.url} alt={`Ảnh kết quả ${service.ten}`} className="aspect-square w-full object-cover" />
+                                {!isReadOnly && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeServiceImage(service._id, image.url)}
+                                    className="absolute right-1 top-1 rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-red-600 opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+                                  >
+                                    Xóa
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 rounded-lg border border-dashed border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                            Chưa có ảnh kết quả cho dịch vụ này.
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Yêu cầu chỉnh sửa: đánh dấu hồ sơ cần sửa lại kèm lý do (song song với "Lưu & Xác nhận"). */}
@@ -447,7 +587,7 @@ export default function ExamResultModal({ appt, queueId, mode = 'edit', onClose,
                 </button>
               )}
               {!isReadOnly && (
-                <button type="submit" className="btn-primary" disabled={saving}>
+                <button type="submit" className="btn-primary" disabled={saving || uploadingServiceId !== null}>
                   {primaryLabel}
                 </button>
               )}

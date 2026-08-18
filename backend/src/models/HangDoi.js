@@ -118,13 +118,6 @@ const queueSchema = new mongoose.Schema(
     // Điều phối — KHÔNG lưu thu_tu (thứ tự đổi liên tục, tính động lúc query)
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', required: true },
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
-    bac_si_uu_tien_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
-    ly_do_uu_tien: { type: String, default: null, maxlength: 500 },
-    muc_uu_tien_tiep_nhan: {
-      type: String,
-      enum: ['binh_thuong', 'uu_tien', 'cap_cuu', null],
-      default: 'binh_thuong',
-    },
     phong_kham: { type: String, default: null },
     schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', default: null },
     slot_id: { type: mongoose.Schema.Types.ObjectId, default: null },
@@ -207,7 +200,6 @@ queueSchema.index({ doctor_id: 1, trang_thai: 1 })
 queueSchema.index({ specialty_id: 1, trang_thai: 1 })
 queueSchema.index({ nguon: 1, trang_thai: 1, thoi_diem_vao_hang_doi_trung_tam: 1 })
 queueSchema.index({ specialty_id: 1, nguon: 1, trang_thai: 1, checkin_time: 1 })
-queueSchema.index({ bac_si_uu_tien_id: 1, trang_thai: 1 })
 queueSchema.index({ appointment_id: 1 }, { unique: true, sparse: true })
 queueSchema.index(
   { ngay_checkin_key: 1, so_thu_tu_checkin: 1 },

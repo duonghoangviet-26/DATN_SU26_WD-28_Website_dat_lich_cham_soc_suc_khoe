@@ -299,7 +299,51 @@ function appointmentMatchesProfile(appointment, profile) {
   if (!isProxyAppointment && appointment.user_id && profile.tai_khoan_id
     && String(appointment.user_id) === String(profile.tai_khoan_id)) return true
 
-  return false
+  return Boolean(
+    appointment.ten_khach
+      && normalizeName(appointment.ten_khach) === normalizeName(profile.ho_ten)
+      && normalizePhone(appointment.so_dien_thoai_khach) === normalizePhone(profile.so_dien_thoai_tim_kiem || profile.so_dien_thoai),
+  )
+}
+
+export const getProfileBookingHistory = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 400, 'Mã hồ sơ bệnh nhân không hợp lệ')
+    }
+
+    const profile = await HoSoBenhNhan.findOne({ _id: req.params.id, trang_thai: 'active' }).lean()
+    if (!profile) return fail(res, 404, 'Không tìm thấy hồ sơ bệnh nhân đang hoạt động')
+
+    const relatedAccountIds = [profile.tai_khoan_id, profile.nguoi_giam_ho_id].filter(Boolean)
+    const relationFilters = [
+      { ho_so_benh_nhan_id: profile._id },
+      ...(profile.member_id ? [{ member_id: profile.member_id }] : []),
+      ...(relatedAccountIds.length
+        ? [{ user_id: { $in: relatedAccountIds } }, { nguoi_dat_ho_id: { $in: relatedAccountIds } }]
+        : []),
+      ...(profile.so_dien_thoai_tim_kiem || profile.so_dien_thoai
+        ? [{ so_dien_thoai_khach: { $in: phoneVariants(profile.so_dien_thoai_tim_kiem || profile.so_dien_thoai) } }]
+        : []),
+    ]
+
+    const appointmentSelect = 'ma_lich_hen ngay_kham gio_kham gio_ket_thuc status payment_status nguon hinh_thuc_dat_lich doctor_id specialty_id phong_kham ho_so_benh_nhan_id member_id user_id nguoi_dat_ho_id so_dien_thoai_khach ten_khach nam_sinh_khach loai_kham'
+    const appointments = await LichHen.find({ $or: relationFilters })
+      .select(appointmentSelect)
+      .populate({ path: 'doctor_id', select: 'user_id', populate: { path: 'user_id', select: 'ho_ten' } })
+      .populate('specialty_id', 'ten')
+      .sort({ ngay_kham: -1, gio_kham: -1 })
+      .limit(100)
+      .lean()
+
+    const rows = appointments
+      .filter((appointment) => appointmentMatchesProfile(appointment, profile))
+      .map(serializeAppointment)
+
+    return ok(res, { appointments: rows, total: rows.length })
+  } catch (error) {
+    return fail(res, 500, error.message)
+  }
 }
 
 export const searchPatientProfiles = async (req, res) => {
@@ -729,9 +773,6 @@ export const intakeCentralOfflineQueue = async (req, res) => {
     const result = await tiepNhanOfflineVaoHangDoiTrungTam({
       hoSoBenhNhanId: req.body.ho_so_benh_nhan_id,
       specialtyId: req.body.specialty_id,
-      bacSiUuTienId: req.body.bac_si_uu_tien_id ?? null,
-      lyDoUuTien: req.body.ly_do_uu_tien ?? null,
-      mucUuTienTiepNhan: req.body.muc_uu_tien_tiep_nhan ?? 'binh_thuong',
       xacNhanCanhBao: Boolean(req.body.xac_nhan_canh_bao),
       actorUserId: req.user?._id ?? req.user?.id ?? null,
       actorRole: 'receptionist',

@@ -5,6 +5,7 @@ import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
 import Icon from '@/components/admin/icons'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
+import ExamHistoryDetailModal from '@/components/doctor/ExamHistoryDetailModal'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import { subscribeDoctorQueueRealtime } from '@/services/realtime.service'
 import type { DoctorExamQueueRow, ExamQueueStatus, DoctorAppointmentDetail, RoomStatus, PhongKhamTrangThai, LichChoTiepNhan } from '@/types'
@@ -186,6 +187,7 @@ export default function DoctorExamQueue() {
   const [modalMode, setModalMode] = useState<'edit' | 'confirm'>('confirm')
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [viewHistoryQueueId, setViewHistoryQueueId] = useState<string | null>(null)
   const [choTiepNhan, setChoTiepNhan] = useState<LichChoTiepNhan[]>([])
   const [choTiepNhanLoading, setChoTiepNhanLoading] = useState(true)
   const [roomRefreshKey, setRoomRefreshKey] = useState(0)
@@ -206,16 +208,8 @@ export default function DoctorExamQueue() {
   }
   useEffect(() => {
     load()
-    // D78 — 'central_offline_cap_cuu' bắn từ tiepNhanOfflineVaoHangDoiTrungTam ngay lúc lễ
-    // tân tiếp nhận cấp cứu, TRƯỚC cả lúc điều phối bác sĩ cụ thể — báo sớm hơn thay vì chờ
-    // bác sĩ tự thấy trong danh sách chờ khi refetch.
-    const unsubscribe = subscribeDoctorQueueRealtime((payload) => {
+    const unsubscribe = subscribeDoctorQueueRealtime(() => {
       load()
-      if (payload?.action === 'central_offline_cap_cuu') {
-        const ten = payload.ten_benh_nhan ?? 'Bệnh nhân'
-        const lyDo = payload.ly_do_uu_tien ? ` — ${payload.ly_do_uu_tien}` : ''
-        showToast(`CẤP CỨU: ${ten} vừa được lễ tân tiếp nhận${lyDo}`, 'error')
-      }
     })
     const fallbackRefresh = window.setInterval(load, 15000)
 
@@ -258,20 +252,6 @@ export default function DoctorExamQueue() {
     } catch { setActive(null) }
   }
 
-  async function openViewRecord(r: DoctorExamQueueRow) {
-    setModalMode('edit')
-    setActive(r)
-    setActiveAppt(null)
-    if (!r.appointment_id) {
-      setActiveAppt(taoLichKhamAoChoLuotOffline(r))
-      return
-    }
-    try {
-      const appt = await doctorAppointmentService.getById(r.appointment_id)
-      setActiveAppt(appt)
-    } catch { setActive(null) }
-  }
-
   function closeModal() { setActive(null); setActiveAppt(null) }
 
   async function runQueueAction(id: string, action: (id: string) => Promise<unknown>, successMsg: string) {
@@ -279,6 +259,10 @@ export default function DoctorExamQueue() {
     try {
       await action(id)
       showToast(successMsg)
+      if (action === doctorAppointmentService.intoRoomQueue) {
+        navigate(`/doctor/exam/${id}`)
+        return
+      }
       load()
     } catch (e) {
       showToast(extractApiMessage(e, 'Thao tác thất bại, vui lòng thử lại'), 'error')
@@ -388,21 +372,21 @@ export default function DoctorExamQueue() {
                           <>
                             <Button size="sm" disabled={actionLoadingId === r.id}
                               onClick={() => runQueueAction(r.id, doctorAppointmentService.intoRoomQueue, 'Bệnh nhân đã vào phòng')}
-                              icon={<Icon name="send" className="h-3.5 w-3.5" />}>Vào khám ngay</Button>
+                              icon={<Icon name="send" className="h-3.5 w-3.5" />}>Bắt đầu khám</Button>
                             <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
                               onClick={() => runQueueAction(r.id, doctorAppointmentService.callQueuePatient, 'Đã gọi bệnh nhân')}
                               icon={<Icon name="bell" className="h-3.5 w-3.5" />}>Gọi bệnh nhân</Button>
                             <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
-                              onClick={() => runQueueAction(r.id, doctorAppointmentService.skipQueue, 'Đã bỏ lượt')}>Bỏ lượt</Button>
+                              onClick={() => runQueueAction(r.id, doctorAppointmentService.skipQueue, 'Đã bỏ lượt')}>Loại khỏi hàng chờ</Button>
                           </>
                         )}
                         {r.trang_thai_tong_hop === 'da_goi' && (
                           <>
                             <Button size="sm" disabled={actionLoadingId === r.id}
                               onClick={() => runQueueAction(r.id, doctorAppointmentService.intoRoomQueue, 'Bệnh nhân đã vào phòng')}
-                              icon={<Icon name="send" className="h-3.5 w-3.5" />}>Vào phòng</Button>
+                              icon={<Icon name="send" className="h-3.5 w-3.5" />}>Bắt đầu khám</Button>
                             <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
-                              onClick={() => runQueueAction(r.id, doctorAppointmentService.skipQueue, 'Đã bỏ lượt')}>Bỏ lượt</Button>
+                              onClick={() => runQueueAction(r.id, doctorAppointmentService.skipQueue, 'Đã bỏ lượt')}>Loại khỏi hàng chờ</Button>
                           </>
                         )}
                         {r.trang_thai_tong_hop === 'trong_phong' && (
@@ -426,7 +410,7 @@ export default function DoctorExamQueue() {
                             icon={<Icon name="check" className="h-3.5 w-3.5" />}>Xem & xác nhận</Button>
                         )}
                         {r.trang_thai_tong_hop === 'da_xong' && (
-                          <Button variant="secondary" size="sm" onClick={() => openViewRecord(r)}
+                          <Button variant="secondary" size="sm" onClick={() => setViewHistoryQueueId(r.id)}
                             icon={<Icon name="eye" className="h-3.5 w-3.5" />}>Xem hồ sơ</Button>
                         )}
                         {['bo_luot', 'da_huy'].includes(r.trang_thai_tong_hop) && (
@@ -447,6 +431,11 @@ export default function DoctorExamQueue() {
           queueId={active.appointment_id ? undefined : active.id}
           onConfirmed={() => { closeModal(); load() }} onSaved={() => { closeModal(); load() }}
           onRevisionRequested={() => { closeModal(); load() }} />
+      )}
+
+      {viewHistoryQueueId && (
+        <ExamHistoryDetailModal queueId={viewHistoryQueueId} onClose={() => setViewHistoryQueueId(null)}
+          onAmended={() => { setViewHistoryQueueId(null); load() }} />
       )}
 
       {/* Toast — góc trên phải, tự mất sau 3 giây */}

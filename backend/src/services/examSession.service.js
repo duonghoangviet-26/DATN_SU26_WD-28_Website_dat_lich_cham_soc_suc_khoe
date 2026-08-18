@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 import {
-  DichVu, DonThuoc, HangDoi, HoaDon, KetQuaKham, LichHen, NhatKyThaoTac, SinhHieuKham, TrangThaiPhongKham,
+  DichVu, DonThuoc, HangDoi, HoaDon, KetQuaKham, LichHen, NhatKyThaoTac, SinhHieuKham, ThanhToan, TrangThaiPhongKham,
 } from '../models/index.js'
 import { soSanhThuTuHangDoi } from '../models/HangDoi.js'
 // `room-status.controller.js` chỉ import models + utils/response → KHÔNG có vòng import
@@ -28,6 +28,33 @@ import { kiemTraDiUngThuoc } from './drugAllergyCheck.service.js'
 
 function loi(statusCode, message, data = null) {
   return Object.assign(new Error(message), { statusCode, httpStatus: statusCode, data })
+}
+
+const TU_KHOA_DICH_VU_CAN_ANH = ['noi soi', 'x quang', 'x-quang', 'sieu am', 'mri', 'ct']
+
+function chuanHoaChuoiTimKiem(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+}
+
+function dichVuCanAnhKetQua(service) {
+  const haystack = chuanHoaChuoiTimKiem(`${service?.ten ?? ''} ${service?.ma_dich_vu ?? ''}`)
+  return TU_KHOA_DICH_VU_CAN_ANH.some((keyword) => haystack.includes(keyword))
+}
+
+function chuanHoaAnhDichVu(value) {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => ({
+      url: String(item?.url ?? '').trim(),
+      mo_ta: String(item?.mo_ta ?? '').trim() || null,
+      uploaded_at: item?.uploaded_at ? new Date(item.uploaded_at) : new Date(),
+    }))
+    .filter((item) => item.url.length > 0 && item.url.length <= 1000)
 }
 
 // ─── Helper dùng chung (chuyển từ appointments.controller.js) ────────────────
@@ -71,10 +98,14 @@ export async function taoChiDinhDichVu(value, specialtyId, doctorId) {
   const requested = value.map((item) => ({
     service_id: item?.service_id,
     so_luong: Number(item?.so_luong ?? 1),
+    hinh_anh: chuanHoaAnhDichVu(item?.hinh_anh),
   }))
   if (requested.length > 20) return { ok: false, status: 400, message: 'Tối đa 20 dịch vụ phát sinh cho một ca khám' }
   if (requested.some((item) => !item.service_id || !mongoose.Types.ObjectId.isValid(item.service_id) || !Number.isInteger(item.so_luong) || item.so_luong < 1)) {
     return { ok: false, status: 400, message: 'Dịch vụ hoặc số lượng chỉ định không hợp lệ' }
+  }
+  if (requested.some((item) => item.hinh_anh.length > 10)) {
+    return { ok: false, status: 400, message: 'Mỗi dịch vụ chỉ được đính kèm tối đa 10 ảnh' }
   }
 
   const ids = requested.map((item) => String(item.service_id))
@@ -85,12 +116,20 @@ export async function taoChiDinhDichVu(value, specialtyId, doctorId) {
     status: 'active',
     loai: 'related',
     $or: [{ specialty_id: specialtyId }, { specialty_id: null }],
-  }).select('ten gia').lean()
+  }).select('ten gia ma_dich_vu').lean()
   if (services.length !== requested.length) {
     return { ok: false, status: 400, message: 'Có dịch vụ không còn hoạt động hoặc không thuộc chuyên khoa của ca khám' }
   }
 
   const byId = new Map(services.map((service) => [String(service._id), service]))
+  const thieuAnh = requested
+    .map((item) => ({ item, service: byId.get(String(item.service_id)) }))
+    .filter(({ item, service }) => service && dichVuCanAnhKetQua(service) && item.hinh_anh.length === 0)
+  if (thieuAnh.length > 0) {
+    const names = thieuAnh.map(({ service }) => service.ten).join(', ')
+    return { ok: false, status: 400, message: `Cần đính kèm ảnh kết quả cho dịch vụ: ${names}` }
+  }
+
   return {
     ok: true,
     lines: requested.map((item) => {
@@ -102,6 +141,7 @@ export async function taoChiDinhDichVu(value, specialtyId, doctorId) {
         don_gia: service.gia,
         thanh_tien: service.gia * item.so_luong,
         chi_dinh_boi_bac_si_id: doctorId,
+        hinh_anh: item.hinh_anh,
       }
     }),
   }
@@ -164,11 +204,14 @@ export async function getOwnedQueueForExam(queueId, docId) {
 export async function layPhienKham({ queueId, docId }) {
   const entry = await getOwnedQueueForExam(queueId, docId)
 
-  const [hoSo, sinhHieu, dichVuKhaDung] = await Promise.all([
+  const [hoSo, sinhHieu, dichVuKhaDung, lichHen] = await Promise.all([
     KetQuaKham.findOne({ hang_doi_id: entry._id }).lean(),
     SinhHieuKham.findOne({ hang_doi_id: entry._id }).lean(),
     DichVu.find({ loai: 'related', specialty_id: entry.specialty_id, status: 'active' })
       .select('_id ten gia ma_dich_vu').sort({ ten: 1 }).lean(),
+    entry.appointment_id
+      ? LichHen.findById(entry.appointment_id).select('ly_do_kham payment_status gia_kham').lean()
+      : null,
   ])
 
   const thuoc = hoSo
@@ -179,22 +222,40 @@ export async function layPhienKham({ queueId, docId }) {
   // gọi thêm API riêng. Tra theo hang_doi_id trước (offline chỉ có khóa này), rồi appointment_id.
   const hoaDon = await HoaDon.findOne({
     $or: [{ hang_doi_id: entry._id }, ...(entry.appointment_id ? [{ appointment_id: entry.appointment_id }] : [])],
-  }).select('tong_tien_kham tong_tien_phat_sinh tong_thanh_toan trang_thai_hoa_don').lean()
+  }).select('tong_tien_kham tong_tien_phat_sinh tong_thanh_toan trang_thai_hoa_don chi_tiet_thu_phi da_xac_nhan_thu_ngan').lean()
+  const thanhToan = hoaDon
+    ? await ThanhToan.find({
+        $or: [
+          { hoa_don_id: hoaDon._id },
+          ...(entry.appointment_id ? [{ appointment_id: entry.appointment_id }] : []),
+          { hang_doi_id: entry._id },
+        ],
+        status: 'paid',
+      }).select('so_tien loai_thanh_toan phuong_thuc ngay_thanh_toan thoi_diem_thanh_toan').lean()
+    : []
+  const tongDaThu = thanhToan.reduce((sum, payment) => sum + (Number(payment.so_tien) || 0), 0)
+  const tongPhaiThu = hoaDon?.tong_thanh_toan ?? (lichHen?.gia_kham ?? 0)
+  const conThieu = Math.max(0, tongPhaiThu - tongDaThu)
 
   return {
     queue: {
       id: String(entry._id),
+      ho_so_benh_nhan_id: entry.ho_so_benh_nhan_id ? String(entry.ho_so_benh_nhan_id) : null,
       ten_benh_nhan: entry.ten_benh_nhan,
+      so_dien_thoai: entry.so_dien_thoai ?? null,
       tuoi: entry.tuoi ?? null,
+      ngay_sinh: entry.ngay_sinh ?? null,
       gioi_tinh: entry.gioi_tinh ?? null,
       nhom_mau: entry.nhom_mau ?? null,
       di_ung: entry.di_ung ?? null,
       benh_nen: entry.benh_nen ?? null,
+      ghi_chu: entry.ghi_chu ?? null,
       ma_so_thu_tu: entry.ma_so_thu_tu ?? null,
       nguon: entry.nguon,
       trang_thai: entry.trang_thai,
       phong_kham: entry.phong_kham ?? null,
       appointment_id: entry.appointment_id ? String(entry.appointment_id) : null,
+      ly_do_kham: lichHen?.ly_do_kham ?? null,
     },
     ho_so: hoSo
       ? {
@@ -231,8 +292,28 @@ export async function layPhienKham({ queueId, docId }) {
           tong_tien_phat_sinh: hoaDon.tong_tien_phat_sinh,
           tong_thanh_toan: hoaDon.tong_thanh_toan,
           trang_thai_hoa_don: hoaDon.trang_thai_hoa_don,
+          chi_tiet_thu_phi: hoaDon.chi_tiet_thu_phi ?? [],
+          da_xac_nhan_thu_ngan: hoaDon.da_xac_nhan_thu_ngan ?? false,
+          tong_da_thu: tongDaThu,
+          con_thieu: conThieu,
+          thanh_toan: thanhToan.map((payment) => ({
+            so_tien: payment.so_tien,
+            loai_thanh_toan: payment.loai_thanh_toan,
+            phuong_thuc: payment.phuong_thuc,
+            thoi_diem: payment.ngay_thanh_toan ?? payment.thoi_diem_thanh_toan ?? null,
+          })),
         }
-      : null,
+      : {
+          tong_tien_kham: lichHen?.gia_kham ?? 0,
+          tong_tien_phat_sinh: 0,
+          tong_thanh_toan: lichHen?.gia_kham ?? 0,
+          trang_thai_hoa_don: lichHen?.payment_status === 'paid' ? 'da_thanh_toan_du' : 'chua_thanh_toan',
+          chi_tiet_thu_phi: [],
+          da_xac_nhan_thu_ngan: false,
+          tong_da_thu: lichHen?.payment_status === 'paid' ? (lichHen?.gia_kham ?? 0) : 0,
+          con_thieu: lichHen?.payment_status === 'paid' ? 0 : (lichHen?.gia_kham ?? 0),
+          thanh_toan: [],
+        },
     dich_vu_kha_dung: dichVuKhaDung.map((d) => ({
       service_id: String(d._id), ten: d.ten, gia: d.gia, ma_dich_vu: d.ma_dich_vu ?? null,
     })),
@@ -516,7 +597,7 @@ export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new
       // ("Phòng chưa sẵn sàng" 409) — bác sĩ hết đường khám tiếp trong ngày.
       if (nhaPhong) {
         const datPhong = {
-          trang_thai: 'dang_don_phong',
+          trang_thai: 'san_sang',
           benh_nhan_hien_tai_id: null,
           thoi_diem_doi: now,
         }
@@ -585,7 +666,7 @@ export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new
         loai_doi_tuong: 'room_status',
         doi_tuong_id: entry.doctor_id,
         du_lieu_cu: { trang_thai: tuRoom },
-        du_lieu_moi: { trang_thai: 'dang_don_phong' },
+        du_lieu_moi: { trang_thai: 'san_sang' },
       })
     } catch (err) {
       console.error('[examSession] Không ghi được nhật ký CHANGE_DOCTOR_STATUS:', err.message)

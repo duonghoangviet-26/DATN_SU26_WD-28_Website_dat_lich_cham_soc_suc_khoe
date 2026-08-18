@@ -3,9 +3,9 @@ import { BacSi, ChuyenKhoa, HangDoi, HoSoBenhNhan, LichHen, LichLamViec, TrangTh
 import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
 import { MAC_DINH_THOI_GIAN_KHAM_PHUT } from '../utils/slotConfig.js'
 import { capSoThuTuCheckin } from './checkInNumber.service.js'
-import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
 import { layCauHinhHangDoiOffline } from './offlineQueueConfig.service.js'
 import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
+import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
 
 export const TRANG_THAI_OFFLINE_TRUNG_TAM = 'cho_dieu_phoi'
 export const TRANG_THAI_HANG_DOI_DANG_MO = [
@@ -367,9 +367,6 @@ export async function tinhSucChuaHangDoiOfflineTrungTam({
 export async function tiepNhanOfflineVaoHangDoiTrungTam({
   hoSoBenhNhanId,
   specialtyId,
-  bacSiUuTienId = null,
-  lyDoUuTien = null,
-  mucUuTienTiepNhan = 'binh_thuong',
   xacNhanCanhBao = false,
   actorUserId = null,
   actorRole = 'receptionist',
@@ -377,14 +374,8 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
 } = {}) {
   const normalizedProfileId = normalizeObjectId(hoSoBenhNhanId, 'ho_so_benh_nhan_id')
   const normalizedSpecialtyId = normalizeObjectId(specialtyId, 'specialty_id')
-  const normalizedPreferredDoctorId = normalizeObjectId(bacSiUuTienId, 'bac_si_uu_tien_id')
   if (!normalizedProfileId) throw loi(400, 'Can chon ho so benh nhan')
   if (!normalizedSpecialtyId) throw loi(400, 'Can chon chuyen khoa')
-  // D78 — cap cuu bat buoc phai co ly do/dau hieu ghi lai, khong duoc chon muc khan ma
-  // khong giai trinh gi (tranh lam dung de vuot hang doi).
-  if (mucUuTienTiepNhan === 'cap_cuu' && !String(lyDoUuTien ?? '').trim()) {
-    throw loi(400, 'Can nhap ly do / dau hieu cap cuu truoc khi tiep nhan')
-  }
 
   const profile = await HoSoBenhNhan.findOne({ _id: normalizedProfileId, trang_thai: 'active' }).lean()
   if (!profile) throw loi(404, 'Ho so benh nhan khong hop le')
@@ -447,9 +438,6 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
         dia_chi: profile.dia_chi,
         ghi_chu: profile.ghi_chu,
         specialty_id: normalizedSpecialtyId,
-        bac_si_uu_tien_id: normalizedPreferredDoctorId,
-        ly_do_uu_tien: lyDoUuTien ? String(lyDoUuTien).trim() : null,
-        muc_uu_tien_tiep_nhan: mucUuTienTiepNhan || 'binh_thuong',
         muc_uu_tien: 'offline',
         trang_thai: TRANG_THAI_OFFLINE_TRUNG_TAM,
         thoi_diem_vao_hang_doi_trung_tam: now,
@@ -479,31 +467,8 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
       specialty_id: String(entry.specialty_id),
       thoi_gian_cho_uoc_tinh_phut: entry.thoi_gian_cho_uoc_tinh_phut ?? null,
       trang_thai: entry.trang_thai,
-      // D78 — trước đây audit tiếp nhận KHÔNG lưu mức ưu tiên/lý do, nên dù lễ tân có chọn
-      // 'cap_cuu' cũng không lọc lại được cuối ngày. Ghi kèm ở đây để báo cáo ca khẩn dùng
-      // được ngay bằng cách lọc theo hai field này, không cần action mới trong catalog.
-      muc_uu_tien_tiep_nhan: entry.muc_uu_tien_tiep_nhan,
-      ly_do_uu_tien: entry.ly_do_uu_tien ?? null,
     },
   })
-
-  // D78 — báo khẩn tới bác sĩ đang trong ca CÙNG chuyên khoa, NGAY LÚC TIẾP NHẬN — sớm hơn
-  // mốc điều phối (ganKhachOfflineChoBacSi) vốn chỉ báo đúng MỘT bác sĩ sau khi đã chọn.
-  // Cấp cứu cần được biết sớm để bác sĩ chủ động, không chờ lễ tân điều phối xong mới hay.
-  // Best-effort: lỗi ở đây không được phép làm hỏng việc tiếp nhận đã ghi nhận xong.
-  if (mucUuTienTiepNhan === 'cap_cuu') {
-    try {
-      const cards = await layBacSiHopLeTheoLich({ specialtyId: normalizedSpecialtyId, now })
-      await Promise.all(cards.map((card) => notifyDoctorQueueUpdated(card.doctor._id, {
-        action: 'central_offline_cap_cuu',
-        queue_id: entry._id,
-        ten_benh_nhan: entry.ten_benh_nhan,
-        ly_do_uu_tien: entry.ly_do_uu_tien ?? null,
-      })))
-    } catch (err) {
-      console.error('[centralOfflineQueue] Khong bao duoc cap cuu cho bac si:', err.message)
-    }
-  }
 
   return {
     entry,
@@ -517,9 +482,11 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
 }
 
 export function sapXepHangDoiTrungTam(a, b) {
-  const muc = { cap_cuu: 0, uu_tien: 1, binh_thuong: 2 }
-  const theoUuTien = (muc[a.muc_uu_tien_tiep_nhan] ?? 2) - (muc[b.muc_uu_tien_tiep_nhan] ?? 2)
-  if (theoUuTien !== 0) return theoUuTien
+  const priorityRank = { cap_cuu: 0, uu_tien: 1, binh_thuong: 2 }
+  const priorityA = priorityRank[a.muc_uu_tien_tiep_nhan] ?? priorityRank.binh_thuong
+  const priorityB = priorityRank[b.muc_uu_tien_tiep_nhan] ?? priorityRank.binh_thuong
+  if (priorityA !== priorityB) return priorityA - priorityB
+
   return new Date(a.thoi_diem_vao_hang_doi_trung_tam ?? a.checkin_time)
     - new Date(b.thoi_diem_vao_hang_doi_trung_tam ?? b.checkin_time)
 }
@@ -565,9 +532,6 @@ async function layUngVienBacSiChoDieuPhoi(entry, now) {
 
   return rows.sort((a, b) => {
     if (a.hop_le !== b.hop_le) return a.hop_le ? -1 : 1
-    const preferA = entry.bac_si_uu_tien_id && String(entry.bac_si_uu_tien_id) === a.doctor_id
-    const preferB = entry.bac_si_uu_tien_id && String(entry.bac_si_uu_tien_id) === b.doctor_id
-    if (preferA !== preferB) return preferA ? -1 : 1
     if (a.diem_tai !== b.diem_tai) return a.diem_tai - b.diem_tai
     return a.doctor_id.localeCompare(b.doctor_id)
   })
@@ -589,14 +553,13 @@ export async function layGoiYDieuPhoiOffline({
     ...(normalizedEntryId ? { _id: normalizedEntryId } : {}),
   }
   const entries = (await HangDoi.find(filter)
-    .select('ten_benh_nhan so_dien_thoai specialty_id bac_si_uu_tien_id muc_uu_tien_tiep_nhan thoi_diem_vao_hang_doi_trung_tam checkin_time ma_so_thu_tu so_thu_tu_checkin')
+    .select('ten_benh_nhan so_dien_thoai specialty_id thoi_diem_vao_hang_doi_trung_tam checkin_time ma_so_thu_tu so_thu_tu_checkin')
     .populate('specialty_id', 'ten')
-    .populate({ path: 'bac_si_uu_tien_id', select: 'user_id', populate: { path: 'user_id', select: 'ho_ten' } })
     .lean()).sort(sapXepHangDoiTrungTam)
 
   const suggestions = []
   for (const entry of entries.slice(0, 20)) {
-    // `entry.specialty_id`/`bac_si_uu_tien_id` da bi populate() thanh object {_id, ten}
+    // `entry.specialty_id` da bi populate() thanh object {_id, ten}
     // o tren de phuc vu hien thi ben duoi. Neu truyen thang entry nay vao
     // layUngVienBacSiChoDieuPhoi(), moi so sanh String(specialtyId) trong slotPhuHop se
     // ra "[object Object]" va KHONG BAO GIO khop — goi y dieu phoi luon rong. Phai go lai
@@ -604,7 +567,6 @@ export async function layGoiYDieuPhoiOffline({
     const rawEntry = {
       ...entry,
       specialty_id: entry.specialty_id?._id ?? entry.specialty_id,
-      bac_si_uu_tien_id: entry.bac_si_uu_tien_id?._id ?? entry.bac_si_uu_tien_id,
     }
     const candidates = await layUngVienBacSiChoDieuPhoi(rawEntry, now)
     suggestions.push({
@@ -615,12 +577,6 @@ export async function layGoiYDieuPhoiOffline({
       specialty: entry.specialty_id
         ? { id: String(entry.specialty_id._id ?? entry.specialty_id), ten: entry.specialty_id.ten ?? null }
         : null,
-      bac_si_uu_tien: entry.bac_si_uu_tien_id
-        ? {
-            id: String(entry.bac_si_uu_tien_id._id ?? entry.bac_si_uu_tien_id),
-            ho_ten: entry.bac_si_uu_tien_id.user_id?.ho_ten ?? null,
-          }
-        : null,
       thoi_gian_cho_phut: phutTuMs(now.getTime() - new Date(entry.thoi_diem_vao_hang_doi_trung_tam ?? entry.checkin_time).getTime()),
       ung_vien: candidates,
       de_xuat_tot_nhat: candidates.find((candidate) => candidate.hop_le) ?? null,
@@ -630,19 +586,40 @@ export async function layGoiYDieuPhoiOffline({
   return { checked_at: now, total: entries.length, suggestions }
 }
 
-export async function layDanhSachHangDoiOffline({ specialtyId = null, status = null, now = new Date() } = {}) {
+// `nguon = 'offline'` giu nguyen hanh vi cu (trang OfflineQueue.tsx chi xem khach vang lai).
+// Truyen `nguon: null` de lay CA HAI nguon — dung cho tab "Ca kham hom nay" (gom online + offline).
+export async function layDanhSachHangDoiOffline({
+  specialtyId = null,
+  status = null,
+  doctorId = null,
+  nguon = 'offline',
+  search = null,
+  now = new Date(),
+} = {}) {
   const normalizedSpecialtyId = normalizeObjectId(specialtyId, 'specialty_id')
+  const normalizedDoctorId = normalizeObjectId(doctorId, 'doctor_id')
   const { start, end } = khoangNgay(now)
   const statuses = status
     ? String(status).split(',').map((item) => item.trim()).filter(Boolean)
     : TRANG_THAI_OFFLINE_THEO_DOI
+  const searchTerm = String(search ?? '').trim()
   const rows = await HangDoi.find({
-    nguon: 'offline',
     checkin_time: { $gte: start, $lt: end },
     trang_thai: { $in: statuses },
+    ...(nguon ? { nguon } : {}),
     ...(normalizedSpecialtyId ? { specialty_id: normalizedSpecialtyId } : {}),
+    ...(normalizedDoctorId ? { doctor_id: normalizedDoctorId } : {}),
+    ...(searchTerm
+      ? {
+          $or: [
+            { ten_benh_nhan: { $regex: searchTerm, $options: 'i' } },
+            { so_dien_thoai: { $regex: searchTerm, $options: 'i' } },
+            { ma_so_thu_tu: { $regex: searchTerm, $options: 'i' } },
+          ],
+        }
+      : {}),
   })
-    .select('ten_benh_nhan so_dien_thoai specialty_id doctor_id phong_kham trang_thai checkin_time thoi_diem_vao_hang_doi_trung_tam thoi_diem_duoc_dieu_phoi ma_so_thu_tu so_thu_tu_checkin thoi_gian_cho_uoc_tinh_phut')
+    .select('nguon appointment_id ten_benh_nhan so_dien_thoai specialty_id doctor_id phong_kham trang_thai checkin_time thoi_diem_vao_hang_doi_trung_tam thoi_diem_duoc_dieu_phoi ma_so_thu_tu so_thu_tu_checkin thoi_gian_cho_uoc_tinh_phut')
     .populate('specialty_id', 'ten')
     .populate({ path: 'doctor_id', select: 'user_id phong_kham_mac_dinh', populate: { path: 'user_id', select: 'ho_ten' } })
     .lean()
@@ -651,6 +628,8 @@ export async function layDanhSachHangDoiOffline({ specialtyId = null, status = n
     .sort((a, b) => new Date(a.thoi_diem_vao_hang_doi_trung_tam ?? a.checkin_time) - new Date(b.thoi_diem_vao_hang_doi_trung_tam ?? b.checkin_time))
     .map((row) => ({
       id: String(row._id),
+      nguon: row.nguon,
+      appointment_id: row.appointment_id ? String(row.appointment_id) : null,
       ten_benh_nhan: row.ten_benh_nhan,
       so_dien_thoai: row.so_dien_thoai ?? null,
       ma_so_thu_tu: row.ma_so_thu_tu ?? null,

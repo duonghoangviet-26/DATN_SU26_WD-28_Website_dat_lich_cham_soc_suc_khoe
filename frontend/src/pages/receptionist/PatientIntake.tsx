@@ -8,12 +8,15 @@ import {
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
 import { SpecialtyOption, specialtyService } from '@/services/specialty.service'
+import { receptionistBookingService, DoctorFilterOption } from '@/services/receptionist-booking.service'
+import { receptionistOfflineQueueService, OfflineQueueRow } from '@/services/receptionist-offline-queue.service'
+import { appointmentStatusLabel, appointmentStatusTone, paymentLabel, examSessionStatusLabel, examSessionStatusTone, examSessionSourceLabel } from '@/utils/receptionistLabels'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
 import TempProfileModal from '@/components/receptionist/TempProfileModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
 import CheckInVerifyModal from '@/components/receptionist/CheckInVerifyModal'
-import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI'
+import { PageShell, ReceptionistHeader, StatusBadge } from '@/components/receptionist/ReceptionistUI'
 import axiosInstance from '@/services/axiosInstance'
 import {
   getLatestAllowedBirthDateInput,
@@ -23,6 +26,7 @@ import {
   validatePatientName,
   validateVietnamesePhone,
 } from '@/utils/patientIdentityValidation'
+import { printTicket } from '@/utils/printTicket'
 
 interface ReceptionistTodayAppointment {
   _id: string
@@ -85,14 +89,6 @@ function lichSuKhamLabel(lichSuKham?: PatientProfile['lich_su_kham']) {
   return `Khách cũ, đã khám ${lichSuKham.so_lan} lần, gần nhất ${ngay}${bacSi}`
 }
 
-function paymentLabel(status: string) {
-  return ({ paid: 'Đã trả phí khám', partial: 'Đã trả một phần', unpaid: 'Chưa trả phí khám', refunded: 'Đã hoàn phí khám' } as Record<string, string>)[status] ?? status
-}
-
-function appointmentStatusLabel(status: string) {
-  return ({ pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', checked_in: 'Đã tiếp nhận', in_progress: 'Đang khám', completed: 'Hoàn thành', cancelled: 'Đã hủy', no_show: 'Không đến' } as Record<string, string>)[status] ?? status
-}
-
 function appointmentIsCheckinable(appointment: TodayAppointment) {
   return appointment.status === 'confirmed'
 }
@@ -102,45 +98,98 @@ function todayAppointmentIsCheckinable(appointment: ReceptionistTodayAppointment
   return appointment.status === 'confirmed'
 }
 
-function appointmentStatusTone(status: string) {
-  if (status === 'checked_in') return 'bg-emerald-100 text-emerald-800'
-  if (status === 'completed') return 'bg-blue-100 text-blue-800'
-  if (status === 'cancelled') return 'bg-rose-100 text-rose-800'
-  if (status === 'no_show') return 'bg-slate-200 text-slate-700'
-  if (status === 'pending') return 'bg-amber-100 text-amber-800'
-  return 'bg-brand-100 text-brand-800'
+function isAppointmentToday(ngayKham: string) {
+  const vnNow = new Date(Date.now() + 7 * 60 * 60 * 1000)
+  const todayKey = vnNow.toISOString().split('T')[0]
+  const apptKey = new Date(ngayKham).toISOString().split('T')[0]
+  return apptKey === todayKey
 }
 
-function TodayAppointmentTab({
+type TimeframeFilter = 'all' | 'today' | 'tomorrow' | 'upcoming' | 'past' | 'custom_date' | 'custom_range'
+type AppointmentStatusFilter = 'active' | 'pending' | 'confirmed' | 'checked_in' | 'cancelled' | 'all'
+type AppointmentPaymentFilter = 'all' | 'unpaid' | 'paid' | 'partial' | 'refunded'
+
+const TIMEFRAME_OPTIONS: Array<{ value: TimeframeFilter; label: string }> = [
+  { value: 'all', label: 'Tất cả thời gian' },
+  { value: 'today', label: 'Hôm nay' },
+  { value: 'tomorrow', label: 'Ngày mai' },
+  { value: 'upcoming', label: 'Sắp tới' },
+  { value: 'past', label: 'Đã qua' },
+  { value: 'custom_date', label: 'Chọn ngày' },
+  { value: 'custom_range', label: 'Khoảng ngày' },
+]
+
+const STATUS_FILTER_OPTIONS: Array<{ value: AppointmentStatusFilter; label: string }> = [
+  { value: 'active', label: 'Đang hoạt động' },
+  { value: 'pending', label: 'Chờ xác nhận' },
+  { value: 'confirmed', label: 'Đã xác nhận' },
+  { value: 'checked_in', label: 'Đã check-in' },
+  { value: 'cancelled', label: 'Đã hủy' },
+  { value: 'all', label: 'Tất cả trạng thái' },
+]
+
+const PAYMENT_FILTER_OPTIONS: Array<{ value: AppointmentPaymentFilter; label: string }> = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'unpaid', label: 'Chưa thanh toán' },
+  { value: 'paid', label: 'Đã thanh toán' },
+  { value: 'partial', label: 'Thanh toán một phần' },
+  { value: 'refunded', label: 'Đã hoàn tiền' },
+]
+
+function AppointmentsTab({
   onTicketReady,
 }: {
   onTicketReady: (data: QueueTicketData) => void
 }) {
   const [appointments, setAppointments] = useState<ReceptionistTodayAppointment[]>([])
+  const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState<'active' | 'confirmed' | 'checked_in' | 'changed' | 'all'>('active')
+  const [timeframe, setTimeframe] = useState<TimeframeFilter>('all')
+  const [status, setStatus] = useState<AppointmentStatusFilter>('active')
+  const [paymentStatus, setPaymentStatus] = useState<AppointmentPaymentFilter>('all')
+  const [doctorId, setDoctorId] = useState('')
+  const [specialtyId, setSpecialtyId] = useState('')
+  const [customDate, setCustomDate] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [doctors, setDoctors] = useState<DoctorFilterOption[]>([])
+  const [specialties, setSpecialties] = useState<SpecialtyOption[]>([])
   const [checkInAppointment, setCheckInAppointment] = useState<ReceptionistTodayAppointment | null>(null)
   const [timelineApptId, setTimelineApptId] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    void specialtyService.getAllActive().then((rows) => setSpecialties(rows)).catch(() => setSpecialties([]))
+    void receptionistBookingService.listDoctorsForFilter().then(setDoctors).catch(() => setDoctors([]))
+  }, [])
 
   const loadAppointments = async () => {
     setLoading(true)
     setError('')
     try {
-      const response = await axiosInstance.get('/receptionist/appointments', {
-        params: {
-          timeframe: 'today',
-          limit: 100,
-          status: status === 'all' || status === 'active' || status === 'changed' ? undefined : status,
-          search: query.trim() || undefined,
-        },
-      })
+      const params: Record<string, string | number> = { limit: 100 }
+      if (timeframe === 'today' || timeframe === 'tomorrow' || timeframe === 'upcoming' || timeframe === 'past') {
+        params.timeframe = timeframe
+      } else if (timeframe === 'custom_date' && customDate) {
+        params.date = customDate
+      } else if (timeframe === 'custom_range') {
+        if (fromDate) params.from_date = fromDate
+        if (toDate) params.to_date = toDate
+      }
+      if (status !== 'active') params.status = status
+      if (paymentStatus !== 'all') params.payment_status = paymentStatus
+      if (doctorId) params.doctor_id = doctorId
+      if (specialtyId) params.specialty_id = specialtyId
+      if (query.trim()) params.search = query.trim()
+
+      const response = await axiosInstance.get('/receptionist/appointments', { params })
       const rows = Array.isArray(response.data?.data) ? response.data.data : []
       setAppointments(rows)
+      setTotalCount(typeof response.data?.pagination?.totalDocs === 'number' ? response.data.pagination.totalDocs : rows.length)
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Không thể tải lịch hẹn hôm nay')
+      setError(requestError?.response?.data?.message || 'Không thể tải danh sách lịch hẹn')
     } finally {
       setLoading(false)
     }
@@ -149,20 +198,13 @@ function TodayAppointmentTab({
   useEffect(() => {
     void loadAppointments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status])
-
-  const filteredAppointments = useMemo(() => {
-    let rows = appointments
-    if (status === 'active') rows = rows.filter((appointment) => appointment.status !== 'cancelled')
-    if (status === 'changed') rows = rows.filter((appointment) => Boolean(appointment.sua_gan_nhat) || appointment.status === 'cancelled')
-    return [...rows].sort((a, b) => b.gio_kham.localeCompare(a.gio_kham))
-  }, [appointments, status])
+  }, [timeframe, status, paymentStatus, doctorId, specialtyId, customDate, fromDate, toDate])
 
   const summary = useMemo(() => ({
     total: appointments.length,
     waiting: appointments.filter((appointment) => appointment.status === 'confirmed' || appointment.status === 'pending').length,
     checkedIn: appointments.filter((appointment) => appointment.status === 'checked_in').length,
-    changed: appointments.filter((appointment) => Boolean(appointment.sua_gan_nhat) || appointment.status === 'cancelled').length,
+    cancelled: appointments.filter((appointment) => appointment.status === 'cancelled').length,
   }), [appointments])
 
   const handleCheckedIn = (
@@ -170,6 +212,7 @@ function TodayAppointmentTab({
   ) => {
     if (checkInAppointment) {
       onTicketReady({
+        ticketType: 'kham',
         patientName: result.ten_benh_nhan,
         doctorName: checkInAppointment.doctor_id?.user_id?.ho_ten || 'Chưa gán',
         roomNumber: result.hang_doi.phong_kham || 'Chưa gán',
@@ -188,9 +231,9 @@ function TodayAppointmentTab({
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h3 className="text-lg font-bold text-slate-950">Lịch hẹn hôm nay</h3>
+          <h3 className="text-lg font-bold text-slate-950">Lịch hẹn</h3>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-            Tab này dùng để xem tổng quan trong ngày, kiểm tra lịch vừa thay đổi và check-in nhanh khi khách online đến quầy.
+            Mặc định hiển thị mọi lịch hẹn còn hiệu lực, không giới hạn theo ngày. Dùng bộ lọc bên dưới để thu hẹp kết quả.
           </p>
         </div>
         <button type="button" onClick={loadAppointments} disabled={loading} className="min-h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
@@ -200,8 +243,11 @@ function TodayAppointmentTab({
 
       <div className="mt-5 grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold text-slate-500">Tổng lịch</p>
-          <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}</p>
+          <p className="text-xs font-semibold text-slate-500">Kết quả</p>
+          <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}{totalCount > summary.total ? ` / ${totalCount}` : ''}</p>
+          {totalCount > summary.total && (
+            <p className="mt-1 text-[11px] font-medium text-amber-700">Đang hiển thị {summary.total}/{totalCount} — thu hẹp bộ lọc để xem đủ.</p>
+          )}
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-xs font-semibold text-amber-700">Chưa đến</p>
@@ -211,43 +257,79 @@ function TodayAppointmentTab({
           <p className="text-xs font-semibold text-emerald-700">Đã check-in</p>
           <p className="mt-1 text-xl font-bold text-emerald-950">{summary.checkedIn}</p>
         </div>
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-          <p className="text-xs font-semibold text-blue-700">Có thay đổi</p>
-          <p className="mt-1 text-xl font-bold text-blue-950">{summary.changed}</p>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+          <p className="text-xs font-semibold text-rose-700">Đã hủy</p>
+          <p className="mt-1 text-xl font-bold text-rose-950">{summary.cancelled}</p>
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="flex flex-wrap gap-2">
-          {[
-            { key: 'active', label: 'Đang hoạt động' },
-            { key: 'confirmed', label: 'Chưa đến' },
-            { key: 'checked_in', label: 'Đã check-in' },
-            { key: 'changed', label: 'Có thay đổi' },
-            { key: 'all', label: 'Tất cả' },
-          ].map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setStatus(item.key as typeof status)}
-              className={`min-h-10 rounded-xl px-3 text-xs font-bold transition ${status === item.key ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <form className="flex min-w-0 flex-1 gap-2" onSubmit={(event) => { event.preventDefault(); void loadAppointments() }}>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm tên, SĐT hoặc mã lịch"
-            className="min-h-10 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-          <button type="submit" className="min-h-10 rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800">
-            Tìm
-          </button>
+      <div className="mt-5 grid gap-3 lg:grid-cols-6">
+        <label className="text-xs font-bold text-slate-600">
+          Thời gian
+          <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as TimeframeFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            {TIMEFRAME_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Trạng thái
+          <select value={status} onChange={(event) => setStatus(event.target.value as AppointmentStatusFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            {STATUS_FILTER_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Thanh toán
+          <select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as AppointmentPaymentFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            {PAYMENT_FILTER_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Bác sĩ
+          <select value={doctorId} onChange={(event) => setDoctorId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="">Tất cả bác sĩ</option>
+            {doctors.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.ho_ten}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Chuyên khoa
+          <select value={specialtyId} onChange={(event) => setSpecialtyId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="">Tất cả chuyên khoa</option>
+            {specialties.map((specialty) => <option key={specialty.id} value={specialty.id}>{specialty.ten}</option>)}
+          </select>
+        </label>
+        <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); void loadAppointments() }}>
+          <label className="flex-1 text-xs font-bold text-slate-600">
+            Tìm kiếm
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Mã lịch, tên, SĐT"
+              className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <button type="submit" className="min-h-10 rounded-lg bg-brand-700 px-3 text-sm font-bold text-white hover:bg-brand-800">Tìm</button>
         </form>
       </div>
+
+      {timeframe === 'custom_date' && (
+        <div className="mt-3">
+          <label className="text-xs font-bold text-slate-600">
+            Chọn ngày
+            <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="mt-1 min-h-10 rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+          </label>
+        </div>
+      )}
+      {timeframe === 'custom_range' && (
+        <div className="mt-3 flex flex-wrap gap-3">
+          <label className="text-xs font-bold text-slate-600">
+            Từ ngày
+            <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="mt-1 min-h-10 rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+          </label>
+          <label className="text-xs font-bold text-slate-600">
+            Đến ngày
+            <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="mt-1 min-h-10 rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+          </label>
+        </div>
+      )}
 
       {(notice || error) && (
         <div className="mt-4 grid gap-2">
@@ -261,7 +343,7 @@ function TodayAppointmentTab({
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs font-bold text-slate-500">
               <tr>
-                <th className="px-4 py-3">Giờ</th>
+                <th className="px-4 py-3">Ngày / giờ</th>
                 <th className="px-4 py-3">Bệnh nhân</th>
                 <th className="px-4 py-3">Bác sĩ</th>
                 <th className="px-4 py-3">Thanh toán / trạng thái</th>
@@ -272,16 +354,17 @@ function TodayAppointmentTab({
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Đang tải lịch hẹn...</td></tr>
-              ) : filteredAppointments.length === 0 ? (
+              ) : appointments.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Không có lịch hẹn phù hợp.</td></tr>
-              ) : filteredAppointments.map((appointment) => {
+              ) : appointments.map((appointment) => {
                 const patientName = appointment.user_id?.ho_ten || appointment.ten_khach || 'Khách vãng lai'
                 const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
                 const canCheckIn = todayAppointmentIsCheckinable(appointment)
+                const isToday = isAppointmentToday(appointment.ngay_kham)
                 return (
                   <tr key={appointment._id} className="align-top hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <p className="font-bold tabular-nums text-slate-950">{appointment.gio_kham}</p>
+                      <p className="font-bold tabular-nums text-slate-950">{formatDate(appointment.ngay_kham)} - {appointment.gio_kham}</p>
                       <p className="mt-1 font-mono text-xs text-slate-400">{appointment.ma_lich_hen || appointment._id}</p>
                     </td>
                     <td className="px-4 py-3">
@@ -312,9 +395,9 @@ function TodayAppointmentTab({
                         <button
                           type="button"
                           onClick={() => setCheckInAppointment(appointment)}
-                          disabled={!canCheckIn || !patientPhone}
+                          disabled={!canCheckIn || !patientPhone || !isToday}
                           className="min-h-9 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          title={!patientPhone ? 'Lịch chưa có số điện thoại để xác minh hồ sơ' : undefined}
+                          title={!patientPhone ? 'Lịch chưa có số điện thoại để xác minh hồ sơ' : !isToday ? 'Chỉ có thể check-in lịch hẹn của hôm nay' : undefined}
                         >
                           Check-in
                         </button>
@@ -350,6 +433,187 @@ function TodayAppointmentTab({
   )
 }
 
+type SessionStatusFilter = 'all' | 'cho_dieu_phoi' | 'dang_cho' | 'da_goi' | 'trong_phong' | 'hoan_thanh' | 'cancelled'
+type SessionSourceFilter = 'all' | 'online' | 'offline'
+
+const SESSION_STATUS_OPTIONS: Array<{ value: SessionStatusFilter; label: string }> = [
+  { value: 'all', label: 'Tất cả trạng thái' },
+  { value: 'cho_dieu_phoi', label: 'Chờ điều phối' },
+  { value: 'dang_cho', label: 'Đang chờ gọi' },
+  { value: 'da_goi', label: 'Đã gọi' },
+  { value: 'trong_phong', label: 'Đang khám' },
+  { value: 'hoan_thanh', label: 'Đã khám xong' },
+  { value: 'cancelled', label: 'Đã hủy / bỏ qua' },
+]
+
+function TodaySessionsTab() {
+  const [rows, setRows] = useState<OfflineQueueRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<SessionStatusFilter>('all')
+  const [source, setSource] = useState<SessionSourceFilter>('all')
+  const [doctorId, setDoctorId] = useState('')
+  const [specialtyId, setSpecialtyId] = useState('')
+  const [doctors, setDoctors] = useState<DoctorFilterOption[]>([])
+  const [specialties, setSpecialties] = useState<SpecialtyOption[]>([])
+
+  useEffect(() => {
+    void specialtyService.getAllActive().then((items) => setSpecialties(items)).catch(() => setSpecialties([]))
+    void receptionistBookingService.listDoctorsForFilter().then(setDoctors).catch(() => setDoctors([]))
+  }, [])
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const statusParam = status === 'cancelled' ? 'cancelled,skipped' : status === 'all' ? undefined : status
+      const rows = await receptionistOfflineQueueService.listToday({
+        status: statusParam,
+        nguon: source === 'all' ? undefined : source,
+        doctor_id: doctorId || undefined,
+        specialty_id: specialtyId || undefined,
+        search: query.trim() || undefined,
+      })
+      setRows(rows)
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.message || 'Không thể tải danh sách ca khám hôm nay')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, source, doctorId, specialtyId])
+
+  const summary = useMemo(() => ({
+    total: rows.length,
+    waiting: rows.filter((row) => ['cho_dieu_phoi', 'dang_cho', 'da_goi'].includes(row.trang_thai)).length,
+    inRoom: rows.filter((row) => row.trang_thai === 'trong_phong').length,
+    done: rows.filter((row) => row.trang_thai === 'hoan_thanh').length,
+  }), [rows])
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-slate-950">Ca khám hôm nay</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+            Toàn bộ ca khám trong ngày, gồm cả lượt đặt online lẫn khách đến trực tiếp tại quầy.
+          </p>
+        </div>
+        <button type="button" onClick={load} disabled={loading} className="min-h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+          {loading ? 'Đang tải...' : 'Làm mới'}
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold text-slate-500">Tổng ca hôm nay</p>
+          <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}</p>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold text-amber-700">Đang chờ</p>
+          <p className="mt-1 text-xl font-bold text-amber-950">{summary.waiting}</p>
+        </div>
+        <div className="rounded-xl border border-brand-200 bg-brand-50 p-3">
+          <p className="text-xs font-semibold text-brand-700">Đang khám</p>
+          <p className="mt-1 text-xl font-bold text-brand-950">{summary.inRoom}</p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-xs font-semibold text-emerald-700">Đã khám xong</p>
+          <p className="mt-1 text-xl font-bold text-emerald-950">{summary.done}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 lg:grid-cols-5">
+        <label className="text-xs font-bold text-slate-600">
+          Trạng thái
+          <select value={status} onChange={(event) => setStatus(event.target.value as SessionStatusFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            {SESSION_STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Nguồn
+          <select value={source} onChange={(event) => setSource(event.target.value as SessionSourceFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="all">Tất cả nguồn</option>
+            <option value="online">Online</option>
+            <option value="offline">Tại quầy</option>
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Bác sĩ
+          <select value={doctorId} onChange={(event) => setDoctorId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="">Tất cả bác sĩ</option>
+            {doctors.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.ho_ten}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">
+          Chuyên khoa
+          <select value={specialtyId} onChange={(event) => setSpecialtyId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+            <option value="">Tất cả chuyên khoa</option>
+            {specialties.map((specialty) => <option key={specialty.id} value={specialty.id}>{specialty.ten}</option>)}
+          </select>
+        </label>
+        <form className="flex items-end gap-2" onSubmit={(event) => { event.preventDefault(); void load() }}>
+          <label className="flex-1 text-xs font-bold text-slate-600">
+            Tìm kiếm
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Tên, SĐT, mã lượt khám"
+              className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <button type="submit" className="min-h-10 rounded-lg bg-brand-700 px-3 text-sm font-bold text-white hover:bg-brand-800">Tìm</button>
+        </form>
+      </div>
+
+      {error && <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-900">{error}</p>}
+
+      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Số / bệnh nhân</th>
+                <th className="px-4 py-3">Nguồn</th>
+                <th className="px-4 py-3">Chuyên khoa</th>
+                <th className="px-4 py-3">Bác sĩ / phòng</th>
+                <th className="px-4 py-3">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Đang tải ca khám...</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Không có ca khám phù hợp.</td></tr>
+              ) : rows.map((row) => (
+                <tr key={row.id} className="align-top hover:bg-slate-50">
+                  <td className="px-4 py-3">
+                    <p className="font-bold text-slate-950">{row.ma_so_thu_tu || '-'}</p>
+                    <p className="mt-1 font-semibold text-slate-900">{row.ten_benh_nhan}</p>
+                    <p className="mt-1 text-xs text-slate-500">{row.so_dien_thoai || 'Chưa có SĐT'}</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">{examSessionSourceLabel(row.nguon || 'offline')}</td>
+                  <td className="px-4 py-3 text-slate-700">{row.specialty?.ten || '-'}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-slate-900">{row.doctor?.ho_ten || 'Chưa gán'}</p>
+                    <p className="mt-1 text-xs text-slate-500">{row.phong_kham || row.doctor?.phong_kham_mac_dinh || '-'}</p>
+                  </td>
+                  <td className="px-4 py-3"><StatusBadge tone={examSessionStatusTone(row.trang_thai)}>{examSessionStatusLabel(row.trang_thai)}</StatusBadge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function DetailItem({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
     <div>
@@ -370,6 +634,105 @@ function StepIndicator({ step, label, state }: { step: number; label: string; st
     <div className="flex min-w-0 items-center gap-2">
       <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${tone}`}>{step}</span>
       <span className={`truncate text-sm font-semibold ${state === 'locked' ? 'text-slate-400' : 'text-slate-800'}`}>{label}</span>
+    </div>
+  )
+}
+
+function BookingHistoryModal({ profile, onClose }: { profile: PatientProfile; onClose: () => void }) {
+  const [appointments, setAppointments] = useState<TodayAppointment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    receptionistPatientIntakeService.getBookingHistory(profile.id)
+      .then((result) => {
+        if (!cancelled) setAppointments(result.appointments || [])
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(requestError?.response?.data?.message || 'Không thể tải lịch sử đặt lịch')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [profile.id])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-slate-900">Lịch sử đặt lịch</h3>
+            <p className="mt-1 text-sm text-slate-500">{profile.ho_ten}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Đóng lịch sử đặt lịch">
+            x
+          </button>
+        </div>
+
+        {loading && (
+          <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+            Đang tải lịch sử đặt lịch...
+          </div>
+        )}
+        {!loading && error && <p className="mt-6 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
+        {!loading && !error && appointments.length === 0 && (
+          <div className="mt-6 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+            Hồ sơ này chưa có lịch đặt nào.
+          </div>
+        )}
+
+        {!loading && !error && appointments.length > 0 && (
+          <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Ngày giờ</th>
+                  <th className="px-4 py-3">Mã lịch</th>
+                  <th className="px-4 py-3">Bác sĩ / chuyên khoa</th>
+                  <th className="px-4 py-3">Trạng thái</th>
+                  <th className="px-4 py-3">Thanh toán</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {appointments.map((appointment) => (
+                  <tr key={appointment.id} className="align-top">
+                    <td className="px-4 py-3">
+                      <p className="font-bold text-slate-950">{formatDate(appointment.ngay_kham)}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{appointment.gio_kham}{appointment.gio_ket_thuc ? ` - ${appointment.gio_ket_thuc}` : ''}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-mono text-xs font-semibold text-slate-700">{appointment.ma_lich_hen || appointment.id}</p>
+                      <p className="mt-1 text-xs text-slate-500">{appointment.nguon === 'tai_cho' ? 'Tại quầy' : 'Online'}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-slate-900">{appointment.doctor?.ho_ten || 'Chưa gán bác sĩ'}</p>
+                      <p className="mt-1 text-xs text-slate-500">{appointment.chuyen_khoa?.ten || 'Chưa có chuyên khoa'}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-2 py-1 text-xs font-bold ${appointmentStatusTone(appointment.status)}`}>
+                        {appointmentStatusLabel(appointment.status)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">{paymentLabel(appointment.payment_status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">
+            Đóng
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -395,23 +758,19 @@ export default function PatientIntake() {
   const [specialties, setSpecialties] = useState<SpecialtyOption[]>([])
   const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('')
   const [confirmLongWait, setConfirmLongWait] = useState(false)
-  // D78 — cấp cứu/ưu tiên khẩn cho walk-in. Bắt buộc lý do/dấu hiệu, backend cũng chặn lại
-  // ở tiepNhanOfflineVaoHangDoiTrungTam (không tin riêng validate FE).
-  const [capCuu, setCapCuu] = useState(false)
-  const [lyDoCapCuu, setLyDoCapCuu] = useState('')
   const [checkingIn, setCheckingIn] = useState(false)
   const [editingProfile, setEditingProfile] = useState<PatientProfile | null>(null)
-  const [auditProfileId, setAuditProfileId] = useState<string | null>(null)
+  const [bookingHistoryProfile, setBookingHistoryProfile] = useState<PatientProfile | null>(null)
   const [linkAccount, setLinkAccount] = useState(true)
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
   const [searchPhoneError, setSearchPhoneError] = useState('')
   const [formErrors, setFormErrors] = useState<{ ho_ten?: string; ngay_sinh?: string }>({})
-  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'today'>('lookup')
+  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'appointments' | 'today_sessions'>('lookup')
   // D81 — modal tự trị, không đụng state tra cứu-theo-SĐT ở trên.
   const [showTempProfileModal, setShowTempProfileModal] = useState(false)
 
   useEffect(() => {
-    if (printData) window.print()
+    if (printData) printTicket()
   }, [printData])
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedId) ?? null
@@ -428,8 +787,6 @@ export default function PatientIntake() {
     setConfirmLongWait(false)
     setSelectedAppointmentId(null)
     setMode('idle')
-    setCapCuu(false)
-    setLyDoCapCuu('')
   }
 
   const search = async (event?: FormEvent) => {
@@ -549,14 +906,14 @@ export default function PatientIntake() {
       const specialtyId = selectedSpecialtyId || specialtyRows[0]?.id || ''
       setSelectedSpecialtyId(specialtyId)
       if (!specialtyId) {
-        setMessage('Chua co chuyen khoa dang hoat dong de tiep nhan khach vang lai.')
+        setMessage('Chưa có chuyên khoa đang hoạt động để tiếp nhận khách vãng lai.')
         return
       }
       const result = await receptionistPatientIntakeService.getCentralOfflineCapacity(specialtyId)
       setCentralCapacity(result)
-      if (!result.co_the_nhan) setMessage(result.ly_do || 'Tam dung nhan khach vang lai cho chuyen khoa nay.')
+      if (!result.co_the_nhan) setMessage(result.ly_do || 'Tạm dừng nhận khách vãng lai cho chuyên khoa này.')
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Khong the xac minh suc chua hang doi trung tam.')
+      setError(requestError?.response?.data?.message || 'Không thể xác minh sức chứa hàng đợi trung tâm.')
     }
   }
 
@@ -568,9 +925,9 @@ export default function PatientIntake() {
     try {
       const result = await receptionistPatientIntakeService.getCentralOfflineCapacity(specialtyId)
       setCentralCapacity(result)
-      setMessage(result.co_the_nhan ? '' : result.ly_do || 'Tam dung nhan khach vang lai cho chuyen khoa nay.')
+      setMessage(result.co_the_nhan ? '' : result.ly_do || 'Tạm dừng nhận khách vãng lai cho chuyên khoa này.')
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Khong the cap nhat suc chua chuyen khoa.')
+      setError(requestError?.response?.data?.message || 'Không thể cập nhật sức chứa chuyên khoa.')
     }
   }
 
@@ -592,6 +949,7 @@ export default function PatientIntake() {
         : profile))
 
       setPrintData({
+        ticketType: 'kham',
         patientName: selectedProfile.ho_ten,
         doctorName: selectedAppointment.doctor?.ho_ten || 'Chưa gán',
         roomNumber: response.hang_doi.phong_kham || 'Chưa gán',
@@ -649,6 +1007,7 @@ export default function PatientIntake() {
       setMode('booked')
       setMessage(`Đã tạo hồ sơ và đưa ${patientName} vào hàng đợi của ${appointment.doctor?.ho_ten || 'bác sĩ phụ trách'} theo lịch ${appointment.ma_lich_hen || appointment.id}.`)
       setPrintData({
+        ticketType: 'kham',
         patientName,
         doctorName: appointment.doctor?.ho_ten || 'Chưa gán',
         roomNumber: response.hang_doi.phong_kham || 'Chưa gán',
@@ -683,10 +1042,6 @@ export default function PatientIntake() {
 
   const checkInWalkIn = async () => {
     if (!selectedProfile || !selectedSpecialtyId || !centralCapacity) return
-    if (capCuu && !lyDoCapCuu.trim()) {
-      setError('Cần nhập lý do / dấu hiệu cấp cứu trước khi tiếp nhận')
-      return
-    }
     setCheckingIn(true)
     setError('')
     try {
@@ -694,23 +1049,24 @@ export default function PatientIntake() {
         ho_so_benh_nhan_id: selectedProfile.id,
         specialty_id: selectedSpecialtyId,
         xac_nhan_canh_bao: confirmLongWait,
-        ...(capCuu ? { muc_uu_tien_tiep_nhan: 'cap_cuu' as const, ly_do_uu_tien: lyDoCapCuu.trim() } : {}),
       })
       setCentralCapacity(null)
       setConfirmLongWait(false)
-      setCapCuu(false)
-      setLyDoCapCuu('')
       setMessage(`Đã tiếp nhận walk-in ${selectedProfile.ho_ten} vào hàng đợi khám. Số thứ tự: ${result.entry.ma_so_thu_tu || result.entry._id}`)
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
         ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'cho_dieu_phoi', specialty_id: selectedSpecialtyId, doctor_id: null, phong_kham: null, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
         : profile))
 
+      const specialtyName = specialties.find((item) => item.id === selectedSpecialtyId)?.ten
       setPrintData({
+        ticketType: 'cho_dieu_phoi',
         patientName: selectedProfile.ho_ten,
-        doctorName: 'Cho dieu phoi',
-        roomNumber: 'Cho dieu phoi',
         queueNumber: result.entry.ma_so_thu_tu || '-',
-        appointmentTime: result.entry.thoi_gian_cho_uoc_tinh_phut ? `Uoc tinh ${result.entry.thoi_gian_cho_uoc_tinh_phut} phut` : 'Cho dieu phoi',
+        specialtyName,
+        appointmentTime: formatDateTime(result.entry.checkin_time ?? new Date().toISOString()),
+        note: result.entry.thoi_gian_cho_uoc_tinh_phut
+          ? `Thời gian chờ ước tính: ${result.entry.thoi_gian_cho_uoc_tinh_phut} phút. Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.`
+          : 'Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.',
       })
 
       setPhone('')
@@ -740,19 +1096,12 @@ export default function PatientIntake() {
     <PageShell>
         <ReceptionistHeader
           eyebrow="Tiếp nhận & lịch hẹn"
-          title="Tra cứu trước, chọn đúng luồng sau"
-          description="Tab tra cứu là luồng chính khi khách đến quầy; tab lịch hẹn hôm nay dùng để xem tổng quan, kiểm tra thay đổi và check-in nhanh."
-          metrics={
-            <div className="grid gap-3 rounded-xl bg-slate-50 p-3 sm:grid-cols-3 lg:min-w-[560px]">
-              <StepIndicator step={1} label="Tra số điện thoại" state={lookupState} />
-              <StepIndicator step={2} label="Chọn hồ sơ" state={profileState} />
-              <StepIndicator step={3} label="Khám/Check-in" state={actionState} />
-            </div>
-          }
+          title="Tiếp nhận tại quầy"
+          description="Quản lý tra cứu hồ sơ, tiếp nhận khách đến trực tiếp, theo dõi lịch hẹn và ca khám trong ngày."
         />
 
         <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => setWorkspaceTab('lookup')}
@@ -763,11 +1112,19 @@ export default function PatientIntake() {
             </button>
             <button
               type="button"
-              onClick={() => setWorkspaceTab('today')}
-              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'today' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+              onClick={() => setWorkspaceTab('appointments')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'appointments' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
             >
-              Lịch hẹn hôm nay
-              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today' ? 'text-slate-200' : 'text-slate-500'}`}>Xem số lượng, trạng thái, thay đổi gần đây và check-in nhanh</span>
+              Lịch hẹn
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'appointments' ? 'text-slate-200' : 'text-slate-500'}`}>Xem và lọc toàn bộ lịch hẹn, không chỉ trong hôm nay</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('today_sessions')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'today_sessions' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+            >
+              Ca khám hôm nay
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today_sessions' ? 'text-slate-200' : 'text-slate-500'}`}>Toàn bộ ca khám trong ngày, cả online lẫn tại quầy</span>
             </button>
           </div>
         </div>
@@ -780,6 +1137,12 @@ export default function PatientIntake() {
         )}
 
         {workspaceTab === 'lookup' ? (
+        <div className="grid gap-5">
+          <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-3">
+            <StepIndicator step={1} label="Tra số điện thoại" state={lookupState} />
+            <StepIndicator step={2} label="Chọn hồ sơ" state={profileState} />
+            <StepIndicator step={3} label="Khám/Check-in" state={actionState} />
+          </div>
         <main className="grid gap-5 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.35fr)]">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
@@ -1038,7 +1401,7 @@ export default function PatientIntake() {
                   <button type="button" onClick={() => setEditingProfile(selectedProfile)} className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-slate-50">
                     Chỉnh sửa hồ sơ
                   </button>
-                  <button type="button" onClick={() => setAuditProfileId(selectedProfile.id)} className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-slate-50">
+                  <button type="button" onClick={() => setBookingHistoryProfile(selectedProfile)} className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-800 hover:bg-slate-50">
                     Lịch sử đặt lịch
                   </button>
                   {hasAppointmentToday ? (
@@ -1104,23 +1467,23 @@ export default function PatientIntake() {
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <h4 className="text-base font-bold text-slate-950">Khach vang lai - hang doi trung tam</h4>
-                        <p className="mt-1 text-sm text-slate-600">Le tan chon chuyen khoa, kiem tra suc chua, roi dua khach vao hang doi cho dieu phoi bac si.</p>
+                        <h4 className="text-base font-bold text-slate-950">Khách vãng lai - hàng đợi trung tâm</h4>
+                        <p className="mt-1 text-sm text-slate-600">Lễ tân chọn chuyên khoa, kiểm tra sức chứa, rồi đưa khách vào hàng đợi chờ điều phối bác sĩ.</p>
                       </div>
                       <button type="button" onClick={loadAvailability} disabled={hasActiveQueue} className="min-h-10 rounded-xl border border-brand-300 px-4 text-sm font-bold text-brand-800 hover:bg-brand-50 disabled:opacity-60">
-                        Kiem tra lai
+                        Kiểm tra lại
                       </button>
                     </div>
 
                     <label className="mt-4 block text-sm font-bold text-slate-800">
-                      Chuyen khoa can kham
+                      Chuyên khoa cần khám
                       <select
                         value={selectedSpecialtyId}
                         onChange={(event) => void changeWalkInSpecialty(event.target.value)}
                         disabled={hasActiveQueue || checkingIn}
                         className="mt-1.5 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:opacity-60"
                       >
-                        <option value="">Chon chuyen khoa</option>
+                        <option value="">Chọn chuyên khoa</option>
                         {specialties.map((specialty) => (
                           <option key={specialty.id} value={specialty.id}>{specialty.ten}</option>
                         ))}
@@ -1129,7 +1492,7 @@ export default function PatientIntake() {
 
                     {!centralCapacity && (
                       <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-600">
-                        Chon chuyen khoa de kiem tra suc chua hang doi trung tam.
+                        Chọn chuyên khoa để kiểm tra sức chứa hàng đợi trung tâm.
                       </div>
                     )}
 
@@ -1144,30 +1507,30 @@ export default function PatientIntake() {
                         }`}>
                           <p className="font-bold">
                             {centralCapacity.trang_thai === 'co_the_nhan'
-                              ? 'Co the tiep nhan'
+                              ? 'Có thể tiếp nhận'
                               : centralCapacity.trang_thai === 'canh_bao_day'
-                                ? 'Hang doi dang day - can bao truoc voi khach'
-                                : 'Tam dung tiep nhan'}
+                                ? 'Hàng đợi đang đầy - cần báo trước với khách'
+                                : 'Tạm dừng tiếp nhận'}
                           </p>
                           {centralCapacity.ly_do && <p className="mt-1 text-sm">{centralCapacity.ly_do}</p>}
-                          <p className="mt-2 text-xs opacity-80">Kiem tra luc {formatDateTime(centralCapacity.checked_at)}</p>
+                          <p className="mt-2 text-xs opacity-80">Kiểm tra lúc {formatDateTime(centralCapacity.checked_at)}</p>
                         </div>
 
                         <div className="mt-4 grid gap-3 sm:grid-cols-4">
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs font-semibold text-slate-500">Dang cho trung tam</p>
+                            <p className="text-xs font-semibold text-slate-500">Đang chờ trung tâm</p>
                             <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.so_khach_cho_trung_tam}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs font-semibold text-slate-500">Bac si co the dieu phoi</p>
+                            <p className="text-xs font-semibold text-slate-500">Bác sĩ có thể điều phối</p>
                             <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.so_bac_si_co_the_dieu_phoi}</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs font-semibold text-slate-500">Cho uoc tinh</p>
+                            <p className="text-xs font-semibold text-slate-500">Chờ ước tính</p>
                             <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.thoi_gian_cho_uoc_tinh_phut ?? '-'}'</p>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-xs font-semibold text-slate-500">Con nhan</p>
+                            <p className="text-xs font-semibold text-slate-500">Còn nhận</p>
                             <p className="mt-1 text-xl font-bold text-slate-950">{centralCapacity.thong_ke.suc_chua_trung_tam_con_lai}</p>
                           </div>
                         </div>
@@ -1180,40 +1543,19 @@ export default function PatientIntake() {
                               onChange={(event) => setConfirmLongWait(event.target.checked)}
                               className="mt-1 h-4 w-4 rounded border-amber-300 text-amber-700 focus:ring-amber-500"
                             />
-                            <span>Da thong bao thoi gian cho uoc tinh cho khach va khach dong y tiep tuc cho dieu phoi.</span>
+                            <span>Đã thông báo thời gian chờ ước tính cho khách và khách đồng ý tiếp tục chờ điều phối.</span>
                           </label>
-                        )}
-
-                        <label className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-bold text-rose-950">
-                          <input
-                            type="checkbox"
-                            checked={capCuu}
-                            onChange={(event) => setCapCuu(event.target.checked)}
-                            className="mt-1 h-4 w-4 rounded border-rose-300 text-rose-700 focus:ring-rose-500"
-                          />
-                          <span>Cấp cứu / ưu tiên khẩn — xếp trước toàn bộ hàng đợi, báo ngay cho bác sĩ trong ca.</span>
-                        </label>
-                        {capCuu && (
-                          <textarea
-                            value={lyDoCapCuu}
-                            onChange={(event) => setLyDoCapCuu(event.target.value)}
-                            rows={2}
-                            placeholder="Lý do / dấu hiệu cấp cứu (bắt buộc) — vd: đau ngực dữ dội, khó thở, chảy máu nhiều"
-                            className="mt-2 w-full rounded-xl border border-rose-300 px-3 py-2 text-sm outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
-                          />
                         )}
 
                         <button
                           type="button"
                           onClick={checkInWalkIn}
-                          disabled={checkingIn || hasActiveQueue || !centralCapacity.co_the_nhan || (centralCapacity.can_xac_nhan_qua_tai && !confirmLongWait) || (capCuu && !lyDoCapCuu.trim())}
-                          className={`mt-4 min-h-12 w-full rounded-xl px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60 ${capCuu ? 'bg-rose-700 hover:bg-rose-800' : 'bg-brand-700 hover:bg-brand-800'}`}
+                          disabled={checkingIn || hasActiveQueue || !centralCapacity.co_the_nhan || (centralCapacity.can_xac_nhan_qua_tai && !confirmLongWait)}
+                          className="mt-4 min-h-12 w-full rounded-xl bg-brand-700 px-4 text-sm font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {checkingIn
-                            ? 'Dang dua vao hang doi...'
-                            : capCuu
-                              ? `Tiếp nhận CẤP CỨU: ${selectedProfile.ho_ten}`
-                              : `Dua ${selectedProfile.ho_ten} vao hang doi trung tam`}
+                            ? 'Đang đưa vào hàng đợi...'
+                            : `Đưa ${selectedProfile.ho_ten} vào hàng đợi trung tâm`}
                         </button>
                       </>
                     )}
@@ -1224,8 +1566,11 @@ export default function PatientIntake() {
             )}
           </section>
         </main>
+        </div>
+        ) : workspaceTab === 'appointments' ? (
+          <AppointmentsTab onTicketReady={setPrintData} />
         ) : (
-          <TodayAppointmentTab onTicketReady={setPrintData} />
+          <TodaySessionsTab />
         )}
 
         {editingProfile && (
@@ -1235,12 +1580,10 @@ export default function PatientIntake() {
             onSaved={handleProfileSaved}
           />
         )}
-        {auditProfileId && (
-          <TimelinePanel
-            loai="ho_so"
-            id={auditProfileId}
-            title="Lịch sử cập nhật hồ sơ"
-            onClose={() => setAuditProfileId(null)}
+        {bookingHistoryProfile && (
+          <BookingHistoryModal
+            profile={bookingHistoryProfile}
+            onClose={() => setBookingHistoryProfile(null)}
           />
         )}
 
@@ -1270,7 +1613,7 @@ export default function PatientIntake() {
             <span className="text-xs text-slate-600">Phiếu số {printData.queueNumber}</span>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => printTicket()}
               className="rounded-full bg-brand-600 px-3 py-1 text-xs font-bold text-white hover:bg-brand-700"
             >
               In lại phiếu
