@@ -694,6 +694,16 @@ export interface AdminDashboardSummary {
     generated_at: string;
 }
 
+export interface RevenueDetails {
+    collectedThisMonth: number;
+    collectedLastMonth: number;
+    collectedTotal: number;
+    growth: number;
+    diff: number;
+    thisYearMonthly: Array<{ month: number; year: number; total: number }>;
+    yearly: Array<{ year: number; total: number }>;
+}
+
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message: string;

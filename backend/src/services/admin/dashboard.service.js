@@ -174,3 +174,73 @@ export async function getAdminDashboardSummary(now = new Date()) {
     generated_at: now.toISOString(),
   }
 }
+
+export async function getChiTietDoanhThu(now = new Date()) {
+  const thisMonth = getMonthBounds(now)
+  const lastMonth = getLastMonthBounds(now)
+
+  // Gom doanh thu theo tháng (tất cả lịch sử)
+  const monthlyRevenue = await ThanhToan.aggregate([
+    { $match: { status: 'paid' } },
+    {
+      $group: {
+        _id: {
+          year: { $year: { date: '$ngay_tao', timezone: 'Asia/Ho_Chi_Minh' } },
+          month: { $month: { date: '$ngay_tao', timezone: 'Asia/Ho_Chi_Minh' } }
+        },
+        total: { $sum: '$so_tien' }
+      }
+    },
+    { $sort: { '_id.year': 1, '_id.month': 1 } }
+  ])
+
+  // Gom doanh thu theo năm
+  const yearlyRevenue = await ThanhToan.aggregate([
+    { $match: { status: 'paid' } },
+    {
+      $group: {
+        _id: {
+          year: { $year: { date: '$ngay_tao', timezone: 'Asia/Ho_Chi_Minh' } }
+        },
+        total: { $sum: '$so_tien' }
+      }
+    },
+    { $sort: { '_id.year': 1 } }
+  ])
+
+  // Chuyển đổi dữ liệu
+  const currentYear = now.getFullYear()
+  
+  // Mảng 12 tháng của năm nay
+  const thisYearMonthly = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1
+    const found = monthlyRevenue.find(x => x._id.year === currentYear && x._id.month === m)
+    return {
+      month: m,
+      year: currentYear,
+      total: found?.total || 0
+    }
+  })
+
+  // Mảng các năm
+  const yearly = yearlyRevenue.map(x => ({
+    year: x._id.year,
+    total: x.total
+  }))
+
+  const [collectedThisMonth, collectedLastMonth, collectedTotal] = await Promise.all([
+    sumField(ThanhToan, 'so_tien', { status: 'paid', ngay_tao: { $gte: thisMonth.start, $lt: thisMonth.end } }),
+    sumField(ThanhToan, 'so_tien', { status: 'paid', ngay_tao: { $gte: lastMonth.start, $lt: lastMonth.end } }),
+    sumField(ThanhToan, 'so_tien', { status: 'paid' })
+  ])
+
+  return {
+    collectedThisMonth,
+    collectedLastMonth,
+    collectedTotal,
+    growth: calcGrowth(collectedThisMonth, collectedLastMonth),
+    diff: collectedThisMonth - collectedLastMonth,
+    thisYearMonthly,
+    yearly
+  }
+}
