@@ -16,6 +16,7 @@ interface PublicHomeServiceItem {
   mo_ta?: string | null
   mo_ta_ngan?: string | null
   image_url?: string | null
+  hinh_anh?: string | null
   thoi_gian_phut?: number | null
   gio_dat_truoc_toi_thieu?: number | null
   khu_vuc?: string[]
@@ -85,7 +86,7 @@ function mapPublicHomeService(item: PublicHomeServiceItem): ServiceItem {
     gia: item.gia,
     mo_ta: item.mo_ta ?? null,
     mo_ta_ngan: item.mo_ta_ngan ?? null,
-    image_url: item.image_url ?? null,
+    image_url: item.image_url ?? item.hinh_anh ?? null,
     thoi_gian_phut: item.thoi_gian_phut ?? null,
     gio_dat_truoc_toi_thieu: item.gio_dat_truoc_toi_thieu ?? undefined,
     ngay_ap_dung: 'T2-T7',
