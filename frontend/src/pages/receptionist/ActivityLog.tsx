@@ -189,7 +189,7 @@ export default function ActivityLog() {
     <PageShell>
       <ReceptionistHeader
         eyebrow="Vận hành · Bàn giao ca"
-        title="Nhật ký ca trực"
+        title="Nhật ký ca trực lễ tân"
         description="Ai đã thao tác với khách nào, lúc nào. Dùng khi bàn giao ca hoặc làm thay đồng nghiệp nghỉ."
       />
 
