@@ -13,6 +13,7 @@ export const adminMenu: AdminMenuItem[] = [
   { type: 'section', label: 'Hoạt động' },
   { type: 'item', path: '/admin/appointments', label: 'Lịch hẹn', icon: 'calendar' },
   { type: 'item', path: '/admin/doctor-schedules', label: 'Lịch làm việc bác sĩ', icon: 'clock' },
+  { type: 'item', path: '/admin/activity-log', label: 'Nhật ký ca trực', icon: 'clipboard-list' },
   { type: 'item', path: '/admin/reviews', label: 'Đánh giá', icon: 'star' },
   { type: 'item', path: '/admin/news', label: 'Tin tức', icon: 'file-text' },
   { type: 'item', path: '/admin/notifications', label: 'Thông báo', icon: 'bell' },

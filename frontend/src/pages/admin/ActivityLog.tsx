@@ -3,8 +3,10 @@ import {
   ActivityLogRow,
   receptionistActivityLogService,
 } from '@/services/receptionist-activity-log.service'
-import { EmptyBlock, PageShell, ReceptionistHeader, TableFrame } from '@/components/receptionist/ReceptionistUI'
+import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
+import PageHeader from '@/components/common/PageHeader'
 import TablePaginationFooter from '@/components/common/TablePaginationFooter'
+import { EmptyBlock, TableFrame } from '@/components/receptionist/ReceptionistUI'
 import Icon from '@/components/admin/icons'
 
 const NHAN_NHOM: Record<string, string> = {
@@ -186,128 +188,135 @@ export default function ActivityLog() {
   const totalPages = Math.ceil(total / limit)
 
   return (
-    <PageShell>
-      <ReceptionistHeader
-        eyebrow="Vận hành · Bàn giao ca"
-        title="Nhật ký ca trực"
-        description="Ai đã thao tác với khách nào, lúc nào. Dùng khi bàn giao ca hoặc làm thay đồng nghiệp nghỉ."
-      />
+    <AdminMotionGroup>
+      <AdminMotionItem>
+        <PageHeader
+          title="Nhật ký ca trực lễ tân"
+          description="Quản lý và xem lại lịch sử các thao tác của lễ tân trên hệ thống."
+        />
+      </AdminMotionItem>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="grid gap-1 text-sm font-semibold text-slate-700">
-          Từ ngày
-          <input
-            type="date"
-            value={tuNgay}
-            onChange={(e) => setTuNgay(e.target.value)}
-            className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-        <label className="grid gap-1 text-sm font-semibold text-slate-700">
-          Đến ngày
-          <input
-            type="date"
-            value={denNgay}
-            onChange={(e) => setDenNgay(e.target.value)}
-            className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
-
-        <label className="grid gap-1 text-sm font-semibold text-slate-700 w-full md:w-auto flex-1 max-w-sm">
-          Tìm kiếm
-          <div className="relative">
-            <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
-              <Icon name="search" className="h-4 w-4" />
-            </span>
+      <AdminMotionItem>
+        <div className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <label className="grid gap-1 text-sm font-semibold text-slate-700">
+            Từ ngày
             <input
-              type="text"
-              placeholder="Tên khách, tên nhân viên..."
-              value={tuKhoa}
-              onChange={(e) => setTuKhoa(e.target.value)}
-              className="min-h-10 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              type="date"
+              value={tuNgay}
+              onChange={(e) => setTuNgay(e.target.value)}
+              className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
-          </div>
-        </label>
+          </label>
+          <label className="grid gap-1 text-sm font-semibold text-slate-700">
+            Đến ngày
+            <input
+              type="date"
+              value={denNgay}
+              onChange={(e) => setDenNgay(e.target.value)}
+              className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
 
-        <label className="grid gap-1 text-sm font-semibold text-slate-700">
-          Nhóm việc
-          <select
-            value={nhom}
-            onChange={(e) => setNhom(e.target.value)}
-            className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          >
-            <option value="">Tất cả</option>
-            {Object.entries(NHAN_NHOM).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
+          <label className="grid gap-1 text-sm font-semibold text-slate-700 w-full md:w-auto flex-1 max-w-sm">
+            Tìm kiếm
+            <div className="relative">
+              <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
+                <Icon name="search" className="h-4 w-4" />
+              </span>
+              <input
+                type="text"
+                placeholder="Tên khách, tên nhân viên..."
+                value={tuKhoa}
+                onChange={(e) => setTuKhoa(e.target.value)}
+                className="min-h-10 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
+          </label>
 
-        <label className="grid gap-1 text-sm font-semibold text-slate-700">
-          Người trực
-          <select
-            value={nguoiId}
-            onChange={(e) => setNguoiId(e.target.value)}
-            className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-          >
-            <option value="">Tất cả</option>
-            {nguoiTrong.map(([id, ten]) => (
-              <option key={id} value={id}>{ten}</option>
-            ))}
-          </select>
-        </label>
+          <label className="grid gap-1 text-sm font-semibold text-slate-700">
+            Nhóm việc
+            <select
+              value={nhom}
+              onChange={(e) => setNhom(e.target.value)}
+              className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            >
+              <option value="">Tất cả</option>
+              {Object.entries(NHAN_NHOM).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
 
-      </div>
+          <label className="grid gap-1 text-sm font-semibold text-slate-700">
+            Người trực
+            <select
+              value={nguoiId}
+              onChange={(e) => setNguoiId(e.target.value)}
+              className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            >
+              <option value="">Tất cả</option>
+              {nguoiTrong.map(([id, ten]) => (
+                <option key={id} value={id}>{ten}</option>
+              ))}
+            </select>
+          </label>
+
+        </div>
+      </AdminMotionItem>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <AdminMotionItem>
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        </AdminMotionItem>
       )}
 
-      <TableFrame>
-        <table className="min-w-[900px] w-full text-sm">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Thời gian</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Người thực hiện</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Hành động</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Khách hàng</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Chi tiết</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {loading && (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-400">Đang tải...</td></tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6"><EmptyBlock>Không tìm thấy thao tác nào phù hợp.</EmptyBlock></td></tr>
-            )}
-            {!loading && rows.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-[11px] text-slate-500">{ngayThangPhut(row.thoi_diem)}</td>
-                <td className="px-4 py-3 font-medium text-slate-800">{row.nguoi_thuc_hien}</td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${row.nhom ? MAU_NHOM[row.nhom] : 'bg-slate-100 text-slate-600'}`}>
-                    {row.nhan_hanh_dong}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-slate-700">{row.ten_khach ?? '—'}</td>
-                <td className="max-w-xl px-4 py-3 text-xs leading-5 text-slate-600">
-                  {formatActivityDetail(row)}
-                </td>
+      <AdminMotionItem>
+        <TableFrame>
+          <table className="min-w-[900px] w-full text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600">Thời gian</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600">Người thực hiện</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600">Hành động</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600">Khách hàng</th>
+                <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-600">Chi tiết</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        <TablePaginationFooter
-          currentPage={page}
-          totalPages={totalPages}
-          totalItems={total}
-          currentItemCount={rows.length}
-          itemLabel="thao tác"
-          onPageChange={setPage}
-          pageSize={limit}
-        />
-      </TableFrame>
-    </PageShell>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading && (
+                <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-400">Đang tải...</td></tr>
+              )}
+              {!loading && rows.length === 0 && (
+                <tr><td colSpan={5} className="px-5 py-8"><EmptyBlock>Không tìm thấy thao tác nào phù hợp.</EmptyBlock></td></tr>
+              )}
+              {!loading && rows.map((row) => (
+                <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="whitespace-nowrap px-5 py-3.5 font-mono text-[11px] text-slate-500">{ngayThangPhut(row.thoi_diem)}</td>
+                  <td className="px-5 py-3.5 font-medium text-slate-800">{row.nguoi_thuc_hien}</td>
+                  <td className="px-5 py-3.5">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${row.nhom ? MAU_NHOM[row.nhom] : 'bg-slate-100 text-slate-600'}`}>
+                      {row.nhan_hanh_dong}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-slate-700">{row.ten_khach ?? '—'}</td>
+                  <td className="max-w-xl px-5 py-3.5 text-xs leading-5 text-slate-600">
+                    {formatActivityDetail(row)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <TablePaginationFooter
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={total}
+            currentItemCount={rows.length}
+            itemLabel="thao tác"
+            onPageChange={setPage}
+            pageSize={limit}
+          />
+        </TableFrame>
+      </AdminMotionItem>
+    </AdminMotionGroup>
   )
 }
