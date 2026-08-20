@@ -40,6 +40,12 @@ async function formatProfile(doc) {
     // Hồ sơ chi tiết (trang chi tiết BN xem) — null nếu bác sĩ chưa điền
     chuc_danh:           hoSo?.chuc_danh ?? null,
     chuc_vu:             hoSo?.chuc_vu ?? null,
+    chuc_vu_hien_tai:    hoSo?.chuc_vu_hien_tai ?? null,
+    ma_cchn:             hoSo?.ma_cchn ?? null,
+    gioi_thieu_ngan:     hoSo?.gioi_thieu_ngan ?? null,
+    bang_cap_hoc_vi_tags:hoSo?.bang_cap_hoc_vi_tags ?? [],
+    ngon_ngu:            hoSo?.ngon_ngu ?? ['Tiếng Việt'],
+    the_manh_chuyen_mon: hoSo?.the_manh_chuyen_mon ?? [],
     benh_ly_dieu_tri:    hoSo?.benh_ly_dieu_tri ?? [],
     qua_trinh_cong_tac:  hoSo?.qua_trinh_cong_tac ?? [],
     qua_trinh_dao_tao:   hoSo?.qua_trinh_dao_tao ?? [],
@@ -68,7 +74,9 @@ export async function updateProfile(req, res) {
       tieu_su, bang_cap, kinh_nghiem,
       so_nam_kinh_nghiem, gia_kham, tuoi_nhan_kham_tu,
       specialties, services,
-      chuc_danh, chuc_vu, benh_ly_dieu_tri,
+      chuc_danh, chuc_vu, chuc_vu_hien_tai, ma_cchn, gioi_thieu_ngan,
+      bang_cap_hoc_vi_tags, ngon_ngu, the_manh_chuyen_mon,
+      benh_ly_dieu_tri,
       qua_trinh_cong_tac, qua_trinh_dao_tao, thanh_vien_hoi, giai_thuong,
     } = req.body
 
@@ -103,13 +111,20 @@ export async function updateProfile(req, res) {
 
     // Cập nhật hồ sơ chi tiết (chỉ upsert nếu client có gửi ít nhất 1 trường liên quan)
     const hoSoFields = {
-      chuc_danh, chuc_vu, benh_ly_dieu_tri,
+      chuc_danh, chuc_vu, chuc_vu_hien_tai, ma_cchn, gioi_thieu_ngan,
+      bang_cap_hoc_vi_tags, ngon_ngu, the_manh_chuyen_mon, benh_ly_dieu_tri,
       qua_trinh_cong_tac, qua_trinh_dao_tao, thanh_vien_hoi, giai_thuong,
     }
     if (Object.values(hoSoFields).some((v) => v !== undefined)) {
       const hoSoUpdate = {}
       if (chuc_danh !== undefined) hoSoUpdate.chuc_danh = chuc_danh?.trim() || null
       if (chuc_vu   !== undefined) hoSoUpdate.chuc_vu   = chuc_vu?.trim()   || null
+      if (chuc_vu_hien_tai !== undefined) hoSoUpdate.chuc_vu_hien_tai = chuc_vu_hien_tai?.trim() || null
+      if (ma_cchn   !== undefined) hoSoUpdate.ma_cchn   = ma_cchn?.trim()   || null
+      if (gioi_thieu_ngan !== undefined) hoSoUpdate.gioi_thieu_ngan = gioi_thieu_ngan?.trim() || null
+      if (Array.isArray(bang_cap_hoc_vi_tags)) hoSoUpdate.bang_cap_hoc_vi_tags = bang_cap_hoc_vi_tags
+      if (Array.isArray(ngon_ngu))             hoSoUpdate.ngon_ngu             = ngon_ngu
+      if (Array.isArray(the_manh_chuyen_mon))  hoSoUpdate.the_manh_chuyen_mon  = the_manh_chuyen_mon
       if (Array.isArray(benh_ly_dieu_tri))   hoSoUpdate.benh_ly_dieu_tri   = benh_ly_dieu_tri
       if (Array.isArray(qua_trinh_cong_tac)) hoSoUpdate.qua_trinh_cong_tac = qua_trinh_cong_tac
       if (Array.isArray(qua_trinh_dao_tao))  hoSoUpdate.qua_trinh_dao_tao  = qua_trinh_dao_tao

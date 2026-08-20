@@ -84,6 +84,12 @@ export default function DoctorDetail() {
               {doctor.ho_so_chi_tiet?.chuc_vu_hien_tai || doctor.bang_cap || 'Bác sĩ Chuyên khoa'}
             </p>
 
+            {doctor.ho_so_chi_tiet?.gioi_thieu_ngan && (
+              <p className="text-sm italic text-slate-600 border-l-2 border-brand-300 pl-3 mt-2 mb-2">
+                "{doctor.ho_so_chi_tiet.gioi_thieu_ngan}"
+              </p>
+            )}
+
             {/* Tags Bằng cấp & Học vị */}
             {doctor.ho_so_chi_tiet?.bang_cap_hoc_vi_tags && doctor.ho_so_chi_tiet.bang_cap_hoc_vi_tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1">
@@ -136,6 +142,47 @@ export default function DoctorDetail() {
       <div className="grid gap-8 lg:grid-cols-3 items-start">
         {/* LEFT COLUMN: EDUCATION & EXPERIENCE */}
         <div className="lg:col-span-2 space-y-6 text-left">
+
+          {/* Tiểu sử */}
+          {doctor.tieu_su && (
+            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
+              <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">Tiểu sử & Giới thiệu</h2>
+              <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{doctor.tieu_su}</p>
+            </div>
+          )}
+
+          {/* Thế mạnh chuyên môn */}
+          {(doctor.ho_so_chi_tiet?.the_manh_chuyen_mon?.length > 0 || doctor.ho_so_chi_tiet?.benh_ly_dieu_tri?.length > 0) && (
+            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
+              <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">Thế mạnh chuyên môn & Điều trị</h2>
+              
+              {doctor.ho_so_chi_tiet?.the_manh_chuyen_mon?.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Thế mạnh chuyên môn:</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {doctor.ho_so_chi_tiet.the_manh_chuyen_mon.map((item, idx) => (
+                      <span key={idx} className="px-3 py-1.5 bg-brand-50 text-brand-700 rounded-lg text-sm font-medium border border-brand-100">
+                        ✓ {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {doctor.ho_so_chi_tiet?.benh_ly_dieu_tri?.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Bệnh lý điều trị:</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {doctor.ho_so_chi_tiet.benh_ly_dieu_tri.map((item, idx) => (
+                      <span key={idx} className="px-3 py-1.5 bg-slate-50 text-slate-700 rounded-lg text-sm font-medium border border-slate-200">
+                        • {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Học vấn & Quá trình đào tạo */}
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
