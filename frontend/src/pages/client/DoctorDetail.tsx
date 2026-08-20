@@ -119,15 +119,10 @@ export default function DoctorDetail() {
             )}
           </div>
 
-          {/* Ngôn ngữ & Mã CCHN */}
-          {(doctor.ho_so_chi_tiet?.ma_cchn || doctor.ho_so_chi_tiet?.ngon_ngu) && (
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-              {doctor.ho_so_chi_tiet?.ma_cchn && (
-                <p><strong>Mã CCHN:</strong> <span className="font-mono text-slate-700">{doctor.ho_so_chi_tiet.ma_cchn}</span></p>
-              )}
-              {doctor.ho_so_chi_tiet?.ngon_ngu && doctor.ho_so_chi_tiet.ngon_ngu.length > 0 && (
-                <p><strong>Ngôn ngữ:</strong> <span className="text-slate-700">{doctor.ho_so_chi_tiet.ngon_ngu.join(', ')}</span></p>
-              )}
+          {/* CCHN */}
+          {doctor.ho_so_chi_tiet?.ma_cchn && (
+            <div className="mt-1 text-xs text-slate-500">
+              <p><strong>Mã CCHN:</strong> <span className="font-mono text-slate-700">{doctor.ho_so_chi_tiet.ma_cchn}</span></p>
             </div>
           )}
 
@@ -151,38 +146,52 @@ export default function DoctorDetail() {
             </div>
           )}
 
-          {/* Thế mạnh chuyên môn */}
-          {(doctor.ho_so_chi_tiet?.the_manh_chuyen_mon?.length > 0 || doctor.ho_so_chi_tiet?.benh_ly_dieu_tri?.length > 0) && (
-            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
-              <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">Thế mạnh chuyên môn & Điều trị</h2>
-              
-              {doctor.ho_so_chi_tiet?.the_manh_chuyen_mon?.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Thế mạnh chuyên môn:</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {doctor.ho_so_chi_tiet.the_manh_chuyen_mon.map((item, idx) => (
-                      <span key={idx} className="px-3 py-1.5 bg-brand-50 text-brand-700 rounded-lg text-sm font-medium border border-brand-100">
-                        ✓ {item}
-                      </span>
-                    ))}
-                  </div>
+          {/* Chuyên môn */}
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
+            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3 uppercase">Chuyên môn</h2>
+            <dl className="space-y-4 text-sm">
+              {doctor.ho_so_chi_tiet?.chuc_vu_hien_tai && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Chức vụ hiện tại</dt>
+                  <dd className="font-medium text-slate-800">{doctor.ho_so_chi_tiet.chuc_vu_hien_tai}</dd>
                 </div>
               )}
-
-              {doctor.ho_so_chi_tiet?.benh_ly_dieu_tri?.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Bệnh lý điều trị:</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {doctor.ho_so_chi_tiet.benh_ly_dieu_tri.map((item, idx) => (
-                      <span key={idx} className="px-3 py-1.5 bg-slate-50 text-slate-700 rounded-lg text-sm font-medium border border-slate-200">
-                        • {item}
-                      </span>
-                    ))}
-                  </div>
+              {doctor.bang_cap && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Bằng cấp</dt>
+                  <dd className="font-medium text-slate-800">{doctor.bang_cap}</dd>
                 </div>
               )}
-            </div>
-          )}
+              {doctor.ho_so_chi_tiet?.bang_cap_hoc_vi_tags && doctor.ho_so_chi_tiet.bang_cap_hoc_vi_tags.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Học vị (Tags)</dt>
+                  <dd className="flex flex-wrap gap-1.5">
+                    {doctor.ho_so_chi_tiet.bang_cap_hoc_vi_tags.map((tag, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-slate-100 text-slate-700 text-xs rounded border border-slate-200">{tag}</span>
+                    ))}
+                  </dd>
+                </div>
+              )}
+              {doctor.ho_so_chi_tiet?.ngon_ngu && doctor.ho_so_chi_tiet.ngon_ngu.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Ngôn ngữ</dt>
+                  <dd className="font-medium text-slate-800">{doctor.ho_so_chi_tiet.ngon_ngu.join(', ')}</dd>
+                </div>
+              )}
+              {doctor.ho_so_chi_tiet?.the_manh_chuyen_mon && doctor.ho_so_chi_tiet.the_manh_chuyen_mon.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Thế mạnh</dt>
+                  <dd className="font-medium text-slate-800">{doctor.ho_so_chi_tiet.the_manh_chuyen_mon.join(', ')}</dd>
+                </div>
+              )}
+              {doctor.ho_so_chi_tiet?.benh_ly_dieu_tri && doctor.ho_so_chi_tiet.benh_ly_dieu_tri.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Bệnh lý điều trị</dt>
+                  <dd className="font-medium text-slate-800">{doctor.ho_so_chi_tiet.benh_ly_dieu_tri.join(', ')}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
 
           {/* Học vấn & Quá trình đào tạo */}
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
