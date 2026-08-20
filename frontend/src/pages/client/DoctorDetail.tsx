@@ -294,18 +294,19 @@ export default function DoctorDetail() {
               ) : (
                 <div className="space-y-3.5 max-h-[400px] overflow-y-auto pr-1">
                   {reviews.map((r) => {
-                    const ratingDoc = r.chi_tiet?.danh_gia_bac_si || r.so_sao || 5
+                    const ratingDoc = r.so_sao || 5
                     return (
                       <div key={r.id || r._id} className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-100 space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-800">{r.benh_nhan || 'Bệnh nhân đã khám'}</span>
-                          <span className="text-xs font-bold text-amber-500">{'⭐'.repeat(ratingDoc)}</span>
+                          <span className="text-xs font-bold text-slate-700">{r.benh_nhan || 'Bệnh nhân'}</span>
+                          <div className="flex">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <span key={i} className={`text-[10px] ${i < ratingDoc ? 'text-amber-400' : 'text-slate-200'}`}>⭐</span>
+                            ))}
+                          </div>
                         </div>
-                        <p className="text-xs leading-relaxed text-slate-600">
-                          &ldquo;{r.noi_dung || 'Không có bình luận.'}&rdquo;
-                        </p>
-                        <p className="text-[10px] font-medium text-slate-400 text-right">
-                          {new Date(r.ngay_tao).toLocaleDateString('vi-VN')}
+                        <p className="text-[11px] leading-relaxed text-slate-600 italic">
+                          "{r.noi_dung || 'Đã khám thành công và để lại đánh giá.'}"
                         </p>
                       </div>
                     )

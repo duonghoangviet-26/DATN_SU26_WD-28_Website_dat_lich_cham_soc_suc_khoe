@@ -835,11 +835,11 @@ export default function DoctorProfile() {
               ) : (
                 <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                   {reviews.map((r) => {
-                    const ratingDoc = r.chi_tiet?.danh_gia_bac_si || r.so_sao || 5
+                    const ratingDoc = r.so_sao || 5
                     return (
                       <div key={r.id || r._id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-700">{r.benh_nhan?.ho_ten || 'Bệnh nhân'}</span>
+                          <span className="text-xs font-bold text-slate-700">{r.benh_nhan || 'Bệnh nhân'}</span>
                           <div className="flex">
                             {Array.from({ length: 5 }).map((_, i) => (
                               <span key={i} className={`text-[10px] ${i < ratingDoc ? 'text-amber-400' : 'text-slate-200'}`}>⭐</span>
@@ -847,7 +847,7 @@ export default function DoctorProfile() {
                           </div>
                         </div>
                         <p className="text-[11px] leading-relaxed text-slate-600 italic">
-                          "{r.nhan_xet || 'Đã khám thành công và để lại đánh giá.'}"
+                          "{r.noi_dung || 'Đã khám thành công và để lại đánh giá.'}"
                         </p>
                         <p className="text-[9px] font-mono text-slate-400 pt-1 border-t border-slate-100/50 text-right">
                           {new Date(r.ngay_tao || new Date()).toLocaleDateString('vi-VN')}
