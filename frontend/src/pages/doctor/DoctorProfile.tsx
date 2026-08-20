@@ -4,6 +4,7 @@ import Badge from '@/components/common/Badge'
 import Toast from '@/components/common/Toast'
 import Icon from '@/components/admin/icons'
 import { doctorProfileService } from '@/services/doctor-profile.service'
+import { patientBookingService } from '@/services/patient-booking.service'
 import type { DoctorApproval, DoctorSelfProfile } from '@/types'
 import { formatPrice } from '@/utils/format'
 import { resolveMediaUrl } from '@/utils/media'
@@ -178,6 +179,7 @@ export default function DoctorProfile() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [reviews, setReviews] = useState<any[]>([])
 
   useEffect(() => {
     let mounted = true
@@ -188,6 +190,11 @@ export default function DoctorProfile() {
         if (!mounted) return
         setProfile(data)
         setForm(toForm(data))
+        return patientBookingService.getDoctorReviews(data.id)
+      })
+      .then((reviewsData) => {
+        if (!mounted || !reviewsData) return
+        setReviews(reviewsData)
       })
       .catch((error) => {
         if (!mounted) return
@@ -819,6 +826,37 @@ export default function DoctorProfile() {
                 ))}
               </div>
               <p className="text-sm text-slate-500">{profile.tong_danh_gia ?? 0} lượt đánh giá</p>
+            </div>
+
+            <div className="mt-6 border-t border-slate-100 pt-5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Nhận xét mới nhất</h4>
+              {reviews.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">Chưa có lượt đánh giá nào.</p>
+              ) : (
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                  {reviews.map((r) => {
+                    const ratingDoc = r.chi_tiet?.danh_gia_bac_si || r.so_sao || 5
+                    return (
+                      <div key={r.id || r._id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700">{r.benh_nhan?.ho_ten || 'Bệnh nhân'}</span>
+                          <div className="flex">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <span key={i} className={`text-[10px] ${i < ratingDoc ? 'text-amber-400' : 'text-slate-200'}`}>⭐</span>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-slate-600 italic">
+                          "{r.nhan_xet || 'Đã khám thành công và để lại đánh giá.'}"
+                        </p>
+                        <p className="text-[9px] font-mono text-slate-400 pt-1 border-t border-slate-100/50 text-right">
+                          {new Date(r.ngay_tao || new Date()).toLocaleDateString('vi-VN')}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
