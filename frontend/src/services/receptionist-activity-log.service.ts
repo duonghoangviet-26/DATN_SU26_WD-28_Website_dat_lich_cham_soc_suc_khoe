@@ -17,13 +17,21 @@ export interface ActivityLogRow {
 
 export interface ActivityLogParams {
   ngay?: string
+  tu_ngay?: string
+  den_ngay?: string
+  tu_khoa?: string
   nguoi_id?: string
   nhom?: string
+  page?: number
+  limit?: number
 }
 
 export interface ActivityLogResult {
   rows: ActivityLogRow[]
   nhom_kha_dung: string[]
+  total: number
+  page: number
+  limit: number
 }
 
 export const receptionistActivityLogService = {

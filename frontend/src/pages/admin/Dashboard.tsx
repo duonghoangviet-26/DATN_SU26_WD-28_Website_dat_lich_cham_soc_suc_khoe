@@ -10,6 +10,8 @@ import RevenueTrendChart from '@/components/admin/dashboard/RevenueTrendChart'
 import TopServicesTable from '@/components/admin/dashboard/TopServicesTable'
 import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import PageHeader from '@/components/common/PageHeader'
+import RevenueDetailsModal from '@/components/admin/dashboard/RevenueDetailsModal'
+import InvoicedDetailsModal from '@/components/admin/dashboard/InvoicedDetailsModal'
 import { useDashboardRealtime } from '@/hooks/useDashboardRealtime'
 import { dashboardService } from '@/services/dashboard.service'
 import type { AdminDashboardSummary } from '@/types'
@@ -60,11 +62,15 @@ function DashboardStatCard({ item, loading }: {
     helper: string
     iconBg: string
     iconColor: string
+    onClick?: () => void
   }
   loading: boolean
 }) {
   return (
-    <div className="card p-5">
+    <div 
+      className={`card p-5 ${item.onClick ? 'cursor-pointer transition-shadow hover:shadow-md' : ''}`}
+      onClick={item.onClick}
+    >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-sm font-medium text-slate-500">{item.label}</p>
@@ -94,6 +100,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshTick, setRefreshTick] = useState(0)
+  const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false)
+  const [isInvoicedModalOpen, setIsInvoicedModalOpen] = useState(false)
   const { connection, versions } = useDashboardRealtime()
 
   useEffect(() => {
@@ -159,6 +167,7 @@ export default function Dashboard() {
       iconColor: 'text-brand-600',
     },
     {
+      id: 'revenue-collected',
       label: 'Doanh thu đã thu',
       value: summary.revenue.collected_total,
       growth: summary.revenue.growth,
@@ -167,6 +176,7 @@ export default function Dashboard() {
       helper: 'Tháng này so với tháng trước.',
       iconBg: 'bg-blue-100',
       iconColor: 'text-blue-600',
+      onClick: () => setIsRevenueModalOpen(true)
     },
     {
       label: 'Doanh thu xuất hóa đơn',
@@ -176,6 +186,7 @@ export default function Dashboard() {
       helper: 'Tổng giá trị đã xuất trên các hóa đơn.',
       iconBg: 'bg-orange-100',
       iconColor: 'text-orange-600',
+      onClick: () => setIsInvoicedModalOpen(true)
     },
   ]
 
@@ -352,6 +363,16 @@ export default function Dashboard() {
           </AdminMotionItem>
         </AdminMotionGroup>
       </AdminMotionItem>
+      
+      <RevenueDetailsModal 
+        isOpen={isRevenueModalOpen} 
+        onClose={() => setIsRevenueModalOpen(false)} 
+      />
+
+      <InvoicedDetailsModal 
+        isOpen={isInvoicedModalOpen} 
+        onClose={() => setIsInvoicedModalOpen(false)} 
+      />
     </AdminMotionGroup>
   )
 }

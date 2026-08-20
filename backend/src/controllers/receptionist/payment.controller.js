@@ -9,6 +9,25 @@ import {
 } from '../../realtime/socket.js'
 
 const VNPAY_SESSION_MINUTES = Number(process.env.VNPAY_SESSION_MINUTES || process.env.PAYMENT_HOLD_MINUTES || 15)
+
+let clockDrift = 0;
+(async () => {
+  try {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), 2000)
+    const res = await fetch('https://google.com', { method: 'HEAD', signal: controller.signal })
+    clearTimeout(id)
+    const dateHeader = res.headers.get('date')
+    if (dateHeader) {
+      clockDrift = new Date(dateHeader).getTime() - Date.now()
+    }
+  } catch(e) {}
+})();
+
+function getRealTime() {
+  return new Date(Date.now() + clockDrift)
+}
+
 const DEFAULT_CLIENT_BASE_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
 
 function isValidObjectId(value) {
@@ -59,7 +78,7 @@ function toDateOrNull(value) {
 function isGatewaySessionExpired(gateway) {
   const expiresAt = toDateOrNull(gateway?.expires_at)
   if (!expiresAt) return false
-  return expiresAt.getTime() <= Date.now()
+  return expiresAt.getTime() <= getRealTime().getTime()
 }
 
 function getActorUserId(req) {
@@ -71,7 +90,7 @@ function getActorRole(req) {
   return req.user?.role === 'admin' ? 'admin' : 'receptionist'
 }
 
-function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt }) {
+function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, createdAt, expiresAt }) {
   const tmnCode = process.env.VNP_TMNCODE || 'WVZUTWIX'
   const secretKey = process.env.VNP_HASHSECRET || 'MPCYVPEZAQLIXFLZLGWBKOIXOPTHNWVA'
   const vnpUrl = process.env.VNP_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
@@ -88,7 +107,7 @@ function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt
     vnp_Locale: 'vn',
     vnp_BankCode: 'NCB',
     vnp_IpAddr: '127.0.0.1',
-    vnp_CreateDate: formatVnpDate(new Date()),
+    vnp_CreateDate: formatVnpDate(createdAt),
     vnp_ExpireDate: formatVnpDate(expiresAt),
     vnp_ReturnUrl: `${DEFAULT_CLIENT_BASE_URL}/receptionist/booking?payment_id=${payment._id}&gateway=vnpay`,
   }
@@ -164,6 +183,7 @@ function serializePaymentStatus({ payment, appointment, invoice }) {
       mock_status: gateway.mock_status ?? null,
       is_expired: isGatewaySessionExpired(gateway),
     },
+    server_time: getRealTime().toISOString(),
   }
 }
 
@@ -263,10 +283,10 @@ export const createMockVnpaySession = async (req, res) => {
       gateway.mock_status !== 'paid'
 
     if (!canReuse) {
-      const now = new Date()
+      const now = getRealTime()
       const expiresAt = new Date(now.getTime() + VNPAY_SESSION_MINUTES * 60 * 1000)
-      const vnpTxnRef = `VNPAY-${payment.ma_giao_dich}-${Date.now().toString().slice(-6)}`
-      const paymentUrl = buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt })
+      const vnpTxnRef = `VNPAY-${payment.ma_giao_dich}-${now.getTime().toString().slice(-6)}`
+      const paymentUrl = buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, createdAt: now, expiresAt })
 
       payment.gateway_response = {
         ...gateway,

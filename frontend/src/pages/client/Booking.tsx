@@ -31,9 +31,10 @@ function formatGatewayExpiry(expiresAt: string | null) {
   return new Date(expiresAt).toLocaleString('vi-VN')
 }
 
-function getCountdownLabel(expiresAt: string | null, nowMs: number) {
+function getCountdownLabel(expiresAt: string | null, nowMs: number, serverTimeOffset: number = 0) {
   if (!expiresAt) return null
-  const distance = new Date(expiresAt).getTime() - nowMs
+  const realNow = nowMs - serverTimeOffset
+  const distance = new Date(expiresAt).getTime() - realNow
   if (distance <= 0) return 'Mã QR đã hết hạn'
 
   const totalSeconds = Math.floor(distance / 1000)
@@ -135,6 +136,7 @@ export default function Booking() {
   const [dates, setDates] = useState<{ value: string; label: string }[]>([])
   const [createdBooking, setCreatedBooking] = useState<CreatedBookingResult | null>(draft?.createdBooking || null)
   const [paymentSnapshot, setPaymentSnapshot] = useState<PatientPaymentStatusResult | null>(null)
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
   const [nowMs, setNowMs] = useState(() => Date.now())
 
@@ -281,7 +283,12 @@ export default function Booking() {
     setCreatingPaymentSession(true)
     patientBookingService.createVnpaySession(createdBooking.payment_id)
       .then((data) => {
-        if (!ignore) setPaymentSnapshot(data)
+        if (!ignore) {
+          setPaymentSnapshot(data)
+          if (data.server_time) {
+            setServerTimeOffset(Date.now() - new Date(data.server_time).getTime())
+          }
+        }
       })
       .catch((error: any) => {
         if (!ignore) {
@@ -328,14 +335,18 @@ export default function Booking() {
     if (step !== 5 || !createdBooking?.payment_id || paymentSnapshot?.payment_status !== 'pending') return
 
     let cancelled = false
-    const intervalId = window.setInterval(() => {
-      patientBookingService.getPaymentStatus(createdBooking.payment_id)
-        .then((data) => {
-          if (!cancelled) setPaymentSnapshot(data)
-        })
-        .catch(() => {
-          // Keep the existing snapshot if polling fails transiently.
-        })
+    const intervalId = window.setInterval(async () => {
+      try {
+        const snapshot = await patientBookingService.getPaymentStatus(createdBooking.payment_id)
+        if (!cancelled) {
+          setPaymentSnapshot(snapshot)
+          if (snapshot.server_time) {
+            setServerTimeOffset(Date.now() - new Date(snapshot.server_time).getTime())
+          }
+        }
+      } catch (err) {
+        // Keep the existing snapshot if polling fails transiently.
+      }
     }, 5000)
 
     return () => {
@@ -351,8 +362,16 @@ export default function Booking() {
       setNowMs(Date.now())
     }, 1000)
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setNowMs(Date.now())
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [step, paymentSnapshot?.payment_status, paymentSnapshot?.gateway.is_expired])
 
@@ -363,7 +382,7 @@ export default function Booking() {
     }
   }, [step, paymentSnapshot?.payment_status, paymentSnapshot?.appointment_status, createdBooking, navigate])
 
-  const countdownLabel = getCountdownLabel(paymentSnapshot?.gateway.expires_at || null, nowMs)
+  const countdownLabel = getCountdownLabel(paymentSnapshot?.gateway.expires_at || null, nowMs, serverTimeOffset)
   const selectedSpecialty = specialties.find((specialty) => specialty.id === selectedSpecialtyId)
   const selectedDateLabel = dates.find((date) => date.value === selectedDate)?.label || selectedDate
 

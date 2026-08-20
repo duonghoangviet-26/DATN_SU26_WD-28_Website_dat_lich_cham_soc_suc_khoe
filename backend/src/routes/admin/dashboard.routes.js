@@ -7,5 +7,7 @@ const router = Router()
 router.use(verifyToken, requireRole('admin'))
 
 router.get('/', dashboard.getSummary)
+router.get('/revenue-details', dashboard.getRevenueDetails)
+router.get('/invoiced-details', dashboard.getInvoicedDetails)
 
 export default router

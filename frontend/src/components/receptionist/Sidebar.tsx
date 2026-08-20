@@ -14,7 +14,7 @@ const receptionistMenu = [
   { path: '/receptionist/offline-queue', label: 'Hàng đợi vãng lai', icon: 'clipboard-list' },
   { path: '/receptionist/doctor-day-view', label: 'Điều phối bác sĩ', icon: 'stethoscope' },
   { path: '/receptionist/contact-tasks', label: 'Liên hệ bệnh nhân', icon: 'phone-call' },
-  { path: '/receptionist/activity-log', label: 'Nhật ký ca trực', icon: 'clipboard-list' },
+  { path: '/receptionist/activity-log', label: 'Nhật ký ca trực lễ tân', icon: 'clipboard-list' },
   { path: '/receptionist/payments', label: 'Viện phí & hóa đơn', icon: 'receipt' },
   { path: '/receptionist/news', label: 'Tin sức khỏe', icon: 'newspaper' },
 ];

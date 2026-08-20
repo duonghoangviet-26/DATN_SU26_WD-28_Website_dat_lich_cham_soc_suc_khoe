@@ -694,6 +694,37 @@ export interface AdminDashboardSummary {
     generated_at: string;
 }
 
+export interface RevenueDetails {
+    collectedThisMonth: number;
+    collectedLastMonth: number;
+    collectedTotal: number;
+    growth: number;
+    diff: number;
+    thisYearMonthly: Array<{ month: number; year: number; total: number }>;
+    yearly: Array<{ year: number; total: number }>;
+}
+
+export interface MonthlyInvoiced {
+  thang: number; // 1-12
+  tongHoaDon: number;
+}
+
+export interface YearlyInvoiced {
+  nam: number;
+  tongHoaDon: number;
+}
+
+export interface InvoicedDetails {
+  invoicedThisMonth: number;
+  invoicedLastMonth: number;
+  invoicedTotal: number;
+  growth: number | null; // null khi tháng trước = 0
+  diff: number;
+  outstandingTotal: number; // Tổng công nợ
+  thisYearMonthly: MonthlyInvoiced[];
+  yearly: YearlyInvoiced[];
+}
+
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message: string;
