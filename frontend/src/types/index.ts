@@ -704,6 +704,27 @@ export interface RevenueDetails {
     yearly: Array<{ year: number; total: number }>;
 }
 
+export interface MonthlyInvoiced {
+  thang: number; // 1-12
+  tongHoaDon: number;
+}
+
+export interface YearlyInvoiced {
+  nam: number;
+  tongHoaDon: number;
+}
+
+export interface InvoicedDetails {
+  invoicedThisMonth: number;
+  invoicedLastMonth: number;
+  invoicedTotal: number;
+  growth: number | null; // null khi tháng trước = 0
+  diff: number;
+  outstandingTotal: number; // Tổng công nợ
+  thisYearMonthly: MonthlyInvoiced[];
+  yearly: YearlyInvoiced[];
+}
+
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message: string;

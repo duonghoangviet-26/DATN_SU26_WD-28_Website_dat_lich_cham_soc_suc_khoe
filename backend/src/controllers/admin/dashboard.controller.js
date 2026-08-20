@@ -1,4 +1,4 @@
-import { getAdminDashboardSummary, getChiTietDoanhThu } from '../../services/admin/dashboard.service.js'
+import { getAdminDashboardSummary, getChiTietDoanhThu, getChiTietDoanhThuXuatHoaDon } from '../../services/admin/dashboard.service.js'
 import { ok, fail } from '../../utils/response.js'
 
 export async function getSummary(req, res) {
@@ -13,6 +13,15 @@ export async function getSummary(req, res) {
 export async function getRevenueDetails(req, res) {
   try {
     const details = await getChiTietDoanhThu()
+    return ok(res, details)
+  } catch (error) {
+    return fail(res, 500, error.message)
+  }
+}
+
+export async function getInvoicedDetails(req, res) {
+  try {
+    const details = await getChiTietDoanhThuXuatHoaDon()
     return ok(res, details)
   } catch (error) {
     return fail(res, 500, error.message)

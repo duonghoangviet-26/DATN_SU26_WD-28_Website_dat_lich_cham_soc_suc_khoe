@@ -11,6 +11,7 @@ import TopServicesTable from '@/components/admin/dashboard/TopServicesTable'
 import { AdminMotionGroup, AdminMotionItem } from '@/components/admin/motion/AdminMotion'
 import PageHeader from '@/components/common/PageHeader'
 import RevenueDetailsModal from '@/components/admin/dashboard/RevenueDetailsModal'
+import InvoicedDetailsModal from '@/components/admin/dashboard/InvoicedDetailsModal'
 import { useDashboardRealtime } from '@/hooks/useDashboardRealtime'
 import { dashboardService } from '@/services/dashboard.service'
 import type { AdminDashboardSummary } from '@/types'
@@ -100,6 +101,7 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [refreshTick, setRefreshTick] = useState(0)
   const [isRevenueModalOpen, setIsRevenueModalOpen] = useState(false)
+  const [isInvoicedModalOpen, setIsInvoicedModalOpen] = useState(false)
   const { connection, versions } = useDashboardRealtime()
 
   useEffect(() => {
@@ -184,6 +186,7 @@ export default function Dashboard() {
       helper: 'Tổng giá trị đã xuất trên các hóa đơn.',
       iconBg: 'bg-orange-100',
       iconColor: 'text-orange-600',
+      onClick: () => setIsInvoicedModalOpen(true)
     },
   ]
 
@@ -364,6 +367,11 @@ export default function Dashboard() {
       <RevenueDetailsModal 
         isOpen={isRevenueModalOpen} 
         onClose={() => setIsRevenueModalOpen(false)} 
+      />
+
+      <InvoicedDetailsModal 
+        isOpen={isInvoicedModalOpen} 
+        onClose={() => setIsInvoicedModalOpen(false)} 
       />
     </AdminMotionGroup>
   )

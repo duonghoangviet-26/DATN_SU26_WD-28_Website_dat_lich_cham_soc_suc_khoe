@@ -244,3 +244,125 @@ export async function getChiTietDoanhThu(now = new Date()) {
     yearly
   }
 }
+
+export async function getChiTietDoanhThuXuatHoaDon(now = new Date()) {
+  const thisMonth = getMonthBounds(now)
+  const lastMonth = getLastMonthBounds(now)
+
+  // HoaDon schema thực tế không có trường trạng thái hủy (huy),
+  // nên baseMatch sẽ lấy tất cả hóa đơn hợp lệ hiện có.
+  const baseMatch = {} 
+
+  // Gom doanh thu xuất hóa đơn theo tháng (tất cả lịch sử)
+  const monthlyRevenue = await HoaDon.aggregate([
+    { $match: baseMatch },
+    {
+      $group: {
+        _id: {
+          year: { $year: { date: '$created_at', timezone: 'Asia/Ho_Chi_Minh' } },
+          month: { $month: { date: '$created_at', timezone: 'Asia/Ho_Chi_Minh' } }
+        },
+        total: { $sum: '$tong_thanh_toan' }
+      }
+    },
+    { $sort: { '_id.year': 1, '_id.month': 1 } }
+  ])
+
+  // Gom doanh thu xuất hóa đơn theo năm
+  const yearlyRevenue = await HoaDon.aggregate([
+    { $match: baseMatch },
+    {
+      $group: {
+        _id: {
+          year: { $year: { date: '$created_at', timezone: 'Asia/Ho_Chi_Minh' } }
+        },
+        total: { $sum: '$tong_thanh_toan' }
+      }
+    },
+    { $sort: { '_id.year': 1 } }
+  ])
+
+  // Chuyển đổi dữ liệu
+  const currentYear = now.getFullYear()
+  
+  // Mảng 12 tháng của năm nay
+  const thisYearMonthly = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1
+    const found = monthlyRevenue.find(x => x._id.year === currentYear && x._id.month === m)
+    return {
+      thang: m,
+      tongHoaDon: found?.total || 0
+    }
+  })
+
+  // Mảng các năm
+  const yearly = yearlyRevenue.map(x => ({
+    nam: x._id.year,
+    tongHoaDon: x.total
+  }))
+
+  const [invoicedThisMonth, invoicedLastMonth, invoicedTotal] = await Promise.all([
+    sumField(HoaDon, 'tong_thanh_toan', { ...baseMatch, created_at: { $gte: thisMonth.start, $lt: thisMonth.end } }),
+    sumField(HoaDon, 'tong_thanh_toan', { ...baseMatch, created_at: { $gte: lastMonth.start, $lt: lastMonth.end } }),
+    sumField(HoaDon, 'tong_thanh_toan', baseMatch)
+  ])
+  
+  // Tính tổng công nợ
+  const [debtResult] = await HoaDon.aggregate([
+    { $match: baseMatch },
+    {
+      $lookup: {
+        from: 'thanh_toan',
+        localField: '_id',
+        foreignField: 'hoa_don_id',
+        as: 'payments'
+      }
+    },
+    {
+      $addFields: {
+        tong_da_thu: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: {
+                  input: '$payments',
+                  as: 'payment',
+                  cond: { $eq: ['$$payment.status', 'paid'] }
+                }
+              },
+              as: 'paid_payment',
+              in: '$$paid_payment.so_tien'
+            }
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        no_hoa_don: {
+          $max: [0, { $subtract: ['$tong_thanh_toan', '$tong_da_thu'] }]
+        }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        outstandingTotal: { $sum: '$no_hoa_don' }
+      }
+    }
+  ])
+
+  const outstandingTotal = debtResult?.outstandingTotal || 0
+  const growth = invoicedLastMonth === 0 ? null : Math.round(((invoicedThisMonth - invoicedLastMonth) / invoicedLastMonth) * 100)
+
+  return {
+    invoicedThisMonth,
+    invoicedLastMonth,
+    invoicedTotal,
+    growth,
+    diff: invoicedThisMonth - invoicedLastMonth,
+    outstandingTotal,
+    thisYearMonthly,
+    yearly
+  }
+}
