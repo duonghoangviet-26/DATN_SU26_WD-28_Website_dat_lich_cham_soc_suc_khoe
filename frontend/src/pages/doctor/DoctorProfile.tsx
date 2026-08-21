@@ -5,6 +5,7 @@ import Toast from '@/components/common/Toast'
 import Icon from '@/components/admin/icons'
 import { doctorProfileService } from '@/services/doctor-profile.service'
 import { patientBookingService } from '@/services/patient-booking.service'
+import { authService } from '@/services/auth.service'
 import type { DoctorApproval, DoctorSelfProfile } from '@/types'
 import { formatPrice } from '@/utils/format'
 import { resolveMediaUrl } from '@/utils/media'
@@ -181,6 +182,14 @@ export default function DoctorProfile() {
   const [saveError, setSaveError] = useState('')
   const [reviews, setReviews] = useState<any[]>([])
 
+  // Change password states
+  const [oldPassword, setOldPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState(false)
+
   useEffect(() => {
     let mounted = true
 
@@ -261,11 +270,39 @@ export default function DoctorProfile() {
       setForm(toForm(updated))
       setEditing(false)
       setSaved(true)
-      window.setTimeout(() => setSaved(false), 3000)
+      setTimeout(() => setSaved(false), 3000)
     } catch (error: any) {
-      setSaveError(error?.response?.data?.message || 'Không thể lưu thông tin. Vui lòng thử lại.')
+      setSaveError(error?.response?.data?.message || 'Không thể lưu hồ sơ.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault()
+    setPasswordError('')
+    setPasswordSuccess(false)
+
+    if (newPassword !== confirmPassword) {
+      return setPasswordError('Mật khẩu mới không khớp')
+    }
+
+    if (newPassword.length < 6) {
+      return setPasswordError('Mật khẩu mới phải có ít nhất 6 ký tự')
+    }
+
+    setPasswordLoading(true)
+    try {
+      await authService.changePassword(oldPassword, newPassword)
+      setPasswordSuccess(true)
+      setOldPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setTimeout(() => setPasswordSuccess(false), 3000)
+    } catch (error: any) {
+      setPasswordError(error?.response?.data?.message || 'Không thể đổi mật khẩu.')
+    } finally {
+      setPasswordLoading(false)
     }
   }
 
@@ -874,6 +911,58 @@ export default function DoctorProfile() {
                 </dd>
               </div>
             </dl>
+          </div>
+
+          {/* Đổi mật khẩu */}
+          <div className="card rounded-3xl p-5">
+            <h3 className="mb-4 text-sm font-semibold text-slate-700">Đổi mật khẩu</h3>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-slate-500">Mật khẩu cũ</label>
+                <input
+                  type="password"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-slate-500">Mật khẩu mới</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-slate-500">Nhập lại mật khẩu mới</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  required
+                />
+              </div>
+
+              {passwordError && (
+                <p className="text-xs text-rose-600 font-medium">{passwordError}</p>
+              )}
+              {passwordSuccess && (
+                <p className="text-xs text-green-600 font-medium">Đổi mật khẩu thành công!</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={passwordLoading}
+                className="btn btn-primary w-full rounded-xl py-2 text-sm"
+              >
+                {passwordLoading ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}
+              </button>
+            </form>
           </div>
 
           {profile.trang_thai_duyet === 'approved' && (

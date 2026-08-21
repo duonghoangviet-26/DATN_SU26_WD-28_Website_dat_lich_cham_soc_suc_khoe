@@ -893,3 +893,44 @@ export async function verify2FA(req, res) {
     return fail(res, 500, 'Lỗi xác minh 2FA: ' + err.message)
   }
 }
+
+/**
+ * Đổi mật khẩu chủ động
+ */
+export async function changePassword(req, res) {
+  try {
+    const { oldPassword, newPassword } = req.body
+
+    if (!oldPassword || !newPassword) {
+      return fail(res, 400, 'Vui lòng cung cấp mật khẩu cũ và mật khẩu mới')
+    }
+
+    if (newPassword.length < 6) {
+      return fail(res, 400, 'Mật khẩu mới phải có ít nhất 6 ký tự')
+    }
+
+    const user = await NguoiDung.findOne({ _id: req.user.id, ngay_xoa: null }).select('+mat_khau')
+    if (!user) {
+      return fail(res, 404, 'Tài khoản không tồn tại')
+    }
+
+    if (!user.mat_khau) {
+      return fail(res, 400, 'Tài khoản của bạn đăng nhập bằng Google và chưa cài đặt mật khẩu. Vui lòng liên hệ Admin.')
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.mat_khau)
+    if (!isMatch) {
+      return fail(res, 400, 'Mật khẩu cũ không chính xác')
+    }
+
+    const salt = await bcrypt.genSalt(10)
+    user.mat_khau = await bcrypt.hash(newPassword, salt)
+    await user.save()
+
+    return ok(res, null, 'Đổi mật khẩu thành công')
+  } catch (err) {
+    console.error('Lỗi đổi mật khẩu:', err)
+    return fail(res, 500, 'Đã xảy ra lỗi khi đổi mật khẩu')
+  }
+}
+

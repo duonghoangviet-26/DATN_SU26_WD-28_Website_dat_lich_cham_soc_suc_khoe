@@ -17,6 +17,7 @@ router.post('/logout', authController.logout)
 router.post('/update-onboarding', verifyToken, authController.updateOnboarding)
 router.get('/profile', verifyToken, authController.getProfile)
 router.put('/profile', verifyToken, authController.updateProfile)
+router.post('/change-password', verifyToken, authController.changePassword)
 
 // 2FA Routes
 router.get('/2fa/setup', verifyToken, authController.setup2FA)
