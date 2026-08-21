@@ -157,8 +157,8 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
-  async cancelQueue(id: string): Promise<QueueActionResult> {
-    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/cancel`)
+  async cancelQueue(id: string, lyDo: string): Promise<QueueActionResult> {
+    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/cancel`, { ly_do: lyDo })
     return res.data.data
   },
 

@@ -254,6 +254,14 @@ export default function DoctorExamQueue() {
 
   function closeModal() { setActive(null); setActiveAppt(null) }
 
+  // Hủy ca gồm rất nhiều tình huống khác nhau (khách bỏ về, không đủ điều kiện khám...) —
+  // bắt buộc nhập lý do để lưu lại đối chiếu sau này (rule mục 8, LichSuLichHen.ly_do_thay_doi).
+  async function handleHuyCa(r: DoctorExamQueueRow) {
+    const reason = window.prompt(`Lý do hủy ca của ${r.ten_benh_nhan}`)
+    if (!reason?.trim()) return
+    await runQueueAction(r.id, (id) => doctorAppointmentService.cancelQueue(id, reason.trim()), 'Đã hủy ca')
+  }
+
   async function runQueueAction(id: string, action: (id: string) => Promise<unknown>, successMsg: string) {
     setActionLoadingId(id)
     try {
@@ -377,7 +385,7 @@ export default function DoctorExamQueue() {
                               onClick={() => runQueueAction(r.id, doctorAppointmentService.callQueuePatient, 'Đã gọi bệnh nhân')}
                               icon={<Icon name="bell" className="h-3.5 w-3.5" />}>Gọi bệnh nhân</Button>
                             <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
-                              onClick={() => runQueueAction(r.id, doctorAppointmentService.skipQueue, 'Đã bỏ lượt')}>Loại khỏi hàng chờ</Button>
+                              onClick={() => handleHuyCa(r)}>Hủy ca</Button>
                           </>
                         )}
                         {r.trang_thai_tong_hop === 'da_goi' && (
@@ -386,7 +394,7 @@ export default function DoctorExamQueue() {
                               onClick={() => runQueueAction(r.id, doctorAppointmentService.intoRoomQueue, 'Bệnh nhân đã vào phòng')}
                               icon={<Icon name="send" className="h-3.5 w-3.5" />}>Bắt đầu khám</Button>
                             <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
-                              onClick={() => runQueueAction(r.id, doctorAppointmentService.skipQueue, 'Đã bỏ lượt')}>Loại khỏi hàng chờ</Button>
+                              onClick={() => handleHuyCa(r)}>Hủy ca</Button>
                           </>
                         )}
                         {r.trang_thai_tong_hop === 'trong_phong' && (

@@ -8,7 +8,7 @@ import {
 // D81 — Bệnh nhân không có/không nhớ số điện thoại. Modal này CÔ LẬP với toàn bộ state
 // tra cứu-theo-SĐT của PatientIntake.tsx (phone/profiles/selectedId...) — không sửa bất kỳ
 // hàm nào ở đó. Khi tạo/tra được hồ sơ, chỉ trả về qua onProfileReady để trang cha tự đặt
-// vào state `profiles`/`selectedId` sẵn có, rồi toàn bộ luồng chọn chuyên khoa/tiếp nhận vào
+// vào state `profiles`/`selectedId` sẵn có, rồi toàn bộ luồng tiếp nhận vào
 // hàng đợi trung tâm phía dưới dùng lại y nguyên, không cần biết hồ sơ đến từ đâu.
 
 interface Props {
@@ -130,7 +130,7 @@ export default function TempProfileModal({ open, onClose, onProfileReady }: Prop
             }}
             className="btn-primary w-full"
           >
-            Tiếp tục chọn chuyên khoa cho hồ sơ này
+            Tiếp tục tiếp nhận hồ sơ này
           </button>
         </div>
       ) : (
