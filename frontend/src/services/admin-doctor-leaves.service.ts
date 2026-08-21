@@ -9,7 +9,7 @@ export interface AdminDoctorLeave extends PendingDoctorLeave {
 }
 
 export const adminDoctorLeavesService = {
-  async list(filters?: { trang_thai?: string; bac_si_id?: string }): Promise<AdminDoctorLeave[]> {
+  async list(filters?: { trang_thai?: string; bac_si_id?: string; ngay?: string }): Promise<AdminDoctorLeave[]> {
     const res = await axiosInstance.get<ApiResponse<AdminDoctorLeave[]>>('/admin/doctor-leaves', { params: filters })
     return Array.isArray(res.data.data) ? res.data.data : []
   },

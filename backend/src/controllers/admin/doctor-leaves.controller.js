@@ -82,7 +82,7 @@ export async function createDoctorLeave(req, res) {
 
 export async function listDoctorLeaves(req, res) {
   try {
-    const { bac_si_id, trang_thai } = req.query
+    const { bac_si_id, trang_thai, ngay } = req.query
     const filter = {}
 
     if (bac_si_id) {
@@ -94,6 +94,16 @@ export async function listDoctorLeaves(req, res) {
 
     if (trang_thai) {
       filter.trang_thai = trang_thai
+    }
+
+    if (ngay) {
+      const targetDate = new Date(ngay)
+      targetDate.setHours(0, 0, 0, 0)
+      const targetDateEnd = new Date(targetDate)
+      targetDateEnd.setHours(23, 59, 59, 999)
+      
+      filter.tu_ngay = { $lte: targetDateEnd }
+      filter.den_ngay = { $gte: targetDate }
     }
 
     const leaves = await NghiPhepBacSi.find(filter)

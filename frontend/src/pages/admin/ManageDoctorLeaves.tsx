@@ -19,12 +19,16 @@ export default function ManageDoctorLeaves() {
   const [error, setError] = useState('')
   const [approvingLeave, setApprovingLeave] = useState<AdminDoctorLeave | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [dateFilter, setDateFilter] = useState<string>('')
 
   const fetchLeaves = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const data = await adminDoctorLeavesService.list(statusFilter ? { trang_thai: statusFilter } : undefined)
+      const filters: any = {}
+      if (statusFilter) filters.trang_thai = statusFilter
+      if (dateFilter) filters.ngay = dateFilter
+      const data = await adminDoctorLeavesService.list(filters)
       setLeaves(data)
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Không thể tải danh sách đơn nghỉ phép')
@@ -35,7 +39,7 @@ export default function ManageDoctorLeaves() {
 
   useEffect(() => {
     fetchLeaves()
-  }, [fetchLeaves])
+  }, [fetchLeaves, dateFilter])
 
   return (
     <>
@@ -60,10 +64,20 @@ export default function ManageDoctorLeaves() {
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+          />
           <button
             type="button"
-            onClick={fetchLeaves}
+            onClick={() => {
+              setStatusFilter('')
+              setDateFilter('')
+              fetchLeaves()
+            }}
             disabled={loading}
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >

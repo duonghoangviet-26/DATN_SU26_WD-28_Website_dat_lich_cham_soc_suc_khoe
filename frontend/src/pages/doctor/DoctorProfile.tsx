@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
+import Modal from '@/components/common/Modal'
 import Toast from '@/components/common/Toast'
 import Icon from '@/components/admin/icons'
 import { doctorProfileService } from '@/services/doctor-profile.service'
@@ -189,6 +190,7 @@ export default function DoctorProfile() {
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -337,12 +339,20 @@ export default function DoctorProfile() {
         title="Hồ sơ bác sĩ"
         description="Thông tin chuyên môn hiển thị trên hệ thống đặt lịch và hồ sơ khám."
       >
-        {!editing && (
-          <button onClick={() => setEditing(true)} className="btn-primary">
-            <Icon name="plus" className="h-4 w-4" />
-            Chỉnh sửa
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setIsChangePasswordOpen(true)} 
+            className="btn rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Đổi mật khẩu
           </button>
-        )}
+          {!editing && (
+            <button onClick={() => setEditing(true)} className="btn-primary">
+              <Icon name="plus" className="h-4 w-4" />
+              Chỉnh sửa
+            </button>
+          )}
+        </div>
       </PageHeader>
 
       <section className="mb-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_18px_50px_-28px_rgba(15,118,110,0.45)]">
@@ -913,58 +923,6 @@ export default function DoctorProfile() {
             </dl>
           </div>
 
-          {/* Đổi mật khẩu */}
-          <div className="card rounded-3xl p-5">
-            <h3 className="mb-4 text-sm font-semibold text-slate-700">Đổi mật khẩu</h3>
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-slate-500">Mật khẩu cũ</label>
-                <input
-                  type="password"
-                  value={oldPassword}
-                  onChange={(e) => setOldPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-slate-500">Mật khẩu mới</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-slate-500">Nhập lại mật khẩu mới</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  required
-                />
-              </div>
-
-              {passwordError && (
-                <p className="text-xs text-rose-600 font-medium">{passwordError}</p>
-              )}
-              {passwordSuccess && (
-                <p className="text-xs text-green-600 font-medium">Đổi mật khẩu thành công!</p>
-              )}
-
-              <button
-                type="submit"
-                disabled={passwordLoading}
-                className="btn btn-primary w-full rounded-xl py-2 text-sm"
-              >
-                {passwordLoading ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}
-              </button>
-            </form>
-          </div>
-
           {profile.trang_thai_duyet === 'approved' && (
             <div className="rounded-xl border border-green-200 bg-green-50 p-4">
               <div className="flex items-center gap-2 text-green-700">
@@ -976,6 +934,83 @@ export default function DoctorProfile() {
           )}
         </div>
       </div>
+
+      {/* Modal Đổi mật khẩu */}
+      <Modal 
+        isOpen={isChangePasswordOpen} 
+        onClose={() => {
+          if (!passwordLoading) {
+            setIsChangePasswordOpen(false)
+            setOldPassword('')
+            setNewPassword('')
+            setConfirmPassword('')
+            setPasswordError('')
+            setPasswordSuccess(false)
+          }
+        }} 
+        title="Đổi mật khẩu"
+        maxWidth="md"
+      >
+        <div className="p-5 pt-2">
+          <form onSubmit={handleChangePassword} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-500">Mật khẩu cũ</label>
+              <input
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-500">Mật khẩu mới</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-500">Nhập lại mật khẩu mới</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                required
+              />
+            </div>
+
+            {passwordError && (
+              <p className="text-xs text-rose-600 font-medium">{passwordError}</p>
+            )}
+            {passwordSuccess && (
+              <p className="text-xs text-green-600 font-medium">Đổi mật khẩu thành công!</p>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsChangePasswordOpen(false)}
+                disabled={passwordLoading}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={passwordLoading}
+                className="btn btn-primary rounded-xl px-4 py-2 text-sm"
+              >
+                {passwordLoading ? 'Đang xử lý...' : 'Cập nhật'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
     </div>
   )
 }
