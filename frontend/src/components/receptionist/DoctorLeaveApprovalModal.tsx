@@ -8,10 +8,12 @@ import {
   type ApproveDoctorLeaveResult,
   type PendingDoctorLeave,
 } from '@/services/receptionist-doctor-leaves.service'
+import { adminDoctorLeavesService } from '@/services/admin-doctor-leaves.service'
 import QueueTransferModal, { QueueTransferCandidate } from '@/components/receptionist/QueueTransferModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 
 interface Props {
+  apiMode?: 'receptionist' | 'admin'
   leave: PendingDoctorLeave
   onClose: () => void
   onDone: () => void
@@ -42,7 +44,7 @@ function moTaKhoangNgay(leave: PendingDoctorLeave) {
   return khoang + gio
 }
 
-export default function DoctorLeaveApprovalModal({ leave, onClose, onDone }: Props) {
+export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', leave, onClose, onDone }: Props) {
   const [mode, setMode] = useState<'confirm' | 'reject-reason'>('confirm')
   const [rejectReason, setRejectReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -60,7 +62,9 @@ export default function DoctorLeaveApprovalModal({ leave, onClose, onDone }: Pro
     setSubmitting(true)
     setError('')
     try {
-      const res = await receptionistDoctorLeavesService.approve(leave._id)
+      const res = apiMode === 'admin' 
+        ? await adminDoctorLeavesService.approve(leave._id) 
+        : await receptionistDoctorLeavesService.approve(leave._id)
       setResult(res)
       onDone()
     } catch (requestError: any) {
@@ -78,7 +82,11 @@ export default function DoctorLeaveApprovalModal({ leave, onClose, onDone }: Pro
     setSubmitting(true)
     setError('')
     try {
-      await receptionistDoctorLeavesService.reject(leave._id, rejectReason.trim())
+      if (apiMode === 'admin') {
+        await adminDoctorLeavesService.reject(leave._id, rejectReason.trim())
+      } else {
+        await receptionistDoctorLeavesService.reject(leave._id, rejectReason.trim())
+      }
       onDone()
       onClose()
     } catch (requestError: any) {
