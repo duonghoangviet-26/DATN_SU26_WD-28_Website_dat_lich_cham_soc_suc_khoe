@@ -716,7 +716,7 @@ export default function Booking() {
               )}
 
               <p className="text-xs leading-5 text-slate-500">
-                Bác sĩ được phân công theo suất thực tế khi xác nhận. Đặt lịch trực tuyến đóng trước giờ khám 30 phút.
+                Đặt lịch trực tuyến vui lòng đến trước giờ hẹn 15 phút!
               </p>
             </div>
           </div>
