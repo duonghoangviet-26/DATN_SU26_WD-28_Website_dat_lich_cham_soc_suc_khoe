@@ -92,7 +92,7 @@ export function startCronJobs() {
     // Tat bang NO_SHOW_SWEEP_ENABLED=false khi demo (xem BAT_QUET_NO_SHOW).
     if (BAT_QUET_NO_SHOW) {
       try {
-        const { daDanhDau } = await quetNoShowHetCa()
+        const { daDanhDau } = await quetNoShowHetCa({ soNgay: 3 })
         if (daDanhDau > 0) console.log(`[cron] Da danh dau ${daDanhDau} lich hen 'no_show' (het ca, khong toi quay)`)
       } catch (err) {
         console.error('[cron] Loi quet no_show:', err.message)

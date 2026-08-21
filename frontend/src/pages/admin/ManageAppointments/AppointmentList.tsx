@@ -61,6 +61,26 @@ function ActionIconButton({ label, icon, title, className, onClick }: ActionIcon
   )
 }
 
+/**
+ * Kiểm tra xem thời điểm lịch hẹn đã qua chưa.
+ * Dùng ngay_kham (YYYY-MM-DD) + gio_kham (HH:MM) ghép thành DateTime rồi so với now.
+ * Thêm buffer 30 phút: trong vòng 30 phút sau giờ hẹn vẫn cho phép hủy
+ * (phòng trường hợp admin mở trang trúng đúng giờ khám).
+ */
+function isAppointmentPast(appointment: AppointmentItem): boolean {
+  if (!appointment.ngay_kham || !appointment.gio_kham) return false
+  try {
+    const [year, month, day] = appointment.ngay_kham.split('-').map(Number)
+    const [hour, minute] = appointment.gio_kham.split(':').map(Number)
+    const appointmentDateTime = new Date(year, month - 1, day, hour, minute, 0)
+    // Thêm buffer 30 phút sau giờ hẹn
+    appointmentDateTime.setMinutes(appointmentDateTime.getMinutes() + 30)
+    return new Date() > appointmentDateTime
+  } catch {
+    return false
+  }
+}
+
 export default function AppointmentList({
   appointments,
   loading,
@@ -194,7 +214,8 @@ export default function AppointmentList({
                       onClick={() => onHistory(appointment)}
                       className="border-purple-200 bg-purple-50 text-purple-600 hover:border-purple-300 hover:bg-purple-100 focus:ring-purple-200"
                     />
-                    {(appointment.status === 'pending' || appointment.status === 'confirmed') && (
+
+                    {(appointment.status === 'pending' || appointment.status === 'confirmed') && !isAppointmentPast(appointment) && (
                       <>
                         <ActionIconButton
                           label="Dời lịch"

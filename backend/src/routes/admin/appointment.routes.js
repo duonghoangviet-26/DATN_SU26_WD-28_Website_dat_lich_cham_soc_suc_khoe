@@ -21,5 +21,6 @@ router.patch('/:id/cancel', controller.cancelAppointment)
 router.patch('/:id/reschedule', controller.rescheduleAppointment)
 router.patch('/:id/restore', controller.restoreAppointment)
 router.delete('/:id', controller.deleteAppointment)
+router.post('/sweep-no-show', controller.sweepNoShow)
 
 export default router

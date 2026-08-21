@@ -46,6 +46,8 @@ export default function ManageAppointments() {
   const [appointments, setAppointments] = useState<AppointmentItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sweepLoading, setSweepLoading] = useState(false)
+  const [sweepResult, setSweepResult] = useState<string | null>(null)
 
   const [searchParams, setSearchParams] = useSearchParams()
   const filterDoctorId = searchParams.get('doctor_id')
@@ -174,6 +176,21 @@ export default function ManageAppointments() {
     'admin:payment_updated': () => fetchAppointments(page),
   }), [fetchAppointments, page])
 
+  async function handleSweepNoShow() {
+    if (sweepLoading) return
+    setSweepLoading(true)
+    setSweepResult(null)
+    try {
+      const result = await appointmentService.sweepNoShow(180)
+      setSweepResult(result.message)
+      await fetchAppointments(page)
+    } catch (err: any) {
+      setSweepResult('Lỗi khi quét: ' + (err?.response?.data?.message || err.message))
+    } finally {
+      setSweepLoading(false)
+    }
+  }
+
   async function handleCancel(appointment: AppointmentItem, reason: string) {
     try {
       await appointmentService.cancel(appointment._id, reason, appointment.ngay_cap_nhat)
@@ -249,7 +266,7 @@ export default function ManageAppointments() {
       {view === 'list' && (
         <AdminMotionGroup>
 
-          <AdminMotionItem className="mb-4 flex flex-wrap gap-2">
+          <AdminMotionItem className="mb-4 flex flex-wrap items-center gap-2">
             {[
               ['all', 'Tất cả'],
               ['today', 'Hôm nay'],
@@ -275,6 +292,23 @@ export default function ManageAppointments() {
                 {label}
               </button>
             ))}
+
+            {/* Nút quét lịch không đến thủ công */}
+            <div className="ml-auto flex flex-col items-end gap-1">
+              <button
+                type="button"
+                onClick={handleSweepNoShow}
+                disabled={sweepLoading}
+                title="Quét và cập nhật lịch hẹn đã qua mà bệnh nhân không đến khám sang trạng thái 'Không đến'"
+                className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-60"
+              >
+                <Icon name="refresh-cw" className={`h-4 w-4 ${sweepLoading ? 'animate-spin' : ''}`} />
+                {sweepLoading ? 'Đang quét...' : 'Quét lịch không đến'}
+              </button>
+              {sweepResult && (
+                <p className="text-xs text-slate-500 italic">{sweepResult}</p>
+              )}
+            </div>
           </AdminMotionItem>
 
           <AdminMotionGroup className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
