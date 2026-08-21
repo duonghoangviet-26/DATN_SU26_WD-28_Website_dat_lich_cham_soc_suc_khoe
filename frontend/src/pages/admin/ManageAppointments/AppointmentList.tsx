@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import Icon from '@/components/admin/icons'
 import Badge from '@/components/common/Badge'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import type { AppointmentItem, AppointmentStatus } from '@/types'
 import { APPOINTMENT_STATUS_LABEL, EXAM_TYPE_LABEL, PAYMENT_STATUS_LABEL } from '@/utils/constants'
 import { formatAdminValue } from '@/utils/adminDisplay'
@@ -36,6 +37,12 @@ interface Props {
   onReschedule: (a: AppointmentItem) => void
   onRestore: (a: AppointmentItem) => void
   onHardDelete: (a: AppointmentItem) => void
+  pagination?: {
+    total: number
+    totalPages: number
+    page: number
+  }
+  onPageChange?: (page: number) => void
 }
 
 interface ActionIconButtonProps {
@@ -90,6 +97,8 @@ export default function AppointmentList({
   onReschedule,
   onRestore,
   onHardDelete,
+  pagination,
+  onPageChange,
 }: Props) {
   const [confirmItem, setConfirmItem] = useState<AppointmentItem | null>(null)
   const [cancelReason, setCancelReason] = useState('')
@@ -258,6 +267,18 @@ export default function AppointmentList({
           </tbody>
         </table>
       </div>
+
+      {!loading && appointments.length > 0 && pagination && onPageChange && (
+        <TablePaginationFooter
+          currentPage={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          currentItemCount={appointments.length}
+          itemLabel="lịch hẹn"
+          pageSize={10}
+          onPageChange={onPageChange}
+        />
+      )}
 
       {confirmItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

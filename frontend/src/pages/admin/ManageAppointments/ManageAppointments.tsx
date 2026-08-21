@@ -465,41 +465,10 @@ export default function ManageAppointments() {
               onReschedule={handleReschedule}
               onRestore={handleRestore}
               onHardDelete={handleHardDelete}
+              pagination={pagination}
+              onPageChange={setPage}
             />
           </AdminMotionItem>
-
-          {!loading && pagination.totalPages > 1 && (
-            <div className="mt-6 flex items-center justify-between rounded-lg border-t border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-6">
-              <div className="flex flex-1 items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-700">
-                    Hiển thị trang <span className="font-medium">{pagination.page}</span> /{' '}
-                    <span className="font-medium">{pagination.totalPages}</span>
-                  </p>
-                </div>
-                <div>
-                  <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                    <button
-                      onClick={() => setPage((current) => Math.max(1, current - 1))}
-                      disabled={pagination.page <= 1}
-                      className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                    >
-                      <span className="sr-only">Previous</span>
-                      <Icon name="chevron-left" className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))}
-                      disabled={pagination.page >= pagination.totalPages}
-                      className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                    >
-                      <span className="sr-only">Next</span>
-                      <Icon name="chevron-right" className="h-5 w-5" />
-                    </button>
-                  </nav>
-                </div>
-              </div>
-            </div>
-          )}
         </AdminMotionGroup>
       )}
 
