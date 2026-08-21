@@ -122,6 +122,10 @@ export default function Booking() {
   const [patientPhone, setPatientPhone] = useState(draft?.patientPhone || user?.so_dien_thoai || '')
   const [symptoms, setSymptoms] = useState(draft?.symptoms || '')
 
+  // Inline field validation states
+  const [fieldErrors, setFieldErrors] = useState<{ patientName?: string; patientPhone?: string; symptoms?: string }>({})
+  const [touchedFields, setTouchedFields] = useState<{ patientName?: boolean; patientPhone?: boolean; symptoms?: boolean }>({})
+
   const [toast, setToast] = useState<string | null>(null)
   const [submittingBooking, setSubmittingBooking] = useState(false)
   const [creatingPaymentSession, setCreatingPaymentSession] = useState(false)
@@ -396,44 +400,54 @@ export default function Booking() {
         return
       }
 
-      // Appointment display names are normalized before applying the legacy name guard.
-      // This keeps a non-editable self-profile such as "Nguyễn Thị Hạnh (TEST)" bookable.
-      const nameTrimmed = patientName.trim().replace(/[()_-]/g, ' ').replace(/\s+/g, ' ')
-      const phoneTrimmed = patientPhone.trim()
+      const nameErr = bookingFor === 'other' ? validatePatientName(patientName) : undefined
+      const phoneErr = validatePatientPhone(patientPhone)
+      const symptomsErr = validateSymptoms(symptoms)
 
-      if (!nameTrimmed || !phoneTrimmed) {
-        setToast('Họ tên và số điện thoại liên hệ là bắt buộc.')
-        return
+      const newErrors = {
+        patientName: nameErr,
+        patientPhone: phoneErr,
+        symptoms: symptomsErr,
       }
 
-      // Kiểm tra định dạng Họ tên (chữ cái Tiếng Việt có dấu, khoảng trắng, dấu chấm cho danh xưng
-      // như "BS.", "ThS." — bắt buộc phải cho phép vì "Tự khám" khoá cứng tên theo user.ho_ten,
-      // không có ô sửa, nên tài khoản bác sĩ tự đặt lịch sẽ luôn bị chặn nếu thiếu dấu chấm)
-      const nameRegex = /^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂÂÊÔƠƯưăâêôơưẠ-ỹđĐ\s'.]{2,100}$/
-      if (!nameRegex.test(nameTrimmed)) {
-        setToast('Họ tên bệnh nhân không hợp lệ (phải từ 2 ký tự trở lên và chỉ chứa chữ cái).')
-        return
-      }
+      setFieldErrors(newErrors)
+      setTouchedFields({ patientName: true, patientPhone: true, symptoms: true })
 
-      // Kiểm tra định dạng Số điện thoại (10 chữ số, bắt đầu bằng 0)
-      const phoneRegex = /^0\d{9}$/
-      if (!phoneRegex.test(phoneTrimmed)) {
-        setToast('Số điện thoại liên hệ không hợp lệ (phải gồm 10 chữ số và bắt đầu bằng số 0).')
-        return
-      }
-
-      if (!symptoms.trim()) {
-        setToast('Vui lòng mô tả sơ qua triệu chứng bệnh.')
-        return
-      }
-
-      if (symptoms.trim().length < 5) {
-        setToast('Mô tả triệu chứng quá ngắn (vui lòng nhập tối thiểu 5 ký tự để bác sĩ nắm thông tin).')
+      if (nameErr || phoneErr || symptomsErr) {
+        const firstErr = phoneErr || symptomsErr || nameErr
+        if (firstErr) setToast(firstErr)
         return
       }
 
       setStep(4)
     }
+  }
+
+  function validatePatientName(val: string): string | undefined {
+    const nameTrimmed = val.trim().replace(/[()_-]/g, ' ').replace(/\s+/g, ' ')
+    if (!nameTrimmed) return 'Vui lòng nhập họ và tên người khám.'
+    const nameRegex = /^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂÂÊÔƠƯưăâêôơưẠ-ỹđĐ\s'.]{2,100}$/
+    if (!nameRegex.test(nameTrimmed)) {
+      return 'Họ tên bệnh nhân không hợp lệ (tối thiểu 2 ký tự, chỉ chứa chữ cái).'
+    }
+    return undefined
+  }
+
+  function validatePatientPhone(val: string): string | undefined {
+    const phoneTrimmed = val.trim()
+    if (!phoneTrimmed) return 'Vui lòng nhập số điện thoại liên hệ.'
+    const phoneRegex = /^0\d{9}$/
+    if (!phoneRegex.test(phoneTrimmed)) {
+      return 'Số điện thoại liên hệ không hợp lệ (phải gồm 10 chữ số, ví dụ 0912345678).'
+    }
+    return undefined
+  }
+
+  function validateSymptoms(val: string): string | undefined {
+    const symptomsTrimmed = val.trim()
+    if (!symptomsTrimmed) return 'Vui lòng mô tả sơ qua triệu chứng bệnh.'
+    if (symptomsTrimmed.length < 5) return 'Mô tả triệu chứng quá ngắn (tối thiểu 5 ký tự).'
+    return undefined
   }
 
   function handlePrevStep() {
@@ -726,6 +740,9 @@ export default function Booking() {
                   setPatientName(user?.ho_ten || '')
                   setPatientPhone(user?.so_dien_thoai || '')
                   setSelectedMemberId('')
+                  setSymptoms('')
+                  setFieldErrors({})
+                  setTouchedFields({})
                 }}
                 aria-pressed={bookingFor === 'self'}
                 className={`flex flex-col items-center justify-center rounded-xl border p-4 text-center transition ${
@@ -741,6 +758,9 @@ export default function Booking() {
               <button
                 type="button"
                 onClick={() => {
+                  setSymptoms('')
+                  setFieldErrors({})
+                  setTouchedFields({})
                   if (familyMembers.length > 0) {
                     setBookingFor('member')
                     const firstMember = familyMembers[0]
@@ -780,7 +800,18 @@ export default function Booking() {
                 label="Số điện thoại liên hệ nhận SMS/Zalo"
                 required
                 value={patientPhone}
-                onChange={(event) => setPatientPhone(event.target.value)}
+                onChange={(event) => {
+                  const val = event.target.value
+                  setPatientPhone(val)
+                  if (touchedFields.patientPhone) {
+                    setFieldErrors((prev) => ({ ...prev, patientPhone: validatePatientPhone(val) }))
+                  }
+                }}
+                onBlur={() => {
+                  setTouchedFields((prev) => ({ ...prev, patientPhone: true }))
+                  setFieldErrors((prev) => ({ ...prev, patientPhone: validatePatientPhone(patientPhone) }))
+                }}
+                error={touchedFields.patientPhone ? fieldErrors.patientPhone : undefined}
                 placeholder="Ví dụ: 0912345678"
               />
             </div>
@@ -808,7 +839,11 @@ export default function Booking() {
                           setBookingFor('member')
                           setSelectedMemberId(member.id)
                           setPatientName(member.ho_ten)
-                          setPatientPhone(member.so_dien_thoai || user?.so_dien_thoai || '')
+                          const newPhone = member.so_dien_thoai || user?.so_dien_thoai || ''
+                          setPatientPhone(newPhone)
+                          setSymptoms('')
+                          setFieldErrors({})
+                          setTouchedFields({})
                         }}
                         aria-pressed={selectedMemberId === member.id}
                         className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
@@ -838,6 +873,9 @@ export default function Booking() {
                         setSelectedMemberId('')
                         setPatientName('')
                         setPatientPhone('')
+                        setSymptoms('')
+                        setFieldErrors({})
+                        setTouchedFields({})
                       }}
                       aria-pressed={!selectedMemberId}
                       className={`flex items-center gap-2.5 rounded-xl border border-dashed p-3 text-left transition ${
@@ -869,7 +907,18 @@ export default function Booking() {
                         label="Số điện thoại liên hệ nhận SMS/Zalo"
                         required
                         value={patientPhone}
-                        onChange={(event) => setPatientPhone(event.target.value)}
+                        onChange={(event) => {
+                          const val = event.target.value
+                          setPatientPhone(val)
+                          if (touchedFields.patientPhone) {
+                            setFieldErrors((prev) => ({ ...prev, patientPhone: validatePatientPhone(val) }))
+                          }
+                        }}
+                        onBlur={() => {
+                          setTouchedFields((prev) => ({ ...prev, patientPhone: true }))
+                          setFieldErrors((prev) => ({ ...prev, patientPhone: validatePatientPhone(patientPhone) }))
+                        }}
+                        error={touchedFields.patientPhone ? fieldErrors.patientPhone : undefined}
                         placeholder="Ví dụ: 0912345678"
                       />
                     </div>
@@ -879,14 +928,36 @@ export default function Booking() {
                         label="Họ và tên người khám"
                         required
                         value={patientName}
-                        onChange={(event) => setPatientName(event.target.value)}
+                        onChange={(event) => {
+                          const val = event.target.value
+                          setPatientName(val)
+                          if (touchedFields.patientName) {
+                            setFieldErrors((prev) => ({ ...prev, patientName: validatePatientName(val) }))
+                          }
+                        }}
+                        onBlur={() => {
+                          setTouchedFields((prev) => ({ ...prev, patientName: true }))
+                          setFieldErrors((prev) => ({ ...prev, patientName: validatePatientName(patientName) }))
+                        }}
+                        error={touchedFields.patientName ? fieldErrors.patientName : undefined}
                         placeholder="Nhập họ và tên người khám..."
                       />
                       <Input
                         label="Số điện thoại liên hệ nhận SMS/Zalo"
                         placeholder="Nhập số di động liên hệ..."
                         value={patientPhone}
-                        onChange={(event) => setPatientPhone(event.target.value)}
+                        onChange={(event) => {
+                          const val = event.target.value
+                          setPatientPhone(val)
+                          if (touchedFields.patientPhone) {
+                            setFieldErrors((prev) => ({ ...prev, patientPhone: validatePatientPhone(val) }))
+                          }
+                        }}
+                        onBlur={() => {
+                          setTouchedFields((prev) => ({ ...prev, patientPhone: true }))
+                          setFieldErrors((prev) => ({ ...prev, patientPhone: validatePatientPhone(patientPhone) }))
+                        }}
+                        error={touchedFields.patientPhone ? fieldErrors.patientPhone : undefined}
                         required
                       />
                     </div>
@@ -921,14 +992,36 @@ export default function Booking() {
                       label="Họ và tên người khám"
                       required
                       value={patientName}
-                      onChange={(event) => setPatientName(event.target.value)}
+                      onChange={(event) => {
+                        const val = event.target.value
+                        setPatientName(val)
+                        if (touchedFields.patientName) {
+                          setFieldErrors((prev) => ({ ...prev, patientName: validatePatientName(val) }))
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouchedFields((prev) => ({ ...prev, patientName: true }))
+                        setFieldErrors((prev) => ({ ...prev, patientName: validatePatientName(patientName) }))
+                      }}
+                      error={touchedFields.patientName ? fieldErrors.patientName : undefined}
                       placeholder="Ví dụ: Nguyễn Thị Hoa"
                     />
                     <Input
                       label="Số điện thoại liên hệ nhận SMS/Zalo"
                       required
                       value={patientPhone}
-                      onChange={(event) => setPatientPhone(event.target.value)}
+                      onChange={(event) => {
+                        const val = event.target.value
+                        setPatientPhone(val)
+                        if (touchedFields.patientPhone) {
+                          setFieldErrors((prev) => ({ ...prev, patientPhone: validatePatientPhone(val) }))
+                        }
+                      }}
+                      onBlur={() => {
+                        setTouchedFields((prev) => ({ ...prev, patientPhone: true }))
+                        setFieldErrors((prev) => ({ ...prev, patientPhone: validatePatientPhone(patientPhone) }))
+                      }}
+                      error={touchedFields.patientPhone ? fieldErrors.patientPhone : undefined}
                       placeholder="Ví dụ: 0912345678"
                     />
                   </div>
@@ -941,7 +1034,18 @@ export default function Booking() {
             label="Mô tả triệu chứng bệnh"
             placeholder="Ví dụ: Đau họng rát buốt khi nuốt, nghẹt mũi kéo dài, đau buốt vùng tai..."
             value={symptoms}
-            onChange={(event) => setSymptoms(event.target.value)}
+            onChange={(event) => {
+              const val = event.target.value
+              setSymptoms(val)
+              if (touchedFields.symptoms) {
+                setFieldErrors((prev) => ({ ...prev, symptoms: validateSymptoms(val) }))
+              }
+            }}
+            onBlur={() => {
+              setTouchedFields((prev) => ({ ...prev, symptoms: true }))
+              setFieldErrors((prev) => ({ ...prev, symptoms: validateSymptoms(symptoms) }))
+            }}
+            error={touchedFields.symptoms ? fieldErrors.symptoms : undefined}
             required
           />
         </div>
