@@ -725,6 +725,25 @@ export interface InvoicedDetails {
   yearly: YearlyInvoiced[];
 }
 
+export interface DebtItem {
+  _id: string;
+  so_hoa_don: string;
+  ho_ten: string;
+  so_dien_thoai: string;
+  email?: string;
+  tong_thanh_toan: number;
+  tong_da_thu: number;
+  no_hoa_don: number;
+  chi_tiet_thu_phi: {
+    loai: string;
+    ten: string;
+    so_tien: number;
+    so_luong: number;
+    thanh_tien: number;
+  }[];
+  created_at: string;
+}
+
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message: string;
