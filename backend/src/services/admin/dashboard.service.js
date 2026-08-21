@@ -366,3 +366,80 @@ export async function getChiTietDoanhThuXuatHoaDon(now = new Date()) {
     yearly
   }
 }
+
+export async function getDanhSachCongNo() {
+  const danhSach = await HoaDon.aggregate([
+    {
+      $lookup: {
+        from: 'thanh_toan',
+        localField: '_id',
+        foreignField: 'hoa_don_id',
+        as: 'payments'
+      }
+    },
+    {
+      $addFields: {
+        tong_da_thu: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: {
+                  input: '$payments',
+                  as: 'payment',
+                  cond: { $eq: ['$$payment.status', 'paid'] }
+                }
+              },
+              as: 'paid_payment',
+              in: '$$paid_payment.so_tien'
+            }
+          }
+        }
+      }
+    },
+    {
+      $addFields: {
+        no_hoa_don: {
+          $max: [0, { $subtract: ['$tong_thanh_toan', '$tong_da_thu'] }]
+        }
+      }
+    },
+    {
+      $match: {
+        no_hoa_don: { $gt: 0 }
+      }
+    },
+    {
+      $lookup: {
+        from: 'ho_so_benh_nhan',
+        localField: 'ho_so_benh_nhan_id',
+        foreignField: '_id',
+        as: 'patient'
+      }
+    },
+    {
+      $unwind: {
+        path: '$patient',
+        preserveNullAndEmptyArrays: true
+      }
+    },
+    {
+      $project: {
+        _id: 1,
+        so_hoa_don: 1,
+        ho_ten: '$patient.ho_ten',
+        so_dien_thoai: '$patient.so_dien_thoai',
+        email: '$patient.email',
+        tong_thanh_toan: 1,
+        tong_da_thu: 1,
+        no_hoa_don: 1,
+        chi_tiet_thu_phi: 1,
+        created_at: 1
+      }
+    },
+    {
+      $sort: { created_at: -1 }
+    }
+  ])
+
+  return danhSach
+}

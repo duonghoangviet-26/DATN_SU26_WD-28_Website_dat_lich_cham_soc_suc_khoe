@@ -93,4 +93,9 @@ export const appointmentService = {
     const res = await axiosInstance.get(`/admin/appointments/doctors/${doctorId}/schedules`)
     return res.data.data
   },
+
+  async sweepNoShow(soNgay = 90): Promise<{ daDanhDau: number; soNgayQuet: number; message: string }> {
+    const res = await axiosInstance.post(`/admin/appointments/sweep-no-show?soNgay=${soNgay}`)
+    return res.data.data
+  },
 }
