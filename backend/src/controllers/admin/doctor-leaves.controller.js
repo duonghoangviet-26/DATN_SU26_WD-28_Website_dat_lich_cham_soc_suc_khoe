@@ -32,7 +32,11 @@ function formatDoctorLeave(leave) {
     ly_do: leave.ly_do ?? null,
     trang_thai: leave.trang_thai,
     nguon_tao: leave.nguon_tao ?? null,
-    nguoi_duyet_id: leave.nguoi_duyet_id ?? null,
+    nguoi_duyet_id: leave.nguoi_duyet_id?._id ?? leave.nguoi_duyet_id ?? null,
+    nguoi_duyet: leave.nguoi_duyet_id ? {
+      _id: leave.nguoi_duyet_id._id ?? leave.nguoi_duyet_id,
+      ho_ten: leave.nguoi_duyet_id.ho_ten ?? null,
+    } : null,
     thoi_diem_duyet: leave.thoi_diem_duyet ?? null,
     ghi_chu: leave.ghi_chu ?? null,
     ngay_tao: leave.ngay_tao ?? null,
@@ -111,6 +115,10 @@ export async function listDoctorLeaves(req, res) {
         path: 'bac_si_id',
         select: 'user_id trang_thai',
         populate: { path: 'user_id', select: 'ho_ten' },
+      })
+      .populate({
+        path: 'nguoi_duyet_id',
+        select: 'ho_ten'
       })
       .sort({ ngay_tao: -1, _id: -1 })
       .lean()

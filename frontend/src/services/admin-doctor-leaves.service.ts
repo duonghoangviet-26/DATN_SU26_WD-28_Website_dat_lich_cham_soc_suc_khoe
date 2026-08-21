@@ -4,6 +4,10 @@ import type { ApproveDoctorLeaveResult, PendingDoctorLeave } from '@/services/re
 
 export interface AdminDoctorLeave extends PendingDoctorLeave {
   nguoi_duyet_id?: string | null
+  nguoi_duyet?: {
+    _id: string
+    ho_ten: string | null
+  } | null
   thoi_diem_duyet?: string | null
   ghi_chu?: string | null
 }

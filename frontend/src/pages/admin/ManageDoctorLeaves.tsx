@@ -4,6 +4,8 @@ import Badge from '@/components/common/Badge'
 import PageHeader from '@/components/common/PageHeader'
 import DoctorLeaveApprovalModal from '@/components/receptionist/DoctorLeaveApprovalModal'
 import TablePaginationFooter from '@/components/common/TablePaginationFooter'
+import Modal from '@/components/common/Modal'
+import Icon from '@/components/admin/icons'
 import { adminDoctorLeavesService, type AdminDoctorLeave } from '@/services/admin-doctor-leaves.service'
 import { DOCTOR_LEAVE_STATUS_COLOR } from '@/utils/constants'
 
@@ -19,6 +21,7 @@ export default function ManageDoctorLeaves() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [approvingLeave, setApprovingLeave] = useState<AdminDoctorLeave | null>(null)
+  const [historyLeave, setHistoryLeave] = useState<AdminDoctorLeave | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [dateFilter, setDateFilter] = useState<string>('')
   
@@ -155,13 +158,22 @@ export default function ManageDoctorLeaves() {
                       </Badge>
                     </td>
                     <td className="p-4 text-right">
-                      {leave.trang_thai === 'cho_duyet' && (
+                      {leave.trang_thai === 'cho_duyet' ? (
                         <button
                           type="button"
                           onClick={() => setApprovingLeave(leave)}
                           className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-100"
                         >
                           Duyệt đơn
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setHistoryLeave(leave)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                          title="Xem lịch sử"
+                        >
+                          <Icon name="clock" className="h-4 w-4" />
                         </button>
                       )}
                     </td>
@@ -197,6 +209,44 @@ export default function ManageDoctorLeaves() {
           />,
           document.body
         )}
+
+      {/* Modal Lịch sử */}
+      <Modal
+        isOpen={!!historyLeave}
+        onClose={() => setHistoryLeave(null)}
+        title="Lịch sử duyệt đơn"
+        maxWidth="sm"
+      >
+        {historyLeave && (
+          <div className="p-5 text-sm text-slate-600 space-y-4">
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+              <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-400">Thời điểm tạo đơn</p>
+              <p className="font-medium text-slate-800">
+                {historyLeave.ngay_tao ? new Date(historyLeave.ngay_tao).toLocaleString('vi-VN') : 'Không xác định'}
+              </p>
+            </div>
+            
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+              <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-400">Trạng thái hiện tại</p>
+              <div className="mb-3">
+                <Badge color={DOCTOR_LEAVE_STATUS_COLOR[historyLeave.trang_thai] as any}>
+                  {LEAVE_STATUS_LABEL[historyLeave.trang_thai] ?? historyLeave.trang_thai}
+                </Badge>
+              </div>
+
+              <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-400">Xử lý bởi</p>
+              <p className="font-medium text-slate-800">
+                {historyLeave.nguoi_duyet?.ho_ten || 'Hệ thống'}
+              </p>
+              {historyLeave.thoi_diem_duyet && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Vào lúc: {new Date(historyLeave.thoi_diem_duyet).toLocaleString('vi-VN')}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </>
   )
 }
