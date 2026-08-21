@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { adminMenu } from '@/routes/adminMenu'
-import { adminDoctorLeavesService } from '@/services/admin-doctor-leaves.service'
 import Icon from './icons'
 
 interface Props {
@@ -10,23 +8,6 @@ interface Props {
 }
 
 export default function Sidebar({ open, onClose }: Props) {
-  const [pendingLeaves, setPendingLeaves] = useState(0)
-
-  useEffect(() => {
-    const fetchCounts = async () => {
-      try {
-        const count = await adminDoctorLeavesService.getPendingCount()
-        setPendingLeaves(count)
-      } catch (err) {
-        // ignore
-      }
-    }
-    
-    fetchCounts()
-    const interval = setInterval(fetchCounts, 60000) // update every minute
-    return () => clearInterval(interval)
-  }, [])
-
   return (
     <>
       {open && (
@@ -74,22 +55,15 @@ export default function Sidebar({ open, onClose }: Props) {
                 end={item.end}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `mb-0.5 flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                  `mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                     isActive
                       ? 'bg-brand-500 text-white shadow-sm'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
                   }`
                 }
               >
-                <div className="flex items-center gap-3">
-                  <Icon name={item.icon} className="h-4 w-4 shrink-0" />
-                  {item.label}
-                </div>
-                {item.badgeKey === 'leaves' && pendingLeaves > 0 && (
-                  <span className="flex h-5 items-center justify-center rounded-full bg-rose-500 px-2 text-[10px] font-bold text-white shadow-sm">
-                    {pendingLeaves > 99 ? '99+' : pendingLeaves}
-                  </span>
-                )}
+                <Icon name={item.icon} className="h-4 w-4 shrink-0" />
+                {item.label}
               </NavLink>
             )
           })}

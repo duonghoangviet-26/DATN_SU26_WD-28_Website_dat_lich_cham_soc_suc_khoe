@@ -125,7 +125,11 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
                         className="p-3 hover:bg-slate-50 transition-colors cursor-pointer"
                         onClick={() => {
                           setShowNotiDropdown(false)
-                          navigate('/admin/notifications', { state: { openNotification: n } })
+                          if (n.related_type === 'doctor_leave_request') {
+                            navigate('/admin/doctor-leaves')
+                          } else {
+                            navigate('/admin/notifications', { state: { openNotification: n } })
+                          }
                         }}
                       >
                         <p className="text-sm font-semibold text-slate-800 line-clamp-2">{n.tieu_de}</p>
