@@ -47,6 +47,7 @@ function moTaKhoangNgay(leave: PendingDoctorLeave) {
 export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', leave, onClose, onDone }: Props) {
   const [mode, setMode] = useState<'confirm' | 'reject-reason'>('confirm')
   const [rejectReason, setRejectReason] = useState('')
+  const [approveNote, setApproveNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<ApproveDoctorLeaveResult | null>(null)
@@ -63,8 +64,8 @@ export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', lea
     setError('')
     try {
       const res = apiMode === 'admin' 
-        ? await adminDoctorLeavesService.approve(leave._id) 
-        : await receptionistDoctorLeavesService.approve(leave._id)
+        ? await adminDoctorLeavesService.approve(leave._id, approveNote.trim() || undefined) 
+        : await receptionistDoctorLeavesService.approve(leave._id, approveNote.trim() || undefined)
       setResult(res)
       onDone()
     } catch (requestError: any) {
@@ -115,6 +116,16 @@ export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', lea
                 <p><span className="font-semibold text-slate-700">Thời gian nghỉ:</span> {moTaKhoangNgay(leave)}</p>
                 <p><span className="font-semibold text-slate-700">Lý do:</span> {leave.ly_do ?? '—'}</p>
               </div>
+              <label className="mt-4 block text-sm font-medium text-slate-700">
+                Ghi chú duyệt (không bắt buộc)
+                <textarea
+                  rows={2}
+                  value={approveNote}
+                  onChange={(event) => setApproveNote(event.target.value)}
+                  placeholder="Vd: Chúc bác sĩ đi chơi vui vẻ..."
+                  className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 font-normal outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                />
+              </label>
               <p className="mt-3 text-xs text-slate-500">Duyệt sẽ khoá các slot liên quan và tự tìm phương án dời cho lịch bị ảnh hưởng (bác sĩ khác cùng khung → khung khác trong ngày), giữ nguyên giá, không hoàn tiền theo quy định.</p>
               {error && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
               <div className="mt-6 flex justify-end gap-3">
