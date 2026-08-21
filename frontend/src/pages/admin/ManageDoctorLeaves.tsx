@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import Badge from '@/components/common/Badge'
 import PageHeader from '@/components/common/PageHeader'
 import DoctorLeaveApprovalModal from '@/components/receptionist/DoctorLeaveApprovalModal'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { adminDoctorLeavesService, type AdminDoctorLeave } from '@/services/admin-doctor-leaves.service'
 import { DOCTOR_LEAVE_STATUS_COLOR } from '@/utils/constants'
 
@@ -20,6 +21,10 @@ export default function ManageDoctorLeaves() {
   const [approvingLeave, setApprovingLeave] = useState<AdminDoctorLeave | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [dateFilter, setDateFilter] = useState<string>('')
+  
+  // Phân trang
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const fetchLeaves = useCallback(async () => {
     setLoading(true)
@@ -30,6 +35,7 @@ export default function ManageDoctorLeaves() {
       if (dateFilter) filters.ngay = dateFilter
       const data = await adminDoctorLeavesService.list(filters)
       setLeaves(data)
+      setCurrentPage(1)
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Không thể tải danh sách đơn nghỉ phép')
     } finally {
@@ -39,7 +45,11 @@ export default function ManageDoctorLeaves() {
 
   useEffect(() => {
     fetchLeaves()
-  }, [fetchLeaves, dateFilter])
+  }, [fetchLeaves, dateFilter, statusFilter])
+
+  const totalItems = leaves.length
+  const totalPages = Math.ceil(totalItems / itemsPerPage)
+  const paginatedLeaves = leaves.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   return (
     <>
@@ -110,14 +120,14 @@ export default function ManageDoctorLeaves() {
                   </div>
                 </td>
               </tr>
-            ) : leaves.length === 0 ? (
+            ) : paginatedLeaves.length === 0 ? (
               <tr>
                 <td colSpan={6} className="p-12 text-center text-slate-400">
                   Không tìm thấy đơn nghỉ phép nào.
                 </td>
               </tr>
             ) : (
-              leaves.map((leave) => {
+              paginatedLeaves.map((leave) => {
                 const tu = new Date(leave.tu_ngay).toLocaleDateString('vi-VN')
                 const den = new Date(leave.den_ngay).toLocaleDateString('vi-VN')
                 const khoang = tu === den ? tu : `${tu} → ${den}`
@@ -161,6 +171,18 @@ export default function ManageDoctorLeaves() {
             )}
           </tbody>
         </table>
+
+        {totalItems > 0 && (
+          <TablePaginationFooter
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            currentItemCount={paginatedLeaves.length}
+            itemLabel="đơn nghỉ phép"
+            pageSize={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </div>
 
       {approvingLeave &&
