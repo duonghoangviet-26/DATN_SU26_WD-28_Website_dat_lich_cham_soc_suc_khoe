@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Badge from '@/components/common/Badge'
 import PageHeader from '@/components/common/PageHeader'
-import { AdminAutoStagger } from '@/components/admin/motion/AdminMotion'
 import DoctorLeaveApprovalModal from '@/components/receptionist/DoctorLeaveApprovalModal'
 import { adminDoctorLeavesService, type AdminDoctorLeave } from '@/services/admin-doctor-leaves.service'
 import { DOCTOR_LEAVE_STATUS_COLOR } from '@/utils/constants'
@@ -104,49 +103,47 @@ export default function ManageDoctorLeaves() {
                 </td>
               </tr>
             ) : (
-              <AdminAutoStagger>
-                {leaves.map((leave) => {
-                  const tu = new Date(leave.tu_ngay).toLocaleDateString('vi-VN')
-                  const den = new Date(leave.den_ngay).toLocaleDateString('vi-VN')
-                  const khoang = tu === den ? tu : `${tu} → ${den}`
-                  const gio = leave.gio_bat_dau && leave.gio_ket_thuc ? `${leave.gio_bat_dau}–${leave.gio_ket_thuc}` : 'Cả ngày'
+              leaves.map((leave) => {
+                const tu = new Date(leave.tu_ngay).toLocaleDateString('vi-VN')
+                const den = new Date(leave.den_ngay).toLocaleDateString('vi-VN')
+                const khoang = tu === den ? tu : `${tu} → ${den}`
+                const gio = leave.gio_bat_dau && leave.gio_ket_thuc ? `${leave.gio_bat_dau}–${leave.gio_ket_thuc}` : 'Cả ngày'
 
-                  return (
-                    <tr key={leave._id} className="transition-colors hover:bg-slate-50/50">
-                      <td className="p-4">
-                        <p className="font-bold text-slate-800">{leave.bac_si?.ho_ten || 'Không rõ'}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">{new Date(leave.ngay_tao || '').toLocaleString('vi-VN')}</p>
-                      </td>
-                      <td className="p-4">
-                        <p className="font-medium text-slate-700">{khoang}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">{gio}</p>
-                      </td>
-                      <td className="p-4 max-w-[200px] truncate" title={leave.ly_do || ''}>
-                        {leave.ly_do}
-                      </td>
-                      <td className="p-4 max-w-[200px] truncate text-xs text-slate-500" title={leave.ghi_chu || ''}>
-                        {leave.ghi_chu || '-'}
-                      </td>
-                      <td className="p-4 text-center">
-                        <Badge color={DOCTOR_LEAVE_STATUS_COLOR[leave.trang_thai] as any}>
-                          {LEAVE_STATUS_LABEL[leave.trang_thai] ?? leave.trang_thai}
-                        </Badge>
-                      </td>
-                      <td className="p-4 text-right">
-                        {leave.trang_thai === 'cho_duyet' && (
-                          <button
-                            type="button"
-                            onClick={() => setApprovingLeave(leave)}
-                            className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-100"
-                          >
-                            Duyệt đơn
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </AdminAutoStagger>
+                return (
+                  <tr key={leave._id} className="transition-colors hover:bg-slate-50/50">
+                    <td className="p-4">
+                      <p className="font-bold text-slate-800">{leave.bac_si?.ho_ten || 'Không rõ'}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{new Date(leave.ngay_tao || '').toLocaleString('vi-VN')}</p>
+                    </td>
+                    <td className="p-4">
+                      <p className="font-medium text-slate-700">{khoang}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{gio}</p>
+                    </td>
+                    <td className="p-4 max-w-[200px] truncate" title={leave.ly_do || ''}>
+                      {leave.ly_do}
+                    </td>
+                    <td className="p-4 max-w-[200px] truncate text-xs text-slate-500" title={leave.ghi_chu || ''}>
+                      {leave.ghi_chu || '-'}
+                    </td>
+                    <td className="p-4 text-center">
+                      <Badge color={DOCTOR_LEAVE_STATUS_COLOR[leave.trang_thai] as any}>
+                        {LEAVE_STATUS_LABEL[leave.trang_thai] ?? leave.trang_thai}
+                      </Badge>
+                    </td>
+                    <td className="p-4 text-right">
+                      {leave.trang_thai === 'cho_duyet' && (
+                        <button
+                          type="button"
+                          onClick={() => setApprovingLeave(leave)}
+                          className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-100"
+                        >
+                          Duyệt đơn
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
