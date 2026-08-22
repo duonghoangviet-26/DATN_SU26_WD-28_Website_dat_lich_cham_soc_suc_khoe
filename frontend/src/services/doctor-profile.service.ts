@@ -11,6 +11,7 @@ interface ProfileUpdateData {
   so_nam_kinh_nghiem?: number
   gia_kham?: number
   tuoi_nhan_kham_tu?: number
+  chuc_danh?: string | null
 }
 
 export const doctorProfileService = {

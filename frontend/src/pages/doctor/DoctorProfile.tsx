@@ -949,7 +949,7 @@ export default function DoctorProfile() {
           }
         }} 
         title="Đổi mật khẩu"
-        maxWidth="md"
+        size="md"
       >
         <div className="p-5 pt-2">
           <form onSubmit={handleChangePassword} className="space-y-4">
