@@ -8,6 +8,7 @@ router.get('/',              examQueue) // giữ nguyên contract GET /api/docto
 // Khách đã đặt hôm nay, chưa vào hàng đợi — nguồn cho nút "Tiếp nhận" ở trang Hồ sơ chờ khám.
 router.get('/pending-checkin', queue.pendingCheckin)
 router.post('/checkin',       queue.checkin)
+router.post('/notify-reception', queue.notifyReceptionGeneral)
 router.patch('/:id/call',      queue.call)
 router.patch('/:id/into-room',  queue.intoRoom)
 router.patch('/:id/finish',     queue.finish)

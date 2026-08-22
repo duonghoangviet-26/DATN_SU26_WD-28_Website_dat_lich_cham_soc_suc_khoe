@@ -439,10 +439,10 @@ export async function getAvailability(req, res) {
         const ngayDate = parseDateOnly(date) ?? getTodayDateOnly();
 
         if (ngayDate.getTime() < getTodayDateOnly().getTime()) {
-            return fail(res, 400, "Khong tra cuu duoc ngay da qua");
+            return fail(res, 400, "Không tra cứu được ngày đã qua");
         }
         if (specialty_id && !mongoose.Types.ObjectId.isValid(specialty_id)) {
-            return fail(res, 400, "specialty_id khong hop le");
+            return fail(res, 400, "specialty_id không hợp lệ");
         }
 
         const doctorFilter = { trang_thai_duyet: "approved", la_hien: true };
@@ -693,7 +693,7 @@ export async function createBooking(req, res) {
         if (patientConflict.blocked) {
             return rollbackFail(
                 409,
-                `Nguoi duoc kham da co lich ${patientConflict.blocked.ma_lich_hen ?? ""} luc ${patientConflict.blocked.gio_kham} trong ngay nay. Khong the dat trung cung khung gio cho cung mot ho so.`,
+                `Người được khám đã có lịch ${patientConflict.blocked.ma_lich_hen ?? ""} lúc ${patientConflict.blocked.gio_kham} trong ngày này. Không thể đặt trùng cùng khung giờ cho cùng một hồ sơ.`,
             );
         }
         const conflictWarnings = patientConflict.sameDay.map((item) => ({
@@ -701,7 +701,7 @@ export async function createBooking(req, res) {
             ma_lich_hen: item.ma_lich_hen ?? null,
             gio_kham: item.gio_kham,
             status: item.status,
-            message: `Nguoi duoc kham da co lich ${item.ma_lich_hen ?? ""} luc ${item.gio_kham} trong cung ngay; le tan can xac minh ly do dat them.`,
+            message: `Người được khám đã có lịch ${item.ma_lich_hen ?? ""} lúc ${item.gio_kham} trong cùng ngày; lễ tân cần xác minh lý do đặt thêm.`,
         }));
 
         const updated = await LichLamViec.findOneAndUpdate(

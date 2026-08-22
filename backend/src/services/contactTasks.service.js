@@ -36,8 +36,8 @@ function taoYeuCauLienHeTreHen(appointment, now) {
   const mocCanLienHe = congPhut(gioHen, PHUT_TRE_CAN_LIEN_HE)
   const phutTre = Math.max(0, Math.floor((now.getTime() - gioHen.getTime()) / 60_000))
   const ma = appointment.ma_lich_hen ? ` (${appointment.ma_lich_hen})` : ''
-  const title = 'Xac nhan benh nhan co den kham khong'
-  const content = `Lich kham${ma} luc ${appointment.gio_kham} da qua ${phutTre} phut nhung chua check-in tai quay. Le tan can lien he de xac nhan khach co den hay khong.`
+  const title = 'Xác nhận bệnh nhân có đến khám không'
+  const content = `Lịch khám${ma} lúc ${appointment.gio_kham} đã qua ${phutTre} phút nhưng chưa check-in tại quầy. Lễ tân cần liên hệ để xác nhận khách có đến hay không.`
 
   return {
     _id: `late:${appointment._id}`,
@@ -46,7 +46,7 @@ function taoYeuCauLienHeTreHen(appointment, now) {
     hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
     loai_doi_tuong: 'appointment',
     doi_tuong_id: appointment._id,
-    ly_do: `Khach da qua gio kham ${PHUT_TRE_CAN_LIEN_HE} phut nhung chua check-in`,
+    ly_do: `Khách đã quá giờ khám ${PHUT_TRE_CAN_LIEN_HE} phút nhưng chưa check-in`,
     ngay_tao: mocCanLienHe,
     du_lieu_moi: {
       action: ACTION_XAC_NHAN_DEN_MUON,
@@ -187,10 +187,10 @@ export async function danhDauDaGoi({ auditId, actorUserId, ghiChu = null, ketQua
   if (String(auditId).startsWith('late:')) {
     const appointmentId = String(auditId).slice('late:'.length)
     if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
-      throw Object.assign(new Error('Ma lich hen can lien he khong hop le'), { statusCode: 400 })
+      throw Object.assign(new Error('Mã lịch hẹn cần liên hệ không hợp lệ'), { statusCode: 400 })
     }
     const appointment = await LichHen.findById(appointmentId).select('_id').lean()
-    if (!appointment) throw Object.assign(new Error('Khong tim thay lich hen can lien he'), { statusCode: 404 })
+    if (!appointment) throw Object.assign(new Error('Không tìm thấy lịch hẹn cần liên hệ'), { statusCode: 404 })
 
     const audit = await NhatKyThaoTac.create({
       nguoi_thuc_hien_id: actorUserId,

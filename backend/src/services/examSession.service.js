@@ -150,17 +150,17 @@ export async function taoChiDinhDichVu(value, specialtyId, doctorId) {
 // Lõi dùng chung cho hai biến thể dưới. `chiOffline` quyết định có ép `nguon='offline'` hay không.
 async function timLuotKhamCuaBacSi(queueId, docId, { chiOffline }) {
   if (!mongoose.Types.ObjectId.isValid(queueId)) {
-    throw Object.assign(new Error('Ma luot kham khong hop le'), { httpStatus: 400 })
+    throw Object.assign(new Error('Mã lượt khám không hợp lệ'), { httpStatus: 400 })
   }
   const filter = { _id: queueId, doctor_id: docId }
   if (chiOffline) filter.nguon = 'offline'
   const entry = await HangDoi.findOne(filter).lean()
   if (!entry) {
-    const msg = chiOffline ? 'Khong tim thay luot kham offline' : 'Khong tim thay luot kham'
+    const msg = chiOffline ? 'Không tìm thấy lượt khám offline' : 'Không tìm thấy lượt khám'
     throw Object.assign(new Error(msg), { httpStatus: 404 })
   }
   if (!['trong_phong', 'hoan_thanh', 'cho_dich_vu'].includes(entry.trang_thai)) {
-    throw Object.assign(new Error('Chi nhap ket qua khi benh nhan dang kham hoac da ket thuc kham'), { httpStatus: 409 })
+    throw Object.assign(new Error('Chỉ nhập kết quả khi bệnh nhân đang khám hoặc đã kết thúc khám'), { httpStatus: 409 })
   }
   return entry
 }

@@ -3,7 +3,8 @@ import mongoose from 'mongoose'
 import { BacSi, LichLamViec, NguoiDung } from '../models/index.js'
 import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
 
-const DOCTOR_EMAIL = process.env.DEMO_DOCTOR_EMAIL
+const DEFAULT_DOCTOR_EMAIL = 'doctor.bao@vitafamily.vn'
+const DOCTOR_EMAIL = process.env.DEMO_DOCTOR_EMAIL || DEFAULT_DOCTOR_EMAIL
 const DEMO_MARKER = '[DEMO-CA-TOI-18H-24H]'
 const EVENING_WINDOWS = [
   ['18:00', '18:30'],
@@ -119,7 +120,7 @@ async function main() {
     throw new Error('Không chạy seed demo khi NODE_ENV=production')
   }
   if (!process.env.MONGODB_URI) throw new Error('Thiếu MONGODB_URI')
-  if (!DOCTOR_EMAIL) throw new Error('Thiếu DEMO_DOCTOR_EMAIL — phải truyền đúng email tài khoản bác sĩ Hải, không dùng email tài khoản bệnh nhân')
+  if (!DOCTOR_EMAIL) throw new Error('Thiếu email bác sĩ demo')
 
   await mongoose.connect(process.env.MONGODB_URI)
   const user = await NguoiDung.findOne({ email: DOCTOR_EMAIL, role: 'doctor' }).lean()
@@ -134,8 +135,8 @@ async function main() {
 
   const now = new Date()
   const today = startOfDayUtc(now)
-  const todayEveningStart = buildSlotDateTime(today, '18:00')
-  const todayIsUsable = todayEveningStart && todayEveningStart.getTime() > now.getTime()
+  const todayEveningEnd = buildSlotDateTime(today, '24:00')
+  const todayIsUsable = todayEveningEnd && todayEveningEnd.getTime() > now.getTime()
   const targetDate = dateFromEnvOrDefault(
     process.env.DEMO_DATE,
     todayIsUsable ? today : addDays(today, 1),

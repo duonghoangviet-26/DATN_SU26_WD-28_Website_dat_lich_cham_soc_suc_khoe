@@ -105,22 +105,22 @@ export async function getOfflineInvoice(req, res) {
 
 async function getOfflinePayment(queueId, paymentId) {
   const entry = await getQueue(queueId)
-  if (!mongoose.Types.ObjectId.isValid(paymentId)) throw loi(400, 'Ma giao dich khong hop le')
+  if (!mongoose.Types.ObjectId.isValid(paymentId)) throw loi(400, 'Mã giao dịch không hợp lệ')
 
   const payment = await ThanhToan.findOne({
     _id: paymentId,
     hang_doi_id: entry._id,
     hoa_don_id: { $ne: null },
   }).lean()
-  if (!payment) throw loi(404, 'Khong tim thay giao dich cua luot kham')
+  if (!payment) throw loi(404, 'Không tìm thấy giao dịch của lượt khám')
   return { entry, payment }
 }
 
 export async function confirmOfflinePayment(req, res) {
   try {
     const { entry, payment: existing } = await getOfflinePayment(req.params.queueId, req.params.paymentId)
-    if (existing.phuong_thuc !== 'chuyen_khoan') throw loi(400, 'Chi xac nhan giao dich chuyen khoan offline')
-    if (existing.status !== 'pending') throw loi(409, 'Giao dich khong con o trang thai cho xac nhan')
+    if (existing.phuong_thuc !== 'chuyen_khoan') throw loi(400, 'Chỉ xác nhận giao dịch chuyển khoản offline')
+    if (existing.status !== 'pending') throw loi(409, 'Giao dịch không còn ở trạng thái chờ xác nhận')
 
     const now = new Date()
     const payment = await ThanhToan.findOneAndUpdate(
@@ -140,7 +140,7 @@ export async function confirmOfflinePayment(req, res) {
       },
       { new: true },
     ).lean()
-    if (!payment) throw loi(409, 'Giao dich da duoc xu ly o tab khac')
+    if (!payment) throw loi(409, 'Giao dịch đã được xử lý ở tab khác')
 
     await tinhTrangThaiHoaDon(payment.hoa_don_id)
     const invoice = await HoaDon.findById(payment.hoa_don_id).lean()
@@ -165,7 +165,7 @@ export async function confirmOfflinePayment(req, res) {
     return ok(res, {
       payment: serializePayment(payment),
       invoice: serialize(invoice, await getPaidTotal(payment.hoa_don_id)),
-    }, 'Da xac nhan giao dich chuyen khoan')
+    }, 'Đã xác nhận giao dịch chuyển khoản')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }
@@ -174,8 +174,8 @@ export async function confirmOfflinePayment(req, res) {
 export async function cancelOfflinePayment(req, res) {
   try {
     const { entry, payment: existing } = await getOfflinePayment(req.params.queueId, req.params.paymentId)
-    if (existing.phuong_thuc !== 'chuyen_khoan') throw loi(400, 'Chi huy giao dich chuyen khoan offline')
-    if (existing.status !== 'pending') throw loi(409, 'Giao dich khong con o trang thai cho xu ly')
+    if (existing.phuong_thuc !== 'chuyen_khoan') throw loi(400, 'Chỉ hủy giao dịch chuyển khoản offline')
+    if (existing.status !== 'pending') throw loi(409, 'Giao dịch không còn ở trạng thái chờ xử lý')
 
     const now = new Date()
     const payment = await ThanhToan.findOneAndUpdate(
@@ -187,19 +187,19 @@ export async function cancelOfflinePayment(req, res) {
             ...(existing.gateway_response || {}),
             cancelled_by: 'receptionist',
             cancelled_at: now.toISOString(),
-            cancel_reason: req.body?.ly_do?.trim() || 'Le tan huy giao dich cho xac nhan',
+            cancel_reason: req.body?.ly_do?.trim() || 'Lễ tân hủy giao dịch chờ xác nhận',
           },
         },
       },
       { new: true },
     ).lean()
-    if (!payment) throw loi(409, 'Giao dich da duoc xu ly o tab khac')
+    if (!payment) throw loi(409, 'Giao dịch đã được xử lý ở tab khác')
 
     const invoice = await HoaDon.findById(payment.hoa_don_id).lean()
     return ok(res, {
       payment: serializePayment(payment),
       invoice: serialize(invoice, await getPaidTotal(payment.hoa_don_id)),
-    }, 'Da huy giao dich chuyen khoan')
+    }, 'Đã hủy giao dịch chuyển khoản')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }
@@ -234,7 +234,7 @@ export async function listOfflineQueues(req, res) {
 export async function listRelatedServices(req, res) {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.query.specialty_id)) {
-      return fail(res, 400, 'Chuyen khoa khong hop le')
+      return fail(res, 400, 'Chuyên khoa không hợp lệ')
     }
     const services = await DichVu.find({
       status: 'active',
@@ -282,7 +282,7 @@ export async function createOfflineInvoice(req, res) {
     if (current && req.body.phuong_thuc) {
       const pendingTotal = await getPendingTotal(current._id)
       if (pendingTotal > 0) {
-        throw loi(409, 'Hoa don dang co giao dich chuyen khoan cho thanh toan, hay xac nhan hoac huy giao dich truoc khi lap lai')
+        throw loi(409, 'Hóa đơn đang có giao dịch chuyển khoản chờ thanh toán, hãy xác nhận hoặc hủy giao dịch trước khi lập lại')
       }
     }
     const existingServiceIds = new Set(

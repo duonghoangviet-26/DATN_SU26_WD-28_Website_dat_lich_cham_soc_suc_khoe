@@ -31,6 +31,11 @@ export async function getRecentNotifications(req, res) {
     }))
 
     // Format lại dữ liệu cho giống cấu trúc Thông báo
+    // `url` phải trỏ đúng lịch hẹn vừa đặt (qua appointment_id), VÀ đúng trang đang dùng trong
+    // sidebar — "Tiếp nhận & lịch hẹn" (/receptionist/patient-intake, tab "appointments").
+    // Trước đây `url` để null nên frontend rơi về '/receptionist/appointments' — trang lịch hẹn
+    // CŨ đã bỏ khỏi menu — hiển thị lịch hẹn đầu danh sách theo bộ lọc mặc định thay vì đúng
+    // lịch hẹn vừa được thông báo.
     const bookingNotifications = recentBookings.map((booking) => {
       const tenKhach = booking.ten_khach || booking.user_id?.ho_ten || 'Khách hàng ẩn danh'
       return {
@@ -42,7 +47,7 @@ export async function getRecentNotifications(req, res) {
         loai: 'appointment',
         related_id: booking._id,
         related_type: 'appointment',
-        du_lieu_dinh_kem: null,
+        du_lieu_dinh_kem: { url: `/receptionist/patient-intake?tab=appointments&appointment_id=${booking._id}` },
       }
     })
 

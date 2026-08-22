@@ -159,7 +159,7 @@ export default function Dashboard() {
       const res = await axiosInstance.get('/receptionist/appointments/doctor-statuses');
       if (res.data.success) setDoctorStatuses(res.data.data ?? []);
     } catch (err) {
-      console.error('Loi khi lay trang thai bac si:', err);
+      console.error('Lỗi khi lấy trạng thái bác sĩ:', err);
     }
   };
 
@@ -177,7 +177,7 @@ export default function Dashboard() {
       const tasks = await receptionistContactTasksService.list({ trang_thai: 'chua_goi' });
       setChuaGoiCount(tasks.length);
     } catch (err) {
-      console.error('Loi khi lay so viec can goi:', err);
+      console.error('Lỗi khi lấy số việc cần gọi:', err);
     }
   };
 

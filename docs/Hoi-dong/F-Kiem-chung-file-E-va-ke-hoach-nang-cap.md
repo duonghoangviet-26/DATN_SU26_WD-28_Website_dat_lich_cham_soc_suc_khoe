@@ -16,7 +16,7 @@
 | C2 | Cảnh báo dị ứng khi kê thuốc (B47) | ✅ Đã xong | `Fix_demo` |
 | C3 | Outcome `ket_cuc` + chuyển viện (D78/D80) | ✅ Đã xong (phần D80; D78 nút cấp cứu ở C6) | `Fix_demo` |
 | C4 | Đính chính hồ sơ sau xác nhận (B54/B55) | ✅ Đã xong cả BE + FE (trang "Bệnh nhân đã khám") | `Fix_demo` |
-| C5 | Hồ sơ tạm không SĐT (D81) | ✅ Đã xong cả 3 tầng + UI lễ tân | `Fix_demo` |
+| C5 | Hồ sơ tạm không SĐT (D81) | ⛔ **ĐÃ GỠ TOÀN BỘ theo yêu cầu người dùng 2026-08-21** — xem ghi chú | `Fix_demo` |
 | C6 | Nút cấp cứu + thông báo khẩn (D78) | ✅ Nút tiếp nhận (tối giản, không bắt buộc lý do). ⛔ **Biên bản ca khẩn cuối ngày ĐÃ BỊ GỠ theo yêu cầu người dùng 2026-08-14** — xem ghi chú | `Fix_demo` |
 
 **Ghi chú C4:** `PATCH /api/doctor/exam-session/:queueId/amendment` (`dinhChinhHoSo` trong
@@ -32,15 +32,24 @@ kết cục + thông tin thanh toán (`layPhienKham` bổ sung field `hoa_don` �
 `hang_doi_id`/`appointment_id`) + lịch sử chỉnh sửa, và có form "Đính chính" gọi thẳng
 endpoint amendment (bắt buộc lý do, đúng whitelist trường cho sửa).
 
-**Ghi chú C5:** nới có điều kiện qua `la_ho_so_tam`/`ma_tam` ở đúng 3 tầng đã nêu ở §3.3
-(`patient-intake.controller.js`, `centralOfflineQueue.service.js:386`, `HangDoi.js` pre-validate)
-— hành vi cũ (bắt buộc SĐT) giữ nguyên 100% khi không có `ma_tam`. Mã tạm sinh qua
-`Counter.nextSeq` (atomic, tái dùng cơ chế `capSoThuTuCheckin` đã có) nên không đụng nhau khi
-nhiều lễ tân tạo cùng lúc. Endpoint tra cứu mới `GET .../search-temp` **tách riêng**
+**Ghi chú C5 (lịch sử, khi còn triển khai):** nới có điều kiện qua `la_ho_so_tam`/`ma_tam` ở đúng
+3 tầng đã nêu ở §3.3 (`patient-intake.controller.js`, `centralOfflineQueue.service.js:386`,
+`HangDoi.js` pre-validate) — hành vi cũ (bắt buộc SĐT) giữ nguyên 100% khi không có `ma_tam`. Mã
+tạm sinh qua `Counter.nextSeq` (atomic, tái dùng cơ chế `capSoThuTuCheckin` đã có) nên không đụng
+nhau khi nhiều lễ tân tạo cùng lúc. Endpoint tra cứu mới `GET .../search-temp` **tách riêng**
 khỏi `searchPatientProfiles` (không sửa hàm tra cứu theo SĐT đang chạy). FE: modal
 `TempProfileModal.tsx` **cô lập hoàn toàn** với state tra cứu-theo-SĐT của `PatientIntake.tsx`
 — chỉ trả hồ sơ ra qua callback rồi tái dùng nguyên luồng chọn chuyên khoa/tiếp nhận vào hàng
 đợi trung tâm đã có sẵn, không viết lại logic đó.
+
+⛔ **Đã gỡ toàn bộ 2026-08-21 (theo yêu cầu người dùng):** nút "Bệnh nhân không có số điện
+thoại?" ở `PatientIntake.tsx` cùng toàn bộ luồng D81 phía sau đã bị xoá — không còn cách nào
+tạo hồ sơ tạm từ giao diện. Đã xoá: `components/receptionist/TempProfileModal.tsx`,
+`services/tempProfileCode.service.js`, hàm `searchPatientProfileByTempCode` + route
+`GET /search-temp`, nhánh `khong_co_so_dien_thoai` trong `createPatientProfile`, field
+`la_ho_so_tam`/`ma_tam` ở `HoSoBenhNhan.js` (và index unique đi kèm) và `HangDoi.js`. Luồng
+offline check-in nay **bắt buộc số điện thoại 100%** trở lại, không còn ngoại lệ hồ sơ tạm.
+Dữ liệu `ma_tam`/`la_ho_so_tam` cũ (nếu có) vẫn còn trong DB nhưng không còn được model đọc/ghi.
 
 **Ghi chú C6:** trước đây `muc_uu_tien_tiep_nhan`/`ly_do_uu_tien` tồn tại sẵn ở backend
 (`tiepNhanOfflineVaoHangDoiTrungTam`) nhưng **FE chưa từng gửi** — mọi lượt walk-in luôn mặc
