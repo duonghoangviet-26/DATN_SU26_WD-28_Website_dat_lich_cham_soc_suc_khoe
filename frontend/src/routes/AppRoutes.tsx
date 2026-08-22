@@ -47,6 +47,7 @@ const ManageServices = lazy(() => import('@/pages/admin/ManageServices'))
 const ManageServiceSpecialtyDetail = lazy(() => import('@/pages/admin/ManageServiceSpecialtyDetail'))
 const ManageAppointments = lazy(() => import('@/pages/admin/ManageAppointments/ManageAppointments'))
 const ManageDoctorSchedules = lazy(() => import('@/pages/admin/ManageDoctorSchedules'))
+const ManageDoctorLeaves = lazy(() => import('@/pages/admin/ManageDoctorLeaves'))
 const AdminActivityLog = lazy(() => import('@/pages/admin/ActivityLog'))
 const ManageReviews = lazy(() => import('@/pages/admin/ManageReviews'))
 const ManageNews = lazy(() => import('@/pages/admin/ManageNews'))
@@ -132,6 +133,7 @@ export default function AppRoutes() {
         <Route path="services/chuyen-khoa/:slug" element={<ManageServiceSpecialtyDetail />} />
         <Route path="appointments" element={<ManageAppointments />} /> {/* C5 */}
         <Route path="doctor-schedules" element={<ManageDoctorSchedules />} />
+        <Route path="doctor-leaves" element={<ManageDoctorLeaves />} />
         <Route path="activity-log" element={<AdminActivityLog />} />
         <Route path="reviews" element={<ManageReviews />} />       {/* C6 */}
         <Route path="news" element={<ManageNews />} />

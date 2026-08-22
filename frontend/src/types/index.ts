@@ -175,6 +175,12 @@ export interface DoctorSelfProfile {
     ngay_tao: string;
     chuc_danh: string | null;
     chuc_vu: string | null;
+    chuc_vu_hien_tai: string | null;
+    ma_cchn: string | null;
+    gioi_thieu_ngan: string | null;
+    bang_cap_hoc_vi_tags: string[];
+    ngon_ngu: string[];
+    the_manh_chuyen_mon: string[];
     benh_ly_dieu_tri: string[];
     qua_trinh_cong_tac: {
         noi_cong_tac: string;

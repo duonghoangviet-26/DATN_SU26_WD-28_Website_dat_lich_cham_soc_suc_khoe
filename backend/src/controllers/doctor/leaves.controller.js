@@ -1,6 +1,7 @@
-import { BacSi, NghiPhepBacSi, LichHen } from '../../models/index.js'
+import { BacSi, NghiPhepBacSi, LichHen, ThongBao, NguoiDung } from '../../models/index.js'
 import { ok, created, fail } from '../../utils/response.js'
 import { AFFECTED_BY_LEAVE_STATUSES } from '../../utils/appointmentStatus.js'
+import { emitAdminRealtime } from '../../realtime/socket.js'
 
 // ============================================================
 // Bác sĩ gửi yêu cầu nghỉ — Routes: /api/doctor/leaves
@@ -121,6 +122,29 @@ export async function createLeaveRequest(req, res) {
       nguon_tao: 'bac_si_tu_gui',
       nguoi_tao_id: req.user.id,
     })
+
+    const admins = await NguoiDung.find({ role: 'admin', status: 'active' }).select('_id').lean()
+    
+    if (admins.length > 0) {
+      const now = new Date()
+      await ThongBao.insertMany(
+        admins.map((admin) => ({
+          user_id: admin._id,
+          tieu_de: 'Đơn xin nghỉ phép mới',
+          noi_dung: `Có một đơn xin nghỉ phép chờ duyệt từ ${startDate.toLocaleDateString('vi-VN')} đến ${endDate.toLocaleDateString('vi-VN')}.`,
+          loai: 'system',
+          related_id: leave._id,
+          related_type: 'doctor_leave_request',
+          kenh_gui: 'in_app',
+          da_gui: true,
+          thoi_diem_gui: now,
+          ngay_gui_du_kien: now,
+        })),
+        { ordered: false }
+      ).catch(() => {}) // Ignore errors for notifications
+      
+      emitAdminRealtime('thong_bao:moi', { related_type: 'doctor_leave_request' })
+    }
 
     return created(
       res,

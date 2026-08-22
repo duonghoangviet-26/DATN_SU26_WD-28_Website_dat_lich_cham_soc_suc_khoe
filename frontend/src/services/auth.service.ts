@@ -112,6 +112,16 @@ export const authService = {
     await axiosInstance.post<ApiResponse<void>>('/auth/logout')
   },
 
+  /**
+   * Đổi mật khẩu chủ động (khi đang đăng nhập)
+   */
+  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+    await axiosInstance.post('/auth/change-password', {
+      oldPassword,
+      newPassword,
+    })
+  },
+
   async setup2FA(): Promise<{ qrCodeUrl: string; secret: string }> {
     const res = await axiosInstance.get<ApiResponse<{ qrCodeUrl: string; secret: string }>>('/auth/2fa/setup')
     return res.data.data

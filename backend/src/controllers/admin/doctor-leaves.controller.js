@@ -32,7 +32,11 @@ function formatDoctorLeave(leave) {
     ly_do: leave.ly_do ?? null,
     trang_thai: leave.trang_thai,
     nguon_tao: leave.nguon_tao ?? null,
-    nguoi_duyet_id: leave.nguoi_duyet_id ?? null,
+    nguoi_duyet_id: leave.nguoi_duyet_id?._id ?? leave.nguoi_duyet_id ?? null,
+    nguoi_duyet: leave.nguoi_duyet_id ? {
+      _id: leave.nguoi_duyet_id._id ?? leave.nguoi_duyet_id,
+      ho_ten: leave.nguoi_duyet_id.ho_ten ?? null,
+    } : null,
     thoi_diem_duyet: leave.thoi_diem_duyet ?? null,
     ghi_chu: leave.ghi_chu ?? null,
     ngay_tao: leave.ngay_tao ?? null,
@@ -82,7 +86,7 @@ export async function createDoctorLeave(req, res) {
 
 export async function listDoctorLeaves(req, res) {
   try {
-    const { bac_si_id, trang_thai } = req.query
+    const { bac_si_id, trang_thai, ngay } = req.query
     const filter = {}
 
     if (bac_si_id) {
@@ -96,11 +100,25 @@ export async function listDoctorLeaves(req, res) {
       filter.trang_thai = trang_thai
     }
 
+    if (ngay) {
+      const targetDate = new Date(ngay)
+      targetDate.setHours(0, 0, 0, 0)
+      const targetDateEnd = new Date(targetDate)
+      targetDateEnd.setHours(23, 59, 59, 999)
+      
+      filter.tu_ngay = { $lte: targetDateEnd }
+      filter.den_ngay = { $gte: targetDate }
+    }
+
     const leaves = await NghiPhepBacSi.find(filter)
       .populate({
         path: 'bac_si_id',
         select: 'user_id trang_thai',
         populate: { path: 'user_id', select: 'ho_ten' },
+      })
+      .populate({
+        path: 'nguoi_duyet_id',
+        select: 'ho_ten'
       })
       .sort({ ngay_tao: -1, _id: -1 })
       .lean()
