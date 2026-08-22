@@ -243,6 +243,13 @@ export default function ManageDoctorLeaves() {
                   Vào lúc: {new Date(historyLeave.thoi_diem_duyet).toLocaleString('vi-VN')}
                 </p>
               )}
+
+              {historyLeave.ghi_chu && (
+                <div className="mt-4 pt-4 border-t border-slate-200/60">
+                  <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-400">Nội dung ghi chú</p>
+                  <p className="font-medium text-slate-800 italic whitespace-pre-wrap">"{historyLeave.ghi_chu}"</p>
+                </div>
+              )}
             </div>
           </div>
         )}
