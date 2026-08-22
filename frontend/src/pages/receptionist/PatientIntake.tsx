@@ -13,7 +13,6 @@ import { receptionistBookingService, DoctorFilterOption, ReceptionistBookingSlot
 import { receptionistOfflineQueueService, OfflineQueueRow } from '@/services/receptionist-offline-queue.service'
 import { appointmentStatusLabel, appointmentStatusTone, paymentLabel, examSessionStatusLabel, examSessionStatusTone, examSessionSourceLabel } from '@/utils/receptionistLabels'
 import ProfileAdminEditModal from '@/components/receptionist/ProfileAdminEditModal'
-import TempProfileModal from '@/components/receptionist/TempProfileModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
 import CheckInVerifyModal from '@/components/receptionist/CheckInVerifyModal'
@@ -29,6 +28,7 @@ import {
   validateVietnamesePhone,
 } from '@/utils/patientIdentityValidation'
 import { printTicket } from '@/utils/printTicket'
+import { toLocalDateStr } from '@/utils/format'
 
 interface ReceptionistTodayAppointment {
   _id: string
@@ -984,10 +984,13 @@ const SESSION_STATUS_OPTIONS: Array<{ value: SessionStatusFilter; label: string 
   { value: 'cancelled', label: 'Đã hủy / bỏ qua' },
 ]
 
-function TodaySessionsTab() {
+// Đổi tên từ "Ca khám hôm nay": trước đây khoá cứng ngày hôm nay, nay thêm ô chọn ngày (mặc định
+// hôm nay, giống pattern DoctorExamHistory.tsx) để lễ tân tra cứu lại bất kỳ ngày nào đã ghi nhận.
+function ExamSessionsHistoryTab() {
   const [rows, setRows] = useState<OfflineQueueRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [date, setDate] = useState(toLocalDateStr())
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<SessionStatusFilter>('all')
   const [source, setSource] = useState<SessionSourceFilter>('all')
@@ -1006,7 +1009,8 @@ function TodaySessionsTab() {
     setError('')
     try {
       const statusParam = status === 'cancelled' ? 'cancelled,skipped' : status === 'all' ? undefined : status
-      const rows = await receptionistOfflineQueueService.listToday({
+      const rows = await receptionistOfflineQueueService.listSessions({
+        date,
         status: statusParam,
         nguon: source === 'all' ? undefined : source,
         doctor_id: doctorId || undefined,
@@ -1015,7 +1019,7 @@ function TodaySessionsTab() {
       })
       setRows(rows)
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.message || 'Không thể tải danh sách ca khám hôm nay')
+      setError(requestError?.response?.data?.message || 'Không thể tải danh sách ca khám')
     } finally {
       setLoading(false)
     }
@@ -1024,7 +1028,9 @@ function TodaySessionsTab() {
   useEffect(() => {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, source, doctorId, specialtyId])
+  }, [date, status, source, doctorId, specialtyId])
+
+  const isToday = date === toLocalDateStr()
 
   const summary = useMemo(() => ({
     total: rows.length,
@@ -1037,9 +1043,9 @@ function TodaySessionsTab() {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h3 className="text-lg font-bold text-slate-950">Ca khám hôm nay</h3>
+          <h3 className="text-lg font-bold text-slate-950">Danh sách đã khám</h3>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-            Toàn bộ ca khám trong ngày, gồm cả lượt đặt online lẫn khách đến trực tiếp tại quầy.
+            Toàn bộ ca khám đã ghi nhận theo ngày, gồm cả lượt đặt online lẫn khách đến trực tiếp tại quầy. Chọn ngày để xem lại các ca trước đó.
           </p>
         </div>
         <button type="button" onClick={load} disabled={loading} className="min-h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
@@ -1049,7 +1055,7 @@ function TodaySessionsTab() {
 
       <div className="mt-5 grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold text-slate-500">Tổng ca hôm nay</p>
+          <p className="text-xs font-semibold text-slate-500">Tổng số ca</p>
           <p className="mt-1 text-xl font-bold text-slate-950">{summary.total}</p>
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -1066,7 +1072,25 @@ function TodaySessionsTab() {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 lg:grid-cols-5">
+      <div className="mt-5 grid gap-3 lg:grid-cols-6">
+        <label className="text-xs font-bold text-slate-600">
+          Ngày khám
+          <div className="mt-1 flex gap-1.5">
+            <input
+              type="date"
+              value={date}
+              max={toLocalDateStr()}
+              onChange={(event) => setDate(event.target.value)}
+              className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+            {!isToday && (
+              <button type="button" onClick={() => setDate(toLocalDateStr())} title="Về hôm nay"
+                className="min-h-10 shrink-0 rounded-lg border border-slate-300 px-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                Hôm nay
+              </button>
+            )}
+          </div>
+        </label>
         <label className="text-xs font-bold text-slate-600">
           Trạng thái
           <select value={status} onChange={(event) => setStatus(event.target.value as SessionStatusFilter)} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
@@ -1305,7 +1329,6 @@ export default function PatientIntake() {
   const [formErrors, setFormErrors] = useState<{ ho_ten?: string; ngay_sinh?: string }>({})
   const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'appointments' | 'today_sessions'>('lookup')
   // D81 — modal tự trị, không đụng state tra cứu-theo-SĐT ở trên.
-  const [showTempProfileModal, setShowTempProfileModal] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const [pendingAppointmentId, setPendingAppointmentId] = useState<string | null>(null)
 
@@ -1667,8 +1690,8 @@ export default function PatientIntake() {
               onClick={() => setWorkspaceTab('today_sessions')}
               className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'today_sessions' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
             >
-              Ca khám hôm nay
-              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today_sessions' ? 'text-slate-200' : 'text-slate-500'}`}>Toàn bộ ca khám trong ngày, cả online lẫn tại quầy</span>
+              Danh sách đã khám
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today_sessions' ? 'text-slate-200' : 'text-slate-500'}`}>Toàn bộ ca khám đã ghi nhận, xem lại theo từng ngày</span>
             </button>
           </div>
         </div>
@@ -1715,14 +1738,6 @@ export default function PatientIntake() {
             </form>
 
             {searchPhoneError && <p className="mt-2 text-sm font-medium text-rose-700">{searchPhoneError}</p>}
-
-            <button
-              type="button"
-              onClick={() => setShowTempProfileModal(true)}
-              className="mt-3 text-xs font-semibold text-slate-500 underline decoration-dotted hover:text-brand-700"
-            >
-              Bệnh nhân không có số điện thoại?
-            </button>
 
             {!hasSearched && (
               <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
@@ -1913,16 +1928,11 @@ export default function PatientIntake() {
                       <p className="text-sm font-semibold text-brand-800">Hồ sơ đang thao tác</p>
                       <h3 className="mt-1 text-xl font-bold text-slate-950">
                         {selectedProfile.ho_ten}
-                        {selectedProfile.la_ho_so_tam && (
-                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
-                            Hồ sơ tạm — {selectedProfile.ma_tam}
-                          </span>
-                        )}
                       </h3>
                       <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <DetailItem
                           label="Số liên hệ"
-                          value={selectedProfile.so_dien_thoai || (selectedProfile.la_ho_so_tam ? 'Chưa có — hồ sơ tạm' : phone)}
+                          value={selectedProfile.so_dien_thoai || phone}
                         />
                         <DetailItem label="Ngày sinh" value={`${formatDate(selectedProfile.ngay_sinh)}${age !== null ? ` (${age} tuổi)` : ''}`} />
                         <DetailItem label="Giới tính" value={genderLabel(selectedProfile.gioi_tinh)} />
@@ -2108,7 +2118,7 @@ export default function PatientIntake() {
             onInitialAppointmentHandled={() => setPendingAppointmentId(null)}
           />
         ) : (
-          <TodaySessionsTab />
+          <ExamSessionsHistoryTab />
         )}
 
         {editingProfile && (
@@ -2124,25 +2134,6 @@ export default function PatientIntake() {
             onClose={() => setBookingHistoryProfile(null)}
           />
         )}
-
-        <TempProfileModal
-          open={showTempProfileModal}
-          onClose={() => setShowTempProfileModal(false)}
-          onProfileReady={(profile) => {
-            setError('')
-            setPhone('')
-            setAccounts([])
-            setSelectedAccountId(null)
-            setAmbiguousAppointments([])
-            setAccountAppointments([])
-            setProfiles([profile])
-            setSelectedId(profile.id)
-            setHasSearched(true)
-            setShowCreateForm(false)
-            clearDecision()
-            setMessage(`Đang dùng hồ sơ tạm ${profile.ma_tam ?? ''} — kiểm tra sức chứa để tiếp nhận.`)
-          }}
-        />
 
         <QueueTicketTemplate data={printData} />
 

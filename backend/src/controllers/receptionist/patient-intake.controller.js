@@ -6,7 +6,6 @@ import {
   layKhaNangTiepNhanTaiQuay,
   tiepNhanHoSoVaoHangDoi,
 } from '../../services/offlineIntake.service.js'
-import { capMaTam } from '../../services/tempProfileCode.service.js'
 import {
   tinhSucChuaHangDoiOfflineTrungTam,
   tiepNhanOfflineVaoHangDoiTrungTam,
@@ -188,8 +187,6 @@ function serializeProfile(profile) {
     loai_lien_ket_tai_khoan: profile.loai_lien_ket_tai_khoan ?? null,
     member_id: profile.member_id,
     trang_thai: profile.trang_thai,
-    la_ho_so_tam: Boolean(profile.la_ho_so_tam),
-    ma_tam: profile.ma_tam ?? null,
     nguoi_lien_he: profile.nguoi_lien_he ?? null,
     quan_he: profile.quan_he ?? null,
     nhom_gia_dinh: profile.nhom_gia_dinh ?? null,
@@ -545,10 +542,8 @@ export const createPatientProfile = async (req, res) => {
       dia_chi,
       ghi_chu,
       tai_khoan_id,
-      khong_co_so_dien_thoai,
     } = req.body
     const ho_ten = String(rawName ?? '').trim().replace(/\s+/g, ' ')
-    const laHoSoTam = Boolean(khong_co_so_dien_thoai)
 
     if (!ho_ten) return fail(res, 400, 'Họ tên là bắt buộc')
     if (gioi_tinh && !['nam', 'nu', 'khac'].includes(gioi_tinh)) {
@@ -561,35 +556,6 @@ export const createPatientProfile = async (req, res) => {
 
     if (ngay_sinh && Number.isNaN(new Date(ngay_sinh).getTime())) {
       return fail(res, 400, 'Ngày sinh không hợp lệ')
-    }
-
-    // D81 — hồ sơ tạm KHÔNG có số điện thoại để tra cứu lại, nên bù bằng ba thứ nhận diện
-    // khác bắt buộc: ngày sinh, giới tính, ghi chú đặc điểm. Thiếu một trong ba thì không
-    // đủ để phân biệt hai bệnh nhân trùng tên sau này — không tạo hồ sơ mồ côi.
-    if (laHoSoTam) {
-      if (!ngay_sinh) return fail(res, 400, 'Hồ sơ tạm cần ngày sinh để nhận diện')
-      if (!gioi_tinh) return fail(res, 400, 'Hồ sơ tạm cần giới tính để nhận diện')
-      if (!ghi_chu?.trim()) return fail(res, 400, 'Hồ sơ tạm cần ghi chú đặc điểm nhận diện (vd: người đi cùng, đặc điểm ngoại hình)')
-
-      const ma_tam = await capMaTam()
-      const profile = await HoSoBenhNhan.create({
-        ho_ten,
-        so_dien_thoai: null,
-        so_dien_thoai_tim_kiem: null,
-        ngay_sinh: new Date(ngay_sinh),
-        gioi_tinh,
-        nhom_mau: nhom_mau || null,
-        di_ung: di_ung?.trim() || null,
-        benh_nen: benh_nen?.trim() || null,
-        dia_chi: dia_chi?.trim() || null,
-        ghi_chu: ghi_chu.trim(),
-        tai_khoan_id: null,
-        nguon_tao: 'tai_quay',
-        trang_thai: 'active',
-        la_ho_so_tam: true,
-        ma_tam,
-      })
-      return created(res, { profile: serializeProfile(profile.toObject()) }, `Đã tạo hồ sơ tạm — mã tra cứu: ${ma_tam}`)
     }
 
     const so_dien_thoai = normalizePhone(rawPhone)
@@ -649,63 +615,19 @@ export const createPatientProfile = async (req, res) => {
   }
 }
 
-// D81 — tra cứu hồ sơ TẠM bằng mã (không có số điện thoại để tìm theo luồng /search thường).
-// Cố ý KHÔNG dùng chung searchPatientProfiles: hồ sơ tạm không có tài khoản/thành viên gia
-// đình liên kết, nên toàn bộ phần join account/member ở đó là thừa — giữ hàm này tối giản.
-export const searchPatientProfileByTempCode = async (req, res) => {
-  try {
-    const maTam = String(req.query.ma_tam ?? '').trim().toUpperCase()
-    if (!maTam) return fail(res, 400, 'Cần nhập mã tra cứu')
-
-    const profile = await HoSoBenhNhan.findOne({ ma_tam: maTam, trang_thai: 'active' }).lean()
-    if (!profile) return fail(res, 404, 'Không tìm thấy hồ sơ tạm với mã này')
-
-    const { start, end } = khoangHomNay()
-    const [suaGanNhatByProfile, lichSuKhamByProfile, activeQueue] = await Promise.all([
-      layDongSuaGanNhatChoNhieuHoSo([profile]),
-      layLichSuKhamChoNhieuHoSo([profile._id]),
-      HangDoi.findOne({
-        ho_so_benh_nhan_id: profile._id,
-        checkin_time: { $gte: start, $lt: end },
-        trang_thai: { $in: ['cho_dieu_phoi', 'dang_cho', 'da_goi', 'trong_phong', 'cho_dich_vu'] },
-      }).select('_id trang_thai specialty_id doctor_id phong_kham checkin_time so_thu_tu_checkin ma_so_thu_tu').lean(),
-    ])
-
-    profile.sua_gan_nhat = suaGanNhatByProfile.get(String(profile._id)) ?? null
-    profile.lich_su_kham = lichSuKhamByProfile.get(String(profile._id)) ?? null
-    profile.lich_hen_hom_nay = [] // ho so tam khong dat lich online duoc — khong co gi de gan
-    profile.luot_dang_cho_hom_nay = activeQueue
-      ? {
-          id: String(activeQueue._id),
-          trang_thai: activeQueue.trang_thai,
-          specialty_id: activeQueue.specialty_id ? String(activeQueue.specialty_id) : null,
-          doctor_id: activeQueue.doctor_id ? String(activeQueue.doctor_id) : null,
-          phong_kham: activeQueue.phong_kham ?? null,
-          checkin_time: activeQueue.checkin_time,
-          so_thu_tu_checkin: activeQueue.so_thu_tu_checkin ?? null,
-          ma_so_thu_tu: activeQueue.ma_so_thu_tu ?? null,
-        }
-      : null
-
-    return ok(res, { profile: serializeProfile(profile) })
-  } catch (error) {
-    return fail(res, 500, error.message)
-  }
-}
-
 export const updatePatientProfileAdministrative = async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return fail(res, 400, 'Ma ho so benh nhan khong hop le')
+      return fail(res, 400, 'Mã hồ sơ bệnh nhân không hợp lệ')
     }
 
     const profile = await HoSoBenhNhan.findOne({ _id: req.params.id, trang_thai: 'active' })
-    if (!profile) return fail(res, 404, 'Khong tim thay ho so benh nhan dang hoat dong')
+    if (!profile) return fail(res, 404, 'Không tìm thấy hồ sơ bệnh nhân đang hoạt động')
 
     const { ly_do, update } = normalizeAdministrativeProfileUpdate(req.body)
     const diff = buildAdministrativeProfileAuditDiff(profile, update)
     if (diff.changed_fields.length === 0) {
-      return fail(res, 400, 'Khong co thong tin ho so nao thay doi')
+      return fail(res, 400, 'Không có thông tin hồ sơ nào thay đổi')
     }
 
     const updated = await HoSoBenhNhan.findOneAndUpdate(
@@ -777,7 +699,7 @@ export const intakeCentralOfflineQueue = async (req, res) => {
       actorUserId: req.user?._id ?? req.user?.id ?? null,
       actorRole: 'receptionist',
     })
-    return created(res, result, 'Da tiep nhan khach vang lai vao hang doi trung tam')
+    return created(res, result, 'Đã tiếp nhận khách vãng lai vào hàng đợi trung tâm')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }

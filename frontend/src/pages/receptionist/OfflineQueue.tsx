@@ -53,23 +53,24 @@ export default function OfflineQueue() {
     done: rows.filter((row) => row.trang_thai === 'hoan_thanh').length,
   }), [rows])
 
-  const assignBest = async (row: OfflineQueueRow) => {
-    const suggestion = suggestionByQueueId.get(row.id)
-    const best = suggestion?.de_xuat_tot_nhat
-    if (!best) return
+  const assignDoctor = async (row: OfflineQueueRow, candidate: DispatchCandidate, isSuggested: boolean) => {
     setActionId(row.id)
     setError('')
     setMessage('')
     try {
-      await receptionistOfflineQueueService.assign(row.id, best.doctor_id, 'Điều phối theo gợi ý hệ thống')
-      setMessage(`Đã điều phối ${row.ten_benh_nhan} cho ${best.bac_si || 'bác sĩ phù hợp'}.`)
+      await receptionistOfflineQueueService.assign(
+        row.id,
+        candidate.doctor_id,
+        isSuggested ? 'Điều phối theo gợi ý hệ thống' : 'Lễ tân tự chọn bác sĩ',
+      )
+      setMessage(`Đã điều phối ${row.ten_benh_nhan} cho ${candidate.bac_si || 'bác sĩ đã chọn'}.`)
       setPrintData({
         ticketType: 'kham',
         patientName: row.ten_benh_nhan,
         queueNumber: row.ma_so_thu_tu || '-',
-        doctorName: best.bac_si || 'Chưa gán',
-        roomNumber: best.phong_kham || 'Chưa gán',
-        appointmentTime: best.gio_bat_dau ? `${best.gio_bat_dau}${best.gio_ket_thuc ? ` - ${best.gio_ket_thuc}` : ''}` : formatTime(new Date().toISOString()),
+        doctorName: candidate.bac_si || 'Chưa gán',
+        roomNumber: candidate.phong_kham || 'Chưa gán',
+        appointmentTime: candidate.gio_bat_dau ? `${candidate.gio_bat_dau}${candidate.gio_ket_thuc ? ` - ${candidate.gio_ket_thuc}` : ''}` : formatTime(new Date().toISOString()),
         specialtyName: row.specialty?.ten,
       })
       setConfirmingId(null)
@@ -206,7 +207,7 @@ export default function OfflineQueue() {
                                 disabled={actionId === row.id || !suggestion}
                                 className="min-h-9 rounded-lg bg-brand-700 px-3 text-xs font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                Gán theo gợi ý
+                                Chọn bác sĩ
                               </button>
                               <button
                                 type="button"
@@ -237,34 +238,41 @@ export default function OfflineQueue() {
                       {confirmingId === row.id && suggestion && (
                         <tr>
                           <td colSpan={6} className="bg-slate-50 px-4 py-4">
-                            <p className="text-sm font-bold text-slate-800">Căn cứ gợi ý điều phối cho {row.ten_benh_nhan}</p>
+                            <p className="text-sm font-bold text-slate-800">Chọn bác sĩ điều phối cho {row.ten_benh_nhan}</p>
+                            <p className="mt-1 text-xs text-slate-500">Hệ thống chỉ gợi ý — lễ tân bấm chọn bác sĩ đang rảnh theo ý muốn, không tự động gán.</p>
                             <div className="mt-3 grid gap-2">
-                              {suggestion.ung_vien.map((candidate: DispatchCandidate) => (
-                                <div key={candidate.doctor_id} className={`rounded-lg border p-3 text-xs ${candidate.hop_le ? 'border-emerald-200 bg-white' : 'border-slate-200 bg-slate-100 opacity-80'}`}>
-                                  <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <span className="font-bold text-slate-900">{candidate.bac_si || 'Bác sĩ'}</span>
-                                    <span className="text-slate-500">Phòng {candidate.phong_kham || '-'} · {candidate.gio_bat_dau || '-'}-{candidate.gio_ket_thuc || '-'} · Đang xử lý {candidate.so_luot_dang_xu_ly} lượt</span>
+                              {suggestion.ung_vien.map((candidate: DispatchCandidate) => {
+                                const isSuggested = best?.doctor_id === candidate.doctor_id
+                                return (
+                                  <div key={candidate.doctor_id} className={`rounded-lg border p-3 text-xs ${candidate.hop_le ? 'border-emerald-200 bg-white' : 'border-slate-200 bg-slate-100 opacity-80'}`}>
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="font-bold text-slate-900">
+                                        {candidate.bac_si || 'Bác sĩ'}
+                                        {isSuggested && <span className="ml-2 rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-700">Gợi ý</span>}
+                                      </span>
+                                      <span className="text-slate-500">Phòng {candidate.phong_kham || '-'} · {candidate.gio_bat_dau || '-'}-{candidate.gio_ket_thuc || '-'} · Đang xử lý {candidate.so_luot_dang_xu_ly} lượt</span>
+                                    </div>
+                                    {candidate.hop_le ? (
+                                      <p className="mt-1 font-semibold text-emerald-700">Phù hợp — còn khung an toàn, phòng sẵn sàng</p>
+                                    ) : (
+                                      <p className="mt-1 font-semibold text-rose-700">
+                                        Bị chặn: {candidate.ly_do_chan.map(dispatchBlockReasonLabel).join('; ')}
+                                      </p>
+                                    )}
+                                    {candidate.hop_le && (
+                                      <button
+                                        type="button"
+                                        onClick={() => assignDoctor(row, candidate, isSuggested)}
+                                        disabled={actionId === row.id}
+                                        className="mt-2 min-h-8 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {actionId === row.id ? 'Đang gán...' : `Gán cho ${candidate.bac_si || 'bác sĩ này'}`}
+                                      </button>
+                                    )}
                                   </div>
-                                  {candidate.hop_le ? (
-                                    <p className="mt-1 font-semibold text-emerald-700">Phù hợp — còn khung an toàn, phòng sẵn sàng</p>
-                                  ) : (
-                                    <p className="mt-1 font-semibold text-rose-700">
-                                      Bị chặn: {candidate.ly_do_chan.map(dispatchBlockReasonLabel).join('; ')}
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
-                            {best && (
-                              <button
-                                type="button"
-                                onClick={() => assignBest(row)}
-                                disabled={actionId === row.id}
-                                className="mt-3 min-h-9 rounded-lg bg-emerald-600 px-4 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {actionId === row.id ? 'Đang gán...' : `Xác nhận gán ${best.bac_si || 'bác sĩ này'}`}
-                              </button>
-                            )}
                           </td>
                         </tr>
                       )}

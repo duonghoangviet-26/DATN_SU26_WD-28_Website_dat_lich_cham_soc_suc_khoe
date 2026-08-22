@@ -85,20 +85,20 @@ export async function approveLeave(req, res) {
     if (!isValidObjectId(id)) {
       await session.abortTransaction()
       session.endSession()
-      return fail(res, 400, 'ID nghi phep khong hop le')
+      return fail(res, 400, 'ID nghỉ phép không hợp lệ')
     }
 
     const leave = await NghiPhepBacSi.findById(id).session(session)
     if (!leave) {
       await session.abortTransaction()
       session.endSession()
-      return fail(res, 404, 'Khong tim thay don nghi phep')
+      return fail(res, 404, 'Không tìm thấy đơn nghỉ phép')
     }
 
     if (!laDonNganHanChoLeTan(leave)) {
       await session.abortTransaction()
       session.endSession()
-      return fail(res, 403, 'Don nghi keo dai hoac bat dau xa hon ngay mai — can Admin duyet')
+      return fail(res, 403, 'Đơn nghỉ kéo dài hoặc bắt đầu xa hơn ngày mai — cần Admin duyệt')
     }
 
     const { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat } = await duyetDonNghi({
@@ -143,21 +143,21 @@ export async function rejectLeave(req, res) {
   try {
     const { id } = req.params
     if (!isValidObjectId(id)) {
-      return fail(res, 400, 'ID nghi phep khong hop le')
+      return fail(res, 400, 'ID nghỉ phép không hợp lệ')
     }
 
     const leave = await NghiPhepBacSi.findById(id)
     if (!leave) {
-      return fail(res, 404, 'Khong tim thay don nghi phep')
+      return fail(res, 404, 'Không tìm thấy đơn nghỉ phép')
     }
     if (!laDonNganHanChoLeTan(leave)) {
-      return fail(res, 403, 'Don nghi keo dai hoac bat dau xa hon ngay mai — can Admin duyet')
+      return fail(res, 403, 'Đơn nghỉ kéo dài hoặc bắt đầu xa hơn ngày mai — cần Admin duyệt')
     }
 
     await tuChoiDonNghi({ leave, actorUserId: getActorUserId(req), ghiChu: req.body?.ghi_chu })
 
     const populatedLeave = await findLeaveByIdWithDoctor(id).lean()
-    return ok(res, formatDoctorLeave(populatedLeave), 'Tu choi don nghi phep thanh cong')
+    return ok(res, formatDoctorLeave(populatedLeave), 'Từ chối đơn nghỉ phép thành công')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }

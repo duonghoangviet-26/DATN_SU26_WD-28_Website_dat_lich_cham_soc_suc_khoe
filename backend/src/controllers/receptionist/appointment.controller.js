@@ -978,7 +978,7 @@ export const markLateArrival = async (req, res) => {
 
     const appointment = await LichHen.findById(req.params.id).populate('user_id', 'email')
     if (!appointment) {
-      return res.status(404).json({ success: false, message: 'Khong tim thay lich hen' })
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
     }
 
     const queueEntry = await getQueueEntryForAppointment(appointment._id)
@@ -990,7 +990,7 @@ export const markLateArrival = async (req, res) => {
 
     const moc = cacMocCuaKhung(appointment.ngay_kham, appointment.gio_kham)
     if (!moc || now.getTime() < moc.T.getTime()) {
-      return res.status(409).json({ success: false, message: 'Lich hen chua qua gio kham, khong the ghi nhan khach den muon.' })
+      return res.status(409).json({ success: false, message: 'Lịch hẹn chưa qua giờ khám, không thể ghi nhận khách đến muộn.' })
     }
 
     const target = await findLateArrivalTargetSlot({ appointment, policy, now })
@@ -1070,7 +1070,7 @@ export const markLateArrival = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Da xu ly khach den muon: chuyen tu ${gioCu} sang ${appointment.gio_kham}.`,
+      message: `Đã xử lý khách đến muộn: chuyển từ ${gioCu} sang ${appointment.gio_kham}.`,
       data: appointment,
       late_policy: target.policy,
       notification: notificationResult,
@@ -1455,18 +1455,18 @@ export const reportDoctorUnavailable = async (req, res) => {
       session.endSession()
       return res.status(400).json({
         success: false,
-        message: 'doctor_id, ngay bat dau va ngay ket thuc la bat buoc',
+        message: 'doctor_id, ngày bắt đầu và ngày kết thúc là bắt buộc',
       })
     }
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(400).json({ success: false, message: 'doctor_id khong hop le' })
+      return res.status(400).json({ success: false, message: 'doctor_id không hợp lệ' })
     }
     if (!validHHMM(gio_bat_dau) || !validHHMM(gio_ket_thuc) || ((gio_bat_dau || gio_ket_thuc) && (!gio_bat_dau || !gio_ket_thuc || gio_ket_thuc <= gio_bat_dau))) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(400).json({ success: false, message: 'Khung gio nghi khong hop le' })
+      return res.status(400).json({ success: false, message: 'Khung giờ nghỉ không hợp lệ' })
     }
 
     const doctor = await BacSi.findOne({
@@ -1477,7 +1477,7 @@ export const reportDoctorUnavailable = async (req, res) => {
     if (!doctor) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(404).json({ success: false, message: 'Khong tim thay bac si dang hoat dong' })
+      return res.status(404).json({ success: false, message: 'Không tìm thấy bác sĩ đang hoạt động' })
     }
 
     const tuNgay = startOfDayUtc(new Date(startInput))
@@ -1485,7 +1485,7 @@ export const reportDoctorUnavailable = async (req, res) => {
     if (!tuNgay || !denNgay || denNgay < tuNgay) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(400).json({ success: false, message: 'Khoang ngay nghi khong hop le' })
+      return res.status(400).json({ success: false, message: 'Khoảng ngày nghỉ không hợp lệ' })
     }
 
     const overlappingLeave = await NghiPhepBacSi.findOne({
@@ -1499,7 +1499,7 @@ export const reportDoctorUnavailable = async (req, res) => {
       session.endSession()
       return res.status(409).json({
         success: false,
-        message: 'Bac si da co don nghi trong khoang ngay nay, vui long xu ly tren don hien co',
+        message: 'Bác sĩ đã có đơn nghỉ trong khoảng ngày này, vui lòng xử lý trên đơn hiện có',
         leave_id: overlappingLeave._id,
       })
     }
@@ -1624,7 +1624,7 @@ export const reportDoctorUnavailable = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Da ghi nhan bac si nghi dot xuat. Tao de xuat cho ${proposals.length}/${affectedAppointments.length} lich bi anh huong.`,
+      message: `Đã ghi nhận bác sĩ nghỉ đột xuất. Tạo đề xuất cho ${proposals.length}/${affectedAppointments.length} lịch bị ảnh hưởng.`,
       data: {
         leave_id: suddenLeave._id,
         so_lich_bi_anh_huong: affectedAppointments.length,

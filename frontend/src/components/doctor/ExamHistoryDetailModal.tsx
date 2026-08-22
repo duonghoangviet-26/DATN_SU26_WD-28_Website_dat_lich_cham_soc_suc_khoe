@@ -94,14 +94,14 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
     if (!printWindow) return
     const dichVu = hoSo.dich_vu_phat_sinh.length
       ? hoSo.dich_vu_phat_sinh.map((dv) => `<li>${escapeHtml(dv.ten)} x ${dv.so_luong}: ${formatPrice(dv.thanh_tien)}</li>`).join('')
-      : '<li>Khong co dich vu phat sinh</li>'
+      : '<li>Không có dịch vụ phát sinh</li>'
     const thuoc = phien.thuoc.length
-      ? phien.thuoc.map((t) => `<li>${escapeHtml(t.ten_thuoc)} - ${escapeHtml(t.lieu_luong || '-')}, ${escapeHtml(t.tan_suat || '-')}, ${t.so_ngay} ngay</li>`).join('')
-      : '<li>Khong ke don</li>'
+      ? phien.thuoc.map((t) => `<li>${escapeHtml(t.ten_thuoc)} - ${escapeHtml(t.lieu_luong || '-')}, ${escapeHtml(t.tan_suat || '-')}, ${t.so_ngay} ngày</li>`).join('')
+      : '<li>Không kê đơn</li>'
     printWindow.document.write(`
       <html>
         <head>
-          <title>Ho so kham - ${escapeHtml(phien.queue.ten_benh_nhan)}</title>
+          <title>Hồ sơ khám - ${escapeHtml(phien.queue.ten_benh_nhan)}</title>
           <style>
             body { font-family: Arial, sans-serif; color: #0f172a; padding: 28px; line-height: 1.5; }
             h1 { font-size: 22px; margin: 0 0 16px; }
@@ -112,31 +112,31 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
           </style>
         </head>
         <body>
-          <h1>Ho so kham benh</h1>
+          <h1>Hồ sơ khám bệnh</h1>
           <section class="grid">
-            <p><strong>Benh nhan:</strong> ${escapeHtml(phien.queue.ten_benh_nhan)}</p>
-            <p><strong>So dien thoai:</strong> ${escapeHtml(phien.queue.so_dien_thoai || '-')}</p>
-            <p><strong>Tuoi:</strong> ${phien.queue.tuoi ?? '-'}</p>
-            <p><strong>Gioi tinh:</strong> ${escapeHtml(phien.queue.gioi_tinh || '-')}</p>
+            <p><strong>Bệnh nhân:</strong> ${escapeHtml(phien.queue.ten_benh_nhan)}</p>
+            <p><strong>Số điện thoại:</strong> ${escapeHtml(phien.queue.so_dien_thoai || '-')}</p>
+            <p><strong>Tuổi:</strong> ${phien.queue.tuoi ?? '-'}</p>
+            <p><strong>Giới tính:</strong> ${escapeHtml(phien.queue.gioi_tinh || '-')}</p>
           </section>
-          <h2>Tiep nhan</h2>
-          <p><strong>Ly do/trieu chung:</strong> ${escapeHtml(hoSo.trieu_chung_ban_dau || '-')}</p>
-          <h2>Chan doan va dieu tri</h2>
-          <p><strong>Chan doan:</strong> ${escapeHtml(hoSo.chan_doan || '-')}</p>
-          <p><strong>Huong dan:</strong> ${escapeHtml(hoSo.huong_dan_dieu_tri || '-')}</p>
-          <p><strong>Ghi chu:</strong> ${escapeHtml(hoSo.ghi_chu || '-')}</p>
-          <p><strong>Tai kham:</strong> ${hoSo.ngay_tai_kham ? new Date(hoSo.ngay_tai_kham).toLocaleDateString('vi-VN') : '-'}</p>
-          <h2>Dich vu phat sinh</h2>
+          <h2>Tiếp nhận</h2>
+          <p><strong>Lý do/triệu chứng:</strong> ${escapeHtml(hoSo.trieu_chung_ban_dau || '-')}</p>
+          <h2>Chẩn đoán và điều trị</h2>
+          <p><strong>Chẩn đoán:</strong> ${escapeHtml(hoSo.chan_doan || '-')}</p>
+          <p><strong>Hướng dẫn:</strong> ${escapeHtml(hoSo.huong_dan_dieu_tri || '-')}</p>
+          <p><strong>Ghi chú:</strong> ${escapeHtml(hoSo.ghi_chu || '-')}</p>
+          <p><strong>Tái khám:</strong> ${hoSo.ngay_tai_kham ? new Date(hoSo.ngay_tai_kham).toLocaleDateString('vi-VN') : '-'}</p>
+          <h2>Dịch vụ phát sinh</h2>
           <ul>${dichVu}</ul>
-          <h2>Don thuoc</h2>
+          <h2>Đơn thuốc</h2>
           <ul>${thuoc}</ul>
-          <h2>Thanh toan</h2>
-          <p><strong>Tien kham:</strong> ${formatPrice(phien.hoa_don?.tong_tien_kham ?? 0)}</p>
-          <p><strong>Dich vu phat sinh:</strong> ${formatPrice(phien.hoa_don?.tong_tien_phat_sinh ?? 0)}</p>
-          <p><strong>Tong thanh toan:</strong> ${formatPrice(phien.hoa_don?.tong_thanh_toan ?? 0)}</p>
-          <p><strong>Da thu:</strong> ${formatPrice(phien.hoa_don?.tong_da_thu ?? 0)}</p>
-          <p><strong>Con thieu:</strong> ${formatPrice(phien.hoa_don?.con_thieu ?? 0)}</p>
-          <p><strong>Thu ngan:</strong> ${phien.hoa_don?.da_xac_nhan_thu_ngan ? 'Da doi chieu' : 'Chua doi chieu'}</p>
+          <h2>Thanh toán</h2>
+          <p><strong>Tiền khám:</strong> ${formatPrice(phien.hoa_don?.tong_tien_kham ?? 0)}</p>
+          <p><strong>Dịch vụ phát sinh:</strong> ${formatPrice(phien.hoa_don?.tong_tien_phat_sinh ?? 0)}</p>
+          <p><strong>Tổng thanh toán:</strong> ${formatPrice(phien.hoa_don?.tong_thanh_toan ?? 0)}</p>
+          <p><strong>Đã thu:</strong> ${formatPrice(phien.hoa_don?.tong_da_thu ?? 0)}</p>
+          <p><strong>Còn thiếu:</strong> ${formatPrice(phien.hoa_don?.con_thieu ?? 0)}</p>
+          <p><strong>Thu ngân:</strong> ${phien.hoa_don?.da_xac_nhan_thu_ngan ? 'Đã đối chiếu' : 'Chưa đối chiếu'}</p>
         </body>
       </html>
     `)
@@ -249,7 +249,7 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
                   <h3 className="text-sm font-semibold text-slate-900">Thanh toán</h3>
                   <button type="button" onClick={inHoSo}
                     className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">
-                    In ho so
+                    In hồ sơ
                   </button>
                 </div>
                 {phien.hoa_don ? (

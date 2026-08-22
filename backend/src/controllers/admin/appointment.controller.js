@@ -1296,3 +1296,30 @@ export async function getAppointmentHistory(req, res) {
     return fail(res, 500, err.message)
   }
 }
+
+/**
+ * POST /api/admin/appointments/sweep-no-show
+ * Admin chạy thủ công để quét toàn bộ lịch hẹn quá hạn chưa được đánh dấu no_show.
+ * Bỏ qua công tắc BAT_QUET_NO_SHOW (cho phép chạy trong môi trường dev).
+ * Query param: soNgay (số ngày nhìn lại, mặc định 90)
+ */
+export async function sweepNoShow(req, res) {
+  try {
+    const { quetNoShowHetCa } = await import('../../services/noShowSweep.service.js')
+    const soNgay = Math.min(Math.max(Number.parseInt(req.query.soNgay ?? '90', 10) || 90, 1), 365)
+
+    const result = await quetNoShowHetCa({ now: new Date(), apply: true, soNgay })
+
+    return ok(res, {
+      daDanhDau: result.daDanhDau,
+      soNgayQuet: soNgay,
+      boQua: result.boQua,
+      message: result.daDanhDau > 0
+        ? `Đã cập nhật ${result.daDanhDau} lịch hẹn sang trạng thái "Không đến khám".`
+        : `Không có lịch hẹn nào cần cập nhật trong ${soNgay} ngày qua.`,
+    })
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+

@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
+import Modal from '@/components/common/Modal'
 import Icon from '@/components/admin/icons'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
 import ExamHistoryDetailModal from '@/components/doctor/ExamHistoryDetailModal'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import { subscribeDoctorQueueRealtime } from '@/services/realtime.service'
+import type { MucDoThongBaoLeTan } from '@/services/doctor-exam-session.service'
 import type { DoctorExamQueueRow, ExamQueueStatus, DoctorAppointmentDetail, RoomStatus, PhongKhamTrangThai, LichChoTiepNhan } from '@/types'
 import { formatDate } from '@/utils/format'
 
@@ -191,6 +193,14 @@ export default function DoctorExamQueue() {
   const [choTiepNhan, setChoTiepNhan] = useState<LichChoTiepNhan[]>([])
   const [choTiepNhanLoading, setChoTiepNhanLoading] = useState(true)
   const [roomRefreshKey, setRoomRefreshKey] = useState(0)
+  // Báo lễ tân KHÔNG gắn bệnh nhân cụ thể — cần gửi được bất cứ lúc nào (ca khám quá lâu, khám
+  // nhanh có thể đưa bệnh nhân tiếp theo vào...), không chỉ khi đang đứng trong phòng khám.
+  const [showNotifyReception, setShowNotifyReception] = useState(false)
+  const [notifyPriority, setNotifyPriority] = useState<MucDoThongBaoLeTan>('warning')
+  const [notifyContent, setNotifyContent] = useState('')
+  const [notifySaving, setNotifySaving] = useState(false)
+  const [notifyError, setNotifyError] = useState<string | null>(null)
+  const [notifySuccess, setNotifySuccess] = useState<string | null>(null)
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
@@ -254,6 +264,26 @@ export default function DoctorExamQueue() {
 
   function closeModal() { setActive(null); setActiveAppt(null) }
 
+  async function sendReceptionNotice() {
+    if (!notifyContent.trim()) return
+    setNotifySaving(true)
+    setNotifyError(null)
+    setNotifySuccess(null)
+    try {
+      await doctorAppointmentService.notifyReceptionGeneral({ muc_do: notifyPriority, noi_dung: notifyContent.trim() })
+      setNotifyContent('')
+      setNotifySuccess('Đã gửi thông báo cho lễ tân')
+      window.setTimeout(() => {
+        setShowNotifyReception(false)
+        setNotifySuccess(null)
+      }, 800)
+    } catch (e) {
+      setNotifyError(extractApiMessage(e, 'Không gửi được thông báo cho lễ tân'))
+    } finally {
+      setNotifySaving(false)
+    }
+  }
+
   // Hủy ca gồm rất nhiều tình huống khác nhau (khách bỏ về, không đủ điều kiện khám...) —
   // bắt buộc nhập lý do để lưu lại đối chiếu sau này (rule mục 8, LichSuLichHen.ly_do_thay_doi).
   async function handleHuyCa(r: DoctorExamQueueRow) {
@@ -301,6 +331,10 @@ export default function DoctorExamQueue() {
     <div>
       <PageHeader title="Hồ sơ chờ khám"
         description="Toàn bộ bệnh nhân (đặt online + vãng lai) đã check-in được gán cho bạn — check-in, gọi, vào phòng, kết thúc khám và nhập hồ sơ.">
+        <Button variant="secondary" size="sm" onClick={() => setShowNotifyReception(true)}
+          icon={<Icon name="bell" className="h-3.5 w-3.5" />}>
+          Báo lễ tân
+        </Button>
         <Button variant="secondary" size="sm" onClick={() => navigate('/doctor/exam-history')}
           icon={<Icon name="eye" className="h-3.5 w-3.5" />}>
           Bệnh nhân đã khám{soDaXongHomNay > 0 ? ` (${soDaXongHomNay} hôm nay)` : ''}
@@ -445,6 +479,50 @@ export default function DoctorExamQueue() {
         <ExamHistoryDetailModal queueId={viewHistoryQueueId} onClose={() => setViewHistoryQueueId(null)}
           onAmended={() => { setViewHistoryQueueId(null); load() }} />
       )}
+
+      {/* Báo lễ tân — KHÔNG gắn bệnh nhân cụ thể, gửi được bất cứ lúc nào (VD: ca khám quá lâu,
+          khám nhanh hơn dự kiến có thể đưa bệnh nhân tiếp theo vào). */}
+      <Modal isOpen={showNotifyReception} onClose={() => setShowNotifyReception(false)} title="Báo lễ tân" size="sm">
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-500">Mức độ ưu tiên</label>
+            <select
+              value={notifyPriority}
+              onChange={(event) => setNotifyPriority(event.target.value as MucDoThongBaoLeTan)}
+              className="input w-full"
+            >
+              <option value="urgent">Khẩn — cần lễ tân xử lý ngay</option>
+              <option value="warning">Cần chú ý / điều phối</option>
+              <option value="info">Thông tin, không gấp</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-500">Nội dung gửi lễ tân</label>
+            <textarea
+              value={notifyContent}
+              onChange={(event) => setNotifyContent(event.target.value)}
+              rows={5}
+              placeholder="VD: Ca này khám lâu hơn dự kiến, nhờ báo trước cho người đang chờ. Hoặc: Khám nhanh hơn dự kiến, có thể đưa bệnh nhân tiếp theo vào."
+              className="input w-full"
+            />
+          </div>
+          {notifyError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{notifyError}</p>}
+          {notifySuccess && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{notifySuccess}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowNotifyReception(false)} className="btn-secondary">
+              Hủy
+            </button>
+            <button
+              type="button"
+              disabled={notifySaving || !notifyContent.trim()}
+              onClick={sendReceptionNotice}
+              className="btn-primary disabled:opacity-40"
+            >
+              {notifySaving ? 'Đang gửi...' : 'Gửi lễ tân'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Toast — góc trên phải, tự mất sau 3 giây */}
       {toast && (

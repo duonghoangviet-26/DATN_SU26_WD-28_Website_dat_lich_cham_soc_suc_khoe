@@ -16,6 +16,7 @@ import patientRoutes       from './patient.routes.js'
 import scheduleTemplatesRoutes from './schedule-templates.routes.js'
 import rescheduleApprovalsRoutes from './reschedule-approvals.routes.js'
 import newsRoutes          from './news.routes.js'
+import searchRoutes        from './search.routes.js'
 
 // ============================================================
 // Admin routes — mount tại /api/admin
@@ -46,5 +47,6 @@ router.use('/doctor-leaves', doctorLeavesRoutes)
 router.use('/medical-read', medicalReadRoutes)
 router.use('/dashboard', dashboardRoutes)
 router.use('/news', newsRoutes)
+router.use('/search', searchRoutes)
 
 export default router

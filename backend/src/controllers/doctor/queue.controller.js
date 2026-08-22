@@ -15,6 +15,11 @@ import { traSlotVePool } from '../../services/offlineIntake.service.js'
 import { bacSiDangTrongCaLamViec, getTodayRange } from '../../services/doctorAvailability.service.js'
 import { huyLuotHangDoi } from '../../services/queueCancel.service.js'
 import { resolveAndSyncAppointmentPaymentState } from '../../services/appointmentPaymentStatus.service.js'
+import {
+  chuanHoaMucDoBaoLeTan,
+  chuanHoaNoiDungBaoLeTan,
+  guiThongBaoChoLeTan,
+} from '../../services/receptionNotify.service.js'
 
 // ============================================================
 // Hàng đợi động (Bác sĩ) — Routes: /api/doctor/queue
@@ -453,6 +458,40 @@ export async function cancel(req, res) {
     })
 
     return ok(res, { id: entry._id, trang_thai: entry.trang_thai }, 'Đã hủy lượt khám')
+  } catch (err) {
+    return fail(res, err.statusCode ?? 500, err.message)
+  }
+}
+
+// ─── POST /api/doctor/queue/notify-reception ─────────────────────────────────
+// Báo lễ tân KHÔNG gắn với một bệnh nhân cụ thể — ví dụ ca khám quá lâu (nhờ báo trước cho
+// người đang chờ) hoặc khám nhanh hơn dự kiến (có thể đưa bệnh nhân tiếp theo vào sớm). Trước
+// đây "Báo lễ tân" CHỈ có trong phòng khám, gắn theo queueId (doctor/exam-session.controller.js)
+// — sai nghiệp vụ vì bác sĩ cần báo được BẤT CỨ LÚC NÀO, kể cả khi chưa có bệnh nhân nào
+// đang trong phòng. Dùng chung `guiThongBaoChoLeTan` với luồng trong phòng khám.
+export async function notifyReceptionGeneral(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+    const noiDung = chuanHoaNoiDungBaoLeTan(req.body?.noi_dung)
+    const mucDo = chuanHoaMucDoBaoLeTan(req.body?.muc_do)
+
+    const [bacSi, room] = await Promise.all([
+      NguoiDung.findById(req.user.id).select('ho_ten').lean(),
+      findOrCreateRoomStatus(docId),
+    ])
+    const tenBacSi = bacSi?.ho_ten ? `BS. ${bacSi.ho_ten}` : 'Bác sĩ'
+    const ngucanhPhong = room.phong_kham ? ` (phòng ${room.phong_kham})` : ''
+
+    const sent = await guiThongBaoChoLeTan({
+      mucDo,
+      noiDung: `${tenBacSi}${ngucanhPhong}: ${noiDung}`,
+      relatedId: docId,
+      extraData: { doctor_id: String(docId), room: room.phong_kham ?? null },
+    })
+
+    return ok(res, { sent }, 'Đã gửi thông báo cho lễ tân')
   } catch (err) {
     return fail(res, err.statusCode ?? 500, err.message)
   }

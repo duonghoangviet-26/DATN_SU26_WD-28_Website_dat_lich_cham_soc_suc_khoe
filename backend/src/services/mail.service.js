@@ -222,3 +222,47 @@ export async function sendBookingSuccessEmail({ to, bookingData }) {
   })
 }
 
+export function renderDebtReminderEmail({ ten_khach_hang, so_hoa_don, thieu, chi_tiet_thu_phi, ngay_tao }) {
+  const safeTen = escapeHtml(ten_khach_hang)
+  const safeHoaDon = escapeHtml(so_hoa_don)
+  const safeThieu = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(thieu || 0)
+  const safeNgayTao = new Date(ngay_tao).toLocaleDateString('vi-VN')
+
+  let servicesHtml = ''
+  if (chi_tiet_thu_phi && chi_tiet_thu_phi.length > 0) {
+    servicesHtml = '<ul style="padding-left: 20px;">'
+    chi_tiet_thu_phi.forEach(sv => {
+       servicesHtml += `<li>${escapeHtml(sv.ten)} - SL: ${sv.so_luong}</li>`
+    })
+    servicesHtml += '</ul>'
+  }
+
+  return `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 24px; border-radius: 12px; background-color: #ffffff;">
+      <h2 style="color: #0f172a; margin-top: 0;">Thông báo nhắc nợ - Phòng khám ViteFamily</h2>
+      <p>Kính gửi anh/chị <strong>${safeTen}</strong>,</p>
+      <p>Hệ thống của phòng khám ViteFamily ghi nhận anh/chị vẫn còn một khoản thanh toán chưa hoàn tất. Chi tiết như sau:</p>
+      <ul>
+        <li><strong>Số hóa đơn:</strong> ${safeHoaDon} (Ngày tạo: ${safeNgayTao})</li>
+        <li><strong>Số tiền còn nợ:</strong> <span style="color: #ef4444; font-weight: bold;">${safeThieu}</span></li>
+      </ul>
+      <p><strong>Các dịch vụ bao gồm:</strong></p>
+      ${servicesHtml}
+      <p>Vui lòng tiến hành thanh toán trong thời gian sớm nhất để hoàn tất hồ sơ khám bệnh.</p>
+      <p>Mọi thắc mắc vui lòng liên hệ trực tiếp với phòng khám hoặc số điện thoại hỗ trợ.</p>
+      <p>Trân trọng,</p>
+      <p><strong>Phòng khám ViteFamily</strong></p>
+    </div>
+  `
+}
+
+export async function sendDebtReminderEmail({ to, data }) {
+  if (!to) return null
+  return sendMail({
+    to,
+    subject: `[ViteFamily] Thông báo nhắc nợ hóa đơn ${data.so_hoa_don}`,
+    text: `Kính gửi ${data.ten_khach_hang}, Bạn có khoản nợ ${new Intl.NumberFormat('vi-VN').format(data.thieu)} VND cho hóa đơn ${data.so_hoa_don}. Vui lòng thanh toán sớm.`,
+    html: renderDebtReminderEmail(data),
+  })
+}
+
