@@ -344,7 +344,12 @@ export const getSpecialtiesByClinic = async (req, res) => {
 export const getDoctorsBySpecialty = async (req, res) => {
   try {
     const specialtyId = req.params.specialtyId ?? req.params.id
-    const doctors = await BacSi.find({ specialties: specialtyId })
+    const doctors = await BacSi.find({
+      specialties: specialtyId,
+      trang_thai: 'active',
+      la_hien: true,
+      trang_thai_duyet: 'approved',
+    })
       .populate('user_id', 'ho_ten')
       .lean()
 
