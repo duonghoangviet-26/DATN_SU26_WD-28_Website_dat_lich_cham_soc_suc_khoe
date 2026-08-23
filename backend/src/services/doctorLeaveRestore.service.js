@@ -1,6 +1,7 @@
 import { LichHen, LichLamViec, NghiPhepBacSi, NhatKyThaoTac, ThongBao } from '../models/index.js'
 import { nhaChoDaGiu } from './appointmentReschedule.service.js'
 import { TRANG_THAI_DE_XUAT_MO } from './rescheduleRules.js'
+import { startOfDayUtc, startOfClinicDayUtc } from '../utils/clinicTime.js'
 
 // ============================================================
 // KHÔI PHỤC BÁO NGHỈ — bác sĩ đổi ý / lễ tân bấm nhầm (chốt 2026-08-23, A2/B1–B4)
@@ -15,14 +16,8 @@ import { TRANG_THAI_DE_XUAT_MO } from './rescheduleRules.js'
 //   3. Lịch ĐÃ DỜI XONG                  → GIỮ NGUYÊN ở chỗ mới (B4), chỉ đếm để báo cáo.
 //      Đảo ngược sẽ dời khách hai lần vì một quyết định của phòng khám.
 
-function dauNgayUtc(value) {
-  const d = new Date(value)
-  d.setUTCHours(0, 0, 0, 0)
-  return d
-}
-
 function ngayKeTiep(value) {
-  const d = dauNgayUtc(value)
+  const d = startOfDayUtc(value)
   d.setUTCDate(d.getUTCDate() + 1)
   return d
 }
@@ -32,7 +27,7 @@ export function kiemTraDuocKhoiPhuc(leave, now = new Date()) {
   if (leave?.trang_thai !== 'da_duyet') {
     return { hopLe: false, message: 'Chi khoi phuc duoc don nghi dang o trang thai da duyet.' }
   }
-  if (dauNgayUtc(leave.den_ngay) < dauNgayUtc(now)) {
+  if (startOfDayUtc(leave.den_ngay) < startOfClinicDayUtc(now)) {
     return { hopLe: false, message: 'Don nghi da qua ngay — khong khoi phuc duoc (B2).' }
   }
   return { hopLe: true }
@@ -62,9 +57,12 @@ function laSlotDoDonNayKhoa(slot, leave) {
 
 /** Xem trước — KHÔNG ghi gì. Dùng cho modal xác nhận (hiện đúng con số trước khi bấm). */
 export async function xemTruocKhoiPhuc(leave, session = null) {
+  const kiemTra = kiemTraDuocKhoiPhuc(leave)
+  if (!kiemTra.hopLe) throw Object.assign(new Error(kiemTra.message), { statusCode: 409 })
+
   const scheduleQuery = LichLamViec.find({
     doctor_id: leave.bac_si_id,
-    ngay: { $gte: dauNgayUtc(leave.tu_ngay), $lt: ngayKeTiep(leave.den_ngay) },
+    ngay: { $gte: startOfDayUtc(leave.tu_ngay), $lt: ngayKeTiep(leave.den_ngay) },
   })
   if (session) scheduleQuery.session(session)
   const schedules = await scheduleQuery.lean()
@@ -100,7 +98,7 @@ export async function huyBaoNghi({ leave, actorUserId, actorRole, session, now =
   // ── 1. Mở khoá slot ──────────────────────────────────────────────────────
   const schedules = await LichLamViec.find({
     doctor_id: leave.bac_si_id,
-    ngay: { $gte: dauNgayUtc(leave.tu_ngay), $lt: ngayKeTiep(leave.den_ngay) },
+    ngay: { $gte: startOfDayUtc(leave.tu_ngay), $lt: ngayKeTiep(leave.den_ngay) },
   }).session(session)
 
   let soSlotMoLai = 0
