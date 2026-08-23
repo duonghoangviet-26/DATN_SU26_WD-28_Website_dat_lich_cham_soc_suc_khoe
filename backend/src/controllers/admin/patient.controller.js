@@ -6,6 +6,9 @@ import {
   HangDoi,
   HoSoBenhNhan,
   KetQuaKham,
+  KetQuaKhamTai,
+  KetQuaKhamMui,
+  KetQuaKhamHong,
   LichHen,
   NguoiDung,
   NhatKyThaoTac,
@@ -220,7 +223,50 @@ function serializePrescription(prescription) {
   }
 }
 
-function serializeHistoryItem(result, prescriptions) {
+function extractImagesForResult(result, specialtyRecords = []) {
+  const images = []
+  const seenUrls = new Set()
+
+  const addImg = (img) => {
+    if (!img) return
+    let url = ''
+    let mo_ta = null
+    let uploaded_at = null
+
+    if (typeof img === 'string') {
+      url = img
+    } else if (typeof img === 'object') {
+      url = img.url || img.hinh_anh || img.image_url || ''
+      mo_ta = img.mo_ta || img.description || img.ghi_chu || null
+      uploaded_at = img.uploaded_at || img.ngay_tao || null
+    }
+
+    if (url && !seenUrls.has(url)) {
+      seenUrls.add(url)
+      images.push({ url, mo_ta, uploaded_at })
+    }
+  }
+
+  for (const item of specialtyRecords) {
+    for (const img of item?.hinh_anh_noi_soi || []) addImg(img)
+  }
+
+  if (result) {
+    for (const img of result.hinh_anh_noi_soi || []) addImg(img)
+    for (const img of result.hinh_anh_kham || []) addImg(img)
+    for (const img of result.hinh_anh || []) addImg(img)
+
+    for (const dv of result.dich_vu_phat_sinh || []) {
+      for (const img of dv.hinh_anh_ket_qua || []) addImg(img)
+      for (const img of dv.hinh_anh_noi_soi || []) addImg(img)
+      for (const img of dv.hinh_anh || []) addImg(img)
+    }
+  }
+
+  return images
+}
+
+function serializeHistoryItem(result, prescriptions, specialtyRecords = []) {
   const appointment = result.appointment_id || null
   const queue = result.hang_doi_id || null
   const doctor = result.bac_si_phu_trach_id || appointment?.doctor_id || queue?.doctor_id || null
@@ -242,6 +288,7 @@ function serializeHistoryItem(result, prescriptions) {
     ghi_chu: result.ghi_chu || null,
     status: result.status,
     don_thuoc: prescriptions.map(serializePrescription),
+    hinh_anh_noi_soi: extractImagesForResult(result, specialtyRecords),
   }
 }
 
@@ -684,9 +731,15 @@ export async function getPatientExamHistory(req, res) {
       .sort('-ngay_tao')
       .lean()
 
-    const prescriptions = await DonThuoc.find({
-      ket_qua_kham_id: { $in: results.map((result) => result._id) },
-    }).lean()
+    const [prescriptions, taiResults, muiResults, hongResults] = await Promise.all([
+      DonThuoc.find({
+        ket_qua_kham_id: { $in: results.map((result) => result._id) },
+      }).lean(),
+      appointmentIds.length > 0 ? KetQuaKhamTai.find({ appointment_id: { $in: appointmentIds } }).lean() : [],
+      appointmentIds.length > 0 ? KetQuaKhamMui.find({ appointment_id: { $in: appointmentIds } }).lean() : [],
+      appointmentIds.length > 0 ? KetQuaKhamHong.find({ appointment_id: { $in: appointmentIds } }).lean() : [],
+    ])
+
     const prescriptionMap = prescriptions.reduce((map, prescription) => {
       const key = normalizeId(prescription.ket_qua_kham_id)
       if (!map.has(key)) map.set(key, [])
@@ -694,8 +747,29 @@ export async function getPatientExamHistory(req, res) {
       return map
     }, new Map())
 
+    const specialtyImageMap = new Map()
+    const appendSpecialtyList = (list) => {
+      for (const item of list) {
+        const key = normalizeId(item.appointment_id) || normalizeId(item.ket_qua_kham_id)
+        if (!key) continue
+        if (!specialtyImageMap.has(key)) specialtyImageMap.set(key, [])
+        specialtyImageMap.get(key).push(item)
+      }
+    }
+    appendSpecialtyList(taiResults)
+    appendSpecialtyList(muiResults)
+    appendSpecialtyList(hongResults)
+
     const history = results
-      .map((result) => serializeHistoryItem(result, prescriptionMap.get(normalizeId(result._id)) || []))
+      .map((result) => {
+        const resIdKey = normalizeId(result._id)
+        const apptIdKey = normalizeId(result.appointment_id?._id)
+        const specList = [
+          ...(specialtyImageMap.get(resIdKey) || []),
+          ...(specialtyImageMap.get(apptIdKey) || []),
+        ]
+        return serializeHistoryItem(result, prescriptionMap.get(resIdKey) || [], specList)
+      })
       .sort((left, right) => new Date(right.ngay_kham || 0) - new Date(left.ngay_kham || 0))
 
     return ok(res, history, 'Lay lich su kham benh thanh cong')
