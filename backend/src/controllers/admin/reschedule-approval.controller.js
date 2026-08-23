@@ -1,11 +1,12 @@
 import mongoose from 'mongoose'
 
-import { LichHen, LichLamViec, NghiPhepBacSi, HangDoi } from '../../models/index.js'
+import { LichHen, LichLamViec, NghiPhepBacSi, HangDoi, NhatKyThaoTac } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { isSlotInPast, quaSatGioBatDau } from '../../utils/clinicTime.js'
 import { TRANG_THAI_DE_XUAT_MO } from '../../services/rescheduleRules.js'
 import {
   guiThongBaoDeXuat, nhaChoDaGiu, chonPhuongAnTuDo, slotConTrong, GIO_HAN_PHAN_HOI,
+  sinhLaiDeXuatChoLichMatCho,
 } from '../../services/appointmentReschedule.service.js'
 
 // ============================================================
@@ -227,6 +228,95 @@ export async function approve(req, res) {
     await guiThongBaoDeXuat(appointment)
 
     return ok(res, fmt(appointment.toObject()), 'Da duyet phuong an va gui cho khach chon')
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+/** Trần chống lạm dụng. UI cảnh báo từ 20 (D2), server chặn cứng ở 100. */
+const TRAN_DUYET_HANG_LOAT = 100
+
+// ─── POST .../reschedule-approvals/bulk-approve ─────────────────────────────
+// Duyệt nhiều đề xuất một lượt (D1: KHÔNG bắt nhập lý do, vẫn ghi nhật ký người bấm).
+//
+// KHÔNG gói cả lô vào một transaction: một lịch hỏng không được rollback những lịch đã
+// duyệt xong. Mỗi lịch tự đứng, hỏng thì ghi vào `that_bai` rồi đi tiếp.
+export async function bulkApprove(req, res) {
+  try {
+    const ids = Array.isArray(req.body?.appointment_ids) ? req.body.appointment_ids : []
+    const hopLe = ids.filter((id) => mongoose.Types.ObjectId.isValid(id))
+    if (hopLe.length === 0) return fail(res, 400, 'Thieu appointment_ids')
+    if (hopLe.length > TRAN_DUYET_HANG_LOAT) {
+      return fail(res, 400, `Toi da ${TRAN_DUYET_HANG_LOAT} lich moi luot.`)
+    }
+
+    const thanhCong = []
+    const thatBai = []
+
+    for (const id of hopLe) {
+      // Nạp LẠI từng lịch ngay trước khi ghi — dữ liệu có thể đã đổi từ lúc lễ tân mở bảng.
+      const appointment = await LichHen.findById(id)
+      if (!appointment) {
+        thatBai.push({ id, ten_khach: null, ly_do: 'Khong tim thay lich hen' })
+        continue
+      }
+      const tenKhach = appointment.ten_khach ?? null
+      const dx = appointment.de_xuat_doi
+
+      if (dx?.trang_thai !== 'cho_admin_duyet') {
+        thatBai.push({ id, ten_khach: tenKhach, ly_do: 'De xuat khong con o trang thai cho duyet' })
+        continue
+      }
+      const phuongAn = dx.phuong_an?.[0]
+      if (!phuongAn) {
+        thatBai.push({ id, ten_khach: tenKhach, ly_do: 'Khong co phuong an nao — phai lien he khach' })
+        continue
+      }
+
+      // Kiểm LẠI chỗ giữ sẵn trên dữ liệu mới nhất (§2.1d của spec): một bác sĩ khác có thể
+      // vừa báo nghỉ và khoá đúng slot này.
+      const schedule = await LichLamViec.findById(phuongAn.schedule_id).lean()
+      const slot = schedule?.slots?.find((s) => String(s._id) === String(phuongAn.slot_id))
+      const conDung = slot && (phuongAn.da_giu_cho
+        ? slot.status === 'locked' && !slot.bi_khoa_boi_nghi_phep
+        : slotConTrong(slot))
+
+      if (!conDung) {
+        await sinhLaiDeXuatChoLichMatCho([phuongAn.slot_id])
+        thatBai.push({ id, ten_khach: tenKhach, ly_do: 'Cho giu san da mat — da sinh phuong an moi, kiem lai roi duyet' })
+        continue
+      }
+
+      try {
+        dx.trang_thai = 'cho_khach_chon'
+        dx.nguoi_duyet_id = req.user.id
+        dx.thoi_diem_duyet = new Date()
+        // D3: khách VẪN giữ quyền đổi ý trong GIO_HAN_PHAN_HOI giờ sau khi lễ tân duyệt.
+        dx.han_phan_hoi = new Date(Date.now() + GIO_HAN_PHAN_HOI * 3600_000)
+        await appointment.save()
+        await guiThongBaoDeXuat(appointment)
+
+        await NhatKyThaoTac.create([{
+          nguoi_thuc_hien_id: req.user.id,
+          vai_tro: req.user.role,
+          hanh_dong: 'LT_DIEU_PHOI_HANG_LOAT',
+          loai_doi_tuong: 'appointment',
+          doi_tuong_id: appointment._id,
+          du_lieu_moi: { phuong_an: phuongAn.mo_ta, han_phan_hoi: dx.han_phan_hoi },
+          ly_do: 'Duyet phuong an doi lich theo lo',
+        }])
+
+        thanhCong.push({ id, ten_khach: tenKhach, mo_ta: phuongAn.mo_ta })
+      } catch (err) {
+        thatBai.push({ id, ten_khach: tenKhach, ly_do: err.message })
+      }
+    }
+
+    return ok(
+      res,
+      { thanh_cong: thanhCong, that_bai: thatBai },
+      `Duyet thanh cong ${thanhCong.length}/${hopLe.length} lich.`,
+    )
   } catch (err) {
     return fail(res, 500, err.message)
   }
