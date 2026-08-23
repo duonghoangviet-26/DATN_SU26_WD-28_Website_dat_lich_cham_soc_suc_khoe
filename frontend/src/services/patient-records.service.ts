@@ -50,6 +50,11 @@ export interface PatientRecordDetail extends PatientRecordListItem {
       ngay_ket_thuc?: string
       ghi_chu?: string | null
     } | string>
+    hinh_anh_noi_soi?: Array<{
+      url: string
+      mo_ta?: string | null
+      uploaded_at?: string | null
+    }>
   }
 }
 
@@ -91,6 +96,11 @@ export interface MedicalResultItem {
       ngay_ket_thuc?: string
       ghi_chu?: string | null
     } | string>
+    hinh_anh_noi_soi?: Array<{
+      url: string
+      mo_ta?: string | null
+      uploaded_at?: string | null
+    }>
   }
 }
 

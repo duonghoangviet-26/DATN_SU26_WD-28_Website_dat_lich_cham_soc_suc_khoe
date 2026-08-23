@@ -26,7 +26,7 @@ function formatAppointmentDate(value?: string | null) {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-  }).format(date)
+  }).format(date)Vui lòng đến trước giờ hẹn 15 phút
 }
 
 function DetailIcon({ children }: { children: React.ReactNode }) {
@@ -177,7 +177,7 @@ export default function VnpayResult() {
                 <div>
                   <dt className="text-xs font-semibold text-slate-500">Địa điểm khám</dt>
                   <dd className="mt-1 text-base font-bold text-slate-900">{appointment.phong_kham || 'Phòng khám ViteFamily'}</dd>
-                  <dd className="mt-0.5 text-sm text-slate-600">Vui lòng đến trước giờ hẹn 10 phút</dd>
+                  <dd className="mt-0.5 text-sm text-slate-600">Vui lòng đến trước giờ hẹn 15 phút</dd>
                 </div>
               </div>
 
