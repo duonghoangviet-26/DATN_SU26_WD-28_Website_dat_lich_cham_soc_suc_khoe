@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { DayOverview, DayOverviewDoctor, DayOverviewKhungRow, DoctorDayAppointment, receptionistBookingService } from '@/services/receptionist-booking.service'
 import { receptionistDoctorLeavesService, type PendingDoctorLeave } from '@/services/receptionist-doctor-leaves.service'
 import { DispatchSuggestion, OfflineQueueRow, receptionistOfflineQueueService } from '@/services/receptionist-offline-queue.service'
 import DoctorUnavailableModal from '@/components/receptionist/DoctorUnavailableModal'
 import DoctorLeaveApprovalModal from '@/components/receptionist/DoctorLeaveApprovalModal'
+import ConfirmRestoreModal from '@/components/receptionist/ConfirmRestoreModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
 import { EmptyBlock, LoadingBlock, MetricCard, PageShell, Panel, ReceptionistHeader, StatusBadge } from '@/components/receptionist/ReceptionistUI'
 
@@ -88,6 +90,7 @@ export default function DoctorDayView() {
   const [timelineApptId, setTimelineApptId] = useState<string | null>(null)
   const [pendingLeaves, setPendingLeaves] = useState<PendingDoctorLeave[]>([])
   const [approvingLeave, setApprovingLeave] = useState<PendingDoctorLeave | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<{ leaveId: string; name: string } | null>(null)
 
   const loadPendingLeaves = useCallback(() => {
     receptionistDoctorLeavesService.listPending().then(setPendingLeaves).catch(() => {})
@@ -310,7 +313,7 @@ export default function DoctorDayView() {
                       Đang xin nghỉ
                     </button>
                   )}
-                  {doctor.trang_thai_ngay === 'lam_viec' && (
+                  {doctor.trang_thai_ngay === 'lam_viec' ? (
                     <button
                       type="button"
                       onClick={() => setUnavailableDoctor({ id: doctor.doctor_id, name: doctor.ten_bac_si })}
@@ -318,7 +321,25 @@ export default function DoctorDayView() {
                     >
                       Báo nghỉ đột xuất
                     </button>
-                  )}
+                  ) : (doctor.trang_thai_ngay === 'nghi' || doctor.trang_thai_ngay === 'nghi_phep') && doctor.leave_id ? (
+                    <>
+                      {/* Đổi nút Báo nghỉ thành Khôi phục để không bấm nhầm lần hai, và mở
+                          đường sang trang điều phối cho các lịch cũ của bác sĩ (A2, C1). */}
+                      <button
+                        type="button"
+                        onClick={() => setRestoreTarget({ leaveId: doctor.leave_id!, name: doctor.ten_bac_si })}
+                        className="min-h-9 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                      >
+                        Khôi phục
+                      </button>
+                      <Link
+                        to={`/receptionist/dieu-phoi/${doctor.leave_id}`}
+                        className="inline-flex min-h-9 items-center rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700"
+                      >
+                        Điều phối lịch hẹn →
+                      </Link>
+                    </>
+                  ) : null}
                 </div>
               </div>
 
@@ -398,6 +419,19 @@ export default function DoctorDayView() {
         <DoctorLeaveApprovalModal
           leave={approvingLeave}
           onClose={() => setApprovingLeave(null)}
+          onDone={() => {
+            setAppointmentsCache({})
+            loadPendingLeaves()
+            loadOverview()
+          }}
+        />
+      )}
+
+      {restoreTarget && (
+        <ConfirmRestoreModal
+          leaveId={restoreTarget.leaveId}
+          doctorName={restoreTarget.name}
+          onClose={() => setRestoreTarget(null)}
           onDone={() => {
             setAppointmentsCache({})
             loadPendingLeaves()
