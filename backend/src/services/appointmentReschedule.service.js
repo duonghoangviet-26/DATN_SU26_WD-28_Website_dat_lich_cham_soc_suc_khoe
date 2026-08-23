@@ -455,7 +455,12 @@ export async function sinhLaiDeXuatChoLichMatCho(slotIds, { session = null, now 
 
   const danhSach = await LichHen.find({
     'de_xuat_doi.trang_thai': { $in: TRANG_THAI_DE_XUAT_MO },
-    'de_xuat_doi.phuong_an.slot_id': { $in: slotIds },
+    // Chỉ khớp phương án ĐANG THỰC SỰ GIỮ CHỖ (da_giu_cho: true) — không phải bất kỳ phương
+    // án nào trong danh sách gợi ý. Nếu chỉ lọc theo slot_id, một phương án KHÔNG được chọn
+    // (chưa từng giữ chỗ thật) của lịch hẹn X có thể trùng slot vừa bị đơn nghỉ KHÁC vô hiệu,
+    // khiến X bị nhả nhầm chỗ đang giữ hợp lệ của chính nó (vi phạm mục 15: khách không được
+    // mất chỗ khi không có lý do chính đáng).
+    'de_xuat_doi.phuong_an': { $elemMatch: { slot_id: { $in: slotIds }, da_giu_cho: true } },
     status: { $in: ['pending', 'confirmed'] },
   }).session(session)
 
