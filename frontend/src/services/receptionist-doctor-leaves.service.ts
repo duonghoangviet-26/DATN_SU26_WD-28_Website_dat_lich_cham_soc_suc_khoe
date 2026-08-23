@@ -25,6 +25,12 @@ export interface ApproveDoctorLeaveResult extends PendingDoctorLeave {
   so_lich_khong_co_phuong_an: number
 }
 
+export interface HuyBaoNghiKetQua {
+  so_slot_mo_lai: number
+  so_de_xuat_huy: number
+  so_lich_da_doi_giu_nguyen: number
+}
+
 export const receptionistDoctorLeavesService = {
   async listPending(): Promise<PendingDoctorLeave[]> {
     const res = await axiosInstance.get<ApiResponse<PendingDoctorLeave[]>>('/receptionist/doctor-leaves/pending')
@@ -38,6 +44,16 @@ export const receptionistDoctorLeavesService = {
 
   async reject(id: string, ghi_chu: string): Promise<PendingDoctorLeave> {
     const res = await axiosInstance.patch<ApiResponse<PendingDoctorLeave>>(`/receptionist/doctor-leaves/${id}/reject`, { ghi_chu })
+    return res.data.data
+  },
+
+  async previewHuyBaoNghi(id: string): Promise<HuyBaoNghiKetQua> {
+    const res = await axiosInstance.get<ApiResponse<HuyBaoNghiKetQua>>(`/receptionist/doctor-leaves/${id}/huy-bao-nghi/preview`)
+    return res.data.data
+  },
+
+  async huyBaoNghi(id: string): Promise<HuyBaoNghiKetQua> {
+    const res = await axiosInstance.patch<ApiResponse<HuyBaoNghiKetQua>>(`/receptionist/doctor-leaves/${id}/huy-bao-nghi`)
     return res.data.data
   },
 }

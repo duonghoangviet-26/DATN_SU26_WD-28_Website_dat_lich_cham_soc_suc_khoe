@@ -29,6 +29,9 @@ export interface DayOverviewDoctor {
   ten_bac_si: string
   trang_thai_bac_si: string
   trang_thai_ngay: 'lam_viec' | 'nghi' | 'nghi_phep' | 'khong_co_lich'
+  /** Đơn nghỉ cả ngày đang phủ ngày đang xem — nguồn cho nút "Khôi phục". */
+  leave_id: string | null
+  ly_do_nghi: string | null
   ca_sang: DayOverviewKhungRow[]
   ca_chieu: DayOverviewKhungRow[]
 }

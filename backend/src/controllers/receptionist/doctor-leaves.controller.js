@@ -9,6 +9,7 @@ import {
   moTaKetQuaDuyet,
   laDonNganHanChoLeTan,
 } from '../../services/doctorLeaveApproval.service.js'
+import { huyBaoNghi, xemTruocKhoiPhuc, kiemTraDuocKhoiPhuc } from '../../services/doctorLeaveRestore.service.js'
 
 // ============================================================
 // Lễ tân duyệt đơn nghỉ NGẮN HẠN của bác sĩ — Routes: /api/receptionist/doctor-leaves
@@ -163,8 +164,74 @@ export async function rejectLeave(req, res) {
   }
 }
 
+// ─── GET /api/receptionist/doctor-leaves/:id/huy-bao-nghi/preview ───────────
+// Xem trước hậu quả khôi phục — modal xác nhận cần hiện ĐÚNG con số trước khi lễ tân bấm,
+// không phải câu chung chung "bạn có chắc không".
+export async function previewHuyBaoNghi(req, res) {
+  try {
+    const { id } = req.params
+    if (!isValidObjectId(id)) return fail(res, 400, 'ID nghỉ phép không hợp lệ')
+
+    const leave = await NghiPhepBacSi.findById(id)
+    if (!leave) return fail(res, 404, 'Không tìm thấy đơn nghỉ phép')
+
+    const kiemTra = kiemTraDuocKhoiPhuc(leave)
+    if (!kiemTra.hopLe) return fail(res, 409, kiemTra.message)
+
+    return ok(res, await xemTruocKhoiPhuc(leave))
+  } catch (error) {
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
+// ─── PATCH /api/receptionist/doctor-leaves/:id/huy-bao-nghi ─────────────────
+// Bác sĩ đổi ý hoặc lễ tân bấm nhầm nút "Báo nghỉ đột xuất" (A2, B1).
+export async function huyBaoNghiHandler(req, res) {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+  try {
+    const { id } = req.params
+    if (!isValidObjectId(id)) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 400, 'ID nghỉ phép không hợp lệ')
+    }
+
+    const leave = await NghiPhepBacSi.findById(id).session(session)
+    if (!leave) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 404, 'Không tìm thấy đơn nghỉ phép')
+    }
+
+    const ketQua = await huyBaoNghi({
+      leave,
+      actorUserId: getActorUserId(req),
+      actorRole: req.user?.role === 'admin' ? 'admin' : 'receptionist',
+      session,
+    })
+
+    await session.commitTransaction()
+    session.endSession()
+
+    return ok(
+      res,
+      ketQua,
+      `Đã khôi phục lịch làm việc. Mở lại ${ketQua.so_slot_mo_lai} slot, huỷ `
+        + `${ketQua.so_de_xuat_huy} đề xuất dời và đã báo đính chính cho khách. `
+        + `${ketQua.so_lich_da_doi_giu_nguyen} lịch đã dời xong giữ nguyên ở chỗ mới.`,
+    )
+  } catch (error) {
+    await session.abortTransaction().catch(() => {})
+    session.endSession()
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
 export default {
   listPendingLeaves,
   approveLeave,
   rejectLeave,
+  previewHuyBaoNghi,
+  huyBaoNghiHandler,
 }

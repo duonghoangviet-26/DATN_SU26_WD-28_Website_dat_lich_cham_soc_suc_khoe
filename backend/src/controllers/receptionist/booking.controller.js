@@ -10,6 +10,7 @@ import {
     ThanhToan,
     GiaDinh,
     ThanhVien,
+    NghiPhepBacSi,
 } from "../../models/index.js";
 import { ok, fail } from "../../utils/response.js";
 import { emitDashboardRevenueChanged } from "../../realtime/socket.js";
@@ -292,6 +293,24 @@ export async function getDoctorDayOverview(req, res) {
             : [];
         const scheduleByDoctor = new Map(schedules.map((s) => [String(s.doctor_id), s]));
 
+        // Đơn nghỉ CẢ NGÀY đang phủ ngày đang xem — để nút "Khôi phục" biết gọi đơn nào.
+        const leaves = doctorIds.length
+            ? await NghiPhepBacSi.find({
+                bac_si_id: { $in: doctorIds },
+                trang_thai: "da_duyet",
+                tu_ngay: { $lte: ngayDate },
+                den_ngay: { $gte: ngayDate },
+            }).select("_id bac_si_id gio_bat_dau ly_do").lean()
+            : [];
+        // Ưu tiên đơn nghỉ CẢ NGÀY (gio_bat_dau = null) — đó mới là đơn làm cả ngày thành
+        // 'nghi_phep'. Đơn nghỉ một khung không đổi trang_thai_ngay nên không có nút khôi phục.
+        const leaveByDoctor = new Map();
+        for (const leave of leaves) {
+            const key = String(leave.bac_si_id);
+            const dangCo = leaveByDoctor.get(key);
+            if (!dangCo || (dangCo.gio_bat_dau && !leave.gio_bat_dau)) leaveByDoctor.set(key, leave);
+        }
+
         const data = doctors.map((doctor) => {
             const schedule = scheduleByDoctor.get(String(doctor._id)) ?? null;
             // Phan biet "khong dang ky ca nao" (khong co ban ghi lich) voi "co dang ky nhung
@@ -307,6 +326,8 @@ export async function getDoctorDayOverview(req, res) {
                 ten_bac_si: doctor.user_id?.ho_ten ?? "Bác sĩ",
                 trang_thai_bac_si: doctor.trang_thai,
                 trang_thai_ngay: trangThaiNgay,
+                leave_id: leaveByDoctor.get(String(doctor._id))?._id ?? null,
+                ly_do_nghi: leaveByDoctor.get(String(doctor._id))?.ly_do ?? null,
                 ca_sang,
                 ca_chieu,
             };
