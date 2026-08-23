@@ -254,40 +254,44 @@ export async function bulkApprove(req, res) {
     const thatBai = []
 
     for (const id of hopLe) {
-      // Nạp LẠI từng lịch ngay trước khi ghi — dữ liệu có thể đã đổi từ lúc lễ tân mở bảng.
-      const appointment = await LichHen.findById(id)
-      if (!appointment) {
-        thatBai.push({ id, ten_khach: null, ly_do: 'Khong tim thay lich hen' })
-        continue
-      }
-      const tenKhach = appointment.ten_khach ?? null
-      const dx = appointment.de_xuat_doi
-
-      if (dx?.trang_thai !== 'cho_admin_duyet') {
-        thatBai.push({ id, ten_khach: tenKhach, ly_do: 'De xuat khong con o trang thai cho duyet' })
-        continue
-      }
-      const phuongAn = dx.phuong_an?.[0]
-      if (!phuongAn) {
-        thatBai.push({ id, ten_khach: tenKhach, ly_do: 'Khong co phuong an nao — phai lien he khach' })
-        continue
-      }
-
-      // Kiểm LẠI chỗ giữ sẵn trên dữ liệu mới nhất (§2.1d của spec): một bác sĩ khác có thể
-      // vừa báo nghỉ và khoá đúng slot này.
-      const schedule = await LichLamViec.findById(phuongAn.schedule_id).lean()
-      const slot = schedule?.slots?.find((s) => String(s._id) === String(phuongAn.slot_id))
-      const conDung = slot && (phuongAn.da_giu_cho
-        ? slot.status === 'locked' && !slot.bi_khoa_boi_nghi_phep
-        : slotConTrong(slot))
-
-      if (!conDung) {
-        await sinhLaiDeXuatChoLichMatCho([phuongAn.slot_id])
-        thatBai.push({ id, ten_khach: tenKhach, ly_do: 'Cho giu san da mat — da sinh phuong an moi, kiem lai roi duyet' })
-        continue
-      }
-
+      // Bọc cả vòng lặp trong try/catch riêng: bất kỳ lỗi nào ở bất kỳ bước nào (kể cả các
+      // findById/sinhLaiDeXuatChoLichMatCho phía trên) cũng chỉ làm hỏng MỘT lịch, không được
+      // thoát khỏi vòng lặp và làm mất kết quả của những lịch đã xử lý xong trước đó.
+      let tenKhach = null
       try {
+        // Nạp LẠI từng lịch ngay trước khi ghi — dữ liệu có thể đã đổi từ lúc lễ tân mở bảng.
+        const appointment = await LichHen.findById(id)
+        if (!appointment) {
+          thatBai.push({ id, ten_khach: null, ly_do: 'Khong tim thay lich hen' })
+          continue
+        }
+        tenKhach = appointment.ten_khach ?? null
+        const dx = appointment.de_xuat_doi
+
+        if (dx?.trang_thai !== 'cho_admin_duyet') {
+          thatBai.push({ id, ten_khach: tenKhach, ly_do: 'De xuat khong con o trang thai cho duyet' })
+          continue
+        }
+        const phuongAn = dx.phuong_an?.[0]
+        if (!phuongAn) {
+          thatBai.push({ id, ten_khach: tenKhach, ly_do: 'Khong co phuong an nao — phai lien he khach' })
+          continue
+        }
+
+        // Kiểm LẠI chỗ giữ sẵn trên dữ liệu mới nhất (§2.1d của spec): một bác sĩ khác có thể
+        // vừa báo nghỉ và khoá đúng slot này.
+        const schedule = await LichLamViec.findById(phuongAn.schedule_id).lean()
+        const slot = schedule?.slots?.find((s) => String(s._id) === String(phuongAn.slot_id))
+        const conDung = slot && (phuongAn.da_giu_cho
+          ? slot.status === 'locked' && !slot.bi_khoa_boi_nghi_phep
+          : slotConTrong(slot))
+
+        if (!conDung) {
+          await sinhLaiDeXuatChoLichMatCho([phuongAn.slot_id])
+          thatBai.push({ id, ten_khach: tenKhach, ly_do: 'Cho giu san da mat — da sinh phuong an moi, kiem lai roi duyet' })
+          continue
+        }
+
         dx.trang_thai = 'cho_khach_chon'
         dx.nguoi_duyet_id = req.user.id
         dx.thoi_diem_duyet = new Date()
