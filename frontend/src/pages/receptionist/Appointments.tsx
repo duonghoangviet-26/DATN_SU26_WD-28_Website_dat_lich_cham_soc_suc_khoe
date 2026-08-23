@@ -152,11 +152,7 @@ export default function Appointments() {
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [selectedApts, setSelectedApts] = useState<string[]>([]);
   const [bulkCancelModalOpen, setBulkCancelModalOpen] = useState(false);
-  const [bulkRescheduleModalOpen, setBulkRescheduleModalOpen] = useState(false);
   const [bulkReason, setBulkReason] = useState('');
-  const [bulkStartDate, setBulkStartDate] = useState('');
-  const [bulkStartTime, setBulkStartTime] = useState('');
-  const [availableBulkSlots, setAvailableBulkSlots] = useState<string[]>([]);
 
   // States cho Modal Chi tiết
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -236,7 +232,9 @@ export default function Appointments() {
           setIsBulkMode(true);
           setSelectedApts(rows.map((row: { appointment_id: string }) => row.appointment_id));
           setBulkReason(`Điều phối ca quá tải (trễ ~${res.data.data?.do_tre_ca_phut ?? 0} phút)`);
-          setBulkRescheduleModalOpen(true);
+          // Dời lịch tự động theo lô đã gỡ 2026-08-23 — xem rule mục 5/11/15.
+          // Lịch được nạp sẵn vào chế độ chọn nhiều, lễ tân tự chọn Hủy hàng loạt hoặc
+          // dời từng lịch bằng nút "Dời lịch" đơn lẻ cho tới khi luồng de_xuat_doi thay thế.
         }
       } catch {
         setOverloadNotice('Không thể tải danh sách lịch cần điều phối của bác sĩ này.');
@@ -250,30 +248,6 @@ export default function Appointments() {
     loadOverloadAffected();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
-
-  useEffect(() => {
-    if (!bulkStartDate) {
-      setAvailableBulkSlots([]);
-      setBulkStartTime('');
-      return;
-    }
-    const fetchBulkSlots = async () => {
-      try {
-        const res = await axiosInstance.get(`/receptionist/booking/doctors/all/slots?date=${bulkStartDate}`);
-        if (res.data.success) {
-          const slots = res.data.data;
-          const times = [...new Set(slots.map((s: any) => s.gio_bat_dau))].sort() as string[];
-          setAvailableBulkSlots(times);
-          if (!times.includes(bulkStartTime)) {
-            setBulkStartTime('');
-          }
-        }
-      } catch {
-        setAvailableBulkSlots([]);
-      }
-    };
-    fetchBulkSlots();
-  }, [bulkStartDate, bulkStartTime]);
 
   useEffect(() => {
     fetchAppointments(1);
@@ -320,27 +294,6 @@ export default function Appointments() {
       fetchAppointments(currentPage);
     } catch (err: any) {
       alert(err.response?.data?.message || 'Lỗi khi hủy hàng loạt');
-    }
-  };
-
-  const handleBulkReschedule = async () => {
-    try {
-      const res = await axiosInstance.post('/receptionist/appointments/bulk-reschedule', {
-        ids: selectedApts,
-        startDate: bulkStartDate,
-        startTime: bulkStartTime,
-        reason: bulkReason
-      });
-      alert(res.data.message);
-      setBulkRescheduleModalOpen(false);
-      setSelectedApts([]);
-      setIsBulkMode(false);
-      setBulkStartDate('');
-      setBulkStartTime('');
-      setBulkReason('');
-      fetchAppointments(currentPage);
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Lỗi khi dời hàng loạt');
     }
   };
 
@@ -1228,7 +1181,6 @@ export default function Appointments() {
           <span className="font-semibold text-brand-700">Đã chọn {selectedApts.length} lịch hẹn</span>
           <div className="w-px h-6 bg-slate-200"></div>
           <button onClick={() => setBulkCancelModalOpen(true)} className="text-red-600 hover:text-red-700 font-medium text-sm">Hủy hàng loạt</button>
-          <button onClick={() => setBulkRescheduleModalOpen(true)} className="bg-brand-600 text-white px-4 py-1.5 rounded-full hover:bg-brand-700 font-medium text-sm">Dời lịch hàng loạt</button>
         </div>
       )}
 
@@ -1259,71 +1211,6 @@ export default function Appointments() {
             <div className="p-6 pt-0 flex justify-end gap-3">
               <button onClick={() => setBulkCancelModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Hủy bỏ</button>
               <button onClick={handleBulkCancel} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-sm font-medium">Xác nhận Hủy</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Reschedule Modal */}
-      {bulkRescheduleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-brand-50/50">
-              <h3 className="text-lg font-bold text-brand-700 flex items-center gap-2">
-                Dời {selectedApts.length} lịch hẹn (Auto-fill)
-              </h3>
-              <button onClick={() => setBulkRescheduleModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <Icon name="x" className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-slate-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                Hệ thống sẽ tự động tìm kiếm chỗ trống (kể cả của Bác sĩ khác cùng chuyên khoa) để dồn các bệnh nhân vào, bắt đầu từ <b>Ngày bắt đầu</b> bạn chọn bên dưới.
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Ngày bắt đầu tìm chỗ trống <span className="text-red-500">*</span></label>
-                <input
-                  type="date"
-                  className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                  value={bulkStartDate}
-                  onChange={(e) => setBulkStartDate(e.target.value)}
-                />
-              </div>
-              {availableBulkSlots.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Khung giờ bắt đầu <span className="text-red-500">*</span></label>
-                  <select
-                    className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                    value={bulkStartTime}
-                    onChange={(e) => setBulkStartTime(e.target.value)}
-                  >
-                    <option value="">-- Chọn giờ --</option>
-                    {availableBulkSlots.map(time => (
-                      <option key={time} value={time}>{time}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {bulkStartDate && availableBulkSlots.length === 0 && (
-                <p className="text-sm text-amber-600 flex items-center gap-1 bg-amber-50 p-3 rounded-lg border border-amber-100">
-                  <Icon name="alert-triangle" className="w-4 h-4" />
-                  Không có khung giờ nào trống trong ngày này.
-                </p>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Lý do dời (áp dụng cho tất cả)</label>
-                <textarea
-                  className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                  rows={2}
-                  value={bulkReason}
-                  onChange={(e) => setBulkReason(e.target.value)}
-                  placeholder="Vd: Bác sĩ nghỉ phép, chuyển sang ca tiếp theo"
-                ></textarea>
-              </div>
-            </div>
-            <div className="p-6 pt-0 flex justify-end gap-3">
-              <button onClick={() => setBulkRescheduleModalOpen(false)} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium">Hủy bỏ</button>
-              <button onClick={handleBulkReschedule} disabled={!bulkStartDate || (availableBulkSlots.length > 0 && !bulkStartTime)} className="px-4 py-2 bg-brand-600 text-white hover:bg-brand-700 rounded-lg text-sm font-medium disabled:opacity-50">Xác nhận Dời</button>
             </div>
           </div>
         </div>
