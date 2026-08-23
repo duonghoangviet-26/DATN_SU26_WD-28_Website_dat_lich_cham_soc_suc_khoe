@@ -114,7 +114,7 @@ export async function tongQuanTheoDonNghi(req, res) {
     const hangDoi = await HangDoi.find({
       doctor_id: leave.bac_si_id,
       trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong'] },
-    }).select('_id appointment_id trang_thai ma_so_thu_tu ten_benh_nhan').lean()
+    }).select('_id appointment_id trang_thai ma_so_thu_tu ten_benh_nhan specialty_id').lean()
 
     const lichTaiQuay = hangDoi.length
       ? await LichHen.find({ _id: { $in: hangDoi.map((h) => h.appointment_id).filter(Boolean) } })
@@ -134,8 +134,8 @@ export async function tongQuanTheoDonNghi(req, res) {
         so_dien_thoai_khach: lich?.so_dien_thoai_khach ?? null,
         gio_kham: lich?.gio_kham ?? null,
         ma_lich_hen: lich?.ma_lich_hen ?? null,
-        doctor_id: lich?.doctor_id ?? leave.bac_si_id,
-        specialty_id: lich?.specialty_id ?? null,
+        doctor_id: lich?.doctor_id ?? leave.bac_si_id?._id ?? leave.bac_si_id ?? null,
+        specialty_id: lich?.specialty_id ?? h.specialty_id ?? null,
       }
     })
 
