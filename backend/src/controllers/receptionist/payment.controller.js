@@ -9,6 +9,25 @@ import {
 } from '../../realtime/socket.js'
 
 const VNPAY_SESSION_MINUTES = Number(process.env.VNPAY_SESSION_MINUTES || process.env.PAYMENT_HOLD_MINUTES || 15)
+
+let clockDrift = 0;
+(async () => {
+  try {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), 2000)
+    const res = await fetch('https://google.com', { method: 'HEAD', signal: controller.signal })
+    clearTimeout(id)
+    const dateHeader = res.headers.get('date')
+    if (dateHeader) {
+      clockDrift = new Date(dateHeader).getTime() - Date.now()
+    }
+  } catch(e) {}
+})();
+
+function getRealTime() {
+  return new Date(Date.now() + clockDrift)
+}
+
 const DEFAULT_CLIENT_BASE_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
 
 function isValidObjectId(value) {
@@ -59,7 +78,7 @@ function toDateOrNull(value) {
 function isGatewaySessionExpired(gateway) {
   const expiresAt = toDateOrNull(gateway?.expires_at)
   if (!expiresAt) return false
-  return expiresAt.getTime() <= Date.now()
+  return expiresAt.getTime() <= getRealTime().getTime()
 }
 
 function getActorUserId(req) {
@@ -71,7 +90,7 @@ function getActorRole(req) {
   return req.user?.role === 'admin' ? 'admin' : 'receptionist'
 }
 
-function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt }) {
+function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, createdAt, expiresAt }) {
   const tmnCode = process.env.VNP_TMNCODE || 'WVZUTWIX'
   const secretKey = process.env.VNP_HASHSECRET || 'MPCYVPEZAQLIXFLZLGWBKOIXOPTHNWVA'
   const vnpUrl = process.env.VNP_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
@@ -88,7 +107,7 @@ function buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt
     vnp_Locale: 'vn',
     vnp_BankCode: 'NCB',
     vnp_IpAddr: '127.0.0.1',
-    vnp_CreateDate: formatVnpDate(new Date()),
+    vnp_CreateDate: formatVnpDate(createdAt),
     vnp_ExpireDate: formatVnpDate(expiresAt),
     vnp_ReturnUrl: `${DEFAULT_CLIENT_BASE_URL}/receptionist/booking?payment_id=${payment._id}&gateway=vnpay`,
   }
@@ -114,7 +133,7 @@ async function loadPaymentBundle(paymentId, session = null) {
   const payment = await paymentQuery
 
   if (!payment) {
-    return { error: { status: 404, message: 'Khong tim thay giao dich' } }
+    return { error: { status: 404, message: 'Không tìm thấy giao dịch' } }
   }
 
   const appointmentQuery = LichHen.findById(payment.appointment_id)
@@ -122,7 +141,7 @@ async function loadPaymentBundle(paymentId, session = null) {
   const appointment = await appointmentQuery
 
   if (!appointment) {
-    return { error: { status: 404, message: 'Khong tim thay lich hen lien quan' } }
+    return { error: { status: 404, message: 'Không tìm thấy lịch hẹn liên quan' } }
   }
 
   let invoice = null
@@ -164,15 +183,16 @@ function serializePaymentStatus({ payment, appointment, invoice }) {
       mock_status: gateway.mock_status ?? null,
       is_expired: isGatewaySessionExpired(gateway),
     },
+    server_time: getRealTime().toISOString(),
   }
 }
 
 async function finalizePendingPayment({ payment, appointment, actorUserId, actorRole, channel, reason, providerData, session }) {
   if (payment.status !== 'pending') {
-    throw Object.assign(new Error('Chi co the xac nhan giao dich dang cho thanh toan'), { statusCode: 409 })
+    throw Object.assign(new Error('Chỉ có thể xác nhận giao dịch đang chờ thanh toán'), { statusCode: 409 })
   }
   if (appointment.status !== 'pending') {
-    throw Object.assign(new Error(`Chi co the xac nhan thanh toan cho lich dang cho xu ly (hien tai: ${appointment.status})`), { statusCode: 409 })
+    throw Object.assign(new Error(`Chỉ có thể xác nhận thanh toán cho lịch đang chờ xử lý (hiện tại: ${appointment.status})`), { statusCode: 409 })
   }
 
   const oldStatus = appointment.status
@@ -228,12 +248,12 @@ async function finalizePendingPayment({ payment, appointment, actorUserId, actor
 export const getPaymentStatus = async (req, res) => {
   try {
     const { id } = req.params
-    if (!isValidObjectId(id)) return fail(res, 400, 'ID thanh toan khong hop le')
+    if (!isValidObjectId(id)) return fail(res, 400, 'ID thanh toán không hợp lệ')
 
     const bundle = await loadPaymentBundle(id)
     if (bundle.error) return fail(res, bundle.error.status, bundle.error.message)
 
-    return ok(res, serializePaymentStatus(bundle), 'Lay trang thai thanh toan thanh cong')
+    return ok(res, serializePaymentStatus(bundle), 'Lấy trạng thái thanh toán thành công')
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -242,15 +262,15 @@ export const getPaymentStatus = async (req, res) => {
 export const createMockVnpaySession = async (req, res) => {
   try {
     const { id } = req.params
-    if (!isValidObjectId(id)) return fail(res, 400, 'ID thanh toan khong hop le')
+    if (!isValidObjectId(id)) return fail(res, 400, 'ID thanh toán không hợp lệ')
 
     const bundle = await loadPaymentBundle(id)
     if (bundle.error) return fail(res, bundle.error.status, bundle.error.message)
 
     const { payment, appointment, invoice } = bundle
-    if (payment.status !== 'pending') return fail(res, 409, 'Giao dich nay khong con o trang thai cho thanh toan')
+    if (payment.status !== 'pending') return fail(res, 409, 'Giao dịch này không còn ở trạng thái chờ thanh toán')
     if (appointment.status !== 'pending') {
-      return fail(res, 409, `Chi tao QR thanh toan cho lich dang cho xu ly (hien tai: ${appointment.status})`)
+      return fail(res, 409, `Chỉ tạo QR thanh toán cho lịch đang chờ xử lý (hiện tại: ${appointment.status})`)
     }
 
     const gateway = getGatewayResponseObject(payment)
@@ -263,10 +283,10 @@ export const createMockVnpaySession = async (req, res) => {
       gateway.mock_status !== 'paid'
 
     if (!canReuse) {
-      const now = new Date()
+      const now = getRealTime()
       const expiresAt = new Date(now.getTime() + VNPAY_SESSION_MINUTES * 60 * 1000)
-      const vnpTxnRef = `VNPAY-${payment.ma_giao_dich}-${Date.now().toString().slice(-6)}`
-      const paymentUrl = buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, expiresAt })
+      const vnpTxnRef = `VNPAY-${payment.ma_giao_dich}-${now.getTime().toString().slice(-6)}`
+      const paymentUrl = buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, createdAt: now, expiresAt })
 
       payment.gateway_response = {
         ...gateway,
@@ -297,7 +317,7 @@ export const createMockVnpaySession = async (req, res) => {
       }
     }
 
-    return ok(res, serializePaymentStatus({ payment, appointment, invoice }), 'Tao session VNPAY mock thanh cong')
+    return ok(res, serializePaymentStatus({ payment, appointment, invoice }), 'Tạo session VNPAY mock thành công')
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -311,7 +331,7 @@ export const completeMockVnpayPayment = async (req, res) => {
     const { id } = req.params
     if (!isValidObjectId(id)) {
       await session.abortTransaction(); session.endSession()
-      return fail(res, 400, 'ID thanh toan khong hop le')
+      return fail(res, 400, 'ID thanh toán không hợp lệ')
     }
 
     const bundle = await loadPaymentBundle(id, session)
@@ -325,12 +345,12 @@ export const completeMockVnpayPayment = async (req, res) => {
 
     if (gateway.provider !== 'vnpay') {
       await session.abortTransaction(); session.endSession()
-      return fail(res, 409, 'Giao dich nay chua co session VNPAY mock')
+      return fail(res, 409, 'Giao dịch này chưa có session VNPAY mock')
     }
 
     if (isGatewaySessionExpired(gateway)) {
       await session.abortTransaction(); session.endSession()
-      return fail(res, 409, 'Ma QR VNPAY da het han, vui long tao lai ma moi')
+      return fail(res, 409, 'Mã QR VNPAY đã hết hạn, vui lòng tạo lại mã mới')
     }
 
     const previousAppointmentStatus = appointment.status
@@ -339,7 +359,7 @@ export const completeMockVnpayPayment = async (req, res) => {
       actorUserId: getActorUserId(req),
       actorRole: getActorRole(req),
       channel: 'receptionist_vnpay_mock_complete',
-      reason: 'Le tan mo phong thanh toan thanh cong qua VNPAY QR',
+      reason: 'Lễ tân mô phỏng thanh toán thành công qua VNPAY QR',
       providerData: {
         provider: 'vnpay', mode: 'mock',
         bank_code: gateway.bank_code || 'VNBANK',
@@ -366,7 +386,7 @@ export const completeMockVnpayPayment = async (req, res) => {
       bundle.invoice = await HoaDon.findById(invoice._id)
     }
 
-    return ok(res, serializePaymentStatus(bundle), 'Mo phong thanh toan VNPAY thanh cong')
+    return ok(res, serializePaymentStatus(bundle), 'Mô phỏng thanh toán VNPAY thành công')
   } catch (err) {
     await session.abortTransaction(); session.endSession()
     return fail(res, err.statusCode || 500, err.message)

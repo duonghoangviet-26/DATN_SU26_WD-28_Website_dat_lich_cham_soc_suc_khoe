@@ -4,6 +4,8 @@ import {
   receptionistActivityLogService,
 } from '@/services/receptionist-activity-log.service'
 import { EmptyBlock, PageShell, ReceptionistHeader, TableFrame } from '@/components/receptionist/ReceptionistUI'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
+import Icon from '@/components/admin/icons'
 
 const NHAN_NHOM: Record<string, string> = {
   tiep_nhan: 'Tiếp nhận',
@@ -21,6 +23,11 @@ const MAU_NHOM: Record<string, string> = {
 
 function gioPhut(value: string) {
   return new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+}
+
+function ngayThangPhut(value: string) {
+  const d = new Date(value)
+  return d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 }
 
 function homNayISO() {
@@ -125,46 +132,101 @@ export default function ActivityLog() {
   const [rows, setRows] = useState<ActivityLogRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [ngay, setNgay] = useState(homNayISO())
+  const [tuNgay, setTuNgay] = useState(homNayISO())
+  const [denNgay, setDenNgay] = useState(homNayISO())
+  const [tuKhoa, setTuKhoa] = useState('')
   const [nhom, setNhom] = useState('')
   const [nguoiId, setNguoiId] = useState('')
+  const [page, setPage] = useState(1)
+  const [limit] = useState(20)
+  const [total, setTotal] = useState(0)
+
+  // Danh sách gợi ý người dùng (có thể phải gọi API riêng hoặc gộp chung từ log trả về)
+  const [nguoiTrong, setNguoiTrong] = useState<Array<[string, string]>>([])
+
+  useEffect(() => {
+    // Reset về trang 1 khi các filter thay đổi
+    setPage(1)
+  }, [tuNgay, denNgay, tuKhoa, nhom, nguoiId])
 
   useEffect(() => {
     setLoading(true)
     setError('')
     receptionistActivityLogService
-      .list({ ngay, nhom: nhom || undefined, nguoi_id: nguoiId || undefined })
-      .then((result) => setRows(result.rows))
+      .list({
+        tu_ngay: tuNgay,
+        den_ngay: denNgay,
+        tu_khoa: tuKhoa || undefined,
+        nhom: nhom || undefined,
+        nguoi_id: nguoiId || undefined,
+        page,
+        limit,
+      })
+      .then((result) => {
+        setRows(result.rows)
+        setTotal(result.total || 0)
+        
+        // Cập nhật người thực hiện nếu lấy được người mới từ log
+        const map = new Map<string, string>(nguoiTrong)
+        let changed = false
+        result.rows.forEach((r) => {
+          if (r.nguoi_thuc_hien_id && !map.has(r.nguoi_thuc_hien_id)) {
+            map.set(r.nguoi_thuc_hien_id, r.nguoi_thuc_hien)
+            changed = true
+          }
+        })
+        if (changed) {
+          setNguoiTrong([...map.entries()])
+        }
+      })
       .catch((e) => setError(e?.response?.data?.message || 'Không tải được nhật ký'))
       .finally(() => setLoading(false))
-  }, [ngay, nhom, nguoiId])
+  }, [tuNgay, denNgay, tuKhoa, nhom, nguoiId, page, limit])
 
-  // Danh sách người trực suy từ chính dữ liệu — không cần API riêng.
-  const nguoiTrong = useMemo(() => {
-    const map = new Map<string, string>()
-    rows.forEach((r) => {
-      if (r.nguoi_thuc_hien_id) map.set(r.nguoi_thuc_hien_id, r.nguoi_thuc_hien)
-    })
-    return [...map.entries()]
-  }, [rows])
+  const totalPages = Math.ceil(total / limit)
 
   return (
     <PageShell>
       <ReceptionistHeader
         eyebrow="Vận hành · Bàn giao ca"
-        title="Nhật ký ca trực"
+        title="Nhật ký ca trực lễ tân"
         description="Ai đã thao tác với khách nào, lúc nào. Dùng khi bàn giao ca hoặc làm thay đồng nghiệp nghỉ."
       />
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <label className="grid gap-1 text-sm font-semibold text-slate-700">
-          Ngày
+          Từ ngày
           <input
             type="date"
-            value={ngay}
-            onChange={(e) => setNgay(e.target.value)}
+            value={tuNgay}
+            onChange={(e) => setTuNgay(e.target.value)}
             className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           />
+        </label>
+        <label className="grid gap-1 text-sm font-semibold text-slate-700">
+          Đến ngày
+          <input
+            type="date"
+            value={denNgay}
+            onChange={(e) => setDenNgay(e.target.value)}
+            className="min-h-10 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          />
+        </label>
+
+        <label className="grid gap-1 text-sm font-semibold text-slate-700 w-full md:w-auto flex-1 max-w-sm">
+          Tìm kiếm
+          <div className="relative">
+            <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
+              <Icon name="search" className="h-4 w-4" />
+            </span>
+            <input
+              type="text"
+              placeholder="Tên khách, tên nhân viên..."
+              value={tuKhoa}
+              onChange={(e) => setTuKhoa(e.target.value)}
+              className="min-h-10 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
         </label>
 
         <label className="grid gap-1 text-sm font-semibold text-slate-700">
@@ -195,7 +257,6 @@ export default function ActivityLog() {
           </select>
         </label>
 
-        <span className="ml-auto text-sm text-slate-500">{rows.length} thao tác</span>
       </div>
 
       {error && (
@@ -206,7 +267,7 @@ export default function ActivityLog() {
         <table className="min-w-[900px] w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Giờ</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Thời gian</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Người thực hiện</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Hành động</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Khách hàng</th>
@@ -218,11 +279,11 @@ export default function ActivityLog() {
               <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-400">Đang tải...</td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6"><EmptyBlock>Chưa có thao tác nào trong ngày này.</EmptyBlock></td></tr>
+              <tr><td colSpan={5} className="px-4 py-6"><EmptyBlock>Không tìm thấy thao tác nào phù hợp.</EmptyBlock></td></tr>
             )}
             {!loading && rows.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50">
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-500">{gioPhut(row.thoi_diem)}</td>
+              <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-[11px] text-slate-500">{ngayThangPhut(row.thoi_diem)}</td>
                 <td className="px-4 py-3 font-medium text-slate-800">{row.nguoi_thuc_hien}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${row.nhom ? MAU_NHOM[row.nhom] : 'bg-slate-100 text-slate-600'}`}>
@@ -237,6 +298,15 @@ export default function ActivityLog() {
             ))}
           </tbody>
         </table>
+        <TablePaginationFooter
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={total}
+          currentItemCount={rows.length}
+          itemLabel="thao tác"
+          onPageChange={setPage}
+          pageSize={limit}
+        />
       </TableFrame>
     </PageShell>
   )

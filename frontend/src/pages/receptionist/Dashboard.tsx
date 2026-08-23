@@ -33,6 +33,20 @@ interface PendingCheckin {
   tre_qua_grace?: boolean;
 }
 
+function notificationTone(notification: VirtualNotification) {
+  const priority = notification.du_lieu_dinh_kem?.priority
+  if (priority === 'urgent') return 'border-red-200 bg-red-50 text-red-900'
+  if (priority === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900'
+  return 'border-slate-100 bg-slate-50 text-slate-800'
+}
+
+function notificationLabel(notification: VirtualNotification) {
+  const priority = notification.du_lieu_dinh_kem?.priority
+  if (priority === 'urgent') return 'Khẩn'
+  if (priority === 'warning') return 'Cần xử lý'
+  return 'Thông tin'
+}
+
 interface DoctorOperationalStatus {
   doctor_id: string;
   ten_bac_si: string;
@@ -145,7 +159,7 @@ export default function Dashboard() {
       const res = await axiosInstance.get('/receptionist/appointments/doctor-statuses');
       if (res.data.success) setDoctorStatuses(res.data.data ?? []);
     } catch (err) {
-      console.error('Loi khi lay trang thai bac si:', err);
+      console.error('Lỗi khi lấy trạng thái bác sĩ:', err);
     }
   };
 
@@ -163,7 +177,7 @@ export default function Dashboard() {
       const tasks = await receptionistContactTasksService.list({ trang_thai: 'chua_goi' });
       setChuaGoiCount(tasks.length);
     } catch (err) {
-      console.error('Loi khi lay so viec can goi:', err);
+      console.error('Lỗi khi lấy số việc cần gọi:', err);
     }
   };
 
@@ -428,8 +442,11 @@ export default function Dashboard() {
               <EmptyBlock>Không có thông báo mới.</EmptyBlock>
             ) : (
               notifications.map(notif => (
-                <div key={notif.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <p className="line-clamp-2 text-sm font-semibold text-slate-800">{notif.tieu_de}</p>
+                <div key={notif.id} className={`rounded-lg border p-3 ${notificationTone(notif)}`}>
+                  <div className="mb-1 flex items-start justify-between gap-2">
+                    <p className="line-clamp-2 text-sm font-semibold">{notif.tieu_de}</p>
+                    <span className="shrink-0 rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-bold">{notificationLabel(notif)}</span>
+                  </div>
                   <p className="text-xs text-slate-500 mt-1">{notif.noi_dung}</p>
                   <p className="text-[10px] text-slate-400 mt-2">{format(new Date(notif.ngay_tao), 'HH:mm dd/MM')}</p>
                 </div>

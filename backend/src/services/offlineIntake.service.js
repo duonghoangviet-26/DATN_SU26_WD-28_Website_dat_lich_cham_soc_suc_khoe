@@ -314,8 +314,8 @@ export async function tiepNhanHoSoVaoHangDoi({
   if (!mongoose.Types.ObjectId.isValid(hoSoBenhNhanId)) throw loi(400, 'Mã hồ sơ bệnh nhân không hợp lệ')
 
   const profile = await HoSoBenhNhan.findOne({ _id: hoSoBenhNhanId, trang_thai: 'active' }).lean()
-  if (!profile) throw loi(404, 'Ho so benh nhan khong hop le')
-  if (!profile.so_dien_thoai) throw loi(400, 'Ho so benh nhan chua co so dien thoai')
+  if (!profile) throw loi(404, 'Hồ sơ bệnh nhân không hợp lệ')
+  if (!profile.so_dien_thoai) throw loi(400, 'Hồ sơ bệnh nhân chưa có số điện thoại')
   const { start: todayStart, end: tomorrowStart } = khoangNgay(now)
   const activeVisit = await HangDoi.findOne({
     ho_so_benh_nhan_id: profile?._id,
@@ -323,7 +323,7 @@ export async function tiepNhanHoSoVaoHangDoi({
     trang_thai: { $in: TRANG_THAI_GIU_CHO },
   }).select('_id trang_thai gio_hen_goc').lean()
   if (activeVisit) {
-    throw loi(409, 'Ho so nay da co mot luot kham dang duoc tiep nhan trong ngay hom nay', { entry: activeVisit })
+    throw loi(409, 'Hồ sơ này đã có một lượt khám đang được tiếp nhận trong ngày hôm nay', { entry: activeVisit })
   }
   const availability = await layKhaNangTiepNhanTaiQuay({ specialtyId: null, now })
   if (availability.bi_chan_qua_tai) {
@@ -348,7 +348,7 @@ export async function tiepNhanHoSoVaoHangDoi({
         { $set: { ngay_cap_nhat: now } },
         { new: false, session },
       ).select('_id').lean()
-      if (!profileLock) throw loi(409, 'Ho so benh nhan vua thay doi, vui long tai lai du lieu')
+      if (!profileLock) throw loi(409, 'Hồ sơ bệnh nhân vừa thay đổi, vui lòng tải lại dữ liệu')
 
       const schedule = await LichLamViec.findOne({
         _id: requested.schedule_id,
@@ -367,7 +367,7 @@ export async function tiepNhanHoSoVaoHangDoi({
         trang_thai_duyet: 'approved',
         la_hien: true,
       }).session(session).select('_id').lean()
-      if (!doctor) throw loi(409, 'Bac si vua khong con du dieu kien tiep nhan, vui long kiem tra lai')
+      if (!doctor) throw loi(409, 'Bác sĩ vừa không còn đủ điều kiện tiếp nhận, vui lòng kiểm tra lại')
 
       const activeInTransaction = await HangDoi.findOne({
         ho_so_benh_nhan_id: profile._id,
@@ -375,7 +375,7 @@ export async function tiepNhanHoSoVaoHangDoi({
         trang_thai: { $in: TRANG_THAI_GIU_CHO },
       }).session(session).select('_id').lean()
       if (activeInTransaction) {
-        throw loi(409, 'Ho so nay vua duoc tiep nhan o mot luot khac, vui long tai lai hang doi')
+        throw loi(409, 'Hồ sơ này vừa được tiếp nhận ở một lượt khác, vui lòng tải lại hàng đợi')
       }
       if (!slot
         || !locSlotBanTaiQuay(schedule, now).some((candidate) => String(candidate._id) === String(slot._id))
@@ -389,7 +389,7 @@ export async function tiepNhanHoSoVaoHangDoi({
 
       const overload = await kiemTraQuaTai(schedule.doctor_id, now, session)
       if (overload.ngungBanWalkIn) {
-        throw loi(409, 'Ca vua vuot nguong tre cho phep, vui long tai lai minh chung va chon bac si khac', { overload })
+        throw loi(409, 'Ca vừa vượt ngưỡng trễ cho phép, vui lòng tải lại minh chứng và chọn bác sĩ khác', { overload })
       }
 
       const claimed = await LichLamViec.findOneAndUpdate(

@@ -1,3 +1,13 @@
+// Nhãn thật của kết cục ca khám — phòng khám nhỏ 1 chuyên khoa, luồng khám mới chỉ còn
+// "điều trị thường" (xem StepChanDoan.tsx); các giá trị chuyển viện/chuyên khoa/cấp cứu chỉ
+// còn có thể tồn tại ở hồ sơ cũ, hiển thị đúng nhãn lịch sử thay vì gộp chung một nhãn.
+export const NHAN_KET_CUC_THAT: Record<string, string> = {
+  dieu_tri_thuong: 'Điều trị thường',
+  chuyen_chuyen_khoa: 'Chuyển chuyên khoa (dữ liệu cũ)',
+  chuyen_vien: 'Chuyển viện (dữ liệu cũ)',
+  cap_cuu_ngoai_vien: 'Cấp cứu ngoại viện (dữ liệu cũ)',
+}
+
 // Định dạng tiền tệ VND: 150000 -> "150.000 ₫"
 export function formatPrice(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'

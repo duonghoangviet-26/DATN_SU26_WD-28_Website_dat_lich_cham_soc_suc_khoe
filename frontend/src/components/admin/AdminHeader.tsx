@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import Icon from './icons'
 import { notificationService } from '@/services/notification.service'
+import { adminSearchService, type SearchResult } from '@/services/admin-search.service'
 import { subscribeAdminRealtime } from '@/services/realtime.service'
 import { formatDateTime } from '@/utils/format'
 
@@ -18,15 +19,48 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
   const [showNotiDropdown, setShowNotiDropdown] = useState(false)
   const notiRef = useRef<HTMLDivElement>(null)
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false)
+  const searchRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (notiRef.current && !notiRef.current.contains(event.target as Node)) {
         setShowNotiDropdown(false)
       }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchDropdown(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Search effect
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const results = await adminSearchService.globalSearch(searchQuery)
+        setSearchResults(results)
+      } catch (err) {
+        console.error('Lỗi tìm kiếm:', err)
+      } finally {
+        setIsSearching(false)
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   const loadNotifications = () => {
     notificationService.getReceived(1, 5).then(({ data }) => {
@@ -77,15 +111,60 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
 
       {/* Center: search bar */}
       <div className="hidden flex-1 sm:block" style={{ maxWidth: 400 }}>
-        <div className="relative">
+        <div className="relative" ref={searchRef}>
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-            <Icon name="search" className="h-4 w-4" />
+            {isSearching ? (
+              <Icon name="refresh-cw" className="h-4 w-4 animate-spin" />
+            ) : (
+              <Icon name="search" className="h-4 w-4" />
+            )}
           </span>
           <input
             type="text"
             placeholder="Tìm kiếm..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              setShowSearchDropdown(true)
+            }}
+            onFocus={() => {
+              if (searchQuery) setShowSearchDropdown(true)
+            }}
             className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm text-slate-700 placeholder-slate-400 outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100"
           />
+
+          {/* Search Dropdown */}
+          {showSearchDropdown && searchQuery.trim() !== '' && (
+            <div className="absolute top-full left-0 mt-2 w-full max-h-96 overflow-y-auto rounded-xl bg-white shadow-xl border border-slate-100 z-50">
+              {searchResults.length === 0 && !isSearching ? (
+                <div className="p-4 text-center text-sm text-slate-500">
+                  Không tìm thấy kết quả phù hợp
+                </div>
+              ) : (
+                <div className="py-2">
+                  {searchResults.map((res) => (
+                    <div
+                      key={res._id}
+                      className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex items-center justify-between"
+                      onClick={() => {
+                        setShowSearchDropdown(false)
+                        setSearchQuery('')
+                        navigate(res.link)
+                      }}
+                    >
+                      <div>
+                        <div className="text-sm font-semibold text-slate-800">{res.title}</div>
+                        <div className="text-xs text-slate-500">{res.subtitle}</div>
+                      </div>
+                      <span className="text-[10px] uppercase font-bold tracking-wider bg-slate-100 text-slate-600 px-2 py-1 rounded">
+                        {res.tag}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -125,7 +204,11 @@ export default function AdminHeader({ onToggleSidebar }: Props) {
                         className="p-3 hover:bg-slate-50 transition-colors cursor-pointer"
                         onClick={() => {
                           setShowNotiDropdown(false)
-                          navigate('/admin/notifications', { state: { openNotification: n } })
+                          if (n.related_type === 'doctor_leave_request') {
+                            navigate('/admin/doctor-leaves')
+                          } else {
+                            navigate('/admin/notifications', { state: { openNotification: n } })
+                          }
                         }}
                       >
                         <p className="text-sm font-semibold text-slate-800 line-clamp-2">{n.tieu_de}</p>

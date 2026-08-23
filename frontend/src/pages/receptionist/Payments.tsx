@@ -16,6 +16,8 @@ import {
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
 import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI'
+import InvoiceReceiptTemplate from '@/components/receptionist/InvoiceReceiptTemplate'
+import { printInvoice } from '@/utils/printInvoice'
 
 type PaymentView = 'pending' | 'paid'
 type BillingScope = 'today' | 'all'
@@ -52,6 +54,15 @@ function paymentTypeLabel(type: BillingCase['payments'][number]['loai_thanh_toan
 function formatCaseDate(value?: string | null) {
   if (!value) return 'Chưa rõ ngày'
   return new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function isOverdueCase(caseItem: BillingCase): boolean {
+  if (!caseItem.ngay_kham) return false
+  const examDay = new Date(caseItem.ngay_kham)
+  examDay.setHours(0, 0, 0, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return examDay.getTime() < today.getTime()
 }
 
 function formatDateTime(value?: string | null) {
@@ -126,7 +137,10 @@ function SectionTitle({
 
 export default function Payments() {
   const [view, setView] = useState<PaymentView>('pending')
-  const [scope, setScope] = useState<BillingScope>('today')
+  // Mặc định 'all': lọc theo hôm nay từng khiến ca chưa được lễ tân đối chiếu (đặc biệt case
+  // đã thanh toán online, "còn phải thu" = 0đ) biến mất khỏi danh sách "Chờ thu" khi qua ngày,
+  // dẫn tới bị bỏ quên vô thời hạn dù hóa đơn thật sự chưa được xác nhận thu ngân.
+  const [scope, setScope] = useState<BillingScope>('all')
   const [cases, setCases] = useState<BillingCase[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selected, setSelected] = useState<BillingCase | null>(null)
@@ -227,7 +241,9 @@ export default function Payments() {
     try {
       const fresh = await receptionistPatientIntakeService.markBillingReceiptPrinted(selected.id, selected.source)
       setSelected(fresh)
-      window.print()
+      // Doi 1 tick de #invoice-print nhan du lieu `fresh` truoc khi in — tranh in nham
+      // ban hoa don cu (hoac rong) do setSelected chua kip render lai.
+      requestAnimationFrame(() => printInvoice())
       setMessage('Đã ghi nhận in hoặc giao lại hóa đơn.')
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Chưa thể in hóa đơn')
@@ -264,6 +280,9 @@ export default function Payments() {
   const pendingCount = filteredCases.filter((item) => !item.billing_summary.da_xac_nhan_thu_ngan).length
   const transferCount = filteredCases.filter((item) => Boolean(item.pending_payment)).length
   const remainingTotal = filteredCases.reduce((sum, item) => sum + Number(item.billing_summary.con_phai_thu || 0), 0)
+  // Ca đã qua ngày khám nhưng vẫn chưa được lễ tân xác nhận thu ngân — dễ bị quên vì mọi nơi
+  // khác trong hệ thống (trang bệnh nhân, màn khám bác sĩ) đã hiển thị "đã thanh toán" từ trước.
+  const overdueCases = view === 'pending' ? filteredCases.filter(isOverdueCase) : []
   const actionLabel = !summary
     ? 'Chọn ca khám'
     : summary.con_phai_thu <= 0
@@ -274,15 +293,22 @@ export default function Payments() {
 
   return (
     <PageShell>
+        <InvoiceReceiptTemplate data={selected} />
+
         <ReceptionistHeader
           eyebrow="Viện phí & hóa đơn"
           title="Thanh toán tại quầy"
           description="Tra cứu hóa đơn, đối chiếu khoản thu và xác nhận thanh toán."
           metrics={
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricTile
                 label={scope === 'today' ? `Ca đang xem · ${todayLabel}` : 'Ca đang xem'}
                 value={`${pendingCount} ca`}
+              />
+              <MetricTile
+                label="Quá hạn xác nhận"
+                value={`${overdueCases.length} ca`}
+                tone={overdueCases.length > 0 ? 'border-rose-200 bg-rose-50/80' : 'border-slate-200 bg-white'}
               />
               <MetricTile
                 label="Chờ chuyển khoản"
@@ -409,6 +435,11 @@ export default function Payments() {
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(caseItem, view)}`}>
                             {casePaymentLabel(caseItem, view)}
                           </span>
+                          {view === 'pending' && isOverdueCase(caseItem) && (
+                            <span className="ml-2 inline-flex rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800">
+                              Quá hạn xác nhận
+                            </span>
+                          )}
                           <p className="mt-2 text-xs text-slate-500">{sourceLabel(caseItem.source)}</p>
                         </div>
 

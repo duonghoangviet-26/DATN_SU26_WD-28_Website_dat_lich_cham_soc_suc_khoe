@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { receptionistTimelineService, TimelineRow } from '@/services/receptionist-timeline.service'
+import { appointmentStatusLabel, paymentLabel } from '@/utils/receptionistLabels'
 
 const FIELD_LABELS: Record<string, string> = {
   ho_ten: 'Họ tên',
   so_dien_thoai: 'Số điện thoại',
   ngay_sinh: 'Ngày sinh',
+  ngay_kham: 'Ngày khám',
   gioi_tinh: 'Giới tính',
   nhom_mau: 'Nhóm máu',
   di_ung: 'Dị ứng',
@@ -13,7 +15,7 @@ const FIELD_LABELS: Record<string, string> = {
   ghi_chu: 'Ghi chú',
   status: 'Trạng thái tài khoản',
   trang_thai: 'Trạng thái',
-  doctor_id: 'Bác sĩ',
+  payment_status: 'Thanh toán',
   gio_kham: 'Giờ khám',
   ly_do_doi: 'Lý do đổi',
   'primary_member.ngay_sinh': 'Ngày sinh',
@@ -25,12 +27,18 @@ const FIELD_LABELS: Record<string, string> = {
 
 function formatValue(field: string, value: unknown) {
   if (value === null || value === undefined || value === '') return 'Chưa cập nhật'
-  if (field.endsWith('ngay_sinh')) {
+  if (field.endsWith('ngay_sinh') || field === 'ngay_kham') {
     const date = new Date(String(value))
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('vi-VN')
   }
   if (field.endsWith('gioi_tinh')) {
     return ({ nam: 'Nam', nu: 'Nữ', khac: 'Khác' } as Record<string, string>)[String(value)] ?? String(value)
+  }
+  if (field === 'trang_thai' || field === 'status') {
+    return appointmentStatusLabel(String(value))
+  }
+  if (field === 'payment_status') {
+    return paymentLabel(String(value))
   }
   return String(value)
 }
@@ -57,7 +65,7 @@ function TimelineRowItem({ row }: { row: TimelineRow }) {
       {row.ly_do && <p className="mt-2 text-sm text-slate-600">Lý do: {row.ly_do}</p>}
       {row.thay_doi.length > 0 && (
         <div className="mt-3 space-y-1.5">
-          {row.thay_doi.map((item) => (
+          {row.thay_doi.filter((item) => item.truong !== 'doctor_id').map((item) => (
             <div key={item.truong} className="flex flex-wrap items-center gap-2 text-xs text-slate-700">
               <span className="font-semibold">{FIELD_LABELS[item.truong] || item.truong}:</span>
               <span className="rounded bg-slate-100 px-2 py-0.5 line-through">{formatValue(item.truong, item.cu)}</span>

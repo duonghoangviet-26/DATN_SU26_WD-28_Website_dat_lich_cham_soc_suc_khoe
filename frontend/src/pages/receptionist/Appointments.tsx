@@ -10,6 +10,7 @@ import CheckInVerifyModal from '../../components/receptionist/CheckInVerifyModal
 import TimelinePanel from '../../components/receptionist/TimelinePanel';
 import { TimelineRow } from '../../services/receptionist-timeline.service';
 import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI';
+import { printTicket } from '@/utils/printTicket';
 
 interface Appointment {
   _id: string;
@@ -228,17 +229,17 @@ export default function Appointments() {
         if (!res.data.success) return;
         const rows = res.data.data?.lich_hen ?? [];
         if (rows.length === 0) {
-          setOverloadNotice('Bac si nay hien khong co lich chua check-in nao can dieu phoi.');
+          setOverloadNotice('Bác sĩ này hiện không có lịch chưa check-in nào cần điều phối.');
         } else {
           setActiveTab('today');
           setFilterDoctorId(doctorId);
           setIsBulkMode(true);
           setSelectedApts(rows.map((row: { appointment_id: string }) => row.appointment_id));
-          setBulkReason(`Dieu phoi ca qua tai (tre ~${res.data.data?.do_tre_ca_phut ?? 0} phut)`);
+          setBulkReason(`Điều phối ca quá tải (trễ ~${res.data.data?.do_tre_ca_phut ?? 0} phút)`);
           setBulkRescheduleModalOpen(true);
         }
       } catch {
-        setOverloadNotice('Khong the tai danh sach lich can dieu phoi cua bac si nay.');
+        setOverloadNotice('Không thể tải danh sách lịch cần điều phối của bác sĩ này.');
       } finally {
         setSearchParams((params) => {
           params.delete('overload_doctor');
@@ -358,6 +359,7 @@ export default function Appointments() {
   const handleCheckedIn = ({ hang_doi, canh_bao, ten_benh_nhan }: { hang_doi: { phong_kham?: string | null; ma_so_thu_tu?: string | null }; canh_bao: string[]; ten_benh_nhan: string }) => {
     if (checkInApt) {
       setPrintData({
+        ticketType: 'kham',
         patientName: ten_benh_nhan,
         doctorName: checkInApt.doctor_id?.user_id?.ho_ten || 'Chưa gán',
         roomNumber: hang_doi.phong_kham || 'Chưa gán',
@@ -376,7 +378,7 @@ export default function Appointments() {
   // window.print() la ham dong bo chan UI — phai goi SAU khi QueueTicketTemplate da render
   // xong voi printData moi, neu khong se in ra phieu trong (canh bao trong tai lieu E-7).
   useEffect(() => {
-    if (printData) window.print();
+    if (printData) printTicket();
   }, [printData]);
 
   const handleCancel = (id: string) => {
@@ -477,7 +479,7 @@ export default function Appointments() {
   const handleLateArrival = (apt: Appointment) => {
     setLateAppointment(apt);
     setLatePolicy('nearest_available');
-    setLateReason('Khach den muon, le tan dieu phoi lai slot.');
+    setLateReason('Khách đến muộn, lễ tân điều phối lại slot.');
     setLateModalOpen(true);
   };
 
@@ -494,7 +496,7 @@ export default function Appointments() {
       if (res.data?.message) alert(res.data.message);
       fetchAppointments();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Loi khi xu ly khach den muon');
+      alert(err.response?.data?.message || 'Lỗi khi xử lý khách đến muộn');
     }
   };
 
@@ -740,7 +742,7 @@ export default function Appointments() {
                               )}
                               {canHandleLateArrival && (
                                 <button
-                                  title="Khach den muon"
+                                  title="Khách đến muộn"
                                   onClick={() => handleLateArrival(apt)}
                                   className="p-1.5 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-md transition-colors"
                                 >
@@ -851,31 +853,31 @@ export default function Appointments() {
         </div>
       )}
 
-      {/* Modal Khach Den Muon */}
+      {/* Modal Khách Đến Muộn */}
       {lateModalOpen && lateAppointment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-slate-800 mb-2">Xu ly khach den muon</h3>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Xử lý khách đến muộn</h3>
             <p className="text-sm text-slate-600 mb-4">
-              Lich {lateAppointment.ma_lich_hen || ''} luc <strong>{lateAppointment.gio_kham}</strong> da qua gio. Chon cach dieu phoi phu hop.
+              Lịch {lateAppointment.ma_lich_hen || ''} lúc <strong>{lateAppointment.gio_kham}</strong> đã quá giờ. Chọn cách điều phối phù hợp.
             </p>
 
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Cach dieu phoi</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Cách điều phối</label>
                 <select
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
                   value={latePolicy}
                   onChange={(e) => setLatePolicy(e.target.value as LateArrivalPolicy)}
                 >
-                  <option value="nearest_available">Slot trong gan nhat trong ngay</option>
-                  <option value="end_of_shift">Dua xuong cuoi ca hien tai</option>
-                  <option value="tomorrow">Doi sang ngay lam viec tiep theo</option>
+                  <option value="nearest_available">Slot trống gần nhất trong ngày</option>
+                  <option value="end_of_shift">Đưa xuống cuối ca hiện tại</option>
+                  <option value="tomorrow">Đổi sang ngày làm việc tiếp theo</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Ghi chu cho khach hang</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Ghi chú cho khách hàng</label>
                 <textarea
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none resize-none"
                   rows={3}
@@ -885,7 +887,7 @@ export default function Appointments() {
               </div>
 
               <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-xs text-orange-700">
-                He thong se tu tim slot con trong, ghi lich su dieu phoi va thong bao cho khach hang.
+                Hệ thống sẽ tự tìm slot còn trống, ghi lịch sử điều phối và thông báo cho khách hàng.
               </div>
             </div>
 
@@ -894,13 +896,13 @@ export default function Appointments() {
                 onClick={() => setLateModalOpen(false)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-sm font-medium transition-colors"
               >
-                Huy bo
+                Hủy bỏ
               </button>
               <button
                 onClick={confirmLateArrival}
                 className="px-4 py-2 bg-orange-600 text-white hover:bg-orange-700 rounded-lg text-sm font-medium transition-colors"
               >
-                Xac nhan dieu phoi
+                Xác nhận điều phối
               </button>
             </div>
           </div>
@@ -1336,7 +1338,7 @@ export default function Appointments() {
           <span className="text-xs text-slate-600">Phiếu số {printData.queueNumber}</span>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => printTicket()}
             className="rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
           >
             In lại phiếu

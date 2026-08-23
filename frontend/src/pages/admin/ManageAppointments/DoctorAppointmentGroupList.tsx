@@ -169,7 +169,7 @@ export default function DoctorAppointmentGroupList({
 
                 {/* Tab Content */}
                 <div className="overflow-x-auto p-4">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm whitespace-nowrap">
                     <thead className="border-b border-slate-100 text-left text-slate-500">
                       <tr>
                         <th className="px-4 py-3 font-medium">Bệnh nhân</th>

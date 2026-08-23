@@ -1,4 +1,5 @@
 import axiosInstance from './axiosInstance'
+import type { MucDoThongBaoLeTan } from './doctor-exam-session.service'
 import type {
   ApiResponse,
   DoctorAppointmentDetail,
@@ -157,8 +158,15 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
-  async cancelQueue(id: string): Promise<QueueActionResult> {
-    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/cancel`)
+  async cancelQueue(id: string, lyDo: string): Promise<QueueActionResult> {
+    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/cancel`, { ly_do: lyDo })
+    return res.data.data
+  },
+
+  // Báo lễ tân KHÔNG gắn bệnh nhân cụ thể — dùng ở "Hồ sơ chờ khám" (ngoài phòng khám), khác
+  // doctorExamSessionService.notifyReception (trong phòng khám, gắn theo queueId).
+  async notifyReceptionGeneral(payload: { noi_dung: string; muc_do: MucDoThongBaoLeTan }): Promise<{ sent: number }> {
+    const res = await axiosInstance.post<ApiResponse<{ sent: number }>>('/doctor/queue/notify-reception', payload)
     return res.data.data
   },
 

@@ -469,7 +469,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
                               )}
                               {changedFields.length > 0 && (
                                 <div className="mt-3 overflow-hidden rounded-lg border border-slate-100">
-                                  <table className="w-full text-xs">
+                                  <table className="w-full text-xs whitespace-nowrap">
                                     <thead className="bg-slate-50 text-slate-500">
                                       <tr>
                                         <th className="px-3 py-2 text-left font-semibold">Trường</th>
@@ -517,7 +517,7 @@ export default function DoctorDetailDrawer({ doctorId, onClose, onAction }: Prop
 
                     <div className="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden">
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-sm whitespace-nowrap">
                           <thead className="bg-slate-50/80 text-left text-slate-500 border-b border-slate-100">
                             <tr>
                               <th className="px-5 py-3 font-medium whitespace-nowrap">Bệnh nhân</th>

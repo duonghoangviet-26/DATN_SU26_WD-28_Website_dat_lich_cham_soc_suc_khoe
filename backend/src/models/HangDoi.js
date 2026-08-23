@@ -103,9 +103,6 @@ const queueSchema = new mongoose.Schema(
     ho_so_benh_nhan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'HoSoBenhNhan', default: null },
     ten_benh_nhan: { type: String, required: true, trim: true, maxlength: 255 },
     so_dien_thoai: { type: String, default: null, maxlength: 20 },
-    // D81 — sao chép từ HoSoBenhNhan.ma_tam khi lượt gắn hồ sơ tạm (không có so_dien_thoai).
-    // Cho phép pre('validate') dưới đây chấp nhận lượt offline thiếu SĐT khi có mã tạm thay thế.
-    ma_tam: { type: String, default: null, maxlength: 40 },
     ngay_sinh: { type: Date, default: null },
     tuoi: { type: Number, default: null, min: 0 },
     gioi_tinh: { type: String, enum: ['nam', 'nu', 'khac'], default: null },
@@ -118,13 +115,6 @@ const queueSchema = new mongoose.Schema(
     // Điều phối — KHÔNG lưu thu_tu (thứ tự đổi liên tục, tính động lúc query)
     specialty_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ChuyenKhoa', required: true },
     doctor_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
-    bac_si_uu_tien_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
-    ly_do_uu_tien: { type: String, default: null, maxlength: 500 },
-    muc_uu_tien_tiep_nhan: {
-      type: String,
-      enum: ['binh_thuong', 'uu_tien', 'cap_cuu', null],
-      default: 'binh_thuong',
-    },
     phong_kham: { type: String, default: null },
     schedule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichLamViec', default: null },
     slot_id: { type: mongoose.Schema.Types.ObjectId, default: null },
@@ -186,8 +176,8 @@ queueSchema.pre('validate', function () {
   if (this.nguon === 'online' && !this.appointment_id) {
     throw new Error('Hang doi online bat buoc co appointment_id')
   }
-  if (this.nguon === 'offline' && !this.so_dien_thoai && !this.ma_tam) {
-    throw new Error('Hang doi offline bat buoc co so_dien_thoai hoac ma_tam (ho so tam)')
+  if (this.nguon === 'offline' && !this.so_dien_thoai) {
+    throw new Error('Hang doi offline bat buoc co so_dien_thoai')
   }
   if (this.trang_thai === 'cho_dieu_phoi' && this.nguon !== 'offline') {
     throw new Error('Chi luot offline moi duoc o trang thai cho_dieu_phoi')
@@ -207,7 +197,6 @@ queueSchema.index({ doctor_id: 1, trang_thai: 1 })
 queueSchema.index({ specialty_id: 1, trang_thai: 1 })
 queueSchema.index({ nguon: 1, trang_thai: 1, thoi_diem_vao_hang_doi_trung_tam: 1 })
 queueSchema.index({ specialty_id: 1, nguon: 1, trang_thai: 1, checkin_time: 1 })
-queueSchema.index({ bac_si_uu_tien_id: 1, trang_thai: 1 })
 queueSchema.index({ appointment_id: 1 }, { unique: true, sparse: true })
 queueSchema.index(
   { ngay_checkin_key: 1, so_thu_tu_checkin: 1 },

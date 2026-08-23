@@ -16,8 +16,9 @@ const DEFAULT_SERVICE_IMAGES = [
 export function getServiceImage(service?: Partial<ServiceItem> | null, index = 0): string {
   if (!service) return DEFAULT_SERVICE_IMAGES[0]
 
-  if (service.hinh_anh && service.hinh_anh.trim().length > 0) {
-    return service.hinh_anh
+  const img = service.hinh_anh || service.image_url
+  if (img && img.trim().length > 0) {
+    return img.trim()
   }
 
   const nameLower = (service.ten || '').toLowerCase()

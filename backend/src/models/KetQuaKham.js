@@ -26,6 +26,15 @@ const lichSuSuaSchema = new mongoose.Schema(
   { _id: false }
 )
 
+const hinhAnhDichVuSchema = new mongoose.Schema(
+  {
+    url: { type: String, required: true, trim: true, maxlength: 1000 },
+    mo_ta: { type: String, default: null, trim: true, maxlength: 255 },
+    uploaded_at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+)
+
 // Dịch vụ cộng thêm bác sĩ chỉ định trong ca — gõ kiểu để tổng hợp HoaDon (thay Mixed).
 const dichVuPhatSinhSchema = new mongoose.Schema(
   {
@@ -35,6 +44,7 @@ const dichVuPhatSinhSchema = new mongoose.Schema(
     don_gia: { type: Number, required: true, min: 0 },
     thanh_tien: { type: Number, required: true, min: 0 },
     chi_dinh_boi_bac_si_id: { type: mongoose.Schema.Types.ObjectId, ref: 'BacSi', default: null },
+    hinh_anh: { type: [hinhAnhDichVuSchema], default: [] },
   },
   { _id: true }
 )

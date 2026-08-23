@@ -196,16 +196,16 @@ export function findLeaveByIdWithDoctor(id) {
 
 // Nói rõ người duyệt còn phải làm gì, thay vì chỉ báo "duyệt thành công".
 export function moTaKetQuaDuyet(soLichAnhHuong, deXuat) {
-  if (soLichAnhHuong === 0) return 'Duyet don nghi phep thanh cong'
+  if (soLichAnhHuong === 0) return 'Duyệt đơn nghỉ phép thành công'
 
-  const phan = [`Duyet don nghi phep thanh cong. ${soLichAnhHuong} lich hen bi anh huong.`]
+  const phan = [`Duyệt đơn nghỉ phép thành công. ${soLichAnhHuong} lịch hẹn bị ảnh hưởng.`]
   const choDuyet = deXuat.filter((d) => d.cho_admin_duyet).length
   const khongCo = deXuat.filter((d) => d.so_phuong_an === 0).length
 
-  if (choDuyet > 0) phan.push(`${choDuyet} lich DA THANH TOAN — da bao khach, dang cho Admin duyet phuong an cuoi.`)
-  if (khongCo > 0) phan.push(`${khongCo} lich KHONG tim duoc phuong an trong ngay — phai lien he khach.`)
+  if (choDuyet > 0) phan.push(`${choDuyet} lịch ĐÃ THANH TOÁN — đã báo khách, đang chờ Admin duyệt phương án cuối.`)
+  if (khongCo > 0) phan.push(`${khongCo} lịch KHÔNG tìm được phương án trong ngày — phải liên hệ khách.`)
   const daBaoKhach = deXuat.length - choDuyet - khongCo
-  if (daBaoKhach > 0) phan.push(`${daBaoKhach} lich da gui phuong an cho khach chon.`)
+  if (daBaoKhach > 0) phan.push(`${daBaoKhach} lịch đã gửi phương án cho khách chọn.`)
 
   return phan.join(' ')
 }

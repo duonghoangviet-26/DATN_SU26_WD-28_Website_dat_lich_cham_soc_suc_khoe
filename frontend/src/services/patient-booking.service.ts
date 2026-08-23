@@ -201,6 +201,7 @@ export interface PatientPaymentStatusResult {
   ngay_thanh_toan: string | null
   phuong_thuc: string
   gateway: PatientPaymentGatewaySnapshot
+  server_time?: string
 }
 
 export const patientBookingService = {

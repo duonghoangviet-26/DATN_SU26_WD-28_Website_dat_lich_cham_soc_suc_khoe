@@ -4,6 +4,8 @@ import type { CentralOfflineCapacity } from '@/services/receptionist-patient-int
 
 export interface OfflineQueueRow {
   id: string
+  nguon?: 'online' | 'offline'
+  appointment_id?: string | null
   ten_benh_nhan: string
   so_dien_thoai?: string | null
   ma_so_thu_tu?: string | null
@@ -46,6 +48,12 @@ export interface DispatchSuggestion {
 export const receptionistOfflineQueueService = {
   async list(params?: { specialty_id?: string; status?: string }): Promise<OfflineQueueRow[]> {
     const response = await axiosInstance.get<ApiResponse<OfflineQueueRow[]>>('/receptionist/offline-queue', { params })
+    return response.data.data ?? []
+  },
+
+  // "Danh sách đã khám" — tra cứu ca khám theo ngày bất kỳ (mặc định hôm nay nếu không truyền `date`).
+  async listSessions(params?: { specialty_id?: string; status?: string; doctor_id?: string; nguon?: string; search?: string; date?: string }): Promise<OfflineQueueRow[]> {
+    const response = await axiosInstance.get<ApiResponse<OfflineQueueRow[]>>('/receptionist/offline-queue/sessions-today', { params })
     return response.data.data ?? []
   },
 

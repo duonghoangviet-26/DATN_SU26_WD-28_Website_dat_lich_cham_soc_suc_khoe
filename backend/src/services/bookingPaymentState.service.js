@@ -160,21 +160,21 @@ export async function finalizePendingPayment({
   actorUserId,
   actorRole = 'user',
   channel = 'payment_confirm',
-  reason = 'Xac nhan thanh toan',
+  reason = 'Xác nhận thanh toán',
   providerData = {},
   session = null,
 }) {
   const payment = await loadPayment(paymentInput ?? paymentId, session)
   if (!payment) {
-    throw new Error('Khong tim thay giao dich')
+    throw new Error('Không tìm thấy giao dịch')
   }
   if (payment.status !== 'pending') {
-    throw Object.assign(new Error('Chi co the xac nhan giao dich dang cho thanh toan'), { statusCode: 409 })
+    throw Object.assign(new Error('Chỉ có thể xác nhận giao dịch đang chờ thanh toán'), { statusCode: 409 })
   }
 
   const appointment = await loadAppointment(appointmentInput ?? payment.appointment_id, session)
   if (!appointment) {
-    throw new Error('Khong tim thay lich hen lien quan')
+    throw new Error('Không tìm thấy lịch hẹn liên quan')
   }
 
   const oldStatus = appointment.status
@@ -228,15 +228,15 @@ export async function expirePendingBookingPayment({
   actorUserId = null,
   actorRole = 'system',
   channel = 'system_auto_expire',
-  reason = 'Qua han thanh toan',
+  reason = 'Quá hạn thanh toán',
   session = null,
 }) {
   const appointment = await loadAppointment(appointmentInput ?? appointmentId, session)
   if (!appointment) {
-    throw new Error('Khong tim thay lich hen')
+    throw new Error('Không tìm thấy lịch hẹn')
   }
   if (appointment.payment_status === 'paid') {
-    throw Object.assign(new Error('Khong the het han lich da thanh toan'), { statusCode: 409 })
+    throw Object.assign(new Error('Không thể hết hạn lịch đã thanh toán'), { statusCode: 409 })
   }
 
   const oldStatus = appointment.status
@@ -285,15 +285,15 @@ export async function cancelAppointmentWithPaymentSync({
   actorUserId = null,
   actorRole = 'user',
   channel = 'patient_cancel',
-  reason = 'Huy lich hen',
+  reason = 'Hủy lịch hẹn',
   session = null,
 }) {
   const appointment = await loadAppointment(appointmentInput ?? appointmentId, session)
   if (!appointment) {
-    throw new Error('Khong tim thay lich hen')
+    throw new Error('Không tìm thấy lịch hẹn')
   }
   if (['completed', 'cancelled'].includes(appointment.status)) {
-    throw Object.assign(new Error('Lich hen khong the huy o trang thai hien tai'), { statusCode: 409 })
+    throw Object.assign(new Error('Lịch hẹn không thể hủy ở trạng thái hiện tại'), { statusCode: 409 })
   }
 
   const oldStatus = appointment.status

@@ -161,17 +161,35 @@ async function boSungTenKhachTuNghiepVu(rows) {
 }
 
 /**
- * Nhật ký của một ngày.
+ * Nhật ký của một ngày hoặc một khoảng thời gian.
  *
  * @param {object}  p
- * @param {string?} p.ngay     - ISO date; thiếu thì lấy hôm nay
+ * @param {string?} p.ngay     - ISO date (Tương thích ngược)
+ * @param {string?} p.tu_ngay  - ISO date; từ ngày
+ * @param {string?} p.den_ngay - ISO date; đến ngày
+ * @param {string?} p.tu_khoa  - chuỗi tìm kiếm (tên khách, tên nhân viên)
  * @param {string?} p.nguoiId  - lọc theo người thực hiện
  * @param {string?} p.nhom     - 'tiep_nhan' | 'thanh_toan' | 'lich_hen' | 'lien_he'
+ * @param {number?} p.page     - trang hiện tại (mặc định 1)
+ * @param {number?} p.limit    - số lượng trên 1 trang (mặc định 50)
  */
-export async function layNhatKyCaTruc({ ngay = null, nguoiId = null, nhom = null } = {}) {
-  const tu = ngay ? startOfDayUtc(new Date(ngay)) : startOfDayUtc(new Date())
-  const den = new Date(tu)
-  den.setUTCDate(den.getUTCDate() + 1)
+export async function layNhatKyCaTruc({
+  ngay = null,
+  tu_ngay = null,
+  den_ngay = null,
+  tu_khoa = null,
+  nguoiId = null,
+  nhom = null,
+  page = 1,
+  limit = 50,
+} = {}) {
+  // Tương thích ngược: nếu truyền ngay thì gán tu_ngay và den_ngay bằng ngay
+  const startStr = tu_ngay || ngay || new Date().toISOString()
+  const endStr = den_ngay || ngay || new Date().toISOString()
+
+  const tu = startOfDayUtc(new Date(startStr))
+  const den = startOfDayUtc(new Date(endStr))
+  den.setUTCDate(den.getUTCDate() + 1) // Đến hết ngày (00:00 hôm sau)
 
   const filter = {
     hanh_dong: { $in: locMaTheoNhom(nhom) },
@@ -179,15 +197,53 @@ export async function layNhatKyCaTruc({ ngay = null, nguoiId = null, nhom = null
   }
   if (nguoiId) filter.nguoi_thuc_hien_id = nguoiId
 
+  // Lấy dữ liệu thô từ DB (Giới hạn 5000 để bảo vệ memory)
   const records = await NhatKyThaoTac.find(filter)
     .populate('nguoi_thuc_hien_id', 'ho_ten')
     .sort({ ngay_tao: -1, _id: -1 })
-    .limit(500)
+    .limit(5000)
     .lean()
 
-  const rows = records.map((record) => ({
+  const rawRows = records.map((record) => ({
     ...dinhDangBanGhi(record),
     _lookupKey: String(record._id),
   }))
-  return boSungTenKhachTuNghiepVu(rows)
+
+  // Resolve ten_khach từ các collection khác
+  let rows = await boSungTenKhachTuNghiepVu(rawRows)
+
+  // Lọc in-memory theo từ khóa (nếu có)
+  if (tu_khoa && tu_khoa.trim() !== '') {
+    const kw = tu_khoa.toLowerCase().trim()
+    rows = rows.filter((r) => {
+      const matchNguoiThucHien = r.nguoi_thuc_hien?.toLowerCase().includes(kw)
+      const matchTenKhach = r.ten_khach?.toLowerCase().includes(kw)
+      const matchNhanHanhDong = r.nhan_hanh_dong?.toLowerCase().includes(kw)
+      
+      // Tìm trong chi tiết (lý do, v.v.)
+      let matchChiTiet = false
+      if (r.chi_tiet) {
+        const strChiTiet = JSON.stringify(r.chi_tiet).toLowerCase()
+        if (strChiTiet.includes(kw)) {
+          matchChiTiet = true
+        }
+      }
+
+      return matchNguoiThucHien || matchTenKhach || matchNhanHanhDong || matchChiTiet
+    })
+  }
+
+  // Phân trang
+  const total = rows.length
+  const pageNum = Math.max(1, Number(page) || 1)
+  const limitNum = Math.max(1, Number(limit) || 50)
+  const startIndex = (pageNum - 1) * limitNum
+  const paginatedRows = rows.slice(startIndex, startIndex + limitNum)
+
+  return {
+    rows: paginatedRows,
+    total,
+    page: pageNum,
+    limit: limitNum,
+  }
 }

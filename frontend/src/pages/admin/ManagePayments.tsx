@@ -358,7 +358,7 @@ export default function ManagePayments() {
 
       <AdminMotionItem className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-medium">Giao dịch</th>

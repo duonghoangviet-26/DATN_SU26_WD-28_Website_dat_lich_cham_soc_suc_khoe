@@ -49,6 +49,42 @@ h3 {
   text-wrap: balance;
 }
 
+/* Tiep nhan tai quay — co lap phieu in khoi menu/sidebar/layout web (rule C6/D — in phieu sach).
+   Ky thuat chuan: an TOAN BO trang bang visibility, chi hien lai phan tu #queue-ticket-print. */
+@media print {
+  body.printing-ticket * {
+    visibility: hidden;
+  }
+  body.printing-ticket #queue-ticket-print,
+  body.printing-ticket #queue-ticket-print * {
+    visibility: visible;
+  }
+  body.printing-ticket #queue-ticket-print {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 999999;
+  }
+}
+
+/* Thu ngan (Payments.tsx) — cung ky thuat: an toan bo trang, chi hien lai #invoice-print.
+   Truoc day goi thang window.print() nen in ca sidebar/danh sach/nut bam dang hien sau modal. */
+@media print {
+  body.printing-invoice * {
+    visibility: hidden;
+  }
+  body.printing-invoice #invoice-print,
+  body.printing-invoice #invoice-print * {
+    visibility: visible;
+  }
+  body.printing-invoice #invoice-print {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 999999;
+  }
+}
+
 p,
 li {
   text-wrap: pretty;

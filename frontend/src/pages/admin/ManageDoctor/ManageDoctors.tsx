@@ -130,7 +130,7 @@ export default function ManageDoctors() {
       {/* Bảng bác sĩ */}
       <AdminMotionItem className="card overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-slate-50 text-left text-slate-500 border-b border-slate-100">
               <tr>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">Bác sĩ</th>

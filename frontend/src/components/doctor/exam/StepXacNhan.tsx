@@ -2,9 +2,9 @@ import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
-import type { BuocKham, KetCuc, KetQuaHoanTat, PhienKham } from '@/services/doctor-exam-session.service'
+import type { BuocKham, KetQuaHoanTat, PhienKham } from '@/services/doctor-exam-session.service'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
-import { formatPrice } from '@/utils/format'
+import { formatPrice, NHAN_KET_CUC_THAT } from '@/utils/format'
 
 // Props giữ đúng { phien, saving, onNext } như 4 bước còn lại để là component thay thế
 // trực tiếp cho ô placeholder trong ExamSessionPage. Thêm DUY NHẤT onEditStep — bắt buộc
@@ -20,13 +20,6 @@ interface Props {
 function extractApiMessage(err: unknown, fallback: string) {
   const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
   return message?.trim() || fallback
-}
-
-const NHAN_KET_CUC: Record<KetCuc, string> = {
-  dieu_tri_thuong: 'Điều trị thường',
-  chuyen_chuyen_khoa: 'Chuyển chuyên khoa',
-  chuyen_vien: 'Chuyển viện',
-  cap_cuu_ngoai_vien: 'Cấp cứu ngoài viện',
 }
 
 function KhoiTomTat({
@@ -163,7 +156,7 @@ export default function StepXacNhan({ phien, onEditStep }: Props) {
           <p>
             <span className="text-slate-400">Kết cục: </span>
             <span className={hoSo?.ket_cuc && hoSo.ket_cuc !== 'dieu_tri_thuong' ? 'font-semibold text-amber-700' : 'text-slate-800'}>
-              {NHAN_KET_CUC[hoSo?.ket_cuc ?? 'dieu_tri_thuong']}
+              {NHAN_KET_CUC_THAT[hoSo?.ket_cuc ?? 'dieu_tri_thuong'] ?? hoSo?.ket_cuc}
             </span>
           </p>
           {hoSo?.chuyen_vien_thong_tin && (
@@ -181,11 +174,22 @@ export default function StepXacNhan({ phien, onEditStep }: Props) {
       <KhoiTomTat tieuDe="3. Dịch vụ" onSua={() => onEditStep('dich_vu')}>
         {hoSo?.dich_vu_phat_sinh?.length ? (
           <>
-            <ul className="space-y-1 text-sm text-slate-800">
+            <ul className="space-y-3 text-sm text-slate-800">
               {hoSo.dich_vu_phat_sinh.map((dv) => (
-                <li key={dv.service_id} className="flex justify-between">
-                  <span>{dv.ten} × {dv.so_luong}</span>
-                  <span className="text-slate-500">{formatPrice(dv.thanh_tien)}</span>
+                <li key={dv.service_id}>
+                  <div className="flex justify-between gap-3">
+                    <span>{dv.ten} × {dv.so_luong}</span>
+                    <span className="text-slate-500">{formatPrice(dv.thanh_tien)}</span>
+                  </div>
+                  {dv.hinh_anh?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {dv.hinh_anh.map((image) => (
+                        <a key={image.url} href={image.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-slate-200">
+                          <img src={image.url} alt={`Ảnh kết quả ${dv.ten}`} className="h-16 w-16 object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>

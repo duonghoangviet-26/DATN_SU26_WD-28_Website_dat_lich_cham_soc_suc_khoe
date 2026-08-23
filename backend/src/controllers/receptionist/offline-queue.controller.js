@@ -40,18 +40,31 @@ export const list = async (req, res) => {
   }
 }
 
+export const listToday = async (req, res) => {
+  try {
+    const data = await layDanhSachHangDoiOffline({
+      specialtyId: req.query.specialty_id ?? null,
+      status: req.query.status ?? null,
+      doctorId: req.query.doctor_id ?? null,
+      search: req.query.search ?? null,
+      nguon: req.query.nguon && req.query.nguon !== 'all' ? req.query.nguon : null,
+      date: req.query.date ?? null,
+    })
+    return ok(res, data)
+  } catch (error) {
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
 export const intake = async (req, res) => {
   try {
     const result = await tiepNhanOfflineVaoHangDoiTrungTam({
       hoSoBenhNhanId: req.body.ho_so_benh_nhan_id,
       specialtyId: req.body.specialty_id,
-      bacSiUuTienId: req.body.bac_si_uu_tien_id ?? null,
-      lyDoUuTien: req.body.ly_do_uu_tien ?? null,
-      mucUuTienTiepNhan: req.body.muc_uu_tien_tiep_nhan ?? 'binh_thuong',
       xacNhanCanhBao: Boolean(req.body.xac_nhan_canh_bao),
       ...actor(req),
     })
-    return created(res, result, 'Da tiep nhan khach vang lai vao hang doi trung tam')
+    return created(res, result, 'Đã tiếp nhận khách vãng lai vào hàng đợi trung tâm')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }
@@ -77,7 +90,7 @@ export const assign = async (req, res) => {
       lyDo: req.body.ly_do ?? null,
       ...actor(req),
     })
-    return ok(res, result, 'Da dieu phoi khach vang lai cho bac si')
+    return ok(res, result, 'Đã điều phối khách vãng lai cho bác sĩ')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }
@@ -90,7 +103,7 @@ export const returnCentral = async (req, res) => {
       lyDo: req.body.ly_do,
       ...actor(req),
     })
-    return ok(res, result, 'Da tra khach ve hang doi trung tam')
+    return ok(res, result, 'Đã trả khách về hàng đợi trung tâm')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }
@@ -103,7 +116,7 @@ export const cancelCentral = async (req, res) => {
       lyDo: req.body.ly_do,
       ...actor(req),
     })
-    return ok(res, result, 'Da huy luot cho trung tam')
+    return ok(res, result, 'Đã hủy lượt chờ trung tâm')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }
@@ -111,6 +124,7 @@ export const cancelCentral = async (req, res) => {
 
 export default {
   list,
+  listToday,
   getCapacity,
   intake,
   dispatchSuggestions,

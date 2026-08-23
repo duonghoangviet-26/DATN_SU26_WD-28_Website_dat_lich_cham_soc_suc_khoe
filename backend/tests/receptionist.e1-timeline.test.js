@@ -96,7 +96,9 @@ test('E-1 tuLichSuLichHen only reports fields that actually changed', () => {
 
   assert.equal(row.nguon, 'lich_su_lich_hen')
   assert.deepEqual(row.thay_doi, [{ truong: 'trang_thai', cu: 'confirmed', moi: 'checked_in' }])
-  assert.equal(row.nhan, 'Chuyển trạng thái sang "checked_in"')
+  // Nhan nghiep vu cu the (khong con nhan chung chung lo raw enum "checked_in") — xem
+  // TRANG_THAI_LICH_HEN_CHUYEN_NHAN trong receptionistTimeline.service.js.
+  assert.equal(row.nhan, 'Bệnh nhân đã đến quầy và được check-in')
 })
 
 test('E-1 tuLichSuLichHen falls back to kenh_thay_doi when vai_tro is absent (legacy rows)', () => {

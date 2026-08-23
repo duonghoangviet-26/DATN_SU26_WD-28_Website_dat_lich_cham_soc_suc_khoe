@@ -175,6 +175,12 @@ export interface DoctorSelfProfile {
     ngay_tao: string;
     chuc_danh: string | null;
     chuc_vu: string | null;
+    chuc_vu_hien_tai: string | null;
+    ma_cchn: string | null;
+    gioi_thieu_ngan: string | null;
+    bang_cap_hoc_vi_tags: string[];
+    ngon_ngu: string[];
+    the_manh_chuyen_mon: string[];
     benh_ly_dieu_tri: string[];
     qua_trinh_cong_tac: {
         noi_cong_tac: string;
@@ -694,6 +700,56 @@ export interface AdminDashboardSummary {
     generated_at: string;
 }
 
+export interface RevenueDetails {
+    collectedThisMonth: number;
+    collectedLastMonth: number;
+    collectedTotal: number;
+    growth: number;
+    diff: number;
+    thisYearMonthly: Array<{ month: number; year: number; total: number }>;
+    yearly: Array<{ year: number; total: number }>;
+}
+
+export interface MonthlyInvoiced {
+  thang: number; // 1-12
+  tongHoaDon: number;
+}
+
+export interface YearlyInvoiced {
+  nam: number;
+  tongHoaDon: number;
+}
+
+export interface InvoicedDetails {
+  invoicedThisMonth: number;
+  invoicedLastMonth: number;
+  invoicedTotal: number;
+  growth: number | null; // null khi tháng trước = 0
+  diff: number;
+  outstandingTotal: number; // Tổng công nợ
+  thisYearMonthly: MonthlyInvoiced[];
+  yearly: YearlyInvoiced[];
+}
+
+export interface DebtItem {
+  _id: string;
+  so_hoa_don: string;
+  ho_ten: string;
+  so_dien_thoai: string;
+  email?: string;
+  tong_thanh_toan: number;
+  tong_da_thu: number;
+  no_hoa_don: number;
+  chi_tiet_thu_phi: {
+    loai: string;
+    ten: string;
+    so_tien: number;
+    so_luong: number;
+    thanh_tien: number;
+  }[];
+  created_at: string;
+}
+
 export interface ApiResponse<T = unknown> {
     success: boolean;
     message: string;
@@ -1051,7 +1107,7 @@ export interface ExamResultEditPayload {
     ghi_chu?: string | null;
     ngay_tai_kham?: string | null;
     thuoc?: Omit<PrescriptionDrug, 'id'>[];
-    dich_vu_phat_sinh?: Array<{ service_id: string; so_luong: number }>;
+    dich_vu_phat_sinh?: Array<{ service_id: string; so_luong: number; hinh_anh?: ExaminationServiceImage[] }>;
     sinh_hieu?: VitalSigns;
 }
 
@@ -1062,12 +1118,19 @@ export interface ExamRelatedService {
     specialty_id?: string | null;
 }
 
+export interface ExaminationServiceImage {
+    url: string;
+    mo_ta?: string | null;
+    uploaded_at?: string | null;
+}
+
 export interface ExaminationServiceOrder {
     service_id: string;
     ten: string;
     so_luong: number;
     don_gia: number;
     thanh_tien: number;
+    hinh_anh?: ExaminationServiceImage[];
 }
 
 // Sinh hiệu ban đầu — bác sĩ tự đo/nhập ngay khi nhập kết quả khám.
@@ -1345,4 +1408,18 @@ export interface AdminNewsListResult extends NewsListResult {
         draft: number;
         hidden: number;
     };
+}
+
+export interface NewsHistoryItem {
+    _id: string;
+    vai_tro: string;
+    hanh_dong: string;
+    loai_doi_tuong: string;
+    doi_tuong_id: string;
+    nguoi_thuc_hien: string;
+    nguoi_thuc_hien_email?: string;
+    ly_do?: string | null;
+    du_lieu_cu?: any;
+    du_lieu_moi?: any;
+    thoi_diem: string;
 }

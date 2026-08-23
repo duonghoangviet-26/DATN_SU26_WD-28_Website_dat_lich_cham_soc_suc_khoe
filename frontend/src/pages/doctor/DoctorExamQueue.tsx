@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
+import Modal from '@/components/common/Modal'
 import Icon from '@/components/admin/icons'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
+import ExamHistoryDetailModal from '@/components/doctor/ExamHistoryDetailModal'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import { subscribeDoctorQueueRealtime } from '@/services/realtime.service'
+import type { MucDoThongBaoLeTan } from '@/services/doctor-exam-session.service'
 import type { DoctorExamQueueRow, ExamQueueStatus, DoctorAppointmentDetail, RoomStatus, PhongKhamTrangThai, LichChoTiepNhan } from '@/types'
 import { formatDate } from '@/utils/format'
 
@@ -186,9 +189,18 @@ export default function DoctorExamQueue() {
   const [modalMode, setModalMode] = useState<'edit' | 'confirm'>('confirm')
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [viewHistoryQueueId, setViewHistoryQueueId] = useState<string | null>(null)
   const [choTiepNhan, setChoTiepNhan] = useState<LichChoTiepNhan[]>([])
   const [choTiepNhanLoading, setChoTiepNhanLoading] = useState(true)
   const [roomRefreshKey, setRoomRefreshKey] = useState(0)
+  // Báo lễ tân KHÔNG gắn bệnh nhân cụ thể — cần gửi được bất cứ lúc nào (ca khám quá lâu, khám
+  // nhanh có thể đưa bệnh nhân tiếp theo vào...), không chỉ khi đang đứng trong phòng khám.
+  const [showNotifyReception, setShowNotifyReception] = useState(false)
+  const [notifyPriority, setNotifyPriority] = useState<MucDoThongBaoLeTan>('warning')
+  const [notifyContent, setNotifyContent] = useState('')
+  const [notifySaving, setNotifySaving] = useState(false)
+  const [notifyError, setNotifyError] = useState<string | null>(null)
+  const [notifySuccess, setNotifySuccess] = useState<string | null>(null)
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
@@ -206,16 +218,8 @@ export default function DoctorExamQueue() {
   }
   useEffect(() => {
     load()
-    // D78 — 'central_offline_cap_cuu' bắn từ tiepNhanOfflineVaoHangDoiTrungTam ngay lúc lễ
-    // tân tiếp nhận cấp cứu, TRƯỚC cả lúc điều phối bác sĩ cụ thể — báo sớm hơn thay vì chờ
-    // bác sĩ tự thấy trong danh sách chờ khi refetch.
-    const unsubscribe = subscribeDoctorQueueRealtime((payload) => {
+    const unsubscribe = subscribeDoctorQueueRealtime(() => {
       load()
-      if (payload?.action === 'central_offline_cap_cuu') {
-        const ten = payload.ten_benh_nhan ?? 'Bệnh nhân'
-        const lyDo = payload.ly_do_uu_tien ? ` — ${payload.ly_do_uu_tien}` : ''
-        showToast(`CẤP CỨU: ${ten} vừa được lễ tân tiếp nhận${lyDo}`, 'error')
-      }
     })
     const fallbackRefresh = window.setInterval(load, 15000)
 
@@ -258,27 +262,45 @@ export default function DoctorExamQueue() {
     } catch { setActive(null) }
   }
 
-  async function openViewRecord(r: DoctorExamQueueRow) {
-    setModalMode('edit')
-    setActive(r)
-    setActiveAppt(null)
-    if (!r.appointment_id) {
-      setActiveAppt(taoLichKhamAoChoLuotOffline(r))
-      return
-    }
+  function closeModal() { setActive(null); setActiveAppt(null) }
+
+  async function sendReceptionNotice() {
+    if (!notifyContent.trim()) return
+    setNotifySaving(true)
+    setNotifyError(null)
+    setNotifySuccess(null)
     try {
-      const appt = await doctorAppointmentService.getById(r.appointment_id)
-      setActiveAppt(appt)
-    } catch { setActive(null) }
+      await doctorAppointmentService.notifyReceptionGeneral({ muc_do: notifyPriority, noi_dung: notifyContent.trim() })
+      setNotifyContent('')
+      setNotifySuccess('Đã gửi thông báo cho lễ tân')
+      window.setTimeout(() => {
+        setShowNotifyReception(false)
+        setNotifySuccess(null)
+      }, 800)
+    } catch (e) {
+      setNotifyError(extractApiMessage(e, 'Không gửi được thông báo cho lễ tân'))
+    } finally {
+      setNotifySaving(false)
+    }
   }
 
-  function closeModal() { setActive(null); setActiveAppt(null) }
+  // Hủy ca gồm rất nhiều tình huống khác nhau (khách bỏ về, không đủ điều kiện khám...) —
+  // bắt buộc nhập lý do để lưu lại đối chiếu sau này (rule mục 8, LichSuLichHen.ly_do_thay_doi).
+  async function handleHuyCa(r: DoctorExamQueueRow) {
+    const reason = window.prompt(`Lý do hủy ca của ${r.ten_benh_nhan}`)
+    if (!reason?.trim()) return
+    await runQueueAction(r.id, (id) => doctorAppointmentService.cancelQueue(id, reason.trim()), 'Đã hủy ca')
+  }
 
   async function runQueueAction(id: string, action: (id: string) => Promise<unknown>, successMsg: string) {
     setActionLoadingId(id)
     try {
       await action(id)
       showToast(successMsg)
+      if (action === doctorAppointmentService.intoRoomQueue) {
+        navigate(`/doctor/exam/${id}`)
+        return
+      }
       load()
     } catch (e) {
       showToast(extractApiMessage(e, 'Thao tác thất bại, vui lòng thử lại'), 'error')
@@ -309,6 +331,10 @@ export default function DoctorExamQueue() {
     <div>
       <PageHeader title="Hồ sơ chờ khám"
         description="Toàn bộ bệnh nhân (đặt online + vãng lai) đã check-in được gán cho bạn — check-in, gọi, vào phòng, kết thúc khám và nhập hồ sơ.">
+        <Button variant="secondary" size="sm" onClick={() => setShowNotifyReception(true)}
+          icon={<Icon name="bell" className="h-3.5 w-3.5" />}>
+          Báo lễ tân
+        </Button>
         <Button variant="secondary" size="sm" onClick={() => navigate('/doctor/exam-history')}
           icon={<Icon name="eye" className="h-3.5 w-3.5" />}>
           Bệnh nhân đã khám{soDaXongHomNay > 0 ? ` (${soDaXongHomNay} hôm nay)` : ''}
@@ -388,21 +414,21 @@ export default function DoctorExamQueue() {
                           <>
                             <Button size="sm" disabled={actionLoadingId === r.id}
                               onClick={() => runQueueAction(r.id, doctorAppointmentService.intoRoomQueue, 'Bệnh nhân đã vào phòng')}
-                              icon={<Icon name="send" className="h-3.5 w-3.5" />}>Vào khám ngay</Button>
+                              icon={<Icon name="send" className="h-3.5 w-3.5" />}>Bắt đầu khám</Button>
                             <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
                               onClick={() => runQueueAction(r.id, doctorAppointmentService.callQueuePatient, 'Đã gọi bệnh nhân')}
                               icon={<Icon name="bell" className="h-3.5 w-3.5" />}>Gọi bệnh nhân</Button>
                             <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
-                              onClick={() => runQueueAction(r.id, doctorAppointmentService.skipQueue, 'Đã bỏ lượt')}>Bỏ lượt</Button>
+                              onClick={() => handleHuyCa(r)}>Hủy ca</Button>
                           </>
                         )}
                         {r.trang_thai_tong_hop === 'da_goi' && (
                           <>
                             <Button size="sm" disabled={actionLoadingId === r.id}
                               onClick={() => runQueueAction(r.id, doctorAppointmentService.intoRoomQueue, 'Bệnh nhân đã vào phòng')}
-                              icon={<Icon name="send" className="h-3.5 w-3.5" />}>Vào phòng</Button>
+                              icon={<Icon name="send" className="h-3.5 w-3.5" />}>Bắt đầu khám</Button>
                             <Button variant="secondary" size="sm" disabled={actionLoadingId === r.id}
-                              onClick={() => runQueueAction(r.id, doctorAppointmentService.skipQueue, 'Đã bỏ lượt')}>Bỏ lượt</Button>
+                              onClick={() => handleHuyCa(r)}>Hủy ca</Button>
                           </>
                         )}
                         {r.trang_thai_tong_hop === 'trong_phong' && (
@@ -426,7 +452,7 @@ export default function DoctorExamQueue() {
                             icon={<Icon name="check" className="h-3.5 w-3.5" />}>Xem & xác nhận</Button>
                         )}
                         {r.trang_thai_tong_hop === 'da_xong' && (
-                          <Button variant="secondary" size="sm" onClick={() => openViewRecord(r)}
+                          <Button variant="secondary" size="sm" onClick={() => setViewHistoryQueueId(r.id)}
                             icon={<Icon name="eye" className="h-3.5 w-3.5" />}>Xem hồ sơ</Button>
                         )}
                         {['bo_luot', 'da_huy'].includes(r.trang_thai_tong_hop) && (
@@ -448,6 +474,55 @@ export default function DoctorExamQueue() {
           onConfirmed={() => { closeModal(); load() }} onSaved={() => { closeModal(); load() }}
           onRevisionRequested={() => { closeModal(); load() }} />
       )}
+
+      {viewHistoryQueueId && (
+        <ExamHistoryDetailModal queueId={viewHistoryQueueId} onClose={() => setViewHistoryQueueId(null)}
+          onAmended={() => { setViewHistoryQueueId(null); load() }} />
+      )}
+
+      {/* Báo lễ tân — KHÔNG gắn bệnh nhân cụ thể, gửi được bất cứ lúc nào (VD: ca khám quá lâu,
+          khám nhanh hơn dự kiến có thể đưa bệnh nhân tiếp theo vào). */}
+      <Modal isOpen={showNotifyReception} onClose={() => setShowNotifyReception(false)} title="Báo lễ tân" size="sm">
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-500">Mức độ ưu tiên</label>
+            <select
+              value={notifyPriority}
+              onChange={(event) => setNotifyPriority(event.target.value as MucDoThongBaoLeTan)}
+              className="input w-full"
+            >
+              <option value="urgent">Khẩn — cần lễ tân xử lý ngay</option>
+              <option value="warning">Cần chú ý / điều phối</option>
+              <option value="info">Thông tin, không gấp</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-500">Nội dung gửi lễ tân</label>
+            <textarea
+              value={notifyContent}
+              onChange={(event) => setNotifyContent(event.target.value)}
+              rows={5}
+              placeholder="VD: Ca này khám lâu hơn dự kiến, nhờ báo trước cho người đang chờ. Hoặc: Khám nhanh hơn dự kiến, có thể đưa bệnh nhân tiếp theo vào."
+              className="input w-full"
+            />
+          </div>
+          {notifyError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{notifyError}</p>}
+          {notifySuccess && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{notifySuccess}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setShowNotifyReception(false)} className="btn-secondary">
+              Hủy
+            </button>
+            <button
+              type="button"
+              disabled={notifySaving || !notifyContent.trim()}
+              onClick={sendReceptionNotice}
+              className="btn-primary disabled:opacity-40"
+            >
+              {notifySaving ? 'Đang gửi...' : 'Gửi lễ tân'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Toast — góc trên phải, tự mất sau 3 giây */}
       {toast && (

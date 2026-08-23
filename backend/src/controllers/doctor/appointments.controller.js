@@ -594,10 +594,10 @@ export async function listRelatedServices(req, res) {
 export async function getResultByQueue(req, res) {
   try {
     const docId = await getDocId(req.user.id)
-    if (!docId) return fail(res, 404, 'Khong tim thay ho so bac si')
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
     const entry = await getOwnedOfflineQueue(req.params.hangDoiId, docId)
     const result = await KetQuaKham.findOne({ hang_doi_id: entry._id }).lean()
-    if (!result) return fail(res, 404, 'Chua co ket qua kham')
+    if (!result) return fail(res, 404, 'Chưa có kết quả khám')
     const prescription = await DonThuoc.findOne({ medical_record_id: result._id }).lean()
     return ok(res, { ...result, id: result._id, thuoc: prescription?.items ?? [] })
   } catch (err) {
@@ -610,16 +610,16 @@ export async function createResultByQueue(req, res) {
   let result = null
   try {
     const docId = await getDocId(req.user.id)
-    if (!docId) return fail(res, 404, 'Khong tim thay ho so bac si')
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
     const entry = await getOwnedOfflineQueue(req.params.hangDoiId, docId)
     if (await KetQuaKham.exists({ hang_doi_id: entry._id })) {
-      return fail(res, 409, 'Ket qua kham da ton tai, hay dung chuc nang xem ket qua')
+      return fail(res, 409, 'Kết quả khám đã tồn tại, hãy dùng chức năng xem kết quả')
     }
 
     const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc, sinh_hieu, dich_vu_phat_sinh = [] } = req.body
-    if (!chan_doan?.trim()) return fail(res, 400, 'Chan doan la bat buoc')
+    if (!chan_doan?.trim()) return fail(res, 400, 'Chẩn đoán là bắt buộc')
     if (ngay_tai_kham && !isNgayTaiKhamHopLe(ngay_tai_kham, entry.checkin_time)) {
-      return fail(res, 400, 'Ngay tai kham phai tu ngay tiep theo sau ngay kham')
+      return fail(res, 400, 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám')
     }
 
     const chiDinh = await taoChiDinhDichVu(dich_vu_phat_sinh, entry.specialty_id, docId)
@@ -641,7 +641,7 @@ export async function createResultByQueue(req, res) {
       lich_su_sua: [{
         nguoi_sua_id: req.user.id,
         thoi_diem_sua: new Date(),
-        noi_dung: 'Bac si nhap va xac nhan ho so kham offline',
+        noi_dung: 'Bác sĩ nhập và xác nhận hồ sơ khám offline',
       }],
     })
 
@@ -662,7 +662,7 @@ export async function createResultByQueue(req, res) {
       })
     }
 
-    return created(res, { ...result.toObject(), id: result._id, thuoc: prescription?.items ?? [] }, 'Da luu ket qua kham offline')
+    return created(res, { ...result.toObject(), id: result._id, thuoc: prescription?.items ?? [] }, 'Đã lưu kết quả khám offline')
   } catch (err) {
     if (result?._id) {
       await Promise.all([
@@ -671,7 +671,7 @@ export async function createResultByQueue(req, res) {
         KetQuaKham.deleteOne({ _id: result._id }),
       ]).catch(() => {})
     }
-    if (err.code === 11000) return fail(res, 409, 'Ket qua kham da ton tai, hay dung chuc nang xem ket qua')
+    if (err.code === 11000) return fail(res, 409, 'Kết quả khám đã tồn tại, hãy dùng chức năng xem kết quả')
     if (err.httpStatus) return fail(res, err.httpStatus, err.message)
     if (err.name === 'ValidationError') return fail(res, 400, err.message)
     return fail(res, 500, err.message)

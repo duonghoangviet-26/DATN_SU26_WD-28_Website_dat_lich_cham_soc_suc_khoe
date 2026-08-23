@@ -2,20 +2,13 @@ import { useEffect, useState } from 'react'
 import Modal from '@/components/common/Modal'
 import Badge from '@/components/common/Badge'
 import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
-import type { KetCuc, PhienKham } from '@/services/doctor-exam-session.service'
-import { formatDateTime, formatPrice } from '@/utils/format'
+import type { PhienKham } from '@/services/doctor-exam-session.service'
+import { formatDateTime, formatPrice, NHAN_KET_CUC_THAT } from '@/utils/format'
 
 interface Props {
   queueId: string
   onClose: () => void
   onAmended: () => void
-}
-
-const NHAN_KET_CUC: Record<KetCuc, string> = {
-  dieu_tri_thuong: 'Điều trị thường',
-  chuyen_chuyen_khoa: 'Chuyển chuyên khoa',
-  chuyen_vien: 'Chuyển viện',
-  cap_cuu_ngoai_vien: 'Cấp cứu ngoài viện',
 }
 
 const NHAN_THANH_TOAN: Record<string, { label: string; color: 'green' | 'yellow' | 'red' | 'gray' }> = {
@@ -28,6 +21,15 @@ const NHAN_THANH_TOAN: Record<string, { label: string; color: 'green' | 'yellow'
 function extractApiMessage(err: unknown, fallback: string) {
   const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
   return message?.trim() || fallback
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 // C4/B54-B55 — xem lại toàn bộ nội dung một ca đã khám xong + đính chính khi phát hiện
@@ -43,7 +45,6 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
   const [huongDan, setHuongDan] = useState('')
   const [ghiChu, setGhiChu] = useState('')
   const [ngayTaiKham, setNgayTaiKham] = useState('')
-  const [ketCuc, setKetCuc] = useState<KetCuc>('dieu_tri_thuong')
   const [lyDo, setLyDo] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -57,7 +58,6 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
         setHuongDan(p.ho_so?.huong_dan_dieu_tri ?? '')
         setGhiChu(p.ho_so?.ghi_chu ?? '')
         setNgayTaiKham(p.ho_so?.ngay_tai_kham ? p.ho_so.ngay_tai_kham.slice(0, 10) : '')
-        setKetCuc(p.ho_so?.ket_cuc ?? 'dieu_tri_thuong')
       })
       .catch((e) => setError(extractApiMessage(e, 'Không tải được hồ sơ')))
       .finally(() => setLoading(false))
@@ -73,7 +73,6 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
         huong_dan_dieu_tri: huongDan.trim() || null,
         ghi_chu: ghiChu.trim() || null,
         ngay_tai_kham: ngayTaiKham || null,
-        ket_cuc: ketCuc,
       }, lyDo.trim())
       setDinhChinh(false)
       setLyDo('')
@@ -88,6 +87,63 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
 
   const hoSo = phien?.ho_so
   const payment = phien?.hoa_don?.trang_thai_hoa_don ? NHAN_THANH_TOAN[phien.hoa_don.trang_thai_hoa_don] : null
+
+  function inHoSo() {
+    if (!phien || !hoSo) return
+    const printWindow = window.open('', '_blank', 'width=900,height=700')
+    if (!printWindow) return
+    const dichVu = hoSo.dich_vu_phat_sinh.length
+      ? hoSo.dich_vu_phat_sinh.map((dv) => `<li>${escapeHtml(dv.ten)} x ${dv.so_luong}: ${formatPrice(dv.thanh_tien)}</li>`).join('')
+      : '<li>Không có dịch vụ phát sinh</li>'
+    const thuoc = phien.thuoc.length
+      ? phien.thuoc.map((t) => `<li>${escapeHtml(t.ten_thuoc)} - ${escapeHtml(t.lieu_luong || '-')}, ${escapeHtml(t.tan_suat || '-')}, ${t.so_ngay} ngày</li>`).join('')
+      : '<li>Không kê đơn</li>'
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Hồ sơ khám - ${escapeHtml(phien.queue.ten_benh_nhan)}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #0f172a; padding: 28px; line-height: 1.5; }
+            h1 { font-size: 22px; margin: 0 0 16px; }
+            h2 { font-size: 15px; margin: 20px 0 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+            p { margin: 4px 0; }
+            ul { margin: 6px 0 0 20px; padding: 0; }
+            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
+          </style>
+        </head>
+        <body>
+          <h1>Hồ sơ khám bệnh</h1>
+          <section class="grid">
+            <p><strong>Bệnh nhân:</strong> ${escapeHtml(phien.queue.ten_benh_nhan)}</p>
+            <p><strong>Số điện thoại:</strong> ${escapeHtml(phien.queue.so_dien_thoai || '-')}</p>
+            <p><strong>Tuổi:</strong> ${phien.queue.tuoi ?? '-'}</p>
+            <p><strong>Giới tính:</strong> ${escapeHtml(phien.queue.gioi_tinh || '-')}</p>
+          </section>
+          <h2>Tiếp nhận</h2>
+          <p><strong>Lý do/triệu chứng:</strong> ${escapeHtml(hoSo.trieu_chung_ban_dau || '-')}</p>
+          <h2>Chẩn đoán và điều trị</h2>
+          <p><strong>Chẩn đoán:</strong> ${escapeHtml(hoSo.chan_doan || '-')}</p>
+          <p><strong>Hướng dẫn:</strong> ${escapeHtml(hoSo.huong_dan_dieu_tri || '-')}</p>
+          <p><strong>Ghi chú:</strong> ${escapeHtml(hoSo.ghi_chu || '-')}</p>
+          <p><strong>Tái khám:</strong> ${hoSo.ngay_tai_kham ? new Date(hoSo.ngay_tai_kham).toLocaleDateString('vi-VN') : '-'}</p>
+          <h2>Dịch vụ phát sinh</h2>
+          <ul>${dichVu}</ul>
+          <h2>Đơn thuốc</h2>
+          <ul>${thuoc}</ul>
+          <h2>Thanh toán</h2>
+          <p><strong>Tiền khám:</strong> ${formatPrice(phien.hoa_don?.tong_tien_kham ?? 0)}</p>
+          <p><strong>Dịch vụ phát sinh:</strong> ${formatPrice(phien.hoa_don?.tong_tien_phat_sinh ?? 0)}</p>
+          <p><strong>Tổng thanh toán:</strong> ${formatPrice(phien.hoa_don?.tong_thanh_toan ?? 0)}</p>
+          <p><strong>Đã thu:</strong> ${formatPrice(phien.hoa_don?.tong_da_thu ?? 0)}</p>
+          <p><strong>Còn thiếu:</strong> ${formatPrice(phien.hoa_don?.con_thieu ?? 0)}</p>
+          <p><strong>Thu ngân:</strong> ${phien.hoa_don?.da_xac_nhan_thu_ngan ? 'Đã đối chiếu' : 'Chưa đối chiếu'}</p>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.focus()
+    printWindow.print()
+  }
 
   return (
     <Modal isOpen title={phien ? `Hồ sơ khám — ${phien.queue.ten_benh_nhan}` : 'Hồ sơ khám'} onClose={onClose} size="lg">
@@ -131,7 +187,7 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
                   <p>
                     <span className="text-slate-400">Kết cục: </span>
                     <span className={hoSo.ket_cuc !== 'dieu_tri_thuong' ? 'font-semibold text-amber-700' : 'text-slate-800'}>
-                      {NHAN_KET_CUC[hoSo.ket_cuc]}
+                      {NHAN_KET_CUC_THAT[hoSo.ket_cuc] ?? hoSo.ket_cuc}
                     </span>
                   </p>
                   {hoSo.chuyen_vien_thong_tin && (
@@ -147,11 +203,22 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
                 <h3 className="mb-2 text-sm font-semibold text-slate-900">Dịch vụ phát sinh</h3>
                 {hoSo.dich_vu_phat_sinh.length ? (
                   <>
-                    <ul className="space-y-1 text-sm text-slate-800">
+                    <ul className="space-y-3 text-sm text-slate-800">
                       {hoSo.dich_vu_phat_sinh.map((dv) => (
-                        <li key={dv.service_id} className="flex justify-between">
-                          <span>{dv.ten} × {dv.so_luong}</span>
-                          <span className="text-slate-500">{formatPrice(dv.thanh_tien)}</span>
+                        <li key={dv.service_id}>
+                          <div className="flex justify-between gap-3">
+                            <span>{dv.ten} × {dv.so_luong}</span>
+                            <span className="text-slate-500">{formatPrice(dv.thanh_tien)}</span>
+                          </div>
+                          {dv.hinh_anh?.length ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {dv.hinh_anh.map((image) => (
+                                <a key={image.url} href={image.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-slate-200">
+                                  <img src={image.url} alt={`Ảnh kết quả ${dv.ten}`} className="h-16 w-16 object-cover" />
+                                </a>
+                              ))}
+                            </div>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
@@ -178,13 +245,29 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
               </section>
 
               <section className="rounded-lg border border-slate-200 p-4">
-                <h3 className="mb-2 text-sm font-semibold text-slate-900">Thanh toán</h3>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900">Thanh toán</h3>
+                  <button type="button" onClick={inHoSo}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                    In hồ sơ
+                  </button>
+                </div>
                 {phien.hoa_don ? (
                   <div className="flex items-center justify-between text-sm">
                     <div className="space-y-0.5">
                       <p><span className="text-slate-400">Tiền khám: </span>{formatPrice(phien.hoa_don.tong_tien_kham)}</p>
                       <p><span className="text-slate-400">Dịch vụ phát sinh: </span>{formatPrice(phien.hoa_don.tong_tien_phat_sinh)}</p>
                       <p className="font-semibold text-slate-900">Tổng thanh toán: {formatPrice(phien.hoa_don.tong_thanh_toan)}</p>
+                      <p><span className="text-slate-400">Đã thu: </span>{formatPrice(phien.hoa_don.tong_da_thu ?? 0)}</p>
+                      <p className={(phien.hoa_don.con_thieu ?? 0) > 0 ? 'font-semibold text-red-700' : 'font-semibold text-green-700'}>
+                        Còn thiếu: {formatPrice(phien.hoa_don.con_thieu ?? 0)}
+                      </p>
+                      <p><span className="text-slate-400">Thu ngân: </span>{phien.hoa_don.da_xac_nhan_thu_ngan ? 'Đã đối chiếu' : 'Chưa đối chiếu'}</p>
+                      {phien.hoa_don.tong_tien_phat_sinh > 0 && (phien.hoa_don.con_thieu ?? 0) > 0 && (
+                        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                          Dịch vụ phát sinh chưa thu đủ. Lễ tân cần thu/đối chiếu trước khi bệnh nhân ra về.
+                        </p>
+                      )}
                     </div>
                     {payment && <Badge color={payment.color}>{payment.label}</Badge>}
                   </div>
@@ -209,17 +292,9 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
                   <label className="mb-1 block text-xs font-semibold text-slate-500">Ghi chú</label>
                   <textarea value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} rows={2} className="input w-full" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-500">Ngày tái khám</label>
-                    <input type="date" value={ngayTaiKham} onChange={(e) => setNgayTaiKham(e.target.value)} className="input w-full" />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-500">Kết cục</label>
-                    <select value={ketCuc} onChange={(e) => setKetCuc(e.target.value as KetCuc)} className="input w-full">
-                      {Object.entries(NHAN_KET_CUC).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                    </select>
-                  </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">Ngày tái khám</label>
+                  <input type="date" value={ngayTaiKham} onChange={(e) => setNgayTaiKham(e.target.value)} className="input w-full" />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-500">Lý do đính chính (bắt buộc)</label>

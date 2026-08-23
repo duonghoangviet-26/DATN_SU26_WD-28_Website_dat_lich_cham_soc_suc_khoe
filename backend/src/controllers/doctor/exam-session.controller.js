@@ -1,10 +1,15 @@
-import { BacSi } from '../../models/index.js'
+import { BacSi, HangDoi } from '../../models/index.js'
 import {
   dinhChinhHoSo,
   hoanTatPhienKham,
   layPhienKham,
   luuBuoc,
 } from '../../services/examSession.service.js'
+import {
+  chuanHoaMucDoBaoLeTan,
+  chuanHoaNoiDungBaoLeTan,
+  guiThongBaoChoLeTan,
+} from '../../services/receptionNotify.service.js'
 import { ok, fail } from '../../utils/response.js'
 
 async function getDocId(userId) {
@@ -72,5 +77,34 @@ export async function amend(req, res) {
     return ok(res, phien, 'Đã đính chính hồ sơ')
   } catch (err) {
     return fail(res, err.httpStatus ?? err.statusCode ?? 500, err.message, err.data ?? null)
+  }
+}
+
+// POST /api/doctor/exam-session/:queueId/notify-reception
+export async function notifyReception(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+    const noiDung = chuanHoaNoiDungBaoLeTan(req.body?.noi_dung)
+    const mucDo = chuanHoaMucDoBaoLeTan(req.body?.muc_do)
+
+    const entry = await HangDoi.findOne({ _id: req.params.queueId, doctor_id: docId }).lean()
+    if (!entry) return fail(res, 404, 'Không tìm thấy lượt khám của bác sĩ')
+
+    const sent = await guiThongBaoChoLeTan({
+      mucDo,
+      noiDung: `${entry.ten_benh_nhan}: ${noiDung}`,
+      relatedId: entry._id,
+      extraData: {
+        queue_id: String(entry._id),
+        patient_name: entry.ten_benh_nhan,
+        room: entry.phong_kham ?? null,
+      },
+    })
+
+    return ok(res, { sent }, 'Đã gửi thông báo cho lễ tân')
+  } catch (err) {
+    return fail(res, err.httpStatus ?? err.statusCode ?? 500, err.message)
   }
 }

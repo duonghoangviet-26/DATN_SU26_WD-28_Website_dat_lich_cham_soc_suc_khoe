@@ -17,6 +17,7 @@
     "test:e2e:bacsi-letan": "node src/scripts/e2e-lien-ket-bacsi-letan.js",
     "db:init": "node src/scripts/init-db.js",
     "db:seed": "node src/scripts/seed-all.js",
+    "db:seed:bao-evening": "node src/scripts/seed-doctor-bao-evening-demo.js",
     "db:repair-invoice-indexes": "node src/scripts/repair-hoadon-indexes.js",
     "db:test-dbs": "node src/scripts/manage-test-databases.js"
   },

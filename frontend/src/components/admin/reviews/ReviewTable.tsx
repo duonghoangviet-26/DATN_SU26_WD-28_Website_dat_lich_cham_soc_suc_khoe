@@ -93,7 +93,7 @@ export default function ReviewTable({
       {/* Bảng đánh giá */}
       <div className="card bg-white rounded-xl shadow-sm border border-slate-100 relative z-10 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase tracking-wider text-[11px] font-semibold">
               <tr>
                 <th className="px-3 py-3 w-10 text-center">

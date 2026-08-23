@@ -271,7 +271,7 @@ export default function DoctorRevenueDetail() {
               <h3 className="mb-4 text-base font-semibold text-slate-800">Dịch vụ thực hiện phổ biến</h3>
               {data.topServices && data.topServices.length > 0 ? (
                 <div className="overflow-hidden rounded-xl border border-slate-200">
-                  <table className="w-full text-left text-sm text-slate-600">
+                  <table className="w-full text-left text-sm text-slate-600 whitespace-nowrap">
                     <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-700">
                       <tr>
                         <th className="px-4 py-3">Tên dịch vụ</th>

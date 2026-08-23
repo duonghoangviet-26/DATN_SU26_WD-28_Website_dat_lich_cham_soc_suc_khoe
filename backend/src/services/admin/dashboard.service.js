@@ -174,3 +174,272 @@ export async function getAdminDashboardSummary(now = new Date()) {
     generated_at: now.toISOString(),
   }
 }
+
+export async function getChiTietDoanhThu(now = new Date()) {
+  const thisMonth = getMonthBounds(now)
+  const lastMonth = getLastMonthBounds(now)
+
+  // Gom doanh thu theo tháng (tất cả lịch sử)
+  const monthlyRevenue = await ThanhToan.aggregate([
+    { $match: { status: 'paid' } },
+    {
+      $group: {
+        _id: {
+          year: { $year: { date: '$ngay_tao', timezone: 'Asia/Ho_Chi_Minh' } },
+          month: { $month: { date: '$ngay_tao', timezone: 'Asia/Ho_Chi_Minh' } }
+        },
+        total: { $sum: '$so_tien' }
+      }
+    },
+    { $sort: { '_id.year': 1, '_id.month': 1 } }
+  ])
+
+  // Gom doanh thu theo năm
+  const yearlyRevenue = await ThanhToan.aggregate([
+    { $match: { status: 'paid' } },
+    {
+      $group: {
+        _id: {
+          year: { $year: { date: '$ngay_tao', timezone: 'Asia/Ho_Chi_Minh' } }
+        },
+        total: { $sum: '$so_tien' }
+      }
+    },
+    { $sort: { '_id.year': 1 } }
+  ])
+
+  // Chuyển đổi dữ liệu
+  const currentYear = now.getFullYear()
+  
+  // Mảng 12 tháng của năm nay
+  const thisYearMonthly = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1
+    const found = monthlyRevenue.find(x => x._id.year === currentYear && x._id.month === m)
+    return {
+      month: m,
+      year: currentYear,
+      total: found?.total || 0
+    }
+  })
+
+  // Mảng các năm
+  const yearly = yearlyRevenue.map(x => ({
+    year: x._id.year,
+    total: x.total
+  }))
+
+  const [collectedThisMonth, collectedLastMonth, collectedTotal] = await Promise.all([
+    sumField(ThanhToan, 'so_tien', { status: 'paid', ngay_tao: { $gte: thisMonth.start, $lt: thisMonth.end } }),
+    sumField(ThanhToan, 'so_tien', { status: 'paid', ngay_tao: { $gte: lastMonth.start, $lt: lastMonth.end } }),
+    sumField(ThanhToan, 'so_tien', { status: 'paid' })
+  ])
+
+  return {
+    collectedThisMonth,
+    collectedLastMonth,
+    collectedTotal,
+    growth: calcGrowth(collectedThisMonth, collectedLastMonth),
+    diff: collectedThisMonth - collectedLastMonth,
+    thisYearMonthly,
+    yearly
+  }
+}
+
+export async function getChiTietDoanhThuXuatHoaDon(now = new Date()) {
+  const thisMonth = getMonthBounds(now)
+  const lastMonth = getLastMonthBounds(now)
+
+  // HoaDon schema thực tế không có trường trạng thái hủy (huy),
+  // nên baseMatch sẽ lấy tất cả hóa đơn hợp lệ hiện có.
+  const baseMatch = {} 
+
+  // Gom doanh thu xuất hóa đơn theo tháng (tất cả lịch sử)
+  const monthlyRevenue = await HoaDon.aggregate([
+    { $match: baseMatch },
+    {
+      $group: {
+        _id: {
+          year: { $year: { date: '$created_at', timezone: 'Asia/Ho_Chi_Minh' } },
+          month: { $month: { date: '$created_at', timezone: 'Asia/Ho_Chi_Minh' } }
+        },
+        total: { $sum: '$tong_thanh_toan' }
+      }
+    },
+    { $sort: { '_id.year': 1, '_id.month': 1 } }
+  ])
+
+  // Gom doanh thu xuất hóa đơn theo năm
+  const yearlyRevenue = await HoaDon.aggregate([
+    { $match: baseMatch },
+    {
+      $group: {
+        _id: {
+          year: { $year: { date: '$created_at', timezone: 'Asia/Ho_Chi_Minh' } }
+        },
+        total: { $sum: '$tong_thanh_toan' }
+      }
+    },
+    { $sort: { '_id.year': 1 } }
+  ])
+
+  // Chuyển đổi dữ liệu
+  const currentYear = now.getFullYear()
+  
+  // Mảng 12 tháng của năm nay
+  const thisYearMonthly = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1
+    const found = monthlyRevenue.find(x => x._id.year === currentYear && x._id.month === m)
+    return {
+      thang: m,
+      tongHoaDon: found?.total || 0
+    }
+  })
+
+  // Mảng các năm
+  const yearly = yearlyRevenue.map(x => ({
+    nam: x._id.year,
+    tongHoaDon: x.total
+  }))
+
+  const [invoicedThisMonth, invoicedLastMonth, invoicedTotal] = await Promise.all([
+    sumField(HoaDon, 'tong_thanh_toan', { ...baseMatch, created_at: { $gte: thisMonth.start, $lt: thisMonth.end } }),
+    sumField(HoaDon, 'tong_thanh_toan', { ...baseMatch, created_at: { $gte: lastMonth.start, $lt: lastMonth.end } }),
+    sumField(HoaDon, 'tong_thanh_toan', baseMatch)
+  ])
+  
+  // Tính tổng công nợ
+  const [debtResult] = await HoaDon.aggregate([
+    { $match: baseMatch },
+    {
+      $lookup: {
+        from: 'thanh_toan',
+        localField: '_id',
+        foreignField: 'hoa_don_id',
+        as: 'payments'
+      }
+    },
+    {
+      $addFields: {
+        tong_da_thu: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: {
+                  input: '$payments',
+                  as: 'payment',
+                  cond: { $eq: ['$$payment.status', 'paid'] }
+                }
+              },
+              as: 'paid_payment',
+              in: '$$paid_payment.so_tien'
+            }
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        no_hoa_don: {
+          $max: [0, { $subtract: ['$tong_thanh_toan', '$tong_da_thu'] }]
+        }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        outstandingTotal: { $sum: '$no_hoa_don' }
+      }
+    }
+  ])
+
+  const outstandingTotal = debtResult?.outstandingTotal || 0
+  const growth = invoicedLastMonth === 0 ? null : Math.round(((invoicedThisMonth - invoicedLastMonth) / invoicedLastMonth) * 100)
+
+  return {
+    invoicedThisMonth,
+    invoicedLastMonth,
+    invoicedTotal,
+    growth,
+    diff: invoicedThisMonth - invoicedLastMonth,
+    outstandingTotal,
+    thisYearMonthly,
+    yearly
+  }
+}
+
+export async function getDanhSachCongNo() {
+  const danhSach = await HoaDon.aggregate([
+    {
+      $lookup: {
+        from: 'thanh_toan',
+        localField: '_id',
+        foreignField: 'hoa_don_id',
+        as: 'payments'
+      }
+    },
+    {
+      $addFields: {
+        tong_da_thu: {
+          $sum: {
+            $map: {
+              input: {
+                $filter: {
+                  input: '$payments',
+                  as: 'payment',
+                  cond: { $eq: ['$$payment.status', 'paid'] }
+                }
+              },
+              as: 'paid_payment',
+              in: '$$paid_payment.so_tien'
+            }
+          }
+        }
+      }
+    },
+    {
+      $addFields: {
+        no_hoa_don: {
+          $max: [0, { $subtract: ['$tong_thanh_toan', '$tong_da_thu'] }]
+        }
+      }
+    },
+    {
+      $match: {
+        no_hoa_don: { $gt: 0 }
+      }
+    },
+    {
+      $lookup: {
+        from: 'ho_so_benh_nhan',
+        localField: 'ho_so_benh_nhan_id',
+        foreignField: '_id',
+        as: 'patient'
+      }
+    },
+    {
+      $unwind: {
+        path: '$patient',
+        preserveNullAndEmptyArrays: true
+      }
+    },
+    {
+      $project: {
+        _id: 1,
+        so_hoa_don: 1,
+        ho_ten: '$patient.ho_ten',
+        so_dien_thoai: '$patient.so_dien_thoai',
+        email: '$patient.email',
+        tong_thanh_toan: 1,
+        tong_da_thu: 1,
+        no_hoa_don: 1,
+        chi_tiet_thu_phi: 1,
+        created_at: 1
+      }
+    },
+    {
+      $sort: { created_at: -1 }
+    }
+  ])
+
+  return danhSach
+}

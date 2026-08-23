@@ -89,7 +89,7 @@ export default function ReceiveNotificationTab() {
         </div>
 
         <div className="overflow-x-auto bg-white">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-slate-50/80 text-left text-slate-500 border-b border-slate-100">
               <tr>
                 <th className="px-5 py-3.5 font-medium whitespace-nowrap w-2/3">Nội dung</th>

@@ -7,6 +7,7 @@ import {
   detailForReceptionist,
   listForReceptionist,
   updateForReceptionist,
+  getNewsHistory
 } from '../../controllers/admin/news.controller.js'
 
 const router = Router()
@@ -26,5 +27,6 @@ router.get('/', listForReceptionist)
 router.post('/', create)
 router.get('/:id', detailForReceptionist)
 router.put('/:id', updateForReceptionist)
+router.get('/:id/history', getNewsHistory)
 
 export default router

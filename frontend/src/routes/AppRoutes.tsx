@@ -16,7 +16,6 @@ const ReceptionistOfflineQueue = lazy(() => import('@/pages/receptionist/Offline
 const ReceptionistDoctorDayView = lazy(() => import('@/pages/receptionist/DoctorDayView'))
 const ReceptionistContactTasks = lazy(() => import('@/pages/receptionist/ContactTasks'))
 const ReceptionistActivityLog = lazy(() => import('@/pages/receptionist/ActivityLog'))
-const ReceptionistEmergencyReport = lazy(() => import('@/pages/receptionist/EmergencyReport'))
 const ReceptionistNewsList = lazy(() => import('@/pages/receptionist/NewsList'))
 const ReceptionistNewsCreate = lazy(() => import('@/pages/receptionist/NewsCreate'))
 const ReceptionistNewsEdit = lazy(() => import('@/pages/receptionist/NewsEdit'))
@@ -48,6 +47,8 @@ const ManageServices = lazy(() => import('@/pages/admin/ManageServices'))
 const ManageServiceSpecialtyDetail = lazy(() => import('@/pages/admin/ManageServiceSpecialtyDetail'))
 const ManageAppointments = lazy(() => import('@/pages/admin/ManageAppointments/ManageAppointments'))
 const ManageDoctorSchedules = lazy(() => import('@/pages/admin/ManageDoctorSchedules'))
+const ManageDoctorLeaves = lazy(() => import('@/pages/admin/ManageDoctorLeaves'))
+const AdminActivityLog = lazy(() => import('@/pages/admin/ActivityLog'))
 const ManageReviews = lazy(() => import('@/pages/admin/ManageReviews'))
 const ManageNews = lazy(() => import('@/pages/admin/ManageNews'))
 const ManageNotifications = lazy(() => import('@/pages/admin/ManageNotifications/ManageNotifications'))
@@ -132,6 +133,8 @@ export default function AppRoutes() {
         <Route path="services/chuyen-khoa/:slug" element={<ManageServiceSpecialtyDetail />} />
         <Route path="appointments" element={<ManageAppointments />} /> {/* C5 */}
         <Route path="doctor-schedules" element={<ManageDoctorSchedules />} />
+        <Route path="doctor-leaves" element={<ManageDoctorLeaves />} />
+        <Route path="activity-log" element={<AdminActivityLog />} />
         <Route path="reviews" element={<ManageReviews />} />       {/* C6 */}
         <Route path="news" element={<ManageNews />} />
         <Route path="notifications" element={<ManageNotifications />} /> {/* C7 */}
@@ -155,7 +158,6 @@ export default function AppRoutes() {
         <Route path="doctor-day-view" element={<ReceptionistDoctorDayView />} />
         <Route path="contact-tasks" element={<ReceptionistContactTasks />} />
         <Route path="activity-log" element={<ReceptionistActivityLog />} />
-        <Route path="emergency-report" element={<ReceptionistEmergencyReport />} /> {/* C6/D78 — biên bản ca khẩn cuối ngày */}
         <Route path="booking" element={<ReceptionistPatientIntake />} />
         <Route path="news" element={<ReceptionistNewsList />} />
         <Route path="news/create" element={<ReceptionistNewsCreate />} />

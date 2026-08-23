@@ -262,3 +262,40 @@ export async function remove(req, res) {
     return fail(res, 500, 'Không thể xóa tin tức: ' + error.message)
   }
 }
+
+export async function getNewsHistory(req, res) {
+  try {
+    const { id } = req.params
+
+    if (!isValidNewsId(id)) {
+      return fail(res, 400, 'Mã tin tức không hợp lệ')
+    }
+
+    const news = await findNewsForAdmin(id)
+    if (!news) return fail(res, 404, 'Không tìm thấy tin tức')
+
+    const history = await NhatKyThaoTac.find({ loai_doi_tuong: 'news', doi_tuong_id: id })
+      .populate('nguoi_thuc_hien_id', 'ho_ten email')
+      .sort({ created_at: -1 })
+      .lean()
+
+    const formattedHistory = history.map((log) => ({
+      _id: log._id,
+      vai_tro: log.vai_tro,
+      hanh_dong: log.hanh_dong,
+      loai_doi_tuong: log.loai_doi_tuong,
+      doi_tuong_id: log.doi_tuong_id,
+      nguoi_thuc_hien_id: log.nguoi_thuc_hien_id?._id || null,
+      nguoi_thuc_hien: log.nguoi_thuc_hien_id?.ho_ten || 'Hệ thống',
+      nguoi_thuc_hien_email: log.nguoi_thuc_hien_id?.email || '',
+      ly_do: log.ly_do,
+      du_lieu_cu: log.du_lieu_cu,
+      du_lieu_moi: log.du_lieu_moi,
+      thoi_diem: log.created_at,
+    }))
+
+    return ok(res, formattedHistory, 'Lấy lịch sử thao tác tin tức thành công')
+  } catch (error) {
+    return fail(res, 500, 'Không thể tải lịch sử thao tác tin tức: ' + error.message)
+  }
+}

@@ -15,7 +15,8 @@ function bmiCua(canNang: string, chieuCao: string) {
 }
 
 export default function StepTiepNhan({ phien, saving, onNext }: Props) {
-  const [trieuChung, setTrieuChung] = useState(phien.ho_so?.trieu_chung_ban_dau ?? '')
+  const lyDoKhamDaDat = phien.queue.ly_do_kham?.trim() ?? ''
+  const [trieuChung, setTrieuChung] = useState(phien.ho_so?.trieu_chung_ban_dau ?? lyDoKhamDaDat)
   const [canNang, setCanNang] = useState(String(phien.sinh_hieu?.can_nang ?? ''))
   const [chieuCao, setChieuCao] = useState(String(phien.sinh_hieu?.chieu_cao ?? ''))
   const [huyetAp, setHuyetAp] = useState(phien.sinh_hieu?.huyet_ap ?? '')
@@ -62,8 +63,13 @@ export default function StepTiepNhan({ phien, saving, onNext }: Props) {
 
       <section>
         <h2 className="mb-3 text-base font-semibold text-slate-900">
-          Triệu chứng / lý do khám <span className="text-red-500">*</span>
+          Triệu chứng ghi nhận ban đầu <span className="text-red-500">*</span>
         </h2>
+        {lyDoKhamDaDat && !phien.ho_so?.trieu_chung_ban_dau && (
+          <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+            Da tu dien tu ly do kham khi dat lich online. Bac si hoi lai va bo sung them neu can truoc khi luu.
+          </div>
+        )}
         <textarea
           value={trieuChung}
           onChange={(e) => setTrieuChung(e.target.value)}

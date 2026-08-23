@@ -61,9 +61,9 @@ export default function DoctorDetail() {
       {/* DOCTOR GENERAL CARD */}
       <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm flex flex-col md:flex-row gap-8 items-start">
         {/* Avatar */}
-        <div className="aspect-square w-full md:w-56 shrink-0 bg-slate-100 rounded-xl overflow-hidden shadow-inner">
+        <div className="aspect-[3/4] w-full md:w-56 shrink-0 bg-slate-100 rounded-xl overflow-hidden shadow-inner">
           {resolveMediaUrl(doctor.anh_dai_dien) ? (
-            <img src={resolveMediaUrl(doctor.anh_dai_dien) || undefined} alt={doctor.ho_ten} className="h-full w-full object-cover" />
+            <img src={resolveMediaUrl(doctor.anh_dai_dien) || undefined} alt={doctor.ho_ten} className="h-full w-full object-cover object-top" />
           ) : (
             <div className="grid h-full w-full place-items-center bg-brand-50 text-brand-600 font-extrabold text-5xl">
               {doctor.ho_ten.split(' ').pop()?.charAt(0)}
@@ -83,6 +83,12 @@ export default function DoctorDetail() {
             <p className="text-xs text-slate-500 font-medium tracking-wide">
               {doctor.ho_so_chi_tiet?.chuc_vu_hien_tai || doctor.bang_cap || 'Bác sĩ Chuyên khoa'}
             </p>
+
+            {doctor.ho_so_chi_tiet?.gioi_thieu_ngan && (
+              <p className="text-sm italic text-slate-600 border-l-2 border-brand-300 pl-3 mt-2 mb-2">
+                "{doctor.ho_so_chi_tiet.gioi_thieu_ngan}"
+              </p>
+            )}
 
             {/* Tags Bằng cấp & Học vị */}
             {doctor.ho_so_chi_tiet?.bang_cap_hoc_vi_tags && doctor.ho_so_chi_tiet.bang_cap_hoc_vi_tags.length > 0 && (
@@ -113,15 +119,10 @@ export default function DoctorDetail() {
             )}
           </div>
 
-          {/* Ngôn ngữ & Mã CCHN */}
-          {(doctor.ho_so_chi_tiet?.ma_cchn || doctor.ho_so_chi_tiet?.ngon_ngu) && (
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-              {doctor.ho_so_chi_tiet?.ma_cchn && (
-                <p><strong>Mã CCHN:</strong> <span className="font-mono text-slate-700">{doctor.ho_so_chi_tiet.ma_cchn}</span></p>
-              )}
-              {doctor.ho_so_chi_tiet?.ngon_ngu && doctor.ho_so_chi_tiet.ngon_ngu.length > 0 && (
-                <p><strong>Ngôn ngữ:</strong> <span className="text-slate-700">{doctor.ho_so_chi_tiet.ngon_ngu.join(', ')}</span></p>
-              )}
+          {/* CCHN */}
+          {doctor.ho_so_chi_tiet?.ma_cchn && (
+            <div className="mt-1 text-xs text-slate-500">
+              <p><strong>Mã CCHN:</strong> <span className="font-mono text-slate-700">{doctor.ho_so_chi_tiet.ma_cchn}</span></p>
             </div>
           )}
 
@@ -136,6 +137,61 @@ export default function DoctorDetail() {
       <div className="grid gap-8 lg:grid-cols-3 items-start">
         {/* LEFT COLUMN: EDUCATION & EXPERIENCE */}
         <div className="lg:col-span-2 space-y-6 text-left">
+
+          {/* Tiểu sử */}
+          {doctor.tieu_su && (
+            <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
+              <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">Tiểu sử & Giới thiệu</h2>
+              <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{doctor.tieu_su}</p>
+            </div>
+          )}
+
+          {/* Chuyên môn */}
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
+            <h2 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3 uppercase">Chuyên môn</h2>
+            <dl className="space-y-4 text-sm">
+              {doctor.ho_so_chi_tiet?.chuc_vu_hien_tai && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Chức vụ hiện tại</dt>
+                  <dd className="font-medium text-slate-800">{doctor.ho_so_chi_tiet.chuc_vu_hien_tai}</dd>
+                </div>
+              )}
+              {doctor.bang_cap && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Bằng cấp</dt>
+                  <dd className="font-medium text-slate-800">{doctor.bang_cap}</dd>
+                </div>
+              )}
+              {doctor.ho_so_chi_tiet?.bang_cap_hoc_vi_tags && doctor.ho_so_chi_tiet.bang_cap_hoc_vi_tags.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Học vị (Tags)</dt>
+                  <dd className="flex flex-wrap gap-1.5">
+                    {doctor.ho_so_chi_tiet.bang_cap_hoc_vi_tags.map((tag, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-slate-100 text-slate-700 text-xs rounded border border-slate-200">{tag}</span>
+                    ))}
+                  </dd>
+                </div>
+              )}
+              {doctor.ho_so_chi_tiet?.ngon_ngu && doctor.ho_so_chi_tiet.ngon_ngu.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Ngôn ngữ</dt>
+                  <dd className="font-medium text-slate-800">{doctor.ho_so_chi_tiet.ngon_ngu.join(', ')}</dd>
+                </div>
+              )}
+              {doctor.ho_so_chi_tiet?.the_manh_chuyen_mon && doctor.ho_so_chi_tiet.the_manh_chuyen_mon.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Thế mạnh</dt>
+                  <dd className="font-medium text-slate-800">{doctor.ho_so_chi_tiet.the_manh_chuyen_mon.join(', ')}</dd>
+                </div>
+              )}
+              {doctor.ho_so_chi_tiet?.benh_ly_dieu_tri && doctor.ho_so_chi_tiet.benh_ly_dieu_tri.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-1 sm:gap-4">
+                  <dt className="w-40 shrink-0 text-slate-500">Bệnh lý điều trị</dt>
+                  <dd className="font-medium text-slate-800">{doctor.ho_so_chi_tiet.benh_ly_dieu_tri.join(', ')}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
 
           {/* Học vấn & Quá trình đào tạo */}
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
@@ -238,18 +294,19 @@ export default function DoctorDetail() {
               ) : (
                 <div className="space-y-3.5 max-h-[400px] overflow-y-auto pr-1">
                   {reviews.map((r) => {
-                    const ratingDoc = r.chi_tiet?.danh_gia_bac_si || r.so_sao || 5
+                    const ratingDoc = r.so_sao || 5
                     return (
                       <div key={r.id || r._id} className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-100 space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-800">{r.benh_nhan || 'Bệnh nhân đã khám'}</span>
-                          <span className="text-xs font-bold text-amber-500">{'⭐'.repeat(ratingDoc)}</span>
+                          <span className="text-xs font-bold text-slate-700">{r.benh_nhan || 'Bệnh nhân'}</span>
+                          <div className="flex">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <span key={i} className={`text-[10px] ${i < ratingDoc ? 'text-amber-400' : 'text-slate-200'}`}>⭐</span>
+                            ))}
+                          </div>
                         </div>
-                        <p className="text-xs leading-relaxed text-slate-600">
-                          &ldquo;{r.noi_dung || 'Không có bình luận.'}&rdquo;
-                        </p>
-                        <p className="text-[10px] font-medium text-slate-400 text-right">
-                          {new Date(r.ngay_tao).toLocaleDateString('vi-VN')}
+                        <p className="text-[11px] leading-relaxed text-slate-600 italic">
+                          "{r.noi_dung || 'Đã khám thành công và để lại đánh giá.'}"
                         </p>
                       </div>
                     )

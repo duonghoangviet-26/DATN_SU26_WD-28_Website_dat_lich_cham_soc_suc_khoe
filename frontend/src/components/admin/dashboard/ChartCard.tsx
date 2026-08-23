@@ -32,12 +32,12 @@ export default function ChartCard({
 }: ChartCardProps) {
   return (
     <section className={`card min-w-0 p-5 sm:p-6 ${className}`}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
+      <div className="flex flex-wrap gap-4 items-start justify-between">
+        <div className="flex flex-1 min-w-[200px] items-start gap-3">
           <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBackgroundClassName}`}>
             <Icon name={icon} className={`h-5 w-5 ${iconClassName}`} />
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold text-slate-800">{title}</h2>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{subtitle}</p>
           </div>

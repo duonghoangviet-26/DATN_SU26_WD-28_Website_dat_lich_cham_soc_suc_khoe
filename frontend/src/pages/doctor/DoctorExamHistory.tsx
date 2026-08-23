@@ -5,16 +5,9 @@ import Icon from '@/components/admin/icons'
 import ExamHistoryDetailModal from '@/components/doctor/ExamHistoryDetailModal'
 import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
 import type { ExamHistoryRow } from '@/services/doctor-exam-session.service'
-import { formatDateTime, formatPrice, toLocalDateStr } from '@/utils/format'
+import { formatDateTime, formatPrice, toLocalDateStr, NHAN_KET_CUC_THAT } from '@/utils/format'
 
 const TH = 'px-4 py-3 text-xs font-semibold text-slate-600'
-
-const NHAN_KET_CUC: Record<string, string> = {
-  dieu_tri_thuong: 'Điều trị thường',
-  chuyen_chuyen_khoa: 'Chuyển chuyên khoa',
-  chuyen_vien: 'Chuyển viện',
-  cap_cuu_ngoai_vien: 'Cấp cứu ngoài viện',
-}
 
 const NHAN_THANH_TOAN: Record<string, { label: string; color: 'green' | 'yellow' | 'red' | 'gray' }> = {
   chua_thanh_toan: { label: 'Chưa thanh toán', color: 'red' },
@@ -104,7 +97,7 @@ export default function DoctorExamHistory() {
                       <td className="max-w-xs truncate px-4 py-3 text-slate-700">{r.chan_doan}</td>
                       <td className="px-4 py-3">
                         <span className={r.ket_cuc !== 'dieu_tri_thuong' ? 'font-semibold text-amber-700' : 'text-slate-600'}>
-                          {NHAN_KET_CUC[r.ket_cuc] ?? r.ket_cuc}
+                          {NHAN_KET_CUC_THAT[r.ket_cuc] ?? r.ket_cuc}
                         </span>
                       </td>
                       <td className="px-4 py-3">

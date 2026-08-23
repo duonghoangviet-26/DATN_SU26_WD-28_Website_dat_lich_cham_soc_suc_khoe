@@ -12,6 +12,10 @@ export interface VirtualNotification {
   related_type?: string | null
   du_lieu_dinh_kem?: {
     url?: string | null
+    priority?: 'urgent' | 'warning' | 'info'
+    source?: string
+    patient_name?: string
+    room?: string | null
     [key: string]: unknown
   } | null
 }

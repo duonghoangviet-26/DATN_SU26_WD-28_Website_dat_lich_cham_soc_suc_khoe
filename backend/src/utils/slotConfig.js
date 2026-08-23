@@ -14,9 +14,10 @@
 // Do dai mot khung gio, tinh bang phut. Bat bien theo rule muc 1.
 export const DO_DAI_KHUNG_PHUT = 30
 
-// Mac dinh khi chuyen khoa chua cau hinh (TMH hien tai: kham 10-15' -> 2 slot/khung).
-export const MAC_DINH_THOI_GIAN_KHAM_PHUT = 15
-export const MAC_DINH_TY_LE_ONLINE = 70
+// Mac dinh moi cua phong kham nho: lich online chi mo 1 benh nhan moi khung 30'.
+// Thoi gian thuc te co the nhanh hon de le tan chen khach truc tiep qua hang doi.
+export const MAC_DINH_THOI_GIAN_KHAM_PHUT = 30
+export const MAC_DINH_TY_LE_ONLINE = 100
 
 // Fallback khi bac si CHUA GAN CHUYEN KHOA nao: khong biet thoi gian kham thi khong duoc
 // doan cao. Giu dung hanh vi cu (1 slot/khung, tat ca online) — sinh nhieu slot cho mot
@@ -38,17 +39,12 @@ export function tinhSoSlotToiDa(thoiGianKhamPhut) {
 // config = document/lean object cua ChuyenKhoa, hoac null.
 export function chotSoSlotMoiKhung(config) {
   if (!config) return FALLBACK_KHONG_CHUYEN_KHOA.so_slot_moi_khung
-  const toiDa = tinhSoSlotToiDa(config.thoi_gian_kham_trung_binh_phut)
-  const override = Number(config.so_slot_moi_khung)
-  if (!Number.isFinite(override) || override <= 0) return toiDa
-  return Math.min(Math.floor(override), toiDa)
+  return 1
 }
 
 export function chotTyLeOnline(config) {
   if (!config) return FALLBACK_KHONG_CHUYEN_KHOA.ty_le_online_phan_tram
-  const tyLe = Number(config.ty_le_online_phan_tram)
-  if (!Number.isFinite(tyLe) || tyLe < 0 || tyLe > 100) return MAC_DINH_TY_LE_ONLINE
-  return tyLe
+  return 100
 }
 
 // Kiem tra cau hinh admin nhap vao. Tra ve chuoi loi, hoac null neu hop le.
@@ -87,11 +83,8 @@ export function kiemTraCauHinhSlot({
     if (!Number.isInteger(soSlot) || soSlot < 1) {
       return 'So slot moi khung phai la so nguyen tu 1 tro len'
     }
-    const toiDa = tinhSoSlotToiDa(thoi_gian_kham_trung_binh_phut)
-    if (soSlot > toiDa) {
-      return `So slot moi khung toi da la ${toiDa} (khung ${DO_DAI_KHUNG_PHUT}' / ${
-        thoi_gian_kham_trung_binh_phut ?? MAC_DINH_THOI_GIAN_KHAM_PHUT
-      }' moi ca kham). Chi duoc dat THAP hon muc nay.`
+    if (soSlot > 1) {
+      return `Phong kham chi nhan 1 lich online moi khung ${DO_DAI_KHUNG_PHUT} phut`
     }
   }
 

@@ -1,3 +1,6 @@
+import { buildSlotDateTime } from './clinicTime.js'
+import { caTheoGio, CA_SANG, GIO_KET_THUC_CA_MAC_DINH } from '../models/MauLichLamViec.js'
+
 // ============================================================
 // Phân loại trạng thái lịch hẹn (LichHen.status) — DÙNG CHUNG
 // ============================================================
@@ -58,6 +61,25 @@ export const APPOINTMENT_LOCK_REASONS = {
   SKIPPED: 'Lịch hẹn đã bị bỏ lượt',
   PENDING_PAYMENT: 'Lịch hẹn chưa được xác nhận',
   HAS_OPEN_RESCHEDULE_PROPOSAL: 'Lịch đang có phương án dời do phòng khám đề xuất',
+  OVERDUE_PENDING_SWEEP: 'Đã hết ca hẹn mà chưa check-in — hệ thống sẽ tự động ghi nhận không đến (no-show), không thao tác được nữa',
+}
+
+/**
+ * Lịch hẹn đã qua giờ KẾT THÚC CA hay chưa — ước lượng bằng giờ kết thúc ca MẶC ĐỊNH
+ * (sáng 11:30 / chiều 17:30), KHÔNG tra lịch làm việc thật để tránh N+1 query khi hàm này
+ * chạy cho từng dòng trong danh sách lịch hẹn.
+ *
+ * Đây CHỈ là điều kiện khoá NÚT BẤM (reschedule/cancel/check_in/late_reschedule) — không đổi
+ * `status`, không đụng tiền. Quyết định `no_show` thật (mất 100% tiền) vẫn do
+ * `services/noShowSweep.service.js` làm riêng, có tra lịch làm việc thật + loại trừ ca bị
+ * nghỉ. Ước lượng ở đây thiên về AN TOÀN cho phía khoá nút: nếu bác sĩ đăng ký ca ngắn hơn
+ * mặc định, hàm này khoá muộn hơn thực tế một chút — chấp nhận được vì không có hệ quả tiền.
+ */
+function isAppointmentPastShiftEnd(appointment, now = new Date()) {
+  const ca = caTheoGio(appointment?.gio_kham)
+  const gioKetThuc = GIO_KET_THUC_CA_MAC_DINH[ca] ?? GIO_KET_THUC_CA_MAC_DINH[CA_SANG]
+  const ketThuc = buildSlotDateTime(appointment?.ngay_kham, gioKetThuc)
+  return Boolean(ketThuc) && now.getTime() >= ketThuc.getTime()
 }
 
 export function isAffectedByLeave(status) {
@@ -113,6 +135,14 @@ export function buildReceptionistAppointmentActions(appointment, queueEntry = nu
       lock_reason: APPOINTMENT_LOCK_REASONS.HAS_OPEN_RESCHEDULE_PROPOSAL,
       queue_state: queueState,
     }
+  }
+
+  // Hết ca mà chưa check-in: dù cron `no_show` (chỉ chạy production mặc định, xem
+  // `services/noShowSweep.service.js`) đã kịp quét hay chưa, KHÔNG được để lịch trông vẫn
+  // "dời/hủy/check-in" được vô thời hạn — đây chính là lỗi nghiệp vụ "lịch hẹn đã qua lâu vẫn
+  // thao tác được" (rule mục 8). Khoá ở đây có hiệu lực NGAY LẬP TỨC, không phụ thuộc cron.
+  if ((status === 'confirmed' || status === 'pending') && isAppointmentPastShiftEnd(appointment)) {
+    return { allowed_actions: allowed, lock_reason: APPOINTMENT_LOCK_REASONS.OVERDUE_PENDING_SWEEP, queue_state: queueState }
   }
 
   if (status === 'confirmed') {

@@ -154,63 +154,79 @@ async function getQueueEntryForAppointment(appointmentId, session = null) {
 
 export const getAppointments = async (req, res) => {
   try {
-    const { date, status, timeframe, search, doctor_id, page = 1, limit = 10 } = req.query
+    const { date, status, timeframe, search, doctor_id, specialty_id, payment_status, from_date, to_date, page = 1, limit = 10, id } = req.query
     const pageNum = parseInt(page) || 1
     const limitNum = parseInt(limit) || 10
     const query = { loai_kham: 'clinic' }
 
-    if (search) {
-      const users = await NguoiDung.find({
-        $or: [
-          { ho_ten: { $regex: search, $options: 'i' } },
-          { so_dien_thoai: { $regex: search, $options: 'i' } }
-        ]
-      }).select('_id')
-
-      const userIds = users.map(u => u._id)
-
-      query.$or = [
-        { ma_lich_hen: { $regex: search, $options: 'i' } },
-        { ten_khach: { $regex: search, $options: 'i' } },
-        { so_dien_thoai_khach: { $regex: search, $options: 'i' } },
-        { user_id: { $in: userIds } }
-      ]
-    }
-
-    if (date) {
-      query.ngay_kham = new Date(`${date}T00:00:00.000Z`)
-    } else {
-      const now = new Date()
-      // Ép chuẩn về múi giờ Việt Nam (UTC+7) để Server không bị lạc ngày
-      const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000)
-      const todayString = vnTime.toISOString().split('T')[0]
-      const todayUTC = new Date(`${todayString}T00:00:00.000Z`)
-
-      const tomorrowVn = new Date(vnTime.getTime() + 24 * 60 * 60 * 1000)
-      const tomorrowString = tomorrowVn.toISOString().split('T')[0]
-      const tomorrowUTC = new Date(`${tomorrowString}T00:00:00.000Z`)
-
-      if (timeframe === 'today') {
-        query.ngay_kham = todayUTC
-      } else if (timeframe === 'tomorrow') {
-        query.ngay_kham = tomorrowUTC
-      } else if (timeframe === 'upcoming') {
-        query.ngay_kham = { $gt: todayUTC }
-      } else if (timeframe === 'past') {
-        query.ngay_kham = { $lt: todayUTC }
+    // Tra cứu đúng 1 lịch hẹn theo _id (vd: mở từ link thông báo "Có lịch khám mới!") — bỏ
+    // qua mọi bộ lọc khác (ngày/trạng thái/khung thời gian...) để không bị lọc mất lịch cần tìm.
+    if (id) {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ success: false, message: 'id lịch hẹn không hợp lệ' })
       }
-    }
-
-    // Mac dinh AN lich da huy — de tran nhieu lich huy lam kho tim lich con hieu luc.
-    // status=all -> khong loc gi; status=<gia tri cu the> (ke ca 'cancelled') -> loc dung gia tri do.
-    if (status === 'all') {
-      // khong ap dieu kien status
-    } else if (status) {
-      query.status = status
+      query._id = id
     } else {
-      query.status = { $ne: 'cancelled' }
+      if (search) {
+        const users = await NguoiDung.find({
+          $or: [
+            { ho_ten: { $regex: search, $options: 'i' } },
+            { so_dien_thoai: { $regex: search, $options: 'i' } }
+          ]
+        }).select('_id')
+
+        const userIds = users.map(u => u._id)
+
+        query.$or = [
+          { ma_lich_hen: { $regex: search, $options: 'i' } },
+          { ten_khach: { $regex: search, $options: 'i' } },
+          { so_dien_thoai_khach: { $regex: search, $options: 'i' } },
+          { user_id: { $in: userIds } }
+        ]
+      }
+
+      if (date) {
+        query.ngay_kham = new Date(`${date}T00:00:00.000Z`)
+      } else if (from_date || to_date) {
+        const range = {}
+        if (from_date) range.$gte = new Date(`${from_date}T00:00:00.000Z`)
+        if (to_date) range.$lte = new Date(`${to_date}T00:00:00.000Z`)
+        query.ngay_kham = range
+      } else {
+        const now = new Date()
+        // Ép chuẩn về múi giờ Việt Nam (UTC+7) để Server không bị lạc ngày
+        const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000)
+        const todayString = vnTime.toISOString().split('T')[0]
+        const todayUTC = new Date(`${todayString}T00:00:00.000Z`)
+
+        const tomorrowVn = new Date(vnTime.getTime() + 24 * 60 * 60 * 1000)
+        const tomorrowString = tomorrowVn.toISOString().split('T')[0]
+        const tomorrowUTC = new Date(`${tomorrowString}T00:00:00.000Z`)
+
+        if (timeframe === 'today') {
+          query.ngay_kham = todayUTC
+        } else if (timeframe === 'tomorrow') {
+          query.ngay_kham = tomorrowUTC
+        } else if (timeframe === 'upcoming') {
+          query.ngay_kham = { $gt: todayUTC }
+        } else if (timeframe === 'past') {
+          query.ngay_kham = { $lt: todayUTC }
+        }
+      }
+
+      // Mac dinh AN lich da huy — de tran nhieu lich huy lam kho tim lich con hieu luc.
+      // status=all -> khong loc gi; status=<gia tri cu the> (ke ca 'cancelled') -> loc dung gia tri do.
+      if (status === 'all') {
+        // khong ap dieu kien status
+      } else if (status) {
+        query.status = status
+      } else {
+        query.status = { $ne: 'cancelled' }
+      }
+      if (doctor_id) query.doctor_id = doctor_id
+      if (specialty_id) query.specialty_id = specialty_id
+      if (payment_status && payment_status !== 'all') query.payment_status = payment_status
     }
-    if (doctor_id) query.doctor_id = doctor_id
 
     let sortOption = { ngay_kham: 1, gio_kham: 1 }
     if (timeframe === 'past') {
@@ -962,7 +978,7 @@ export const markLateArrival = async (req, res) => {
 
     const appointment = await LichHen.findById(req.params.id).populate('user_id', 'email')
     if (!appointment) {
-      return res.status(404).json({ success: false, message: 'Khong tim thay lich hen' })
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lịch hẹn' })
     }
 
     const queueEntry = await getQueueEntryForAppointment(appointment._id)
@@ -974,7 +990,7 @@ export const markLateArrival = async (req, res) => {
 
     const moc = cacMocCuaKhung(appointment.ngay_kham, appointment.gio_kham)
     if (!moc || now.getTime() < moc.T.getTime()) {
-      return res.status(409).json({ success: false, message: 'Lich hen chua qua gio kham, khong the ghi nhan khach den muon.' })
+      return res.status(409).json({ success: false, message: 'Lịch hẹn chưa qua giờ khám, không thể ghi nhận khách đến muộn.' })
     }
 
     const target = await findLateArrivalTargetSlot({ appointment, policy, now })
@@ -1054,7 +1070,7 @@ export const markLateArrival = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Da xu ly khach den muon: chuyen tu ${gioCu} sang ${appointment.gio_kham}.`,
+      message: `Đã xử lý khách đến muộn: chuyển từ ${gioCu} sang ${appointment.gio_kham}.`,
       data: appointment,
       late_policy: target.policy,
       notification: notificationResult,
@@ -1439,18 +1455,18 @@ export const reportDoctorUnavailable = async (req, res) => {
       session.endSession()
       return res.status(400).json({
         success: false,
-        message: 'doctor_id, ngay bat dau va ngay ket thuc la bat buoc',
+        message: 'doctor_id, ngày bắt đầu và ngày kết thúc là bắt buộc',
       })
     }
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(400).json({ success: false, message: 'doctor_id khong hop le' })
+      return res.status(400).json({ success: false, message: 'doctor_id không hợp lệ' })
     }
     if (!validHHMM(gio_bat_dau) || !validHHMM(gio_ket_thuc) || ((gio_bat_dau || gio_ket_thuc) && (!gio_bat_dau || !gio_ket_thuc || gio_ket_thuc <= gio_bat_dau))) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(400).json({ success: false, message: 'Khung gio nghi khong hop le' })
+      return res.status(400).json({ success: false, message: 'Khung giờ nghỉ không hợp lệ' })
     }
 
     const doctor = await BacSi.findOne({
@@ -1461,7 +1477,7 @@ export const reportDoctorUnavailable = async (req, res) => {
     if (!doctor) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(404).json({ success: false, message: 'Khong tim thay bac si dang hoat dong' })
+      return res.status(404).json({ success: false, message: 'Không tìm thấy bác sĩ đang hoạt động' })
     }
 
     const tuNgay = startOfDayUtc(new Date(startInput))
@@ -1469,7 +1485,7 @@ export const reportDoctorUnavailable = async (req, res) => {
     if (!tuNgay || !denNgay || denNgay < tuNgay) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(400).json({ success: false, message: 'Khoang ngay nghi khong hop le' })
+      return res.status(400).json({ success: false, message: 'Khoảng ngày nghỉ không hợp lệ' })
     }
 
     const overlappingLeave = await NghiPhepBacSi.findOne({
@@ -1483,7 +1499,7 @@ export const reportDoctorUnavailable = async (req, res) => {
       session.endSession()
       return res.status(409).json({
         success: false,
-        message: 'Bac si da co don nghi trong khoang ngay nay, vui long xu ly tren don hien co',
+        message: 'Bác sĩ đã có đơn nghỉ trong khoảng ngày này, vui lòng xử lý trên đơn hiện có',
         leave_id: overlappingLeave._id,
       })
     }
@@ -1608,7 +1624,7 @@ export const reportDoctorUnavailable = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Da ghi nhan bac si nghi dot xuat. Tao de xuat cho ${proposals.length}/${affectedAppointments.length} lich bi anh huong.`,
+      message: `Đã ghi nhận bác sĩ nghỉ đột xuất. Tạo đề xuất cho ${proposals.length}/${affectedAppointments.length} lịch bị ảnh hưởng.`,
       data: {
         leave_id: suddenLeave._id,
         so_lich_bi_anh_huong: affectedAppointments.length,
