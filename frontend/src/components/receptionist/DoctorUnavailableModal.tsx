@@ -7,6 +7,7 @@ import {
 } from '@/services/receptionist-booking.service'
 import QueueTransferModal, { QueueTransferCandidate } from '@/components/receptionist/QueueTransferModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
+import RescheduleNeedsApprovalList from '@/components/receptionist/RescheduleNeedsApprovalList'
 
 interface Props {
   doctorId: string
@@ -136,9 +137,11 @@ export default function DoctorUnavailableModal({ doctorId, doctorName, defaultDa
               <p className="text-xs text-slate-500">{dangTrongPhong.length} lịch đang trong phòng khám — không cần điều phối.</p>
             )}
 
+            {result && <RescheduleNeedsApprovalList items={result.de_xuat_doi} defaultDate={tuNgay} onChanged={() => {}} />}
+
             {canLienHeThuCong > 0 && (
               <div className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800">
-                {canLienHeThuCong} lượt cần lễ tân liên hệ trực tiếp (khách không có tài khoản, hoặc chờ admin duyệt). Xem tại{' '}
+                {canLienHeThuCong} lượt cần lễ tân liên hệ trực tiếp (khách không có tài khoản, không tìm được phương án, hoặc chờ duyệt ở trên). Xem tại{' '}
                 <a href="/receptionist/contact-tasks" className="font-semibold underline">Liên Hệ Khách Hàng</a>.
               </div>
             )}

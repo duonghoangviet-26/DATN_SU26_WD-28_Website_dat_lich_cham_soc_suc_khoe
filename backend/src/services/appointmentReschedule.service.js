@@ -2,7 +2,7 @@ import {
   BacSi, LichHen, LichLamViec, NguoiDung, NhatKyThaoTac, ThongBao,
 } from '../models/index.js'
 import { caCuaKhung } from '../models/MauLichLamViec.js'
-import { daQuaCutoffOnline, isSlotInPast } from '../utils/clinicTime.js'
+import { daQuaCutoffOnline, isSlotInPast, quaSatGioBatDau } from '../utils/clinicTime.js'
 import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
 
 // ============================================================
@@ -12,12 +12,15 @@ import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
 // dạng QUYỀN DỜI LỊCH. Vì vậy khi phòng khám làm hỏng kế hoạch của khách, hệ thống phải
 // tự tìm được chỗ thay thế — không thể đẩy khách vào thế "mất chỗ mà cũng không lấy lại tiền".
 //
-// Thang đề xuất, ưu tiên ÍT PHIỀN KHÁCH NHẤT trước:
-//   1. Bác sĩ khác cùng chuyên khoa, GIỮ NGUYÊN khung giờ  → khách chỉ đổi người
-//   2. Khung khác trong cùng ngày                          → khách đổi giờ
+// Thang đề xuất (chốt 2026-08-22, thay thế thứ tự bước-1/bước-2 cũ): MỘT danh sách ứng
+// viên gộp (mọi bác sĩ cùng chuyên khoa × mọi slot còn trống trong ngày, kể cả bác sĩ cũ),
+// sắp theo ĐỘ LỆCH PHÚT TUYỆT ĐỐI so với khung gốc tăng dần — ưu tiên ÍT LỆCH GIỜ NHẤT,
+// không còn cứng nhắc "đổi người trước, đổi giờ sau". Lệch bằng nhau thì ưu tiên GIỮ BÁC SĨ
+// CŨ (khách quen bác sĩ). Ứng viên bắt đầu trong vòng PHUT_DEM_DOI_LICH_TOI_THIEU tới bị
+// loại vô điều kiện — ràng buộc vật lý "khách kịp tới nơi", áp cho mọi loại kể cả giữ giờ.
 //
-// Phương án số 1 luôn được GIỮ CHỖ SẴN: quá hạn khách không phản hồi thì áp dụng nó,
-// khách không bao giờ mất chỗ (mục 15).
+// Phương án số 1 (sau khi sắp) luôn được GIỮ CHỖ SẴN: quá hạn khách không phản hồi thì áp
+// dụng nó, khách không bao giờ mất chỗ (mục 15).
 
 /** Hạn khách phản hồi đề xuất, tính bằng giờ. Quá hạn → tự áp phương án đã giữ sẵn. */
 export const GIO_HAN_PHAN_HOI = Number(process.env.DOI_LICH_HAN_PHAN_HOI_GIO || 12)
@@ -35,7 +38,7 @@ function addDays(date, days) {
   return new Date(date.getTime() + days * 86400000)
 }
 
-function slotConTrong(slot) {
+export function slotConTrong(slot) {
   return slot.status === 'active' && !slot.benh_nhan_id && !slot.bi_khoa_boi_nghi_phep
 }
 
@@ -77,69 +80,58 @@ export async function sinhPhuongAnDoi({ appointment, duocLanWalkIn = false, now 
 
   const tenBacSi = new Map(doctors.map((d) => [String(d._id), d.user_id?.ho_ten ?? 'Bác sĩ']))
   const idBacSiKhac = new Set(doctors.map((d) => String(d._id)))
-  const phuongAn = []
 
-  // ── Bước 1: bác sĩ khác, GIỮ NGUYÊN giờ ──────────────────────────────────
-  for (const schedule of schedules) {
-    if (!idBacSiKhac.has(String(schedule.doctor_id))) continue
-    const slot = schedule.slots.find(
-      (s) => s.gio_bat_dau === gio && slotConTrong(s) && !daDat.has(String(s._id))
-        && (s.loai_slot !== 'walk_in' || duocLanWalkIn),
-    )
-    if (!slot) continue
-
-    phuongAn.push({
-      loai: 'doi_bac_si',
-      doctor_id: schedule.doctor_id,
-      schedule_id: schedule._id,
-      slot_id: slot._id,
-      ngay: schedule.ngay,
-      gio_bat_dau: slot.gio_bat_dau,
-      bac_si_ten: tenBacSi.get(String(schedule.doctor_id)) ?? 'Bác sĩ',
-      mo_ta: `Giữ nguyên ${gio}, đổi sang ${tenBacSi.get(String(schedule.doctor_id)) ?? 'bác sĩ khác'}`,
-      lan_walk_in: slot.loai_slot === 'walk_in',
-    })
-  }
-
-  // ── Bước 2: khung khác trong ngày (kể cả chính bác sĩ cũ, khung khác) ────
-  // Ưu tiên khung GẦN giờ cũ nhất để khách ít phải xoay lịch.
-  const ungVienKhungKhac = []
+  // ── Một vòng lặp duy nhất: mọi bác sĩ (kể cả bác sĩ cũ) × mọi slot còn trống ─────────
+  const ungVien = []
   for (const schedule of schedules) {
     const laBacSiCu = String(schedule.doctor_id) === String(appointment.doctor_id)
     if (!laBacSiCu && !idBacSiKhac.has(String(schedule.doctor_id))) continue
 
     for (const slot of schedule.slots) {
-      if (slot.gio_bat_dau === gio) continue
       if (!slotConTrong(slot) || daDat.has(String(slot._id))) continue
       if (slot.loai_slot === 'walk_in' && !duocLanWalkIn) continue
       if (isSlotInPast(schedule.ngay, slot.gio_bat_dau, now)) continue
       // Mốc T-30' KHÔNG áp cho phòng khám dời (mục 15) — mốc đó chỉ để chặn khách né mất
-      // tiền. Nhưng vẫn không xếp vào khung đã bắt đầu: khách không kịp tới.
+      // tiền. Nhưng ngưỡng đệm vật lý bên dưới vẫn áp dụng vô điều kiện.
       if (daQuaCutoffOnline(schedule.ngay, slot.gio_bat_dau, now) && !duocLanWalkIn) continue
+      // Ràng buộc "khách kịp tới nơi" — áp cho MỌI ứng viên, kể cả lấn walk-in.
+      if (quaSatGioBatDau(schedule.ngay, slot.gio_bat_dau, now)) continue
 
-      ungVienKhungKhac.push({
-        loai: 'doi_khung',
+      const giuGio = slot.gio_bat_dau === gio
+      const lechPhut = Math.abs(khoangCachKhung(slot.gio_bat_dau, gio))
+      const ten = tenBacSi.get(String(schedule.doctor_id)) ?? 'Bác sĩ'
+
+      let moTa
+      if (laBacSiCu && giuGio) moTa = `Giữ nguyên ${gio}, cùng bác sĩ` // chỉ xảy ra khi lan_walk_in
+      else if (laBacSiCu) moTa = `Cùng bác sĩ, đổi sang ${slot.gio_bat_dau}`
+      else if (giuGio) moTa = `Giữ nguyên ${gio}, đổi sang ${ten}`
+      else moTa = `${ten}, ${slot.gio_bat_dau}`
+
+      ungVien.push({
+        loai: (giuGio && !laBacSiCu) ? 'doi_bac_si' : 'doi_khung', // enum chỉ có 2 giá trị — mô tả chi tiết nằm ở mo_ta
         doctor_id: schedule.doctor_id,
         schedule_id: schedule._id,
         slot_id: slot._id,
         ngay: schedule.ngay,
         gio_bat_dau: slot.gio_bat_dau,
-        bac_si_ten: laBacSiCu ? null : (tenBacSi.get(String(schedule.doctor_id)) ?? 'Bác sĩ'),
-        mo_ta: laBacSiCu
-          ? `Cùng bác sĩ, đổi sang ${slot.gio_bat_dau}`
-          : `${tenBacSi.get(String(schedule.doctor_id)) ?? 'Bác sĩ khác'}, ${slot.gio_bat_dau}`,
+        bac_si_ten: laBacSiCu ? null : ten,
+        mo_ta: moTa,
         lan_walk_in: slot.loai_slot === 'walk_in',
-        _lechPhut: Math.abs(khoangCachKhung(slot.gio_bat_dau, gio)),
+        _lechPhut: lechPhut,
+        _giuBacSiCu: laBacSiCu,
       })
     }
   }
-  ungVienKhungKhac.sort((a, b) => a._lechPhut - b._lechPhut || a.gio_bat_dau.localeCompare(b.gio_bat_dau))
 
-  // Giới hạn số phương án: đưa 10 lựa chọn cho khách chỉ làm họ khó chọn hơn.
-  for (const item of ungVienKhungKhac.slice(0, 6)) {
-    delete item._lechPhut
-    phuongAn.push(item)
-  }
+  ungVien.sort((a, b) => a._lechPhut - b._lechPhut
+    || Number(b._giuBacSiCu) - Number(a._giuBacSiCu)
+    || a.gio_bat_dau.localeCompare(b.gio_bat_dau))
+
+  // Giới hạn số ứng viên trước khi gộp trùng: đưa quá nhiều lựa chọn chỉ làm khách khó chọn.
+  const phuongAn = ungVien.slice(0, 6).map((pa) => {
+    const { _lechPhut, _giuBacSiCu, ...rest } = pa
+    return rest
+  })
 
   // Trần lấn walk-in: 1 slot/khung, và chỉ khi lỗi phòng khám (mục 15).
   return capTranLanWalkIn(gopPhuongAnTrung(phuongAn)).slice(0, 4)
@@ -226,6 +218,7 @@ export async function apDungPhuongAn({
   actorUserId = null,
   actorRole = null,
   session = null,
+  hauToNhatKy = '',
 }) {
   const slotCu = { schedule_id: appointment.schedule_id, slot_id: appointment.slot_id }
 
@@ -286,7 +279,8 @@ export async function apDungPhuongAn({
     du_lieu_cu: { doctor_id: bacSiCu, gio_kham: gioCu },
     du_lieu_moi: { doctor_id: phuongAn.doctor_id, gio_kham: phuongAn.gio_bat_dau, ly_do_doi: lyDoDoi },
     ly_do: `Doi lich ${appointment.ma_lich_hen ?? ''} tu ${gioCu} sang ${phuongAn.gio_bat_dau}`
-      + (phuongAn.lan_walk_in ? ' (LAN slot walk-in — ngoai le muc 15)' : ''),
+      + (phuongAn.lan_walk_in ? ' (LAN slot walk-in — ngoai le muc 15)' : '')
+      + hauToNhatKy,
   }], session ? { session } : {})
 
   // Bổ sung cho DOI_LICH_HEN ở trên: DOI_LICH_HEN ghi việc gì xảy ra với lịch hẹn, LT_DOI_LICH
@@ -305,6 +299,75 @@ export async function apDungPhuongAn({
   }
 
   return appointment
+}
+
+/**
+ * Chọn tay TỰ DO một slot ngoài danh sách gợi ý (mục 15, chốt 2026-08-22) — dùng khi khách
+ * có yêu cầu riêng mà `sinhPhuongAnDoi()` không (hoặc chưa) đề xuất tới. CHỈ áp dụng cho
+ * lịch hẹn đang có `de_xuat_doi` mở do nghỉ đột xuất; không dùng cho dời lịch thủ công khác
+ * (đó vẫn là `rescheduleAppointment` cũ, ngoài phạm vi hàm này).
+ */
+export async function chonPhuongAnTuDo({
+  appointment, doctorId, scheduleId, slotId, actorUserId = null, actorRole = null, now = new Date(), session = null,
+}) {
+  if (!['cho_khach_chon', 'cho_admin_duyet'].includes(appointment.de_xuat_doi?.trang_thai)) {
+    throw Object.assign(new Error('Lich hen khong co de xuat doi lich dang mo.'), { statusCode: 409 })
+  }
+
+  const scheduleQuery = LichLamViec.findOne({ _id: scheduleId, doctor_id: doctorId })
+  if (session) scheduleQuery.session(session)
+  const schedule = await scheduleQuery.lean()
+  if (!schedule) throw Object.assign(new Error('Khong tim thay lich lam viec cua bac si nay.'), { statusCode: 400 })
+
+  const slot = schedule.slots.find((s) => String(s._id) === String(slotId))
+  if (!slot) throw Object.assign(new Error('Khong tim thay slot.'), { statusCode: 400 })
+  if (!slotConTrong(slot)) throw Object.assign(new Error('Slot nay khong con trong.'), { statusCode: 409 })
+
+  // Không được đổi chuyên khoa — ràng buộc y khoa, không phải tuỳ chọn thương mại.
+  const specialtyIdGoc = String(appointment.specialty_id?._id ?? appointment.specialty_id ?? '')
+  if (slot.specialty_id && specialtyIdGoc && String(slot.specialty_id) !== specialtyIdGoc) {
+    throw Object.assign(new Error('Slot nay khac chuyen khoa voi lich hen goc.'), { statusCode: 400 })
+  }
+  if (isSlotInPast(schedule.ngay, slot.gio_bat_dau, now)) {
+    throw Object.assign(new Error('Slot da qua gio, khong the chon.'), { statusCode: 400 })
+  }
+  if (quaSatGioBatDau(schedule.ngay, slot.gio_bat_dau, now)) {
+    throw Object.assign(new Error('Slot qua sat gio hien tai, khach khong kip toi.'), { statusCode: 400 })
+  }
+
+  const trung = await LichHen.exists({
+    schedule_id: schedule._id,
+    slot_id: slot._id,
+    status: { $ne: 'cancelled' },
+    _id: { $ne: appointment._id },
+  })
+  if (trung) throw Object.assign(new Error('Slot nay vua co lich hen khac chiem.'), { statusCode: 409 })
+
+  const phuongAn = {
+    loai: slot.gio_bat_dau === appointment.gio_kham ? 'doi_bac_si' : 'doi_khung',
+    doctor_id: schedule.doctor_id,
+    schedule_id: schedule._id,
+    slot_id: slot._id,
+    ngay: schedule.ngay,
+    gio_bat_dau: slot.gio_bat_dau,
+    lan_walk_in: slot.loai_slot === 'walk_in',
+  }
+
+  // Đóng phương án đang giữ sẵn (nếu có) trước khi chuyển sang slot khác do lễ tân chọn tay.
+  const dangGiuCho = (appointment.de_xuat_doi.phuong_an ?? []).find(
+    (pa) => pa.da_giu_cho && String(pa.slot_id) !== String(slot._id),
+  )
+  if (dangGiuCho) await nhaChoDaGiu(dangGiuCho, session)
+
+  return apDungPhuongAn({
+    appointment,
+    phuongAn,
+    lyDoDoi: 'phong_kham',
+    actorUserId,
+    actorRole,
+    session,
+    hauToNhatKy: ' (CHON TAY)',
+  })
 }
 
 /**

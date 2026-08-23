@@ -1,15 +1,21 @@
 import mongoose from 'mongoose'
 
-import { LichHen } from '../../models/index.js'
+import { LichHen, LichLamViec } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
-import { guiThongBaoDeXuat, nhaChoDaGiu, GIO_HAN_PHAN_HOI } from '../../services/appointmentReschedule.service.js'
+import { isSlotInPast, quaSatGioBatDau } from '../../utils/clinicTime.js'
+import {
+  guiThongBaoDeXuat, nhaChoDaGiu, chonPhuongAnTuDo, slotConTrong, GIO_HAN_PHAN_HOI,
+} from '../../services/appointmentReschedule.service.js'
 
 // ============================================================
-// DUYỆT PHƯƠNG ÁN DỜI LỊCH — phía Admin
-// Routes: /api/admin/reschedule-approvals
+// DUYỆT PHƯƠNG ÁN DỜI LỊCH — phía Admin / Lễ tân
+// Routes: /api/admin/reschedule-approvals, /api/receptionist/reschedule-approvals
 // ============================================================
-// Rule mục 15: khung đã có khách ĐÃ THANH TOÁN thì bác sĩ chỉ được TẠO YÊU CẦU, admin
-// duyệt rồi mới thông báo khách. Tiền của khách không để một người tự định đoạt.
+// Rule mục 15 (chốt 2026-08-22): khung đã có khách ĐÃ THANH TOÁN thì bác sĩ chỉ được TẠO
+// YÊU CẦU, lễ tân hoặc admin duyệt rồi mới thông báo khách. Tiền của khách không để một
+// người tự định đoạt. Trước 2026-08-22 chỉ Admin duyệt được, nhưng không có UI admin nào
+// gọi API này nên các đề xuất bị kẹt tới khi cron tự áp sau `GIO_HAN_PHAN_HOI_ADMIN` — nay
+// mở thêm cho lễ tân (người trực tiếp xử lý luồng báo nghỉ/liên hệ khách ở phòng khám nhỏ).
 
 function fmt(appointment) {
   const dx = appointment.de_xuat_doi
@@ -121,5 +127,83 @@ export async function reject(req, res) {
     )
   } catch (err) {
     return fail(res, 500, err.message)
+  }
+}
+
+// ─── GET /api/admin/reschedule-approvals/:id/free-slots?doctor_id=&date= ────
+// Danh sách slot còn trống của MỘT bác sĩ trong MỘT ngày, cùng chuyên khoa với lịch hẹn
+// gốc — dùng cho panel "Chọn khác" (chọn tay tự do, mục 15). KHÔNG áp ràng buộc "hôm nay +
+// khung hiện tại/kế tiếp" của mục 13 — đó là ràng buộc riêng cho luồng đặt walk-in tại
+// quầy, không áp dụng cho điều phối lại lịch đã có của phòng khám.
+export async function freeSlots(req, res) {
+  try {
+    const { id } = req.params
+    if (!mongoose.Types.ObjectId.isValid(id)) return fail(res, 400, 'ID khong hop le')
+    const { doctor_id: doctorId, date } = req.query
+    if (!doctorId || !date) return fail(res, 400, 'Thieu doctor_id/date')
+
+    const appointment = await LichHen.findById(id).select('specialty_id').lean()
+    if (!appointment) return fail(res, 404, 'Khong tim thay lich hen')
+    const specialtyId = String(appointment.specialty_id ?? '')
+
+    const ngayBatDau = new Date(date)
+    if (Number.isNaN(ngayBatDau.getTime())) return fail(res, 400, 'date khong hop le')
+    const ngayKetThuc = new Date(ngayBatDau.getTime() + 86400000)
+
+    const schedule = await LichLamViec.findOne({
+      doctor_id: doctorId,
+      ngay: { $gte: ngayBatDau, $lt: ngayKetThuc },
+      trang_thai_ngay: 'lam_viec',
+      trang_thai_xac_nhan: { $ne: 'tu_choi' },
+    }).lean()
+    if (!schedule) return ok(res, { schedule_id: null, slots: [] })
+
+    const now = new Date()
+    const slots = schedule.slots
+      .filter((slot) => slotConTrong(slot))
+      .filter((slot) => !specialtyId || !slot.specialty_id || String(slot.specialty_id) === specialtyId)
+      .filter((slot) => !isSlotInPast(schedule.ngay, slot.gio_bat_dau, now))
+      .filter((slot) => !quaSatGioBatDau(schedule.ngay, slot.gio_bat_dau, now))
+      .map((slot) => ({
+        slot_id: slot._id,
+        gio_bat_dau: slot.gio_bat_dau,
+        gio_ket_thuc: slot.gio_ket_thuc,
+        loai_slot: slot.loai_slot,
+      }))
+
+    return ok(res, { schedule_id: schedule._id, slots })
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── PATCH /api/admin/reschedule-approvals/:id/chon-tay ─────────────────────
+// Chọn tay TỰ DO một bác sĩ/ngày/slot ngoài danh sách gợi ý (mục 15, chốt 2026-08-22) —
+// dùng khi khách có yêu cầu riêng. Chỉ áp dụng cho lịch hẹn đang có `de_xuat_doi` mở.
+export async function chonTay(req, res) {
+  try {
+    const { id } = req.params
+    if (!mongoose.Types.ObjectId.isValid(id)) return fail(res, 400, 'ID khong hop le')
+
+    const { doctor_id: doctorId, schedule_id: scheduleId, slot_id: slotId } = req.body
+    if (!doctorId || !scheduleId || !slotId) {
+      return fail(res, 400, 'Thieu doctor_id/schedule_id/slot_id')
+    }
+
+    const appointment = await LichHen.findById(id)
+    if (!appointment) return fail(res, 404, 'Khong tim thay lich hen')
+
+    await chonPhuongAnTuDo({
+      appointment,
+      doctorId,
+      scheduleId,
+      slotId,
+      actorUserId: req.user.id,
+      actorRole: req.user.role,
+    })
+
+    return ok(res, fmt(appointment.toObject()), 'Da doi lich sang slot da chon.')
+  } catch (err) {
+    return fail(res, err.statusCode ?? 500, err.message)
   }
 }

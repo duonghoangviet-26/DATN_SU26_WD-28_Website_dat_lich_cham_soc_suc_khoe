@@ -71,6 +71,7 @@ interface SelectedKhung {
 
 export default function DoctorDayView() {
   const [date, setDate] = useState(today())
+  const [doctorFilter, setDoctorFilter] = useState('')
   const [overview, setOverview] = useState<DayOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -162,6 +163,11 @@ export default function DoctorDayView() {
     return { centralRows, assignedRows, readySuggestions, byDoctor }
   }, [offlineRows, offlineSuggestions])
 
+  const visibleDoctors = useMemo(() => {
+    const doctors = overview?.doctors ?? []
+    return doctorFilter ? doctors.filter((doctor) => doctor.doctor_id === doctorFilter) : doctors
+  }, [overview, doctorFilter])
+
   const openKhung = async (doctorId: string, doctorName: string, row: DayOverviewKhungRow) => {
     setSelectedKhung({ doctorId, doctorName, row })
     const cacheKey = `${doctorId}_${date}`
@@ -190,10 +196,25 @@ export default function DoctorDayView() {
         title="Lịch bác sĩ trong ngày"
         description="Mỗi ô là 1 khung giờ 30 phút, số hiển thị là số slot còn trống / tổng slot của khung đó. Bấm vào ô để xem ai đã đặt."
         actions={
-          <label className="grid gap-1 text-sm font-semibold text-slate-700">
-            Ngày
-            <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="min-h-10 rounded-lg border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
-          </label>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="grid gap-1 text-sm font-semibold text-slate-700">
+              Lọc theo bác sĩ
+              <select
+                value={doctorFilter}
+                onChange={(event) => setDoctorFilter(event.target.value)}
+                className="min-h-10 rounded-lg border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              >
+                <option value="">Tất cả bác sĩ</option>
+                {(overview?.doctors ?? []).map((doctor) => (
+                  <option key={doctor.doctor_id} value={doctor.doctor_id}>{doctor.ten_bac_si}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-700">
+              Ngày
+              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="min-h-10 rounded-lg border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" />
+            </label>
+          </div>
         }
       />
 
@@ -247,9 +268,11 @@ export default function DoctorDayView() {
         <LoadingBlock>Đang tải lịch bác sĩ...</LoadingBlock>
       ) : !overview || overview.doctors.length === 0 ? (
         <EmptyBlock>Không có bác sĩ nào đang hoạt động.</EmptyBlock>
+      ) : visibleDoctors.length === 0 ? (
+        <EmptyBlock>Bác sĩ đã chọn không có lịch trong ngày này.</EmptyBlock>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
-          {overview.doctors.map((doctor) => {
+          {visibleDoctors.map((doctor) => {
             const leaveCuaBacSi = pendingLeaves.find((leave) => leave.bac_si_id === doctor.doctor_id)
             const offlineChoBacSi = offlineSignal.byDoctor.get(doctor.doctor_id) ?? []
             return (
