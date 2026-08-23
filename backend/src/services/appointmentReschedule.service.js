@@ -4,6 +4,7 @@ import {
 import { caCuaKhung } from '../models/MauLichLamViec.js'
 import { daQuaCutoffOnline, isSlotInPast, quaSatGioBatDau } from '../utils/clinicTime.js'
 import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
+import { dieuKienChiemSlot, capNhatSlotCuSauKhiDoi, TRANG_THAI_DE_XUAT_MO } from './rescheduleRules.js'
 
 // ============================================================
 // ĐIỀU PHỐI DỜI LỊCH — rule mục 14 (bác sĩ nghỉ cả ca) + mục 15 (bận một khung)
@@ -208,8 +209,9 @@ export async function nhaChoDaGiu(phuongAn, session = null) {
 /**
  * Áp dụng một phương án: chuyển lịch hẹn sang slot mới.
  *
- * Slot CŨ chuyển `locked`, KHÔNG trả về pool (mục 15) — bác sĩ bận thật, không bán lại
- * cho ai. Trả về pool sẽ khiến khách khác đặt vào rồi lại phải dời tiếp.
+ * Slot CŨ: mặc định `khoaSlotCu = true` chuyển `locked`, KHÔNG trả về pool (mục 15) — bác
+ * sĩ bận thật, không bán lại cho ai. Khi khách TỰ dời (`khoaSlotCu = false`, mục 11), slot
+ * cũ được trả về pool để bán lại — không thì mỗi lần khách dời là mất hẳn một chỗ bán được.
  */
 export async function apDungPhuongAn({
   appointment,
@@ -219,14 +221,17 @@ export async function apDungPhuongAn({
   actorRole = null,
   session = null,
   hauToNhatKy = '',
+  // Slot CŨ: khoá lại (lỗi phòng khám — mục 15) hay trả về pool (khách tự dời — mục 11).
+  khoaSlotCu = true,
 }) {
   const slotCu = { schedule_id: appointment.schedule_id, slot_id: appointment.slot_id }
 
   const chiem = await LichLamViec.updateOne(
     {
       _id: phuongAn.schedule_id,
-      // Chấp nhận cả `locked` (chỗ đã giữ sẵn cho chính khách này) lẫn `active`.
-      slots: { $elemMatch: { _id: phuongAn.slot_id, status: { $in: ['active', 'locked'] } } },
+      // Điều kiện chi tiết ở rescheduleRules.dieuKienChiemSlot — phân biệt `locked` do
+      // GIỮ CHỖ cho chính lịch này với `locked` do bác sĩ NGHỈ (không bao giờ chiếm).
+      slots: { $elemMatch: dieuKienChiemSlot(phuongAn) },
     },
     {
       $set: {
@@ -242,11 +247,11 @@ export async function apDungPhuongAn({
     throw Object.assign(new Error('Chỗ này vừa có người khác nhận. Vui lòng chọn phương án khác.'), { statusCode: 409 })
   }
 
-  // Slot cũ: khoá lại, không trả pool.
+  // Slot cũ: khoá lại (lỗi phòng khám) hoặc trả về pool (khách tự dời) — mục 11 vs mục 15.
   if (slotCu.schedule_id && slotCu.slot_id) {
     await LichLamViec.updateOne(
       { _id: slotCu.schedule_id, 'slots._id': slotCu.slot_id },
-      { $set: { 'slots.$.status': 'locked', 'slots.$.benh_nhan_id': null, 'slots.$.benh_nhan_tam_giu_id': null } },
+      { $set: capNhatSlotCuSauKhiDoi(khoaSlotCu) },
       session ? { session } : {},
     )
   }

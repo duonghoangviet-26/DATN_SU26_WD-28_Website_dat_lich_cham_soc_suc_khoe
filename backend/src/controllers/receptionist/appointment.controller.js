@@ -912,6 +912,8 @@ export const rescheduleAppointment = async (req, res) => {
       lyDoDoi,
       actorUserId: getActorUserId(req),
       actorRole: getActorRole(req),
+      // Chỉ khoá slot cũ khi lỗi thuộc phòng khám. Khách yêu cầu dời -> trả pool (A1).
+      khoaSlotCu: lyDoDoi !== 'khach_yeu_cau',
     })
 
     // `ly_do_doi_lich` là mô tả tự do cho lễ tân đọc lại; `ly_do_doi` là phân loại nghiệp vụ.
