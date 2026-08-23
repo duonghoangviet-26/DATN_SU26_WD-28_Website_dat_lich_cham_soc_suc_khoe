@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   DoctorOperationalStatus,
   ReportDoctorUnavailableResult,
@@ -7,7 +8,6 @@ import {
 } from '@/services/receptionist-booking.service'
 import QueueTransferModal, { QueueTransferCandidate } from '@/components/receptionist/QueueTransferModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
-import RescheduleNeedsApprovalList from '@/components/receptionist/RescheduleNeedsApprovalList'
 
 interface Props {
   doctorId: string
@@ -137,8 +137,6 @@ export default function DoctorUnavailableModal({ doctorId, doctorName, defaultDa
               <p className="text-xs text-slate-500">{dangTrongPhong.length} lịch đang trong phòng khám — không cần điều phối.</p>
             )}
 
-            {result && <RescheduleNeedsApprovalList items={result.de_xuat_doi} defaultDate={tuNgay} onChanged={() => {}} />}
-
             {canLienHeThuCong > 0 && (
               <div className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800">
                 {canLienHeThuCong} lượt cần lễ tân liên hệ trực tiếp (khách không có tài khoản, không tìm được phương án, hoặc chờ duyệt ở trên). Xem tại{' '}
@@ -146,8 +144,17 @@ export default function DoctorUnavailableModal({ doctorId, doctorName, defaultDa
               </div>
             )}
 
-            <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
-              <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700">Đóng</button>
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
+              <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">Đóng</button>
+              {/* Modal không phải chỗ để duyệt từng người một — bảng điều phối nhìn được
+                  toàn cục và có duyệt hàng loạt (C1). */}
+              <Link
+                to={`/receptionist/dieu-phoi/${result.leave_id}`}
+                onClick={onClose}
+                className="inline-flex min-h-11 items-center rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700"
+              >
+                Sang trang điều phối →
+              </Link>
             </div>
           </div>
         )}
