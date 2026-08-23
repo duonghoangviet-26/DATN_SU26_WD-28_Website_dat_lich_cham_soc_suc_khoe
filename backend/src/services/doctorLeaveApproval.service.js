@@ -1,6 +1,7 @@
 import { NghiPhepBacSi, LichLamViec, LichHen, HangDoi } from '../models/index.js'
 import { AFFECTED_BY_LEAVE_STATUSES } from '../utils/appointmentStatus.js'
 import { taoDeXuatDoiChoDonNghi } from './appointmentReschedule.service.js'
+import { nenKhoaSlotVaoDonNghi, laSlotGiuChoDeXuat, nenSinhLaiDeXuat } from './rescheduleRules.js'
 
 // ============================================================
 // Duyệt đơn nghỉ phép — DÙNG CHUNG cho Admin (mọi kỳ hạn) và Lễ tân (kỳ ngắn).
@@ -37,6 +38,9 @@ export function laDonNganHanChoLeTan(leave) {
 // tiền cho một bác sĩ vừa báo nghỉ vẫn thanh toán được, biến thành 'booked' cho bác sĩ đã
 // nghỉ. Nay khoá cả 'pending_payment'; `markPaymentPaid` sẽ tự phát hiện slot bị khoá và
 // đẩy khách vào luồng đề xuất dời thay vì chốt booking (xem patient/payments.controller.js).
+//
+// 2026-08-23 (P0-3): khoa ca slot dang GIU SAN cho de xuat doi cua lich hen khac. Truoc day
+// bo loc chi co ['active','pending_payment'] nen slot do (da o 'locked') bi bo qua hoan toan.
 async function lockSlotsForLeave(leave, session) {
   const endExclusive = new Date(leave.den_ngay)
   endExclusive.setDate(endExclusive.getDate() + 1)
@@ -47,6 +51,10 @@ async function lockSlotsForLeave(leave, session) {
   }).session(session)
 
   let slotsLocked = 0
+  // Slot vốn đang GIỮ SẴN cho đề xuất dời của một lịch hẹn khác, nay bị đơn nghỉ này vô
+  // hiệu — những lịch hẹn đó phải được sinh lại phương án, nếu không cron quá hạn sẽ đẩy
+  // khách vào đúng slot của bác sĩ vừa nghỉ (P0-3).
+  const slotGiuChoBiHuy = []
 
   for (const schedule of schedules) {
     let changed = false
@@ -55,11 +63,14 @@ async function lockSlotsForLeave(leave, session) {
       const inRange = !leave.gio_bat_dau || !leave.gio_ket_thuc
         ? true
         : slot.gio_bat_dau < leave.gio_ket_thuc && slot.gio_ket_thuc > leave.gio_bat_dau
-      if (!inRange || !['active', 'pending_payment'].includes(slot.status)) continue
+      if (!inRange || !nenKhoaSlotVaoDonNghi(slot)) continue
+
+      if (laSlotGiuChoDeXuat(slot)) slotGiuChoBiHuy.push(slot._id)
 
       slot.status = 'locked'
       slot.bi_khoa_boi_nghi_phep = true
       slot.nghi_phep_id = leave._id
+      slot.benh_nhan_tam_giu_id = null
       slotsLocked += 1
       changed = true
     }
@@ -72,7 +83,7 @@ async function lockSlotsForLeave(leave, session) {
     if (changed) await schedule.save({ session })
   }
 
-  return { slotsLocked }
+  return { slotsLocked, slotGiuChoBiHuy }
 }
 
 // Lịch hẹn CÒN HIỆU LỰC trong khoảng nghỉ (+ khung giờ nếu có) — trả cho người duyệt biết cần
@@ -119,7 +130,7 @@ export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
   if (ghiChu !== undefined) leave.ghi_chu = ghiChu
   await leave.save({ session })
 
-  const { slotsLocked } = await lockSlotsForLeave(leave, session)
+  const { slotsLocked, slotGiuChoBiHuy } = await lockSlotsForLeave(leave, session)
   const affectedAppointments = await findAffectedAppointments(leave, session)
 
   const queueEntries = affectedAppointments.length

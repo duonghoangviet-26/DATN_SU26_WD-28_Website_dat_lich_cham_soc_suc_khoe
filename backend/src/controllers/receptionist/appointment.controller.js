@@ -13,6 +13,7 @@ import TrangThaiPhongKham from '../../models/TrangThaiPhongKham.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { apDungPhuongAn, taoDeXuatDoiChoDonNghi } from '../../services/appointmentReschedule.service.js'
+import { nenKhoaSlotVaoDonNghi, laSlotGiuChoDeXuat, nenSinhLaiDeXuat } from '../../services/rescheduleRules.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
@@ -88,6 +89,9 @@ function leaveSlotInRange(leave, slot) {
 // cho cho tra tien cho chinh bac si vua bao nghi) bi bo qua, van thanh toan duoc va chot
 // 'booked' cho mot bac si da nghi (xem markPaymentPaid trong patient/payments.controller.js,
 // da them kiem tra bi_khoa_boi_nghi_phep truoc khi chot). Nay khoa ca 'pending_payment'.
+//
+// 2026-08-23 (P0-3): khoa ca slot dang GIU SAN cho de xuat doi cua lich hen khac. Truoc day
+// bo loc chi co ['active','pending_payment'] nen slot do (da o 'locked') bi bo qua hoan toan.
 async function lockSlotsForSuddenLeave(leave, session) {
   const schedules = await LichLamViec.find({
     doctor_id: leave.bac_si_id,
@@ -95,13 +99,16 @@ async function lockSlotsForSuddenLeave(leave, session) {
   }).session(session)
 
   let slotsLocked = 0
+  const slotGiuChoBiHuy = []
   for (const schedule of schedules) {
     let changed = false
     for (const slot of schedule.slots) {
-      if (!leaveSlotInRange(leave, slot) || !['active', 'pending_payment'].includes(slot.status)) continue
+      if (!leaveSlotInRange(leave, slot) || !nenKhoaSlotVaoDonNghi(slot)) continue
+      if (laSlotGiuChoDeXuat(slot)) slotGiuChoBiHuy.push(slot._id)
       slot.status = 'locked'
       slot.bi_khoa_boi_nghi_phep = true
       slot.nghi_phep_id = leave._id
+      slot.benh_nhan_tam_giu_id = null
       slotsLocked += 1
       changed = true
     }
@@ -111,7 +118,7 @@ async function lockSlotsForSuddenLeave(leave, session) {
     }
     if (changed) await schedule.save({ session })
   }
-  return slotsLocked
+  return { slotsLocked, slotGiuChoBiHuy }
 }
 
 async function findAppointmentsAffectedBySuddenLeave(leave, session, appointmentIds = null) {
@@ -1569,7 +1576,7 @@ export const reportDoctorUnavailable = async (req, res) => {
         }
       })
 
-    const slotsLocked = await lockSlotsForSuddenLeave(suddenLeave, session)
+    const { slotsLocked, slotGiuChoBiHuy } = await lockSlotsForSuddenLeave(suddenLeave, session)
     const proposals = appointmentsForProposal.length > 0
       ? await taoDeXuatDoiChoDonNghi(suddenLeave, {
           session,
