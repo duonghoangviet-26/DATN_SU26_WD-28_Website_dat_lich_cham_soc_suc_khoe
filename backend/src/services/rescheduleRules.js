@@ -86,3 +86,35 @@ export function nenSinhLaiDeXuat(deXuatDoi) {
   if (!deXuatDoi) return true
   return TRANG_THAI_DE_XUAT_MO.includes(deXuatDoi.trang_thai)
 }
+
+// ============================================================
+// CHẤM ĐIỂM PHƯƠNG ÁN — quyết định thứ tự đề xuất (mục 15, A3/A4)
+// ============================================================
+
+/**
+ * Số ngày tìm phương án, kể từ ngày khám gốc. Trước 2026-08-23 chỉ tìm ĐÚNG 1 ngày, nên
+ * bác sĩ nghỉ cả ngày mà không có đồng nghiệp cùng chuyên khoa trực hôm đó thì 100% lịch
+ * rơi vào diện "phải liên hệ tay".
+ */
+export const SO_NGAY_TIM_PHUONG_AN = Number(process.env.DOI_LICH_SO_NGAY_TIM || 7)
+
+/**
+ * Phạt cộng thêm cho mỗi ngày phải nhảy sang. 480' = 8 tiếng, dài hơn cả khoảng cách
+ * lớn nhất trong một ngày (08:00 → 17:00 = 540'... trừ hai đầu ca), nên mọi slot CÙNG NGÀY
+ * gần như luôn xếp trước slot ngày hôm sau — đúng ý "ưu tiên triệt để trong ngày".
+ */
+export const PHAT_MOI_NGAY_PHUT = Number(process.env.DOI_LICH_PHAT_NGAY_PHUT || 480)
+
+/** Hiệu số phút giữa hai mốc `HH:MM`, có dấu. */
+export function khoangCachKhung(hhmmA, hhmmB) {
+  const phut = (hhmm) => {
+    const [h, m] = String(hhmm).split(':').map(Number)
+    return h * 60 + m
+  }
+  return phut(hhmmA) - phut(hhmmB)
+}
+
+/** Điểm lệch của một ứng viên so với khung gốc — càng nhỏ càng được ưu tiên. */
+export function diemLechPhuongAn({ gioSlot, gioGoc, soNgayLech = 0 }) {
+  return Math.abs(khoangCachKhung(gioSlot, gioGoc)) + soNgayLech * PHAT_MOI_NGAY_PHUT
+}
