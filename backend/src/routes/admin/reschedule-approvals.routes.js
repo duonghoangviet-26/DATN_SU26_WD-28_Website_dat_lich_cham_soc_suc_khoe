@@ -10,6 +10,8 @@ const router = Router()
 router.use(verifyToken, requireRole('admin', 'receptionist'))
 
 router.get('/', approvals.list)
+router.get('/leaves', approvals.danhSachDonNghiConViec)
+router.get('/leave/:leaveId/tong-quan', approvals.tongQuanTheoDonNghi)
 router.get('/:id/free-slots', approvals.freeSlots)
 router.patch('/:id/approve', approvals.approve)
 router.patch('/:id/reject', approvals.reject)

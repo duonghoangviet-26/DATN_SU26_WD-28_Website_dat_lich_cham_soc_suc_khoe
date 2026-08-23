@@ -1,8 +1,9 @@
 import mongoose from 'mongoose'
 
-import { LichHen, LichLamViec } from '../../models/index.js'
+import { LichHen, LichLamViec, NghiPhepBacSi, HangDoi } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { isSlotInPast, quaSatGioBatDau } from '../../utils/clinicTime.js'
+import { TRANG_THAI_DE_XUAT_MO } from '../../services/rescheduleRules.js'
 import {
   guiThongBaoDeXuat, nhaChoDaGiu, chonPhuongAnTuDo, slotConTrong, GIO_HAN_PHAN_HOI,
 } from '../../services/appointmentReschedule.service.js'
@@ -27,9 +28,14 @@ function fmt(appointment) {
     ngay_kham: appointment.ngay_kham,
     gio_kham: appointment.gio_kham,
     doctor_id: appointment.doctor_id,
+    // Bảng điều phối cần lọc bác sĩ cùng chuyên khoa và biết khách còn quyền dời không.
+    specialty_id: appointment.specialty_id ?? null,
+    nguon: appointment.nguon ?? null,
+    so_lan_doi_khach_yeu_cau: appointment.so_lan_doi_khach_yeu_cau ?? 0,
     gia_kham: appointment.gia_kham,
     payment_status: appointment.payment_status,
     de_xuat: {
+      nghi_phep_id: dx?.nghi_phep_id ?? null,
       trang_thai: dx?.trang_thai ?? null,
       han_phan_hoi: dx?.han_phan_hoi ?? null,
       ghi_chu: dx?.ghi_chu ?? null,
@@ -40,8 +46,13 @@ function fmt(appointment) {
         ngay: pa.ngay,
         gio_bat_dau: pa.gio_bat_dau,
         bac_si_ten: pa.bac_si_ten ?? null,
+        // 3 id dưới đây để UI bấm "dời theo phương án #n" đi thẳng đường `chon-tay` —
+        // cùng ràng buộc slot, chỉ khác điểm vào.
+        doctor_id: pa.doctor_id ?? null,
+        schedule_id: pa.schedule_id ?? null,
+        slot_id: pa.slot_id ?? null,
         da_giu_cho: Boolean(pa.da_giu_cho),
-        // Lấn slot khách-tới-quầy là ngoại lệ duy nhất của mục 15 — admin phải thấy rõ
+        // Lấn slot khách-tới-quầy là ngoại lệ duy nhất của mục 15 — người duyệt phải thấy rõ
         // mình đang duyệt cái gì.
         lan_walk_in: Boolean(pa.lan_walk_in),
       })),
@@ -49,14 +60,139 @@ function fmt(appointment) {
   }
 }
 
-// ─── GET /api/admin/reschedule-approvals ────────────────────────────────────
+// ─── GET /api/{admin|receptionist}/reschedule-approvals ─────────────────────
+// ?leave_id= lọc theo đơn nghỉ (trang điều phối của MỘT bác sĩ nghỉ)
+// ?trang_thai= lọc theo trạng thái, mặc định lấy CẢ HAI trạng thái còn mở — bảng điều phối
+//   phải nhìn được toàn cục, không chỉ nhóm đang chờ duyệt.
 export async function list(req, res) {
   try {
-    const danhSach = await LichHen.find({ 'de_xuat_doi.trang_thai': 'cho_admin_duyet' })
+    const { leave_id: leaveId, trang_thai: trangThai } = req.query
+
+    const loc = {}
+    if (trangThai) {
+      const danhSachTrangThai = String(trangThai).split(',').map((s) => s.trim()).filter(Boolean)
+      loc['de_xuat_doi.trang_thai'] = { $in: danhSachTrangThai }
+    } else {
+      loc['de_xuat_doi.trang_thai'] = { $in: TRANG_THAI_DE_XUAT_MO }
+    }
+    if (leaveId) {
+      if (!mongoose.Types.ObjectId.isValid(leaveId)) return fail(res, 400, 'leave_id khong hop le')
+      loc['de_xuat_doi.nghi_phep_id'] = new mongoose.Types.ObjectId(leaveId)
+    }
+
+    const danhSach = await LichHen.find(loc)
       .sort({ ngay_kham: 1, gio_kham: 1 })
       .lean()
 
     return ok(res, danhSach.map(fmt))
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── GET .../reschedule-approvals/leave/:leaveId/tong-quan ──────────────────
+// Header của trang điều phối: một dòng nói rõ còn bao nhiêu việc, thuộc loại nào.
+export async function tongQuanTheoDonNghi(req, res) {
+  try {
+    const { leaveId } = req.params
+    if (!mongoose.Types.ObjectId.isValid(leaveId)) return fail(res, 400, 'leaveId khong hop le')
+
+    const leave = await NghiPhepBacSi.findById(leaveId)
+      .populate({ path: 'bac_si_id', select: 'user_id', populate: { path: 'user_id', select: 'ho_ten' } })
+      .lean()
+    if (!leave) return fail(res, 404, 'Khong tim thay don nghi')
+
+    const danhSach = await LichHen.find({ 'de_xuat_doi.nghi_phep_id': leave._id })
+      .select('_id de_xuat_doi status')
+      .lean()
+
+    const dem = (dieuKien) => danhSach.filter(dieuKien).length
+
+    // Khách ĐÃ CHECK-IN không nằm trong luồng `de_xuat_doi` — họ đang ngồi ở quầy, việc cần
+    // làm là chuyển bác sĩ NGAY, không phải hẹn lại ngày khác. Trả về để bảng điều phối hiện
+    // họ thành hàng riêng, không tick checkbox được (C3).
+    const hangDoi = await HangDoi.find({
+      doctor_id: leave.bac_si_id,
+      trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong'] },
+    }).select('_id appointment_id trang_thai ma_so_thu_tu ten_benh_nhan').lean()
+
+    const lichTaiQuay = hangDoi.length
+      ? await LichHen.find({ _id: { $in: hangDoi.map((h) => h.appointment_id).filter(Boolean) } })
+          .select('_id ma_lich_hen ten_khach so_dien_thoai_khach gio_kham doctor_id specialty_id')
+          .lean()
+      : []
+    const lichTheoId = new Map(lichTaiQuay.map((a) => [String(a._id), a]))
+
+    const taiQuay = hangDoi.map((h) => {
+      const lich = lichTheoId.get(String(h.appointment_id))
+      return {
+        hang_doi_id: h._id,
+        appointment_id: h.appointment_id ?? null,
+        trang_thai_hang_doi: h.trang_thai,
+        ma_so_thu_tu: h.ma_so_thu_tu ?? null,
+        ten_khach: lich?.ten_khach ?? h.ten_benh_nhan ?? null,
+        so_dien_thoai_khach: lich?.so_dien_thoai_khach ?? null,
+        gio_kham: lich?.gio_kham ?? null,
+        ma_lich_hen: lich?.ma_lich_hen ?? null,
+        doctor_id: lich?.doctor_id ?? leave.bac_si_id,
+        specialty_id: lich?.specialty_id ?? null,
+      }
+    })
+
+    return ok(res, {
+      leave_id: leave._id,
+      bac_si: leave.bac_si_id?.user_id?.ho_ten ?? 'Bác sĩ',
+      bac_si_id: leave.bac_si_id?._id ?? leave.bac_si_id ?? null,
+      trang_thai_don: leave.trang_thai,
+      khoang_nghi: {
+        tu_ngay: leave.tu_ngay,
+        den_ngay: leave.den_ngay,
+        gio_bat_dau: leave.gio_bat_dau ?? null,
+        gio_ket_thuc: leave.gio_ket_thuc ?? null,
+      },
+      ly_do: leave.ly_do ?? null,
+      so_lich_anh_huong: danhSach.length,
+      so_cho_duyet: dem((a) => a.de_xuat_doi?.trang_thai === 'cho_admin_duyet'),
+      so_cho_khach_chon: dem((a) => a.de_xuat_doi?.trang_thai === 'cho_khach_chon'),
+      so_da_doi: dem((a) => a.de_xuat_doi?.trang_thai === 'da_ap_dung'),
+      so_khong_co_cho: dem((a) => (a.de_xuat_doi?.phuong_an?.length ?? 0) === 0
+        && TRANG_THAI_DE_XUAT_MO.includes(a.de_xuat_doi?.trang_thai)),
+      so_tai_quay: taiQuay.length,
+      tai_quay: taiQuay,
+    })
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// ─── GET .../reschedule-approvals/leaves ────────────────────────────────────
+// Danh sách đơn nghỉ CÒN việc chưa xử lý — trang đầu của mục "Điều phối lịch hẹn".
+export async function danhSachDonNghiConViec(req, res) {
+  try {
+    const nhomTheoDon = await LichHen.aggregate([
+      { $match: { 'de_xuat_doi.trang_thai': { $in: TRANG_THAI_DE_XUAT_MO } } },
+      { $group: { _id: '$de_xuat_doi.nghi_phep_id', so_lich: { $sum: 1 } } },
+    ])
+    const ids = nhomTheoDon.map((n) => n._id).filter(Boolean)
+    if (ids.length === 0) return ok(res, [])
+
+    const leaves = await NghiPhepBacSi.find({ _id: { $in: ids } })
+      .populate({ path: 'bac_si_id', select: 'user_id', populate: { path: 'user_id', select: 'ho_ten' } })
+      .sort({ tu_ngay: -1 })
+      .lean()
+
+    const soLichTheoDon = new Map(nhomTheoDon.map((n) => [String(n._id), n.so_lich]))
+    return ok(res, leaves.map((leave) => ({
+      leave_id: leave._id,
+      bac_si: leave.bac_si_id?.user_id?.ho_ten ?? 'Bác sĩ',
+      tu_ngay: leave.tu_ngay,
+      den_ngay: leave.den_ngay,
+      gio_bat_dau: leave.gio_bat_dau ?? null,
+      gio_ket_thuc: leave.gio_ket_thuc ?? null,
+      ly_do: leave.ly_do ?? null,
+      trang_thai_don: leave.trang_thai,
+      so_lich_chua_xu_ly: soLichTheoDon.get(String(leave._id)) ?? 0,
+    })))
   } catch (err) {
     return fail(res, 500, err.message)
   }
