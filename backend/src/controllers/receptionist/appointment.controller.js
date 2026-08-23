@@ -12,7 +12,7 @@ import HangDoi from '../../models/HangDoi.js'
 import TrangThaiPhongKham from '../../models/TrangThaiPhongKham.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
-import { apDungPhuongAn, taoDeXuatDoiChoDonNghi } from '../../services/appointmentReschedule.service.js'
+import { apDungPhuongAn, taoDeXuatDoiChoDonNghi, sinhLaiDeXuatChoLichMatCho } from '../../services/appointmentReschedule.service.js'
 import { nenKhoaSlotVaoDonNghi, laSlotGiuChoDeXuat, nenSinhLaiDeXuat } from '../../services/rescheduleRules.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
@@ -1541,7 +1541,7 @@ export const reportDoctorUnavailable = async (req, res) => {
 
     const appointmentsForProposal = affectedAppointments.filter((appointment) => (
       ['pending', 'confirmed'].includes(appointment.status)
-      && !appointment.de_xuat_doi
+      && nenSinhLaiDeXuat(appointment.de_xuat_doi)
       && !queueByAppointment.has(String(appointment._id))
     ))
 
@@ -1563,8 +1563,8 @@ export const reportDoctorUnavailable = async (req, res) => {
             ? 'benh_nhan_dang_trong_phong'
             : queue
               ? 'da_checkin_can_dieu_phoi_tai_quay'
-              : appointment.de_xuat_doi
-                ? 'dang_co_de_xuat_doi_mo'
+              : !nenSinhLaiDeXuat(appointment.de_xuat_doi)
+                ? 'de_xuat_doi_da_xu_ly'
                 : 'trang_thai_khong_cho_phep_tao_de_xuat',
           hang_doi: queue
             ? {
@@ -1584,6 +1584,9 @@ export const reportDoctorUnavailable = async (req, res) => {
           appointmentIds: appointmentsForProposal.map((appointment) => appointment._id),
         })
       : []
+
+    // P0-3: lịch hẹn của bác sĩ khác vừa mất chỗ giữ sẵn nằm trong ca nghỉ này.
+    const proposalsSinhLai = await sinhLaiDeXuatChoLichMatCho(slotGiuChoBiHuy, { session, now })
 
     const updatedAppointments = proposals.length > 0
       ? await LichHen.find({ _id: { $in: proposals.map((proposal) => proposal.appointment_id) } })
@@ -1641,6 +1644,7 @@ export const reportDoctorUnavailable = async (req, res) => {
         de_xuat_doi: proposalSummaries,
         can_dieu_phoi_tai_quay: skippedAppointments,
         so_luot_can_le_tan_lien_he: manualContactCount,
+        so_lich_sinh_lai_phuong_an: proposalsSinhLai.length,
       },
     })
   } catch (error) {

@@ -1,6 +1,6 @@
 import { NghiPhepBacSi, LichLamViec, LichHen, HangDoi } from '../models/index.js'
 import { AFFECTED_BY_LEAVE_STATUSES } from '../utils/appointmentStatus.js'
-import { taoDeXuatDoiChoDonNghi } from './appointmentReschedule.service.js'
+import { taoDeXuatDoiChoDonNghi, sinhLaiDeXuatChoLichMatCho } from './appointmentReschedule.service.js'
 import { nenKhoaSlotVaoDonNghi, laSlotGiuChoDeXuat, nenSinhLaiDeXuat } from './rescheduleRules.js'
 
 // ============================================================
@@ -143,7 +143,9 @@ export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
 
   const appointmentsForProposal = affectedAppointments.filter((a) => (
     ['pending', 'confirmed'].includes(a.status)
-    && !a.de_xuat_doi
+    // P1-6: đề xuất CÒN MỞ nay được sinh lại (trước đây `!a.de_xuat_doi` chặn cả nhóm này,
+    // để lịch hẹn treo với phương án đã hỏng).
+    && nenSinhLaiDeXuat(a.de_xuat_doi)
     && !queueByAppointment.has(String(a._id))
   ))
 
@@ -163,8 +165,8 @@ export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
           ? 'benh_nhan_dang_trong_phong'
           : queue
             ? 'da_checkin_can_dieu_phoi_tai_quay'
-            : a.de_xuat_doi
-              ? 'dang_co_de_xuat_doi_mo'
+            : !nenSinhLaiDeXuat(a.de_xuat_doi)
+              ? 'de_xuat_doi_da_xu_ly'
               : 'trang_thai_khong_cho_phep_tao_de_xuat',
         hang_doi: queue
           ? { hang_doi_id: queue._id, trang_thai: queue.trang_thai, ma_so_thu_tu: queue.ma_so_thu_tu ?? null }
@@ -178,7 +180,10 @@ export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
     ? await taoDeXuatDoiChoDonNghi(leave, { session, appointmentIds: appointmentsForProposal.map((a) => a._id) })
     : []
 
-  return { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat }
+  // P0-3: lịch hẹn của BÁC SĨ KHÁC vừa mất chỗ giữ sẵn vì đơn nghỉ này.
+  const deXuatSinhLai = await sinhLaiDeXuatChoLichMatCho(slotGiuChoBiHuy, { session })
+
+  return { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat, deXuatSinhLai }
 }
 
 /** Từ chối một đơn nghỉ — chỉ đổi trạng thái, không đụng slot/lịch hẹn. */

@@ -82,7 +82,7 @@ export interface SuddenLeaveSkippedAppointment {
   gio_kham: string
   doctor_id?: string | null
   specialty_id?: string | null
-  ly_do_bo_qua: 'benh_nhan_dang_trong_phong' | 'da_checkin_can_dieu_phoi_tai_quay' | 'dang_co_de_xuat_doi_mo' | 'trang_thai_khong_cho_phep_tao_de_xuat'
+  ly_do_bo_qua: 'benh_nhan_dang_trong_phong' | 'da_checkin_can_dieu_phoi_tai_quay' | 'de_xuat_doi_da_xu_ly' | 'trang_thai_khong_cho_phep_tao_de_xuat'
   hang_doi?: { hang_doi_id: string; trang_thai: string; ma_so_thu_tu?: string | null } | null
 }
 
@@ -93,6 +93,7 @@ export interface ReportDoctorUnavailableResult {
   de_xuat_doi: SuddenLeaveProposalSummary[]
   can_dieu_phoi_tai_quay: SuddenLeaveSkippedAppointment[]
   so_luot_can_le_tan_lien_he: number
+  so_lich_sinh_lai_phuong_an?: number
 }
 
 export const receptionistBookingService = {

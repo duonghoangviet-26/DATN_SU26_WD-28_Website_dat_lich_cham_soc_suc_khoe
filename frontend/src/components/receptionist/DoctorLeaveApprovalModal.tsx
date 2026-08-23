@@ -101,7 +101,7 @@ export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', lea
   const canDieuPhoi = result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'da_checkin_can_dieu_phoi_tai_quay') ?? []
   const dangTrongPhong = result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'benh_nhan_dang_trong_phong') ?? []
   const canLienHeThuCong = (result?.de_xuat_doi.filter((p) => p.can_lien_he_thu_cong).length ?? 0)
-    + (result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'trang_thai_khong_cho_phep_tao_de_xuat' || item.ly_do_bo_qua === 'dang_co_de_xuat_doi_mo').length ?? 0)
+    + (result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'trang_thai_khong_cho_phep_tao_de_xuat' || item.ly_do_bo_qua === 'de_xuat_doi_da_xu_ly').length ?? 0)
   const daTuDongDeXuat = result?.de_xuat_doi.filter((p) => !p.can_lien_he_thu_cong).length ?? 0
 
   return (

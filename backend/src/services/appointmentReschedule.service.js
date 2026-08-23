@@ -403,6 +403,13 @@ export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new 
 
   const ketQua = []
   for (const appointment of appointments) {
+    // P1-6: lịch hẹn đã có đề xuất CÒN MỞ (dính hai đơn nghỉ liên tiếp) nay được sinh lại.
+    // Phải nhả chỗ đã giữ ở đề xuất cũ trước, nếu không một lịch hẹn giữ hai chỗ cùng lúc.
+    const dxCu = appointment.de_xuat_doi
+    if (dxCu && TRANG_THAI_DE_XUAT_MO.includes(dxCu.trang_thai)) {
+      for (const pa of dxCu.phuong_an ?? []) await nhaChoDaGiu(pa, session)
+    }
+
     // Lỗi thuộc phòng khám nên khách được lấn slot walk-in (ngoại lệ duy nhất, mục 15).
     const phuongAn = await sinhPhuongAnDoi({ appointment, duocLanWalkIn: true, now, session })
 
@@ -431,6 +438,50 @@ export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new 
     // admin duyệt chỉ để xác nhận phương án cuối chứ không phải cổng chặn thông tin.
     await guiThongBaoDeXuat(appointment, session)
     ketQua.push({ appointment_id: appointment._id, so_phuong_an: phuongAn.length, cho_admin_duyet: daThanhToan })
+  }
+
+  return ketQua
+}
+
+/**
+ * Sinh lại phương án cho những lịch hẹn có chỗ GIỮ SẴN vừa bị một đơn nghỉ khác vô hiệu
+ * (P0-3). Những lịch này thuộc bác sĩ KHÁC — chúng chỉ mượn slot của bác sĩ vừa báo nghỉ.
+ *
+ * PHẢI gọi SAU khi đã khoá slot, để `sinhPhuongAnDoi` nhìn thấy slot mới khoá là không
+ * khả dụng. Giữ nguyên `nghi_phep_id` gốc — đề xuất vẫn thuộc về đơn nghỉ ban đầu.
+ */
+export async function sinhLaiDeXuatChoLichMatCho(slotIds, { session = null, now = new Date() } = {}) {
+  if (!Array.isArray(slotIds) || slotIds.length === 0) return []
+
+  const danhSach = await LichHen.find({
+    'de_xuat_doi.trang_thai': { $in: TRANG_THAI_DE_XUAT_MO },
+    'de_xuat_doi.phuong_an.slot_id': { $in: slotIds },
+    status: { $in: ['pending', 'confirmed'] },
+  }).session(session)
+
+  const ketQua = []
+  for (const appointment of danhSach) {
+    // Nhả nốt các chỗ giữ sẵn CÒN hợp lệ ở phương án cũ — sắp thay bằng phương án mới.
+    for (const pa of appointment.de_xuat_doi.phuong_an ?? []) await nhaChoDaGiu(pa, session)
+
+    const phuongAn = await sinhPhuongAnDoi({ appointment, duocLanWalkIn: true, now, session })
+    if (phuongAn.length > 0) {
+      phuongAn[0].da_giu_cho = await giuChoPhuongAn(phuongAn[0], appointment, session)
+    }
+
+    const choAdminDuyet = appointment.de_xuat_doi.trang_thai === 'cho_admin_duyet'
+    appointment.de_xuat_doi.phuong_an = phuongAn
+    appointment.de_xuat_doi.phuong_an_khach_chon = null
+    appointment.de_xuat_doi.han_phan_hoi = new Date(
+      now.getTime() + (choAdminDuyet ? GIO_HAN_PHAN_HOI_ADMIN : GIO_HAN_PHAN_HOI) * 3600_000,
+    )
+    appointment.de_xuat_doi.ghi_chu = phuongAn.length === 0
+      ? 'Cho giu san mat vi mot bac si khac cung bao nghi — khong tim duoc phuong an moi, phai lien he khach.'
+      : 'Cho giu san mat vi mot bac si khac cung bao nghi — da sinh phuong an moi va giu cho lai.'
+    await appointment.save({ session })
+
+    await guiThongBaoDeXuat(appointment, session)
+    ketQua.push({ appointment_id: appointment._id, so_phuong_an: phuongAn.length })
   }
 
   return ketQua
