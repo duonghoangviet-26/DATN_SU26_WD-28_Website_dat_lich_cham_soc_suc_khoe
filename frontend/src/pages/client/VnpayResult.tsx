@@ -26,7 +26,7 @@ function formatAppointmentDate(value?: string | null) {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-  }).format(date)Vui lòng đến trước giờ hẹn 15 phút
+  }).format(date)
 }
 
 function DetailIcon({ children }: { children: React.ReactNode }) {
