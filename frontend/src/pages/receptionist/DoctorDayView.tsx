@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { DayOverview, DayOverviewKhungRow, DoctorDayAppointment, receptionistBookingService } from '@/services/receptionist-booking.service'
+import { DayOverview, DayOverviewKhungRow, DoctorDayAppointment, DoctorFilterOption, receptionistBookingService } from '@/services/receptionist-booking.service'
 import { receptionistDoctorLeavesService, type PendingDoctorLeave } from '@/services/receptionist-doctor-leaves.service'
 import DoctorUnavailableModal from '@/components/receptionist/DoctorUnavailableModal'
 import DoctorLeaveApprovalModal from '@/components/receptionist/DoctorLeaveApprovalModal'
@@ -13,7 +13,9 @@ function today() {
   return new Date().toISOString().slice(0, 10)
 }
 
-function moTaKhoangNghiChoDuyet(leave: PendingDoctorLeave) {
+// Dùng chung cho cả PendingDoctorLeave (đơn ngắn hạn, bác sĩ tự gửi) và DoctorLeaveDaiHanChoDuyet
+// (đơn dài ngày lễ tân tạo, C1) — hai kiểu dữ liệu khác nhau nhưng cùng có 3 trường này.
+function moTaKhoangNghiChoDuyet(leave: { tu_ngay: string; gio_bat_dau?: string | null; gio_ket_thuc?: string | null }) {
   const gio = leave.gio_bat_dau && leave.gio_ket_thuc ? `${leave.gio_bat_dau}–${leave.gio_ket_thuc}` : 'cả ngày'
   return `${new Date(leave.tu_ngay).toLocaleDateString('vi-VN')} · ${gio}`
 }
@@ -63,9 +65,34 @@ interface SelectedKhung {
   row: DayOverviewKhungRow
 }
 
-export default function DoctorDayView({ embedded = false }: { embedded?: boolean } = {}) {
-  const [date, setDate] = useState(today())
-  const [doctorFilter, setDoctorFilter] = useState('')
+interface DoctorDayViewProps {
+  embedded?: boolean
+  // C2 (2026-08-25): trang gộp QuanLyDieuPhoi.tsx hiện đặt bộ lọc ngày/bác sĩ ở header của
+  // NÓ (cùng hàng với Tabs, spec §3.3) — component này khi embedded=true không tự vẽ header
+  // nữa nên phải nhận ngày/bác sĩ lọc làm props có kiểm soát. Khi không truyền (vd nếu tương
+  // lai có chỗ dùng standalone lại), rơi về state nội bộ như trước — không phá vỡ hành vi cũ.
+  date?: string
+  onDateChange?: (date: string) => void
+  doctorFilter?: string
+  onDoctorFilterChange?: (doctorId: string) => void
+  /** Báo cho component cha danh sách bác sĩ hiện có, để vẽ <select> lọc ở header của cha. */
+  onDoctorsLoaded?: (doctors: DoctorFilterOption[]) => void
+}
+
+export default function DoctorDayView({
+  embedded = false,
+  date: dateProp,
+  onDateChange,
+  doctorFilter: doctorFilterProp,
+  onDoctorFilterChange,
+  onDoctorsLoaded,
+}: DoctorDayViewProps = {}) {
+  const [dateLocal, setDateLocal] = useState(today())
+  const [doctorFilterLocal, setDoctorFilterLocal] = useState('')
+  const date = dateProp ?? dateLocal
+  const setDate = onDateChange ?? setDateLocal
+  const doctorFilter = doctorFilterProp ?? doctorFilterLocal
+  const setDoctorFilter = onDoctorFilterChange ?? setDoctorFilterLocal
   const [overview, setOverview] = useState<DayOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -112,6 +139,13 @@ export default function DoctorDayView({ embedded = false }: { embedded?: boolean
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date])
+
+  // C2: báo danh sách bác sĩ lên cho component cha vẽ <select> lọc ở header của nó.
+  useEffect(() => {
+    if (!overview) return
+    onDoctorsLoaded?.(overview.doctors.map((doctor) => ({ id: doctor.doctor_id, ho_ten: doctor.ten_bac_si })))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overview])
 
   const visibleDoctors = useMemo(() => {
     const doctors = overview?.doctors ?? []
@@ -215,13 +249,31 @@ export default function DoctorDayView({ embedded = false }: { embedded?: boolean
 
               {trangThaiThe === 'lam_viec' && (
                 <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setUnavailableDoctor({ id: doctor.doctor_id, name: doctor.ten_bac_si })}
-                    className="min-h-9 rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                  >
-                    Báo nghỉ đột xuất
-                  </button>
+                  {doctor.don_nghi_dai_han_cho_duyet ? (
+                    // C1 (2026-08-25): đơn nghỉ NHIỀU NGÀY do lễ tân vừa tạo đang 'cho_duyet'
+                    // (cần Admin) — KHÔNG hiện nút "Báo nghỉ đột xuất" nữa (bấm lại chỉ dẫn tới
+                    // 409 "đã có đơn nghỉ trong khoảng ngày này" mà lễ tân không có màn hình
+                    // nào để xử lý đơn đó). Thẻ cũng không được trông giống 'lam_viec' bình
+                    // thường — đây KHÔNG phải trạng thái 'cho_duyet' của xepTrangThaiTheBacSi
+                    // (trạng thái đó dành cho đơn bác sĩ TỰ GỬI, ý nghĩa khác hẳn).
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                      <p className="text-sm font-semibold text-amber-900">
+                        Đã tạo đơn nghỉ dài ngày ({moTaKhoangNghiChoDuyet(doctor.don_nghi_dai_han_cho_duyet)}) — chờ Admin duyệt
+                      </p>
+                      <p className="mt-0.5 text-xs text-amber-700">Chưa khoá lịch, chưa báo khách. Đơn này cần Admin xử lý.</p>
+                      {doctor.don_nghi_dai_han_cho_duyet.ly_do && (
+                        <p className="mt-0.5 text-xs italic text-amber-700">&ldquo;{doctor.don_nghi_dai_han_cho_duyet.ly_do}&rdquo;</p>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setUnavailableDoctor({ id: doctor.doctor_id, name: doctor.ten_bac_si })}
+                      className="min-h-9 rounded-lg border border-rose-300 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                    >
+                      Báo nghỉ đột xuất
+                    </button>
+                  )}
                 </div>
               )}
 
