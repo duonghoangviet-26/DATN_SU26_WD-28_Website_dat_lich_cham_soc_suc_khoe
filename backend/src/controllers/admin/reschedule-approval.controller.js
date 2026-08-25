@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 
 import { LichHen, LichLamViec, NghiPhepBacSi, HangDoi, NhatKyThaoTac } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
+import { ganTrangThaiLienHe } from '../../services/contactTasks.service.js'
 import { isSlotInPast, quaSatGioBatDau } from '../../utils/clinicTime.js'
 import { TRANG_THAI_DE_XUAT_MO } from '../../services/rescheduleRules.js'
 import {
@@ -140,6 +141,43 @@ export async function tongQuanTheoDonNghi(req, res) {
       }
     })
 
+    // B4: đếm slot đã khoá vì chính đơn nghỉ này (bi_khoa_boi_nghi_phep + nghi_phep_id khớp).
+    // leave.bac_si_id ĐÃ populate ở trên (dòng populate 'bac_si_id') -> là object {_id, user_id},
+    // KHÔNG phải ObjectId thô — phải lấy ._id ra trước khi dùng làm điều kiện query, nếu không
+    // Mongoose không khớp được bản ghi nào (cùng cách xử lý đã dùng ở field bac_si_id trả về bên dưới).
+    const bacSiIdThuc = leave.bac_si_id?._id ?? leave.bac_si_id
+    const endExclusiveKhoa = new Date(leave.den_ngay)
+    endExclusiveKhoa.setDate(endExclusiveKhoa.getDate() + 1)
+    const schedulesKhoa = await LichLamViec.find({
+      doctor_id: bacSiIdThuc,
+      ngay: { $gte: leave.tu_ngay, $lt: endExclusiveKhoa },
+      'slots.nghi_phep_id': leave._id,
+    }).select('slots').lean()
+    let soSlotDaKhoa = 0
+    for (const schedule of schedulesKhoa) {
+      for (const slot of schedule.slots ?? []) {
+        if (String(slot.nghi_phep_id) === String(leave._id)) soSlotDaKhoa += 1
+      }
+    }
+
+    // Đ4: trong nhóm "không có chỗ", đếm bao nhiêu đã được lễ tân liên hệ xong — dựa trên
+    // NhatKyThaoTac{CUSTOMER_CONTACT_REQUIRED -> CUSTOMER_CONTACTED} mà guiThongBaoDeXuat()
+    // ghi khi phuong_an rỗng (Task 6). KHÔNG thêm field DB mới.
+    const idsKhongCoCho = danhSach
+      .filter((a) => (a.de_xuat_doi?.phuong_an?.length ?? 0) === 0
+        && TRANG_THAI_DE_XUAT_MO.includes(a.de_xuat_doi?.trang_thai))
+      .map((a) => a._id)
+    let soKhongCoChoDaXuLy = 0
+    if (idsKhongCoCho.length > 0) {
+      const [requests, contacted] = await Promise.all([
+        NhatKyThaoTac.find({ hanh_dong: 'CUSTOMER_CONTACT_REQUIRED', doi_tuong_id: { $in: idsKhongCoCho } })
+          .select('_id doi_tuong_id ngay_tao').lean(),
+        NhatKyThaoTac.find({ hanh_dong: 'CUSTOMER_CONTACTED', doi_tuong_id: { $in: idsKhongCoCho } })
+          .select('doi_tuong_id ngay_tao').lean(),
+      ])
+      soKhongCoChoDaXuLy = ganTrangThaiLienHe(requests, contacted).filter((r) => r.daGoi).length
+    }
+
     return ok(res, {
       leave_id: leave._id,
       bac_si: leave.bac_si_id?.user_id?.ho_ten ?? 'Bác sĩ',
@@ -156,8 +194,9 @@ export async function tongQuanTheoDonNghi(req, res) {
       so_cho_duyet: dem((a) => a.de_xuat_doi?.trang_thai === 'cho_admin_duyet'),
       so_cho_khach_chon: dem((a) => a.de_xuat_doi?.trang_thai === 'cho_khach_chon'),
       so_da_doi: dem((a) => a.de_xuat_doi?.trang_thai === 'da_ap_dung'),
-      so_khong_co_cho: dem((a) => (a.de_xuat_doi?.phuong_an?.length ?? 0) === 0
-        && TRANG_THAI_DE_XUAT_MO.includes(a.de_xuat_doi?.trang_thai)),
+      so_khong_co_cho: idsKhongCoCho.length,
+      so_khong_co_cho_da_xu_ly: soKhongCoChoDaXuLy,
+      so_slot_da_khoa: soSlotDaKhoa,
       so_tai_quay: taiQuay.length,
       tai_quay: taiQuay,
     })

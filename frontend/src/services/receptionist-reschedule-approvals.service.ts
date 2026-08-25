@@ -88,6 +88,8 @@ export interface TongQuanDieuPhoi {
   so_cho_khach_chon: number
   so_da_doi: number
   so_khong_co_cho: number
+  so_khong_co_cho_da_xu_ly: number
+  so_slot_da_khoa: number
   so_tai_quay: number
   tai_quay: KhachTaiQuay[]
 }
