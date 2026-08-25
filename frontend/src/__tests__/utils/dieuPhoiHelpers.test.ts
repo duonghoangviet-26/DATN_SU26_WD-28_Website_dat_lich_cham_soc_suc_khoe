@@ -3,29 +3,51 @@ import { xepBuocQuyTrinh, dinhDangDemNguoc, xepTrangThaiTheBacSi } from '@/utils
 
 describe('xepBuocQuyTrinh', () => {
   it('bước 1 luôn xong khi đơn tồn tại', () => {
-    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 3, so_da_doi: 0, so_khong_co_cho: 0, so_khong_co_cho_da_xu_ly: 0 })
+    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 3, so_da_doi: 0, so_khong_co_cho: 0, so_khong_co_cho_da_xu_ly: 0, so_da_ket_thuc: 0 })
     expect(buoc[0].xong).toBe(true)
   })
 
   it('bước 2 đang làm khi còn lịch chờ duyệt', () => {
-    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 3, so_da_doi: 0, so_khong_co_cho: 0, so_khong_co_cho_da_xu_ly: 0 })
+    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 3, so_da_doi: 0, so_khong_co_cho: 0, so_khong_co_cho_da_xu_ly: 0, so_da_ket_thuc: 0 })
     expect(buoc[1].dangLam).toBe(true)
     expect(buoc[1].xong).toBe(false)
   })
 
   it('bước 2 xong khi hết lịch chờ duyệt', () => {
-    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 0, so_da_doi: 5, so_khong_co_cho: 0, so_khong_co_cho_da_xu_ly: 0 })
+    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 0, so_da_doi: 5, so_khong_co_cho: 0, so_khong_co_cho_da_xu_ly: 0, so_da_ket_thuc: 0 })
     expect(buoc[1].xong).toBe(true)
   })
 
   it('bước 3 CHƯA xong nếu còn lịch không có chỗ chưa xử lý, dù đã dời hết phần còn lại', () => {
-    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 0, so_da_doi: 4, so_khong_co_cho: 1, so_khong_co_cho_da_xu_ly: 0 })
+    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 0, so_da_doi: 4, so_khong_co_cho: 1, so_khong_co_cho_da_xu_ly: 0, so_da_ket_thuc: 0 })
     expect(buoc[2].xong).toBe(false)
   })
 
   it('bước 3 xong khi đã dời + đã xử lý xong nhóm không có chỗ bằng đúng tổng ảnh hưởng', () => {
-    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 0, so_da_doi: 4, so_khong_co_cho: 1, so_khong_co_cho_da_xu_ly: 1 })
+    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 0, so_da_doi: 4, so_khong_co_cho: 1, so_khong_co_cho_da_xu_ly: 1, so_da_ket_thuc: 0 })
     expect(buoc[2].xong).toBe(true)
+  })
+
+  // I1 (2026-08-25): một đề xuất bị từ chối (reject) hoặc tự huỷ quá hạn không phương án
+  // (apDungDeXuatQuaHan) chuyển de_xuat_doi.trang_thai='da_huy' — không rơi vào so_da_doi
+  // (chưa dời) lẫn so_khong_co_cho_da_xu_ly (không phải lúc nào cũng có nhật ký liên hệ).
+  // Trước fix, bước 3 KHÔNG BAO GIỜ đạt 100% nếu có bất kỳ lịch nào bị da_huy dù không còn
+  // việc gì phải làm cho lịch đó nữa.
+  it('bước 3 xong nhờ so_da_ket_thuc dù so_da_doi + so_khong_co_cho_da_xu_ly chưa đủ', () => {
+    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 0, so_da_doi: 3, so_khong_co_cho: 0, so_khong_co_cho_da_xu_ly: 0, so_da_ket_thuc: 2 })
+    expect(buoc[2].xong).toBe(true)
+  })
+
+  // Một lịch da_huy với 0 phương án đồng thời là "cần liên hệ tay" (I2, so_khong_co_cho) VÀ
+  // "giai đoạn này đã kết thúc" (I1, so_da_ket_thuc) — hai điều không loại trừ nhau.
+  it('bước 3 xong nhờ so_da_ket_thuc dù còn so_khong_co_cho chưa được lễ tân đánh dấu đã gọi', () => {
+    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 0, so_da_doi: 3, so_khong_co_cho: 2, so_khong_co_cho_da_xu_ly: 0, so_da_ket_thuc: 2 })
+    expect(buoc[2].xong).toBe(true)
+  })
+
+  it('bước 3 chưa xong nếu so_da_doi + so_khong_co_cho_da_xu_ly + so_da_ket_thuc vẫn thiếu', () => {
+    const buoc = xepBuocQuyTrinh({ so_lich_anh_huong: 5, so_cho_duyet: 0, so_da_doi: 3, so_khong_co_cho: 1, so_khong_co_cho_da_xu_ly: 0, so_da_ket_thuc: 1 })
+    expect(buoc[2].xong).toBe(false)
   })
 })
 

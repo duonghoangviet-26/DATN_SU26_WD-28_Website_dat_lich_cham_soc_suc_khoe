@@ -4,6 +4,10 @@ export interface TongQuanChoQuyTrinh {
   so_da_doi: number
   so_khong_co_cho: number
   so_khong_co_cho_da_xu_ly: number
+  /** I1 (2026-08-25): lịch có de_xuat_doi.trang_thai='da_huy' (từ chối thủ công hoặc tự huỷ
+   * quá hạn không phương án) — không rơi vào so_da_doi lẫn so_khong_co_cho_da_xu_ly nhưng
+   * giai đoạn "báo khách" của lịch đó ĐÃ kết thúc, không còn việc gì để chờ. */
+  so_da_ket_thuc: number
 }
 
 export interface BuocQuyTrinh {
@@ -17,7 +21,7 @@ export interface BuocQuyTrinh {
 /** Thanh quy trình 3 bước (mục 3.2 spec) — suy hoàn toàn từ số liệu tong-quan, không lưu DB. */
 export function xepBuocQuyTrinh(input: TongQuanChoQuyTrinh): BuocQuyTrinh[] {
   const buoc2Xong = input.so_cho_duyet === 0
-  const buoc3Xong = input.so_da_doi + input.so_khong_co_cho_da_xu_ly >= input.so_lich_anh_huong
+  const buoc3Xong = input.so_da_doi + input.so_khong_co_cho_da_xu_ly + input.so_da_ket_thuc >= input.so_lich_anh_huong
 
   return [
     {

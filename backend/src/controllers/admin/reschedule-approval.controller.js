@@ -163,9 +163,14 @@ export async function tongQuanTheoDonNghi(req, res) {
     // Đ4: trong nhóm "không có chỗ", đếm bao nhiêu đã được lễ tân liên hệ xong — dựa trên
     // NhatKyThaoTac{CUSTOMER_CONTACT_REQUIRED -> CUSTOMER_CONTACTED} mà guiThongBaoDeXuat()
     // ghi khi phuong_an rỗng (Task 6). KHÔNG thêm field DB mới.
+    //
+    // I2 (2026-08-25): TRƯỚC ĐÂY lọc thêm `trang_thai in TRANG_THAI_DE_XUAT_MO` — khi cron
+    // apDungDeXuatQuaHan tự huỷ một đề xuất 0 phương án quá hạn (chuyển trang_thai='da_huy'),
+    // lịch đó rơi khỏi TRANG_THAI_DE_XUAT_MO nên biến mất khỏi so_khong_co_cho, tắt luôn
+    // callout "cần liên hệ tay" đúng lúc việc trở nên khẩn cấp nhất. Nay chỉ xét phuong_an
+    // rỗng — không quan tâm trang_thai — nên callout không bị cron làm biến mất.
     const idsKhongCoCho = danhSach
-      .filter((a) => (a.de_xuat_doi?.phuong_an?.length ?? 0) === 0
-        && TRANG_THAI_DE_XUAT_MO.includes(a.de_xuat_doi?.trang_thai))
+      .filter((a) => (a.de_xuat_doi?.phuong_an?.length ?? 0) === 0)
       .map((a) => a._id)
     let soKhongCoChoDaXuLy = 0
     if (idsKhongCoCho.length > 0) {
@@ -196,6 +201,11 @@ export async function tongQuanTheoDonNghi(req, res) {
       so_da_doi: dem((a) => a.de_xuat_doi?.trang_thai === 'da_ap_dung'),
       so_khong_co_cho: idsKhongCoCho.length,
       so_khong_co_cho_da_xu_ly: soKhongCoChoDaXuLy,
+      // I1 (2026-08-25): lịch có đề xuất đã 'da_huy' (từ chối thủ công ở reject(), hoặc tự
+      // huỷ quá hạn không phương án ở apDungDeXuatQuaHan) — giai đoạn báo khách của lịch này
+      // ĐÃ kết thúc dù không rơi vào so_da_doi lẫn so_khong_co_cho_da_xu_ly. Không loại trừ
+      // so_khong_co_cho: một lịch da_huy với 0 phương án được đếm ở CẢ HAI (I2 + I1).
+      so_da_ket_thuc: dem((a) => a.de_xuat_doi?.trang_thai === 'da_huy'),
       so_slot_da_khoa: soSlotDaKhoa,
       so_tai_quay: taiQuay.length,
       tai_quay: taiQuay,

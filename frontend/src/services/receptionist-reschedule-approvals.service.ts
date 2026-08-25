@@ -89,6 +89,8 @@ export interface TongQuanDieuPhoi {
   so_da_doi: number
   so_khong_co_cho: number
   so_khong_co_cho_da_xu_ly: number
+  /** I1 (2026-08-25): lịch có de_xuat_doi.trang_thai='da_huy' — xem chú thích BE. */
+  so_da_ket_thuc: number
   so_slot_da_khoa: number
   so_tai_quay: number
   tai_quay: KhachTaiQuay[]
