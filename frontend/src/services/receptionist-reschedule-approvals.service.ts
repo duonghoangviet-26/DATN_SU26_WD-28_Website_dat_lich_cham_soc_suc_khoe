@@ -59,6 +59,7 @@ export interface DonNghiConViec {
   ly_do: string | null
   trang_thai_don: string
   so_lich_chua_xu_ly: number
+  han_phan_hoi_som_nhat: string | null
 }
 
 /** Khách ĐÃ CHECK-IN — hàng riêng trong bảng, không tick checkbox, chuyển bác sĩ tại quầy (C3). */

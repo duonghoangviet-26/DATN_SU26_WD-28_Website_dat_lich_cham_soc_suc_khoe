@@ -167,33 +167,66 @@ export async function tongQuanTheoDonNghi(req, res) {
 }
 
 // ─── GET .../reschedule-approvals/leaves ────────────────────────────────────
-// Danh sách đơn nghỉ CÒN việc chưa xử lý — trang đầu của mục "Điều phối lịch hẹn".
+// Danh sách đơn nghỉ — trang đầu của mục "Điều phối lịch hẹn".
+// ?trang_thai=con_viec (mặc định) | da_xong | tat_ca — B3 (2026-08-25).
 export async function danhSachDonNghiConViec(req, res) {
   try {
-    const nhomTheoDon = await LichHen.aggregate([
-      { $match: { 'de_xuat_doi.trang_thai': { $in: TRANG_THAI_DE_XUAT_MO } } },
-      { $group: { _id: '$de_xuat_doi.nghi_phep_id', so_lich: { $sum: 1 } } },
-    ])
-    const ids = nhomTheoDon.map((n) => n._id).filter(Boolean)
-    if (ids.length === 0) return ok(res, [])
+    const bocLoc = ['con_viec', 'da_xong', 'tat_ca'].includes(req.query.trang_thai)
+      ? req.query.trang_thai
+      : 'con_viec'
 
-    const leaves = await NghiPhepBacSi.find({ _id: { $in: ids } })
+    // Nhóm CÒN VIỆC: có ít nhất 1 lịch hẹn với đề xuất còn mở.
+    const nhomConViec = await LichHen.aggregate([
+      { $match: { 'de_xuat_doi.trang_thai': { $in: TRANG_THAI_DE_XUAT_MO } } },
+      {
+        $group: {
+          _id: '$de_xuat_doi.nghi_phep_id',
+          so_lich: { $sum: 1 },
+          han_phan_hoi_som_nhat: { $min: '$de_xuat_doi.han_phan_hoi' },
+        },
+      },
+    ])
+    const idsConViec = nhomConViec.map((n) => n._id).filter(Boolean)
+    const thongTinConViec = new Map(nhomConViec.map((n) => [String(n._id), n]))
+
+    let idsCanLay = idsConViec
+    if (bocLoc !== 'con_viec') {
+      // Nhóm ĐÃ XONG: mọi đơn KHÔNG nằm trong idsConViec nhưng từng có ít nhất 1 lịch hẹn
+      // gắn nghi_phep_id (đơn không ảnh hưởng lịch nào thì không có ý nghĩa hiện ở đây).
+      const tatCaDonCoLich = await LichHen.aggregate([
+        { $match: { 'de_xuat_doi.nghi_phep_id': { $ne: null } } },
+        { $group: { _id: '$de_xuat_doi.nghi_phep_id' } },
+      ])
+      const idsTatCa = tatCaDonCoLich.map((n) => String(n._id)).filter(Boolean)
+      const idsConViecSet = new Set(idsConViec.map(String))
+      const idsDaXong = idsTatCa.filter((id) => !idsConViecSet.has(id))
+      idsCanLay = bocLoc === 'da_xong' ? idsDaXong : [...idsConViec.map(String), ...idsDaXong]
+    }
+
+    if (idsCanLay.length === 0) return ok(res, [])
+
+    // Đ5: đơn đã huỷ (lễ tân khôi phục báo nghỉ) không còn là "việc cần làm" dù có sót đề
+    // xuất mở do lỗi ở service khác — rào chặn cả lớp lỗi, không phụ thuộc service khác luôn đúng.
+    const leaves = await NghiPhepBacSi.find({ _id: { $in: idsCanLay }, trang_thai: { $ne: 'da_huy' } })
       .populate({ path: 'bac_si_id', select: 'user_id', populate: { path: 'user_id', select: 'ho_ten' } })
       .sort({ tu_ngay: -1 })
       .lean()
 
-    const soLichTheoDon = new Map(nhomTheoDon.map((n) => [String(n._id), n.so_lich]))
-    return ok(res, leaves.map((leave) => ({
-      leave_id: leave._id,
-      bac_si: leave.bac_si_id?.user_id?.ho_ten ?? 'Bác sĩ',
-      tu_ngay: leave.tu_ngay,
-      den_ngay: leave.den_ngay,
-      gio_bat_dau: leave.gio_bat_dau ?? null,
-      gio_ket_thuc: leave.gio_ket_thuc ?? null,
-      ly_do: leave.ly_do ?? null,
-      trang_thai_don: leave.trang_thai,
-      so_lich_chua_xu_ly: soLichTheoDon.get(String(leave._id)) ?? 0,
-    })))
+    return ok(res, leaves.map((leave) => {
+      const thongTin = thongTinConViec.get(String(leave._id))
+      return {
+        leave_id: leave._id,
+        bac_si: leave.bac_si_id?.user_id?.ho_ten ?? 'Bác sĩ',
+        tu_ngay: leave.tu_ngay,
+        den_ngay: leave.den_ngay,
+        gio_bat_dau: leave.gio_bat_dau ?? null,
+        gio_ket_thuc: leave.gio_ket_thuc ?? null,
+        ly_do: leave.ly_do ?? null,
+        trang_thai_don: leave.trang_thai,
+        so_lich_chua_xu_ly: thongTin?.so_lich ?? 0,
+        han_phan_hoi_som_nhat: thongTin?.han_phan_hoi_som_nhat ?? null,
+      }
+    }))
   } catch (err) {
     return fail(res, 500, err.message)
   }
