@@ -29,7 +29,7 @@ sót ghi chép.
 | 7 | `ReceptionistUI.tsx`, `utils/dieuPhoiHelpers.ts` (mới) | Component dùng chung `Tabs` + `ProcessBar` (thanh quy trình), 2 hàm thuần `xepBuocQuyTrinh`/`dinhDangDemNguoc` |
 | 8 | `Sidebar.tsx`, `AppRoutes.tsx`, `pages/receptionist/QuanLyDieuPhoi.tsx` (mới) | Gộp menu, định tuyến `/receptionist/quan-ly-dieu-phoi` (vỏ trang, nội dung thật ở Task 9–11) |
 | 9 | `DoctorDayView.tsx`, `utils/dieuPhoiHelpers.ts`, `__tests__/utils/dieuPhoiHelpers.test.ts` | Tab 1 "Lịch bác sĩ": gỡ panel khách vãng lai, dựng lại thẻ bác sĩ 4 trạng thái (`xepTrangThaiTheBacSi`) |
-| 10 | `DoctorUnavailableModal.tsx` | Preview 2 nhịp khi báo nghỉ (gọi API Task 5 trước khi submit) + đổi nút Huỷ báo nghỉ |
+| 10 | `DoctorUnavailableModal.tsx` | Preview 2 nhịp khi báo nghỉ (gọi API Task 5 trước khi submit, khoá input trong lúc tải) + đổi màu nút xác nhận (orange → rose) |
 | 11 | `DanhSachDieuPhoi.tsx` | Tab 2 "Điều phối lịch hẹn": bộ lọc còn việc/đã xong + đếm ngược hạn phản hồi |
 | 12 | `DieuPhoiLichHen.tsx`, `DieuPhoiRow.tsx` | Trang con: breadcrumb + `ProcessBar`, nạp cả đơn `da_huy` (hiển thị không tương tác), nhóm "không có chỗ" dùng số liệu Task 3 |
 | 13 | `DoctorDayView.tsx` (rà nút còn sót), `ConfirmRestoreModal.tsx` | Chuẩn hoá màu/kích cỡ còn lại (`min-h-10` → `min-h-11` khớp cụm modal) |
@@ -114,7 +114,9 @@ danh sách dưới đây liệt kê CHÍNH XÁC những gì KHÔNG được ki�
 6. Rào chắn `beforeunload` (Task 12 Step 5) khi còn `so_cho_duyet > 0` — xác nhận dialog
    xác nhận rời trang thật sự hiện ra, và không chặn nhầm khi đã xử lý xong.
 7. `ConfirmRestoreModal.tsx` (Task 13) — thay đổi chiều cao nút 4px (`min-h-10` →
-   `min-h-11`) khớp thị giác với 3 modal khác trong cụm.
+   `min-h-11`) khớp thị giác với 3 modal khác trong cụm. (Đây cũng là mục "minor deferred"
+   duy nhất của Task 13 trong ledger — không lặp lại thành một dòng riêng ở §4, đã gộp vào
+   đây.)
 
 ## 4 · Các phát hiện phụ (deferred minor) — chưa sửa, không chặn merge
 
