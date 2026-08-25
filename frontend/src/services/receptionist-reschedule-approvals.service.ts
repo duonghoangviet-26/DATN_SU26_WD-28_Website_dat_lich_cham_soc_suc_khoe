@@ -106,8 +106,8 @@ function serviceFor(basePath: '/receptionist/reschedule-approvals' | '/admin/res
       return Array.isArray(res.data.data) ? res.data.data : []
     },
 
-    async danhSachDonNghi(): Promise<DonNghiConViec[]> {
-      const res = await axiosInstance.get<ApiResponse<DonNghiConViec[]>>(`${basePath}/leaves`)
+    async danhSachDonNghi(trangThai?: 'con_viec' | 'da_xong' | 'tat_ca'): Promise<DonNghiConViec[]> {
+      const res = await axiosInstance.get<ApiResponse<DonNghiConViec[]>>(`${basePath}/leaves`, { params: trangThai ? { trang_thai: trangThai } : undefined })
       return Array.isArray(res.data.data) ? res.data.data : []
     },
 
