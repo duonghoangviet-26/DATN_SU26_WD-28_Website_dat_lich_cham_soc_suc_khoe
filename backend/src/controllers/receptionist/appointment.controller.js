@@ -13,7 +13,7 @@ import TrangThaiPhongKham from '../../models/TrangThaiPhongKham.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
-import { duyetDonNghi, laDonNganHanChoLeTan } from '../../services/doctorLeaveApproval.service.js'
+import { duyetDonNghi, laDonNganHanChoLeTan, demAnhHuongCuaDonNghi } from '../../services/doctorLeaveApproval.service.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
@@ -1233,6 +1233,32 @@ export const bulkCancelAppointments = async (req, res) => {
   }
 }
 
+// ─── GET /receptionist/booking/doctor-unavailable/preview ───────────────────
+// Rào chắn #1 (mục 3.8 spec): xem trước ảnh hưởng, CHỈ ĐỌC, trước khi xác nhận báo nghỉ.
+export const previewDoctorUnavailable = async (req, res) => {
+  try {
+    const { doctor_id: doctorId, tu_ngay: tuNgayInput, den_ngay: denNgayInput, gio_bat_dau: gioBatDau, gio_ket_thuc: gioKetThuc } = req.query
+    if (!doctorId || !mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({ success: false, message: 'doctor_id không hợp lệ' })
+    }
+    if (!tuNgayInput || !denNgayInput) {
+      return res.status(400).json({ success: false, message: 'tu_ngay và den_ngay là bắt buộc' })
+    }
+    const tuNgay = startOfDayUtc(new Date(tuNgayInput))
+    const denNgay = startOfDayUtc(new Date(denNgayInput))
+    if (!tuNgay || !denNgay || denNgay < tuNgay) {
+      return res.status(400).json({ success: false, message: 'Khoảng ngày không hợp lệ' })
+    }
+
+    const ketQua = await demAnhHuongCuaDonNghi({
+      bacSiId: doctorId, tuNgay, denNgay, gioBatDau: gioBatDau || null, gioKetThuc: gioKetThuc || null,
+    })
+    return res.status(200).json({ success: true, message: 'OK', data: ketQua })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
+  }
+}
+
 export const reportDoctorUnavailable = async (req, res) => {
   const session = await mongoose.startSession()
   session.startTransaction()
@@ -1372,6 +1398,7 @@ export default {
   getPendingCheckin,
   getDoctorOperationalStatuses,
   getOverloadAffectedAppointments,
+  previewDoctorUnavailable,
   reportDoctorUnavailable,
   rescheduleAppointment,
   markLateArrival,

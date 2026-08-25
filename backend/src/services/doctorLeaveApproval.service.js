@@ -1,7 +1,7 @@
 import { NghiPhepBacSi, LichLamViec, LichHen, HangDoi, LichSuLichHen } from '../models/index.js'
 import { AFFECTED_BY_LEAVE_STATUSES } from '../utils/appointmentStatus.js'
 import { taoDeXuatDoiChoDonNghi, sinhLaiDeXuatChoLichMatCho } from './appointmentReschedule.service.js'
-import { nenKhoaSlotVaoDonNghi, laSlotGiuChoDeXuat, nenSinhLaiDeXuat } from './rescheduleRules.js'
+import { nenKhoaSlotVaoDonNghi, laSlotGiuChoDeXuat, nenSinhLaiDeXuat, demSlotSeKhoa } from './rescheduleRules.js'
 
 // ============================================================
 // Duyệt đơn nghỉ phép — DÙNG CHUNG cho Admin (mọi kỳ hạn) và Lễ tân (kỳ ngắn).
@@ -28,6 +28,57 @@ export function laDonNganHanChoLeTan(leave) {
   const soNgay = Math.round((denNgay - tuNgay) / 86400000)
 
   return denNgay >= homNay && denNgay <= ngayMai && soNgay <= 1
+}
+
+/**
+ * B1 (2026-08-25) — đếm ảnh hưởng NẾU một đơn nghỉ với thông số này được duyệt, CHƯA tạo
+ * bản ghi NghiPhepBacSi thật, CHỈ ĐỌC. Dùng cho:
+ *  - Rào chắn #1: preview "Xem ảnh hưởng" trước khi lễ tân xác nhận báo nghỉ.
+ *  - Thẻ bác sĩ (b): số lịch sẽ ảnh hưởng của đơn bác sĩ tự gửi đang chờ duyệt.
+ */
+export async function demAnhHuongCuaDonNghi({ bacSiId, tuNgay, denNgay, gioBatDau, gioKetThuc }) {
+  const endExclusive = new Date(denNgay)
+  endExclusive.setDate(endExclusive.getDate() + 1)
+
+  const schedules = await LichLamViec.find({
+    doctor_id: bacSiId,
+    ngay: { $gte: tuNgay, $lt: endExclusive },
+  }).select('slots').lean()
+
+  let soSlotSeKhoa = 0
+  for (const schedule of schedules) {
+    soSlotSeKhoa += demSlotSeKhoa(schedule.slots, gioBatDau, gioKetThuc)
+  }
+
+  let appointments = await LichHen.find({
+    doctor_id: bacSiId,
+    status: { $in: AFFECTED_BY_LEAVE_STATUSES },
+    ngay_kham: { $gte: tuNgay, $lt: endExclusive },
+  }).select('_id gio_kham payment_status').lean()
+
+  if (gioBatDau && gioKetThuc) {
+    appointments = appointments.filter((a) => a.gio_kham >= gioBatDau && a.gio_kham < gioKetThuc)
+  }
+
+  const appointmentIds = appointments.map((a) => a._id)
+  const hangDoiRows = appointmentIds.length
+    ? await HangDoi.find({
+        appointment_id: { $in: appointmentIds },
+        trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong'] },
+      }).select('appointment_id').lean()
+    : []
+  const checkedInIds = new Set(hangDoiRows.map((h) => String(h.appointment_id)))
+
+  const soDaThanhToan = appointments.filter((a) => a.payment_status === 'paid').length
+  const soDaCheckin = appointments.filter((a) => checkedInIds.has(String(a._id))).length
+
+  return {
+    so_lich_anh_huong: appointments.length,
+    so_da_thanh_toan: soDaThanhToan,
+    so_da_checkin: soDaCheckin,
+    so_chua_thanh_toan: appointments.length - soDaThanhToan,
+    so_slot_se_khoa: soSlotSeKhoa,
+  }
 }
 
 // Khóa các slot 'active' VÀ 'pending_payment' của bác sĩ trong khoảng ngày nghỉ đã duyệt —

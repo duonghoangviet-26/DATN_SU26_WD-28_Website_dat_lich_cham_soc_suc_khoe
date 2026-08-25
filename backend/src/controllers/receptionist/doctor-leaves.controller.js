@@ -8,6 +8,7 @@ import {
   findLeaveByIdWithDoctor,
   moTaKetQuaDuyet,
   laDonNganHanChoLeTan,
+  demAnhHuongCuaDonNghi,
 } from '../../services/doctorLeaveApproval.service.js'
 import { huyBaoNghi, xemTruocKhoiPhuc, kiemTraDuocKhoiPhuc } from '../../services/doctorLeaveRestore.service.js'
 
@@ -72,7 +73,20 @@ export async function listPendingLeaves(req, res) {
 
     const thuocThamQuyen = leaves.filter((leave) => laDonNganHanChoLeTan(leave))
 
-    return ok(res, thuocThamQuyen.map(formatDoctorLeave))
+    // B1: mỗi đơn chờ duyệt hiện kèm số lịch sẽ bị ảnh hưởng nếu duyệt — thẻ bác sĩ trạng
+    // thái (b) hiển thị con số này thay vì chỉ tên bác sĩ (Task 11).
+    const ketQua = await Promise.all(thuocThamQuyen.map(async (leave) => {
+      const anhHuong = await demAnhHuongCuaDonNghi({
+        bacSiId: leave.bac_si_id?._id ?? leave.bac_si_id,
+        tuNgay: leave.tu_ngay,
+        denNgay: leave.den_ngay,
+        gioBatDau: leave.gio_bat_dau,
+        gioKetThuc: leave.gio_ket_thuc,
+      })
+      return { ...formatDoctorLeave(leave), so_lich_se_anh_huong: anhHuong.so_lich_anh_huong }
+    }))
+
+    return ok(res, ketQua)
   } catch (error) {
     return fail(res, 500, error.message)
   }

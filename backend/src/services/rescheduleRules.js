@@ -118,3 +118,18 @@ export function khoangCachKhung(hhmmA, hhmmB) {
 export function diemLechPhuongAn({ gioSlot, gioGoc, soNgayLech = 0 }) {
   return Math.abs(khoangCachKhung(gioSlot, gioGoc)) + soNgayLech * PHAT_MOI_NGAY_PHUT
 }
+
+/**
+ * Đếm slot SẼ bị khoá nếu một đơn nghỉ với khoảng giờ này được duyệt — dùng cho preview
+ * TRƯỚC khi tạo NghiPhepBacSi thật (B1, rào chắn #1 mục 3.8 của spec). Thuần, không chạm DB.
+ */
+export function demSlotSeKhoa(slots, gioBatDau, gioKetThuc) {
+  let dem = 0
+  for (const slot of slots ?? []) {
+    const inRange = !gioBatDau || !gioKetThuc
+      ? true
+      : slot.gio_bat_dau < gioKetThuc && slot.gio_ket_thuc > gioBatDau
+    if (inRange && nenKhoaSlotVaoDonNghi(slot)) dem += 1
+  }
+  return dem
+}

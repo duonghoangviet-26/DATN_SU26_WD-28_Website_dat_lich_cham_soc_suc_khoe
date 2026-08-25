@@ -14,6 +14,7 @@ export interface PendingDoctorLeave {
   trang_thai: 'cho_duyet' | 'da_duyet' | 'tu_choi' | 'da_huy'
   nguon_tao?: 'bac_si_tu_gui' | 'le_tan_ghi_nhan' | 'admin_tao' | null
   ngay_tao: string | null
+  so_lich_se_anh_huong: number
 }
 
 export interface ApproveDoctorLeaveResult extends PendingDoctorLeave {

@@ -102,6 +102,14 @@ export interface ReportDoctorUnavailableResult {
   so_lich_sinh_lai_phuong_an?: number
 }
 
+export interface DoctorUnavailablePreview {
+  so_lich_anh_huong: number
+  so_da_thanh_toan: number
+  so_da_checkin: number
+  so_chua_thanh_toan: number
+  so_slot_se_khoa: number
+}
+
 export const receptionistBookingService = {
   async getSlots(doctorId: string, date: string): Promise<ReceptionistBookingSlot[]> {
     const res = await axiosInstance.get<ApiResponse<ReceptionistBookingSlot[]>>(`/receptionist/booking/doctors/${doctorId}/slots`, {
@@ -133,6 +141,14 @@ export const receptionistBookingService = {
 
   async reportDoctorUnavailable(payload: ReportDoctorUnavailablePayload): Promise<ReportDoctorUnavailableResult> {
     const res = await axiosInstance.post<ApiResponse<ReportDoctorUnavailableResult>>('/receptionist/appointments/doctor-unavailable', payload)
+    return res.data.data
+  },
+
+  // Rào chắn #1 (mục 3.8 spec): xem trước ảnh hưởng, CHỈ ĐỌC, trước khi xác nhận báo nghỉ.
+  // Lưu ý: route thật nằm dưới /receptionist/appointments (appointment.routes.js), không phải
+  // /receptionist/booking — sửa lại theo cách mount thực tế của backend.
+  async previewDoctorUnavailable(params: { doctor_id: string; tu_ngay: string; den_ngay: string; gio_bat_dau?: string; gio_ket_thuc?: string }): Promise<DoctorUnavailablePreview> {
+    const res = await axiosInstance.get<ApiResponse<DoctorUnavailablePreview>>('/receptionist/appointments/doctor-unavailable/preview', { params })
     return res.data.data
   },
 
