@@ -161,6 +161,7 @@ export default function DieuPhoiLichHen() {
           so_khong_co_cho: tongQuan.so_khong_co_cho,
           so_khong_co_cho_da_xu_ly: tongQuan.so_khong_co_cho_da_xu_ly,
           so_da_ket_thuc: tongQuan.so_da_ket_thuc,
+          so_hoan_tat: tongQuan.so_hoan_tat,
         })} />
       )}
 

@@ -173,6 +173,7 @@ export async function tongQuanTheoDonNghi(req, res) {
       .filter((a) => (a.de_xuat_doi?.phuong_an?.length ?? 0) === 0)
       .map((a) => a._id)
     let soKhongCoChoDaXuLy = 0
+    const idsKhongCoChoDaXuLy = []
     if (idsKhongCoCho.length > 0) {
       const [requests, contacted] = await Promise.all([
         NhatKyThaoTac.find({ hanh_dong: 'CUSTOMER_CONTACT_REQUIRED', doi_tuong_id: { $in: idsKhongCoCho } })
@@ -180,8 +181,23 @@ export async function tongQuanTheoDonNghi(req, res) {
         NhatKyThaoTac.find({ hanh_dong: 'CUSTOMER_CONTACTED', doi_tuong_id: { $in: idsKhongCoCho } })
           .select('doi_tuong_id ngay_tao').lean(),
       ])
-      soKhongCoChoDaXuLy = ganTrangThaiLienHe(requests, contacted).filter((r) => r.daGoi).length
+      const daXuLy = ganTrangThaiLienHe(requests, contacted).filter((r) => r.daGoi)
+      soKhongCoChoDaXuLy = daXuLy.length
+      idsKhongCoChoDaXuLy.push(...daXuLy.map((r) => String(r.request.doi_tuong_id)))
     }
+
+    // N1 (2026-08-25, phát hiện SAU khi I1+I2 đã merge riêng lẻ — xem
+    // .superpowers/sdd/2026-08-25-quan-ly-va-dieu-phoi/progress.md): I1 (đếm da_huy vào
+    // so_da_ket_thuc) và I2 (bỏ lọc trang_thai khỏi so_khong_co_cho) mỗi cái ĐÚNG riêng lẻ,
+    // nhưng CỘNG chung 3 counter ở buoc3Xong (FE) thì SAI — một lịch da_huy với 0 phương án
+    // rơi vào CẢ so_khong_co_cho_da_xu_ly LẪN so_da_ket_thuc cùng lúc, bị đếm 2 lần. Tổng có
+    // thể chạm so_lich_anh_huong (báo "xong 100%") trong khi một lịch KHÁC hoàn toàn chưa xử
+    // lý gì. Sửa đúng: hợp (UNION) tập hợp id đã khử trùng lặp, không phải tổng 3 số.
+    const idsHoanTat = new Set([
+      ...danhSach.filter((a) => a.de_xuat_doi?.trang_thai === 'da_ap_dung').map((a) => String(a._id)),
+      ...danhSach.filter((a) => a.de_xuat_doi?.trang_thai === 'da_huy').map((a) => String(a._id)),
+      ...idsKhongCoChoDaXuLy,
+    ])
 
     return ok(res, {
       leave_id: leave._id,
@@ -204,8 +220,13 @@ export async function tongQuanTheoDonNghi(req, res) {
       // I1 (2026-08-25): lịch có đề xuất đã 'da_huy' (từ chối thủ công ở reject(), hoặc tự
       // huỷ quá hạn không phương án ở apDungDeXuatQuaHan) — giai đoạn báo khách của lịch này
       // ĐÃ kết thúc dù không rơi vào so_da_doi lẫn so_khong_co_cho_da_xu_ly. Không loại trừ
-      // so_khong_co_cho: một lịch da_huy với 0 phương án được đếm ở CẢ HAI (I2 + I1).
+      // so_khong_co_cho: một lịch da_huy với 0 phương án được đếm ở CẢ HAI (I2 + I1). Các
+      // counter riêng lẻ này VẪN giữ nguyên (dùng cho chiTiet/hiển thị từng loại) — CHỈ
+      // so_hoan_tat bên dưới mới là số dùng để xét "xong bước 3" (xem chú thích N1 ở trên).
       so_da_ket_thuc: dem((a) => a.de_xuat_doi?.trang_thai === 'da_huy'),
+      // N1: số lịch ĐÃ XONG giai đoạn báo khách, đã khử trùng lặp — dùng để so với
+      // so_lich_anh_huong ở buoc3Xong (FE), thay cho cộng 3 counter có thể chồng lấn.
+      so_hoan_tat: idsHoanTat.size,
       so_slot_da_khoa: soSlotDaKhoa,
       so_tai_quay: taiQuay.length,
       tai_quay: taiQuay,

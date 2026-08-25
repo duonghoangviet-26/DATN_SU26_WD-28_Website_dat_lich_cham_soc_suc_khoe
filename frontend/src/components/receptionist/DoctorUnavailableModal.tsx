@@ -164,7 +164,12 @@ export default function DoctorUnavailableModal({ doctorId, doctorName, defaultDa
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <p className="font-bold">Đã tạo đơn báo nghỉ — CHƯA được xử lý.</p>
               <p className="mt-1">
-                Khoảng nghỉ dài hơn 1 ngày nên vượt thẩm quyền lễ tân — đơn cần <strong>Admin duyệt</strong> trước
+                {/* N4 (2026-08-25): trước đây chốt cứng lý do "dài hơn 1 ngày" — nhưng cùng nhóm
+                    "vượt thẩm quyền lễ tân" còn có đơn 1 ngày do CHÍNH bác sĩ tự gửi cho một ngày
+                    xa hơn ngày mai (laDonNganHanChoLeTan false vì đến-ngày > ngày-mai, không phải
+                    vì khoảng nghỉ dài). Để chữ không suy diễn sai nguyên nhân, chỉ nói tới hệ quả
+                    thật: vượt thẩm quyền lễ tân, cần Admin duyệt. */}
+                Đơn này vượt thẩm quyền lễ tân xử lý trực tiếp — cần <strong>Admin duyệt</strong> trước
                 khi hệ thống khoá slot và tìm phương án cho khách. Hiện tại chưa có slot nào bị khoá, chưa có
                 lịch hẹn nào được xử lý, khách chưa được thông báo gì.
               </p>
