@@ -29,6 +29,7 @@ import {
 } from "../../services/walkInWindow.service.js";
 import { NhatKyThaoTac } from "../../models/index.js";
 import { caCuaKhung } from "../../models/MauLichLamViec.js";
+import { laDonNganHanChoLeTan } from "../../services/doctorLeaveApproval.service.js";
 
 function parseDateOnly(value) {
     if (!value) return null;
@@ -312,6 +313,26 @@ export async function getDoctorDayOverview(req, res) {
             if (!dangCo || (dangCo.gio_bat_dau && !leave.gio_bat_dau)) leaveByDoctor.set(key, leave);
         }
 
+        // C1 (2026-08-25): đơn nghỉ NHIỀU NGÀY do lễ tân tạo (reportDoctorUnavailable) chỉ được
+        // khởi tạo 'cho_duyet' (không tự khoá slot, không sinh đề xuất — cần Admin duyệt), nên
+        // KHÔNG có mặt trong `leaves` (chỉ lọc 'da_duyet' ở trên) — thẻ bác sĩ trước đây hiện
+        // y hệt trạng thái 'lam_viec' bình thường, nút "Báo nghỉ đột xuất" vẫn bấm được và dẫn
+        // tới 409 "đã có đơn nghỉ ... xử lý trên đơn hiện có" — đơn mà lễ tân không có màn hình
+        // nào để xem/xử lý. Truy thêm nhóm này để FE hiện chỉ báo đọc-được thay vì nút "chết".
+        const donDaiHanChoDuyet = doctorIds.length
+            ? await NghiPhepBacSi.find({
+                bac_si_id: { $in: doctorIds },
+                trang_thai: "cho_duyet",
+                tu_ngay: { $lte: ngayDate },
+                den_ngay: { $gte: ngayDate },
+            }).select("_id bac_si_id tu_ngay den_ngay gio_bat_dau gio_ket_thuc ly_do").lean()
+            : [];
+        const donDaiHanChoDuyetByDoctor = new Map();
+        for (const leave of donDaiHanChoDuyet) {
+            if (laDonNganHanChoLeTan(leave)) continue; // thuộc thẩm quyền lễ tân — đã có surface riêng (listPendingLeaves)
+            donDaiHanChoDuyetByDoctor.set(String(leave.bac_si_id), leave);
+        }
+
         // B2: số lịch còn tồn / tổng lịch bị ảnh hưởng của MỖI đơn nghỉ đang hiển thị —
         // dùng cho thẻ bác sĩ "còn X/Y lịch chưa điều phối" (Tab 1, Task 11).
         const leaveIdsDangHien = [...leaveByDoctor.values()].map((l) => l._id);
@@ -345,6 +366,7 @@ export async function getDoctorDayOverview(req, res) {
             const { ca_sang, ca_chieu } = chiaCaSangChieu(khungRows);
             const leaveIdCuaBacSi = leaveByDoctor.get(String(doctor._id))?._id ?? null;
             const demCuaLeave = leaveIdCuaBacSi ? demTheoLeaveMap.get(String(leaveIdCuaBacSi)) : null;
+            const donDaiHanChoDuyet = donDaiHanChoDuyetByDoctor.get(String(doctor._id)) ?? null;
             return {
                 doctor_id: doctor._id,
                 ten_bac_si: doctor.user_id?.ho_ten ?? "Bác sĩ",
@@ -354,6 +376,18 @@ export async function getDoctorDayOverview(req, res) {
                 ly_do_nghi: leaveByDoctor.get(String(doctor._id))?.ly_do ?? null,
                 so_lich_chua_xu_ly: demCuaLeave?.chuaXuLy ?? 0,
                 so_lich_anh_huong: demCuaLeave?.tong ?? 0,
+                // C1: đơn nghỉ dài ngày do lễ tân tạo, đang chờ Admin duyệt — chưa khoá slot,
+                // chưa sinh đề xuất, chưa có gì để điều phối. null khi không có đơn như vậy.
+                don_nghi_dai_han_cho_duyet: donDaiHanChoDuyet
+                    ? {
+                        leave_id: donDaiHanChoDuyet._id,
+                        tu_ngay: donDaiHanChoDuyet.tu_ngay,
+                        den_ngay: donDaiHanChoDuyet.den_ngay,
+                        gio_bat_dau: donDaiHanChoDuyet.gio_bat_dau ?? null,
+                        gio_ket_thuc: donDaiHanChoDuyet.gio_ket_thuc ?? null,
+                        ly_do: donDaiHanChoDuyet.ly_do ?? null,
+                    }
+                    : null,
                 ca_sang,
                 ca_chieu,
             };

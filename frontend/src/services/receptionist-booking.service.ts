@@ -24,6 +24,15 @@ export interface DayOverviewKhungRow {
   khoa_boi_nghi_phep: boolean
 }
 
+export interface DoctorLeaveDaiHanChoDuyet {
+  leave_id: string
+  tu_ngay: string
+  den_ngay: string
+  gio_bat_dau: string | null
+  gio_ket_thuc: string | null
+  ly_do: string | null
+}
+
 export interface DayOverviewDoctor {
   doctor_id: string
   ten_bac_si: string
@@ -35,6 +44,9 @@ export interface DayOverviewDoctor {
   /** B2 (2026-08-25): chỉ có ý nghĩa khi leave_id != null. */
   so_lich_chua_xu_ly: number
   so_lich_anh_huong: number
+  /** C1 (2026-08-25): đơn nghỉ NHIỀU NGÀY do lễ tân tạo, đang chờ Admin duyệt — chưa khoá
+   * slot, chưa sinh đề xuất. Khác hẳn `leave_id` (chỉ set khi đơn đã 'da_duyet'). */
+  don_nghi_dai_han_cho_duyet: DoctorLeaveDaiHanChoDuyet | null
   ca_sang: DayOverviewKhungRow[]
   ca_chieu: DayOverviewKhungRow[]
 }
@@ -94,6 +106,9 @@ export interface SuddenLeaveSkippedAppointment {
 
 export interface ReportDoctorUnavailableResult {
   leave_id: string
+  /** C1 (2026-08-25): true khi khoảng nghỉ >1 ngày -> đơn mới được TẠO ('cho_duyet'), CHƯA xử
+   * lý gì (chưa khoá slot, chưa sinh đề xuất, cần Admin duyệt trước). false = đã xử lý xong. */
+  can_admin_duyet: boolean
   so_lich_bi_anh_huong: number
   so_slot_da_khoa: number
   de_xuat_doi: SuddenLeaveProposalSummary[]
@@ -139,6 +154,9 @@ export const receptionistBookingService = {
     return Array.isArray(res.data.data) ? res.data.data : []
   },
 
+  // C1 (2026-08-25): data đã mang discriminator `can_admin_duyet` — trước đây hàm này chỉ
+  // trả `res.data.data`, đã ĐÚNG cấu trúc rồi (field nằm trong `data`, không phải top-level),
+  // giữ nguyên chữ ký nhưng ghi rõ lý do không đổi để lần sau khỏi phải đọc lại BE.
   async reportDoctorUnavailable(payload: ReportDoctorUnavailablePayload): Promise<ReportDoctorUnavailableResult> {
     const res = await axiosInstance.post<ApiResponse<ReportDoctorUnavailableResult>>('/receptionist/appointments/doctor-unavailable', payload)
     return res.data.data

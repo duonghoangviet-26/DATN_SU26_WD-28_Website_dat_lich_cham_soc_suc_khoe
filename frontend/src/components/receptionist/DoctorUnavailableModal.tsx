@@ -156,6 +156,23 @@ export default function DoctorUnavailableModal({ doctorId, doctorName, defaultDa
               )}
             </div>
           </>
+        ) : result.can_admin_duyet ? (
+          // C1 (2026-08-25): khoảng nghỉ >1 ngày -> BE chỉ TẠO đơn ('cho_duyet'), CHƯA khoá
+          // slot / sinh đề xuất nào. Không được hiện như thành công đã xử lý xong (emerald) —
+          // dễ hiểu lầm "xong rồi" trong khi mọi việc còn nguyên, chờ Admin.
+          <div className="mt-5 space-y-4">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-bold">Đã tạo đơn báo nghỉ — CHƯA được xử lý.</p>
+              <p className="mt-1">
+                Khoảng nghỉ dài hơn 1 ngày nên vượt thẩm quyền lễ tân — đơn cần <strong>Admin duyệt</strong> trước
+                khi hệ thống khoá slot và tìm phương án cho khách. Hiện tại chưa có slot nào bị khoá, chưa có
+                lịch hẹn nào được xử lý, khách chưa được thông báo gì.
+              </p>
+            </div>
+            <div className="flex justify-end border-t border-slate-100 pt-4">
+              <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">Đóng</button>
+            </div>
+          </div>
         ) : (
           <div className="mt-5 space-y-4">
             <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

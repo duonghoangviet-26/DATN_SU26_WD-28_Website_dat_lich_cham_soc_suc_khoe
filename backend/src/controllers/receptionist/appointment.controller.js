@@ -1364,6 +1364,10 @@ export const reportDoctorUnavailable = async (req, res) => {
         message: 'Đã tạo đơn nghỉ. Khoảng nghỉ vượt quá 1 ngày nên cần Admin duyệt trước khi khoá lịch và báo khách.',
         data: {
           leave_id: leaveDoc._id,
+          // C1 (2026-08-25): discriminator để FE phân biệt "đã xử lý xong" khỏi "mới tạo đơn,
+          // còn chờ Admin" — trước đây FE coi mọi phản hồi 200 là đã xử lý xong, hiện nguyên
+          // vẹn emerald success box + CTA "Sang trang điều phối" dẫn tới bảng trống.
+          can_admin_duyet: true,
           so_lich_bi_anh_huong: 0,
           so_slot_da_khoa: 0,
           de_xuat_doi: [],
@@ -1395,6 +1399,7 @@ export const reportDoctorUnavailable = async (req, res) => {
       message: `Đã ghi nhận bác sĩ nghỉ đột xuất. Tạo đề xuất cho ${deXuat.length}/${affectedAppointments.length} lịch bị ảnh hưởng.`,
       data: {
         leave_id: leaveDoc._id,
+        can_admin_duyet: false,
         so_lich_bi_anh_huong: affectedAppointments.length,
         so_slot_da_khoa: slotsLocked,
         de_xuat_doi: proposalSummaries,
