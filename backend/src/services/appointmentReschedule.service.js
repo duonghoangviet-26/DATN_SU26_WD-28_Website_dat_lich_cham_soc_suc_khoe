@@ -587,23 +587,43 @@ export async function guiThongBaoDeXuat(appointment, session = null) {
   // hệ tay xếp lịch thủ công. Trước đây hàm thoát ngay ở đây, nhóm "so_khong_co_cho" không
   // bao giờ xuất hiện trong /receptionist/contact-tasks — không có nơi nào đánh dấu đã xử lý.
   if (!dx.phuong_an?.length) {
-    await NhatKyThaoTac.create([{
-      nguoi_thuc_hien_id: null,
-      vai_tro: 'system',
+    // Guard chống trùng (review 2026-08-25): cùng một lịch hẹn có thể bị đề xuất lại nhiều lần
+    // (VD: dính hai đơn nghỉ liên tiếp — taoDeXuatDoiChoDonNghi dòng ~440-473 nhả chỗ cũ rồi
+    // sinh lại đề xuất mới, hoặc sinhLaiDeXuatChoLichMatCho). Không canh thì mỗi lần gọi lại
+    // tạo thêm một CUSTOMER_CONTACT_REQUIRED trùng doi_tuong_id, khiến so_khong_co_cho_da_xu_ly
+    // (Task 3, ganTrangThaiLienHe) đếm vượt so_khong_co_cho khi lễ tân chỉ xử lý một lần. Theo
+    // đúng quy ước "REQUIRED coi là chưa xử lý nếu KHÔNG có CONTACTED nào mới hơn nó" đã dùng ở
+    // contactTasks.service.js — chỉ tạo bản ghi mới khi yêu cầu GẦN NHẤT (nếu có) đã được xử lý.
+    const yeuCauGanNhat = await NhatKyThaoTac.findOne({
       hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
-      loai_doi_tuong: 'appointment',
       doi_tuong_id: appointment._id,
-      ly_do: 'Khong tim duoc phuong an doi lich nao — phai lien he khach truc tiep de xep tay',
-      du_lieu_moi: {
-        action: 'reschedule_khong_co_phuong_an',
-        appointment_id: appointment._id,
-        ma_lich_hen: appointment.ma_lich_hen ?? null,
-        ten_khach: appointment.ten_khach ?? null,
-        so_dien_thoai_khach: appointment.so_dien_thoai_khach ?? null,
-        email_khach: appointment.email_khach ?? null,
-        noi_dung: dx.ghi_chu || 'Khong tim duoc phuong an doi lich phu hop trong pham vi tim kiem.',
-      },
-    }], session ? { session } : {})
+    }).sort({ ngay_tao: -1 }).session(session).lean()
+
+    const conYeuCauChuaXuLy = yeuCauGanNhat && !(await NhatKyThaoTac.exists({
+      hanh_dong: 'CUSTOMER_CONTACTED',
+      doi_tuong_id: appointment._id,
+      ngay_tao: { $gt: yeuCauGanNhat.ngay_tao },
+    }).session(session))
+
+    if (!conYeuCauChuaXuLy) {
+      await NhatKyThaoTac.create([{
+        nguoi_thuc_hien_id: null,
+        vai_tro: 'system',
+        hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
+        loai_doi_tuong: 'appointment',
+        doi_tuong_id: appointment._id,
+        ly_do: 'Khong tim duoc phuong an doi lich nao — phai lien he khach truc tiep de xep tay',
+        du_lieu_moi: {
+          action: 'reschedule_khong_co_phuong_an',
+          appointment_id: appointment._id,
+          ma_lich_hen: appointment.ma_lich_hen ?? null,
+          ten_khach: appointment.ten_khach ?? null,
+          so_dien_thoai_khach: appointment.so_dien_thoai_khach ?? null,
+          email_khach: appointment.email_khach ?? null,
+          noi_dung: dx.ghi_chu || 'Khong tim duoc phuong an doi lich phu hop trong pham vi tim kiem.',
+        },
+      }], session ? { session } : {})
+    }
     return
   }
 
