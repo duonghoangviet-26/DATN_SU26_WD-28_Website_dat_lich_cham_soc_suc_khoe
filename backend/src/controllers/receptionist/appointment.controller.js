@@ -1244,6 +1244,24 @@ export const previewDoctorUnavailable = async (req, res) => {
     if (!tuNgayInput || !denNgayInput) {
       return res.status(400).json({ success: false, message: 'tu_ngay và den_ngay là bắt buộc' })
     }
+
+    // I3 (2026-08-25): preview phải áp ĐÚNG validation của hành động thật (reportDoctorUnavailable)
+    // — thiếu bước này, preview có thể báo "0 lịch ảnh hưởng" cho một khung giờ mà submit thật
+    // sẽ 400, gây yên tâm giả; hoặc coi một gio_bat_dau-thiếu-gio_ket_thuc là nghỉ cả ngày trong
+    // khi submit thật sẽ từ chối. Dùng lại nguyên `validHHMM` cục bộ, không viết lại logic.
+    if (!validHHMM(gioBatDau) || !validHHMM(gioKetThuc) || ((gioBatDau || gioKetThuc) && (!gioBatDau || !gioKetThuc || gioKetThuc <= gioBatDau))) {
+      return res.status(400).json({ success: false, message: 'Khung giờ nghỉ không hợp lệ' })
+    }
+
+    const doctor = await BacSi.findOne({
+      _id: doctorId,
+      trang_thai_duyet: 'approved',
+      la_hien: true,
+    })
+    if (!doctor) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy bác sĩ đang hoạt động' })
+    }
+
     const tuNgay = startOfDayUtc(new Date(tuNgayInput))
     const denNgay = startOfDayUtc(new Date(denNgayInput))
     if (!tuNgay || !denNgay || denNgay < tuNgay) {
