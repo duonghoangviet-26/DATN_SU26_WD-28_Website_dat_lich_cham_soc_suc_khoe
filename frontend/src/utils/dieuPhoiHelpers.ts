@@ -63,3 +63,18 @@ export function dinhDangDemNguoc(hanPhanHoi: string | null, now: Date = new Date
   }
   return { text: `còn ${Math.round(conLaiPhut / 60)} giờ`, quaHan: false }
 }
+
+export type TrangThaiTheBacSi = 'lam_viec' | 'cho_duyet' | 'con_viec' | 'da_xong'
+
+interface DoctorChoPhanLoai {
+  trang_thai_ngay: string
+  leave_id: string | null
+  so_lich_chua_xu_ly: number
+}
+
+/** 4 trạng thái thẻ bác sĩ ở Tab 1 (mục 3.3 spec). */
+export function xepTrangThaiTheBacSi(doctor: DoctorChoPhanLoai, leaveCuaBacSiChoDuyet: { _id: string } | null): TrangThaiTheBacSi {
+  if (leaveCuaBacSiChoDuyet) return 'cho_duyet'
+  if (doctor.leave_id) return doctor.so_lich_chua_xu_ly > 0 ? 'con_viec' : 'da_xong'
+  return 'lam_viec'
+}
