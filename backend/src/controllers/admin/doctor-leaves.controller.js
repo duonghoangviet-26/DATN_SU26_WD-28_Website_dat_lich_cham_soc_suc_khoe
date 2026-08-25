@@ -151,6 +151,7 @@ export async function approveDoctorLeave(req, res) {
     const { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat } = await duyetDonNghi({
       leave,
       actorUserId: req.user.id,
+      actorRole: req.user?.role === 'admin' ? 'admin' : 'receptionist',
       ghiChu,
       session,
     })

@@ -1,4 +1,4 @@
-import { NghiPhepBacSi, LichLamViec, LichHen, HangDoi } from '../models/index.js'
+import { NghiPhepBacSi, LichLamViec, LichHen, HangDoi, LichSuLichHen } from '../models/index.js'
 import { AFFECTED_BY_LEAVE_STATUSES } from '../utils/appointmentStatus.js'
 import { taoDeXuatDoiChoDonNghi, sinhLaiDeXuatChoLichMatCho } from './appointmentReschedule.service.js'
 import { nenKhoaSlotVaoDonNghi, laSlotGiuChoDeXuat, nenSinhLaiDeXuat } from './rescheduleRules.js'
@@ -100,7 +100,7 @@ async function findAffectedAppointments(leave, session) {
     status: { $in: AFFECTED_BY_LEAVE_STATUSES },
     ngay_kham: { $gte: leave.tu_ngay, $lt: endExclusive },
   })
-    .select('ma_lich_hen ngay_kham gio_kham status ten_khach so_dien_thoai_khach user_id doctor_id specialty_id payment_status de_xuat_doi')
+    .select('ma_lich_hen ngay_kham gio_kham status ten_khach so_dien_thoai_khach user_id doctor_id specialty_id schedule_id slot_id payment_status de_xuat_doi')
     .session(session)
     .lean()
 
@@ -119,7 +119,7 @@ async function findAffectedAppointments(leave, session) {
  * không phải hẹn lại ngày khác. Trả riêng nhóm này ở `canDieuPhoiTaiQuay` để FE hiện đúng
  * hành động (rút từ `reportDoctorUnavailable`, hợp nhất về một chỗ theo nguyên tắc mục 7).
  */
-export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
+export async function duyetDonNghi({ leave, actorUserId, actorRole = 'receptionist', ghiChu, session }) {
   if (leave.trang_thai !== 'cho_duyet') {
     throw Object.assign(new Error('Chi duyet duoc don dang cho duyet'), { statusCode: 409 })
   }
@@ -182,6 +182,50 @@ export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
 
   // P0-3: lịch hẹn của BÁC SĨ KHÁC vừa mất chỗ giữ sẵn vì đơn nghỉ này.
   const deXuatSinhLai = await sinhLaiDeXuatChoLichMatCho(slotGiuChoBiHuy, { session })
+
+  // Ghi lịch sử "đề xuất dời lịch được tạo" — trước 2026-08-25 chỉ có ở đường
+  // reportDoctorUnavailable (lễ tân tự báo nghỉ), đường bác sĩ tự gửi đơn (approveLeave/
+  // approveDoctorLeave) không có gì. Hợp nhất về một chỗ theo nguyên tắc mục 7.
+  if (deXuat.length > 0) {
+    const updatedAppointments = await LichHen.find({ _id: { $in: deXuat.map((d) => d.appointment_id) } })
+      .select('_id de_xuat_doi')
+      .session(session)
+    const updatedById = new Map(updatedAppointments.map((a) => [String(a._id), a]))
+    const affectedById = new Map(affectedAppointments.map((a) => [String(a._id), a]))
+    const lyDoNghi = leave.ly_do || 'Bac si nghi dot xuat'
+
+    for (const item of deXuat) {
+      const appointment = affectedById.get(String(item.appointment_id))
+      if (!appointment) continue
+      const nextOption = updatedById.get(String(item.appointment_id))?.de_xuat_doi?.phuong_an?.[0] ?? null
+      await LichSuLichHen.create([{
+        appointment_id: appointment._id,
+        tu_trang_thai: appointment.status,
+        den_trang_thai: appointment.status,
+        tu_payment_status: appointment.payment_status ?? null,
+        den_payment_status: appointment.payment_status ?? null,
+        loai_thay_doi: 'reschedule_proposal',
+        ly_do_thay_doi: lyDoNghi,
+        vai_tro: actorRole,
+        kenh_thay_doi: 'web',
+        nguoi_thay_doi_id: actorUserId,
+        nguoi_thuc_hien_id: actorUserId,
+        bac_si_cu_id: appointment.doctor_id ?? null,
+        bac_si_moi_id: nextOption?.doctor_id ?? null,
+        specialty_cu_id: appointment.specialty_id ?? null,
+        specialty_moi_id: appointment.specialty_id ?? null,
+        schedule_cu_id: appointment.schedule_id ?? null,
+        schedule_moi_id: nextOption?.schedule_id ?? null,
+        slot_cu_id: appointment.slot_id ?? null,
+        slot_moi_id: nextOption?.slot_id ?? null,
+        ngay_kham_cu: appointment.ngay_kham ?? null,
+        ngay_kham_moi: nextOption?.ngay ?? null,
+        gio_kham_cu: appointment.gio_kham ?? null,
+        gio_kham_moi: nextOption?.gio_bat_dau ?? null,
+        ly_do: `Tao de xuat doi lich do bac si nghi: ${lyDoNghi}`,
+      }], { session })
+    }
+  }
 
   return { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat, deXuatSinhLai }
 }
