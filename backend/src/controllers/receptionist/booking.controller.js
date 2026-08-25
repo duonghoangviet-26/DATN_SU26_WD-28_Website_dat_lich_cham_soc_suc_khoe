@@ -19,6 +19,7 @@ import { emitDashboardRevenueChanged } from "../../realtime/socket.js";
 import { buildSlotDateTime, isSlotInPast } from "../../utils/clinicTime.js";
 import { donDepSlotTruocKhiDoc } from "../../services/slotRelease.service.js";
 import { kiemTraQuaTai } from "../../services/queueOverflow.service.js";
+import { TRANG_THAI_DE_XUAT_MO } from "../../services/rescheduleRules.js";
 import {
     cacKhungDuocBanTaiQuay,
     laHomNay,
@@ -311,6 +312,27 @@ export async function getDoctorDayOverview(req, res) {
             if (!dangCo || (dangCo.gio_bat_dau && !leave.gio_bat_dau)) leaveByDoctor.set(key, leave);
         }
 
+        // B2: số lịch còn tồn / tổng lịch bị ảnh hưởng của MỖI đơn nghỉ đang hiển thị —
+        // dùng cho thẻ bác sĩ "còn X/Y lịch chưa điều phối" (Tab 1, Task 11).
+        const leaveIdsDangHien = [...leaveByDoctor.values()].map((l) => l._id);
+        const demTheoLeave = leaveIdsDangHien.length
+            ? await LichHen.aggregate([
+                { $match: { 'de_xuat_doi.nghi_phep_id': { $in: leaveIdsDangHien } } },
+                {
+                    $group: {
+                        _id: '$de_xuat_doi.nghi_phep_id',
+                        tong: { $sum: 1 },
+                        chuaXuLy: {
+                            $sum: {
+                                $cond: [{ $in: ['$de_xuat_doi.trang_thai', TRANG_THAI_DE_XUAT_MO] }, 1, 0],
+                            },
+                        },
+                    },
+                },
+            ])
+            : [];
+        const demTheoLeaveMap = new Map(demTheoLeave.map((d) => [String(d._id), d]));
+
         const data = doctors.map((doctor) => {
             const schedule = scheduleByDoctor.get(String(doctor._id)) ?? null;
             // Phan biet "khong dang ky ca nao" (khong co ban ghi lich) voi "co dang ky nhung
@@ -321,13 +343,17 @@ export async function getDoctorDayOverview(req, res) {
                 && schedule?.trang_thai_xac_nhan !== "tu_choi";
             const khungRows = dangLamViec ? buildDoctorKhungRows(schedule) : [];
             const { ca_sang, ca_chieu } = chiaCaSangChieu(khungRows);
+            const leaveIdCuaBacSi = leaveByDoctor.get(String(doctor._id))?._id ?? null;
+            const demCuaLeave = leaveIdCuaBacSi ? demTheoLeaveMap.get(String(leaveIdCuaBacSi)) : null;
             return {
                 doctor_id: doctor._id,
                 ten_bac_si: doctor.user_id?.ho_ten ?? "Bác sĩ",
                 trang_thai_bac_si: doctor.trang_thai,
                 trang_thai_ngay: trangThaiNgay,
-                leave_id: leaveByDoctor.get(String(doctor._id))?._id ?? null,
+                leave_id: leaveIdCuaBacSi,
                 ly_do_nghi: leaveByDoctor.get(String(doctor._id))?.ly_do ?? null,
+                so_lich_chua_xu_ly: demCuaLeave?.chuaXuLy ?? 0,
+                so_lich_anh_huong: demCuaLeave?.tong ?? 0,
                 ca_sang,
                 ca_chieu,
             };

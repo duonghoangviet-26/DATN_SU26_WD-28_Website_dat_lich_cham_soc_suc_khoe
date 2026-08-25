@@ -32,6 +32,9 @@ export interface DayOverviewDoctor {
   /** Đơn nghỉ cả ngày đang phủ ngày đang xem — nguồn cho nút "Khôi phục". */
   leave_id: string | null
   ly_do_nghi: string | null
+  /** B2 (2026-08-25): chỉ có ý nghĩa khi leave_id != null. */
+  so_lich_chua_xu_ly: number
+  so_lich_anh_huong: number
   ca_sang: DayOverviewKhungRow[]
   ca_chieu: DayOverviewKhungRow[]
 }
