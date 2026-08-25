@@ -79,6 +79,12 @@ interface DoctorChoPhanLoai {
 /** 4 trạng thái thẻ bác sĩ ở Tab 1 (mục 3.3 spec). */
 export function xepTrangThaiTheBacSi(doctor: DoctorChoPhanLoai, leaveCuaBacSiChoDuyet: { _id: string } | null): TrangThaiTheBacSi {
   if (leaveCuaBacSiChoDuyet) return 'cho_duyet'
-  if (doctor.leave_id) return doctor.so_lich_chua_xu_ly > 0 ? 'con_viec' : 'da_xong'
+  // I4 (2026-08-25): leave_id được set cho MỌI đơn nghỉ da_duyet phủ ngày, kể cả đơn nghỉ
+  // MỘT KHUNG (mục 15, vd bác sĩ bận 10:00-10:30) — loại này KHÔNG đổi trang_thai_ngay khỏi
+  // 'lam_viec' vì bác sĩ vẫn làm việc gần trọn ngày. Chỉ coi là đang điều phối nghỉ khi
+  // trang_thai_ngay thực sự là 'nghi' hoặc 'nghi_phep' — nếu không, một đơn nghỉ 30 phút sẽ
+  // làm bác sĩ mất nút "Báo nghỉ đột xuất" và hiện nhầm badge "Đang nghỉ"/"Đã điều phối xong".
+  const dangNghiTheoNgay = doctor.trang_thai_ngay === 'nghi' || doctor.trang_thai_ngay === 'nghi_phep'
+  if (doctor.leave_id && dangNghiTheoNgay) return doctor.so_lich_chua_xu_ly > 0 ? 'con_viec' : 'da_xong'
   return 'lam_viec'
 }

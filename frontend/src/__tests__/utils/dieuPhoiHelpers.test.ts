@@ -93,4 +93,16 @@ describe('xepTrangThaiTheBacSi', () => {
     // Đơn xin nghỉ NGÀY MAI trong khi hôm nay vẫn 'lam_viec' -> vẫn phải hiện badge chờ duyệt.
     expect(xepTrangThaiTheBacSi({ trang_thai_ngay: 'lam_viec', leave_id: null, so_lich_chua_xu_ly: 0 }, { _id: 'l1' } as any)).toBe('cho_duyet')
   })
+
+  // I4 (2026-08-25): một đơn nghỉ MỘT KHUNG (mục 15, vd bác sĩ bận 10:00-10:30) KHÔNG đổi
+  // trang_thai_ngay khỏi 'lam_viec' — bác sĩ vẫn làm việc gần trọn ngày. Trước fix, hàm này
+  // chỉ nhìn leave_id (được set cho MỌI đơn da_duyet phủ ngày, kể cả đơn 1 khung) nên bác sĩ
+  // bị xếp nhầm vào trạng thái điều phối, mất luôn nút "Báo nghỉ đột xuất".
+  it('lam_viec: leave_id có giá trị nhưng trang_thai_ngay vẫn lam_viec (nghỉ 1 khung, mục 15) -> vẫn là lam_viec', () => {
+    expect(xepTrangThaiTheBacSi({ trang_thai_ngay: 'lam_viec', leave_id: 'l1', so_lich_chua_xu_ly: 3 }, null)).toBe('lam_viec')
+  })
+
+  it('con_viec: trang_thai_ngay = nghi (không phải nghi_phep) vẫn được coi là đang nghỉ điều phối', () => {
+    expect(xepTrangThaiTheBacSi({ trang_thai_ngay: 'nghi', leave_id: 'l1', so_lich_chua_xu_ly: 1 }, null)).toBe('con_viec')
+  })
 })
