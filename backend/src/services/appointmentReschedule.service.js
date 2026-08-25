@@ -581,7 +581,31 @@ export async function xuLyThanhToanTrungLichNghi({ appointment, slot, session })
  */
 export async function guiThongBaoDeXuat(appointment, session = null) {
   const dx = appointment.de_xuat_doi
-  if (!dx?.phuong_an?.length) return
+  if (!dx) return
+
+  // Đ4 (2026-08-25): 0 phương án — không có gì để báo KHÁCH, nhưng LỄ TÂN phải biết để liên
+  // hệ tay xếp lịch thủ công. Trước đây hàm thoát ngay ở đây, nhóm "so_khong_co_cho" không
+  // bao giờ xuất hiện trong /receptionist/contact-tasks — không có nơi nào đánh dấu đã xử lý.
+  if (!dx.phuong_an?.length) {
+    await NhatKyThaoTac.create([{
+      nguoi_thuc_hien_id: null,
+      vai_tro: 'system',
+      hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
+      loai_doi_tuong: 'appointment',
+      doi_tuong_id: appointment._id,
+      ly_do: 'Khong tim duoc phuong an doi lich nao — phai lien he khach truc tiep de xep tay',
+      du_lieu_moi: {
+        action: 'reschedule_khong_co_phuong_an',
+        appointment_id: appointment._id,
+        ma_lich_hen: appointment.ma_lich_hen ?? null,
+        ten_khach: appointment.ten_khach ?? null,
+        so_dien_thoai_khach: appointment.so_dien_thoai_khach ?? null,
+        email_khach: appointment.email_khach ?? null,
+        noi_dung: dx.ghi_chu || 'Khong tim duoc phuong an doi lich phu hop trong pham vi tim kiem.',
+      },
+    }], session ? { session } : {})
+    return
+  }
 
   const choAdminDuyet = dx.trang_thai === 'cho_admin_duyet'
   const danhSach = dx.phuong_an.map((pa, i) => `${i + 1}. ${pa.mo_ta}`).join('\n')
