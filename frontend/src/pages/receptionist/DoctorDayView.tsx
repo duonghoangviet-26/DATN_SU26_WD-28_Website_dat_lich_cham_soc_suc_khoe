@@ -319,7 +319,7 @@ export default function DoctorDayView({ embedded = false }: { embedded?: boolean
             </div>
 
             <div className="mt-5 flex justify-end">
-              <button type="button" onClick={() => setSelectedKhung(null)} className="min-h-10 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">Đóng</button>
+              <button type="button" onClick={() => setSelectedKhung(null)} className="min-h-11 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">Đóng</button>
             </div>
           </div>
         </div>
