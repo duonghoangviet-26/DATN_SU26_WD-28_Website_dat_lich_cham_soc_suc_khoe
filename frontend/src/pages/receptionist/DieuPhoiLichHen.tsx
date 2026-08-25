@@ -11,7 +11,8 @@ import DieuPhoiRow from '@/components/receptionist/DieuPhoiRow'
 import ChonKhacPanel from '@/components/receptionist/ChonKhacPanel'
 import BulkApproveConfirm from '@/components/receptionist/BulkApproveConfirm'
 import QueueTransferModal, { type QueueTransferCandidate } from '@/components/receptionist/QueueTransferModal'
-import { EmptyBlock, LoadingBlock, MetricCard, PageShell, Panel, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI'
+import { EmptyBlock, LoadingBlock, PageShell, Panel, ProcessBar, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI'
+import { xepBuocQuyTrinh } from '@/utils/dieuPhoiHelpers'
 
 function ngayVN(value: string) {
   return new Date(value).toLocaleDateString('vi-VN')
@@ -63,7 +64,7 @@ export default function DieuPhoiLichHen() {
     setError('')
     Promise.all([
       receptionistRescheduleApprovalsService.tongQuan(leaveId),
-      receptionistRescheduleApprovalsService.list({ leave_id: leaveId, trang_thai: 'cho_admin_duyet,cho_khach_chon,da_ap_dung' }),
+      receptionistRescheduleApprovalsService.list({ leave_id: leaveId, trang_thai: 'cho_admin_duyet,cho_khach_chon,da_ap_dung,da_huy' }),
     ])
       .then(([tq, ds]) => { setTongQuan(tq); setItems(ds); setChon(new Set()) })
       .catch((requestError: any) => setError(requestError?.response?.data?.message || 'Không thể tải dữ liệu điều phối.'))
@@ -71,6 +72,20 @@ export default function DieuPhoiLichHen() {
   }, [leaveId])
 
   useEffect(() => { load() }, [load])
+
+  // Rào chắn #3 — cảnh báo rời trang khi còn lịch chờ duyệt (đóng tab/refresh). Sự kiện
+  // `beforeunload` chỉ kích hoạt khi trình duyệt thật sự rời trang (unload), KHÔNG kích hoạt
+  // khi điều hướng nội bộ SPA qua React Router (đổi route không unload document).
+  useEffect(() => {
+    const conChoDuyet = (tongQuan?.so_cho_duyet ?? 0) > 0
+    if (!conChoDuyet) return undefined
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [tongQuan?.so_cho_duyet])
 
   const chonDuoc = useMemo(
     () => items.filter((item) => item.de_xuat.trang_thai === 'cho_admin_duyet' && item.de_xuat.phuong_an.length > 0),
@@ -125,21 +140,27 @@ export default function DieuPhoiLichHen() {
 
   return (
     <PageShell>
+      <p className="mb-2 text-xs font-semibold text-slate-500">
+        <Link to="/receptionist/quan-ly-dieu-phoi" className="hover:underline">Quản lý và điều phối</Link>
+        {' › '}
+        <Link to="/receptionist/quan-ly-dieu-phoi/dieu-phoi" className="hover:underline">Điều phối lịch hẹn</Link>
+        {tongQuan && <> › {tongQuan.bac_si} · {ngayVN(tongQuan.khoang_nghi.tu_ngay)}</>}
+      </p>
       <ReceptionistHeader
         eyebrow="Điều phối · Lịch hẹn"
         title={tongQuan ? `${tongQuan.bac_si} — nghỉ ${ngayVN(tongQuan.khoang_nghi.tu_ngay)}` : 'Bảng điều phối'}
         description={tongQuan?.ly_do ? `Lý do: ${tongQuan.ly_do}` : 'Duyệt phương án dời cho khách bị ảnh hưởng.'}
-        actions={<Link to="/receptionist/dieu-phoi" className="inline-flex min-h-10 items-center rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">← Danh sách</Link>}
+        actions={<Link to="/receptionist/quan-ly-dieu-phoi/dieu-phoi" className="inline-flex min-h-10 items-center rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">← Danh sách</Link>}
       />
 
       {tongQuan && (
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <MetricCard label="Lịch ảnh hưởng" value={tongQuan.so_lich_anh_huong} />
-          <MetricCard label="Chờ duyệt" value={tongQuan.so_cho_duyet} tone={tongQuan.so_cho_duyet ? 'warning' : 'default'} />
-          <MetricCard label="Chờ khách chọn" value={tongQuan.so_cho_khach_chon} tone="info" />
-          <MetricCard label="Đã dời xong" value={tongQuan.so_da_doi} tone="success" />
-          <MetricCard label="Không có chỗ" value={tongQuan.so_khong_co_cho} tone={tongQuan.so_khong_co_cho ? 'warning' : 'default'} />
-        </div>
+        <ProcessBar steps={xepBuocQuyTrinh({
+          so_lich_anh_huong: tongQuan.so_lich_anh_huong,
+          so_cho_duyet: tongQuan.so_cho_duyet,
+          so_da_doi: tongQuan.so_da_doi,
+          so_khong_co_cho: tongQuan.so_khong_co_cho,
+          so_khong_co_cho_da_xu_ly: tongQuan.so_khong_co_cho_da_xu_ly,
+        })} />
       )}
 
       {error && <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
@@ -219,6 +240,18 @@ export default function DieuPhoiLichHen() {
           </div>
         )}
       </Panel>
+
+      {tongQuan && tongQuan.so_khong_co_cho > tongQuan.so_khong_co_cho_da_xu_ly && (
+        <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+          <p className="font-bold">
+            {tongQuan.so_khong_co_cho - tongQuan.so_khong_co_cho_da_xu_ly} lịch không tìm được phương án — cần liên hệ tay
+          </p>
+          <p className="mt-1 text-violet-700">Hệ thống không tự tìm được chỗ thay thế cho những lịch này. Xem chi tiết và đánh dấu đã gọi tại trang Liên hệ bệnh nhân.</p>
+          <a href="/receptionist/contact-tasks" className="mt-2 inline-flex min-h-9 items-center rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700">
+            Mở Liên hệ bệnh nhân →
+          </a>
+        </div>
+      )}
 
       {chon.size > 0 && (
         <div className="sticky bottom-4 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-white px-4 py-3 shadow-lg">

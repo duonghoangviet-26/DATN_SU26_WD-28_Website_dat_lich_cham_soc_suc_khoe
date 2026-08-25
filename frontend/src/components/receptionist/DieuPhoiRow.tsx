@@ -56,7 +56,9 @@ export default function DieuPhoiRow({ item, checked, onToggle, onChonKhac, onDuy
           )}
         </td>
         <td className="px-3 py-2.5 text-sm text-slate-700">
-          {coPhuongAn ? (
+          {trangThai === 'da_huy' ? (
+            <span className="italic text-slate-500">Đã bỏ phương án — liên hệ tay. {item.de_xuat.ghi_chu && `"${item.de_xuat.ghi_chu}"`}</span>
+          ) : coPhuongAn ? (
             <button type="button" onClick={() => setMo((truoc) => !truoc)} className="text-left hover:underline">
               {item.de_xuat.phuong_an[phuongAnIndex]?.mo_ta ?? item.de_xuat.phuong_an[0].mo_ta}
               <span className="ml-1 text-slate-400">{mo ? '▴' : '▾'}</span>
