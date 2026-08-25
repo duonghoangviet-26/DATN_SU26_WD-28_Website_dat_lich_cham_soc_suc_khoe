@@ -13,11 +13,10 @@ const ReceptionistAppointments = lazy(() => import('@/pages/receptionist/Appoint
 const ReceptionistPayments = lazy(() => import('@/pages/receptionist/Payments'))
 const ReceptionistPatientIntake = lazy(() => import('@/pages/receptionist/PatientIntake'))
 const ReceptionistOfflineQueue = lazy(() => import('@/pages/receptionist/OfflineQueue'))
-const ReceptionistDoctorDayView = lazy(() => import('@/pages/receptionist/DoctorDayView'))
 const ReceptionistContactTasks = lazy(() => import('@/pages/receptionist/ContactTasks'))
 const ReceptionistActivityLog = lazy(() => import('@/pages/receptionist/ActivityLog'))
-const ReceptionistDanhSachDieuPhoi = lazy(() => import('@/pages/receptionist/DanhSachDieuPhoi'))
 const ReceptionistDieuPhoiLichHen = lazy(() => import('@/pages/receptionist/DieuPhoiLichHen'))
+const ReceptionistQuanLyDieuPhoi = lazy(() => import('@/pages/receptionist/QuanLyDieuPhoi'))
 const ReceptionistNewsList = lazy(() => import('@/pages/receptionist/NewsList'))
 const ReceptionistNewsCreate = lazy(() => import('@/pages/receptionist/NewsCreate'))
 const ReceptionistNewsEdit = lazy(() => import('@/pages/receptionist/NewsEdit'))
@@ -158,11 +157,14 @@ export default function AppRoutes() {
         <Route path="payments" element={<ReceptionistPayments />} />
         <Route path="patient-intake" element={<ReceptionistPatientIntake />} />
         <Route path="offline-queue" element={<ReceptionistOfflineQueue />} />
-        <Route path="doctor-day-view" element={<ReceptionistDoctorDayView />} />
+        <Route path="doctor-day-view" element={<Navigate to="/receptionist/quan-ly-dieu-phoi" replace />} />
         <Route path="contact-tasks" element={<ReceptionistContactTasks />} />
         <Route path="activity-log" element={<ReceptionistActivityLog />} />
-        <Route path="dieu-phoi" element={<ReceptionistDanhSachDieuPhoi />} />
+        <Route path="dieu-phoi" element={<Navigate to="/receptionist/quan-ly-dieu-phoi/dieu-phoi" replace />} />
         <Route path="dieu-phoi/:leaveId" element={<ReceptionistDieuPhoiLichHen />} />
+        <Route path="quan-ly-dieu-phoi" element={<ReceptionistQuanLyDieuPhoi />} />
+        <Route path="quan-ly-dieu-phoi/dieu-phoi" element={<ReceptionistQuanLyDieuPhoi />} />
+        <Route path="quan-ly-dieu-phoi/dieu-phoi/:leaveId" element={<ReceptionistDieuPhoiLichHen />} />
         <Route path="booking" element={<ReceptionistPatientIntake />} />
         <Route path="news" element={<ReceptionistNewsList />} />
         <Route path="news/create" element={<ReceptionistNewsCreate />} />

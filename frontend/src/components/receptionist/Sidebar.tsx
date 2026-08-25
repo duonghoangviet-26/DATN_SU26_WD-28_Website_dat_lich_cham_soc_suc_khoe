@@ -13,8 +13,7 @@ const receptionistMenu = [
   { path: '/receptionist', label: 'Tổng quan tiếp đón', icon: 'dashboard', end: true },
   { path: '/receptionist/patient-intake', label: 'Tiếp nhận & lịch hẹn', icon: 'user-check' },
   { path: '/receptionist/offline-queue', label: 'Hàng đợi vãng lai', icon: 'clipboard-list' },
-  { path: '/receptionist/doctor-day-view', label: 'Điều phối bác sĩ', icon: 'stethoscope' },
-  { path: '/receptionist/dieu-phoi', label: 'Điều phối lịch hẹn', icon: 'calendar' },
+  { path: '/receptionist/quan-ly-dieu-phoi', label: 'Quản lý và điều phối', icon: 'stethoscope' },
   { path: '/receptionist/contact-tasks', label: 'Liên hệ bệnh nhân', icon: 'phone-call' },
   { path: '/receptionist/activity-log', label: 'Nhật ký ca trực lễ tân', icon: 'clipboard-list' },
   { path: '/receptionist/payments', label: 'Viện phí & hóa đơn', icon: 'receipt' },
@@ -92,7 +91,7 @@ export default function Sidebar({ open, onClose }: Props) {
               {item.path === '/receptionist/contact-tasks' && chuaGoiCount > 0 && (
                 <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-rose-600 px-1.5 text-[10px] font-bold text-white">{chuaGoiCount > 99 ? '99+' : chuaGoiCount}</span>
               )}
-              {item.path === '/receptionist/dieu-phoi' && canDieuPhoiCount > 0 && (
+              {item.path === '/receptionist/quan-ly-dieu-phoi' && canDieuPhoiCount > 0 && (
                 <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-amber-500 px-1.5 text-[10px] font-bold text-white">{canDieuPhoiCount > 99 ? '99+' : canDieuPhoiCount}</span>
               )}
             </NavLink>
