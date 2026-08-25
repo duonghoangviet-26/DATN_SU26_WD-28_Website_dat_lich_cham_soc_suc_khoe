@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   DoctorOperationalStatus,
+  DoctorUnavailablePreview,
   ReportDoctorUnavailableResult,
   SuddenLeaveSkippedAppointment,
   receptionistBookingService,
@@ -42,6 +43,9 @@ export default function DoctorUnavailableModal({ doctorId, doctorName, defaultDa
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [preview, setPreview] = useState<DoctorUnavailablePreview | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState('')
   const [result, setResult] = useState<ReportDoctorUnavailableResult | null>(null)
   const [doctorStatuses, setDoctorStatuses] = useState<DoctorOperationalStatus[]>([])
   const [transferTarget, setTransferTarget] = useState<{ item: SuddenLeaveSkippedAppointment } | null>(null)
@@ -50,6 +54,30 @@ export default function DoctorUnavailableModal({ doctorId, doctorName, defaultDa
   useEffect(() => {
     receptionistBookingService.getDoctorOperationalStatuses().then(setDoctorStatuses).catch(() => {})
   }, [])
+
+  const xemAnhHuong = async () => {
+    if (!reason.trim()) {
+      setError('Vui lòng nhập lý do bác sĩ nghỉ đột xuất.')
+      return
+    }
+    setPreviewLoading(true)
+    setPreviewError('')
+    setError('')
+    try {
+      const res = await receptionistBookingService.previewDoctorUnavailable({
+        doctor_id: doctorId,
+        tu_ngay: tuNgay,
+        den_ngay: denNgay,
+        gio_bat_dau: gioBatDau || undefined,
+        gio_ket_thuc: gioKetThuc || undefined,
+      })
+      setPreview(res)
+    } catch (requestError: any) {
+      setPreviewError(requestError?.response?.data?.message || 'Không thể xem trước ảnh hưởng.')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
 
   const submit = async () => {
     if (!reason.trim()) {
@@ -91,17 +119,41 @@ export default function DoctorUnavailableModal({ doctorId, doctorName, defaultDa
         {!result ? (
           <>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <label className="text-sm font-medium text-slate-700">Từ ngày<input type="date" value={tuNgay} onChange={(event) => setTuNgay(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
-              <label className="text-sm font-medium text-slate-700">Đến ngày<input type="date" value={denNgay} onChange={(event) => setDenNgay(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
-              <label className="text-sm font-medium text-slate-700">Từ giờ (để trống = nghỉ cả ca/ngày)<input type="time" value={gioBatDau} onChange={(event) => setGioBatDau(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
-              <label className="text-sm font-medium text-slate-700">Đến giờ<input type="time" value={gioKetThuc} onChange={(event) => setGioKetThuc(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
-              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Lý do *<textarea rows={2} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Vd: bác sĩ đột ngột ốm, việc gia đình khẩn cấp..." className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
+              <label className="text-sm font-medium text-slate-700">Từ ngày<input type="date" value={tuNgay} onChange={(event) => { setTuNgay(event.target.value); setPreview(null) }} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
+              <label className="text-sm font-medium text-slate-700">Đến ngày<input type="date" value={denNgay} onChange={(event) => { setDenNgay(event.target.value); setPreview(null) }} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
+              <label className="text-sm font-medium text-slate-700">Từ giờ (để trống = nghỉ cả ca/ngày)<input type="time" value={gioBatDau} onChange={(event) => { setGioBatDau(event.target.value); setPreview(null) }} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
+              <label className="text-sm font-medium text-slate-700">Đến giờ<input type="time" value={gioKetThuc} onChange={(event) => { setGioKetThuc(event.target.value); setPreview(null) }} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
+              <label className="text-sm font-medium text-slate-700 sm:col-span-2">Lý do *<textarea rows={2} value={reason} onChange={(event) => { setReason(event.target.value); setPreview(null) }} placeholder="Vd: bác sĩ đột ngột ốm, việc gia đình khẩn cấp..." className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" /></label>
             </div>
             <p className="mt-3 text-xs text-slate-500">Hệ thống sẽ tự tìm phương án dời cho toàn bộ lịch bị ảnh hưởng (bác sĩ khác cùng khung → khung khác trong ngày), giữ nguyên giá, không hoàn tiền theo quy định (chỉ giữ quyền dời lịch).</p>
+            {previewError && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{previewError}</p>}
+
+            {preview && (
+              <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+                <p className="font-bold">Sẽ ảnh hưởng {preview.so_lich_anh_huong} lịch hẹn:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  <li>{preview.so_da_thanh_toan} đã thanh toán</li>
+                  <li>{preview.so_da_checkin} đã check-in (phải chuyển bác sĩ tại quầy, không dời lịch)</li>
+                  <li>{preview.so_chua_thanh_toan} chưa thanh toán</li>
+                </ul>
+                <p className="mt-1">{preview.so_slot_se_khoa} slot sẽ bị khoá.</p>
+              </div>
+            )}
+
             {error && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
             <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">Hủy bỏ</button>
-              <button type="button" onClick={submit} disabled={submitting} className="min-h-11 rounded-xl bg-orange-600 px-4 text-sm font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60">{submitting ? 'Đang xử lý...' : 'Xác nhận báo nghỉ'}</button>
+              <button type="button" onClick={onClose} className="min-h-11 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200">
+                {preview ? 'Để sau — chưa xác nhận' : 'Hủy bỏ'}
+              </button>
+              {!preview ? (
+                <button type="button" onClick={() => void xemAnhHuong()} disabled={previewLoading} className="min-h-11 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60">
+                  {previewLoading ? 'Đang kiểm tra...' : 'Xem ảnh hưởng'}
+                </button>
+              ) : (
+                <button type="button" onClick={submit} disabled={submitting} className="min-h-11 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60">
+                  {submitting ? 'Đang xử lý...' : 'Xác nhận báo nghỉ'}
+                </button>
+              )}
             </div>
           </>
         ) : (
