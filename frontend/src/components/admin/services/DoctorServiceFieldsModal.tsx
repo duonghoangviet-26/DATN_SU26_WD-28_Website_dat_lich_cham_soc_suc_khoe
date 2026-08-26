@@ -5,7 +5,6 @@ import Icon from '@/components/admin/icons'
 
 export interface DoctorServiceFieldsData {
   gia_kham: number
-  bao_hiem: { nha_nuoc: boolean; bao_lanh: boolean }
   related_services: { id: string; ten: string; gia: number }[]
 }
 
@@ -18,12 +17,11 @@ interface Props {
   onSave: (data: DoctorServiceFieldsData) => Promise<void>
 }
 
-// Sửa nhanh field liên quan dịch vụ của 1 bác sĩ: giá khám, bảo hiểm áp dụng,
-// dịch vụ liên quan đã tích. KHÔNG sửa hồ sơ bác sĩ (bằng cấp, kinh nghiệm...)
-// — việc đó thuộc trang Quản lý bác sĩ (C2).
+// Sửa nhanh field liên quan dịch vụ của 1 bác sĩ: giá khám và dịch vụ liên quan
+// đã tích. KHÔNG sửa hồ sơ bác sĩ (bằng cấp, kinh nghiệm...) — việc đó thuộc
+// trang Quản lý bác sĩ (C2).
 export default function DoctorServiceFieldsModal({ open, doctor, availableServices, onClose, onSave }: Props) {
   const [giaKham, setGiaKham] = useState(0)
-  const [baoHiem, setBaoHiem] = useState({ nha_nuoc: false, bao_lanh: false })
   const [checkedIds, setCheckedIds] = useState<string[]>([])
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -31,10 +29,6 @@ export default function DoctorServiceFieldsModal({ open, doctor, availableServic
   useEffect(() => {
     if (!open || !doctor) return
     setGiaKham(doctor.gia_kham)
-    setBaoHiem({
-      nha_nuoc: doctor.bao_hiem?.nha_nuoc ?? false,
-      bao_lanh: doctor.bao_hiem?.bao_lanh ?? false,
-    })
     setCheckedIds((doctor.related_services ?? []).map((rs) => rs.id))
     setError('')
   }, [open, doctor])
@@ -50,7 +44,7 @@ export default function DoctorServiceFieldsModal({ open, doctor, availableServic
       const related_services = availableServices
         .filter((s) => checkedIds.includes(s.id))
         .map((s) => ({ id: s.id, ten: s.ten, gia: s.gia }))
-      await onSave({ gia_kham: giaKham, bao_hiem: baoHiem, related_services })
+      await onSave({ gia_kham: giaKham, related_services })
     } finally {
       setSubmitting(false)
     }
@@ -83,30 +77,6 @@ export default function DoctorServiceFieldsModal({ open, doctor, availableServic
               className={`input w-full ${error ? 'border-red-300 focus:ring-red-200' : ''}`}
             />
             {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Loại bảo hiểm áp dụng</label>
-            <div className="space-y-2">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={baoHiem.nha_nuoc}
-                  onChange={(e) => setBaoHiem((b) => ({ ...b, nha_nuoc: e.target.checked }))}
-                  className="h-4 w-4 rounded border-slate-300 accent-brand-500"
-                />
-                Bảo hiểm y tế nhà nước
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={baoHiem.bao_lanh}
-                  onChange={(e) => setBaoHiem((b) => ({ ...b, bao_lanh: e.target.checked }))}
-                  className="h-4 w-4 rounded border-slate-300 accent-brand-500"
-                />
-                Bảo hiểm bảo lãnh
-              </label>
-            </div>
           </div>
 
           <div>

@@ -40,17 +40,6 @@ export default function DoctorCard({ doctor, onBook }: Props) {
             {doctor.gia_kham.toLocaleString('vi-VN')}đ <span className="font-normal text-slate-500">/ 30 phút</span>
           </p>
 
-          {(doctor.bao_hiem?.nha_nuoc || doctor.bao_hiem?.bao_lanh) && (
-            <div className="flex flex-wrap gap-1.5">
-              {doctor.bao_hiem?.nha_nuoc && (
-                <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">BHYT nhà nước</span>
-              )}
-              {doctor.bao_hiem?.bao_lanh && (
-                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">Bảo lãnh viện phí</span>
-              )}
-            </div>
-          )}
-
           {doctor.related_services && doctor.related_services.length > 0 && (
             <div>
               <p className="text-xs font-medium text-slate-500">Dịch vụ có thể được bác sĩ chỉ định:</p>
