@@ -108,9 +108,10 @@ function PaymentDetailModal({ detail, loading, onClose }: PaymentDetailModalProp
                 </div>
 
                 <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <DetailField label="Bệnh nhân" value={detail.benh_nhan || 'Không rõ'} />
+                  <DetailField label="Bệnh nhân" value={`${detail.benh_nhan || 'Không rõ'} ${detail.so_dien_thoai_benh_nhan ? `(${detail.so_dien_thoai_benh_nhan})` : ''}`} />
+                  <DetailField label="Người thanh toán" value={`${detail.nguoi_thanh_toan || 'Không rõ'} ${detail.nguoi_thanh_toan !== detail.benh_nhan ? '(Thanh toán hộ)' : ''}`} />
                   <DetailField label="Email" value={detail.email || 'Không có'} />
-                  <DetailField label="Số điện thoại" value={detail.so_dien_thoai || 'Không có'} />
+                  <DetailField label="SĐT Người thanh toán" value={detail.so_dien_thoai || 'Không có'} />
                   <DetailField label="Bác sĩ" value={detail.bac_si || 'Không rõ'} />
                   <DetailField label="Số tiền" value={formatPrice(detail.so_tien)} />
                   <DetailField label="Loại thanh toán" value={formatAdminValue('loai_thanh_toan', detail.loai_thanh_toan)} />
@@ -121,6 +122,42 @@ function PaymentDetailModal({ detail, loading, onClose }: PaymentDetailModalProp
                   <DetailField label="Số hóa đơn" value={detail.so_hoa_don || 'Chưa có'} />
                   <DetailField label="Trạng thái hóa đơn" value={formatAdminValue('trang_thai_hoa_don', detail.trang_thai_hoa_don)} />
                 </dl>
+                {detail.chi_tiet_thu_phi && detail.chi_tiet_thu_phi.length > 0 && (
+                  <div className="mt-6 border-t border-slate-100 pt-5">
+                    <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Chi tiết dịch vụ trên hóa đơn</h4>
+                    <div className="overflow-hidden rounded-xl border border-slate-100">
+                      <table className="w-full text-left text-sm text-slate-600">
+                        <thead className="bg-slate-50 text-xs text-slate-500">
+                          <tr>
+                            <th className="px-4 py-3 font-medium uppercase tracking-[0.08em]">Dịch vụ</th>
+                            <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-right">SL</th>
+                            <th className="px-4 py-3 font-medium uppercase tracking-[0.08em] text-right">Đơn giá</th>
+                            <th className="px-4 py-3 text-right font-medium uppercase tracking-[0.08em]">Thành tiền</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {detail.chi_tiet_thu_phi.map((item, index) => (
+                            <tr key={index} className="hover:bg-slate-50">
+                              <td className="px-4 py-2.5">
+                                <p className="font-medium text-slate-900">{item.ten || formatAdminValue('loai', item.loai)}</p>
+                                {item.ghi_chu && <p className="mt-0.5 text-xs text-slate-500">{item.ghi_chu}</p>}
+                              </td>
+                              <td className="px-4 py-2.5 text-right">{item.so_luong}</td>
+                              <td className="px-4 py-2.5 text-right">{formatPrice(item.so_tien)}</td>
+                              <td className="px-4 py-2.5 text-right font-semibold text-slate-700">{formatPrice(item.thanh_tien)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-slate-50">
+                          <tr>
+                            <td colSpan={3} className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Tổng cộng</td>
+                            <td className="px-4 py-3 text-right font-bold text-slate-900">{formatPrice(detail.chi_tiet_thu_phi.reduce((sum, item) => sum + item.thanh_tien, 0))}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-slate-100 px-5 py-4 sm:px-6">
@@ -363,6 +400,7 @@ export default function ManagePayments() {
               <tr>
                 <th className="px-4 py-3 font-medium">Giao dịch</th>
                 <th className="px-4 py-3 font-medium">Bệnh nhân</th>
+                <th className="px-4 py-3 font-medium">Người thanh toán</th>
                 <th className="px-4 py-3 font-medium">Bác sĩ</th>
                 <th className="px-4 py-3 font-medium">Thời gian</th>
                 <th className="px-4 py-3 font-medium">Số tiền</th>
@@ -373,19 +411,19 @@ export default function ManagePayments() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                     Đang tải...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-red-700">
+                  <td colSpan={8} className="px-4 py-10 text-center text-red-700">
                     Không thể tải dữ liệu giao dịch. Vui lòng thử lại.
                   </td>
                 </tr>
               ) : payments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-600">
+                  <td colSpan={8} className="px-4 py-10 text-center text-slate-600">
                     {keyword || status || fromDate || toDate
                       ? 'Không có giao dịch phù hợp với bộ lọc.'
                       : 'Chưa có giao dịch thanh toán trong hệ thống.'}
@@ -402,8 +440,27 @@ export default function ManagePayments() {
 
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-900">{payment.benh_nhan || 'Không rõ'}</p>
-                    <p className="mt-1 text-xs text-slate-500">{payment.so_dien_thoai || 'Chưa có số điện thoại'}</p>
-                    <p className="text-xs text-slate-400">{payment.email || 'Chưa có email'}</p>
+                    <p className="mt-1 text-xs text-slate-500">{payment.so_dien_thoai_benh_nhan || 'Chưa có số điện thoại'}</p>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {payment.nguoi_thanh_toan === payment.benh_nhan && (payment.so_dien_thoai === payment.so_dien_thoai_benh_nhan || !payment.so_dien_thoai_benh_nhan) ? (
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                          <Icon name="user" className="h-3 w-3" />
+                          Là bệnh nhân
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="font-medium text-slate-900">{payment.nguoi_thanh_toan || 'Không rõ'}</p>
+                        <p className="mt-1 text-xs text-slate-500">{payment.so_dien_thoai || 'Chưa có số điện thoại'}</p>
+                        <p className="text-xs text-slate-400">{payment.email || 'Chưa có email'}</p>
+                        <span className="mt-1.5 inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                          {payment.loai_thanh_toan === 'thanh_toan_bo_sung' ? 'Thanh toán tại quầy (Khách/Người nhà)' : 'Đặt & thanh toán hộ'}
+                        </span>
+                      </>
+                    )}
                   </td>
 
                   <td className="px-4 py-3 text-slate-700">

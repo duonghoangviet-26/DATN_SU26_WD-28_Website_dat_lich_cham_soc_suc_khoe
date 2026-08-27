@@ -640,6 +640,8 @@ export interface PaymentItem {
     id: string | number;
     ma_giao_dich: string; // "TXN0001" — auto-gen bởi backend (GAP-21)
     benh_nhan: string;
+    so_dien_thoai_benh_nhan?: string | null;
+    nguoi_thanh_toan: string;
     bac_si: string;
     so_tien: number;
     phuong_thuc: PaymentMethod;
@@ -655,6 +657,14 @@ export interface PaymentItem {
     thoi_diem_thanh_toan?: string | null;
     ngay_thanh_toan?: string | null;
     trang_thai_hoa_don?: string | null;
+    chi_tiet_thu_phi?: {
+        loai: string;
+        ten?: string | null;
+        so_tien: number;
+        so_luong: number;
+        thanh_tien: number;
+        ghi_chu?: string | null;
+    }[];
 }
 
 export interface UpcomingAppointmentItem {
