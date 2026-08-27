@@ -140,7 +140,8 @@ export interface DoctorProfile {
     ly_do_tu_choi?: string | null;
     // specialist = bác sĩ khám clinic | home_staff = nhân viên lấy mẫu tại nhà
     loai?: "specialist" | "home_staff";
-    // Bảo hiểm bác sĩ chấp nhận — hiển thị ở trang chọn bác sĩ theo chuyên khoa
+    // Field cũ còn trong DB, KHÔNG còn hiển thị ở giao diện nào (gỡ 2026-08-26):
+    // mô hình đã chốt là phòng khám tư, không áp dụng bảo hiểm y tế.
     bao_hiem?: { nha_nuoc: boolean; bao_lanh: boolean };
     // Dịch vụ liên quan (loai='related') mà bác sĩ này có thể chỉ định — hiển thị tham khảo
     related_services?: { id: string; ten: string; gia: number }[];

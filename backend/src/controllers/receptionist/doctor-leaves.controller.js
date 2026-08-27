@@ -8,7 +8,9 @@ import {
   findLeaveByIdWithDoctor,
   moTaKetQuaDuyet,
   laDonNganHanChoLeTan,
+  demAnhHuongCuaDonNghi,
 } from '../../services/doctorLeaveApproval.service.js'
+import { huyBaoNghi, xemTruocKhoiPhuc, kiemTraDuocKhoiPhuc } from '../../services/doctorLeaveRestore.service.js'
 
 // ============================================================
 // Lễ tân duyệt đơn nghỉ NGẮN HẠN của bác sĩ — Routes: /api/receptionist/doctor-leaves
@@ -71,7 +73,20 @@ export async function listPendingLeaves(req, res) {
 
     const thuocThamQuyen = leaves.filter((leave) => laDonNganHanChoLeTan(leave))
 
-    return ok(res, thuocThamQuyen.map(formatDoctorLeave))
+    // B1: mỗi đơn chờ duyệt hiện kèm số lịch sẽ bị ảnh hưởng nếu duyệt — thẻ bác sĩ trạng
+    // thái (b) hiển thị con số này thay vì chỉ tên bác sĩ (Task 11).
+    const ketQua = await Promise.all(thuocThamQuyen.map(async (leave) => {
+      const anhHuong = await demAnhHuongCuaDonNghi({
+        bacSiId: leave.bac_si_id?._id ?? leave.bac_si_id,
+        tuNgay: leave.tu_ngay,
+        denNgay: leave.den_ngay,
+        gioBatDau: leave.gio_bat_dau,
+        gioKetThuc: leave.gio_ket_thuc,
+      })
+      return { ...formatDoctorLeave(leave), so_lich_se_anh_huong: anhHuong.so_lich_anh_huong }
+    }))
+
+    return ok(res, ketQua)
   } catch (error) {
     return fail(res, 500, error.message)
   }
@@ -104,6 +119,7 @@ export async function approveLeave(req, res) {
     const { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat } = await duyetDonNghi({
       leave,
       actorUserId: getActorUserId(req),
+      actorRole: req.user?.role === 'admin' ? 'admin' : 'receptionist',
       ghiChu: req.body?.ghi_chu,
       session,
     })
@@ -163,8 +179,74 @@ export async function rejectLeave(req, res) {
   }
 }
 
+// ─── GET /api/receptionist/doctor-leaves/:id/huy-bao-nghi/preview ───────────
+// Xem trước hậu quả khôi phục — modal xác nhận cần hiện ĐÚNG con số trước khi lễ tân bấm,
+// không phải câu chung chung "bạn có chắc không".
+export async function previewHuyBaoNghi(req, res) {
+  try {
+    const { id } = req.params
+    if (!isValidObjectId(id)) return fail(res, 400, 'ID nghỉ phép không hợp lệ')
+
+    const leave = await NghiPhepBacSi.findById(id)
+    if (!leave) return fail(res, 404, 'Không tìm thấy đơn nghỉ phép')
+
+    const kiemTra = kiemTraDuocKhoiPhuc(leave)
+    if (!kiemTra.hopLe) return fail(res, 409, kiemTra.message)
+
+    return ok(res, await xemTruocKhoiPhuc(leave))
+  } catch (error) {
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
+// ─── PATCH /api/receptionist/doctor-leaves/:id/huy-bao-nghi ─────────────────
+// Bác sĩ đổi ý hoặc lễ tân bấm nhầm nút "Báo nghỉ đột xuất" (A2, B1).
+export async function huyBaoNghiHandler(req, res) {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+  try {
+    const { id } = req.params
+    if (!isValidObjectId(id)) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 400, 'ID nghỉ phép không hợp lệ')
+    }
+
+    const leave = await NghiPhepBacSi.findById(id).session(session)
+    if (!leave) {
+      await session.abortTransaction()
+      session.endSession()
+      return fail(res, 404, 'Không tìm thấy đơn nghỉ phép')
+    }
+
+    const ketQua = await huyBaoNghi({
+      leave,
+      actorUserId: getActorUserId(req),
+      actorRole: req.user?.role === 'admin' ? 'admin' : 'receptionist',
+      session,
+    })
+
+    await session.commitTransaction()
+    session.endSession()
+
+    return ok(
+      res,
+      ketQua,
+      `Đã khôi phục lịch làm việc. Mở lại ${ketQua.so_slot_mo_lai} slot, huỷ `
+        + `${ketQua.so_de_xuat_huy} đề xuất dời và đã báo đính chính cho khách. `
+        + `${ketQua.so_lich_da_doi_giu_nguyen} lịch đã dời xong giữ nguyên ở chỗ mới.`,
+    )
+  } catch (error) {
+    await session.abortTransaction().catch(() => {})
+    session.endSession()
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
 export default {
   listPendingLeaves,
   approveLeave,
   rejectLeave,
+  previewHuyBaoNghi,
+  huyBaoNghiHandler,
 }

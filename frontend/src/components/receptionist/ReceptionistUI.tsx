@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { BuocQuyTrinh } from '@/utils/dieuPhoiHelpers'
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ')
@@ -140,6 +141,68 @@ export function TableFrame({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="overflow-x-auto">{children}</div>
+    </div>
+  )
+}
+
+interface TabItem {
+  key: string
+  label: string
+  badge?: number
+}
+
+interface TabsProps {
+  items: TabItem[]
+  active: string
+  onChange: (key: string) => void
+}
+
+export function Tabs({ items, active, onChange }: TabsProps) {
+  return (
+    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1">
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => onChange(item.key)}
+          className={cx(
+            'flex min-h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold transition',
+            active === item.key ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+          )}
+        >
+          {item.label}
+          {Boolean(item.badge) && (
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
+              {item.badge}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export function ProcessBar({ steps }: { steps: BuocQuyTrinh[] }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-3">
+      {steps.map((step, index) => (
+        <div key={step.key} className="flex items-start gap-2">
+          <span
+            className={cx(
+              'mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold',
+              step.xong ? 'bg-emerald-100 text-emerald-700' : step.dangLam ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-400',
+            )}
+          >
+            {step.xong ? '✓' : index + 1}
+          </span>
+          <div className="min-w-0">
+            <p className={cx('text-sm font-bold', step.xong ? 'text-emerald-700' : step.dangLam ? 'text-brand-700' : 'text-slate-400')}>
+              {step.label}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">{step.chiTiet}</p>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

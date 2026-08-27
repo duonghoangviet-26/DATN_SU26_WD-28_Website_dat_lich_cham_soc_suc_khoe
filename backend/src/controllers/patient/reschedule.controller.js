@@ -157,6 +157,9 @@ export async function chooseReschedule(req, res) {
       phuongAn,
       lyDoDoi: 'khach_yeu_cau',
       actorUserId: req.user.id,
+      // Khách tự dời -> slot cũ trả về pool để bán lại (A1). Giữ khoá là mỗi lần khách dời
+      // phòng khám mất hẳn một chỗ bán được.
+      khoaSlotCu: false,
     })
     return ok(
       res,

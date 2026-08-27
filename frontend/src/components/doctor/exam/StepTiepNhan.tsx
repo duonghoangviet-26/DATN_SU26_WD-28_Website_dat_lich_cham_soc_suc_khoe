@@ -67,7 +67,7 @@ export default function StepTiepNhan({ phien, saving, onNext }: Props) {
         </h2>
         {lyDoKhamDaDat && !phien.ho_so?.trieu_chung_ban_dau && (
           <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-            Da tu dien tu ly do kham khi dat lich online. Bac si hoi lai va bo sung them neu can truoc khi luu.
+            Đã tự điền từ lý do khám khi đặt lịch online. Bác sĩ hỏi lại và bổ sung thêm nếu cần trước khi lưu.
           </div>
         )}
         <textarea

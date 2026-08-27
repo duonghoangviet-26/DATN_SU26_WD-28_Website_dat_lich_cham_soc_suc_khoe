@@ -11,6 +11,7 @@ import {
 import { adminDoctorLeavesService } from '@/services/admin-doctor-leaves.service'
 import QueueTransferModal, { QueueTransferCandidate } from '@/components/receptionist/QueueTransferModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
+import RescheduleNeedsApprovalList from '@/components/receptionist/RescheduleNeedsApprovalList'
 
 interface Props {
   apiMode?: 'receptionist' | 'admin'
@@ -100,7 +101,7 @@ export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', lea
   const canDieuPhoi = result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'da_checkin_can_dieu_phoi_tai_quay') ?? []
   const dangTrongPhong = result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'benh_nhan_dang_trong_phong') ?? []
   const canLienHeThuCong = (result?.de_xuat_doi.filter((p) => p.can_lien_he_thu_cong).length ?? 0)
-    + (result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'trang_thai_khong_cho_phep_tao_de_xuat' || item.ly_do_bo_qua === 'dang_co_de_xuat_doi_mo').length ?? 0)
+    + (result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'trang_thai_khong_cho_phep_tao_de_xuat' || item.ly_do_bo_qua === 'de_xuat_doi_da_xu_ly').length ?? 0)
   const daTuDongDeXuat = result?.de_xuat_doi.filter((p) => !p.can_lien_he_thu_cong).length ?? 0
 
   return (
@@ -186,9 +187,11 @@ export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', lea
               <p className="text-xs text-slate-500">{dangTrongPhong.length} lịch đang trong phòng khám — không cần điều phối.</p>
             )}
 
+            {result && <RescheduleNeedsApprovalList items={result.de_xuat_doi} defaultDate={leave.tu_ngay.slice(0, 10)} onChanged={() => {}} />}
+
             {canLienHeThuCong > 0 && (
               <div className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800">
-                {canLienHeThuCong} lượt cần lễ tân liên hệ trực tiếp (khách không có tài khoản, hoặc chờ admin duyệt). Xem tại{' '}
+                {canLienHeThuCong} lượt cần lễ tân liên hệ trực tiếp (khách không có tài khoản, không tìm được phương án, hoặc chờ duyệt ở trên). Xem tại{' '}
                 <a href="/receptionist/contact-tasks" className="font-semibold underline">Liên Hệ Khách Hàng</a>.
               </div>
             )}

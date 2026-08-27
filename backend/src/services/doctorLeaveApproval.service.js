@@ -1,6 +1,7 @@
-import { NghiPhepBacSi, LichLamViec, LichHen, HangDoi } from '../models/index.js'
+import { NghiPhepBacSi, LichLamViec, LichHen, HangDoi, LichSuLichHen } from '../models/index.js'
 import { AFFECTED_BY_LEAVE_STATUSES } from '../utils/appointmentStatus.js'
-import { taoDeXuatDoiChoDonNghi } from './appointmentReschedule.service.js'
+import { taoDeXuatDoiChoDonNghi, sinhLaiDeXuatChoLichMatCho } from './appointmentReschedule.service.js'
+import { nenKhoaSlotVaoDonNghi, laSlotGiuChoDeXuat, nenSinhLaiDeXuat, demSlotSeKhoa } from './rescheduleRules.js'
 
 // ============================================================
 // Duyệt đơn nghỉ phép — DÙNG CHUNG cho Admin (mọi kỳ hạn) và Lễ tân (kỳ ngắn).
@@ -29,6 +30,57 @@ export function laDonNganHanChoLeTan(leave) {
   return denNgay >= homNay && denNgay <= ngayMai && soNgay <= 1
 }
 
+/**
+ * B1 (2026-08-25) — đếm ảnh hưởng NẾU một đơn nghỉ với thông số này được duyệt, CHƯA tạo
+ * bản ghi NghiPhepBacSi thật, CHỈ ĐỌC. Dùng cho:
+ *  - Rào chắn #1: preview "Xem ảnh hưởng" trước khi lễ tân xác nhận báo nghỉ.
+ *  - Thẻ bác sĩ (b): số lịch sẽ ảnh hưởng của đơn bác sĩ tự gửi đang chờ duyệt.
+ */
+export async function demAnhHuongCuaDonNghi({ bacSiId, tuNgay, denNgay, gioBatDau, gioKetThuc }) {
+  const endExclusive = new Date(denNgay)
+  endExclusive.setDate(endExclusive.getDate() + 1)
+
+  const schedules = await LichLamViec.find({
+    doctor_id: bacSiId,
+    ngay: { $gte: tuNgay, $lt: endExclusive },
+  }).select('slots').lean()
+
+  let soSlotSeKhoa = 0
+  for (const schedule of schedules) {
+    soSlotSeKhoa += demSlotSeKhoa(schedule.slots, gioBatDau, gioKetThuc)
+  }
+
+  let appointments = await LichHen.find({
+    doctor_id: bacSiId,
+    status: { $in: AFFECTED_BY_LEAVE_STATUSES },
+    ngay_kham: { $gte: tuNgay, $lt: endExclusive },
+  }).select('_id gio_kham payment_status').lean()
+
+  if (gioBatDau && gioKetThuc) {
+    appointments = appointments.filter((a) => a.gio_kham >= gioBatDau && a.gio_kham < gioKetThuc)
+  }
+
+  const appointmentIds = appointments.map((a) => a._id)
+  const hangDoiRows = appointmentIds.length
+    ? await HangDoi.find({
+        appointment_id: { $in: appointmentIds },
+        trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong'] },
+      }).select('appointment_id').lean()
+    : []
+  const checkedInIds = new Set(hangDoiRows.map((h) => String(h.appointment_id)))
+
+  const soDaThanhToan = appointments.filter((a) => a.payment_status === 'paid').length
+  const soDaCheckin = appointments.filter((a) => checkedInIds.has(String(a._id))).length
+
+  return {
+    so_lich_anh_huong: appointments.length,
+    so_da_thanh_toan: soDaThanhToan,
+    so_da_checkin: soDaCheckin,
+    so_chua_thanh_toan: appointments.length - soDaThanhToan,
+    so_slot_se_khoa: soSlotSeKhoa,
+  }
+}
+
 // Khóa các slot 'active' VÀ 'pending_payment' của bác sĩ trong khoảng ngày nghỉ đã duyệt —
 // dùng field bi_khoa_boi_nghi_phep/nghi_phep_id đã có sẵn trong schema (KHÔNG đổi model).
 // Slot đã booked KHÔNG bị đụng — Admin/lễ tân tự xử lý thủ công (không tự hủy lịch BN).
@@ -37,6 +89,9 @@ export function laDonNganHanChoLeTan(leave) {
 // tiền cho một bác sĩ vừa báo nghỉ vẫn thanh toán được, biến thành 'booked' cho bác sĩ đã
 // nghỉ. Nay khoá cả 'pending_payment'; `markPaymentPaid` sẽ tự phát hiện slot bị khoá và
 // đẩy khách vào luồng đề xuất dời thay vì chốt booking (xem patient/payments.controller.js).
+//
+// 2026-08-23 (P0-3): khoa ca slot dang GIU SAN cho de xuat doi cua lich hen khac. Truoc day
+// bo loc chi co ['active','pending_payment'] nen slot do (da o 'locked') bi bo qua hoan toan.
 async function lockSlotsForLeave(leave, session) {
   const endExclusive = new Date(leave.den_ngay)
   endExclusive.setDate(endExclusive.getDate() + 1)
@@ -47,6 +102,10 @@ async function lockSlotsForLeave(leave, session) {
   }).session(session)
 
   let slotsLocked = 0
+  // Slot vốn đang GIỮ SẴN cho đề xuất dời của một lịch hẹn khác, nay bị đơn nghỉ này vô
+  // hiệu — những lịch hẹn đó phải được sinh lại phương án, nếu không cron quá hạn sẽ đẩy
+  // khách vào đúng slot của bác sĩ vừa nghỉ (P0-3).
+  const slotGiuChoBiHuy = []
 
   for (const schedule of schedules) {
     let changed = false
@@ -55,11 +114,14 @@ async function lockSlotsForLeave(leave, session) {
       const inRange = !leave.gio_bat_dau || !leave.gio_ket_thuc
         ? true
         : slot.gio_bat_dau < leave.gio_ket_thuc && slot.gio_ket_thuc > leave.gio_bat_dau
-      if (!inRange || !['active', 'pending_payment'].includes(slot.status)) continue
+      if (!inRange || !nenKhoaSlotVaoDonNghi(slot)) continue
+
+      if (laSlotGiuChoDeXuat(slot)) slotGiuChoBiHuy.push(slot._id)
 
       slot.status = 'locked'
       slot.bi_khoa_boi_nghi_phep = true
       slot.nghi_phep_id = leave._id
+      slot.benh_nhan_tam_giu_id = null
       slotsLocked += 1
       changed = true
     }
@@ -72,7 +134,7 @@ async function lockSlotsForLeave(leave, session) {
     if (changed) await schedule.save({ session })
   }
 
-  return { slotsLocked }
+  return { slotsLocked, slotGiuChoBiHuy }
 }
 
 // Lịch hẹn CÒN HIỆU LỰC trong khoảng nghỉ (+ khung giờ nếu có) — trả cho người duyệt biết cần
@@ -89,7 +151,7 @@ async function findAffectedAppointments(leave, session) {
     status: { $in: AFFECTED_BY_LEAVE_STATUSES },
     ngay_kham: { $gte: leave.tu_ngay, $lt: endExclusive },
   })
-    .select('ma_lich_hen ngay_kham gio_kham status ten_khach so_dien_thoai_khach user_id doctor_id specialty_id payment_status de_xuat_doi')
+    .select('ma_lich_hen ngay_kham gio_kham status ten_khach so_dien_thoai_khach user_id doctor_id specialty_id schedule_id slot_id payment_status de_xuat_doi')
     .session(session)
     .lean()
 
@@ -108,7 +170,7 @@ async function findAffectedAppointments(leave, session) {
  * không phải hẹn lại ngày khác. Trả riêng nhóm này ở `canDieuPhoiTaiQuay` để FE hiện đúng
  * hành động (rút từ `reportDoctorUnavailable`, hợp nhất về một chỗ theo nguyên tắc mục 7).
  */
-export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
+export async function duyetDonNghi({ leave, actorUserId, actorRole = 'receptionist', ghiChu, session }) {
   if (leave.trang_thai !== 'cho_duyet') {
     throw Object.assign(new Error('Chi duyet duoc don dang cho duyet'), { statusCode: 409 })
   }
@@ -119,7 +181,7 @@ export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
   if (ghiChu !== undefined) leave.ghi_chu = ghiChu
   await leave.save({ session })
 
-  const { slotsLocked } = await lockSlotsForLeave(leave, session)
+  const { slotsLocked, slotGiuChoBiHuy } = await lockSlotsForLeave(leave, session)
   const affectedAppointments = await findAffectedAppointments(leave, session)
 
   const queueEntries = affectedAppointments.length
@@ -132,7 +194,9 @@ export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
 
   const appointmentsForProposal = affectedAppointments.filter((a) => (
     ['pending', 'confirmed'].includes(a.status)
-    && !a.de_xuat_doi
+    // P1-6: đề xuất CÒN MỞ nay được sinh lại (trước đây `!a.de_xuat_doi` chặn cả nhóm này,
+    // để lịch hẹn treo với phương án đã hỏng).
+    && nenSinhLaiDeXuat(a.de_xuat_doi)
     && !queueByAppointment.has(String(a._id))
   ))
 
@@ -152,8 +216,8 @@ export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
           ? 'benh_nhan_dang_trong_phong'
           : queue
             ? 'da_checkin_can_dieu_phoi_tai_quay'
-            : a.de_xuat_doi
-              ? 'dang_co_de_xuat_doi_mo'
+            : !nenSinhLaiDeXuat(a.de_xuat_doi)
+              ? 'de_xuat_doi_da_xu_ly'
               : 'trang_thai_khong_cho_phep_tao_de_xuat',
         hang_doi: queue
           ? { hang_doi_id: queue._id, trang_thai: queue.trang_thai, ma_so_thu_tu: queue.ma_so_thu_tu ?? null }
@@ -167,7 +231,54 @@ export async function duyetDonNghi({ leave, actorUserId, ghiChu, session }) {
     ? await taoDeXuatDoiChoDonNghi(leave, { session, appointmentIds: appointmentsForProposal.map((a) => a._id) })
     : []
 
-  return { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat }
+  // P0-3: lịch hẹn của BÁC SĨ KHÁC vừa mất chỗ giữ sẵn vì đơn nghỉ này.
+  const deXuatSinhLai = await sinhLaiDeXuatChoLichMatCho(slotGiuChoBiHuy, { session })
+
+  // Ghi lịch sử "đề xuất dời lịch được tạo" — trước 2026-08-25 chỉ có ở đường
+  // reportDoctorUnavailable (lễ tân tự báo nghỉ), đường bác sĩ tự gửi đơn (approveLeave/
+  // approveDoctorLeave) không có gì. Hợp nhất về một chỗ theo nguyên tắc mục 7.
+  if (deXuat.length > 0) {
+    const updatedAppointments = await LichHen.find({ _id: { $in: deXuat.map((d) => d.appointment_id) } })
+      .select('_id de_xuat_doi')
+      .session(session)
+    const updatedById = new Map(updatedAppointments.map((a) => [String(a._id), a]))
+    const affectedById = new Map(affectedAppointments.map((a) => [String(a._id), a]))
+    const lyDoNghi = leave.ly_do || 'Bac si nghi dot xuat'
+
+    for (const item of deXuat) {
+      const appointment = affectedById.get(String(item.appointment_id))
+      if (!appointment) continue
+      const nextOption = updatedById.get(String(item.appointment_id))?.de_xuat_doi?.phuong_an?.[0] ?? null
+      await LichSuLichHen.create([{
+        appointment_id: appointment._id,
+        tu_trang_thai: appointment.status,
+        den_trang_thai: appointment.status,
+        tu_payment_status: appointment.payment_status ?? null,
+        den_payment_status: appointment.payment_status ?? null,
+        loai_thay_doi: 'reschedule_proposal',
+        ly_do_thay_doi: lyDoNghi,
+        vai_tro: actorRole,
+        kenh_thay_doi: 'web',
+        nguoi_thay_doi_id: actorUserId,
+        nguoi_thuc_hien_id: actorUserId,
+        bac_si_cu_id: appointment.doctor_id ?? null,
+        bac_si_moi_id: nextOption?.doctor_id ?? null,
+        specialty_cu_id: appointment.specialty_id ?? null,
+        specialty_moi_id: appointment.specialty_id ?? null,
+        schedule_cu_id: appointment.schedule_id ?? null,
+        schedule_moi_id: nextOption?.schedule_id ?? null,
+        slot_cu_id: appointment.slot_id ?? null,
+        slot_moi_id: nextOption?.slot_id ?? null,
+        ngay_kham_cu: appointment.ngay_kham ?? null,
+        ngay_kham_moi: nextOption?.ngay ?? null,
+        gio_kham_cu: appointment.gio_kham ?? null,
+        gio_kham_moi: nextOption?.gio_bat_dau ?? null,
+        ly_do: `Tao de xuat doi lich do bac si nghi: ${lyDoNghi}`,
+      }], { session })
+    }
+  }
+
+  return { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat, deXuatSinhLai }
 }
 
 /** Từ chối một đơn nghỉ — chỉ đổi trạng thái, không đụng slot/lịch hẹn. */

@@ -12,7 +12,8 @@ import HangDoi from '../../models/HangDoi.js'
 import TrangThaiPhongKham from '../../models/TrangThaiPhongKham.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
-import { apDungPhuongAn, taoDeXuatDoiChoDonNghi } from '../../services/appointmentReschedule.service.js'
+import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
+import { duyetDonNghi, laDonNganHanChoLeTan, demAnhHuongCuaDonNghi } from '../../services/doctorLeaveApproval.service.js'
 import { notifyAppointmentCustomerChange } from '../../services/appointmentCustomerNotification.service.js'
 import { releaseAppointmentSlot } from '../../services/bookingPaymentState.service.js'
 import { kiemTraQuaTai } from '../../services/queueOverflow.service.js'
@@ -23,7 +24,6 @@ import { buildSlotDateTime, cacMocCuaKhung, startOfDayUtc } from '../../utils/cl
 import { caCuaKhung } from '../../models/MauLichLamViec.js'
 import { soSanhThuTuHangDoi } from '../../models/HangDoi.js'
 import {
-  AFFECTED_BY_LEAVE_STATUSES,
   RECEPTIONIST_APPOINTMENT_ACTIONS,
   assertReceptionistAppointmentAction,
   buildReceptionistAppointmentActions,
@@ -76,64 +76,6 @@ function nextDayUtc(date) {
 
 function validHHMM(value) {
   return !value || /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
-}
-
-function leaveSlotInRange(leave, slot) {
-  return !leave.gio_bat_dau || !leave.gio_ket_thuc
-    ? true
-    : slot.gio_bat_dau < leave.gio_ket_thuc && slot.gio_ket_thuc > leave.gio_bat_dau
-}
-
-// G3 (2026-08-03): truoc day chi khoa slot 'active' — slot 'pending_payment' (khach dang giu
-// cho cho tra tien cho chinh bac si vua bao nghi) bi bo qua, van thanh toan duoc va chot
-// 'booked' cho mot bac si da nghi (xem markPaymentPaid trong patient/payments.controller.js,
-// da them kiem tra bi_khoa_boi_nghi_phep truoc khi chot). Nay khoa ca 'pending_payment'.
-async function lockSlotsForSuddenLeave(leave, session) {
-  const schedules = await LichLamViec.find({
-    doctor_id: leave.bac_si_id,
-    ngay: { $gte: startOfDayUtc(leave.tu_ngay), $lt: nextDayUtc(leave.den_ngay) },
-  }).session(session)
-
-  let slotsLocked = 0
-  for (const schedule of schedules) {
-    let changed = false
-    for (const slot of schedule.slots) {
-      if (!leaveSlotInRange(leave, slot) || !['active', 'pending_payment'].includes(slot.status)) continue
-      slot.status = 'locked'
-      slot.bi_khoa_boi_nghi_phep = true
-      slot.nghi_phep_id = leave._id
-      slotsLocked += 1
-      changed = true
-    }
-    if (!leave.gio_bat_dau && schedule.trang_thai_ngay === 'lam_viec') {
-      schedule.trang_thai_ngay = 'nghi_phep'
-      changed = true
-    }
-    if (changed) await schedule.save({ session })
-  }
-  return slotsLocked
-}
-
-async function findAppointmentsAffectedBySuddenLeave(leave, session, appointmentIds = null) {
-  const query = {
-    doctor_id: leave.bac_si_id,
-    status: { $in: AFFECTED_BY_LEAVE_STATUSES },
-    ngay_kham: { $gte: startOfDayUtc(leave.tu_ngay), $lt: nextDayUtc(leave.den_ngay) },
-  }
-  if (Array.isArray(appointmentIds) && appointmentIds.length > 0) {
-    query._id = { $in: appointmentIds }
-  }
-
-  let appointments = await LichHen.find(query)
-    .select('_id ma_lich_hen ngay_kham gio_kham status ten_khach so_dien_thoai_khach user_id doctor_id specialty_id schedule_id slot_id payment_status de_xuat_doi')
-    .session(session)
-
-  if (leave.gio_bat_dau && leave.gio_ket_thuc) {
-    appointments = appointments.filter((appointment) => (
-      appointment.gio_kham >= leave.gio_bat_dau && appointment.gio_kham < leave.gio_ket_thuc
-    ))
-  }
-  return appointments
 }
 
 function summarizeSuddenLeaveProposal(result) {
@@ -238,6 +180,11 @@ export const getAppointments = async (req, res) => {
 
     const appointments = await LichHen.find(query)
       .populate('user_id', 'ho_ten so_dien_thoai email anh_dai_dien')
+      // Bệnh nhân đến khám khi đặt hộ CHO thành viên gia đình (rule mục 5: giới hạn tính theo
+      // member_id chứ không theo user_id). Thiếu populate này, FE không có cách nào phân biệt
+      // "người đặt" (user_id, chủ tài khoản) với "người được khám" (member_id) khi ten_khach
+      // trống — và sẽ hiển thị nhầm tên người đặt hộ thay vì bệnh nhân thực tế.
+      .populate('member_id', 'ho_ten')
       .populate({
         path: 'doctor_id',
         populate: { path: 'user_id', select: 'ho_ten' }
@@ -427,7 +374,10 @@ export const getDoctorOperationalStatuses = async (req, res) => {
           doctor_id: { $in: doctorIds },
           ngay_kham: { $gte: todayStart, $lt: todayEnd },
           status: { $in: ['pending', 'confirmed'] },
-        }).select('_id doctor_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id').populate('user_id', 'ho_ten so_dien_thoai').lean()
+        }).select('_id doctor_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id member_id')
+          .populate('user_id', 'ho_ten so_dien_thoai')
+          .populate('member_id', 'ho_ten')
+          .lean()
         : [],
     ])
 
@@ -476,7 +426,7 @@ export const getDoctorOperationalStatuses = async (req, res) => {
         .map((appointment) => ({
           appointment_id: appointment._id,
           ma_lich_hen: appointment.ma_lich_hen ?? null,
-          ten_benh_nhan: appointment.user_id?.ho_ten ?? appointment.ten_khach ?? 'Khach hang',
+          ten_benh_nhan: appointment.member_id?.ho_ten ?? appointment.ten_khach ?? appointment.user_id?.ho_ten ?? 'Khach hang',
           so_dien_thoai: appointment.user_id?.so_dien_thoai ?? appointment.so_dien_thoai_khach ?? null,
           gio_kham: appointment.gio_kham,
           status: appointment.status,
@@ -571,7 +521,7 @@ export function buildOverloadAffectedList(appointments, now, doTrePhut) {
     .map((appointment) => ({
       appointment_id: appointment._id,
       ma_lich_hen: appointment.ma_lich_hen ?? null,
-      ten_benh_nhan: appointment.user_id?.ho_ten ?? appointment.ten_khach ?? 'Khách hàng',
+      ten_benh_nhan: appointment.member_id?.ho_ten ?? appointment.ten_khach ?? appointment.user_id?.ho_ten ?? 'Khách hàng',
       so_dien_thoai: appointment.user_id?.so_dien_thoai ?? appointment.so_dien_thoai_khach ?? null,
       gio_kham: appointment.gio_kham,
       status: appointment.status,
@@ -597,8 +547,9 @@ export async function getOverloadAffectedAppointments(req, res) {
       ngay_kham: { $gte: todayStart, $lt: todayEnd },
       status: { $in: ['pending', 'confirmed'] },
     })
-      .select('_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id')
+      .select('_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id member_id')
       .populate('user_id', 'ho_ten so_dien_thoai')
+      .populate('member_id', 'ho_ten')
       .lean()
 
     const overflow = await kiemTraQuaTai(doctorId, now)
@@ -912,6 +863,8 @@ export const rescheduleAppointment = async (req, res) => {
       lyDoDoi,
       actorUserId: getActorUserId(req),
       actorRole: getActorRole(req),
+      // Chỉ khoá slot cũ khi lỗi thuộc phòng khám. Khách yêu cầu dời -> trả pool (A1).
+      khoaSlotCu: lyDoDoi !== 'khach_yeu_cau',
     })
 
     // `ly_do_doi_lich` là mô tả tự do cho lễ tân đọc lại; `ly_do_doi` là phân loại nghiệp vụ.
@@ -1289,152 +1242,47 @@ export const bulkCancelAppointments = async (req, res) => {
   }
 }
 
-export const bulkRescheduleAppointments = async (req, res) => {
-  const session = await mongoose.startSession()
-  session.startTransaction()
+// ─── GET /receptionist/booking/doctor-unavailable/preview ───────────────────
+// Rào chắn #1 (mục 3.8 spec): xem trước ảnh hưởng, CHỈ ĐỌC, trước khi xác nhận báo nghỉ.
+export const previewDoctorUnavailable = async (req, res) => {
   try {
-    const { ids, startDate, startTime, reason } = req.body
-    if (!ids || !ids.length || !startDate) {
-      return res.status(400).json({ success: false, message: 'Thiếu thông tin dời lịch' })
+    const { doctor_id: doctorId, tu_ngay: tuNgayInput, den_ngay: denNgayInput, gio_bat_dau: gioBatDau, gio_ket_thuc: gioKetThuc } = req.query
+    if (!doctorId || !mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({ success: false, message: 'doctor_id không hợp lệ' })
+    }
+    if (!tuNgayInput || !denNgayInput) {
+      return res.status(400).json({ success: false, message: 'tu_ngay và den_ngay là bắt buộc' })
     }
 
-    const appointments = await LichHen.find({ _id: { $in: ids }, status: { $in: ['pending', 'confirmed'] } })
-      .populate('user_id', 'email')
-      .sort({ ngay_kham: 1, gio_kham: 1 })
-
-    let assignedCount = 0
-    let startSearchDate = new Date(startDate)
-    startSearchDate.setHours(0, 0, 0, 0)
-
-    // Find booked slots to avoid conflict
-    const getBookedSlotIds = async () => {
-      const booked = await LichHen.find({ status: { $ne: 'cancelled' } }).select('slot_id').lean()
-      return new Set(booked.filter(a => a.slot_id).map(a => String(a.slot_id)))
+    // I3 (2026-08-25): preview phải áp ĐÚNG validation của hành động thật (reportDoctorUnavailable)
+    // — thiếu bước này, preview có thể báo "0 lịch ảnh hưởng" cho một khung giờ mà submit thật
+    // sẽ 400, gây yên tâm giả; hoặc coi một gio_bat_dau-thiếu-gio_ket_thuc là nghỉ cả ngày trong
+    // khi submit thật sẽ từ chối. Dùng lại nguyên `validHHMM` cục bộ, không viết lại logic.
+    if (!validHHMM(gioBatDau) || !validHHMM(gioKetThuc) || ((gioBatDau || gioKetThuc) && (!gioBatDau || !gioKetThuc || gioKetThuc <= gioBatDau))) {
+      return res.status(400).json({ success: false, message: 'Khung giờ nghỉ không hợp lệ' })
     }
 
-    const bookedSlots = await getBookedSlotIds()
-
-    for (const appointment of appointments) {
-      const oldStatus = appointment.status
-      const ngayCu = appointment.ngay_kham
-      const gioCu = appointment.gio_kham
-
-      // Giải phóng slot cũ trước (cục bộ trong memory/session) để nếu chính nó được xếp lại cùng lịch thì ko bị lỗi
-      if (appointment.schedule_id && appointment.slot_id) {
-        const schedule = await LichLamViec.findById(appointment.schedule_id).session(session)
-        if (schedule) {
-          const slot = schedule.slots.id(appointment.slot_id)
-          if (slot) {
-            slot.benh_nhan_id = null
-            slot.benh_nhan_tam_giu_id = null
-            slot.status = 'active'
-            await schedule.save({ session })
-            bookedSlots.delete(String(slot._id))
-          }
-        }
-      }
-
-      // Auto-fill spill-over logic
-      let newSlotFound = false
-      let searchDate = new Date(startSearchDate)
-      const maxDaysToSearch = 14 // Try up to 14 days forward
-
-      for (let dayOffset = 0; dayOffset < maxDaysToSearch; dayOffset++) {
-        const currentDate = new Date(searchDate.getTime() + dayOffset * 86400000)
-
-        // Lấy tất cả lịch làm việc trong ngày này cho chuyên khoa của appointment
-        const schedules = await LichLamViec.find({
-          ngay: { $gte: currentDate, $lt: new Date(currentDate.getTime() + 86400000) },
-          trang_thai_ngay: 'lam_viec',
-          trang_thai_xac_nhan: { $ne: 'tu_choi' }
-        }).populate('doctor_id').session(session)
-
-        for (const schedule of schedules) {
-          // Bỏ qua nếu ko đúng chuyên khoa (nếu appointment có specialty_id)
-          if (appointment.specialty_id) {
-             const bacSi = await BacSi.findById(schedule.doctor_id).session(session)
-             if (!bacSi || !bacSi.specialties.includes(appointment.specialty_id)) continue
-          }
-
-          const availableSlot = schedule.slots.find(s => {
-            if (dayOffset === 0 && startTime && s.gio_bat_dau < startTime) {
-              return false;
-            }
-            return s.status === 'active' &&
-                   !s.benh_nhan_id &&
-                   !s.bi_khoa_boi_nghi_phep &&
-                   !bookedSlots.has(String(s._id));
-          })
-
-          if (availableSlot) {
-            // Assign this slot
-            availableSlot.benh_nhan_id = appointment.user_id?._id || appointment.user_id
-            await schedule.save({ session })
-            bookedSlots.add(String(availableSlot._id))
-
-            appointment.schedule_id = schedule._id
-            appointment.slot_id = availableSlot._id
-            appointment.doctor_id = schedule.doctor_id
-            appointment.ngay_kham = schedule.ngay
-            appointment.gio_kham = availableSlot.gio_bat_dau
-            appointment.ly_do_doi_lich = reason || 'Dời lịch hàng loạt (Auto-fill)'
-
-            // Xử lý phòng khám
-            const phongKhamMoi = availableSlot.phong_id ? (await mongoose.model('MauLichLamViec').findOne({'ca_kham.phong_id': availableSlot.phong_id})).ca_kham.find(c => String(c.phong_id) === String(availableSlot.phong_id))?.ten_phong : null;
-
-            await appointment.save({ session })
-
-            await LichSuLichHen.create([{
-              appointment_id: appointment._id,
-              tu_trang_thai: oldStatus,
-              den_trang_thai: appointment.status,
-              loai_thay_doi: 'reschedule',
-              ly_do_thay_doi: appointment.ly_do_doi_lich,
-              vai_tro: 'admin',
-              kenh_thay_doi: 'web',
-              ngay_kham_cu: ngayCu,
-              ngay_kham_moi: appointment.ngay_kham,
-              gio_kham_cu: gioCu,
-              gio_kham_moi: appointment.gio_kham,
-              phong_kham_moi: phongKhamMoi,
-              nguoi_thay_doi_id: req.user?.id ?? req.user?._id ?? null,
-            }], { session })
-
-            // Notify
-            const tieuDe = 'Lịch hẹn của bạn đã được thay đổi'
-            const noiDung = `Phòng khám đã tự động dời lịch hẹn của bạn sang ngày ${new Date(appointment.ngay_kham).toLocaleDateString('vi-VN')} lúc ${appointment.gio_kham}.`
-            if (appointment.user_id) {
-              await ThongBao.create([{
-                user_id: appointment.user_id._id,
-                tieu_de: tieuDe,
-                noi_dung: noiDung,
-                loai: 'appointment',
-                related_id: appointment._id,
-                related_type: 'LichHen',
-              }], { session })
-            }
-            const emailNhan = appointment.user_id?.email || appointment.email_khach
-            if (emailNhan && isMailConfigured()) {
-               sendNotificationEmail({ to: emailNhan, title: tieuDe, content: noiDung }).catch(console.error)
-            }
-
-            newSlotFound = true
-            assignedCount++
-            break // Done with this appointment
-          }
-        }
-
-        if (newSlotFound) break
-      }
+    const doctor = await BacSi.findOne({
+      _id: doctorId,
+      trang_thai_duyet: 'approved',
+      la_hien: true,
+    })
+    if (!doctor) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy bác sĩ đang hoạt động' })
     }
 
-    await session.commitTransaction()
-    session.endSession()
-    res.status(200).json({ success: true, message: `Đã dời thành công ${assignedCount}/${appointments.length} lịch hẹn` })
+    const tuNgay = startOfDayUtc(new Date(tuNgayInput))
+    const denNgay = startOfDayUtc(new Date(denNgayInput))
+    if (!tuNgay || !denNgay || denNgay < tuNgay) {
+      return res.status(400).json({ success: false, message: 'Khoảng ngày không hợp lệ' })
+    }
+
+    const ketQua = await demAnhHuongCuaDonNghi({
+      bacSiId: doctorId, tuNgay, denNgay, gioBatDau: gioBatDau || null, gioKetThuc: gioKetThuc || null,
+    })
+    return res.status(200).json({ success: true, message: 'OK', data: ketQua })
   } catch (error) {
-    await session.abortTransaction()
-    session.endSession()
-    res.status(500).json({ success: false, message: error.message })
+    return res.status(500).json({ success: false, message: error.message })
   }
 }
 
@@ -1442,10 +1290,7 @@ export const reportDoctorUnavailable = async (req, res) => {
   const session = await mongoose.startSession()
   session.startTransaction()
   try {
-    const { doctor_id, date, tu_ngay, den_ngay, gio_bat_dau, gio_ket_thuc, reason, ghi_chu, appointment_ids } = req.body
-    const appointmentIds = Array.isArray(appointment_ids)
-      ? appointment_ids.filter((id) => mongoose.Types.ObjectId.isValid(id))
-      : []
+    const { doctor_id, date, tu_ngay, den_ngay, gio_bat_dau, gio_ket_thuc, reason, ghi_chu } = req.body
     const doctorId = doctor_id
     const startInput = tu_ngay || date
     const endInput = den_ngay || tu_ngay || date
@@ -1453,10 +1298,7 @@ export const reportDoctorUnavailable = async (req, res) => {
     if (!doctorId || !startInput || !endInput) {
       await session.abortTransaction()
       session.endSession()
-      return res.status(400).json({
-        success: false,
-        message: 'doctor_id, ngày bắt đầu và ngày kết thúc là bắt buộc',
-      })
+      return res.status(400).json({ success: false, message: 'doctor_id, ngày bắt đầu và ngày kết thúc là bắt buộc' })
     }
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
       await session.abortTransaction()
@@ -1504,134 +1346,75 @@ export const reportDoctorUnavailable = async (req, res) => {
       })
     }
 
-    const now = new Date()
-    const leave = await NghiPhepBacSi.create([{
+    // duyetDonNghi() yêu cầu leave.trang_thai === 'cho_duyet' làm tiền điều kiện — MỌI nhánh
+    // tạo đơn ở đây đều khởi tạo 'cho_duyet', không được tạo sẵn 'da_duyet'.
+    const leaveDoc = new NghiPhepBacSi({
       bac_si_id: doctorId,
       tu_ngay: tuNgay,
       den_ngay: denNgay,
       gio_bat_dau: gio_bat_dau || null,
       gio_ket_thuc: gio_ket_thuc || null,
       ly_do: reason || 'Bac si nghi dot xuat',
-      trang_thai: 'da_duyet',
-      nguoi_duyet_id: getActorUserId(req),
-      thoi_diem_duyet: now,
-      ghi_chu: ghi_chu || 'Le tan ghi nhan bac si nghi dot xuat va tao de xuat doi lich cho khach',
+      trang_thai: 'cho_duyet',
+      ghi_chu: ghi_chu || 'Le tan ghi nhan bac si nghi dot xuat',
       nguon_tao: 'le_tan_ghi_nhan',
       nguoi_tao_id: getActorUserId(req),
-    }], { session })
-    const suddenLeave = leave[0]
+    })
 
-    const affectedAppointments = await findAppointmentsAffectedBySuddenLeave(suddenLeave, session, appointmentIds)
-    const queueEntries = affectedAppointments.length
-      ? await HangDoi.find({
-          appointment_id: { $in: affectedAppointments.map((appointment) => appointment._id) },
-          trang_thai: { $in: ['dang_cho', 'da_goi', 'trong_phong'] },
-        }).select('appointment_id trang_thai ma_so_thu_tu ten_benh_nhan doctor_id').session(session).lean()
-      : []
-    const queueByAppointment = new Map(queueEntries.map((entry) => [String(entry.appointment_id), entry]))
-
-    const appointmentsForProposal = affectedAppointments.filter((appointment) => (
-      ['pending', 'confirmed'].includes(appointment.status)
-      && !appointment.de_xuat_doi
-      && !queueByAppointment.has(String(appointment._id))
-    ))
-
-    const skippedAppointments = affectedAppointments
-      .filter((appointment) => !appointmentsForProposal.some((eligible) => String(eligible._id) === String(appointment._id)))
-      .map((appointment) => {
-        const queue = queueByAppointment.get(String(appointment._id))
-        return {
-          appointment_id: appointment._id,
-          ma_lich_hen: appointment.ma_lich_hen ?? null,
-          status: appointment.status,
-          ten_khach: appointment.ten_khach ?? null,
-          gio_kham: appointment.gio_kham,
-          // Doctor bi bao nghi + specialty cua lich nay — de FE dung QueueTransferModal
-          // loc dung bac si cung chuyen khoa khi dieu phoi tai quay (E-4 tai su dung).
-          doctor_id: appointment.doctor_id ?? null,
-          specialty_id: appointment.specialty_id ?? null,
-          ly_do_bo_qua: queue?.trang_thai === 'trong_phong'
-            ? 'benh_nhan_dang_trong_phong'
-            : queue
-              ? 'da_checkin_can_dieu_phoi_tai_quay'
-              : appointment.de_xuat_doi
-                ? 'dang_co_de_xuat_doi_mo'
-                : 'trang_thai_khong_cho_phep_tao_de_xuat',
-          hang_doi: queue
-            ? {
-                hang_doi_id: queue._id,
-                trang_thai: queue.trang_thai,
-                ma_so_thu_tu: queue.ma_so_thu_tu ?? null,
-              }
-            : null,
-        }
+    // Đ2 (2026-08-25): lễ tân chỉ được duyệt NGAY đơn NGẮN HẠN — cùng ranh giới thẩm quyền
+    // với đường "bác sĩ tự gửi đơn" (approveLeave dùng laDonNganHanChoLeTan). Trước đợt này,
+    // reportDoctorUnavailable tạo thẳng trang_thai:'da_duyet' không kiểm tra gì.
+    if (!laDonNganHanChoLeTan(leaveDoc)) {
+      await leaveDoc.save({ session })
+      await session.commitTransaction()
+      session.endSession()
+      return res.status(200).json({
+        success: true,
+        message: 'Đã tạo đơn nghỉ. Khoảng nghỉ vượt quá 1 ngày nên cần Admin duyệt trước khi khoá lịch và báo khách.',
+        data: {
+          leave_id: leaveDoc._id,
+          // C1 (2026-08-25): discriminator để FE phân biệt "đã xử lý xong" khỏi "mới tạo đơn,
+          // còn chờ Admin" — trước đây FE coi mọi phản hồi 200 là đã xử lý xong, hiện nguyên
+          // vẹn emerald success box + CTA "Sang trang điều phối" dẫn tới bảng trống.
+          can_admin_duyet: true,
+          so_lich_bi_anh_huong: 0,
+          so_slot_da_khoa: 0,
+          de_xuat_doi: [],
+          can_dieu_phoi_tai_quay: [],
+          so_luot_can_le_tan_lien_he: 0,
+          so_lich_sinh_lai_phuong_an: 0,
+        },
       })
-
-    const slotsLocked = await lockSlotsForSuddenLeave(suddenLeave, session)
-    const proposals = appointmentsForProposal.length > 0
-      ? await taoDeXuatDoiChoDonNghi(suddenLeave, {
-          session,
-          now,
-          appointmentIds: appointmentsForProposal.map((appointment) => appointment._id),
-        })
-      : []
-
-    const updatedAppointments = proposals.length > 0
-      ? await LichHen.find({ _id: { $in: proposals.map((proposal) => proposal.appointment_id) } })
-          .select('_id de_xuat_doi')
-          .session(session)
-      : []
-    const affectedById = new Map(affectedAppointments.map((appointment) => [String(appointment._id), appointment]))
-    const updatedById = new Map(updatedAppointments.map((appointment) => [String(appointment._id), appointment]))
-    for (const proposal of proposals) {
-      const appointment = affectedById.get(String(proposal.appointment_id))
-      if (!appointment) continue
-      const nextOption = updatedById.get(String(proposal.appointment_id))?.de_xuat_doi?.phuong_an?.[0] ?? null
-      await LichSuLichHen.create([{
-        appointment_id: appointment._id,
-        tu_trang_thai: appointment.status,
-        den_trang_thai: appointment.status,
-        tu_payment_status: appointment.payment_status ?? null,
-        den_payment_status: appointment.payment_status ?? null,
-        loai_thay_doi: 'reschedule_proposal',
-        ly_do_thay_doi: reason || 'Bac si nghi dot xuat',
-        vai_tro: getActorRole(req),
-        kenh_thay_doi: 'web',
-        nguoi_thay_doi_id: getActorUserId(req),
-        nguoi_thuc_hien_id: getActorUserId(req),
-        bac_si_cu_id: appointment.doctor_id ?? null,
-        bac_si_moi_id: nextOption?.doctor_id ?? null,
-        specialty_cu_id: appointment.specialty_id ?? null,
-        specialty_moi_id: appointment.specialty_id ?? null,
-        schedule_cu_id: appointment.schedule_id ?? null,
-        schedule_moi_id: nextOption?.schedule_id ?? null,
-        slot_cu_id: appointment.slot_id ?? null,
-        slot_moi_id: nextOption?.slot_id ?? null,
-        ngay_kham_cu: appointment.ngay_kham ?? null,
-        ngay_kham_moi: nextOption?.ngay ?? null,
-        gio_kham_cu: appointment.gio_kham ?? null,
-        gio_kham_moi: nextOption?.gio_bat_dau ?? null,
-        ly_do: `Tao de xuat doi lich do bac si nghi dot xuat: ${reason || 'khong ghi ro ly do'}`,
-      }], { session })
     }
+
+    await leaveDoc.save({ session })
+
+    const { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat, deXuatSinhLai } = await duyetDonNghi({
+      leave: leaveDoc,
+      actorUserId: getActorUserId(req),
+      actorRole: getActorRole(req),
+      session,
+    })
 
     await session.commitTransaction()
     session.endSession()
 
-    const proposalSummaries = proposals.map(summarizeSuddenLeaveProposal)
+    const proposalSummaries = deXuat.map(summarizeSuddenLeaveProposal)
     const manualContactCount = proposalSummaries.filter((item) => item.can_lien_he_thu_cong).length
-      + skippedAppointments.filter((item) => item.ly_do_bo_qua !== 'benh_nhan_dang_trong_phong').length
+      + canDieuPhoiTaiQuay.filter((item) => item.ly_do_bo_qua !== 'benh_nhan_dang_trong_phong').length
 
     return res.status(200).json({
       success: true,
-      message: `Đã ghi nhận bác sĩ nghỉ đột xuất. Tạo đề xuất cho ${proposals.length}/${affectedAppointments.length} lịch bị ảnh hưởng.`,
+      message: `Đã ghi nhận bác sĩ nghỉ đột xuất. Tạo đề xuất cho ${deXuat.length}/${affectedAppointments.length} lịch bị ảnh hưởng.`,
       data: {
-        leave_id: suddenLeave._id,
+        leave_id: leaveDoc._id,
+        can_admin_duyet: false,
         so_lich_bi_anh_huong: affectedAppointments.length,
         so_slot_da_khoa: slotsLocked,
         de_xuat_doi: proposalSummaries,
-        can_dieu_phoi_tai_quay: skippedAppointments,
+        can_dieu_phoi_tai_quay: canDieuPhoiTaiQuay,
         so_luot_can_le_tan_lien_he: manualContactCount,
+        so_lich_sinh_lai_phuong_an: deXuatSinhLai.length,
       },
     })
   } catch (error) {
@@ -1647,11 +1430,11 @@ export default {
   getPendingCheckin,
   getDoctorOperationalStatuses,
   getOverloadAffectedAppointments,
+  previewDoctorUnavailable,
   reportDoctorUnavailable,
   rescheduleAppointment,
   markLateArrival,
   cancelAppointment,
   getRescheduleHistory,
-  bulkCancelAppointments,
-  bulkRescheduleAppointments
+  bulkCancelAppointments
 }

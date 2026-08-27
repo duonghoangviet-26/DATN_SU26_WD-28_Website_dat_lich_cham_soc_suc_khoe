@@ -124,3 +124,19 @@ export function hanGiuChoCoGian(dateOnly, hhmm, now = new Date(), phutToiDa = PH
   if (moc.hanChotGiuCho.getTime() <= now.getTime()) return null
   return hanToiDa.getTime() < moc.hanChotGiuCho.getTime() ? hanToiDa : moc.hanChotGiuCho
 }
+
+// ============================================================
+// NGƯỠNG ĐỆM ĐỀ XUẤT DỜI LỊCH — rule mục 15 (chốt 2026-08-22)
+// ============================================================
+// Ràng buộc VẬT LÝ "khách kịp tới nơi" — khác mốc T-30' (chính sách thương mại chặn né mất
+// tiền, mục 11). Áp dụng cho MỌI ứng viên do sinhPhuongAnDoi() sinh ra, kể cả khi được lấn
+// walk-in — lấn walk-in chỉ nới ràng buộc "không bán chỗ khách khác", không nới chuyện khách
+// có kịp di chuyển tới phòng khám hay không.
+export const PHUT_DEM_DOI_LICH_TOI_THIEU = 15 // không đề xuất slot bắt đầu trong vòng 15' tới
+
+/** Slot bắt đầu quá gần hiện tại để đề xuất dời khách sang (mục 15). */
+export function quaSatGioBatDau(dateOnly, hhmm, now = new Date(), phutDem = PHUT_DEM_DOI_LICH_TOI_THIEU) {
+  const slotDateTime = buildSlotDateTime(dateOnly, hhmm)
+  if (!slotDateTime) return true
+  return slotDateTime.getTime() - now.getTime() < phutDem * 60_000
+}

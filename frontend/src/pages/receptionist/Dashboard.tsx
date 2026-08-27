@@ -18,6 +18,7 @@ interface Appointment {
   ten_khach?: string;
   so_dien_thoai_khach?: string;
   user_id?: { _id: string; ho_ten: string; so_dien_thoai: string } | null;
+  member_id?: { ho_ten?: string | null } | null;
   nguoi_dat_ho_ten?: string;
   nguoi_dat_sdt?: string;
   hinh_thuc_dat_lich?: string;
@@ -482,7 +483,7 @@ export default function Dashboard() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="line-clamp-2 text-sm font-bold text-slate-800">
-                        {apt.user_id?.ho_ten || apt.ten_khach || 'Khách vãng lai'}
+                        {apt.member_id?.ho_ten || apt.ten_khach || apt.user_id?.ho_ten || 'Khách vãng lai'}
                       </p>
                       <p className="text-xs text-slate-500 font-medium flex items-center gap-1">
                         <Icon name="calendar" className="w-3 h-3" />
@@ -501,7 +502,7 @@ export default function Dashboard() {
                       {/* Tooltip */}
                       {activeTooltip === apt._id && (
                         <div className="absolute right-0 top-8 z-10 w-56 rounded-lg bg-slate-900 p-3 text-xs text-white shadow-lg">
-                          <p className="mb-1"><span className="text-slate-400">Khám:</span> {apt.user_id?.ho_ten || apt.ten_khach}</p>
+                          <p className="mb-1"><span className="text-slate-400">Khám:</span> {apt.member_id?.ho_ten || apt.ten_khach || apt.user_id?.ho_ten}</p>
                           <p className="mb-1"><span className="text-slate-400">Đặt hộ:</span> {apt.nguoi_dat_ho_ten || 'Không'}</p>
                           <p className="mt-2 flex items-center gap-1 font-bold text-brand-200">
                             {apt.user_id?.so_dien_thoai || apt.so_dien_thoai_khach || apt.nguoi_dat_sdt || 'Chưa cập nhật'}

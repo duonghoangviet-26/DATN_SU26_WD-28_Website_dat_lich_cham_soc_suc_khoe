@@ -222,6 +222,11 @@ export interface OfflinePendingPayment {
   ma_giao_dich?: string
   ngay_tao?: string
   ngay_thanh_toan?: string | null
+  gateway?: {
+    qr_payload: string | null
+    expires_at: string | null
+    is_expired: boolean
+  } | null
 }
 
 export interface OfflineRelatedService {
@@ -459,6 +464,11 @@ export const receptionistPatientIntakeService = {
 
   async cancelBillingPayment(referenceId: string, source: BillingCase['source'], paymentId: string): Promise<BillingCase> {
     const response = await axiosInstance.patch<ApiResponse<BillingCase>>(`/receptionist/payments/cases/${referenceId}/payments/${paymentId}/cancel`, { source })
+    return response.data.data
+  },
+
+  async createTransferVnpaySession(referenceId: string, source: BillingCase['source'], paymentId: string): Promise<BillingCase> {
+    const response = await axiosInstance.post<ApiResponse<BillingCase>>(`/receptionist/payments/cases/${referenceId}/payments/${paymentId}/vnpay-session`, { source })
     return response.data.data
   },
 

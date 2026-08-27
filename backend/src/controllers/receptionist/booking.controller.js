@@ -10,6 +10,7 @@ import {
     ThanhToan,
     GiaDinh,
     ThanhVien,
+    NghiPhepBacSi,
 } from "../../models/index.js";
 import { ok, fail } from "../../utils/response.js";
 import { emitDashboardRevenueChanged } from "../../realtime/socket.js";
@@ -18,6 +19,7 @@ import { emitDashboardRevenueChanged } from "../../realtime/socket.js";
 import { buildSlotDateTime, isSlotInPast } from "../../utils/clinicTime.js";
 import { donDepSlotTruocKhiDoc } from "../../services/slotRelease.service.js";
 import { kiemTraQuaTai } from "../../services/queueOverflow.service.js";
+import { TRANG_THAI_DE_XUAT_MO } from "../../services/rescheduleRules.js";
 import {
     cacKhungDuocBanTaiQuay,
     laHomNay,
@@ -27,6 +29,7 @@ import {
 } from "../../services/walkInWindow.service.js";
 import { NhatKyThaoTac } from "../../models/index.js";
 import { caCuaKhung } from "../../models/MauLichLamViec.js";
+import { laDonNganHanChoLeTan } from "../../services/doctorLeaveApproval.service.js";
 
 function parseDateOnly(value) {
     if (!value) return null;
@@ -292,6 +295,65 @@ export async function getDoctorDayOverview(req, res) {
             : [];
         const scheduleByDoctor = new Map(schedules.map((s) => [String(s.doctor_id), s]));
 
+        // Đơn nghỉ CẢ NGÀY đang phủ ngày đang xem — để nút "Khôi phục" biết gọi đơn nào.
+        const leaves = doctorIds.length
+            ? await NghiPhepBacSi.find({
+                bac_si_id: { $in: doctorIds },
+                trang_thai: "da_duyet",
+                tu_ngay: { $lte: ngayDate },
+                den_ngay: { $gte: ngayDate },
+            }).select("_id bac_si_id gio_bat_dau ly_do").lean()
+            : [];
+        // Ưu tiên đơn nghỉ CẢ NGÀY (gio_bat_dau = null) — đó mới là đơn làm cả ngày thành
+        // 'nghi_phep'. Đơn nghỉ một khung không đổi trang_thai_ngay nên không có nút khôi phục.
+        const leaveByDoctor = new Map();
+        for (const leave of leaves) {
+            const key = String(leave.bac_si_id);
+            const dangCo = leaveByDoctor.get(key);
+            if (!dangCo || (dangCo.gio_bat_dau && !leave.gio_bat_dau)) leaveByDoctor.set(key, leave);
+        }
+
+        // C1 (2026-08-25): đơn nghỉ NHIỀU NGÀY do lễ tân tạo (reportDoctorUnavailable) chỉ được
+        // khởi tạo 'cho_duyet' (không tự khoá slot, không sinh đề xuất — cần Admin duyệt), nên
+        // KHÔNG có mặt trong `leaves` (chỉ lọc 'da_duyet' ở trên) — thẻ bác sĩ trước đây hiện
+        // y hệt trạng thái 'lam_viec' bình thường, nút "Báo nghỉ đột xuất" vẫn bấm được và dẫn
+        // tới 409 "đã có đơn nghỉ ... xử lý trên đơn hiện có" — đơn mà lễ tân không có màn hình
+        // nào để xem/xử lý. Truy thêm nhóm này để FE hiện chỉ báo đọc-được thay vì nút "chết".
+        const donDaiHanChoDuyet = doctorIds.length
+            ? await NghiPhepBacSi.find({
+                bac_si_id: { $in: doctorIds },
+                trang_thai: "cho_duyet",
+                tu_ngay: { $lte: ngayDate },
+                den_ngay: { $gte: ngayDate },
+            }).select("_id bac_si_id tu_ngay den_ngay gio_bat_dau gio_ket_thuc ly_do").lean()
+            : [];
+        const donDaiHanChoDuyetByDoctor = new Map();
+        for (const leave of donDaiHanChoDuyet) {
+            if (laDonNganHanChoLeTan(leave)) continue; // thuộc thẩm quyền lễ tân — đã có surface riêng (listPendingLeaves)
+            donDaiHanChoDuyetByDoctor.set(String(leave.bac_si_id), leave);
+        }
+
+        // B2: số lịch còn tồn / tổng lịch bị ảnh hưởng của MỖI đơn nghỉ đang hiển thị —
+        // dùng cho thẻ bác sĩ "còn X/Y lịch chưa điều phối" (Tab 1, Task 11).
+        const leaveIdsDangHien = [...leaveByDoctor.values()].map((l) => l._id);
+        const demTheoLeave = leaveIdsDangHien.length
+            ? await LichHen.aggregate([
+                { $match: { 'de_xuat_doi.nghi_phep_id': { $in: leaveIdsDangHien } } },
+                {
+                    $group: {
+                        _id: '$de_xuat_doi.nghi_phep_id',
+                        tong: { $sum: 1 },
+                        chuaXuLy: {
+                            $sum: {
+                                $cond: [{ $in: ['$de_xuat_doi.trang_thai', TRANG_THAI_DE_XUAT_MO] }, 1, 0],
+                            },
+                        },
+                    },
+                },
+            ])
+            : [];
+        const demTheoLeaveMap = new Map(demTheoLeave.map((d) => [String(d._id), d]));
+
         const data = doctors.map((doctor) => {
             const schedule = scheduleByDoctor.get(String(doctor._id)) ?? null;
             // Phan biet "khong dang ky ca nao" (khong co ban ghi lich) voi "co dang ky nhung
@@ -302,11 +364,30 @@ export async function getDoctorDayOverview(req, res) {
                 && schedule?.trang_thai_xac_nhan !== "tu_choi";
             const khungRows = dangLamViec ? buildDoctorKhungRows(schedule) : [];
             const { ca_sang, ca_chieu } = chiaCaSangChieu(khungRows);
+            const leaveIdCuaBacSi = leaveByDoctor.get(String(doctor._id))?._id ?? null;
+            const demCuaLeave = leaveIdCuaBacSi ? demTheoLeaveMap.get(String(leaveIdCuaBacSi)) : null;
+            const donDaiHanChoDuyet = donDaiHanChoDuyetByDoctor.get(String(doctor._id)) ?? null;
             return {
                 doctor_id: doctor._id,
                 ten_bac_si: doctor.user_id?.ho_ten ?? "Bác sĩ",
                 trang_thai_bac_si: doctor.trang_thai,
                 trang_thai_ngay: trangThaiNgay,
+                leave_id: leaveIdCuaBacSi,
+                ly_do_nghi: leaveByDoctor.get(String(doctor._id))?.ly_do ?? null,
+                so_lich_chua_xu_ly: demCuaLeave?.chuaXuLy ?? 0,
+                so_lich_anh_huong: demCuaLeave?.tong ?? 0,
+                // C1: đơn nghỉ dài ngày do lễ tân tạo, đang chờ Admin duyệt — chưa khoá slot,
+                // chưa sinh đề xuất, chưa có gì để điều phối. null khi không có đơn như vậy.
+                don_nghi_dai_han_cho_duyet: donDaiHanChoDuyet
+                    ? {
+                        leave_id: donDaiHanChoDuyet._id,
+                        tu_ngay: donDaiHanChoDuyet.tu_ngay,
+                        den_ngay: donDaiHanChoDuyet.den_ngay,
+                        gio_bat_dau: donDaiHanChoDuyet.gio_bat_dau ?? null,
+                        gio_ket_thuc: donDaiHanChoDuyet.gio_ket_thuc ?? null,
+                        ly_do: donDaiHanChoDuyet.ly_do ?? null,
+                    }
+                    : null,
                 ca_sang,
                 ca_chieu,
             };
@@ -591,6 +672,15 @@ export async function createBooking(req, res) {
             const gioKhamRequest = targetSlot.gio_bat_dau;
 
             // 2. Tìm tất cả các bác sĩ có lịch làm việc trong ngày đó và có slot active ở khung giờ đó
+            //
+            // BUG (2026-08-25, phát hiện cùng đợt N1): "slots.gio_bat_dau" và "slots.status" viết
+            // RỜI (không gói trong $elemMatch) là đúng lỗi "claim slot sai phần tử mảng" đã ghi ở
+            // rule mục 9 P0 — Mongo cho phép mỗi điều kiện khớp một PHẦN TỬ KHÁC NHAU trong mảng
+            // slots. Hệ quả thật: chỉ cần lịch bác sĩ CÒN BẤT KỲ slot 'active' nào (giờ khác) là
+            // điều kiện "slots.status":"active" đã thoả — bất kể slot ĐÚNG khung giờ khách chọn có
+            // đang bị khoá do nghỉ phép (bi_khoa_boi_nghi_phep=true, status vẫn có thể là 'active'
+            // với slot khác cùng khung — TMH 2 slot/khung) hay không. Gộp lại MỘT $elemMatch, thêm
+            // luôn bi_khoa_boi_nghi_phep — khớp đúng cách patient/booking.controller.js đã làm.
             const schedules = await LichLamViec.find({
                 ngay: {
                     $gte: appointmentDate,
@@ -598,8 +688,14 @@ export async function createBooking(req, res) {
                 },
                 trang_thai_ngay: "lam_viec",
                 trang_thai_xac_nhan: { $ne: "tu_choi" },
-                "slots.gio_bat_dau": gioKhamRequest,
-                "slots.status": "active",
+                slots: {
+                    $elemMatch: {
+                        gio_bat_dau: gioKhamRequest,
+                        status: "active",
+                        benh_nhan_id: null,
+                        bi_khoa_boi_nghi_phep: { $ne: true },
+                    },
+                },
             }).lean();
 
             if (!schedules.length)
@@ -655,29 +751,54 @@ export async function createBooking(req, res) {
             schedule = await LichLamViec.findOne({
                 _id: selectedSchedule._id,
             }).session(session);
-            slot = schedule.slots.find((s) => s.gio_bat_dau === gioKhamRequest);
+            // Đọc lại TRỰC TIẾP từ document mới nhất (không dùng `selectedSchedule` .lean() cũ) —
+            // và phải lọc ĐỦ điều kiện, không chỉ khớp giờ: nếu khung này có nhiều slot cùng giờ
+            // (TMH 2 slot/khung), .find() theo giờ đơn thuần có thể trúng đúng slot đã bị khoá bởi
+            // nghỉ phép trong khi slot còn lại (cùng giờ) vẫn trống — chọn nhầm sẽ bị chặn ở bước
+            // kiểm tra status ngay dưới dù thực ra vẫn còn chỗ hợp lệ.
+            slot = schedule.slots.find(
+                (s) =>
+                    s.gio_bat_dau === gioKhamRequest &&
+                    s.status === "active" &&
+                    !s.benh_nhan_id &&
+                    !s.bi_khoa_boi_nghi_phep,
+            );
             doc = await BacSi.findOne({ _id: selectedSchedule.doctor_id })
                 .populate("specialties", "ten")
                 .session(session);
         } else {
             // Chọn thủ công như cũ
-            doc = await BacSi.findOne({ _id: doctor_id })
+            //
+            // BUG "lịch hẹn ảo" (2026-08-25): nhánh này TRƯỚC ĐÂY tra bác sĩ bằng
+            // `BacSi.findOne({_id: doctor_id})` KHÔNG lọc trang_thai_duyet/la_hien (khác hẳn
+            // nhánh "auto" ở trên VÀ patient/booking.controller.js — cả hai đều lọc), và tra
+            // lịch làm việc KHÔNG lọc trang_thai_ngay — nên nếu trang lễ tân đang mở đã cũ
+            // (bác sĩ vừa bị admin khoá/ẩn, hoặc vừa báo nghỉ cả ngày SAU khi trang tải), lễ
+            // tân vẫn bấm đặt được cho một bác sĩ đã "đóng", tạo ra lịch hẹn không có bác sĩ
+            // nào thực sự tiếp nhận — khách đã trả tiền nhưng không ai khám, phải xử lý tay.
+            doc = await BacSi.findOne({
+                _id: doctor_id,
+                trang_thai_duyet: "approved",
+                la_hien: true,
+            })
                 .populate("specialties", "ten")
                 .session(session);
-            if (!doc) return rollbackFail(404, "Bác sĩ không tồn tại");
+            if (!doc) return rollbackFail(404, "Bác sĩ không tồn tại hoặc đã ngừng nhận lịch");
             schedule = await LichLamViec.findOne({
                 _id: schedule_id,
                 doctor_id: doc._id,
+                trang_thai_ngay: "lam_viec",
+                trang_thai_xac_nhan: { $ne: "tu_choi" },
             }).session(session);
             if (!schedule)
-                return rollbackFail(400, "Lịch làm việc không hợp lệ");
+                return rollbackFail(400, "Bác sĩ không làm việc vào ngày này (đã báo nghỉ hoặc lịch chưa được xác nhận)");
             slot = schedule.slots.id(slot_id);
         }
 
-        if (!slot || slot.status !== "active")
+        if (!slot || slot.status !== "active" || slot.benh_nhan_id || slot.bi_khoa_boi_nghi_phep)
             return rollbackFail(
                 409,
-                "Khung giờ này đã được đặt, vui lòng tải lại trang và chọn lại.",
+                "Khung giờ này đã được đặt hoặc bác sĩ đã báo nghỉ đúng khung này. Vui lòng tải lại trang và chọn lại.",
             );
 
         // Lễ tân đặt luôn nên slot booked
@@ -704,11 +825,23 @@ export async function createBooking(req, res) {
             message: `Người được khám đã có lịch ${item.ma_lich_hen ?? ""} lúc ${item.gio_kham} trong cùng ngày; lễ tân cần xác minh lý do đặt thêm.`,
         }));
 
+        // ⚠️ Gói mọi điều kiện về slot trong MỘT $elemMatch (rule mục 9 P0) — viết rời từng
+        // khoá ("slots._id", "slots.status") cho phép Mongo khớp mỗi điều kiện với một PHẦN
+        // TỬ KHÁC NHAU của mảng: chỉ cần lịch còn BẤT KỲ slot 'active' nào khác là điều kiện
+        // status đã thoả, trong khi $ positional lại trỏ theo _id — có thể "booked" nhầm một
+        // slot đã bị khoá do nghỉ phép giữa lúc kiểm tra (784) và lúc claim (đây), một khoảng
+        // hở TOCTOU hẹp trong cùng transaction.
         const updated = await LichLamViec.findOneAndUpdate(
             {
                 _id: schedule._id,
-                "slots._id": slot._id,
-                "slots.status": "active",
+                slots: {
+                    $elemMatch: {
+                        _id: slot._id,
+                        status: "active",
+                        benh_nhan_id: null,
+                        bi_khoa_boi_nghi_phep: { $ne: true },
+                    },
+                },
             },
             { $set: { "slots.$.status": "booked" } },
             { new: true, session },
