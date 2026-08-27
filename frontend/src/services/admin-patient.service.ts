@@ -67,6 +67,11 @@ export interface AdminPatientExamHistory {
   ghi_chu?: string | null
   status: string
   don_thuoc: AdminPatientPrescription[]
+  hinh_anh_noi_soi?: Array<{
+    url: string
+    mo_ta?: string | null
+    uploaded_at?: string | null
+  }>
 }
 
 export interface AdminPatientAuditLog {

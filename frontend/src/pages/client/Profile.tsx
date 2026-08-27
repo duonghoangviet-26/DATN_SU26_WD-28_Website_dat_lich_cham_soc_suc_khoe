@@ -226,6 +226,7 @@ export default function Profile() {
 
   const ownerMemberId = familyGroup?.members?.find((m) => m.la_chu_ho)?.id || null
   const [appStatusFilter, setAppStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all')
+  const [activeEndoscopyImage, setActiveEndoscopyImage] = useState<{ url: string; mo_ta?: string | null } | null>(null)
 
   const statusCounts = useMemo(() => {
     const counts = {
@@ -1193,6 +1194,44 @@ export default function Profile() {
                                 )}
                               </div>
 
+                              {/* Endoscopic / Service Result Images */}
+                              {result.ket_qua.hinh_anh_noi_soi && result.ket_qua.hinh_anh_noi_soi.length > 0 && (
+                                <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50/60 p-3.5">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-sky-800 flex items-center gap-1.5">
+                                      <span>📸</span> Hình ảnh nội soi / Kết quả dịch vụ
+                                    </p>
+                                    <span className="text-[11px] font-semibold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
+                                      {result.ket_qua.hinh_anh_noi_soi.length} ảnh
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                                    {result.ket_qua.hinh_anh_noi_soi.map((img, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => setActiveEndoscopyImage(img)}
+                                        className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-sky-500 hover:shadow-md text-left"
+                                      >
+                                        <img
+                                          src={img.url}
+                                          alt={img.mo_ta || `Ảnh nội soi ${idx + 1}`}
+                                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                                        />
+                                        {img.mo_ta && (
+                                          <div className="absolute inset-x-0 bottom-0 bg-slate-900/70 p-1 backdrop-blur-[2px]">
+                                            <p className="truncate text-[10px] font-medium text-white">{img.mo_ta}</p>
+                                          </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-sky-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
+                                          <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-bold text-sky-700 shadow-sm">🔍 Phóng to</span>
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Prescriptions */}
                               {result.ket_qua.thuoc && result.ket_qua.thuoc.length > 0 && (
                                 <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
@@ -1939,6 +1978,43 @@ export default function Profile() {
                       <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700">{selectedAppointment.ket_qua.huong_dan_dieu_tri}</p>
                     </div>
                   )}
+                  {selectedAppointment.ket_qua.hinh_anh_noi_soi && selectedAppointment.ket_qua.hinh_anh_noi_soi.length > 0 && (
+                    <div className="rounded-xl border border-sky-100 bg-sky-50/60 p-3.5">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-bold uppercase tracking-wide text-sky-800 flex items-center gap-1.5">
+                          <span>📸</span> Hình ảnh nội soi / Kết quả dịch vụ
+                        </p>
+                        <span className="text-[11px] font-semibold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
+                          {selectedAppointment.ket_qua.hinh_anh_noi_soi.length} ảnh
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                        {selectedAppointment.ket_qua.hinh_anh_noi_soi.map((img, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setActiveEndoscopyImage(img)}
+                            className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-sky-500 hover:shadow-md text-left"
+                          >
+                            <img
+                              src={img.url}
+                              alt={img.mo_ta || `Ảnh nội soi ${idx + 1}`}
+                              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                            />
+                            {img.mo_ta && (
+                              <div className="absolute inset-x-0 bottom-0 bg-slate-900/70 p-1 backdrop-blur-[2px]">
+                                <p className="truncate text-[10px] font-medium text-white">{img.mo_ta}</p>
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-sky-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
+                              <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-bold text-sky-700 shadow-sm">🔍 Phóng to</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {selectedAppointment.ket_qua.thuoc.length > 0 && (
                     <div>
                       <p className="text-xs font-semibold text-slate-500">Đơn thuốc</p>
@@ -2115,6 +2191,42 @@ export default function Profile() {
       )}
 
       {toast && <Toast message={toast} type="success" onClose={() => setToast(null)} />}
+
+      {/* Endoscopy Lightbox Modal */}
+      {activeEndoscopyImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setActiveEndoscopyImage(null)}
+        >
+          <div
+            className="relative max-w-4xl w-full rounded-2xl bg-white p-4 shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveEndoscopyImage(null)}
+              className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition font-bold"
+            >
+              ✕
+            </button>
+            <div className="flex flex-col items-center">
+              <p className="text-xs font-bold uppercase tracking-wider text-sky-700 mb-3 flex items-center gap-1.5">
+                <span>📸</span> Hình ảnh nội soi chi tiết
+              </p>
+              <img
+                src={activeEndoscopyImage.url}
+                alt={activeEndoscopyImage.mo_ta || 'Ảnh nội soi'}
+                className="max-h-[70vh] w-auto rounded-xl object-contain shadow-sm border border-slate-100"
+              />
+              {activeEndoscopyImage.mo_ta && (
+                <p className="mt-3 text-center text-sm font-semibold text-slate-800 bg-slate-50 px-4 py-2 rounded-lg border border-slate-200/80">
+                  {activeEndoscopyImage.mo_ta}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </RouteTransition>
   )

@@ -180,6 +180,11 @@ export const getAppointments = async (req, res) => {
 
     const appointments = await LichHen.find(query)
       .populate('user_id', 'ho_ten so_dien_thoai email anh_dai_dien')
+      // Bệnh nhân đến khám khi đặt hộ CHO thành viên gia đình (rule mục 5: giới hạn tính theo
+      // member_id chứ không theo user_id). Thiếu populate này, FE không có cách nào phân biệt
+      // "người đặt" (user_id, chủ tài khoản) với "người được khám" (member_id) khi ten_khach
+      // trống — và sẽ hiển thị nhầm tên người đặt hộ thay vì bệnh nhân thực tế.
+      .populate('member_id', 'ho_ten')
       .populate({
         path: 'doctor_id',
         populate: { path: 'user_id', select: 'ho_ten' }

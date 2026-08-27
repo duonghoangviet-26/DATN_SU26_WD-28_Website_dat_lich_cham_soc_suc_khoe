@@ -131,6 +131,7 @@ export default function ManagePatients() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [editingPatient, setEditingPatient] = useState<AdminPatient | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ type: 'lock' | 'unlock'; patient: AdminPatient } | null>(null)
+  const [activeImage, setActiveImage] = useState<{ url: string; mo_ta?: string | null } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -572,6 +573,42 @@ export default function ManagePatients() {
                           <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
                             {item.huong_dan_dieu_tri && <p><span className="font-semibold">Hướng dẫn:</span> {item.huong_dan_dieu_tri}</p>}
                             {item.ghi_chu && <p className="mt-1"><span className="font-semibold">Ghi chú:</span> {item.ghi_chu}</p>}
+                          </div>
+                        )}
+                        {item.hinh_anh_noi_soi && item.hinh_anh_noi_soi.length > 0 && (
+                          <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50/60 p-3.5">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-xs font-bold uppercase tracking-wider text-sky-800 flex items-center gap-1.5">
+                                <span>📸</span> Hình ảnh nội soi / Kết quả dịch vụ
+                              </h4>
+                              <span className="text-[11px] font-semibold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
+                                {item.hinh_anh_noi_soi.length} ảnh
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                              {item.hinh_anh_noi_soi.map((img, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => setActiveImage(img)}
+                                  className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-sky-500 hover:shadow-md text-left"
+                                >
+                                  <img
+                                    src={img.url}
+                                    alt={img.mo_ta || `Ảnh nội soi ${idx + 1}`}
+                                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                                  />
+                                  {img.mo_ta && (
+                                    <div className="absolute inset-x-0 bottom-0 bg-slate-900/70 p-1 backdrop-blur-[2px]">
+                                      <p className="truncate text-[10px] font-medium text-white">{img.mo_ta}</p>
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-sky-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
+                                    <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-bold text-sky-700 shadow-sm">🔍 Phóng to</span>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         )}
                         <div className="mt-4">

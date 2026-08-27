@@ -1,4 +1,4 @@
-import { LichHen, KetQuaKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen } from '../../models/index.js'
+import { LichHen, KetQuaKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen, KetQuaKhamTai, KetQuaKhamMui, KetQuaKhamHong } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { buildSlotDateTime } from '../../utils/clinicTime.js'
 import { withOptionalTransaction } from '../../services/bookingPaymentState.service.js'
@@ -144,16 +144,32 @@ export async function listMedicalResults(req, res) {
     const appointmentIds = appointments.map((a) => a._id)
     const doctorIds = [...new Set(appointments.map((a) => a.doctor_id.toString()))]
 
-    const [docList, examResults] = await Promise.all([
+    const [docList, examResults, taiResults, muiResults, hongResults] = await Promise.all([
       BacSi.find({ _id: { $in: doctorIds } })
         .populate('user_id', 'ho_ten anh_dai_dien')
         .select('user_id')
         .lean(),
-      KetQuaKham.find({ appointment_id: { $in: appointmentIds } }).lean()
+      KetQuaKham.find({ appointment_id: { $in: appointmentIds } }).lean(),
+      KetQuaKhamTai.find({ appointment_id: { $in: appointmentIds } }).lean(),
+      KetQuaKhamMui.find({ appointment_id: { $in: appointmentIds } }).lean(),
+      KetQuaKhamHong.find({ appointment_id: { $in: appointmentIds } }).lean(),
     ])
 
     const docMap = Object.fromEntries(docList.map((d) => [d._id.toString(), d.user_id]))
     const examResultMap = Object.fromEntries(examResults.map((r) => [r.appointment_id.toString(), r]))
+
+    const specialtyImageMap = new Map()
+    const appendSpecialtyList = (list) => {
+      for (const item of list) {
+        const key = item.appointment_id?.toString()
+        if (!key) continue
+        if (!specialtyImageMap.has(key)) specialtyImageMap.set(key, [])
+        specialtyImageMap.get(key).push(item)
+      }
+    }
+    appendSpecialtyList(taiResults)
+    appendSpecialtyList(muiResults)
+    appendSpecialtyList(hongResults)
 
     const resultIds = examResults.map((r) => r._id)
     const prescriptions = await DonThuoc.find({
@@ -171,6 +187,9 @@ export async function listMedicalResults(req, res) {
     const data = appointments.map((a) => {
       const ketQua = examResultMap[a._id.toString()]
       const thuoc = ketQua ? (prescriptionMap[ketQua._id.toString()] || []) : []
+      const specList = specialtyImageMap.get(a._id.toString()) || []
+      const hinhAnhNoiSoi = extractEndoscopyImages(ketQua, specList)
+
       return {
         id: a._id,
         ngay_kham: a.ngay_kham,
@@ -192,7 +211,8 @@ export async function listMedicalResults(req, res) {
           ghi_chu: ketQua.ghi_chu,
           ngay_tai_kham: ketQua.ngay_tai_kham,
           ngay_tao: ketQua.ngay_tao,
-          thuoc: thuoc
+          thuoc: thuoc,
+          hinh_anh_noi_soi: hinhAnhNoiSoi,
         } : null
       }
     })
@@ -203,15 +223,61 @@ export async function listMedicalResults(req, res) {
   }
 }
 
+function extractEndoscopyImages(ketQua, specialtyRecords = []) {
+  const images = []
+  const seenUrls = new Set()
+
+  const addImg = (img) => {
+    if (!img) return
+    let url = ''
+    let mo_ta = null
+    let uploaded_at = null
+
+    if (typeof img === 'string') {
+      url = img
+    } else if (typeof img === 'object') {
+      url = img.url || img.hinh_anh || img.image_url || ''
+      mo_ta = img.mo_ta || img.description || img.ghi_chu || null
+      uploaded_at = img.uploaded_at || img.ngay_tao || null
+    }
+
+    if (url && !seenUrls.has(url)) {
+      seenUrls.add(url)
+      images.push({ url, mo_ta, uploaded_at })
+    }
+  }
+
+  for (const item of specialtyRecords) {
+    for (const img of item?.hinh_anh_noi_soi || []) addImg(img)
+  }
+
+  if (ketQua) {
+    for (const img of ketQua.hinh_anh_noi_soi || []) addImg(img)
+    for (const img of ketQua.hinh_anh_kham || []) addImg(img)
+    for (const img of ketQua.hinh_anh || []) addImg(img)
+
+    for (const dv of ketQua.dich_vu_phat_sinh || []) {
+      for (const img of dv.hinh_anh_ket_qua || []) addImg(img)
+      for (const img of dv.hinh_anh_noi_soi || []) addImg(img)
+      for (const img of dv.hinh_anh || []) addImg(img)
+    }
+  }
+
+  return images
+}
+
 // ─── GET /api/patient/records/:id ───────────────────────────────────────────
 export async function getRecord(req, res) {
   try {
     const a = await LichHen.findOne({ _id: req.params.id, ...ownedByUser(req.user.id) }).lean()
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
 
-    const [doc, ketQua] = await Promise.all([
+    const [doc, ketQua, taiResults, muiResults, hongResults] = await Promise.all([
       BacSi.findById(a.doctor_id).populate('user_id', 'ho_ten anh_dai_dien so_dien_thoai').select('user_id').lean(),
       a.status === 'completed' ? KetQuaKham.findOne({ appointment_id: a._id }).lean() : null,
+      a.status === 'completed' ? KetQuaKhamTai.find({ appointment_id: a._id }).lean() : [],
+      a.status === 'completed' ? KetQuaKhamMui.find({ appointment_id: a._id }).lean() : [],
+      a.status === 'completed' ? KetQuaKhamHong.find({ appointment_id: a._id }).lean() : [],
     ])
 
     let prescription = null
@@ -223,6 +289,8 @@ export async function getRecord(req, res) {
         ]
       }).lean()
     }
+
+    const hinhAnhNoiSoi = extractEndoscopyImages(ketQua, [...taiResults, ...muiResults, ...hongResults])
 
     return ok(res, {
       id:             a._id,
@@ -256,6 +324,7 @@ export async function getRecord(req, res) {
         ngay_tai_kham:      ketQua.ngay_tai_kham,
         ngay_tao:           ketQua.ngay_tao,
         thuoc: prescription?.items ?? [],
+        hinh_anh_noi_soi: hinhAnhNoiSoi,
       } : null,
     })
   } catch (err) {

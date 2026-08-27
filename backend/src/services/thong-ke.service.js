@@ -163,6 +163,7 @@ export async function getDoanhThuTheoBacSi(range = {}) {
       },
     },
     { $unwind: '$_doctor' },
+    { $match: { '_doctor.trang_thai_duyet': { $ne: 'suspended' } } },
     {
       $lookup: {
         from: NguoiDung.collection.name,

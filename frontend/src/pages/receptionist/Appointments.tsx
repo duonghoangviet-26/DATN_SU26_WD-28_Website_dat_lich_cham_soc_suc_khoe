@@ -20,6 +20,7 @@ interface Appointment {
   loai_kham: string;
   payment_status: string;
   user_id: { ho_ten: string; so_dien_thoai: string } | null;
+  member_id: { ho_ten: string } | null;
   doctor_id: { _id?: string; user_id?: { ho_ten: string } } | null;
   ten_khach?: string;
   so_dien_thoai_khach?: string;
@@ -643,7 +644,7 @@ export default function Appointments() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-slate-800">{apt.ten_khach || apt.user_id?.ho_ten || 'Khách vãng lai'}</span>
+                          <span className="font-medium text-slate-800">{apt.member_id?.ho_ten || apt.ten_khach || apt.user_id?.ho_ten || 'Khách vãng lai'}</span>
                           {apt.dat_ho && (
                             <span className="rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700">
                               Đặt hộ
@@ -1010,7 +1011,7 @@ export default function Appointments() {
                       <div>
                         <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Người đến khám</p>
                         <p className="font-semibold text-slate-800">
-                          {selectedDetailAppointment.ten_khach || selectedDetailAppointment.user_id?.ho_ten || 'Khách vãng lai'}
+                          {selectedDetailAppointment.member_id?.ho_ten || selectedDetailAppointment.ten_khach || selectedDetailAppointment.user_id?.ho_ten || 'Khách vãng lai'}
                         </p>
                         <p className="text-sm text-slate-600 flex items-center gap-2 mt-1">
                           <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
