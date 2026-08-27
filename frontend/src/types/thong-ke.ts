@@ -48,6 +48,7 @@ export interface TopServiceStatistic {
 }
 
 export interface DoctorRevenueDetail {
+  ten_bac_si: string
   chartData: {
     ngay: string
     doanh_thu: number
