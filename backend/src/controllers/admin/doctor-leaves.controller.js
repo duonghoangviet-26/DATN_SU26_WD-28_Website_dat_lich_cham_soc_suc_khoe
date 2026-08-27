@@ -86,7 +86,7 @@ export async function createDoctorLeave(req, res) {
 
 export async function listDoctorLeaves(req, res) {
   try {
-    const { bac_si_id, trang_thai, ngay } = req.query
+    const { bac_si_id, trang_thai, ngay, ten_bac_si, tu_ngay, den_ngay } = req.query
     const filter = {}
 
     if (bac_si_id) {
@@ -96,11 +96,31 @@ export async function listDoctorLeaves(req, res) {
       filter.bac_si_id = bac_si_id
     }
 
+    if (ten_bac_si) {
+      const users = await mongoose.model('NguoiDung').find({ ho_ten: { $regex: ten_bac_si, $options: 'i' } }).select('_id')
+      const userIds = users.map(u => u._id)
+      const doctors = await mongoose.model('BacSi').find({ user_id: { $in: userIds } }).select('_id')
+      const doctorIds = doctors.map(d => d._id)
+      filter.bac_si_id = { $in: doctorIds }
+    }
+
     if (trang_thai) {
       filter.trang_thai = trang_thai
     }
 
-    if (ngay) {
+    if (tu_ngay || den_ngay) {
+      filter.$and = []
+      if (tu_ngay) {
+        const start = new Date(tu_ngay)
+        start.setHours(0, 0, 0, 0)
+        filter.$and.push({ den_ngay: { $gte: start } })
+      }
+      if (den_ngay) {
+        const end = new Date(den_ngay)
+        end.setHours(23, 59, 59, 999)
+        filter.$and.push({ tu_ngay: { $lte: end } })
+      }
+    } else if (ngay) {
       const targetDate = new Date(ngay)
       targetDate.setHours(0, 0, 0, 0)
       const targetDateEnd = new Date(targetDate)

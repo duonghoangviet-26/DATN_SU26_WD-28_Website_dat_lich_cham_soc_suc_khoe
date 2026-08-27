@@ -14,6 +14,7 @@ import TimelinePanel from '@/components/receptionist/TimelinePanel'
 
 interface Props {
   apiMode?: 'receptionist' | 'admin'
+  initialMode?: 'confirm' | 'reject-reason'
   leave: PendingDoctorLeave
   onClose: () => void
   onDone: () => void
@@ -44,8 +45,8 @@ function moTaKhoangNgay(leave: PendingDoctorLeave) {
   return khoang + gio
 }
 
-export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', leave, onClose, onDone }: Props) {
-  const [mode, setMode] = useState<'confirm' | 'reject-reason'>('confirm')
+export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', initialMode = 'confirm', leave, onClose, onDone }: Props) {
+  const [mode, setMode] = useState<'confirm' | 'reject-reason'>(initialMode)
   const [rejectReason, setRejectReason] = useState('')
   const [approveNote, setApproveNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -106,7 +107,7 @@ export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', lea
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
-        <h3 className="text-xl font-bold text-slate-800">Duyệt đơn xin nghỉ</h3>
+        <h3 className="text-xl font-bold text-slate-800">{mode === 'reject-reason' ? 'Từ chối đơn xin nghỉ' : 'Duyệt đơn xin nghỉ'}</h3>
         <p className="mt-1 text-sm text-slate-500">{leave.bac_si?.ho_ten ?? 'Bác sĩ'}</p>
 
         {!result ? (
