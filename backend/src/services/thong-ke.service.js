@@ -707,7 +707,19 @@ export async function getChiTietDoanhThuBacSi(doctorId, range = {}) {
   const totalRevenue = revenueData.reduce((sum, item) => sum + item.doanh_thu, 0)
   const totalAppointments = revenueData.reduce((sum, item) => sum + item.so_luot_kham, 0)
 
+  // 5. Lấy tên bác sĩ
+  const BacSiModel = mongoose.model('BacSi')
+  const bacSiRecord = await BacSiModel.findById(doctorObjectId)
+  let ten_bac_si = 'Bác sĩ chưa xác định'
+  if (bacSiRecord && bacSiRecord.user_id) {
+    const userRecord = await NguoiDung.findById(bacSiRecord.user_id)
+    if (userRecord) {
+      ten_bac_si = userRecord.ho_ten
+    }
+  }
+
   return {
+    ten_bac_si,
     chartData: revenueData,
     topServices,
     rating,
