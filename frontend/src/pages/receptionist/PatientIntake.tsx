@@ -40,6 +40,7 @@ interface ReceptionistTodayAppointment {
   ly_do_kham?: string | null
   gia_kham?: number | null
   user_id: { ho_ten?: string | null; so_dien_thoai?: string | null } | null
+  member_id?: { ho_ten?: string | null } | null
   doctor_id: { _id?: string; user_id?: { ho_ten?: string | null } } | null
   ten_khach?: string | null
   so_dien_thoai_khach?: string | null
@@ -176,7 +177,7 @@ function AppointmentDetailModal({
   onClose: () => void
   onShowTimeline: () => void
 }) {
-  const patientName = appointment.user_id?.ho_ten || appointment.ten_khach || 'Khách vãng lai'
+  const patientName = appointment.member_id?.ho_ten || appointment.ten_khach || appointment.user_id?.ho_ten || 'Khách vãng lai'
   const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
 
   return (
@@ -668,7 +669,7 @@ function AppointmentsTab({
               ) : appointments.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Không có lịch hẹn phù hợp.</td></tr>
               ) : appointments.map((appointment) => {
-                const patientName = appointment.user_id?.ho_ten || appointment.ten_khach || 'Khách vãng lai'
+                const patientName = appointment.member_id?.ho_ten || appointment.ten_khach || appointment.user_id?.ho_ten || 'Khách vãng lai'
                 const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
                 const canCheckIn = hasAppointmentAction(appointment, 'check_in')
                 const isToday = isAppointmentToday(appointment.ngay_kham)
@@ -784,7 +785,7 @@ function AppointmentsTab({
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
             <h3 className="text-lg font-bold text-slate-900">Hủy lịch hẹn</h3>
             <p className="mt-1 text-sm text-slate-500">
-              {cancelTarget.ma_lich_hen || cancelTarget._id} · {cancelTarget.user_id?.ho_ten || cancelTarget.ten_khach || 'Khách vãng lai'}
+              {cancelTarget.ma_lich_hen || cancelTarget._id} · {cancelTarget.member_id?.ho_ten || cancelTarget.ten_khach || cancelTarget.user_id?.ho_ten || 'Khách vãng lai'}
             </p>
             <label className="mt-4 block text-xs font-bold text-slate-600">
               Lý do hủy
@@ -813,7 +814,7 @@ function AppointmentsTab({
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
             <h3 className="text-lg font-bold text-slate-900">Dời lịch hẹn</h3>
             <p className="mt-1 text-sm text-slate-500">
-              {rescheduleTarget.ma_lich_hen || rescheduleTarget._id} · {rescheduleTarget.user_id?.ho_ten || rescheduleTarget.ten_khach || 'Khách vãng lai'}
+              {rescheduleTarget.ma_lich_hen || rescheduleTarget._id} · {rescheduleTarget.member_id?.ho_ten || rescheduleTarget.ten_khach || rescheduleTarget.user_id?.ho_ten || 'Khách vãng lai'}
             </p>
 
             <div className="mt-4 space-y-3">

@@ -65,6 +65,7 @@ export interface DoctorDayAppointment {
   so_dien_thoai_khach?: string | null
   nguon?: 'online' | 'tai_cho'
   user_id?: { ho_ten?: string | null; so_dien_thoai?: string | null } | null
+  member_id?: { ho_ten?: string | null } | null
 }
 
 export interface DoctorOperationalStatus {

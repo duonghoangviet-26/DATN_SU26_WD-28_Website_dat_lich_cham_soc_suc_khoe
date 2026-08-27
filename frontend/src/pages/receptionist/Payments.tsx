@@ -117,26 +117,6 @@ function MetricTile({
   )
 }
 
-function SectionTitle({
-  index,
-  title,
-  hint,
-}: {
-  index: number
-  title: string
-  hint: string
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-700">{index}</span>
-      <div>
-        <h3 className="text-base font-bold text-slate-950">{title}</h3>
-        <p className="mt-1 text-sm text-slate-600">{hint}</p>
-      </div>
-    </div>
-  )
-}
-
 export default function Payments() {
   const [view, setView] = useState<PaymentView>('pending')
   // Mặc định 'all': lọc theo hôm nay từng khiến ca chưa được lễ tân đối chiếu (đặc biệt case
@@ -554,20 +534,6 @@ export default function Payments() {
 
               <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="space-y-5">
-                  <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-                    <SectionTitle
-                      index={1}
-                      title="Đối chiếu số tiền phải thu"
-                      hint="Kiểm tra phí khám, dịch vụ phát sinh và số còn thiếu trước khi xác nhận."
-                    />
-
-                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      <MetricTile label="Phí khám" value={money(summary.tong_tien_kham)} />
-                      <MetricTile label="Dịch vụ phát sinh" value={money(summary.tong_tien_phat_sinh)} />
-                      <MetricTile label="Cần thu sau khám" value={money(summary.con_phai_thu_sau_kham)} tone={summary.con_phai_thu_sau_kham > 0 ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'} />
-                    </div>
-                  </section>
-
                   <section className="rounded-lg border border-slate-200 bg-white">
                     <div className="border-b border-slate-100 px-4 py-3">
                       <h3 className="font-semibold text-slate-950">Chi tiết thu phí</h3>
@@ -610,12 +576,16 @@ export default function Payments() {
                   </section>
                 </div>
 
-                <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-                  <SectionTitle
-                    index={2}
-                    title="Thao tác thu ngân"
-                    hint="Chỉ hiện hành động phù hợp với ca đang chọn."
-                  />
+                <section className="rounded-lg border border-slate-200 bg-white p-5">
+                  <div className="flex items-start gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                      <CircleDollarSign className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-950">Thao tác thu ngân</h3>
+                      <p className="mt-1 text-sm text-slate-600">Chỉ hiện hành động phù hợp với ca đang chọn.</p>
+                    </div>
+                  </div>
 
                   {selected.pending_payment ? (
                     <div className="mt-4 space-y-3">
@@ -627,12 +597,12 @@ export default function Payments() {
                         <span className="truncate text-xs text-slate-500">{selected.pending_payment.ma_giao_dich || selected.pending_payment.id}</span>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-4 text-center">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Số tiền khách cần chuyển</p>
                         <p className="mt-1 text-2xl font-bold text-slate-950">{money(selected.pending_payment.so_tien)}</p>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-4">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                         <div className="flex justify-center">
                           {selected.pending_payment.gateway?.qr_payload && qrCodeDataUrl ? (
                             <img
@@ -683,7 +653,7 @@ export default function Payments() {
                     </div>
                   ) : needsCashierConfirmation ? (
                     <div className="mt-4 space-y-4">
-                      <div className="rounded-lg border border-slate-200 bg-white p-4">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                         <p className="text-sm font-semibold text-slate-900">Số tiền cần xử lý</p>
                         <p className="mt-2 text-2xl font-bold text-slate-950">{money(summary.con_phai_thu)}</p>
                         <p className="mt-2 text-xs leading-5 text-slate-500">
@@ -692,7 +662,7 @@ export default function Payments() {
                       </div>
 
                       {summary.con_phai_thu > 0 && (
-                        <div className="rounded-lg border border-slate-200 bg-white p-4">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                           <p className="text-sm font-semibold text-slate-900">Phương thức thanh toán</p>
                           <div className="mt-3 grid gap-2">
                             <button type="button" onClick={() => setPaymentMethod('tien_mat')} className={`flex items-center justify-between rounded-lg border px-3 py-3 text-left transition ${paymentMethod === 'tien_mat' ? 'border-brand-500 bg-brand-50 text-brand-900' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-200 hover:bg-slate-50'}`}>

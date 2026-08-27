@@ -9,6 +9,15 @@ interface Props {
 
 const SO_DONG_TOI_DA = 10 // giới hạn cứng của DonThuoc ở backend
 
+// Backend (`DonThuoc.js`) bắt buộc `gio_uong` là mảng giờ HH:MM — không đổi được validator đó.
+// Thay vì bắt bác sĩ gõ giờ chính xác, cho chọn nhanh theo buổi; mỗi buổi ánh xạ 1 giờ đại diện
+// nên dữ liệu gửi lên backend vẫn hợp lệ như trước.
+const BUOI_UONG: { key: string; nhan: string; gio: string }[] = [
+  { key: 'sang', nhan: 'Sáng', gio: '07:00' },
+  { key: 'trua', nhan: 'Trưa', gio: '12:00' },
+  { key: 'toi', nhan: 'Tối', gio: '19:00' },
+]
+
 interface DongThuoc {
   ten_thuoc: string
   lieu_luong: string
@@ -46,17 +55,12 @@ export default function StepKeDon({ phien, saving, onNext }: Props) {
     setDsThuoc((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function themGioUong(index: number) {
-    suaDong(index, { gio_uong: [...dsThuoc[index].gio_uong, ''] })
-  }
-
-  function suaGioUong(index: number, gioIndex: number, value: string) {
-    const gioMoi = dsThuoc[index].gio_uong.map((g, i) => (i === gioIndex ? value : g))
+  function toggleBuoiUong(index: number, gio: string) {
+    const dangChon = dsThuoc[index].gio_uong.includes(gio)
+    const gioMoi = dangChon
+      ? dsThuoc[index].gio_uong.filter((g) => g !== gio)
+      : [...dsThuoc[index].gio_uong, gio]
     suaDong(index, { gio_uong: gioMoi })
-  }
-
-  function xoaGioUong(index: number, gioIndex: number) {
-    suaDong(index, { gio_uong: dsThuoc[index].gio_uong.filter((_, i) => i !== gioIndex) })
   }
 
   const dongThieuTen = dsThuoc.some((d) => !d.ten_thuoc.trim())
@@ -155,32 +159,26 @@ export default function StepKeDon({ phien, saving, onNext }: Props) {
               </div>
 
               <div className="mt-3">
-                <span className="mb-1 block text-sm font-medium text-slate-600">Giờ uống</span>
+                <span className="mb-1 block text-sm font-medium text-slate-600">Buổi uống</span>
                 <div className="flex flex-wrap items-center gap-2">
-                  {d.gio_uong.map((gio, gioIndex) => (
-                    <div key={gioIndex} className="flex items-center gap-1">
-                      <input
-                        type="time"
-                        value={gio}
-                        onChange={(e) => suaGioUong(index, gioIndex, e.target.value)}
-                        className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                      />
+                  {BUOI_UONG.map((buoi) => {
+                    const daChon = d.gio_uong.includes(buoi.gio)
+                    return (
                       <button
+                        key={buoi.key}
                         type="button"
-                        onClick={() => xoaGioUong(index, gioIndex)}
-                        className="text-xs text-slate-400 hover:text-red-500"
+                        onClick={() => toggleBuoiUong(index, buoi.gio)}
+                        aria-pressed={daChon}
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                          daChon
+                            ? 'border-brand-500 bg-brand-50 text-brand-700'
+                            : 'border-slate-300 text-slate-600 hover:border-brand-400 hover:text-brand-600'
+                        }`}
                       >
-                        ×
+                        {buoi.nhan}
                       </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => themGioUong(index)}
-                    className="rounded-lg border border-dashed border-slate-300 px-2 py-1 text-xs text-slate-500 hover:border-brand-400 hover:text-brand-600"
-                  >
-                    + Giờ uống
-                  </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>

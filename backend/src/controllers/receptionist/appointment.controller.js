@@ -374,7 +374,10 @@ export const getDoctorOperationalStatuses = async (req, res) => {
           doctor_id: { $in: doctorIds },
           ngay_kham: { $gte: todayStart, $lt: todayEnd },
           status: { $in: ['pending', 'confirmed'] },
-        }).select('_id doctor_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id').populate('user_id', 'ho_ten so_dien_thoai').lean()
+        }).select('_id doctor_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id member_id')
+          .populate('user_id', 'ho_ten so_dien_thoai')
+          .populate('member_id', 'ho_ten')
+          .lean()
         : [],
     ])
 
@@ -423,7 +426,7 @@ export const getDoctorOperationalStatuses = async (req, res) => {
         .map((appointment) => ({
           appointment_id: appointment._id,
           ma_lich_hen: appointment.ma_lich_hen ?? null,
-          ten_benh_nhan: appointment.user_id?.ho_ten ?? appointment.ten_khach ?? 'Khach hang',
+          ten_benh_nhan: appointment.member_id?.ho_ten ?? appointment.ten_khach ?? appointment.user_id?.ho_ten ?? 'Khach hang',
           so_dien_thoai: appointment.user_id?.so_dien_thoai ?? appointment.so_dien_thoai_khach ?? null,
           gio_kham: appointment.gio_kham,
           status: appointment.status,
@@ -518,7 +521,7 @@ export function buildOverloadAffectedList(appointments, now, doTrePhut) {
     .map((appointment) => ({
       appointment_id: appointment._id,
       ma_lich_hen: appointment.ma_lich_hen ?? null,
-      ten_benh_nhan: appointment.user_id?.ho_ten ?? appointment.ten_khach ?? 'Khách hàng',
+      ten_benh_nhan: appointment.member_id?.ho_ten ?? appointment.ten_khach ?? appointment.user_id?.ho_ten ?? 'Khách hàng',
       so_dien_thoai: appointment.user_id?.so_dien_thoai ?? appointment.so_dien_thoai_khach ?? null,
       gio_kham: appointment.gio_kham,
       status: appointment.status,
@@ -544,8 +547,9 @@ export async function getOverloadAffectedAppointments(req, res) {
       ngay_kham: { $gte: todayStart, $lt: todayEnd },
       status: { $in: ['pending', 'confirmed'] },
     })
-      .select('_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id')
+      .select('_id ma_lich_hen ten_khach so_dien_thoai_khach ngay_kham gio_kham status user_id member_id')
       .populate('user_id', 'ho_ten so_dien_thoai')
+      .populate('member_id', 'ho_ten')
       .lean()
 
     const overflow = await kiemTraQuaTai(doctorId, now)

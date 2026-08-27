@@ -21,13 +21,13 @@ export default function StepChanDoan({ phien, saving, onNext }: Props) {
   return (
     <div className="space-y-6">
       <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-        <span className="font-medium text-slate-500">Trieu chung da ghi:</span>{' '}
+        <span className="font-medium text-slate-500">Triệu chứng đã ghi:</span>{' '}
         {phien.ho_so?.trieu_chung_ban_dau ?? '-'}
       </div>
 
       <label className="block text-sm">
         <span className="mb-1 block font-semibold text-slate-900">
-          Chan doan <span className="text-red-500">*</span>
+          Chẩn đoán <span className="text-red-500">*</span>
         </span>
         <textarea
           value={chanDoan}
@@ -38,18 +38,18 @@ export default function StepChanDoan({ phien, saving, onNext }: Props) {
       </label>
 
       <label className="block text-sm">
-        <span className="mb-1 block font-semibold text-slate-900">Giai phap / huong dan dieu tri</span>
+        <span className="mb-1 block font-semibold text-slate-900">Giải pháp / hướng dẫn điều trị</span>
         <textarea
           value={huongDan}
           onChange={(e) => setHuongDan(e.target.value)}
           rows={3}
-          placeholder="Benh nhan can lam gi, kieng gi, theo doi ra sao"
+          placeholder="Bệnh nhân cần làm gì, kiêng gì, theo dõi ra sao"
           className="w-full rounded-lg border border-slate-300 px-3 py-2"
         />
       </label>
 
       <label className="block text-sm">
-        <span className="mb-1 block font-semibold text-slate-900">Luu y</span>
+        <span className="mb-1 block font-semibold text-slate-900">Lưu ý</span>
         <textarea
           value={ghiChu}
           onChange={(e) => setGhiChu(e.target.value)}
@@ -59,7 +59,7 @@ export default function StepChanDoan({ phien, saving, onNext }: Props) {
       </label>
 
       <label className="block text-sm">
-        <span className="mb-1 block font-semibold text-slate-900">Ngay tai kham</span>
+        <span className="mb-1 block font-semibold text-slate-900">Ngày tái khám</span>
         <input
           type="date"
           value={ngayTaiKham}
@@ -84,7 +84,7 @@ export default function StepChanDoan({ phien, saving, onNext }: Props) {
           }
           className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
         >
-          {saving ? 'Dang luu...' : 'Tiep tuc -> Dich vu'}
+          {saving ? 'Đang lưu...' : 'Tiếp tục → Dịch vụ'}
         </button>
       </div>
     </div>

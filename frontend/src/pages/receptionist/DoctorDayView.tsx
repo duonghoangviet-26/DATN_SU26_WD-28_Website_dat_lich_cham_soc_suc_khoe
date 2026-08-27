@@ -360,7 +360,7 @@ export default function DoctorDayView({
                 khungAppointments.map((appt) => (
                   <div key={appt._id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-slate-800">{appt.ten_khach || appt.user_id?.ho_ten || 'Khách'}</p>
+                      <p className="font-semibold text-slate-800">{appt.member_id?.ho_ten || appt.ten_khach || appt.user_id?.ho_ten || 'Khách'}</p>
                       <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 border border-slate-200">{APPT_STATUS_LABEL[appt.status] ?? appt.status}</span>
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">{appt.so_dien_thoai_khach || appt.user_id?.so_dien_thoai || 'Chưa có SĐT'}{appt.ma_lich_hen ? ` · ${appt.ma_lich_hen}` : ''}</p>
