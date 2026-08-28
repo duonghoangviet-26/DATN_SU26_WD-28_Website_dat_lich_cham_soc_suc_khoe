@@ -7,6 +7,7 @@ import { soSanhThuTuHangDoi, tinhBacUuTienDong } from '../../models/HangDoi.js'
 import { startOfDayUtc } from '../../utils/clinicTime.js'
 import {
   getOwnedOfflineQueue,
+  layPhienKham,
   taoChiDinhDichVu,
   upsertVitals,
 } from '../../services/examSession.service.js'
@@ -833,6 +834,59 @@ export async function confirmResultByRecord(req, res) {
   } catch (err) {
     if (err.name === 'ValidationError') return fail(res, 400, err.message)
     return fail(res, 500, err.message)
+  }
+}
+
+// ─── GET /api/doctor/appointments/result/:ketQuaId/print ─────────────────────
+// Dữ liệu để in "Hồ sơ bệnh án" đưa cho bệnh nhân — chỉ hồ sơ ĐÃ XÁC NHẬN (chốt lâm sàng
+// xong mới in). Dùng chung ketQuaId nên hoạt động cho cả online lẫn offline, khớp cách
+// confirmResultByRecord đã định danh hồ sơ. Tái dùng layPhienKham() (đã có sẵn tính toán
+// hoá đơn/đã thu/còn thiếu, dùng chung với "Bệnh nhân đã khám") thay vì tính lại từ đầu.
+// LƯỢC BỎ hinh_anh khỏi dịch vụ phát sinh trước khi trả về: ảnh (vd nội soi) chỉ lưu DB để
+// đối chiếu sau, không được đưa vào bản in cho bệnh nhân.
+export async function getPrintData(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+    const result = await KetQuaKham.findOne({ _id: req.params.ketQuaId, bac_si_phu_trach_id: docId })
+      .select('status hang_doi_id appointment_id')
+      .lean()
+    if (!result) return fail(res, 404, 'Không tìm thấy hồ sơ khám')
+    if (result.status !== 'da_xac_nhan') {
+      return fail(res, 409, 'Chỉ in được hồ sơ đã xác nhận')
+    }
+
+    let hangDoiId = result.hang_doi_id
+    if (!hangDoiId && result.appointment_id) {
+      const entry = await HangDoi.findOne({ appointment_id: result.appointment_id }).select('_id').lean()
+      hangDoiId = entry?._id ?? null
+    }
+    if (!hangDoiId) return fail(res, 404, 'Không tìm thấy lượt khám tương ứng để in')
+
+    const [phien, doctor, entry] = await Promise.all([
+      layPhienKham({ queueId: hangDoiId, docId }),
+      BacSi.findById(docId).select('user_id specialties')
+        .populate('user_id', 'ho_ten')
+        .populate('specialties', 'ten')
+        .lean(),
+      HangDoi.findById(hangDoiId).select('checkin_time').lean(),
+    ])
+
+    return ok(res, {
+      ...phien,
+      ho_so: phien.ho_so ? {
+        ...phien.ho_so,
+        dich_vu_phat_sinh: (phien.ho_so.dich_vu_phat_sinh ?? []).map(({ hinh_anh, ...line }) => line),
+      } : null,
+      bac_si: {
+        ho_ten: doctor?.user_id?.ho_ten ?? null,
+        chuyen_khoa: (doctor?.specialties ?? []).map((s) => s.ten).join(', ') || null,
+      },
+      ngay_kham: entry?.checkin_time ?? null,
+    })
+  } catch (err) {
+    return fail(res, err.httpStatus ?? err.statusCode ?? 500, err.message)
   }
 }
 

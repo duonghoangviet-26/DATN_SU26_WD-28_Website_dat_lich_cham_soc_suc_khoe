@@ -579,6 +579,31 @@ export async function xuLyThanhToanTrungLichNghi({ appointment, slot, session })
  * kể cả khách có tài khoản — vì đây là nhóm cần lễ tân theo dõi tới khi admin duyệt xong,
  * khác cho_khach_chon vốn khách tự xử lý được qua app.
  */
+async function coYeuCauLienHeChuaXuLy(appointmentId, session) {
+  // Guard chống trùng (review 2026-08-25, mở rộng 2026-08-28): guiThongBaoDeXuat() có thể
+  // được gọi NHIỀU LẦN cho cùng một lịch hẹn — lần 1 lúc taoDeXuatDoiChoDonNghi (bác sĩ báo
+  // nghỉ), lần 2 lúc lễ tân approve()/bulkApprove() duyệt phương án, hoặc khi dính hai đơn
+  // nghỉ liên tiếp (sinhLaiDeXuatChoLichMatCho). Không canh thì mỗi lần gọi lại tạo thêm một
+  // CUSTOMER_CONTACT_REQUIRED trùng doi_tuong_id — hiển thị 2 dòng "chưa gọi" cho cùng 1 lịch
+  // hẹn ở tab Liên hệ. Theo đúng quy ước "REQUIRED coi là chưa xử lý nếu KHÔNG có CONTACTED
+  // nào mới hơn nó" đã dùng ở contactTasks.service.js — chỉ tạo bản ghi mới khi yêu cầu GẦN
+  // NHẤT (nếu có) đã được xử lý.
+  const yeuCauGanNhat = await NhatKyThaoTac.findOne({
+    hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
+    doi_tuong_id: appointmentId,
+  }).sort({ ngay_tao: -1 }).session(session).lean()
+
+  if (!yeuCauGanNhat) return false
+
+  const daXuLy = await NhatKyThaoTac.exists({
+    hanh_dong: 'CUSTOMER_CONTACTED',
+    doi_tuong_id: appointmentId,
+    ngay_tao: { $gt: yeuCauGanNhat.ngay_tao },
+  }).session(session)
+
+  return !daXuLy
+}
+
 export async function guiThongBaoDeXuat(appointment, session = null) {
   const dx = appointment.de_xuat_doi
   if (!dx) return
@@ -587,23 +612,7 @@ export async function guiThongBaoDeXuat(appointment, session = null) {
   // hệ tay xếp lịch thủ công. Trước đây hàm thoát ngay ở đây, nhóm "so_khong_co_cho" không
   // bao giờ xuất hiện trong /receptionist/contact-tasks — không có nơi nào đánh dấu đã xử lý.
   if (!dx.phuong_an?.length) {
-    // Guard chống trùng (review 2026-08-25): cùng một lịch hẹn có thể bị đề xuất lại nhiều lần
-    // (VD: dính hai đơn nghỉ liên tiếp — taoDeXuatDoiChoDonNghi dòng ~440-473 nhả chỗ cũ rồi
-    // sinh lại đề xuất mới, hoặc sinhLaiDeXuatChoLichMatCho). Không canh thì mỗi lần gọi lại
-    // tạo thêm một CUSTOMER_CONTACT_REQUIRED trùng doi_tuong_id, khiến so_khong_co_cho_da_xu_ly
-    // (Task 3, ganTrangThaiLienHe) đếm vượt so_khong_co_cho khi lễ tân chỉ xử lý một lần. Theo
-    // đúng quy ước "REQUIRED coi là chưa xử lý nếu KHÔNG có CONTACTED nào mới hơn nó" đã dùng ở
-    // contactTasks.service.js — chỉ tạo bản ghi mới khi yêu cầu GẦN NHẤT (nếu có) đã được xử lý.
-    const yeuCauGanNhat = await NhatKyThaoTac.findOne({
-      hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
-      doi_tuong_id: appointment._id,
-    }).sort({ ngay_tao: -1 }).session(session).lean()
-
-    const conYeuCauChuaXuLy = yeuCauGanNhat && !(await NhatKyThaoTac.exists({
-      hanh_dong: 'CUSTOMER_CONTACTED',
-      doi_tuong_id: appointment._id,
-      ngay_tao: { $gt: yeuCauGanNhat.ngay_tao },
-    }).session(session))
+    const conYeuCauChuaXuLy = await coYeuCauLienHeChuaXuLy(appointment._id, session)
 
     if (!conYeuCauChuaXuLy) {
       await NhatKyThaoTac.create([{
@@ -649,7 +658,11 @@ export async function guiThongBaoDeXuat(appointment, session = null) {
     }], session ? { session } : {})
   }
 
-  if (choAdminDuyet || !appointment.user_id) {
+  // Cùng guard chống trùng như nhánh "0 phương án" phía trên — guiThongBaoDeXuat() bị gọi lại
+  // lúc lễ tân approve()/bulkApprove() (trang_thai đổi cho_admin_duyet -> cho_khach_chon), nên
+  // với khách KHÔNG có tài khoản (!appointment.user_id luôn đúng bất kể trang_thai) nếu không
+  // canh sẽ tạo thêm một CUSTOMER_CONTACT_REQUIRED trùng mỗi lần gọi lại.
+  if ((choAdminDuyet || !appointment.user_id) && !(await coYeuCauLienHeChuaXuLy(appointment._id, session))) {
     await NhatKyThaoTac.create([{
       nguoi_thuc_hien_id: null,
       vai_tro: 'system',

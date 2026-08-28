@@ -26,4 +26,7 @@ router.patch('/:id/result/request-revision', appointments.requestRevision)
 // đụng '/:id' (1 đoạn) hay '/:id/result/confirm' (đoạn 3 là 'confirm' khác 'confirm-by-record').
 router.patch('/result/:ketQuaId/confirm-by-record', appointments.confirmResultByRecord)
 
+// Dữ liệu để in "Hồ sơ bệnh án" đưa cho bệnh nhân — chỉ hồ sơ đã xác nhận (getPrintData).
+router.get('/result/:ketQuaId/print', appointments.getPrintData)
+
 export default router
