@@ -18,7 +18,8 @@ import { huyBaoNghi, xemTruocKhoiPhuc, kiemTraDuocKhoiPhuc } from '../../service
 //
 // Bác sĩ về sớm / xin nghỉ 1 ca không thể chờ Admin online mới xử lý được — nhưng nghỉ dài
 // ngày ảnh hưởng MauLichLamViec + rang buoc phong/ca thi dung tham quyen Admin. Ranh gioi
-// (laDonNganHanChoLeTan): bat dau cham nhat ngay mai, keo dai toi da 1 ngay.
+// (laDonNganHanChoLeTan, đổi 2026-08-28): khoang nghi toi da 1 ngay, cho NGAY BAT KY trong
+// tuong lai — khong con gioi han "chi ngay mai".
 //
 // Dung CHUNG doctorLeaveApproval.service.js voi Admin — tranh 2 noi cai dat khac nhau cung
 // mot hanh vi khoa slot + sinh de xuat (nguyen tac muc 7).
@@ -113,7 +114,7 @@ export async function approveLeave(req, res) {
     if (!laDonNganHanChoLeTan(leave)) {
       await session.abortTransaction()
       session.endSession()
-      return fail(res, 403, 'Đơn nghỉ kéo dài hoặc bắt đầu xa hơn ngày mai — cần Admin duyệt')
+      return fail(res, 403, 'Đơn nghỉ kéo dài hơn 1 ngày — cần Admin duyệt')
     }
 
     const { slotsLocked, affectedAppointments, canDieuPhoiTaiQuay, deXuat } = await duyetDonNghi({
@@ -167,7 +168,7 @@ export async function rejectLeave(req, res) {
       return fail(res, 404, 'Không tìm thấy đơn nghỉ phép')
     }
     if (!laDonNganHanChoLeTan(leave)) {
-      return fail(res, 403, 'Đơn nghỉ kéo dài hoặc bắt đầu xa hơn ngày mai — cần Admin duyệt')
+      return fail(res, 403, 'Đơn nghỉ kéo dài hơn 1 ngày — cần Admin duyệt')
     }
 
     await tuChoiDonNghi({ leave, actorUserId: getActorUserId(req), ghiChu: req.body?.ghi_chu })

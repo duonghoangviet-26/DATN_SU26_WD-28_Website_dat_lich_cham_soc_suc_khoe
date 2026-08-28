@@ -11,23 +11,26 @@ import { nenKhoaSlotVaoDonNghi, laSlotGiuChoDeXuat, nenSinhLaiDeXuat, demSlotSeK
 // ============================================================
 
 /**
- * Đơn nghỉ mà LỄ TÂN được phép duyệt: kết thúc chậm nhất ngày mai, kéo dài tối đa 1 ngày.
+ * Đơn nghỉ mà LỄ TÂN được phép xử lý/duyệt: khoảng nghỉ tối đa 1 ngày, cho NGÀY BẤT KỲ
+ * trong tương lai (không còn giới hạn "chỉ ngày mai" — chốt 2026-08-28, xem changelog
+ * mục 9 trong .claude/rules/lich-lam-viec-bac-si.md). Ranh giới nay hoàn toàn theo ĐỘ
+ * DÀI đợt nghỉ: ≤ 1 ngày → lễ tân tự xử lý ngay; > 1 ngày (nghỉ dài hạn) → luôn cần Admin
+ * duyệt, bất kể ngày bắt đầu gần hay xa.
  *
  * Bắt buộc có cận dưới `denNgay >= homNay` — thiếu điều kiện này thì đơn đã hết hạn từ lâu
  * (vd tạo cách đây nhiều tuần, chưa ai xử lý — dữ liệu rác test, không phải tình huống thật)
- * vẫn lọt qua vì `denNgay <= ngayMai` luôn đúng với mọi ngày trong quá khứ. Phát hiện khi demo
- * 2026-08-03: 4 đơn test cũ dán nhãn "cần lễ tân duyệt gấp" dù đã qua ngày từ lâu.
+ * vẫn lọt qua. Phát hiện khi demo 2026-08-03: 4 đơn test cũ dán nhãn "cần lễ tân duyệt gấp"
+ * dù đã qua ngày từ lâu.
  */
 export function laDonNganHanChoLeTan(leave) {
   const homNay = new Date()
   homNay.setUTCHours(0, 0, 0, 0)
-  const ngayMai = new Date(homNay.getTime() + 86400000)
 
   const denNgay = new Date(leave.den_ngay)
   const tuNgay = new Date(leave.tu_ngay)
   const soNgay = Math.round((denNgay - tuNgay) / 86400000)
 
-  return denNgay >= homNay && denNgay <= ngayMai && soNgay <= 1
+  return denNgay >= homNay && soNgay <= 1
 }
 
 /**
