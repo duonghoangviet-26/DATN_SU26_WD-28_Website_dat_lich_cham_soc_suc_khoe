@@ -50,9 +50,11 @@ export const authService = {
    * Quên mật khẩu - Yêu cầu cấp mã reset
    */
   async forgotPassword(email: string): Promise<any> {
-    const res = await axiosInstance.post<ApiResponse<any>>('/auth/forgot-password', {
-      email,
-    })
+    const res = await axiosInstance.post<ApiResponse<any>>(
+      '/auth/forgot-password',
+      { email },
+      { timeout: 30000 },
+    )
     return res.data
   },
 
