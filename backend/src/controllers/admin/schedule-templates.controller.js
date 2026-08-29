@@ -16,7 +16,7 @@ import { ok, created, fail } from '../../utils/response.js'
 // Chan o nguon thi lich sinh ra khong bao gio vi pham.
 
 const TEN_THU = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
-const TEN_CA = { sang: 'Ca sáng', chieu: 'Ca chiều' }
+const TEN_CA = { sang: 'Ca sáng', chieu: 'Ca chiều', toi: 'Ca tối' }
 
 function tenPhongDayDu(room) {
   if (!room) return null
@@ -72,7 +72,7 @@ function docPayload(body) {
   if (!Number.isInteger(thu) || thu < 0 || thu > 6) {
     return { loi: 'thu_trong_tuan phai la so nguyen tu 0 (Chu nhat) den 6 (Thu bay)' }
   }
-  if (!CAC_CA.includes(ca)) return { loi: 'ca chi nhan "sang" hoac "chieu"' }
+  if (!CAC_CA.includes(ca)) return { loi: 'ca chi nhan "sang", "chieu" hoac "toi"' }
 
   const tu = hieu_luc_tu ? new Date(hieu_luc_tu) : new Date()
   if (Number.isNaN(tu.getTime())) return { loi: 'hieu_luc_tu khong hop le' }
@@ -145,6 +145,7 @@ export async function grid(req, res) {
       thu_ten: ten,
       sang: mau.filter((m) => m.thu_trong_tuan === thu && m.ca === 'sang').map(fmt),
       chieu: mau.filter((m) => m.thu_trong_tuan === thu && m.ca === 'chieu').map(fmt),
+      toi: mau.filter((m) => m.thu_trong_tuan === thu && m.ca === 'toi').map(fmt),
     }))
 
     const [doctors, rooms] = await Promise.all([

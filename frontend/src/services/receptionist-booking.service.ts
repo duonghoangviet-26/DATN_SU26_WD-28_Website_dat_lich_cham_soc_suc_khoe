@@ -49,6 +49,7 @@ export interface DayOverviewDoctor {
   don_nghi_dai_han_cho_duyet: DoctorLeaveDaiHanChoDuyet | null
   ca_sang: DayOverviewKhungRow[]
   ca_chieu: DayOverviewKhungRow[]
+  ca_toi: DayOverviewKhungRow[]
 }
 
 export interface DayOverview {

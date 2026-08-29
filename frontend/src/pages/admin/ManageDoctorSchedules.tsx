@@ -127,13 +127,13 @@ function translateLogNote(note: string | null | undefined): string | null | unde
 // MODAL: CHỈNH SLOT LỊCH LÀM VIỆC
 // ============================================================
 
-// Ca sáng 08:00–11:30 / ca chiều 13:30–17:30 (nghỉ trưa ở giữa) — xem
-// .claude/rules/lich-lam-viec-bac-si.md §1. Chỉ dùng gio_bat_dau để tách vì field này luôn có
-// (khung_index có thể null ở dữ liệu cũ trước migration Phase 1A).
+// Ca sáng 08:00–11:30 / ca chiều 13:30–17:30 / ca tối 18:00-00:00.
+// Chỉ dùng gio_bat_dau để tách vì field này luôn có.
 function splitSlotsByCa(slots: AdminDoctorScheduleSlot[]) {
   return {
     sang: slots.filter((s) => s.gio_bat_dau < '12:00'),
-    chieu: slots.filter((s) => s.gio_bat_dau >= '12:00'),
+    chieu: slots.filter((s) => s.gio_bat_dau >= '12:00' && s.gio_bat_dau < '18:00'),
+    toi: slots.filter((s) => s.gio_bat_dau >= '18:00'),
   }
 }
 
@@ -241,10 +241,11 @@ function SlotEditorModal({
           )}
 
           {(() => {
-            const { sang, chieu } = splitSlotsByCa(workingCopy.slots)
+            const { sang, chieu, toi } = splitSlotsByCa(workingCopy.slots)
             const caSections = [
               { key: 'sang', label: 'Ca Sáng (08:00 – 11:30)', slots: sang },
               { key: 'chieu', label: 'Ca Chiều (13:30 – 17:30)', slots: chieu },
+              { key: 'toi', label: 'Ca Tối (18:00 – 00:00)', slots: toi },
             ].filter((section) => section.slots.length > 0)
 
             if (caSections.length === 0) {

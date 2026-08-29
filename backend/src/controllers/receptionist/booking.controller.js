@@ -266,12 +266,12 @@ export function buildDoctorKhungRows(schedule) {
     return [...bySlot.values()].sort((a, b) => a.khung_index - b.khung_index);
 }
 
-// Ca sáng 08:00–11:30, ca chiều 13:30–17:30, nghỉ trưa ở giữa không sinh khung nào (rule mục 1)
-// — chỉ cần so `gio_bat_dau` với mốc 13:30 là tách đúng ca, không cần biết trước số khung/ca.
-export function chiaCaSangChieu(khungRows) {
+// Ca sáng 08:00–11:30, ca chiều 13:30–17:30, ca tối 18:00-24:00
+export function chiaCaSangChieuToi(khungRows) {
     return {
         ca_sang: khungRows.filter((row) => row.gio_bat_dau < "13:30"),
-        ca_chieu: khungRows.filter((row) => row.gio_bat_dau >= "13:30"),
+        ca_chieu: khungRows.filter((row) => row.gio_bat_dau >= "13:30" && row.gio_bat_dau < "18:00"),
+        ca_toi: khungRows.filter((row) => row.gio_bat_dau >= "18:00"),
     };
 }
 
@@ -363,7 +363,7 @@ export async function getDoctorDayOverview(req, res) {
             const dangLamViec = schedule?.trang_thai_ngay === "lam_viec"
                 && schedule?.trang_thai_xac_nhan !== "tu_choi";
             const khungRows = dangLamViec ? buildDoctorKhungRows(schedule) : [];
-            const { ca_sang, ca_chieu } = chiaCaSangChieu(khungRows);
+            const { ca_sang, ca_chieu, ca_toi } = chiaCaSangChieuToi(khungRows);
             const leaveIdCuaBacSi = leaveByDoctor.get(String(doctor._id))?._id ?? null;
             const demCuaLeave = leaveIdCuaBacSi ? demTheoLeaveMap.get(String(leaveIdCuaBacSi)) : null;
             const donDaiHanChoDuyet = donDaiHanChoDuyetByDoctor.get(String(doctor._id)) ?? null;
@@ -390,6 +390,7 @@ export async function getDoctorDayOverview(req, res) {
                     : null,
                 ca_sang,
                 ca_chieu,
+                ca_toi,
             };
         });
 
@@ -548,7 +549,7 @@ export async function getAvailability(req, res) {
         // Quét lazy để con số phản ánh đúng hiện tại, không phải trạng thái tồn đọng.
         for (const schedule of schedules) await donDepSlotTruocKhiDoc(schedule);
 
-        const dem = { sang: 0, chieu: 0 };
+        const dem = { sang: 0, chieu: 0, toi: 0 };
         for (const schedule of schedules) {
             for (const slot of schedule.slots) {
                 if (slot.status !== "active" || slot.bi_khoa_boi_nghi_phep)
@@ -571,9 +572,15 @@ export async function getAvailability(req, res) {
                 gio: "13:30 – 17:30",
                 muc_do: xepMucDo(dem.chieu),
             },
+            {
+                ca: "toi",
+                ca_ten: "Ca tối",
+                gio: "18:00 – 24:00",
+                muc_do: xepMucDo(dem.toi),
+            },
         ].map((x) => ({ ...x, nhan: nhanMucDo(x.muc_do) }));
 
-        const mucDoChung = xepMucDo(dem.sang + dem.chieu);
+        const mucDoChung = xepMucDo(dem.sang + dem.chieu + dem.toi);
 
         await NhatKyThaoTac.create({
             nguoi_thuc_hien_id: req.user?.id ?? null,
@@ -583,7 +590,7 @@ export async function getAvailability(req, res) {
             doi_tuong_id: specialty_id
                 ? new mongoose.Types.ObjectId(specialty_id)
                 : doctors[0]._id,
-            ly_do: `Tra cuu ngay ${ngayDate.toISOString().slice(0, 10)}: sang=${theoCa[0].muc_do}, chieu=${theoCa[1].muc_do}`,
+            ly_do: `Tra cuu ngay ${ngayDate.toISOString().slice(0, 10)}: sang=${theoCa[0].muc_do}, chieu=${theoCa[1].muc_do}, toi=${theoCa[2].muc_do}`,
         });
 
         return ok(res, {

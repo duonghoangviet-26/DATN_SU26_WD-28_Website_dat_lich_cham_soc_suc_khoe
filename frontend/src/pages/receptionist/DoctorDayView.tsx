@@ -319,7 +319,7 @@ export default function DoctorDayView({
                 </div>
               )}
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Ca sáng (08:00–11:30)</p>
                   <KhungGrid
@@ -333,6 +333,14 @@ export default function DoctorDayView({
                   <KhungGrid
                     rows={doctor.ca_chieu}
                     emptyLabel={doctor.trang_thai_ngay === 'khong_co_lich' ? 'Không có lịch' : 'Không có khung ca chiều'}
+                    onSelect={(row) => void openKhung(doctor.doctor_id, doctor.ten_bac_si, row)}
+                  />
+                </div>
+                <div className="border-t border-dashed border-slate-200 pt-4 lg:border-t-0 lg:border-l lg:pl-4 lg:pt-0">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Ca tối (18:00–24:00)</p>
+                  <KhungGrid
+                    rows={doctor.ca_toi}
+                    emptyLabel={doctor.trang_thai_ngay === 'khong_co_lich' ? 'Không có lịch' : 'Không có khung ca tối'}
                     onSelect={(row) => void openKhung(doctor.doctor_id, doctor.ten_bac_si, row)}
                   />
                 </div>

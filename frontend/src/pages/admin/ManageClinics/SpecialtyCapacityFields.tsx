@@ -8,6 +8,7 @@
 export const DO_DAI_KHUNG_PHUT = 30
 const KHUNG_CA_SANG = 7
 const KHUNG_CA_CHIEU = 8
+const KHUNG_CA_TOI = 12
 
 export interface CapacityForm {
   thoi_gian_kham_trung_binh_phut: number
@@ -85,8 +86,10 @@ export default function SpecialtyCapacityFields({ form, onChange }: Props) {
 
   const sucChuaSang = KHUNG_CA_SANG * soSlot
   const sucChuaChieu = KHUNG_CA_CHIEU * soSlot
+  const sucChuaToi = KHUNG_CA_TOI * soSlot
   const onlineSang = Math.round((sucChuaSang * tyLe) / 100)
   const onlineChieu = Math.round((sucChuaChieu * tyLe) / 100)
+  const onlineToi = Math.round((sucChuaToi * tyLe) / 100)
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white">
@@ -186,7 +189,7 @@ export default function SpecialtyCapacityFields({ form, onChange }: Props) {
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           Một ngày làm việc sẽ thành
         </p>
-        <dl className="mt-2 grid grid-cols-3 gap-3 text-sm">
+        <dl className="mt-2 grid grid-cols-4 gap-3 text-sm">
           <div>
             <dt className="text-xs text-slate-500">Ca sáng · {KHUNG_CA_SANG} khung</dt>
             <dd className="font-semibold text-slate-800">{sucChuaSang} chỗ</dd>
@@ -202,8 +205,15 @@ export default function SpecialtyCapacityFields({ form, onChange }: Props) {
             </dd>
           </div>
           <div>
+            <dt className="text-xs text-slate-500">Ca tối · {KHUNG_CA_TOI} khung</dt>
+            <dd className="font-semibold text-slate-800">{sucChuaToi} chỗ</dd>
+            <dd className="text-xs text-slate-500">
+              {onlineToi} online · {sucChuaToi - onlineToi} tại quầy
+            </dd>
+          </div>
+          <div>
             <dt className="text-xs text-slate-500">Cả ngày</dt>
-            <dd className="font-semibold text-brand-600">{sucChuaSang + sucChuaChieu} chỗ</dd>
+            <dd className="font-semibold text-brand-600">{sucChuaSang + sucChuaChieu + sucChuaToi} chỗ</dd>
             <dd className="text-xs text-slate-500">{soSlot} slot mỗi khung</dd>
           </div>
         </dl>
