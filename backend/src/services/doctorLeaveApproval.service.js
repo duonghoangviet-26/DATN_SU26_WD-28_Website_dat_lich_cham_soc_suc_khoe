@@ -323,3 +323,25 @@ export function moTaKetQuaDuyet(soLichAnhHuong, deXuat) {
 
   return phan.join(' ')
 }
+
+/**
+ * Tự động chuyển các đơn xin nghỉ phép quá hạn (den_ngay < Hôm nay) đang ở trạng thái `cho_duyet` sang `da_huy`.
+ */
+export async function tuDongHuyDonNghiQuaHan() {
+  const startOfToday = new Date()
+  startOfToday.setUTCHours(0, 0, 0, 0)
+
+  await NghiPhepBacSi.updateMany(
+    {
+      trang_thai: 'cho_duyet',
+      den_ngay: { $lt: startOfToday },
+    },
+    {
+      $set: {
+        trang_thai: 'da_huy',
+        ghi_chu: 'Quá thời hạn chờ duyệt (hệ thống tự động hủy do đã qua ngày xin nghỉ)',
+      },
+    }
+  )
+}
+

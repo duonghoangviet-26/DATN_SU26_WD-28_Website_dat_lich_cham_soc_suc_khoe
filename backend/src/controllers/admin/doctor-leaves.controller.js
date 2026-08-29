@@ -7,6 +7,7 @@ import {
   tuChoiDonNghi,
   findLeaveByIdWithDoctor,
   moTaKetQuaDuyet,
+  tuDongHuyDonNghiQuaHan,
 } from '../../services/doctorLeaveApproval.service.js'
 
 function isValidObjectId(value) {
@@ -86,6 +87,7 @@ export async function createDoctorLeave(req, res) {
 
 export async function listDoctorLeaves(req, res) {
   try {
+    await tuDongHuyDonNghiQuaHan()
     const { bac_si_id, trang_thai, ngay, ten_bac_si, tu_ngay, den_ngay } = req.query
     const filter = {}
 

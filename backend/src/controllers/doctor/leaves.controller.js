@@ -55,6 +55,7 @@ async function demLichHenAnhHuong(docId, start, end, gio_bat_dau, gio_ket_thuc) 
 // Chỉ danh sách yêu cầu nghỉ của chính bác sĩ đang đăng nhập.
 export async function listMyLeaveRequests(req, res) {
   try {
+    await tuDongHuyDonNghiQuaHan()
     const docId = await getDocId(req.user.id)
     if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
 
