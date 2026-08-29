@@ -277,8 +277,7 @@ export default function DayShiftBoard({
 }: DayShiftBoardProps) {
   const khungs = groupSlotsByKhung(slots)
   const caSang = khungs.filter((k) => k.gio_bat_dau < '12:00')
-  const caChieu = khungs.filter((k) => k.gio_bat_dau >= '12:00' && k.gio_bat_dau < '18:00')
-  const caToi = khungs.filter((k) => k.gio_bat_dau >= '18:00')
+  const caChieu = khungs.filter((k) => k.gio_bat_dau >= '12:00')
 
   const tong = slots.length
   const daDat = slots.filter((s) => s.status === 'booked').length
@@ -352,17 +351,13 @@ export default function DayShiftBoard({
         </div>
       ) : (
         <>
-          <div className="grid gap-x-8 gap-y-6 px-5 py-4 lg:grid-cols-3">
+          <div className="grid gap-x-8 gap-y-6 px-5 py-4 lg:grid-cols-2">
             <CaColumn
               nhan="Ca sáng" khungs={caSang} leaves={leaves} gioHienTai={gioHienTai}
               chiXem={chiXem} onXinNghi={onXinNghi} onYeuCauHuy={onYeuCauHuy}
             />
             <CaColumn
               nhan="Ca chiều" khungs={caChieu} leaves={leaves} gioHienTai={gioHienTai}
-              chiXem={chiXem} onXinNghi={onXinNghi} onYeuCauHuy={onYeuCauHuy}
-            />
-            <CaColumn
-              nhan="Ca tối" khungs={caToi} leaves={leaves} gioHienTai={gioHienTai}
               chiXem={chiXem} onXinNghi={onXinNghi} onYeuCauHuy={onYeuCauHuy}
             />
           </div>

@@ -43,9 +43,6 @@ export const DEFAULT_SLOT_TIMES = [
   ['10:00', '10:30'], ['10:30', '11:00'], ['11:00', '11:30'],
   ['13:30', '14:00'], ['14:00', '14:30'], ['14:30', '15:00'], ['15:00', '15:30'],
   ['15:30', '16:00'], ['16:00', '16:30'], ['16:30', '17:00'], ['17:00', '17:30'],
-  ['18:00', '18:30'], ['18:30', '19:00'], ['19:00', '19:30'], ['19:30', '20:00'],
-  ['20:00', '20:30'], ['20:30', '21:00'], ['21:00', '21:30'], ['21:30', '22:00'],
-  ['22:00', '22:30'], ['22:30', '23:00'], ['23:00', '23:30'], ['23:30', '00:00'],
 ]
 
 function startOfDateUTC(value) {
@@ -54,10 +51,9 @@ function startOfDateUTC(value) {
   return date
 }
 
-// Ca sang = DEFAULT_SLOT_TIMES[0..6] (7 khung), ca chieu = DEFAULT_SLOT_TIMES[7..14] (8 khung), ca toi = DEFAULT_SLOT_TIMES[15..26] (12 khung).
+// Ca sang = DEFAULT_SLOT_TIMES[0..6] (7 khung), ca chieu = DEFAULT_SLOT_TIMES[7..14] (8 khung).
 const CA_SANG_SO_KHUNG = 7
 const CA_CHIEU_SO_KHUNG = 8
-const CA_TOI_SO_KHUNG = 12
 
 // Khung thuoc ca sang (0..6) hay ca chieu (7..14) — dung chung dinh nghia voi
 // models/MauLichLamViec.js de hai ben khong the phan ky.
@@ -93,8 +89,7 @@ export async function buildDefaultScheduleSlots({
 
   const onlinePerKhungSang = phanBoOnlineTheoKhung(CA_SANG_SO_KHUNG, soSlotMoiKhung, tyLeOnline)
   const onlinePerKhungChieu = phanBoOnlineTheoKhung(CA_CHIEU_SO_KHUNG, soSlotMoiKhung, tyLeOnline)
-  const onlinePerKhungToi = phanBoOnlineTheoKhung(CA_TOI_SO_KHUNG, soSlotMoiKhung, tyLeOnline)
-  const onlinePerKhung = [...onlinePerKhungSang, ...onlinePerKhungChieu, ...onlinePerKhungToi]
+  const onlinePerKhung = [...onlinePerKhungSang, ...onlinePerKhungChieu]
 
   const slots = []
   DEFAULT_SLOT_TIMES.forEach(([gio_bat_dau, gio_ket_thuc], khungIndex) => {

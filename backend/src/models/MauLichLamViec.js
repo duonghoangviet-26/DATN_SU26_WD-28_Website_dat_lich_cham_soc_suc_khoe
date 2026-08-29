@@ -18,17 +18,14 @@ import mongoose from 'mongoose'
 export const CA_SANG = 'sang'
 export const CA_CHIEU = 'chieu'
 export const CA_TOI = 'toi'
-export const CAC_CA = [CA_SANG, CA_CHIEU, CA_TOI]
+export const CAC_CA = [CA_SANG, CA_CHIEU]
 
 // Khung gio (30') thuoc ve ca nao — khop DEFAULT_SLOT_TIMES trong scheduleGenerator.
-// Ca sang = khung 0..6 (08:00–11:30), ca chieu = khung 7..14 (13:30–17:30), ca toi = khung 15..26 (18:00–00:00).
+// Ca sang = khung 0..6 (08:00–11:30), ca chieu = khung 7..14 (13:30–17:30).
 export const KHUNG_DAU_CA_CHIEU = 7
-export const KHUNG_DAU_CA_TOI = 15
 
 export function caCuaKhung(khungIndex) {
-  const index = Number(khungIndex)
-  if (index >= KHUNG_DAU_CA_TOI) return CA_TOI
-  return index >= KHUNG_DAU_CA_CHIEU ? CA_CHIEU : CA_SANG
+  return Number(khungIndex) >= KHUNG_DAU_CA_CHIEU ? CA_CHIEU : CA_SANG
 }
 
 // Nghỉ trưa 11:30–13:30, nên mọi khung từ 12:00 trở đi thuộc ca chiều.
@@ -52,7 +49,7 @@ export function caTheoGio(gioBatDau) {
 // `DEFAULT_SLOT_TIMES` của `scheduleGenerator`: ca sáng 08:00–11:30, chiều 13:30–17:30.
 // Dùng ở `services/noShowSweep.service.js` (quyết định no_show thật) VÀ
 // `utils/appointmentStatus.js` (ước lượng khoá nút bấm, không tra lịch làm việc để tránh N+1).
-export const GIO_KET_THUC_CA_MAC_DINH = { [CA_SANG]: '11:30', [CA_CHIEU]: '17:30', [CA_TOI]: '00:00' }
+export const GIO_KET_THUC_CA_MAC_DINH = { [CA_SANG]: '11:30', [CA_CHIEU]: '17:30' }
 
 const mauLichLamViecSchema = new mongoose.Schema(
   {
@@ -71,7 +68,7 @@ const mauLichLamViecSchema = new mongoose.Schema(
     ca: {
       type: String,
       required: [true, 'ca la bat buoc'],
-      enum: { values: CAC_CA, message: 'ca chi nhan "sang", "chieu" hoac "toi"' },
+      enum: { values: CAC_CA, message: 'ca chi nhan "sang" hoac "chieu"' },
     },
     phong_id: {
       type: mongoose.Schema.Types.ObjectId,

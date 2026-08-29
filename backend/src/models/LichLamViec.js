@@ -79,10 +79,8 @@ const slotSchema = new mongoose.Schema(
 )
 
 slotSchema.pre('validate', function () {
-  if (this.gio_bat_dau && this.gio_ket_thuc) {
-    if (this.gio_ket_thuc !== '00:00' && this.gio_ket_thuc <= this.gio_bat_dau) {
-      throw new Error('gio_ket_thuc phai sau gio_bat_dau')
-    }
+  if (this.gio_bat_dau && this.gio_ket_thuc && this.gio_ket_thuc <= this.gio_bat_dau) {
+    throw new Error('gio_ket_thuc phai sau gio_bat_dau')
   }
   // Giu cho PHAI co han. Khong co han thi khong bao gio het han -> slot khoa vinh vien,
   // khach khong dat duoc du ghe trong (2026-07-25: 9 slot nhu vay tren DB that).
