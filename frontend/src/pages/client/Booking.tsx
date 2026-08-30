@@ -18,6 +18,7 @@ import {
   type SpecialtySlotsResult,
 } from '@/services/patient-booking.service'
 import { specialtyService } from '@/services/specialty.service'
+import { followupService, type FollowUpRecord } from '@/services/followup.service'
 import DieuKhoanDatLich from '@/components/client/DieuKhoanDatLich'
 
 type BookingStep = 1 | 2 | 3 | 4 | 5
@@ -144,6 +145,17 @@ export default function Booking() {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
   const [nowMs, setNowMs] = useState(() => Date.now())
 
+  const [followupInfo, setFollowupInfo] = useState<FollowUpRecord | null>(null)
+  const [loadingFollowup, setLoadingFollowup] = useState(false)
+
+  const followupOverdueInfo = (() => {
+    if (!followupInfo || !followupInfo.ngay_tai_kham) return { isOverdue: false, hanCuoiDate: null }
+    const hanCuoiDate = new Date(followupInfo.ngay_tai_kham)
+    hanCuoiDate.setDate(hanCuoiDate.getDate() + 14)
+    const isOverdue = hanCuoiDate.setHours(23, 59, 59, 999) < Date.now()
+    return { isOverdue, hanCuoiDate }
+  })()
+
   // ── Ghi lại trạng thái booking vào sessionStorage khi thay đổi ──
   useEffect(() => {
     // Không lưu bước 1 (chưa bắt đầu)
@@ -233,6 +245,28 @@ export default function Booking() {
       }
     }
   }, [user])
+
+  useEffect(() => {
+    const fuId = searchParams.get('followup_id')
+    if (fuId && user) {
+      setLoadingFollowup(true)
+      followupService.getMyFollowUps()
+        .then(list => {
+          const matched = list.find(x => x.lich_hen_goc_id === fuId)
+          if (matched) {
+            setFollowupInfo(matched)
+            setSelectedSpecialtyId(matched.specialty_id)
+            if (matched.benh_nhan.member_id) {
+               setBookingFor('member')
+               setSelectedMemberId(matched.benh_nhan.member_id)
+            } else {
+               setBookingFor('self')
+            }
+          }
+        })
+        .finally(() => setLoadingFollowup(false))
+    }
+  }, [searchParams, user])
 
   useEffect(() => {
     let ignore = false
@@ -512,14 +546,30 @@ export default function Booking() {
         payload.member_id = selectedMemberId
       }
 
+      if (followupInfo) {
+        payload.lich_hen_goc_id = followupInfo.lich_hen_goc_id
+      }
+
       const created = await patientBookingService.createBooking(payload)
       setCreatedBooking(created)
       setPaymentSnapshot(null)
       setQrCodeDataUrl('')
+      
+      // Nếu là tái khám thì backend sẽ set giá = 0, bypass payment
+      if (created.gia_kham === 0 || created.payment_status === 'paid') {
+        sessionStorage.removeItem(BOOKING_SS_KEY)
+        navigate(`/profile?booked=true&id=${created.id || created.appointment_id || ''}`, { replace: true })
+        return
+      }
+
       setStep(5)
       setToast('Đã tạo lịch hẹn chờ thanh toán. Hệ thống đang tạo mã QR VNPAY mock.')
     } catch (error: any) {
-      setToast(error.response?.data?.message || error.message || 'Tạo lịch hẹn thất bại')
+      const rawMsg = error.response?.data?.message || error.message || ''
+      const cleanMsg = rawMsg.includes('validation failed') || rawMsg.includes('enum value')
+        ? 'Dữ liệu thanh toán tái khám không hợp lệ. Vui lòng thử lại.'
+        : (rawMsg || 'Tạo lịch hẹn thất bại. Vui lòng thử lại.')
+      setToast(cleanMsg)
     } finally {
       setSubmittingBooking(false)
     }
@@ -600,6 +650,48 @@ export default function Booking() {
           </div>
         </div>
       </div>
+
+      {followupInfo && (
+        <div className={`rounded-2xl border-2 p-6 text-left shadow-md transition-all ${
+          followupOverdueInfo.isOverdue
+            ? 'border-red-400 bg-red-50 text-red-950 ring-4 ring-red-100'
+            : 'border-blue-200 bg-blue-50 text-blue-900'
+        }`}>
+          <div className="flex items-start gap-4">
+            <div className={`mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl font-bold shadow-inner ${
+              followupOverdueInfo.isOverdue
+                ? 'bg-red-200 text-red-700'
+                : 'bg-blue-100 text-blue-600'
+            }`}>
+              {followupOverdueInfo.isOverdue ? '⚠️' : 'ℹ️'}
+            </div>
+            <div>
+              {followupOverdueInfo.isOverdue ? (
+                <>
+                  <h3 className="font-black text-xl text-red-800">ĐÃ QUÁ HẠN TÁI KHÁM MIỄN PHÍ</h3>
+                  <p className="mt-2 text-base font-semibold leading-relaxed text-red-900">
+                    Hồ sơ của <strong>{followupInfo.benh_nhan.ten_khach}</strong> đã quá hạn tái khám quy định (Hạn cuối: <strong>{followupOverdueInfo.hanCuoiDate?.toLocaleDateString('vi-VN')}</strong>).
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-red-700">
+                    Lịch khám này sẽ không được hưởng ưu đãi miễn phí và hệ thống sẽ báo lỗi khi đặt tái khám miễn phí.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="font-bold text-lg text-blue-900">Đang đặt lịch tái khám miễn phí</h3>
+                  <p className="mt-1 text-sm text-blue-800 leading-relaxed">
+                    Cho hồ sơ của <strong>{followupInfo.benh_nhan.ten_khach}</strong> (Khám gốc: {new Date(followupInfo.ngay_kham_cu).toLocaleDateString('vi-VN')}).<br />
+                    Bác sĩ phụ trách: <strong>{followupInfo.bac_si?.ho_ten || 'Không rõ'}</strong>.
+                  </p>
+                  <p className="mt-1 text-xs text-blue-700 font-medium">
+                    Chi phí khám sẽ được tự động miễn phí. Vui lòng giữ nguyên tùy chọn người khám.
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3">
         <div className="flex min-w-[560px] items-center text-center">
@@ -749,11 +841,18 @@ export default function Booking() {
             <p className="mt-1 text-sm text-slate-600">Thông tin này được sử dụng để xác nhận lịch hẹn và liên hệ khi cần.</p>
           </div>
 
+          {followupInfo && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <p className="text-sm font-bold text-blue-800">🔒 Thông tin người khám đã được khóa cố định theo hồ sơ tái khám.</p>
+            </div>
+          )}
+
           <div className="space-y-3">
             <label className="text-sm font-semibold text-slate-900">Đặt lịch cho</label>
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
+                disabled={!!followupInfo}
                 onClick={() => {
                   setBookingFor('self')
                   setPatientName(user?.ho_ten || '')
@@ -768,7 +867,7 @@ export default function Booking() {
                   bookingFor === 'self'
                     ? 'border-brand-600 bg-brand-50 font-bold text-brand-800 shadow-sm'
                     : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                }`}
+                } ${followupInfo ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <span className="text-sm font-bold">Bản thân</span>
                 <span className="mt-1 text-xs text-slate-500">Dùng thông tin tài khoản</span>
@@ -776,6 +875,7 @@ export default function Booking() {
 
               <button
                 type="button"
+                disabled={!!followupInfo}
                 onClick={() => {
                   setSymptoms('')
                   setFieldErrors({})
@@ -798,7 +898,7 @@ export default function Booking() {
                   bookingFor !== 'self'
                     ? 'border-brand-600 bg-brand-50 font-bold text-brand-800 shadow-sm'
                     : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                }`}
+                } ${followupInfo ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <span className="text-sm font-bold">Đặt hộ</span>
                 <span className="mt-1 text-xs text-slate-500">Cho người thân hoặc người khác</span>
@@ -854,6 +954,7 @@ export default function Booking() {
                       <button
                         key={member.id}
                         type="button"
+                        disabled={!!followupInfo}
                         onClick={() => {
                           setBookingFor('member')
                           setSelectedMemberId(member.id)
@@ -869,7 +970,7 @@ export default function Booking() {
                           selectedMemberId === member.id
                             ? 'border-brand-600 bg-brand-50 font-bold text-brand-800 shadow-sm'
                             : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                        }`}
+                        } ${followupInfo ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-teal-100 text-xs font-bold text-teal-800">
                           {member.ho_ten?.split(' ').pop()?.charAt(0) || 'N'}
@@ -887,6 +988,7 @@ export default function Booking() {
 
                     <button
                       type="button"
+                      disabled={!!followupInfo}
                       onClick={() => {
                         setBookingFor('other')
                         setSelectedMemberId('')
@@ -901,7 +1003,7 @@ export default function Booking() {
                         !selectedMemberId
                           ? 'border-brand-600 bg-brand-50 font-bold text-brand-800 shadow-sm'
                           : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'
-                      }`}
+                      } ${followupInfo ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-sm font-bold text-slate-600">
                         ➕
@@ -1256,7 +1358,17 @@ export default function Booking() {
         ) : null}
       </div>
 
-      {toast && <Toast message={toast} type="success" onClose={() => setToast(null)} />}
+      {toast && (
+        <Toast
+          message={toast}
+          type={
+            toast.includes('thành công') || toast.includes('Đã tạo') || toast.includes('thành công!')
+              ? 'success'
+              : 'error'
+          }
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   )
 }

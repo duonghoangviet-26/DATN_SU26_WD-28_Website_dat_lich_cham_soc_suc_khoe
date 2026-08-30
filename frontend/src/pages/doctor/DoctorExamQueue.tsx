@@ -402,7 +402,14 @@ export default function DoctorExamQueue() {
                       <p className="text-xs text-slate-400">{formatDate(r.checkin_time)}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge color={r.nguon === 'offline' ? 'yellow' : 'blue'}>{r.nguon === 'offline' ? 'Vãng lai' : 'Đặt online'}</Badge>
+                      <div className="flex flex-col gap-1 items-start">
+                        <Badge color={r.nguon === 'offline' ? 'yellow' : 'blue'}>{r.nguon === 'offline' ? 'Vãng lai' : 'Đặt online'}</Badge>
+                        {r.loai_lich_hen === 'tai_kham' ? (
+                          <Badge color="purple">🔁 Tái khám</Badge>
+                        ) : (
+                          <Badge color="blue">📋 Khám bình thường</Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{r.phong_kham ?? '—'}</td>
                     <td className="px-4 py-3">

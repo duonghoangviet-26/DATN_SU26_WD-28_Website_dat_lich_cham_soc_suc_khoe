@@ -45,9 +45,13 @@ async function formatAppointment(a) {
     ? new Date().getFullYear() - new Date(ngay_sinh).getFullYear()
     : undefined
 
+  const isTaiKham = a.loai_lich_hen === 'tai_kham' || !!a.lich_hen_goc_id || (!!a.ly_do_kham && a.ly_do_kham.toLowerCase().includes('tái khám'))
+
   return {
     id:               a._id,
     ma_lich_hen:      a.ma_lich_hen ?? null,
+    loai_lich_hen:    isTaiKham ? 'tai_kham' : (a.loai_lich_hen || 'kham_moi'),
+    is_tai_kham:      isTaiKham,
     benh_nhan:        benh_nhan_ho_ten,
     benh_nhan_id:     a.user_id,
     ho_so_benh_nhan_id: a.ho_so_benh_nhan_id ?? null,

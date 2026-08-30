@@ -20,7 +20,7 @@ import AppointmentList from './AppointmentList'
 import RescheduleAppointment from './RescheduleAppointment'
 
 type ViewMode = 'list' | 'reschedule'
-type QuickFilter = 'all' | 'today' | 'upcoming' | 'unpaid' | 'cancelled' | 'need_attention' | 'proxy_booking'
+type QuickFilter = 'all' | 'today' | 'upcoming' | 'completed' | 'unpaid' | 'cancelled' | 'need_attention' | 'proxy_booking'
 type BookingScope = '' | 'self' | 'proxy'
 
 const EMPTY_SUMMARY: AppointmentSummary = {
@@ -59,6 +59,7 @@ export default function ManageAppointments() {
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [status, setStatus] = useState<AppointmentStatus | ''>('')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | ''>('')
+  const [loaiLichHen, setLoaiLichHen] = useState<string>('')
   const [dateFilter, setDateFilter] = useState('')
   const [bookingScope, setBookingScope] = useState<BookingScope>('')
   const [startDate, setStartDate] = useState(filterStartDate)
@@ -95,6 +96,7 @@ export default function ManageAppointments() {
         keyword: debouncedKeyword,
         status,
         payment_status: paymentStatus || undefined,
+        loai_lich_hen: loaiLichHen || undefined,
         booking_scope: bookingScope || undefined,
         startDate,
         endDate,
@@ -115,7 +117,7 @@ export default function ManageAppointments() {
     } finally {
       setLoading(false)
     }
-  }, [debouncedKeyword, status, paymentStatus, bookingScope, startDate, endDate, page, filterDoctorId, quickFilter])
+  }, [debouncedKeyword, status, paymentStatus, loaiLichHen, bookingScope, startDate, endDate, page, filterDoctorId, quickFilter])
 
   const setDateRange = (type: string) => {
     setDateFilter(type)
@@ -271,6 +273,7 @@ export default function ManageAppointments() {
               ['all', 'Tất cả'],
               ['today', 'Hôm nay'],
               ['upcoming', 'Sắp tới'],
+              ['completed', 'Đã hoàn thành'],
               ['unpaid', 'Chưa thanh toán'],
               ['cancelled', 'Đã hủy'],
               ['need_attention', 'Cần xử lý'],
@@ -328,7 +331,7 @@ export default function ManageAppointments() {
           </AdminMotionGroup>
 
           <AdminMotionItem className="card mb-4 p-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-2.5 text-slate-400">
                   <Icon name="search" className="h-4 w-4" />
@@ -378,6 +381,18 @@ export default function ManageAppointments() {
                 <option value="completed">Hoàn thành</option>
                 <option value="cancelled">Đã hủy</option>
                 <option value="no_show">Không đến khám</option>
+              </select>
+              <select
+                className="input"
+                value={loaiLichHen}
+                onChange={(event) => {
+                  setLoaiLichHen(event.target.value)
+                  setPage(1)
+                }}
+              >
+                <option value="">Tất cả loại hẹn</option>
+                <option value="kham_moi">📋 Khám mới</option>
+                <option value="tai_kham">🔁 Tái khám</option>
               </select>
               <select
                 className="input"

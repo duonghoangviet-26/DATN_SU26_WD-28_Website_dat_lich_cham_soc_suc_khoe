@@ -88,6 +88,7 @@ export interface CreateBookingPayload {
   ly_do_kham: string
   ten_khach: string
   so_dien_thoai_khach: string
+  lich_hen_goc_id?: string
   member_id?: string | null
   booking_for?: 'self' | 'member' | 'other'
   phuong_thuc?: 'chuyen_khoan' | 'vi_dien_tu' | 'the_ngan_hang' | 'tien_mat'

@@ -18,6 +18,7 @@ import activityLogRoutes from './activity-log.routes.js'
 import contactTasksRoutes from './contact-tasks.routes.js'
 import doctorLeavesRoutes from './doctor-leaves.routes.js'
 import offlineQueueRoutes from './offline-queue.routes.js'
+import followupRoutes from './followup.routes.js'
 import rescheduleApprovalsRoutes from '../admin/reschedule-approvals.routes.js'
 
 const router = Router()
@@ -56,5 +57,6 @@ router.use('/doctor-leaves', doctorLeavesRoutes)
 router.use('/reschedule-approvals', rescheduleApprovalsRoutes)
 router.use('/payments/offline', offlinePaymentRoutes)
 router.use('/news', newsRoutes)
+router.use('/followup', followupRoutes)
 
 export default router

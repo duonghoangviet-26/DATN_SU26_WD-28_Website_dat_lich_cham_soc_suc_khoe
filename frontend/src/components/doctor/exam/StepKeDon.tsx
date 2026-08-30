@@ -83,13 +83,55 @@ export default function StepKeDon({ phien, saving, onNext }: Props) {
     }
   }
 
+  const thuocCu = phien.ho_so_cu?.thuoc ?? []
+
+  function taiLaiDonThuocCu() {
+    if (!thuocCu.length) return
+    setDsThuoc(thuocCu.slice(0, SO_DONG_TOI_DA).map((t) => ({
+      ten_thuoc: t.ten_thuoc,
+      lieu_luong: t.lieu_luong ?? '',
+      tan_suat: t.tan_suat ?? '',
+      so_ngay: String(t.so_ngay ?? 7),
+      gio_uong: t.gio_uong ?? [],
+      ghi_chu: t.ghi_chu ?? '',
+    })))
+  }
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_260px]">
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-slate-900">Đơn thuốc</h2>
           <span className="text-xs text-slate-400">{dsThuoc.length}/{SO_DONG_TOI_DA} dòng</span>
         </div>
+
+        {/* Đơn thuốc đợt trước — chỉ hiển thị khi tái khám có dữ liệu */}
+        {thuocCu.length > 0 && (
+          <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-600">
+                📋 Đơn thuốc đợt trước (tham khảo)
+              </p>
+              <button
+                type="button"
+                onClick={taiLaiDonThuocCu}
+                className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-100 transition-colors"
+              >
+                Tải lại đơn thuốc đợt trước
+              </button>
+            </div>
+            <ul className="space-y-1">
+              {thuocCu.map((t, i) => (
+                <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                  <span className="font-semibold text-slate-800">{t.ten_thuoc}</span>
+                  {t.lieu_luong && <span className="text-slate-600">{t.lieu_luong}</span>}
+                  {t.tan_suat && <span className="text-slate-500">— {t.tan_suat}</span>}
+                  {t.so_ngay && <span className="text-xs text-slate-400">({t.so_ngay} ngày)</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="space-y-4">
           {dsThuoc.map((d, index) => (

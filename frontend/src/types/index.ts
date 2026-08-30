@@ -369,6 +369,9 @@ export interface ServiceFormData {
 export interface AppointmentItem {
     _id: string;
     ma_lich_hen?: string | null;
+    loai_lich_hen?: 'kham_moi' | 'tai_kham';
+    is_tai_kham?: boolean;
+    lich_hen_goc_id?: string | null;
     user_id?: string | null;
     member_id?: string | null;
     user_email?: string | null;
@@ -650,6 +653,8 @@ export interface PaymentItem {
     ngay_tao: string;
     hoa_don_id?: string | null;
     appointment_id?: string | null;
+    loai_lich_hen?: 'kham_moi' | 'tai_kham';
+    is_tai_kham?: boolean;
     so_hoa_don?: string | null;
     loai_thanh_toan?: string | null;
     email?: string | null;
@@ -942,6 +947,7 @@ export type ExamQueueStatus =
 export interface DoctorExamQueueRow {
     id: string; // HangDoiKham._id
     appointment_id: string | null; // null nếu là lượt vãng lai (offline)
+    loai_lich_hen?: 'kham_moi' | 'tai_kham';
     ho_so_benh_nhan_id?: string | null;
     nguon: "online" | "offline";
     ten_benh_nhan: string;
@@ -1069,6 +1075,9 @@ export interface QueueActionResult {
 export interface DoctorAppointmentDetail {
     id: string | number; // Mongo ObjectId từ API; mock cũ có thể dùng number
     ma_lich_hen?: string | null;
+    loai_kham: "clinic" | "home";
+    loai_lich_hen?: 'kham_moi' | 'tai_kham';
+    is_tai_kham?: boolean;
     benh_nhan: string;
     benh_nhan_id: string | number;
     ho_so_benh_nhan_id?: string | null;

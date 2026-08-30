@@ -17,6 +17,7 @@ function ownedByUser(userId) {
       { nguoi_tao_id: userId },
       { nguoi_dat_ho_id: userId },
     ],
+    da_xoa_boi_benh_nhan: { $ne: true },
   }
 }
 
@@ -31,7 +32,7 @@ function appointmentError(statusCode, message) {
 // ─── GET /api/patient/records?status=&page=&limit= ──────────────────────────
 export async function listRecords(req, res) {
   try {
-    const { status, page = 1, limit = 10 } = req.query
+    const { status, page = 1, limit = 100 } = req.query
     const filter = ownedByUser(req.user.id)
     if (status) filter.status = status
 
@@ -399,5 +400,47 @@ export async function updateAppointmentContact(req, res) {
     }, 'Cập nhật thông tin lịch hẹn thành công')
   } catch (err) {
     return fail(res, err.statusCode ?? 500, err.statusCode ? err.message : 'Không thể cập nhật thông tin lịch hẹn')
+  }
+}
+
+// DELETE /api/patient/records/batch-cancelled
+export async function deleteBatchCancelledAppointments(req, res) {
+  try {
+    const result = await LichHen.updateMany(
+      {
+        ...ownedByUser(req.user.id),
+        status: { $in: ['cancelled', 'no_show', 'skipped'] },
+      },
+      { $set: { da_xoa_boi_benh_nhan: true } }
+    )
+
+    return ok(res, { deletedCount: result.modifiedCount }, `Đã xóa ${result.modifiedCount} lịch hẹn đã hủy khỏi danh sách`)
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// DELETE /api/patient/records/:id
+export async function deleteCancelledAppointment(req, res) {
+  try {
+    const appointment = await LichHen.findOne({
+      _id: req.params.id,
+      ...ownedByUser(req.user.id),
+    })
+
+    if (!appointment) {
+      return fail(res, 404, 'Không tìm thấy lịch hẹn')
+    }
+
+    if (!['cancelled', 'no_show', 'skipped'].includes(appointment.status)) {
+      return fail(res, 400, 'Chỉ được phép xóa lịch hẹn ở trạng thái đã hủy hoặc không đến')
+    }
+
+    appointment.da_xoa_boi_benh_nhan = true
+    await appointment.save()
+
+    return ok(res, { id: appointment._id }, 'Đã xóa lịch hẹn khỏi danh sách của bạn')
+  } catch (err) {
+    return fail(res, 500, err.message)
   }
 }

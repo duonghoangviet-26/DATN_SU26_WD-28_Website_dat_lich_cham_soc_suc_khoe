@@ -29,6 +29,7 @@ import {
 } from '@/utils/patientIdentityValidation'
 import { printTicket } from '@/utils/printTicket'
 import { toLocalDateStr } from '@/utils/format'
+import ReceptionistFollowupTab from '@/components/receptionist/ReceptionistFollowupTab'
 
 interface ReceptionistTodayAppointment {
   _id: string
@@ -179,6 +180,7 @@ function AppointmentDetailModal({
 }) {
   const patientName = appointment.member_id?.ho_ten || appointment.ten_khach || appointment.user_id?.ho_ten || 'Khách vãng lai'
   const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
+  const isTaiKham = appointment.loai_lich_hen === 'tai_kham' || !!appointment.lich_hen_goc_id || (!!appointment.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám'))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
@@ -205,6 +207,15 @@ function AppointmentDetailModal({
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
+          {isTaiKham ? (
+            <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-extrabold text-purple-800 border border-purple-200">
+              🔁 Tái khám
+            </span>
+          ) : (
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800 border border-blue-200">
+              📋 Khám bình thường
+            </span>
+          )}
           <span className={`rounded-full px-2 py-1 text-xs font-bold ${appointmentStatusTone(appointment.status)}`}>{appointmentStatusLabel(appointment.status)}</span>
           <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{paymentLabel(appointment.payment_status)}</span>
           {appointment.ly_do_doi && (
@@ -678,6 +689,7 @@ function AppointmentsTab({
                 const canReschedule = hasAppointmentAction(appointment, 'reschedule')
                 const canCancel = hasAppointmentAction(appointment, 'cancel')
                 const noActionsAvailable = !canCheckIn && !canLate && !canReschedule && !canCancel
+                const isTaiKham = appointment.loai_lich_hen === 'tai_kham' || !!appointment.lich_hen_goc_id || (!!appointment.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám'))
                 return (
                   <tr key={appointment._id} className="align-top hover:bg-slate-50">
                     <td className="px-4 py-3">
@@ -691,6 +703,15 @@ function AppointmentsTab({
                     <td className="px-4 py-3 text-slate-700">{appointment.doctor_id?.user_id?.ho_ten || 'Chưa gán'}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col items-start gap-1.5">
+                        {isTaiKham ? (
+                          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-extrabold text-purple-800 border border-purple-200">
+                            🔁 Tái khám
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-800 border border-blue-200">
+                            📋 Khám bình thường
+                          </span>
+                        )}
                         <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{paymentLabel(appointment.payment_status)}</span>
                         <span className={`rounded-full px-2 py-1 text-xs font-bold ${appointmentStatusTone(appointment.status)}`}>{appointmentStatusLabel(appointment.status)}</span>
                       </div>
@@ -1328,7 +1349,7 @@ export default function PatientIntake() {
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
   const [searchPhoneError, setSearchPhoneError] = useState('')
   const [formErrors, setFormErrors] = useState<{ ho_ten?: string; ngay_sinh?: string }>({})
-  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'appointments' | 'today_sessions'>('lookup')
+  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'appointments' | 'today_sessions' | 'followups'>('lookup')
   // D81 — modal tự trị, không đụng state tra cứu-theo-SĐT ở trên.
   const [searchParams, setSearchParams] = useSearchParams()
   const [pendingAppointmentId, setPendingAppointmentId] = useState<string | null>(null)
@@ -1669,7 +1690,7 @@ export default function PatientIntake() {
         />
 
         <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <button
               type="button"
               onClick={() => setWorkspaceTab('lookup')}
@@ -1693,6 +1714,14 @@ export default function PatientIntake() {
             >
               Danh sách đã khám
               <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today_sessions' ? 'text-slate-200' : 'text-slate-500'}`}>Toàn bộ ca khám đã ghi nhận, xem lại theo từng ngày</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('followups')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'followups' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+            >
+              Tái khám
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'followups' ? 'text-slate-200' : 'text-slate-500'}`}>Nhắc nhở khách chưa đặt lịch</span>
             </button>
           </div>
         </div>

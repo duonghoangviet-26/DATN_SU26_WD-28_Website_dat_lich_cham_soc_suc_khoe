@@ -11,6 +11,7 @@ export const appointmentService = {
     keyword?: string
     status?: string
     loai_kham?: string
+    loai_lich_hen?: string
     payment_status?: string
     startDate?: string
     endDate?: string

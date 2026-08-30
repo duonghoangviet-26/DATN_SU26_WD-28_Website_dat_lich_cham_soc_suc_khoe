@@ -112,9 +112,9 @@ interface MedicalResultListResponse {
 }
 
 export const patientRecordsService = {
-  async getAppointments(status?: string): Promise<PatientRecordListResponse> {
+  async getAppointments(status?: string, limit: number = 100): Promise<PatientRecordListResponse> {
     const res = await axiosInstance.get<ApiResponse<PatientRecordListResponse>>('/patient/records', {
-      params: status ? { status } : undefined,
+      params: { ...(status ? { status } : {}), limit },
     })
     return res.data.data
   },
@@ -144,6 +144,16 @@ export const patientRecordsService = {
       `/patient/booking/${id}/cancel`,
       { ly_do }
     )
+    return res.data.data
+  },
+
+  async deleteAppointment(id: string): Promise<{ id: string }> {
+    const res = await axiosInstance.delete<ApiResponse<{ id: string }>>(`/patient/records/${id}`)
+    return res.data.data
+  },
+
+  async deleteBatchCancelledAppointments(): Promise<{ deletedCount: number }> {
+    const res = await axiosInstance.delete<ApiResponse<{ deletedCount: number }>>('/patient/records/batch-cancelled')
     return res.data.data
   },
 }

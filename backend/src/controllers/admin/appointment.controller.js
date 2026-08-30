@@ -156,18 +156,20 @@ function getQuickFilterConditions(quickFilter) {
     case 'today':
       return {
         ngay_kham: { $gte: today, $lte: endOfDateOnly(today) },
-        status: { $in: ACTIVE_OPERATIONAL_STATUSES },
       }
     case 'upcoming':
       return {
         ngay_kham: { $gte: tomorrow },
         status: { $in: ACTIVE_OPERATIONAL_STATUSES },
       }
+    case 'completed':
+      return {
+        status: 'completed',
+      }
     case 'unpaid':
       return {
         ngay_kham: { $gte: today },
         payment_status: { $in: ['unpaid', 'partial'] },
-        status: { $in: ACTIVE_OPERATIONAL_STATUSES },
       }
     case 'cancelled':
       return { status: 'cancelled' }
@@ -243,6 +245,7 @@ async function buildAppointmentQuery({
   status,
   payment_status,
   loai_kham,
+  loai_lich_hen,
   startDate,
   endDate,
   doctor_id,
@@ -257,6 +260,18 @@ async function buildAppointmentQuery({
   if (loai_kham) query.loai_kham = loai_kham
   if (status) query.status = status
   if (payment_status) query.payment_status = payment_status
+  if (loai_lich_hen) {
+    if (loai_lich_hen === 'tai_kham') {
+      query.$or = [
+        { loai_lich_hen: 'tai_kham' },
+        { lich_hen_goc_id: { $ne: null } },
+        { ly_do_kham: { $regex: /tái khám/i } },
+      ]
+    } else if (loai_lich_hen === 'kham_moi') {
+      query.loai_lich_hen = { $ne: 'tai_kham' }
+      query.lich_hen_goc_id = null
+    }
+  }
 
   if (doctor_id) {
     if (!isValidObjectId(doctor_id)) {
@@ -300,12 +315,13 @@ async function buildAppointmentQuery({
     || Boolean(keyword?.trim())
     || Boolean(ma_lich_hen?.trim())
     || Boolean(status)
+    || Boolean(loai_lich_hen)
     || Boolean(payment_status)
     || Boolean(quick_filter)
 
   if (!hasExplicitHistoryFilter) {
     query.ngay_kham = { $gte: toDateOnly(new Date()) }
-    query.status = { $in: ACTIVE_OPERATIONAL_STATUSES }
+    query.status = { $in: [...ACTIVE_OPERATIONAL_STATUSES, 'completed'] }
   }
 
   const andConditions = []
@@ -348,6 +364,10 @@ function getSummaryBaseQuery(query) {
 }
 
 function formatAppointmentItem(appointment) {
+  const isTaiKham = appointment.loai_lich_hen === 'tai_kham' ||
+    !!appointment.lich_hen_goc_id ||
+    (!!appointment.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám'))
+
   const patientName =
     appointment.member_id?.ho_ten ||
     appointment.ten_khach ||
@@ -370,6 +390,9 @@ function formatAppointmentItem(appointment) {
   return {
     _id: appointment._id,
     ma_lich_hen: appointment.ma_lich_hen ?? null,
+    loai_lich_hen: appointment.loai_lich_hen ?? (isTaiKham ? 'tai_kham' : 'kham_moi'),
+    lich_hen_goc_id: appointment.lich_hen_goc_id ?? null,
+    is_tai_kham: isTaiKham,
     user_id: appointment.user_id?._id ?? appointment.user_id ?? null,
     member_id: appointment.member_id?._id ?? appointment.member_id ?? null,
     user_email: appointment.user_id?.email ?? appointment.email_khach ?? null,
@@ -721,7 +744,7 @@ export async function getAllAppointments(req, res) {
       LichHen.aggregate(buildSortedAppointmentIdsPipeline(query, skip, limitNum)),
       LichHen.countDocuments(withAndConditions(
         summaryBaseQuery,
-        { status: { $in: ACTIVE_OPERATIONAL_STATUSES } },
+        { status: { $ne: 'cancelled' } },
         { ngay_kham: { $gte: toDateOnly(new Date()), $lte: endOfDateOnly(new Date()) } },
       )),
       LichHen.countDocuments(withAndConditions(buildOperationalScopeQuery(summaryBaseQuery), { status: 'pending' })),

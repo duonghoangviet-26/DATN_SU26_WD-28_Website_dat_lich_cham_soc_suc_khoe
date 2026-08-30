@@ -310,6 +310,20 @@ export default function DoctorAppointments() {
               <p className="mt-0.5 text-slate-700">{appt.chuyen_khoa}</p>
             </div>
           )}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Phân loại khám</p>
+            <p className="mt-0.5">
+              {(appt.is_tai_kham || appt.loai_lich_hen === 'tai_kham' || (appt.ly_do_kham && appt.ly_do_kham.toLowerCase().includes('tái khám'))) ? (
+                <span className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-extrabold text-purple-700">
+                  🔁 Tái khám
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-blue-700">
+                  📋 Khám bình thường
+                </span>
+              )}
+            </p>
+          </div>
         </div>
 
         {/* Tầng 1: thông tin bệnh nhân + lịch hẹn — flex-wrap để tự điền, không tạo khoảng trống */}
@@ -673,9 +687,14 @@ export default function DoctorAppointments() {
                               )}
                             </td>
 
-                            {/* Trạng thái lịch hẹn + thanh toán */}
+                            {/* Trạng thái lịch hẹn + phân loại + thanh toán */}
                             <td className="px-4 py-3 align-top">
                               <div className="flex flex-col items-start gap-1">
+                                {(appt.is_tai_kham || appt.loai_lich_hen === 'tai_kham' || (appt.ly_do_kham && appt.ly_do_kham.toLowerCase().includes('tái khám'))) ? (
+                                  <Badge color="purple">🔁 Tái khám</Badge>
+                                ) : (
+                                  <Badge color="blue">📋 Khám bình thường</Badge>
+                                )}
                                 <Badge color={APPOINTMENT_STATUS_COLOR[appt.status]}>
                                   {APPOINTMENT_STATUS_LABEL[appt.status]}
                                 </Badge>
@@ -765,6 +784,11 @@ export default function DoctorAppointments() {
                     )}
 
                     <div className="mt-3 flex flex-wrap gap-1.5">
+                      {(appt.is_tai_kham || appt.loai_lich_hen === 'tai_kham' || (appt.ly_do_kham && appt.ly_do_kham.toLowerCase().includes('tái khám'))) ? (
+                        <Badge color="purple">🔁 Tái khám</Badge>
+                      ) : (
+                        <Badge color="blue">📋 Khám bình thường</Badge>
+                      )}
                       <Badge color={APPOINTMENT_STATUS_COLOR[appt.status]}>
                         {APPOINTMENT_STATUS_LABEL[appt.status]}
                       </Badge>

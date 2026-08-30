@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 import {
-  DichVu, DonThuoc, HangDoi, HoaDon, KetQuaKham, LichHen, NhatKyThaoTac, SinhHieuKham, ThanhToan, TrangThaiPhongKham,
+  BacSi, DichVu, DonThuoc, HangDoi, HoaDon, KetQuaKham, LichHen, NhatKyThaoTac, SinhHieuKham, ThanhToan, TrangThaiPhongKham,
 } from '../models/index.js'
 import { soSanhThuTuHangDoi } from '../models/HangDoi.js'
 // `room-status.controller.js` chỉ import models + utils/response → KHÔNG có vòng import
@@ -154,7 +154,40 @@ async function timLuotKhamCuaBacSi(queueId, docId, { chiOffline }) {
   }
   const filter = { _id: queueId, doctor_id: docId }
   if (chiOffline) filter.nguon = 'offline'
-  const entry = await HangDoi.findOne(filter).lean()
+  let entry = await HangDoi.findOne(filter).lean()
+  
+  if (!entry) {
+    entry = await HangDoi.findOne({ appointment_id: queueId, doctor_id: docId }).lean()
+  }
+
+  if (!entry && !chiOffline) {
+    const lich = await LichHen.findOne({ _id: queueId, doctor_id: docId }).lean()
+    if (lich) {
+      entry = {
+        _id: lich._id,
+        appointment_id: lich._id,
+        ho_so_benh_nhan_id: lich.ho_so_benh_nhan_id || null,
+        ten_benh_nhan: lich.ten_khach,
+        so_dien_thoai: lich.so_dien_thoai_khach || null,
+        tuoi: null,
+        ngay_sinh: null,
+        gioi_tinh: lich.gioi_tinh_khach || null,
+        nhom_mau: null,
+        di_ung: null,
+        benh_nen: null,
+        ghi_chu: null,
+        ma_so_thu_tu: null,
+        nguon: 'online',
+        trang_thai: 'hoan_thanh',
+        phong_kham: lich.phong_kham || null,
+        doctor_id: lich.doctor_id,
+        specialty_id: lich.specialty_id,
+        checkin_time: lich.ngay_kham,
+        thoi_diem_ket_thuc: lich.ngay_cap_nhat || lich.ngay_kham,
+      }
+    }
+  }
+
   if (!entry) {
     const msg = chiOffline ? 'Không tìm thấy lượt khám offline' : 'Không tìm thấy lượt khám'
     throw Object.assign(new Error(msg), { httpStatus: 404 })
@@ -205,14 +238,131 @@ export async function layPhienKham({ queueId, docId }) {
   const entry = await getOwnedQueueForExam(queueId, docId)
 
   const [hoSo, sinhHieu, dichVuKhaDung, lichHen] = await Promise.all([
-    KetQuaKham.findOne({ hang_doi_id: entry._id }).lean(),
-    SinhHieuKham.findOne({ hang_doi_id: entry._id }).lean(),
+    KetQuaKham.findOne({
+      $or: [
+        { hang_doi_id: entry._id },
+        ...(entry.appointment_id ? [{ appointment_id: entry.appointment_id }] : [])
+      ]
+    }).lean(),
+    SinhHieuKham.findOne({
+      $or: [
+        { hang_doi_id: entry._id },
+        ...(entry.appointment_id ? [{ appointment_id: entry.appointment_id }] : [])
+      ]
+    }).lean(),
     DichVu.find({ loai: 'related', specialty_id: entry.specialty_id, status: 'active' })
       .select('_id ten gia ma_dich_vu').sort({ ten: 1 }).lean(),
     entry.appointment_id
-      ? LichHen.findById(entry.appointment_id).select('ly_do_kham payment_status gia_kham').lean()
+      ? LichHen.findById(entry.appointment_id).select('ly_do_kham payment_status gia_kham loai_lich_hen lich_hen_goc_id ho_so_benh_nhan_id').lean()
       : null,
   ])
+
+  // ── Xác định ca tái khám và lấy hồ sơ đợt trước ─────────────────────────────
+  const isTaiKham = lichHen?.loai_lich_hen === 'tai_kham' ||
+    !!lichHen?.lich_hen_goc_id ||
+    !!(lichHen?.ly_do_kham && lichHen.ly_do_kham.toLowerCase().includes('tái khám'))
+
+  let hoSoCu = null
+  if (isTaiKham) {
+    let hoSoCuDoc = null
+
+    // ── Ưu tiên 1: Tìm trực tiếp theo appointment_id của lịch hẹn gốc ──────────
+    // Đây là cách chính xác nhất vì `lich_hen_goc_id` trỏ thẳng đến lịch hẹn ban đầu
+    // (có thể `ho_so_benh_nhan_id` khác nhau do bệnh nhân có nhiều hồ sơ)
+    if (lichHen?.lich_hen_goc_id) {
+      hoSoCuDoc = await KetQuaKham.findOne({
+        appointment_id: lichHen.lich_hen_goc_id,
+        _id: { $ne: hoSo?._id ?? new mongoose.Types.ObjectId('000000000000000000000000') },
+      }).sort({ ngay_tao: -1 }).lean()
+    }
+
+    // ── Ưu tiên 2: Tìm theo ho_so_benh_nhan_id của LichHen gốc ──────────────────
+    // Một số lịch hẹn gốc có ho_so_benh_nhan_id khác với HangDoi hiện tại
+    // (xảy ra khi bệnh nhân được tạo hồ sơ mới khi đặt lịch)
+    if (!hoSoCuDoc && lichHen?.ho_so_benh_nhan_id) {
+      const lichHoSoBenhNhanId = lichHen.ho_so_benh_nhan_id
+      hoSoCuDoc = await KetQuaKham.findOne({
+        ho_so_benh_nhan_id: lichHoSoBenhNhanId,
+        // Ưu tiên da_xac_nhan, nhưng chấp nhận cả hoan_tat (buoc_hien_tai=hoan_tat) vì
+        // nhiều hồ sơ đã khám xong nhưng chưa được xác nhận chính thức
+        $or: [
+          { status: 'da_xac_nhan' },
+          { buoc_hien_tai: 'hoan_tat', status: { $ne: 'ban_nhap' } },
+          { buoc_hien_tai: 'hoan_tat' },
+        ],
+        _id: { $ne: hoSo?._id ?? new mongoose.Types.ObjectId('000000000000000000000000') },
+        ...(entry.appointment_id ? { appointment_id: { $ne: entry.appointment_id } } : {}),
+      }).sort({ ngay_tao: -1 }).lean()
+    }
+
+    // ── Ưu tiên 3: Fallback — tìm theo ho_so_benh_nhan_id của HangDoi hiện tại ──
+    // Trường hợp ho_so_benh_nhan_id HangDoi khớp với KetQuaKham cũ
+    if (!hoSoCuDoc && entry.ho_so_benh_nhan_id) {
+      hoSoCuDoc = await KetQuaKham.findOne({
+        ho_so_benh_nhan_id: entry.ho_so_benh_nhan_id,
+        $or: [
+          { status: 'da_xac_nhan' },
+          { buoc_hien_tai: 'hoan_tat' },
+        ],
+        _id: { $ne: hoSo?._id ?? new mongoose.Types.ObjectId('000000000000000000000000') },
+        ...(entry.appointment_id ? { appointment_id: { $ne: entry.appointment_id } } : {}),
+      }).sort({ ngay_tao: -1 }).lean()
+    }
+
+    if (hoSoCuDoc) {
+      const [sinhHieuCu, donThuocCu, lichHenCu] = await Promise.all([
+        SinhHieuKham.findOne({
+          $or: [
+            ...(hoSoCuDoc.hang_doi_id ? [{ hang_doi_id: hoSoCuDoc.hang_doi_id }] : []),
+            ...(hoSoCuDoc.appointment_id ? [{ appointment_id: hoSoCuDoc.appointment_id }] : []),
+          ],
+        }).lean(),
+        DonThuoc.findOne({ medical_record_id: hoSoCuDoc._id }).lean(),
+        hoSoCuDoc.appointment_id
+          ? LichHen.findById(hoSoCuDoc.appointment_id).select('ngay_kham doctor_id').lean()
+          : null,
+      ])
+
+      // Lấy tên bác sĩ đợt trước
+      let tenBacSiCu = null
+      if (hoSoCuDoc.bac_si_phu_trach_id) {
+        const bacSiCu = await BacSi.findById(hoSoCuDoc.bac_si_phu_trach_id)
+          .populate('user_id', 'ho_ten')
+          .select('user_id').lean()
+        tenBacSiCu = bacSiCu?.user_id?.ho_ten ?? null
+      }
+
+      hoSoCu = {
+        ngay_kham: lichHenCu?.ngay_kham ?? hoSoCuDoc.ngay_tao ?? null,
+        ten_bac_si: tenBacSiCu,
+        chan_doan: (hoSoCuDoc.chan_doan === '(đang khám)' || hoSoCuDoc.chan_doan === '(dang kham)')
+          ? null
+          : (hoSoCuDoc.chan_doan ?? null),
+        huong_dan_dieu_tri: hoSoCuDoc.huong_dan_dieu_tri ?? null,
+        ghi_chu: hoSoCuDoc.ghi_chu ?? null,
+        sinh_hieu: sinhHieuCu ? {
+          can_nang: sinhHieuCu.can_nang ?? null,
+          chieu_cao: sinhHieuCu.chieu_cao ?? null,
+          huyet_ap: sinhHieuCu.huyet_ap ?? null,
+          nhiet_do: sinhHieuCu.nhiet_do ?? null,
+          nhip_tim: sinhHieuCu.nhip_tim ?? null,
+        } : null,
+        thuoc: (donThuocCu?.items ?? []).map((t) => ({
+          ten_thuoc: t.ten_thuoc,
+          lieu_luong: t.lieu_luong ?? null,
+          tan_suat: t.tan_suat ?? null,
+          so_ngay: t.so_ngay ?? 7,
+          gio_uong: t.gio_uong ?? [],
+          ghi_chu: t.ghi_chu ?? null,
+        })),
+      }
+
+      // Nếu chan_doan rỗng (placeholder) → không trả ho_so_cu vô nghĩa
+      if (!hoSoCu.chan_doan && !hoSoCu.sinh_hieu && !hoSoCu.thuoc.length) {
+        hoSoCu = null
+      }
+    }
+  }
 
   const thuoc = hoSo
     ? (await DonThuoc.findOne({ medical_record_id: hoSo._id }).lean())?.items ?? []
@@ -266,6 +416,7 @@ export async function layPhienKham({ queueId, docId }) {
           huong_dan_dieu_tri: hoSo.huong_dan_dieu_tri ?? null,
           ghi_chu: hoSo.ghi_chu ?? null,
           ngay_tai_kham: hoSo.ngay_tai_kham ?? null,
+          chi_dinh_tai_kham: hoSo.chi_dinh_tai_kham ?? false,
           dich_vu_phat_sinh: hoSo.dich_vu_phat_sinh ?? [],
           ket_cuc: hoSo.ket_cuc ?? 'dieu_tri_thuong',
           chuyen_vien_thong_tin: hoSo.chuyen_vien_thong_tin ?? null,
@@ -317,12 +468,19 @@ export async function layPhienKham({ queueId, docId }) {
     dich_vu_kha_dung: dichVuKhaDung.map((d) => ({
       service_id: String(d._id), ten: d.ten, gia: d.gia, ma_dich_vu: d.ma_dich_vu ?? null,
     })),
+    is_tai_kham: isTaiKham,
+    ho_so_cu: hoSoCu,
   }
 }
 
 /** Bảo đảm có bản ghi nháp để gắn dữ liệu bước 1. */
 async function taoNhapNeuChua(entry, doctorUserId, docId) {
-  const daCo = await KetQuaKham.findOne({ hang_doi_id: entry._id })
+  const daCo = await KetQuaKham.findOne({
+    $or: [
+      { hang_doi_id: entry._id },
+      ...(entry.appointment_id ? [{ appointment_id: entry.appointment_id }] : [])
+    ]
+  })
   if (daCo) return daCo
 
   // Lượt ONLINE: hồ sơ phải mang CẢ `appointment_id`. Thiếu nó thì bệnh nhân không xem được
@@ -411,7 +569,7 @@ export async function luuBuoc({ queueId, docId, doctorUserId, buoc, payload = {}
     capNhat.huong_dan_dieu_tri = payload.huong_dan_dieu_tri?.trim() || null
     capNhat.ghi_chu = payload.ghi_chu?.trim() || null
     capNhat.ngay_tai_kham = payload.ngay_tai_kham ? new Date(payload.ngay_tai_kham) : null
-    capNhat.chi_dinh_tai_kham = Boolean(payload.ngay_tai_kham)
+    capNhat.chi_dinh_tai_kham = payload.chi_dinh_tai_kham === true || Boolean(payload.ngay_tai_kham)
     // D78/D80 — luôn ghi đè cả hai field cùng lúc: nếu bác sĩ sửa lại từ 'chuyen_vien' về
     // 'dieu_tri_thuong', thong_tin_chuyen cũ (null từ kiemTraKetCuc) phải xóa theo, không để
     // sót thông tin chuyển viện của một quyết định đã bị đổi ý.
@@ -522,7 +680,12 @@ async function timBenhNhanKeTiep(docId, now = new Date()) {
  */
 export async function hoanTatPhienKham({ queueId, docId, doctorUserId, now = new Date() }) {
   const entry = await getOwnedQueueForExam(queueId, docId)
-  const hoSo = await KetQuaKham.findOne({ hang_doi_id: entry._id })
+  const hoSo = await KetQuaKham.findOne({
+    $or: [
+      { hang_doi_id: entry._id },
+      ...(entry.appointment_id ? [{ appointment_id: entry.appointment_id }] : [])
+    ]
+  })
   if (!hoSo) throw loi(409, 'Chưa có hồ sơ khám cho lượt này')
 
   // Phát hiện qua e2e Task 7 (check 10): thiếu chặn này thì gọi complete lần 2 vẫn trả 200,
@@ -699,7 +862,12 @@ export async function dinhChinhHoSo({ queueId, docId, doctorUserId, thayDoi = {}
   if (!reason) throw loi(400, 'Cần nhập lý do khi đính chính hồ sơ')
 
   const entry = await getOwnedQueueForExam(queueId, docId)
-  const hoSo = await KetQuaKham.findOne({ hang_doi_id: entry._id })
+  const hoSo = await KetQuaKham.findOne({
+    $or: [
+      { hang_doi_id: entry._id },
+      ...(entry.appointment_id ? [{ appointment_id: entry.appointment_id }] : [])
+    ]
+  })
   if (!hoSo) throw loi(409, 'Chưa có hồ sơ khám cho lượt này')
   if (hoSo.status !== 'da_xac_nhan') {
     throw loi(409, 'Chỉ đính chính hồ sơ đã xác nhận — hồ sơ chưa xác nhận thì sửa trực tiếp qua các bước')
