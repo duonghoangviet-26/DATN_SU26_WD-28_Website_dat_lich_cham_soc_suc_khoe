@@ -13,6 +13,7 @@ import ReviewModal from '@/components/client/ReviewModal'
 import { ContentTransition, RouteTransition } from '@/components/client/ClientMotion'
 import { useAuth } from '@/context/AuthContext'
 import { authService } from '@/services/auth.service'
+import { resolveMediaUrl } from '@/utils/media'
 import {
   getLatestAllowedBirthDateInput,
   normalizePersonName,
@@ -1262,6 +1263,47 @@ export default function Profile() {
                                 )}
                               </div>
 
+                              {/* Vitals */}
+                              {result.ket_qua.sinh_hieu && (
+                                <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-3 flex items-center gap-1.5">
+                                    <span>❤️</span> Sinh hiệu
+                                  </p>
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    {result.ket_qua.sinh_hieu.nhip_tim != null && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Nhịp tim</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.nhip_tim} <span className="text-xs font-medium text-slate-500">bpm</span></p>
+                                      </div>
+                                    )}
+                                    {result.ket_qua.sinh_hieu.huyet_ap != null && result.ket_qua.sinh_hieu.huyet_ap !== '' && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Huyết áp</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.huyet_ap} <span className="text-xs font-medium text-slate-500">mmHg</span></p>
+                                      </div>
+                                    )}
+                                    {result.ket_qua.sinh_hieu.nhiet_do != null && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Nhiệt độ</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.nhiet_do} <span className="text-xs font-medium text-slate-500">°C</span></p>
+                                      </div>
+                                    )}
+                                    {result.ket_qua.sinh_hieu.can_nang != null && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Cân nặng</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.can_nang} <span className="text-xs font-medium text-slate-500">kg</span></p>
+                                      </div>
+                                    )}
+                                    {result.ket_qua.sinh_hieu.chieu_cao != null && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Chiều cao</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.chieu_cao} <span className="text-xs font-medium text-slate-500">cm</span></p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Endoscopic / Service Result Images */}
                               {result.ket_qua.hinh_anh_noi_soi && result.ket_qua.hinh_anh_noi_soi.length > 0 && (
                                 <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50/60 p-3.5">
@@ -1282,7 +1324,7 @@ export default function Profile() {
                                         className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-sky-500 hover:shadow-md text-left"
                                       >
                                         <img
-                                          src={img.url}
+                                          src={resolveMediaUrl(img.url) || ''}
                                           alt={img.mo_ta || `Ảnh nội soi ${idx + 1}`}
                                           className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                                         />
@@ -2148,7 +2190,7 @@ export default function Profile() {
                             className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-sky-500 hover:shadow-md text-left"
                           >
                             <img
-                              src={img.url}
+                              src={resolveMediaUrl(img.url) || ''}
                               alt={img.mo_ta || `Ảnh nội soi ${idx + 1}`}
                               className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                             />
@@ -2365,7 +2407,7 @@ export default function Profile() {
                 <span>📸</span> Hình ảnh nội soi chi tiết
               </p>
               <img
-                src={activeEndoscopyImage.url}
+                src={resolveMediaUrl(activeEndoscopyImage.url) || ''}
                 alt={activeEndoscopyImage.mo_ta || 'Ảnh nội soi'}
                 className="max-h-[70vh] w-auto rounded-xl object-contain shadow-sm border border-slate-100"
               />

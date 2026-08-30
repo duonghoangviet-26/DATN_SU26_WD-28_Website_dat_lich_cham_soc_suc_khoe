@@ -40,6 +40,13 @@ export interface PatientRecordDetail extends PatientRecordListItem {
     ghi_chu?: string | null
     ngay_tai_kham?: string | null
     ngay_tao: string
+    sinh_hieu?: {
+      can_nang?: number | null
+      chieu_cao?: number | null
+      huyet_ap?: string | null
+      nhiet_do?: number | null
+      nhip_tim?: number | null
+    } | null
     thuoc: Array<{
       ten_thuoc?: string
       lieu_luong?: string
@@ -86,6 +93,13 @@ export interface MedicalResultItem {
     ghi_chu?: string | null
     ngay_tai_kham?: string | null
     ngay_tao: string
+    sinh_hieu?: {
+      can_nang?: number | null
+      chieu_cao?: number | null
+      huyet_ap?: string | null
+      nhiet_do?: number | null
+      nhip_tim?: number | null
+    } | null
     thuoc: Array<{
       ten_thuoc?: string
       lieu_luong?: string

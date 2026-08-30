@@ -1,4 +1,4 @@
-import { LichHen, KetQuaKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen, KetQuaKhamTai, KetQuaKhamMui, KetQuaKhamHong } from '../../models/index.js'
+import { LichHen, KetQuaKham, SinhHieuKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen, KetQuaKhamTai, KetQuaKhamMui, KetQuaKhamHong } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { buildSlotDateTime } from '../../utils/clinicTime.js'
 import { withOptionalTransaction } from '../../services/bookingPaymentState.service.js'
@@ -145,7 +145,7 @@ export async function listMedicalResults(req, res) {
     const appointmentIds = appointments.map((a) => a._id)
     const doctorIds = [...new Set(appointments.map((a) => a.doctor_id.toString()))]
 
-    const [docList, examResults, taiResults, muiResults, hongResults] = await Promise.all([
+    const [docList, examResults, taiResults, muiResults, hongResults, sinhHieuResults] = await Promise.all([
       BacSi.find({ _id: { $in: doctorIds } })
         .populate('user_id', 'ho_ten anh_dai_dien')
         .select('user_id')
@@ -154,10 +154,12 @@ export async function listMedicalResults(req, res) {
       KetQuaKhamTai.find({ appointment_id: { $in: appointmentIds } }).lean(),
       KetQuaKhamMui.find({ appointment_id: { $in: appointmentIds } }).lean(),
       KetQuaKhamHong.find({ appointment_id: { $in: appointmentIds } }).lean(),
+      SinhHieuKham.find({ appointment_id: { $in: appointmentIds } }).lean(),
     ])
 
     const docMap = Object.fromEntries(docList.map((d) => [d._id.toString(), d.user_id]))
     const examResultMap = Object.fromEntries(examResults.map((r) => [r.appointment_id.toString(), r]))
+    const sinhHieuMap = Object.fromEntries(sinhHieuResults.map((s) => [s.appointment_id.toString(), s]))
 
     const specialtyImageMap = new Map()
     const appendSpecialtyList = (list) => {
@@ -212,6 +214,7 @@ export async function listMedicalResults(req, res) {
           ghi_chu: ketQua.ghi_chu,
           ngay_tai_kham: ketQua.ngay_tai_kham,
           ngay_tao: ketQua.ngay_tao,
+          sinh_hieu: sinhHieuMap[a._id.toString()] || null,
           thuoc: thuoc,
           hinh_anh_noi_soi: hinhAnhNoiSoi,
         } : null
@@ -273,12 +276,13 @@ export async function getRecord(req, res) {
     const a = await LichHen.findOne({ _id: req.params.id, ...ownedByUser(req.user.id) }).lean()
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
 
-    const [doc, ketQua, taiResults, muiResults, hongResults] = await Promise.all([
+    const [doc, ketQua, taiResults, muiResults, hongResults, sinhHieu] = await Promise.all([
       BacSi.findById(a.doctor_id).populate('user_id', 'ho_ten anh_dai_dien so_dien_thoai').select('user_id').lean(),
       a.status === 'completed' ? KetQuaKham.findOne({ appointment_id: a._id }).lean() : null,
       a.status === 'completed' ? KetQuaKhamTai.find({ appointment_id: a._id }).lean() : [],
       a.status === 'completed' ? KetQuaKhamMui.find({ appointment_id: a._id }).lean() : [],
       a.status === 'completed' ? KetQuaKhamHong.find({ appointment_id: a._id }).lean() : [],
+      a.status === 'completed' ? SinhHieuKham.findOne({ appointment_id: a._id }).lean() : null,
     ])
 
     let prescription = null
@@ -324,6 +328,7 @@ export async function getRecord(req, res) {
         ghi_chu:            ketQua.ghi_chu,
         ngay_tai_kham:      ketQua.ngay_tai_kham,
         ngay_tao:           ketQua.ngay_tao,
+        sinh_hieu: sinhHieu || null,
         thuoc: prescription?.items ?? [],
         hinh_anh_noi_soi: hinhAnhNoiSoi,
       } : null,
