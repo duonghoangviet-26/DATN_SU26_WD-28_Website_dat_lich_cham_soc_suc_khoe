@@ -82,7 +82,7 @@ export default function ForgotPassword() {
                 <span className="spinner h-4 w-4" />
                 Đang gửi...
               </span>
-            ) : 'Gui yeu cau dat lai mat khau'}
+            ) : 'Gửi yêu cầu đặt lại mật khẩu'}
           </button>
 
           <div className="flex items-center justify-between border-t border-slate-50 pt-4 text-xs">

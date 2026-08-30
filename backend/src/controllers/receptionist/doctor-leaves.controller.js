@@ -63,6 +63,7 @@ function getActorUserId(req) {
 // tưởng nhầm mình duyệt được rồi bấm phải 403.
 export async function listPendingLeaves(req, res) {
   try {
+    await tuDongHuyDonNghiQuaHan()
     const leaves = await NghiPhepBacSi.find({ trang_thai: 'cho_duyet' })
       .populate({
         path: 'bac_si_id',
