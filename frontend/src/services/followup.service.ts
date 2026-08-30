@@ -2,6 +2,7 @@ import axiosInstance from './axiosInstance';
 
 export interface FollowUpRecord {
     lich_hen_goc_id: string;
+    hang_doi_id?: string;
     ngay_kham_cu: string;
     chan_doan: string;
     ngay_tai_kham: string | null;
@@ -38,6 +39,6 @@ export const followupService = {
     // Dành cho lễ tân
     getPendingFollowUps: async (): Promise<ReceptionistFollowUpRecord[]> => {
         const res = await axiosInstance.get('/receptionist/followup');
-        return res.data.data;
+        return Array.isArray(res.data?.data?.data) ? res.data.data.data : (Array.isArray(res.data?.data) ? res.data.data : []);
     }
 };

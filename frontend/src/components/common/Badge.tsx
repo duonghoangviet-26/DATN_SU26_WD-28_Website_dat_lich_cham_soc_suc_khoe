@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-type Color = 'green' | 'red' | 'blue' | 'yellow' | 'gray'
+type Color = 'green' | 'red' | 'blue' | 'yellow' | 'gray' | 'purple'
 
 interface Props {
   color?: Color
@@ -13,6 +13,7 @@ const colorMap: Record<Color, string> = {
   blue: 'bg-blue-100 text-blue-700',
   yellow: 'bg-yellow-100 text-yellow-700',
   gray: 'bg-slate-100 text-slate-600',
+  purple: 'bg-purple-100 text-purple-700',
 }
 
 export default function Badge({ color = 'gray', children }: Props) {

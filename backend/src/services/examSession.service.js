@@ -258,23 +258,46 @@ export async function layPhienKham({ queueId, docId }) {
   ])
 
   // ── Xác định ca tái khám và lấy hồ sơ đợt trước ─────────────────────────────
+  // Với bệnh nhân offline tái khám (không có lichHen), đọc trực tiếp từ HangDoi.loai_lich_hen
   const isTaiKham = lichHen?.loai_lich_hen === 'tai_kham' ||
     !!lichHen?.lich_hen_goc_id ||
-    !!(lichHen?.ly_do_kham && lichHen.ly_do_kham.toLowerCase().includes('tái khám'))
+    !!(lichHen?.ly_do_kham && lichHen.ly_do_kham.toLowerCase().includes('tái khám')) ||
+    entry.loai_lich_hen === 'tai_kham' ||
+    !!entry.lich_hen_goc_id
 
   let hoSoCu = null
   if (isTaiKham) {
     let hoSoCuDoc = null
 
+    // ── Ưu tiên 0: Tìm trực tiếp theo lich_hen_goc_id từ HangDoi (offline tái khám) ──────────
+    // Với bệnh nhân offline tái khám, lễ tân đã ghi lich_hen_goc_id vào HangDoi khi tiếp nhận.
+    // Đây là cách chính xác nhất cho offline vì không có lichHen (appointment_id = null).
+    if (!hoSoCuDoc && entry.lich_hen_goc_id && !entry.appointment_id) {
+      // lich_hen_goc_id trong HangDoi trỏ đến lịch hẹn ban đầu → tìm KetQuaKham theo appointment_id đó
+      hoSoCuDoc = await KetQuaKham.findOne({
+        appointment_id: entry.lich_hen_goc_id,
+        _id: { $ne: hoSo?._id ?? new mongoose.Types.ObjectId('000000000000000000000000') },
+      }).sort({ ngay_tao: -1 }).lean()
+      // Nếu không có lịch hẹn (do lần đầu cũng khám offline), tìm theo ho_so_benh_nhan_id
+      if (!hoSoCuDoc && entry.ho_so_benh_nhan_id) {
+        hoSoCuDoc = await KetQuaKham.findOne({
+          ho_so_benh_nhan_id: entry.ho_so_benh_nhan_id,
+          $or: [{ status: 'da_xac_nhan' }, { buoc_hien_tai: 'hoan_tat' }],
+          _id: { $ne: hoSo?._id ?? new mongoose.Types.ObjectId('000000000000000000000000') },
+        }).sort({ ngay_tao: -1 }).lean()
+      }
+    }
+
     // ── Ưu tiên 1: Tìm trực tiếp theo appointment_id của lịch hẹn gốc ──────────
     // Đây là cách chính xác nhất vì `lich_hen_goc_id` trỏ thẳng đến lịch hẹn ban đầu
     // (có thể `ho_so_benh_nhan_id` khác nhau do bệnh nhân có nhiều hồ sơ)
-    if (lichHen?.lich_hen_goc_id) {
+    if (!hoSoCuDoc && lichHen?.lich_hen_goc_id) {
       hoSoCuDoc = await KetQuaKham.findOne({
         appointment_id: lichHen.lich_hen_goc_id,
         _id: { $ne: hoSo?._id ?? new mongoose.Types.ObjectId('000000000000000000000000') },
       }).sort({ ngay_tao: -1 }).lean()
     }
+
 
     // ── Ưu tiên 2: Tìm theo ho_so_benh_nhan_id của LichHen gốc ──────────────────
     // Một số lịch hẹn gốc có ho_so_benh_nhan_id khác với HangDoi hiện tại

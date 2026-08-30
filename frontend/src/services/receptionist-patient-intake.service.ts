@@ -27,6 +27,19 @@ export interface PatientProfile {
   luot_dang_cho_hom_nay?: ActiveQueue | null
   sua_gan_nhat?: TimelineRow | null
   lich_su_kham?: VisitHistory | null
+  pending_follow_ups?: PendingFollowUp[]
+}
+
+export interface PendingFollowUp {
+  _id: string
+  chan_doan: string
+  ngay_tai_kham?: string | null
+  appointment_id?: string | null
+  hang_doi_id?: string | null
+  bac_si_cu?: {
+    id: string
+    ho_ten: string | null
+  } | null
 }
 
 export interface VisitHistory {
@@ -355,15 +368,27 @@ export const receptionistPatientIntakeService = {
     return response.data.data as CentralOfflineCapacity
   },
 
+  async getDoctorsForIntake(specialtyId: string) {
+    const response = await axiosInstance.get<ApiResponse<any[]>>('/receptionist/offline-queue/doctors', {
+      params: { specialty_id: specialtyId }
+    })
+    return response.data.data
+  },
+
   async intakeCentralOffline(payload: {
     ho_so_benh_nhan_id: string
     specialty_id: string
     xac_nhan_canh_bao?: boolean
+    lich_hen_goc_id?: string
+    ket_qua_kham_id?: string
+    force_doctor_id?: string
   }) {
     const response = await axiosInstance.post<ApiResponse<{
       entry: {
         _id: string
-        trang_thai: 'cho_dieu_phoi'
+        trang_thai: 'cho_dieu_phoi' | 'dang_cho'
+        doctor_id?: string | null
+        phong_kham?: string | null
         checkin_time?: string
         so_thu_tu_checkin?: number | null
         ma_so_thu_tu?: string | null

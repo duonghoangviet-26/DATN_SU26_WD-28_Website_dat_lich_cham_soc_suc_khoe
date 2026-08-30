@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { GiaDinh, HangDoi, HoSoBenhNhan, LichHen, NguoiDung, NhatKyThaoTac, ThanhVien } from '../../models/index.js'
+import { GiaDinh, HangDoi, HoSoBenhNhan, LichHen, NguoiDung, NhatKyThaoTac, ThanhVien, KetQuaKham } from '../../models/index.js'
 import { created, fail, ok } from '../../utils/response.js'
 import { startOfDayUtc } from '../../utils/clinicTime.js'
 import {
@@ -194,6 +194,7 @@ function serializeProfile(profile) {
     luot_dang_cho_hom_nay: profile.luot_dang_cho_hom_nay ?? null,
     sua_gan_nhat: profile.sua_gan_nhat ?? null,
     lich_su_kham: profile.lich_su_kham ?? null,
+    pending_follow_ups: profile.pending_follow_ups ?? [],
   }
 }
 
@@ -487,6 +488,32 @@ export const searchPatientProfiles = async (req, res) => {
     // Gom "khám lần thứ N" cho CẢ danh sách trong 2 truy vấn — tránh N+1 (E-10).
     const lichSuKhamByProfile = await layLichSuKhamChoNhieuHoSo(profileIds)
 
+    const pendingFollowUps = await KetQuaKham.find({
+      ho_so_benh_nhan_id: { $in: profileIds },
+      chi_dinh_tai_kham: true,
+      da_dat_lich_tai_kham: false
+    })
+      .select('_id ho_so_benh_nhan_id chan_doan ngay_tai_kham appointment_id hang_doi_id bac_si_phu_trach_id')
+      .populate({ path: 'bac_si_phu_trach_id', select: 'user_id', populate: { path: 'user_id', select: 'ho_ten' } })
+      .lean()
+
+    const pendingFollowUpByProfile = new Map()
+    for (const kq of pendingFollowUps) {
+      const key = String(kq.ho_so_benh_nhan_id)
+      if (!pendingFollowUpByProfile.has(key)) pendingFollowUpByProfile.set(key, [])
+      pendingFollowUpByProfile.get(key).push({
+        _id: String(kq._id),
+        chan_doan: kq.chan_doan,
+        ngay_tai_kham: kq.ngay_tai_kham,
+        appointment_id: kq.appointment_id ? String(kq.appointment_id) : null,
+        hang_doi_id: kq.hang_doi_id ? String(kq.hang_doi_id) : null,
+        bac_si_cu: kq.bac_si_phu_trach_id ? {
+          id: String(kq.bac_si_phu_trach_id._id ?? kq.bac_si_phu_trach_id),
+          ho_ten: kq.bac_si_phu_trach_id.user_id?.ho_ten ?? null,
+        } : null,
+      })
+    }
+
     for (const profile of profiles) {
       const related = appointments.filter((appointment) => appointmentMatchesProfile(appointment, profile))
       // Chỉ tự gắn lịch cũ theo SĐT khi số này chỉ có đúng một hồ sơ. Nếu có nhiều hồ sơ,
@@ -508,6 +535,7 @@ export const searchPatientProfiles = async (req, res) => {
         : null
       profile.sua_gan_nhat = suaGanNhatByProfile.get(String(profile._id)) ?? null
       profile.lich_su_kham = lichSuKhamByProfile.get(String(profile._id)) ?? null
+      profile.pending_follow_ups = pendingFollowUpByProfile.get(String(profile._id)) ?? []
     }
 
     const ambiguousAppointments = profiles.length > 1

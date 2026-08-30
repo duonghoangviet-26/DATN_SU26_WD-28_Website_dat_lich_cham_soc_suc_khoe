@@ -123,6 +123,7 @@ export async function getAllFollowUps(req, res) {
       const doctor = doctorMap[doctorId?.toString()]
       
       return {
+        ket_qua_kham_id: kq._id,
         lich_hen_goc_id: lichGocId,
         hang_doi_id: hangDoiId, // thêm hang_doi_id nếu cần map lại
         ten_khach: tenKhach,

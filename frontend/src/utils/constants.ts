@@ -133,6 +133,7 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
     vnpay: "VNPay",
     cash: "Tiền mặt",
     bank: "Chuyển khoản",
+    mien_phi_tai_kham: "Miễn phí (Tái khám)",
 };
 
 export const NOTIFICATION_TARGET_LABEL: Record<string, string> = {

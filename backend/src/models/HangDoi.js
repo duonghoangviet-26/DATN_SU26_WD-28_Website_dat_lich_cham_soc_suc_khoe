@@ -132,6 +132,8 @@ const queueSchema = new mongoose.Schema(
     ngay_checkin_key: { type: String, default: null, trim: true },
     so_thu_tu_checkin: { type: Number, default: null, min: 1 },
     ma_so_thu_tu: { type: String, default: null, trim: true, maxlength: 32 },
+    loai_lich_hen: { type: String, enum: ['kham_moi', 'tai_kham'], default: 'kham_moi' },
+    lich_hen_goc_id: { type: mongoose.Schema.Types.ObjectId, ref: 'LichHen', default: null },
 
     // Vòng đời
     // cho_dich_vu: benh nhan di lam dich vu bo sung (noi soi, xet nghiem...) roi quay lai hang doi

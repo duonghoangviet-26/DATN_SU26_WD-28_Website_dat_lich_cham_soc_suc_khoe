@@ -199,9 +199,11 @@ appointmentSchema.pre('validate', function () {
     if (!this.slot_id) throw new Error('Kham tai nha (home) bat buoc co slot_id')
     this.phong_kham = null
   } else if (this.loai_kham === 'clinic') {
-    if (!this.doctor_id) throw new Error('Kham tai phong kham (clinic) bat buoc co doctor_id')
-    if (!this.schedule_id) throw new Error('Kham tai phong kham (clinic) bat buoc co schedule_id')
-    if (!this.slot_id) throw new Error('Kham tai phong kham (clinic) bat buoc co slot_id')
+    if (this.hinh_thuc_dat_lich !== 'offline') {
+      if (!this.doctor_id) throw new Error('Kham tai phong kham (clinic) bat buoc co doctor_id')
+      if (!this.schedule_id) throw new Error('Kham tai phong kham (clinic) bat buoc co schedule_id')
+      if (!this.slot_id) throw new Error('Kham tai phong kham (clinic) bat buoc co slot_id')
+    }
     this.dia_chi_kham = null
     this.service_id = null
     this.ket_qua_url = null

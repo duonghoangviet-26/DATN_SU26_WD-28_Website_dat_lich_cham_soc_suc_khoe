@@ -208,7 +208,7 @@ export async function list(req, res) {
       return {
         id: e._id,
         appointment_id: e.appointment_id ? e.appointment_id._id : null,
-        loai_lich_hen: e.appointment_id ? e.appointment_id.loai_lich_hen : null,
+        loai_lich_hen: e.appointment_id ? (e.appointment_id.loai_lich_hen ?? e.loai_lich_hen ?? 'kham_moi') : (e.loai_lich_hen ?? 'kham_moi'),
         nguon: e.nguon,
         ten_benh_nhan: e.ten_benh_nhan,
         tuoi: e.tuoi,

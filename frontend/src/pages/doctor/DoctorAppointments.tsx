@@ -5,6 +5,7 @@ import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
 import Icon from '@/components/admin/icons'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import type { DoctorAppointmentDetail, AppointmentStatus, KetQuaKhamStatus } from '@/types'
 import {
@@ -120,6 +121,10 @@ export default function DoctorAppointments() {
   )
   // Chọn 1 ngày cụ thể — dùng chung mọi tab; riêng tab "Đã qua" còn dùng để "mở khóa" hiển thị.
   const [filterDate, setFilterDate] = useState('')
+  
+  // ── Phân trang ────────────────────────────────────────────────────────────────
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 10
 
   // ── UI state ──────────────────────────────────────────────────────────────────
   const [expandedId, setExpandedId] = useState<string | number | null>(null)
@@ -154,6 +159,11 @@ export default function DoctorAppointments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeTab, filterStatus, searchTerm])
 
+  // Reset về trang 1 khi đổi tab hoặc bộ lọc
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [timeTab, searchTerm, filterStatus, filterDate])
+
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
@@ -172,13 +182,9 @@ export default function DoctorAppointments() {
     all: all.length,
   }), [all, todayStr, upcomingWorkingDays])
 
-  // Tab "Đã qua" (lịch sử) mặc định RỖNG — chỉ hiện khi có từ khóa tìm kiếm hoặc đã chọn 1
-  // ngày cụ thể (quyết định 2026-07-16, khác thiết kế 07-11 vốn hiện sẵn toàn bộ).
-  const historyLocked = timeTab === 'past' && !searchTerm.trim() && !filterDate
+  const historyLocked = false
 
   const filtered = useMemo(() => {
-    if (historyLocked) return []
-
     let list = all
     if (timeTab === 'today') {
       list = list.filter((a) => ngayKhamLocal(a) === todayStr)
@@ -200,20 +206,29 @@ export default function DoctorAppointments() {
       )
     }
     return list
-  }, [all, timeTab, filterStatus, filterDate, searchTerm, todayStr, upcomingWorkingDays, historyLocked])
+  }, [all, timeTab, filterStatus, filterDate, searchTerm, todayStr, upcomingWorkingDays])
 
   const hasActiveFilter = Boolean(filterDate || filterStatus || searchTerm.trim())
 
-  const displayed = [...filtered].sort((a, b) => {
-    const dateCompare = b.ngay_kham.localeCompare(a.ngay_kham)
-    return dateCompare !== 0 ? dateCompare : b.gio_kham.localeCompare(a.gio_kham)
-  })
+  const displayed = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const dateCompare = b.ngay_kham.localeCompare(a.ngay_kham)
+      return dateCompare !== 0 ? dateCompare : b.gio_kham.localeCompare(a.gio_kham)
+    })
+  }, [filtered])
 
-  const emptyMessage = historyLocked
-    ? 'Nhập từ khóa hoặc chọn ngày cụ thể để xem lịch sử khám.'
-    : hasActiveFilter
-      ? 'Không có lịch hẹn nào khớp với bộ lọc.'
-      : 'Không có lịch hẹn nào.'
+  const totalItems = displayed.length
+  const totalPages = Math.ceil(totalItems / pageSize) || 1
+  const safePage = Math.min(currentPage, totalPages)
+
+  const paginatedItems = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return displayed.slice(start, start + pageSize)
+  }, [displayed, safePage, pageSize])
+
+  const emptyMessage = hasActiveFilter
+    ? 'Không có lịch hẹn nào khớp với bộ lọc.'
+    : 'Không có lịch hẹn nào.'
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Helper: pending đã quá ngày
@@ -621,7 +636,7 @@ export default function DoctorAppointments() {
                   </thead>
 
                   <tbody className="divide-y divide-slate-100">
-                    {displayed.length === 0 ? (
+                    {totalItems === 0 ? (
                       <tr>
                         <td colSpan={6} className="py-16 text-center">
                           <div className="flex flex-col items-center gap-3">
@@ -633,7 +648,7 @@ export default function DoctorAppointments() {
                         </td>
                       </tr>
                     ) : (
-                      displayed.map((appt) => (
+                      paginatedItems.map((appt) => (
                         <React.Fragment key={appt.id}>
                           {/* ── Row chính ── */}
                           <tr
@@ -739,7 +754,7 @@ export default function DoctorAppointments() {
 
             {/* ── Card list — dưới md (<768px) ── */}
             <div className="space-y-3 md:hidden">
-              {displayed.length === 0 ? (
+              {totalItems === 0 ? (
                 <div className="card flex flex-col items-center gap-3 py-16 text-center">
                   <Icon name="calendar" className="h-10 w-10 text-slate-200" />
                   <p className="text-base font-medium text-slate-500">
@@ -747,7 +762,7 @@ export default function DoctorAppointments() {
                   </p>
                 </div>
               ) : (
-                displayed.map((appt) => (
+                paginatedItems.map((appt) => (
                   <div key={appt.id} className="card p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -817,6 +832,21 @@ export default function DoctorAppointments() {
                 ))
               )}
             </div>
+
+            {/* ── Phân trang ── */}
+            {!loading && !error && totalItems > 0 && (
+              <div className="mt-4">
+                <TablePaginationFooter
+                  currentPage={safePage}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  currentItemCount={paginatedItems.length}
+                  pageSize={pageSize}
+                  itemLabel="lịch hẹn"
+                  onPageChange={(page) => setCurrentPage(page)}
+                />
+              </div>
+            )}
           </>
         )}
 

@@ -199,6 +199,18 @@ export interface DoctorSelfProfile {
     giai_thuong: { ten: string; nam: number | null }[];
 }
 
+export interface PendingFollowUp {
+  _id: string
+  chan_doan: string
+  ngay_tai_kham?: string | null
+  appointment_id?: string | null
+  hang_doi_id?: string | null
+  bac_si_cu?: {
+    id: string
+    ho_ten: string | null
+  } | null
+}
+
 export interface ClinicItem {
     _id: string;
     ten: string;
@@ -1075,7 +1087,6 @@ export interface QueueActionResult {
 export interface DoctorAppointmentDetail {
     id: string | number; // Mongo ObjectId từ API; mock cũ có thể dùng number
     ma_lich_hen?: string | null;
-    loai_kham: "clinic" | "home";
     loai_lich_hen?: 'kham_moi' | 'tai_kham';
     is_tai_kham?: boolean;
     benh_nhan: string;

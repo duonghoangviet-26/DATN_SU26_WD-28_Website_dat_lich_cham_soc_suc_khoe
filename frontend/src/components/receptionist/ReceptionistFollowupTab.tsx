@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { followupService, type ReceptionistFollowUpRecord } from '@/services/followup.service';
 
-export default function ReceptionistFollowupTab() {
+export default function ReceptionistFollowupTab({
+  onSearchPhone,
+}: {
+  onSearchPhone?: (phone: string) => void;
+}) {
   const [followups, setFollowups] = useState<ReceptionistFollowUpRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,13 +57,14 @@ export default function ReceptionistFollowupTab() {
                 <th className="px-4 py-3">Bác sĩ khám</th>
                 <th className="px-4 py-3">Ngày tái khám dự kiến</th>
                 <th className="px-4 py-3">Chẩn đoán</th>
+                <th className="px-4 py-3 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Đang tải dữ liệu...</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Đang tải dữ liệu...</td></tr>
               ) : followups.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Không có danh sách tái khám nào cần xử lý.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">Không có danh sách tái khám nào cần xử lý.</td></tr>
               ) : followups.map((item) => (
                 <tr key={item.lich_hen_goc_id} className="align-top hover:bg-slate-50">
                   <td className="px-4 py-3">
@@ -92,6 +97,15 @@ export default function ReceptionistFollowupTab() {
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-600">
                     {item.chan_doan}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onSearchPhone?.(item.so_dien_thoai)}
+                      className="inline-flex min-h-8 items-center justify-center rounded-lg bg-brand-600 px-3 text-xs font-bold text-white hover:bg-brand-700"
+                    >
+                      Khám ngay
+                    </button>
                   </td>
                 </tr>
               ))}

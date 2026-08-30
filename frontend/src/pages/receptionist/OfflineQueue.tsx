@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { EmptyBlock, LoadingBlock, MetricCard, PageShell, Panel, ReceptionistHeader, StatusBadge, TableFrame } from '@/components/receptionist/ReceptionistUI'
 import { DispatchCandidate, DispatchSuggestion, OfflineQueueRow, receptionistOfflineQueueService } from '@/services/receptionist-offline-queue.service'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
@@ -170,10 +170,17 @@ export default function OfflineQueue() {
                   const suggestion = suggestionByQueueId.get(row.id)
                   const best = suggestion?.de_xuat_tot_nhat
                   return (
-                    <>
-                    <tr key={row.id} className="align-top hover:bg-slate-50">
+                    <Fragment key={row.id}>
+                    <tr className="align-top hover:bg-slate-50">
                       <td className="px-4 py-3">
-                        <p className="font-bold text-slate-950">{row.ma_so_thu_tu || '-'}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-slate-950">{row.ma_so_thu_tu || '-'}</p>
+                          {(row.loai_lich_hen === 'tai_kham' || row.lich_hen_goc_id) && (
+                            <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-extrabold text-purple-800 border border-purple-200" title="Khách tái khám">
+                              🔁 Tái khám
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-1 font-semibold text-slate-900">{row.ten_benh_nhan}</p>
                         <p className="mt-1 text-xs text-slate-500">{row.so_dien_thoai || 'Chưa có SĐT'} - vào lúc {formatTime(row.thoi_diem_vao_hang_doi_trung_tam)}</p>
                       </td>
@@ -276,7 +283,7 @@ export default function OfflineQueue() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   )
                 })}
               </tbody>

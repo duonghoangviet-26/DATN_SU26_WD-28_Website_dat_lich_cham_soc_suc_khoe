@@ -150,7 +150,7 @@ export async function examQueue(req, res) {
     const apptIds = entries.filter((e) => e.appointment_id).map((e) => e.appointment_id)
     const profileIds = entries.filter((e) => e.ho_so_benh_nhan_id).map((e) => e.ho_so_benh_nhan_id)
     const memberIds = entries.filter((e) => e.member_id).map((e) => e.member_id)
-    const [profiles, members, results] = await Promise.all([
+    const [profiles, members, results, appts, prevKetQuaKhams] = await Promise.all([
       profileIds.length
         ? HoSoBenhNhan.find({ _id: { $in: profileIds } }).select('ho_ten so_dien_thoai ngay_sinh gioi_tinh nhom_mau di_ung benh_nen dia_chi ghi_chu').lean()
         : [],
@@ -160,11 +160,19 @@ export async function examQueue(req, res) {
       KetQuaKham.find({
         $or: [{ hang_doi_id: { $in: hangDoiIds } }, { appointment_id: { $in: apptIds } }],
       }).select('hang_doi_id appointment_id status').lean(),
+      apptIds.length
+        ? LichHen.find({ _id: { $in: apptIds } }).select('loai_lich_hen lich_hen_goc_id ly_do_kham').lean()
+        : [],
+      profileIds.length
+        ? KetQuaKham.find({ ho_so_benh_nhan_id: { $in: profileIds } }).select('ho_so_benh_nhan_id').lean()
+        : [],
     ])
     const profileById = new Map(profiles.map((profile) => [String(profile._id), profile]))
     const memberById = new Map(members.map((member) => [String(member._id), member]))
+    const apptById = new Map(appts.map((a) => [String(a._id), a]))
     const kqByHangDoi = new Map(results.filter((r) => r.hang_doi_id).map((r) => [String(r.hang_doi_id), r]))
     const kqByAppt = new Map(results.filter((r) => r.appointment_id).map((r) => [String(r.appointment_id), r]))
+    const profileHasPrevExam = new Set(prevKetQuaKhams.map((k) => String(k.ho_so_benh_nhan_id)))
 
     // Bậc ưu tiên tính ĐỘNG (rule mục 6) — `muc_uu_tien` trong DB chỉ là snapshot lúc
     // check-in, dùng nó để xếp thứ tự sẽ phạt oan người đến sớm.
@@ -176,11 +184,21 @@ export async function examQueue(req, res) {
         const member = e.member_id ? memberById.get(String(e.member_id)) : null
         const ngaySinh = e.ngay_sinh ?? member?.ngay_sinh ?? profile?.ngay_sinh ?? null
         const kq = kqByHangDoi.get(String(e._id)) || (e.appointment_id ? kqByAppt.get(String(e.appointment_id)) : null)
+        const appt = e.appointment_id ? apptById.get(String(e.appointment_id)) : null
+
+        const isTaiKham = e.loai_lich_hen === 'tai_kham' ||
+          !!e.lich_hen_goc_id ||
+          appt?.loai_lich_hen === 'tai_kham' ||
+          !!appt?.lich_hen_goc_id ||
+          !!(appt?.ly_do_kham && appt.ly_do_kham.toLowerCase().includes('tái khám')) ||
+          (e.ho_so_benh_nhan_id && profileHasPrevExam.has(String(e.ho_so_benh_nhan_id)))
+
         return {
           id: e._id,
           appointment_id: e.appointment_id ?? null,
           ho_so_benh_nhan_id: e.ho_so_benh_nhan_id ?? null,
           nguon: e.nguon,
+          loai_lich_hen: isTaiKham ? 'tai_kham' : 'kham_moi',
           ten_benh_nhan: e.ten_benh_nhan,
           so_dien_thoai: e.so_dien_thoai ?? profile?.so_dien_thoai ?? null,
           ngay_sinh: ngaySinh,
@@ -200,6 +218,7 @@ export async function examQueue(req, res) {
           trang_thai_tong_hop: trangThaiTongHop(e, kq),
         }
       })
+    return ok(res, rows)
     return ok(res, rows)
   } catch (err) { return fail(res, 500, err.message) }
 }

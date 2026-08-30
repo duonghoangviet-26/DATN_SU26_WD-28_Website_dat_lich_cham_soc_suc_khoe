@@ -86,7 +86,7 @@ function buildSortedAppointmentIdsPipeline(query, skip, limit) {
               {
                 case: {
                   $and: [
-                    { $in: ['$status', ACTIVE_OPERATIONAL_STATUSES] },
+                    { $in: ['$status', [...ACTIVE_OPERATIONAL_STATUSES, 'completed']] },
                     { $gte: ['$ngay_kham', today] },
                   ],
                 },
@@ -95,17 +95,16 @@ function buildSortedAppointmentIdsPipeline(query, skip, limit) {
               {
                 case: {
                   $and: [
-                    { $in: ['$status', ACTIVE_OPERATIONAL_STATUSES] },
+                    { $in: ['$status', [...ACTIVE_OPERATIONAL_STATUSES, 'completed']] },
                     { $lt: ['$ngay_kham', today] },
                   ],
                 },
                 then: 1,
               },
-              { case: { $eq: ['$status', 'completed'] }, then: 2 },
-              { case: { $eq: ['$status', 'cancelled'] }, then: 3 },
-              { case: { $eq: ['$status', 'no_show'] }, then: 4 },
+              { case: { $eq: ['$status', 'cancelled'] }, then: 2 },
+              { case: { $eq: ['$status', 'no_show'] }, then: 3 },
             ],
-            default: 5,
+            default: 4,
           },
         },
         __sort_datetime: {
