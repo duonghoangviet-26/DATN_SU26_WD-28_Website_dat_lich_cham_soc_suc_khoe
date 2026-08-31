@@ -13,6 +13,7 @@ import ReviewModal from '@/components/client/ReviewModal'
 import { ContentTransition, RouteTransition } from '@/components/client/ClientMotion'
 import { useAuth } from '@/context/AuthContext'
 import { authService } from '@/services/auth.service'
+import { resolveMediaUrl } from '@/utils/media'
 import {
   getLatestAllowedBirthDateInput,
   normalizePersonName,
@@ -37,6 +38,7 @@ import {
   type PendingReviewAppointment,
   type MyReviewItem,
 } from '@/services/patient-review.service'
+import { followupService, type FollowUpRecord } from '@/services/followup.service'
 
 export default function Profile() {
   const { user, loading: authLoading, updateUser } = useAuth()
@@ -45,7 +47,7 @@ export default function Profile() {
 
   const justBooked = searchParams.get('booked') === 'true'
 
-  const [activeTab, setActiveTab] = useState<'appointments' | 'results' | 'account' | 'family' | 'reviews'>('appointments')
+  const [activeTab, setActiveTab] = useState<'appointments' | 'results' | 'account' | 'family' | 'reviews' | 'followups'>('appointments')
   const [appointments, setAppointments] = useState<PatientRecordListItem[]>([])
   const [appointmentsLoading, setAppointmentsLoading] = useState(true)
 
@@ -75,6 +77,24 @@ export default function Profile() {
   const [resultsEndDate, setResultsEndDate] = useState('')
   const [resultsPatientFilter, setResultsPatientFilter] = useState('all')
   const [expandedResultIds, setExpandedResultIds] = useState<Set<string>>(new Set())
+
+  // Followups states
+  const [followups, setFollowups] = useState<FollowUpRecord[]>([])
+  const [followupsLoading, setFollowupsLoading] = useState(false)
+
+  const fetchFollowups = () => {
+    setFollowupsLoading(true)
+    followupService.getMyFollowUps()
+      .then((data) => setFollowups(Array.isArray(data) ? data : []))
+      .catch((err: any) => console.error('Lỗi tải tái khám', err))
+      .finally(() => setFollowupsLoading(false))
+  }
+
+  useEffect(() => {
+    if (activeTab === 'followups' && user) {
+      fetchFollowups()
+    }
+  }, [activeTab, user])
 
   function calculateAge(dateStr?: string | null) {
     if (!dateStr) return null
@@ -328,9 +348,6 @@ export default function Profile() {
       .then((result) => {
         if (!ignore) {
           setAppointments(Array.isArray(result?.data) ? result.data : [])
-          if (justBooked) {
-            setToast('Đặt lịch và xác nhận thanh toán thành công.')
-          }
         }
       })
       .catch((error: any) => {
@@ -431,6 +448,9 @@ export default function Profile() {
 
     const targetId = bookedId || paymentId
     if (targetId && (justBooked || isPaymentSuccess || paymentId)) {
+      if (justBooked) {
+        setToast('🎉 Đặt lịch tái khám thành công! Chi phí đã được miễn phí 100% theo chỉ định của bác sĩ.')
+      }
       setDetailLoading(true)
       patientRecordsService.getAppointmentDetail(targetId)
         .then((detail) => {
@@ -445,9 +465,11 @@ export default function Profile() {
         })
         .finally(() => {
           setDetailLoading(false)
+          // Xóa query params trên URL (?booked=true&id=...) để khi người dùng F5 không bị lặp lại popup & toast
+          navigate('/profile', { replace: true })
         })
     }
-  }, [searchParams, justBooked])
+  }, [searchParams, justBooked, navigate])
 
   function isAppointmentInPast(ngayKham: string, gioKham: string) {
     try {
@@ -552,6 +574,32 @@ export default function Profile() {
       setToast(error.response?.data?.message || error.message || 'Không thể cập nhật thông tin lịch hẹn.')
     } finally {
       setContactSaving(false)
+    }
+  }
+
+  async function handleDeleteAppointment(appointmentId: string) {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa lịch hẹn đã hủy này khỏi danh sách của bạn?')) {
+      return
+    }
+    try {
+      await patientRecordsService.deleteAppointment(appointmentId)
+      setAppointments((prev) => prev.filter((a) => a.id !== appointmentId))
+      setToast('🎉 Đã xóa lịch hẹn đã hủy khỏi danh sách.')
+    } catch (error: any) {
+      setToast(error.response?.data?.message || error.message || 'Không thể xóa lịch hẹn.')
+    }
+  }
+
+  async function handleDeleteBatchCancelled() {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa TẤT CẢ ${statusCounts.cancelled} lịch hẹn đã hủy khỏi danh sách của bạn?`)) {
+      return
+    }
+    try {
+      const res = await patientRecordsService.deleteBatchCancelledAppointments()
+      await loadAppointments()
+      setToast(`🎉 ${res.deletedCount ? `Đã xóa ${res.deletedCount} lịch hẹn đã hủy khỏi danh sách.` : 'Đã dọn dẹp các lịch hẹn đã hủy.'}`)
+    } catch (error: any) {
+      setToast(error.response?.data?.message || error.message || 'Không thể xóa các lịch hẹn đã hủy.')
     }
   }
 
@@ -803,6 +851,7 @@ export default function Profile() {
             {[
               { key: 'appointments', label: 'Lịch hẹn', meta: 'Theo dõi lịch khám' },
               { key: 'results', label: 'Kết quả y tế', meta: 'Đơn thuốc & chẩn đoán' },
+              { key: 'followups', label: 'Tái khám', meta: 'Cần đặt lịch lại' },
               { key: 'family', label: 'Sổ gia đình', meta: 'Hồ sơ người thân' },
               { key: 'account', label: 'Thông tin cá nhân', meta: 'Tên và số liên hệ' },
               { key: 'reviews', label: 'Đánh giá', meta: 'Lịch sử & chờ đánh giá' },
@@ -860,6 +909,16 @@ export default function Profile() {
                       </button>
                     )
                   })}
+                  {statusCounts.cancelled > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteBatchCancelled}
+                      className="ml-auto px-3.5 py-1.5 rounded-full text-xs font-bold text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 transition flex items-center gap-1.5 shadow-sm"
+                      title="Xóa toàn bộ các lịch hẹn đã hủy khỏi danh sách của bạn"
+                    >
+                      <span>🗑️ Xóa tất cả {statusCounts.cancelled} lịch đã hủy</span>
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1009,6 +1068,16 @@ export default function Profile() {
                             >
                               {detailLoading ? 'Đang tải...' : appointment.status === 'completed' ? 'Xem kết quả' : 'Chi tiết'}
                             </button>
+                            {['cancelled', 'no_show', 'skipped'].includes(appointment.status) && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAppointment(appointment.id)}
+                                className="px-3 py-1.5 rounded-lg border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition flex items-center gap-1"
+                                title="Xóa lịch hẹn đã hủy này khỏi danh sách của bạn"
+                              >
+                                <span className="text-xs">🗑️</span> Xóa
+                              </button>
+                            )}
                             {['pending', 'confirmed'].includes(appointment.status) && !isAppointmentInPast(appointment.ngay_kham, appointment.gio_kham) && (
                               <div className="flex gap-2">
                                 <Button
@@ -1194,6 +1263,47 @@ export default function Profile() {
                                 )}
                               </div>
 
+                              {/* Vitals */}
+                              {result.ket_qua.sinh_hieu && (
+                                <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-3 flex items-center gap-1.5">
+                                    <span>❤️</span> Sinh hiệu
+                                  </p>
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    {result.ket_qua.sinh_hieu.nhip_tim != null && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Nhịp tim</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.nhip_tim} <span className="text-xs font-medium text-slate-500">bpm</span></p>
+                                      </div>
+                                    )}
+                                    {result.ket_qua.sinh_hieu.huyet_ap != null && result.ket_qua.sinh_hieu.huyet_ap !== '' && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Huyết áp</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.huyet_ap} <span className="text-xs font-medium text-slate-500">mmHg</span></p>
+                                      </div>
+                                    )}
+                                    {result.ket_qua.sinh_hieu.nhiet_do != null && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Nhiệt độ</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.nhiet_do} <span className="text-xs font-medium text-slate-500">°C</span></p>
+                                      </div>
+                                    )}
+                                    {result.ket_qua.sinh_hieu.can_nang != null && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Cân nặng</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.can_nang} <span className="text-xs font-medium text-slate-500">kg</span></p>
+                                      </div>
+                                    )}
+                                    {result.ket_qua.sinh_hieu.chieu_cao != null && (
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold text-slate-500 uppercase">Chiều cao</p>
+                                        <p className="text-sm font-bold text-slate-800">{result.ket_qua.sinh_hieu.chieu_cao} <span className="text-xs font-medium text-slate-500">cm</span></p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Endoscopic / Service Result Images */}
                               {result.ket_qua.hinh_anh_noi_soi && result.ket_qua.hinh_anh_noi_soi.length > 0 && (
                                 <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50/60 p-3.5">
@@ -1214,7 +1324,7 @@ export default function Profile() {
                                         className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-sky-500 hover:shadow-md text-left"
                                       >
                                         <img
-                                          src={img.url}
+                                          src={resolveMediaUrl(img.url) || ''}
                                           alt={img.mo_ta || `Ảnh nội soi ${idx + 1}`}
                                           className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                                         />
@@ -1281,6 +1391,89 @@ export default function Profile() {
                   </>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'followups' && (
+            <div className="space-y-6">
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-slate-800">Tái khám</h3>
+                <p className="text-xs text-slate-400">Danh sách các hồ sơ được bác sĩ yêu cầu tái khám nhưng chưa đặt lịch.</p>
+              </div>
+
+              {followupsLoading ? (
+                <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
+                  Đang tải danh sách tái khám...
+                </div>
+              ) : followups.length === 0 ? (
+                <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400 shadow-sm">
+                  Bạn không có lịch tái khám nào cần đặt lịch.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {followups.map((fu) => {
+                    let isOverdue = false
+                    let hanCuoiDate = null
+                    if (fu.ngay_tai_kham) {
+                      hanCuoiDate = new Date(fu.ngay_tai_kham)
+                      hanCuoiDate.setDate(hanCuoiDate.getDate() + 14) // Trễ 2 tuần
+                      isOverdue = hanCuoiDate.setHours(23,59,59,999) < Date.now()
+                    }
+                    
+                    return (
+                      <div
+                        key={fu.lich_hen_goc_id}
+                        className={`rounded-2xl border-2 p-5 shadow-sm transition-all ${
+                          isOverdue ? 'border-red-300 bg-red-50/60 ring-2 ring-red-100' : 'border-blue-100 bg-white'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                          <div className="space-y-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="font-bold text-slate-900 text-lg">{fu.benh_nhan.ten_khach}</h4>
+                              {isOverdue && (
+                                <span className="rounded-lg bg-red-600 px-3 py-1 text-xs font-black uppercase text-white shadow-sm">
+                                  ⚠️ Đã quá hạn tái khám miễn phí
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-600">
+                              Khám ngày: <span className="font-semibold text-slate-800">{new Date(fu.ngay_kham_cu).toLocaleDateString('vi-VN')}</span>
+                            </p>
+                            <p className="text-sm text-slate-600">
+                              Bác sĩ: <span className="font-semibold text-slate-800">{fu.bac_si?.ho_ten || 'Không rõ'}</span>
+                            </p>
+                            <p className="text-sm text-slate-600">
+                              Chẩn đoán: <span className="font-semibold text-slate-800">{fu.chan_doan}</span>
+                            </p>
+                            <div className={`mt-2 inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-extrabold ${
+                              isOverdue
+                                ? 'bg-red-200 text-red-950 border border-red-300'
+                                : 'bg-blue-50 text-blue-700'
+                            }`}>
+                              {fu.ngay_tai_kham
+                                ? (isOverdue
+                                    ? `⛔ Hạn cuối: ${hanCuoiDate.toLocaleDateString('vi-VN')}`
+                                    : `Hạn tái khám miễn phí: ${hanCuoiDate.toLocaleDateString('vi-VN')}`)
+                                : 'Tái khám miễn phí không giới hạn thời gian'}
+                            </div>
+                          </div>
+                          <Link
+                            to={`/booking?followup_id=${fu.lich_hen_goc_id || fu.hang_doi_id}`}
+                            className={`shrink-0 rounded-xl px-5 py-2.5 text-sm font-bold transition shadow-sm ${
+                              isOverdue
+                                ? 'bg-slate-700 text-white hover:bg-slate-800'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
+                          >
+                            {isOverdue ? 'Xem chi tiết' : 'Đặt lịch ngay'}
+                          </Link>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -1997,7 +2190,7 @@ export default function Profile() {
                             className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-sky-500 hover:shadow-md text-left"
                           >
                             <img
-                              src={img.url}
+                              src={resolveMediaUrl(img.url) || ''}
                               alt={img.mo_ta || `Ảnh nội soi ${idx + 1}`}
                               className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                             />
@@ -2214,7 +2407,7 @@ export default function Profile() {
                 <span>📸</span> Hình ảnh nội soi chi tiết
               </p>
               <img
-                src={activeEndoscopyImage.url}
+                src={resolveMediaUrl(activeEndoscopyImage.url) || ''}
                 alt={activeEndoscopyImage.mo_ta || 'Ảnh nội soi'}
                 className="max-h-[70vh] w-auto rounded-xl object-contain shadow-sm border border-slate-100"
               />

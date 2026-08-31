@@ -146,7 +146,14 @@ export default function StepXacNhan({ phien, onEditStep }: Props) {
           <p className="pb-2"><span className="text-slate-400">Chẩn đoán: </span><span className="font-medium text-slate-800">{hoSo?.chan_doan || '—'}</span></p>
           <p className="pt-2"><span className="text-slate-400">Hướng dẫn điều trị: </span><span className="text-slate-800">{hoSo?.huong_dan_dieu_tri || '—'}</span></p>
           <p className="pt-2"><span className="text-slate-400">Lưu ý: </span><span className="text-slate-800">{hoSo?.ghi_chu || '—'}</span></p>
-          <p className="pt-2"><span className="text-slate-400">Tái khám: </span><span className="text-slate-800">{hoSo?.ngay_tai_kham ? new Date(hoSo.ngay_tai_kham).toLocaleDateString('vi-VN') : '—'}</span></p>
+          <p className="pt-2">
+            <span className="text-slate-400">Tái khám: </span>
+            <span className="text-slate-800">
+              {hoSo?.chi_dinh_tai_kham 
+                ? (hoSo?.ngay_tai_kham ? new Date(hoSo.ngay_tai_kham).toLocaleDateString('vi-VN') : 'Có (Không hẹn ngày)')
+                : 'Không'}
+            </span>
+          </p>
           <p className="pt-2">
             <span className="text-slate-400">Kết cục: </span>
             <span className={hoSo?.ket_cuc && hoSo.ket_cuc !== 'dieu_tri_thuong' ? 'font-semibold text-amber-700' : 'text-slate-800'}>

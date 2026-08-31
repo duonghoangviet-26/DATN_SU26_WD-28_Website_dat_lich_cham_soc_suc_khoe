@@ -97,6 +97,7 @@ export interface PhienKham {
     huong_dan_dieu_tri: string | null
     ghi_chu: string | null
     ngay_tai_kham: string | null
+    chi_dinh_tai_kham?: boolean
     dich_vu_phat_sinh: DichVuChiDinh[]
     ket_cuc: KetCuc
     chuyen_vien_thong_tin: ChuyenVienThongTin | null
@@ -114,6 +115,23 @@ export interface PhienKham {
   thuoc: ThuocItem[]
   dich_vu_kha_dung: { service_id: string; ten: string; gia: number; ma_dich_vu: string | null }[]
   hoa_don: HoaDonTomTat | null
+  // Tái khám: thông tin hồ sơ khám đợt trước — null nếu là khám mới hoặc chưa có hồ sơ cũ
+  is_tai_kham: boolean
+  ho_so_cu: {
+    ngay_kham: string | null
+    ten_bac_si: string | null
+    chan_doan: string | null
+    huong_dan_dieu_tri: string | null
+    ghi_chu: string | null
+    sinh_hieu: {
+      can_nang: number | null
+      chieu_cao: number | null
+      huyet_ap: string | null
+      nhiet_do: number | null
+      nhip_tim: number | null
+    } | null
+    thuoc: ThuocItem[]
+  } | null
 }
 
 // C4 — hàng trong danh sách "Bệnh nhân đã khám" (GET /doctor/exam-history).
@@ -146,6 +164,7 @@ export interface DinhChinhHoSoPayload {
   huong_dan_dieu_tri?: string | null
   ghi_chu?: string | null
   ngay_tai_kham?: string | null
+  chi_dinh_tai_kham?: boolean
   ket_cuc?: KetCuc
   chuyen_vien_thong_tin?: Partial<ChuyenVienThongTin> | null
   dich_vu_phat_sinh?: { service_id: string; so_luong: number; hinh_anh?: DichVuHinhAnh[] }[]

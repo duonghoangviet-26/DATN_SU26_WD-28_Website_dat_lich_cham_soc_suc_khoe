@@ -209,6 +209,8 @@ export async function checkInLichHen({
     // Snapshot lúc check-in — bậc ưu tiên THẬT tính động lúc query (rule mục 6).
     muc_uu_tien: tinhMucUuTien('online', now, gioHenGoc),
     gio_hen_goc: gioHenGoc,
+    loai_lich_hen: appt.loai_lich_hen ?? 'kham_moi',
+    lich_hen_goc_id: appt.lich_hen_goc_id ?? null,
     ...checkInNumber,
     checkin_time: now,
     nguoi_tiep_nhan_id: actorUserId,

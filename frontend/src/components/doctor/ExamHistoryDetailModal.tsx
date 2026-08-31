@@ -196,16 +196,16 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
                 {hoSo.dich_vu_phat_sinh.length ? (
                   <>
                     <ul className="divide-y divide-slate-100 text-sm text-slate-800">
-                      {hoSo.dich_vu_phat_sinh.map((dv) => (
-                        <li key={dv.service_id} className="py-2 first:pt-0 last:pb-0">
+                      {hoSo.dich_vu_phat_sinh.map((dv, idx) => (
+                        <li key={dv.service_id ? String(dv.service_id) : `dv-${idx}`} className="py-2 first:pt-0 last:pb-0">
                           <div className="flex justify-between gap-3">
                             <span>{dv.ten} × {dv.so_luong}</span>
                             <span className="font-medium text-slate-600">{formatPrice(dv.thanh_tien)}</span>
                           </div>
                           {dv.hinh_anh?.length ? (
                             <div className="mt-2 flex flex-wrap gap-2">
-                              {dv.hinh_anh.map((image) => (
-                                <a key={image.url} href={image.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-slate-200">
+                              {dv.hinh_anh.map((image, imgIdx) => (
+                                <a key={image.url || `img-${imgIdx}`} href={image.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-slate-200">
                                   <img src={image.url} alt={`Ảnh kết quả ${dv.ten}`} className="h-16 w-16 object-cover" />
                                 </a>
                               ))}
@@ -238,8 +238,8 @@ export default function ExamHistoryDetailModal({ queueId, onClose, onAmended }: 
                         </p>
                         {t.gio_uong?.length ? (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            {t.gio_uong.map((g) => (
-                              <span key={g} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                            {t.gio_uong.map((g, gIdx) => (
+                              <span key={`${g}-${gIdx}`} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                                 {nhanBuoiUong(g)}
                               </span>
                             ))}

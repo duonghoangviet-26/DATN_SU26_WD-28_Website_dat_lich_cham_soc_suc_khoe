@@ -193,7 +193,9 @@ export async function list(req, res) {
     const filter = { doctor_id: docId }
     filter.trang_thai = status || { $in: [...DANG_XU_LY, 'skipped', 'cancelled', 'hoan_thanh'] }
 
-    const entries = await HangDoi.find(filter).lean()
+    const entries = await HangDoi.find(filter)
+      .populate('appointment_id', 'loai_lich_hen')
+      .lean()
     const room = await TrangThaiPhongKham.findOne({ doctor_id: docId }).lean()
     const tbPhut = room?.thoi_gian_kham_tb_phut ?? 20
     const now = new Date()
@@ -205,6 +207,8 @@ export async function list(req, res) {
       if (isWaiting) viTriChoDangCho++
       return {
         id: e._id,
+        appointment_id: e.appointment_id ? e.appointment_id._id : null,
+        loai_lich_hen: e.appointment_id ? (e.appointment_id.loai_lich_hen ?? e.loai_lich_hen ?? 'kham_moi') : (e.loai_lich_hen ?? 'kham_moi'),
         nguon: e.nguon,
         ten_benh_nhan: e.ten_benh_nhan,
         tuoi: e.tuoi,

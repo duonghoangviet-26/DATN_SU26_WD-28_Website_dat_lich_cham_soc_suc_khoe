@@ -11,7 +11,9 @@ import {
     GiaDinh,
     ThanhVien,
     NghiPhepBacSi,
+    KetQuaKham,
 } from "../../models/index.js";
+import { validateFollowUpBooking } from "../../services/followupValidation.service.js";
 import { ok, fail } from "../../utils/response.js";
 import { emitDashboardRevenueChanged } from "../../realtime/socket.js";
 // Ban `-7` cuc bo o file nay VON DA DUNG — nay dung chung mot nguon voi patient/doctor de hai
@@ -622,6 +624,7 @@ export async function createBooking(req, res) {
             payment_method,
             user_id,
             member_id,
+            lich_hen_goc_id,
         } = req.body;
         if (
             !doctor_id ||
@@ -650,6 +653,27 @@ export async function createBooking(req, res) {
         const appointmentDate = parseDateOnly(ngay_kham);
         if (!appointmentDate)
             return rollbackFail(400, "Ngày khám không hợp lệ");
+
+        // Xử lý tái khám
+        let isFollowUp = false;
+        let ketQuaKhamTaiKham = null;
+        if (lich_hen_goc_id) {
+            try {
+                // Truyen isReceptionist: true de bo qua validate ownership
+                const result = await validateFollowUpBooking({
+                    lich_hen_goc_id,
+                    userId: null,
+                    ngay_kham: appointmentDate,
+                    specialty_id: null,
+                    session,
+                    isReceptionist: true
+                });
+                isFollowUp = true;
+                ketQuaKhamTaiKham = result.ketQuaKham;
+            } catch (err) {
+                return rollbackFail(err.statusCode || 400, err.message);
+            }
+        }
 
         // ---- HỖ TRỢ RANDOM BÁC SĨ (doctor_id === 'auto') ----
         let doc = null;
@@ -811,7 +835,9 @@ export async function createBooking(req, res) {
             gioKham: slot.gio_bat_dau,
             session,
         });
-        if (patientConflict.blocked) {
+        // Không block lịch trùng ngày nếu là khám tái khám, hoặc validate theo rule khác nếu cần
+        // Theo yêu cầu hiện tại, tái khám được phép trùng ngày với lịch thường nhưng khác luợt khám cũ.
+        if (patientConflict.blocked && !isFollowUp) {
             return rollbackFail(
                 409,
                 `Người được khám đã có lịch ${patientConflict.blocked.ma_lich_hen ?? ""} lúc ${patientConflict.blocked.gio_kham} trong ngày này. Không thể đặt trùng cùng khung giờ cho cùng một hồ sơ.`,
@@ -865,7 +891,7 @@ export async function createBooking(req, res) {
         let ten_chuyen_khoa;
         try {
             const bangGia = await layGiaKhamChuyenKhoa(specialtyId, session);
-            gia_kham = bangGia.gia_kham;
+            gia_kham = isFollowUp ? 0 : bangGia.gia_kham;
             ten_chuyen_khoa = bangGia.ten_chuyen_khoa;
         } catch (err) {
             return rollbackFail(err.statusCode ?? 400, err.message);
@@ -890,7 +916,9 @@ export async function createBooking(req, res) {
                     phong_kham: slot.phong_kham,
                     status: "checked_in",
                     gio_den_thuc_te: new Date(),
-                    payment_status: isPaid ? "paid" : "unpaid",
+                    payment_status: (isPaid || isFollowUp) ? "paid" : "unpaid",
+                    loai_lich_hen: isFollowUp ? "tai_kham" : "kham_moi",
+                    lich_hen_goc_id: isFollowUp ? lich_hen_goc_id : null,
                     gia_kham,
                     ten_dich_vu: ten_chuyen_khoa,
                     ten_khach,
@@ -922,7 +950,7 @@ export async function createBooking(req, res) {
                         },
                     ],
                     tong_thanh_toan: gia_kham,
-                    trang_thai_hoa_don: isPaid
+                    trang_thai_hoa_don: (isPaid || isFollowUp)
                         ? "da_thanh_toan_du"
                         : "chua_thanh_toan",
                 },
@@ -937,14 +965,21 @@ export async function createBooking(req, res) {
                     hoa_don_id: invoice._id,
                     so_tien: gia_kham,
                     loai_thanh_toan: "phi_dat_lich",
-                    phuong_thuc:
-                        payment_method === "cash" ? "tien_mat" : "chuyen_khoan",
-                    status: isPaid ? "paid" : "pending",
-                    ngay_thanh_toan: isPaid ? new Date() : null,
+                    phuong_thuc: isFollowUp ? "mien_phi_tai_kham" : (payment_method === "cash" ? "tien_mat" : "chuyen_khoan"),
+                    status: (isPaid || isFollowUp) ? "paid" : "pending",
+                    ngay_thanh_toan: (isPaid || isFollowUp) ? new Date() : null,
                 },
             ],
             { session },
         );
+
+        if (isFollowUp && ketQuaKhamTaiKham) {
+            await KetQuaKham.findByIdAndUpdate(
+                ketQuaKhamTaiKham._id,
+                { da_dat_lich_tai_kham: true },
+                { session }
+            );
+        }
 
         await session.commitTransaction();
         session.endSession();
@@ -961,6 +996,7 @@ export async function createBooking(req, res) {
             so_hoa_don: invoice.so_hoa_don || appointmentCode,
             status: appointment.status,
             payment_status: payment.status,
+            loai_lich_hen: appointment.loai_lich_hen,
             gia_kham: gia_kham,
             canh_bao_trung_lich: conflictWarnings,
             qr_payload:

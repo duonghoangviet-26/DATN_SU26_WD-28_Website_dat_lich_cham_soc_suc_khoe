@@ -26,6 +26,7 @@ export default function AppointmentDetail({ detail, loading, onClose }: Props) {
     ['Chuyên khoa / dịch vụ', detail.chuyen_khoa || 'Không tìm thấy chuyên khoa'],
     ['Ngày khám', `${detail.ngay_kham} lúc ${detail.gio_kham}`],
     ['Loại khám', EXAM_TYPE_LABEL[detail.loai_kham] || formatAdminValue('loai_kham', detail.loai_kham)],
+    ['Phân loại lượt khám', (detail.is_tai_kham || detail.loai_lich_hen === 'tai_kham') ? '🔁 Tái khám' : '📋 Khám mới'],
     ['Địa chỉ khám', detail.dia_chi_kham || 'Chưa có dữ liệu'],
     ['Lý do khám', detail.ly_do_kham || 'Chưa có dữ liệu'],
     ['Phí khám', formatPrice(detail.gia_kham)],

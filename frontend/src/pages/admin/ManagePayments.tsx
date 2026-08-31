@@ -104,11 +104,21 @@ function PaymentDetailModal({ detail, loading, onClose }: PaymentDetailModalProp
                   <div className="flex flex-wrap gap-2">
                     <Badge color={STATUS_COLOR[detail.status]}>{PAYMENT_STATUS_LABEL[detail.status] || formatAdminValue('status', detail.status)}</Badge>
                     <Badge color="blue">{PAYMENT_METHOD_LABEL[detail.phuong_thuc] || formatAdminValue('phuong_thuc', detail.phuong_thuc)}</Badge>
+                    {detail.is_tai_kham || detail.loai_lich_hen === 'tai_kham' ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-100 px-2.5 py-0.5 text-xs font-bold text-purple-800">
+                        🔁 Tái khám
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                        📋 Khám mới
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <DetailField label="Bệnh nhân" value={`${detail.benh_nhan || 'Không rõ'} ${detail.so_dien_thoai_benh_nhan ? `(${detail.so_dien_thoai_benh_nhan})` : ''}`} />
+                  <DetailField label="Phân loại lượt khám" value={detail.is_tai_kham || detail.loai_lich_hen === 'tai_kham' ? '🔁 Tái khám (Miễn phí khám)' : '📋 Khám mới'} />
                   <DetailField label="Người thanh toán" value={`${detail.nguoi_thanh_toan || 'Không rõ'} ${detail.nguoi_thanh_toan !== detail.benh_nhan ? '(Thanh toán hộ)' : ''}`} />
                   <DetailField label="Email" value={detail.email || 'Không có'} />
                   <DetailField label="SĐT Người thanh toán" value={detail.so_dien_thoai || 'Không có'} />
@@ -439,7 +449,18 @@ export default function ManagePayments() {
                   </td>
 
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900">{payment.benh_nhan || 'Không rõ'}</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-medium text-slate-900">{payment.benh_nhan || 'Không rõ'}</span>
+                      {payment.is_tai_kham || payment.loai_lich_hen === 'tai_kham' ? (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-800">
+                          🔁 Tái khám
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                          📋 Khám mới
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 text-xs text-slate-500">{payment.so_dien_thoai_benh_nhan || 'Chưa có số điện thoại'}</p>
                   </td>
 

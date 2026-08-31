@@ -17,6 +17,8 @@ export interface OfflineQueueRow {
   specialty?: { id: string; ten?: string | null } | null
   doctor?: { id: string; ho_ten?: string | null; phong_kham_mac_dinh?: string | null } | null
   phong_kham?: string | null
+  loai_lich_hen?: string | null
+  lich_hen_goc_id?: string | null
 }
 
 export interface DispatchCandidate {

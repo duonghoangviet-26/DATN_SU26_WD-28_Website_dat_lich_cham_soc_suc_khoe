@@ -299,6 +299,10 @@ function invoiceLines(caseItem, fee) {
 
 async function getFee(caseItem) {
   if (caseItem.source === 'online') return Number(caseItem.appointment.gia_kham ?? 0)
+
+  const isFollowUp = caseItem.queue && (caseItem.queue.loai_lich_hen === 'tai_kham' || caseItem.queue.lich_hen_goc_id != null)
+  if (isFollowUp) return 0
+
   return Number((await layGiaKhamChuyenKhoa(caseItem.specialty_id)).gia_kham ?? 0)
 }
 

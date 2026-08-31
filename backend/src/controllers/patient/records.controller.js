@@ -1,4 +1,4 @@
-import { LichHen, KetQuaKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen, KetQuaKhamTai, KetQuaKhamMui, KetQuaKhamHong } from '../../models/index.js'
+import { LichHen, KetQuaKham, SinhHieuKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen, KetQuaKhamTai, KetQuaKhamMui, KetQuaKhamHong } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { buildSlotDateTime } from '../../utils/clinicTime.js'
 import { withOptionalTransaction } from '../../services/bookingPaymentState.service.js'
@@ -17,6 +17,7 @@ function ownedByUser(userId) {
       { nguoi_tao_id: userId },
       { nguoi_dat_ho_id: userId },
     ],
+    da_xoa_boi_benh_nhan: { $ne: true },
   }
 }
 
@@ -31,7 +32,7 @@ function appointmentError(statusCode, message) {
 // ─── GET /api/patient/records?status=&page=&limit= ──────────────────────────
 export async function listRecords(req, res) {
   try {
-    const { status, page = 1, limit = 10 } = req.query
+    const { status, page = 1, limit = 100 } = req.query
     const filter = ownedByUser(req.user.id)
     if (status) filter.status = status
 
@@ -144,7 +145,7 @@ export async function listMedicalResults(req, res) {
     const appointmentIds = appointments.map((a) => a._id)
     const doctorIds = [...new Set(appointments.map((a) => a.doctor_id.toString()))]
 
-    const [docList, examResults, taiResults, muiResults, hongResults] = await Promise.all([
+    const [docList, examResults, taiResults, muiResults, hongResults, sinhHieuResults] = await Promise.all([
       BacSi.find({ _id: { $in: doctorIds } })
         .populate('user_id', 'ho_ten anh_dai_dien')
         .select('user_id')
@@ -153,10 +154,12 @@ export async function listMedicalResults(req, res) {
       KetQuaKhamTai.find({ appointment_id: { $in: appointmentIds } }).lean(),
       KetQuaKhamMui.find({ appointment_id: { $in: appointmentIds } }).lean(),
       KetQuaKhamHong.find({ appointment_id: { $in: appointmentIds } }).lean(),
+      SinhHieuKham.find({ appointment_id: { $in: appointmentIds } }).lean(),
     ])
 
     const docMap = Object.fromEntries(docList.map((d) => [d._id.toString(), d.user_id]))
     const examResultMap = Object.fromEntries(examResults.map((r) => [r.appointment_id.toString(), r]))
+    const sinhHieuMap = Object.fromEntries(sinhHieuResults.map((s) => [s.appointment_id.toString(), s]))
 
     const specialtyImageMap = new Map()
     const appendSpecialtyList = (list) => {
@@ -211,6 +214,7 @@ export async function listMedicalResults(req, res) {
           ghi_chu: ketQua.ghi_chu,
           ngay_tai_kham: ketQua.ngay_tai_kham,
           ngay_tao: ketQua.ngay_tao,
+          sinh_hieu: sinhHieuMap[a._id.toString()] || null,
           thuoc: thuoc,
           hinh_anh_noi_soi: hinhAnhNoiSoi,
         } : null
@@ -272,12 +276,13 @@ export async function getRecord(req, res) {
     const a = await LichHen.findOne({ _id: req.params.id, ...ownedByUser(req.user.id) }).lean()
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
 
-    const [doc, ketQua, taiResults, muiResults, hongResults] = await Promise.all([
+    const [doc, ketQua, taiResults, muiResults, hongResults, sinhHieu] = await Promise.all([
       BacSi.findById(a.doctor_id).populate('user_id', 'ho_ten anh_dai_dien so_dien_thoai').select('user_id').lean(),
       a.status === 'completed' ? KetQuaKham.findOne({ appointment_id: a._id }).lean() : null,
       a.status === 'completed' ? KetQuaKhamTai.find({ appointment_id: a._id }).lean() : [],
       a.status === 'completed' ? KetQuaKhamMui.find({ appointment_id: a._id }).lean() : [],
       a.status === 'completed' ? KetQuaKhamHong.find({ appointment_id: a._id }).lean() : [],
+      a.status === 'completed' ? SinhHieuKham.findOne({ appointment_id: a._id }).lean() : null,
     ])
 
     let prescription = null
@@ -323,6 +328,7 @@ export async function getRecord(req, res) {
         ghi_chu:            ketQua.ghi_chu,
         ngay_tai_kham:      ketQua.ngay_tai_kham,
         ngay_tao:           ketQua.ngay_tao,
+        sinh_hieu: sinhHieu || null,
         thuoc: prescription?.items ?? [],
         hinh_anh_noi_soi: hinhAnhNoiSoi,
       } : null,
@@ -399,5 +405,47 @@ export async function updateAppointmentContact(req, res) {
     }, 'Cập nhật thông tin lịch hẹn thành công')
   } catch (err) {
     return fail(res, err.statusCode ?? 500, err.statusCode ? err.message : 'Không thể cập nhật thông tin lịch hẹn')
+  }
+}
+
+// DELETE /api/patient/records/batch-cancelled
+export async function deleteBatchCancelledAppointments(req, res) {
+  try {
+    const result = await LichHen.updateMany(
+      {
+        ...ownedByUser(req.user.id),
+        status: { $in: ['cancelled', 'no_show', 'skipped'] },
+      },
+      { $set: { da_xoa_boi_benh_nhan: true } }
+    )
+
+    return ok(res, { deletedCount: result.modifiedCount }, `Đã xóa ${result.modifiedCount} lịch hẹn đã hủy khỏi danh sách`)
+  } catch (err) {
+    return fail(res, 500, err.message)
+  }
+}
+
+// DELETE /api/patient/records/:id
+export async function deleteCancelledAppointment(req, res) {
+  try {
+    const appointment = await LichHen.findOne({
+      _id: req.params.id,
+      ...ownedByUser(req.user.id),
+    })
+
+    if (!appointment) {
+      return fail(res, 404, 'Không tìm thấy lịch hẹn')
+    }
+
+    if (!['cancelled', 'no_show', 'skipped'].includes(appointment.status)) {
+      return fail(res, 400, 'Chỉ được phép xóa lịch hẹn ở trạng thái đã hủy hoặc không đến')
+    }
+
+    appointment.da_xoa_boi_benh_nhan = true
+    await appointment.save()
+
+    return ok(res, { id: appointment._id }, 'Đã xóa lịch hẹn khỏi danh sách của bạn')
+  } catch (err) {
+    return fail(res, 500, err.message)
   }
 }

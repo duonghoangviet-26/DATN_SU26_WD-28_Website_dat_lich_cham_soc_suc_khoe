@@ -12,6 +12,8 @@ export default function NewsList() {
   const [loading, setLoading] = useState(true)
   const [news, setNews] = useState<NewsArticle[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -19,9 +21,12 @@ export default function NewsList() {
     setLoading(true)
     setError('')
     newsService
-      .getPublished({ keyword: searchTerm, page: 1, limit: 12 })
+      .getPublished({ keyword: searchTerm, page, limit: 4 })
       .then((res) => {
-        if (!ignore) setNews(res.items)
+        if (!ignore) {
+          setNews(res.items)
+          setTotalPages(res.pagination?.totalPages || 1)
+        }
       })
       .catch((nextError: any) => {
         if (ignore) return
@@ -35,15 +40,10 @@ export default function NewsList() {
     return () => {
       ignore = true
     }
-  }, [searchTerm])
+  }, [searchTerm, page])
 
-  const filteredNews = news.filter((n) => {
-    const keyword = searchTerm.toLowerCase()
-    return n.title.toLowerCase().includes(keyword) || n.excerpt.toLowerCase().includes(keyword)
-  })
-
-  const featuredItem = filteredNews[0]
-  const regularItems = filteredNews.slice(1)
+  const featuredItem = page === 1 && !searchTerm ? news[0] : null
+  const regularItems = featuredItem ? news.slice(1) : news
 
   return (
     <RouteTransition>
@@ -68,8 +68,10 @@ export default function NewsList() {
           <input
             type="text"
             placeholder="Tìm bài viết cẩm nang..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setPage(1)
+            }}
             className="w-full rounded-lg border border-slate-200 pl-9 pr-4 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none bg-white transition"
           />
         </div>
@@ -101,7 +103,7 @@ export default function NewsList() {
         <div className="rounded-2xl border border-red-100 bg-red-50 p-8">
           <Empty title="Không tải được tin tức" description={error} icon="box" />
         </div>
-      ) : filteredNews.length === 0 ? (
+      ) : news.length === 0 ? (
         <div className="rounded-2xl border border-slate-100 bg-white p-8">
           <Empty title="Không tìm thấy bài viết" description="Vui lòng thử tìm kiếm bằng từ khóa khác." icon="search" />
         </div>
@@ -148,6 +150,7 @@ export default function NewsList() {
 
           {/* REGULAR NEWS GRID */}
           {regularItems.length > 0 && (
+            <>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {regularItems.map((n) => (
                 <Link
@@ -194,6 +197,57 @@ export default function NewsList() {
                 </Link>
               ))}
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2 pt-8">
+                <button
+                  disabled={page === 1}
+                  onClick={() => {
+                    setPage(page - 1)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-brand-600 disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-slate-500 transition-colors"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => {
+                        setPage(p)
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                      }}
+                      className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold transition-all ${
+                        page === p
+                          ? 'border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-500/20'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-brand-600'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  disabled={page === totalPages}
+                  onClick={() => {
+                    setPage(page + 1)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-brand-600 disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-slate-500 transition-colors"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            </>
           )}
         </div>
       )}

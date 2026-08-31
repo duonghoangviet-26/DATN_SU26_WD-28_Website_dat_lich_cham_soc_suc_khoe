@@ -4,6 +4,7 @@ import {
   layDanhSachHangDoiOffline,
   huyKhachOfflineTrungTam,
   layGoiYDieuPhoiOffline,
+  layUngVienBacSiChoDieuPhoi,
   tinhSucChuaHangDoiOfflineTrungTam,
   tiepNhanOfflineVaoHangDoiTrungTam,
   traKhachOfflineVeHangDoiTrungTam,
@@ -61,6 +62,9 @@ export const intake = async (req, res) => {
     const result = await tiepNhanOfflineVaoHangDoiTrungTam({
       hoSoBenhNhanId: req.body.ho_so_benh_nhan_id,
       specialtyId: req.body.specialty_id,
+      lich_hen_goc_id: req.body.lich_hen_goc_id,
+      ket_qua_kham_id: req.body.ket_qua_kham_id,
+      forceDoctorId: req.body.force_doctor_id,
       xacNhanCanhBao: Boolean(req.body.xac_nhan_canh_bao),
       ...actor(req),
     })
@@ -77,6 +81,18 @@ export const dispatchSuggestions = async (req, res) => {
       entryId: req.query.queue_id ?? null,
     })
     return ok(res, data)
+  } catch (error) {
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
+export const getDoctors = async (req, res) => {
+  try {
+    if (!req.query.specialty_id) return fail(res, 400, 'Thiếu specialty_id')
+    const candidates = await layUngVienBacSiChoDieuPhoi({
+      specialty_id: req.query.specialty_id,
+    }, new Date())
+    return ok(res, candidates)
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }
@@ -128,6 +144,7 @@ export default {
   getCapacity,
   intake,
   dispatchSuggestions,
+  getDoctors,
   assign,
   returnCentral,
   cancelCentral,

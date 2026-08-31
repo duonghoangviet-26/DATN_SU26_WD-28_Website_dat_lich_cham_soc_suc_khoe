@@ -123,11 +123,21 @@ async function validateInvoiceOrThrow(hoaDonId) {
 
 function mapPaymentDetail(payment) {
   const resolved = resolvePaymentPayerAndPatient(payment)
+  const invoice = getPopulatedObject(payment.hoa_don_id)
+  const appointment = getPopulatedObject(payment.appointment_id) ?? getPopulatedObject(invoice?.appointment_id)
+  const queue = getPopulatedObject(invoice?.hang_doi_id)
+  const isTaiKham = appointment?.loai_lich_hen === 'tai_kham' ||
+    !!appointment?.lich_hen_goc_id ||
+    (!!appointment?.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám')) ||
+    queue?.loai_lich_hen === 'tai_kham' ||
+    !!queue?.lich_hen_goc_id
 
   return {
     id: payment._id,
     hoa_don_id: payment.hoa_don_id?._id ?? payment.hoa_don_id ?? null,
     appointment_id: resolvePaymentAppointmentId(payment),
+    loai_lich_hen: appointment?.loai_lich_hen ?? queue?.loai_lich_hen ?? (isTaiKham ? 'tai_kham' : 'kham_moi'),
+    is_tai_kham: isTaiKham,
     ma_giao_dich: payment.ma_giao_dich,
     benh_nhan: resolved.patient.ho_ten,
     so_dien_thoai_benh_nhan: resolved.patient.so_dien_thoai,
@@ -150,7 +160,7 @@ function mapPaymentDetail(payment) {
 
 const appointmentPopulate = {
   path: 'appointment_id',
-  select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id',
+  select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id loai_lich_hen lich_hen_goc_id ly_do_kham',
   populate: [
     { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
     { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
@@ -164,7 +174,7 @@ const invoicePopulate = {
   populate: [
     {
       path: 'appointment_id',
-      select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id',
+      select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id loai_lich_hen lich_hen_goc_id ly_do_kham',
       populate: [
         { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
         { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
@@ -173,7 +183,7 @@ const invoicePopulate = {
     },
     {
       path: 'hang_doi_id',
-      select: 'ten_benh_nhan so_dien_thoai doctor_id ho_so_benh_nhan_id',
+      select: 'ten_benh_nhan so_dien_thoai doctor_id ho_so_benh_nhan_id loai_lich_hen lich_hen_goc_id',
       populate: [
         { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
         { path: 'ho_so_benh_nhan_id', select: 'ho_ten so_dien_thoai' },

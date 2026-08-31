@@ -29,6 +29,7 @@ import {
 } from '@/utils/patientIdentityValidation'
 import { printTicket } from '@/utils/printTicket'
 import { toLocalDateStr } from '@/utils/format'
+import ReceptionistFollowupTab from '@/components/receptionist/ReceptionistFollowupTab'
 
 interface ReceptionistTodayAppointment {
   _id: string
@@ -37,6 +38,8 @@ interface ReceptionistTodayAppointment {
   status: string
   payment_status: string
   loai_kham?: string
+  loai_lich_hen?: string
+  lich_hen_goc_id?: string | null
   ly_do_kham?: string | null
   gia_kham?: number | null
   user_id: { ho_ten?: string | null; so_dien_thoai?: string | null } | null
@@ -179,6 +182,7 @@ function AppointmentDetailModal({
 }) {
   const patientName = appointment.member_id?.ho_ten || appointment.ten_khach || appointment.user_id?.ho_ten || 'Khách vãng lai'
   const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
+  const isTaiKham = appointment.loai_lich_hen === 'tai_kham' || !!appointment.lich_hen_goc_id || (!!appointment.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám'))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
@@ -205,6 +209,15 @@ function AppointmentDetailModal({
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
+          {isTaiKham ? (
+            <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-extrabold text-purple-800 border border-purple-200">
+              🔁 Tái khám
+            </span>
+          ) : (
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800 border border-blue-200">
+              📋 Khám bình thường
+            </span>
+          )}
           <span className={`rounded-full px-2 py-1 text-xs font-bold ${appointmentStatusTone(appointment.status)}`}>{appointmentStatusLabel(appointment.status)}</span>
           <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{paymentLabel(appointment.payment_status)}</span>
           {appointment.ly_do_doi && (
@@ -678,6 +691,7 @@ function AppointmentsTab({
                 const canReschedule = hasAppointmentAction(appointment, 'reschedule')
                 const canCancel = hasAppointmentAction(appointment, 'cancel')
                 const noActionsAvailable = !canCheckIn && !canLate && !canReschedule && !canCancel
+                const isTaiKham = appointment.loai_lich_hen === 'tai_kham' || !!appointment.lich_hen_goc_id || (!!appointment.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám'))
                 return (
                   <tr key={appointment._id} className="align-top hover:bg-slate-50">
                     <td className="px-4 py-3">
@@ -691,6 +705,15 @@ function AppointmentsTab({
                     <td className="px-4 py-3 text-slate-700">{appointment.doctor_id?.user_id?.ho_ten || 'Chưa gán'}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col items-start gap-1.5">
+                        {isTaiKham ? (
+                          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-extrabold text-purple-800 border border-purple-200">
+                            🔁 Tái khám
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-800 border border-blue-200">
+                            📋 Khám bình thường
+                          </span>
+                        )}
                         <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{paymentLabel(appointment.payment_status)}</span>
                         <span className={`rounded-full px-2 py-1 text-xs font-bold ${appointmentStatusTone(appointment.status)}`}>{appointmentStatusLabel(appointment.status)}</span>
                       </div>
@@ -1156,7 +1179,14 @@ function ExamSessionsHistoryTab() {
               ) : rows.map((row) => (
                 <tr key={row.id} className="align-top hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <p className="font-bold text-slate-950">{row.ma_so_thu_tu || '-'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-slate-950">{row.ma_so_thu_tu || '-'}</p>
+                      {(row.loai_lich_hen === 'tai_kham' || row.lich_hen_goc_id) && (
+                        <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-extrabold text-purple-800 border border-purple-200" title="Khách tái khám">
+                          🔁 Tái khám
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 font-semibold text-slate-900">{row.ten_benh_nhan}</p>
                     <p className="mt-1 text-xs text-slate-500">{row.so_dien_thoai || 'Chưa có SĐT'}</p>
                   </td>
@@ -1310,6 +1340,7 @@ export default function PatientIntake() {
   const [accountAppointments, setAccountAppointments] = useState<TodayAppointment[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null)
+  const [selectedPendingFollowUpId, setSelectedPendingFollowUpId] = useState<string | null>(null)
   const [mode, setMode] = useState<'idle' | 'booked' | 'walk_in'>('idle')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -1328,10 +1359,13 @@ export default function PatientIntake() {
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
   const [searchPhoneError, setSearchPhoneError] = useState('')
   const [formErrors, setFormErrors] = useState<{ ho_ten?: string; ngay_sinh?: string }>({})
-  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'appointments' | 'today_sessions'>('lookup')
+  const [workspaceTab, setWorkspaceTab] = useState<'lookup' | 'appointments' | 'today_sessions' | 'followups'>('lookup')
   // D81 — modal tự trị, không đụng state tra cứu-theo-SĐT ở trên.
   const [searchParams, setSearchParams] = useSearchParams()
   const [pendingAppointmentId, setPendingAppointmentId] = useState<string | null>(null)
+  
+  const [intakeDoctors, setIntakeDoctors] = useState<any[]>([])
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null)
 
   useEffect(() => {
     if (printData) printTicket()
@@ -1356,7 +1390,9 @@ export default function PatientIntake() {
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedId) ?? null
   const selectedAppointment = selectedProfile?.lich_hen_hom_nay.find((appointment) => appointment.id === selectedAppointmentId) ?? null
+  const selectedPendingFollowUp = selectedProfile?.pending_follow_ups?.find((followUp) => followUp._id === selectedPendingFollowUpId) ?? null
   const hasAppointmentToday = Boolean(selectedProfile?.lich_hen_hom_nay.length)
+  const hasPendingFollowUps = Boolean(selectedProfile?.pending_follow_ups?.length)
   const hasActiveQueue = Boolean(selectedProfile?.luot_dang_cho_hom_nay)
   const unlinkedAccountAppointments = getUnlinkedAccountAppointments(profiles, accountAppointments)
 
@@ -1367,10 +1403,12 @@ export default function PatientIntake() {
     setSelectedSpecialtyId('')
     setConfirmLongWait(false)
     setSelectedAppointmentId(null)
+    setSelectedPendingFollowUpId(null)
     setMode('idle')
+    setSelectedDoctorId(null)
   }
 
-  const search = async (event?: FormEvent) => {
+  const search = async (event?: FormEvent, phoneToSearch?: string) => {
     event?.preventDefault()
     setError('')
     setMessage('')
@@ -1384,7 +1422,7 @@ export default function PatientIntake() {
     setShowCreateForm(false)
     setSearchPhoneError('')
     clearDecision()
-    const normalizedPhone = normalizePhoneInput(phone)
+    const normalizedPhone = normalizePhoneInput(phoneToSearch ?? phone)
     const phoneError = validateVietnamesePhone(normalizedPhone)
     if (phoneError) {
       setSearchPhoneError(phoneError)
@@ -1493,10 +1531,43 @@ export default function PatientIntake() {
       const result = await receptionistPatientIntakeService.getCentralOfflineCapacity(specialtyId)
       setCentralCapacity(result)
       if (!result.co_the_nhan) setMessage(result.ly_do || 'Tạm dừng nhận khách vãng lai cho chuyên khoa này.')
+      
+      const docs = await receptionistPatientIntakeService.getDoctorsForIntake(specialtyId)
+      setIntakeDoctors(docs)
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Không thể xác minh sức chứa hàng đợi trung tâm.')
     }
   }
+  
+  const loadIntakeDoctorsOnly = async (specialtyId: string) => {
+    try {
+      const docs = await receptionistPatientIntakeService.getDoctorsForIntake(specialtyId)
+      setIntakeDoctors(docs)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  // Load doctors if specialty changes while in walk_in mode
+  useEffect(() => {
+    if (mode === 'walk_in' && selectedSpecialtyId) {
+      loadIntakeDoctorsOnly(selectedSpecialtyId)
+    }
+  }, [selectedSpecialtyId, mode])
+
+  // Automatically select the old doctor if available
+  useEffect(() => {
+    if (selectedPendingFollowUpId && selectedPendingFollowUp?.bac_si_cu) {
+      const oldDocInList = intakeDoctors.find(d => String(d.doctor_id) === String(selectedPendingFollowUp.bac_si_cu!.id) && d.hop_le)
+      if (oldDocInList) {
+        setSelectedDoctorId(String(oldDocInList.doctor_id))
+      } else {
+        setSelectedDoctorId(null)
+      }
+    } else {
+      setSelectedDoctorId(null)
+    }
+  }, [selectedPendingFollowUpId, intakeDoctors, selectedPendingFollowUp])
 
   const checkInBooked = async () => {
     if (!selectedAppointment || !selectedProfile) return
@@ -1616,24 +1687,45 @@ export default function PatientIntake() {
         ho_so_benh_nhan_id: selectedProfile.id,
         specialty_id: selectedSpecialtyId,
         xac_nhan_canh_bao: confirmLongWait,
+        lich_hen_goc_id: selectedPendingFollowUp?.appointment_id || undefined,
+        ket_qua_kham_id: selectedPendingFollowUp?._id || undefined,
+        force_doctor_id: selectedDoctorId || undefined
       })
       setCentralCapacity(null)
       setConfirmLongWait(false)
-      setMessage(`Đã tiếp nhận walk-in ${selectedProfile.ho_ten} vào hàng đợi khám. Số thứ tự: ${result.entry.ma_so_thu_tu || result.entry._id}`)
+      const isAutoAssigned = result.entry.trang_thai === 'dang_cho'
+      setMessage(isAutoAssigned 
+        ? `Đã tiếp nhận walk-in ${selectedProfile.ho_ten} và gán TỰ ĐỘNG cho bác sĩ cũ (Phòng ${result.entry.phong_kham || '...'}). Số thứ tự: ${result.entry.ma_so_thu_tu || result.entry._id}`
+        : `Đã tiếp nhận walk-in ${selectedProfile.ho_ten} vào hàng đợi trung tâm. Số thứ tự: ${result.entry.ma_so_thu_tu || result.entry._id}`)
+      
       setProfiles((current) => current.map((profile) => profile.id === selectedProfile.id
-        ? { ...profile, luot_dang_cho_hom_nay: { id: result.entry._id, trang_thai: 'cho_dieu_phoi', specialty_id: selectedSpecialtyId, doctor_id: null, phong_kham: null, checkin_time: result.entry.checkin_time || new Date().toISOString(), so_thu_tu_checkin: result.entry.so_thu_tu_checkin, ma_so_thu_tu: result.entry.ma_so_thu_tu } }
+        ? { ...profile, luot_dang_cho_hom_nay: { 
+            id: result.entry._id, 
+            trang_thai: result.entry.trang_thai, 
+            specialty_id: selectedSpecialtyId, 
+            doctor_id: result.entry.doctor_id || null, 
+            phong_kham: result.entry.phong_kham || null, 
+            checkin_time: result.entry.checkin_time || new Date().toISOString(), 
+            so_thu_tu_checkin: result.entry.so_thu_tu_checkin, 
+            ma_so_thu_tu: result.entry.ma_so_thu_tu 
+          } }
         : profile))
 
       const specialtyName = specialties.find((item) => item.id === selectedSpecialtyId)?.ten
+      const assignedDoctor = isAutoAssigned ? intakeDoctors.find((d) => String(d.doctor_id) === String(result.entry.doctor_id))?.bac_si : undefined
       setPrintData({
-        ticketType: 'cho_dieu_phoi',
+        ticketType: isAutoAssigned ? 'da_gan_bac_si' : 'cho_dieu_phoi',
         patientName: selectedProfile.ho_ten,
         queueNumber: result.entry.ma_so_thu_tu || '-',
         specialtyName,
+        doctorName: assignedDoctor || 'Chưa gán',
+        roomNumber: result.entry.phong_kham || 'Chưa gán',
         appointmentTime: formatDateTime(result.entry.checkin_time ?? new Date().toISOString()),
-        note: result.entry.thoi_gian_cho_uoc_tinh_phut
-          ? `Thời gian chờ ước tính: ${result.entry.thoi_gian_cho_uoc_tinh_phut} phút. Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.`
-          : 'Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.',
+        note: isAutoAssigned 
+          ? `Đã xếp vào phòng ${result.entry.phong_kham}. Vui lòng chờ đến lượt.`
+          : (result.entry.thoi_gian_cho_uoc_tinh_phut
+              ? `Thời gian chờ ước tính: ${result.entry.thoi_gian_cho_uoc_tinh_phut} phút. Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.`
+              : 'Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.'),
       })
 
       setPhone('')
@@ -1669,7 +1761,7 @@ export default function PatientIntake() {
         />
 
         <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <button
               type="button"
               onClick={() => setWorkspaceTab('lookup')}
@@ -1693,6 +1785,14 @@ export default function PatientIntake() {
             >
               Danh sách đã khám
               <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today_sessions' ? 'text-slate-200' : 'text-slate-500'}`}>Toàn bộ ca khám đã ghi nhận, xem lại theo từng ngày</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab('followups')}
+              className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'followups' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
+            >
+              Tái khám
+              <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'followups' ? 'text-slate-200' : 'text-slate-500'}`}>Nhắc nhở khách chưa đặt lịch</span>
             </button>
           </div>
         </div>
@@ -1963,6 +2063,10 @@ export default function PatientIntake() {
                     <button type="button" onClick={() => setMode('booked')} className={`min-h-12 rounded-xl px-4 text-sm font-bold ${mode === 'booked' ? 'bg-blue-700 text-white' : 'border border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100'}`}>
                       Check-in
                     </button>
+                  ) : hasPendingFollowUps ? (
+                    <button type="button" onClick={loadAvailability} disabled={hasActiveQueue} className={`min-h-12 rounded-xl px-4 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60 ${mode === 'walk_in' ? 'bg-purple-700 text-white' : 'border border-purple-300 bg-purple-50 text-purple-800 hover:bg-purple-100'}`}>
+                      Khám vãng lai (Tái khám)
+                    </button>
                   ) : (
                     <button type="button" onClick={loadAvailability} disabled={hasActiveQueue} className={`min-h-12 rounded-xl px-4 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60 ${mode === 'walk_in' ? 'bg-brand-700 text-white' : 'border border-brand-300 bg-brand-50 text-brand-800 hover:bg-brand-100'}`}>
                       Khám bệnh
@@ -2030,6 +2134,31 @@ export default function PatientIntake() {
                       </button>
                     </div>
 
+                    {hasPendingFollowUps && (
+                      <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50 p-4">
+                        <h5 className="text-sm font-bold text-purple-900">Bệnh nhân có chỉ định tái khám chờ xử lý</h5>
+                        <p className="mt-1 text-xs text-purple-800">Chọn lịch tái khám dưới đây để liên kết với lượt khám hiện tại (nếu khách tới khám đúng bệnh cũ):</p>
+                        <div className="mt-3 grid gap-2">
+                          {selectedProfile.pending_follow_ups?.map(fu => (
+                            <label key={fu._id} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${selectedPendingFollowUpId === fu._id ? 'border-purple-600 bg-purple-100 shadow-sm' : 'border-purple-200 bg-white hover:border-purple-400'}`}>
+                              <input type="radio" name="pending_follow_up" checked={selectedPendingFollowUpId === fu._id} onChange={() => setSelectedPendingFollowUpId(fu._id)} className="mt-0.5 h-4 w-4 border-purple-300 text-purple-600 focus:ring-purple-500" />
+                              <div className="flex-1">
+                                <p className="text-sm font-bold text-purple-900">Chẩn đoán cũ: {fu.chan_doan || 'Không có chẩn đoán'}</p>
+                                <p className="mt-1 text-xs font-semibold text-purple-700">Ngày tái khám dự kiến: {fu.ngay_tai_kham ? formatDate(fu.ngay_tai_kham) : 'Chưa xác định'}</p>
+                              </div>
+                            </label>
+                          ))}
+                          <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${selectedPendingFollowUpId === null ? 'border-slate-400 bg-slate-100' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                            <input type="radio" name="pending_follow_up" checked={selectedPendingFollowUpId === null} onChange={() => setSelectedPendingFollowUpId(null)} className="mt-0.5 h-4 w-4 border-slate-300 text-slate-600 focus:ring-slate-500" />
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-slate-700">Khám bệnh mới hoàn toàn</p>
+                              <p className="mt-0.5 text-xs text-slate-500">Bỏ qua liên kết với các chỉ định tái khám ở trên</p>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                       <p className="text-xs font-semibold text-slate-500">Chuyên khoa áp dụng</p>
                       <p className="mt-1 text-sm font-bold text-slate-900">{selectedSpecialtyName || 'Đang xác định chuyên khoa mặc định'}</p>
@@ -2041,7 +2170,58 @@ export default function PatientIntake() {
                       </div>
                     )}
 
-                    {centralCapacity && (
+                    {centralCapacity && selectedPendingFollowUpId && (
+                      <>
+                        <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                           <h5 className="font-bold text-blue-900">
+                             Bác sĩ khám trước đó: {selectedPendingFollowUp?.bac_si_cu?.ho_ten || 'Không rõ'}
+                           </h5>
+                           
+                           <div className="mt-4">
+                             <p className="text-sm font-semibold text-blue-800">Chọn bác sĩ tiếp nhận tái khám hôm nay:</p>
+                             <select
+                               className="mt-2 block w-full rounded-lg border-blue-300 bg-white text-sm focus:border-blue-500 focus:ring-blue-500"
+                               value={selectedDoctorId || ''}
+                               onChange={(e) => setSelectedDoctorId(e.target.value)}
+                             >
+                               <option value="" disabled>-- Chọn bác sĩ --</option>
+                               {intakeDoctors.map(doc => (
+                                 <option key={doc.doctor_id} value={doc.doctor_id} disabled={!doc.hop_le}>
+                                   {doc.bac_si} {doc.phong_kham ? `- Phòng ${doc.phong_kham}` : ''} 
+                                   {!doc.hop_le ? ` (Bận/Không có ca)` : ''}
+                                 </option>
+                               ))}
+                             </select>
+                             {!selectedDoctorId && selectedPendingFollowUp?.bac_si_cu && (
+                               <p className="mt-2 text-xs text-rose-600 font-semibold">Bác sĩ cũ hiện không thể tiếp nhận thêm. Vui lòng chọn bác sĩ khác, hoặc đặt lịch hẹn sang ngày khác.</p>
+                             )}
+                           </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={checkInWalkIn}
+                            disabled={checkingIn || hasActiveQueue || !selectedDoctorId}
+                            className="min-h-12 flex-1 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {checkingIn
+                              ? 'Đang gán bác sĩ...'
+                              : `Gán thẳng cho Bác sĩ`}
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => setWorkspaceTab('appointments')}
+                            className="min-h-12 flex-1 rounded-xl border border-blue-300 bg-white px-4 text-sm font-bold text-blue-700 hover:bg-blue-50"
+                          >
+                            Đặt lịch hẹn ngày khác
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {centralCapacity && !selectedPendingFollowUpId && (
                       <>
                         <div className={`mt-4 rounded-xl border p-4 ${
                           centralCapacity.trang_thai === 'co_the_nhan'
@@ -2118,8 +2298,10 @@ export default function PatientIntake() {
             initialAppointmentId={pendingAppointmentId}
             onInitialAppointmentHandled={() => setPendingAppointmentId(null)}
           />
-        ) : (
+        ) : workspaceTab === 'today_sessions' ? (
           <ExamSessionsHistoryTab />
+        ) : (
+          <ReceptionistFollowupTab onSearchPhone={(p) => { setWorkspaceTab('lookup'); setPhone(p); search(undefined, p); }} />
         )}
 
         {editingProfile && (
