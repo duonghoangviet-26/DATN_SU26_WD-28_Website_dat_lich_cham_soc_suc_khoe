@@ -6,6 +6,7 @@ import { capSoThuTuCheckin } from './checkInNumber.service.js'
 import { layCauHinhHangDoiOffline } from './offlineQueueConfig.service.js'
 import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
 import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
+import { layGiaKhamChuyenKhoa } from './doctorAssignment.service.js'
 
 export const TRANG_THAI_OFFLINE_TRUNG_TAM = 'cho_dieu_phoi'
 export const TRANG_THAI_HANG_DOI_DANG_MO = [
@@ -425,11 +426,31 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
   }).sort({ ngay_tao: -1 }).lean()
 
   if (prevRecord) {
-    isFollowUpPatient = true
-    if (!resolvedLichHenGocId) {
-      resolvedLichHenGocId = prevRecord.appointment_id || null
+    let isValidFollowUp = false
+    if (prevRecord.chi_dinh_tai_kham && !prevRecord.da_dat_lich_tai_kham) {
+      const ngayTaiKham = prevRecord.ngay_tai_kham ? new Date(prevRecord.ngay_tai_kham) : null
+      if (ngayTaiKham) {
+        ngayTaiKham.setUTCHours(0, 0, 0, 0)
+        const hanCuoi = new Date(ngayTaiKham.getTime() + 14 * 86400000)
+        if (now.getTime() <= hanCuoi.getTime()) {
+          isValidFollowUp = true
+        }
+      }
     }
-    lastExamDoctorId = prevRecord.bac_si_phu_trach_id || null
+    
+    if (isValidFollowUp || isFollowUpPatient) {
+      isFollowUpPatient = true
+      if (!resolvedLichHenGocId) {
+        resolvedLichHenGocId = prevRecord.appointment_id || null
+      }
+      lastExamDoctorId = prevRecord.bac_si_phu_trach_id || null
+      
+      if (isValidFollowUp && prevRecord._id) {
+        ket_qua_kham_id = prevRecord._id
+      }
+    } else {
+      isFollowUpPatient = false
+    }
   } else {
     const prevAppt = await LichHen.findOne({
       ho_so_benh_nhan_id: profile._id,
@@ -437,11 +458,19 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
     }).sort({ ngay_kham: -1 }).lean()
 
     if (prevAppt) {
-      isFollowUpPatient = true
-      if (!resolvedLichHenGocId) {
-        resolvedLichHenGocId = prevAppt._id
+      const ngayKham = new Date(prevAppt.ngay_kham)
+      ngayKham.setUTCHours(0, 0, 0, 0)
+      const hanCuoi = new Date(ngayKham.getTime() + 14 * 86400000)
+      
+      if (now.getTime() <= hanCuoi.getTime() || isFollowUpPatient) {
+        isFollowUpPatient = true
+        if (!resolvedLichHenGocId) {
+          resolvedLichHenGocId = prevAppt._id
+        }
+        lastExamDoctorId = prevAppt.doctor_id || null
+      } else {
+        isFollowUpPatient = false
       }
-      lastExamDoctorId = prevAppt.doctor_id || null
     }
   }
 
@@ -494,6 +523,10 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
       }
 
       const checkInNumber = await capSoThuTuCheckin(now)
+      
+      const bangGia = await layGiaKhamChuyenKhoa(normalizedSpecialtyId, session)
+      const gia_kham = isFollowUpPatient ? 0 : bangGia.gia_kham
+      const payment_status = isFollowUpPatient ? 'paid' : 'unpaid'
 
       const appointmentCode = `LH-${String(now.getUTCFullYear()).slice(-2)}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}-${String(await Counter.nextSeq('lich_hen')).padStart(4, '0')}`
       
@@ -510,8 +543,8 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
         ngay_kham: now,
         gio_kham: `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`,
         status: 'checked_in',
-        payment_status: 'paid', // Luồng offline luôn xử lý thanh toán (hoặc 0đ) ngay tại lúc tiếp nhận
-        gia_kham: 0,
+        payment_status: payment_status,
+        gia_kham: gia_kham,
         phong_kham: autoAssignedPhongKham || null,
         doctor_id: autoAssignedDoctorId || null,
         specialty_id: normalizedSpecialtyId,

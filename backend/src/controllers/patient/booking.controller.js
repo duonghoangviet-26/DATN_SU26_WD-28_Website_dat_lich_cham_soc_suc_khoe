@@ -1127,7 +1127,7 @@ export async function cancelBooking(req, res) {
       return fail(res, 400, 'Không thể hủy lịch hẹn đã qua thời gian khám')
     }
 
-    if (a.payment_status === 'paid') {
+    if (a.payment_status === 'paid' && a.gia_kham > 0) {
       return fail(res, 400, 'Lịch hẹn đã thanh toán không thể tự hủy trên ứng dụng, vui lòng liên hệ hotline phòng khám để được hỗ trợ hoàn tiền')
     }
 
@@ -1135,7 +1135,7 @@ export async function cancelBooking(req, res) {
     const isWithin24h = diffMs < 24 * 3600 * 1000
 
     let refundPolicyNote = ''
-    if (a.payment_status === 'paid') {
+    if (a.payment_status === 'paid' && a.gia_kham > 0) {
       refundPolicyNote = isWithin24h 
         ? ' (Hoàn tiền 50% theo chính sách hủy < 24h)' 
         : ' (Hoàn tiền 100% theo chính sách hủy > 24h)'
