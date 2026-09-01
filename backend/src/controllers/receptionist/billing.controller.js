@@ -264,9 +264,15 @@ async function resolveBillingCase(referenceId, source) {
 }
 
 function invoiceFilter(caseItem) {
-  return caseItem.source === 'online'
-    ? { appointment_id: caseItem.reference_id }
-    : { hang_doi_id: caseItem.reference_id }
+  const apptId = caseItem.appointment?._id ?? caseItem.queue?.appointment_id ?? null
+  const queueId = caseItem.queue?._id ?? null
+
+  const conditions = []
+  if (queueId) conditions.push({ hang_doi_id: queueId })
+  if (apptId) conditions.push({ appointment_id: apptId })
+
+  if (conditions.length === 0) return { _id: null }
+  return conditions.length === 1 ? conditions[0] : { $or: conditions }
 }
 
 async function attachOnlinePrepayment(caseItem, invoiceId) {
