@@ -2,6 +2,7 @@ import { BacSi, NghiPhepBacSi, LichHen, ThongBao, NguoiDung } from '../../models
 import { ok, created, fail } from '../../utils/response.js'
 import { AFFECTED_BY_LEAVE_STATUSES } from '../../utils/appointmentStatus.js'
 import { emitAdminRealtime } from '../../realtime/socket.js'
+import { tuDongHuyDonNghiQuaHan } from '../../services/doctorLeaveApproval.service.js'
 
 // ============================================================
 // Bác sĩ gửi yêu cầu nghỉ — Routes: /api/doctor/leaves

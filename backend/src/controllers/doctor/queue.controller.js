@@ -309,7 +309,7 @@ export async function intoRoom(req, res) {
 
     // Khách đặt trước có thể check-in để giữ thứ tự, nhưng không được vào phòng khi
     // phí lịch hẹn chưa thanh toán. Walk-in được thu sau khám nên không áp dụng gate này.
-    if (entry.appointment_id) {
+    if (entry.appointment_id && entry.nguon !== 'offline') {
       const paymentState = await resolveAndSyncAppointmentPaymentState(entry.appointment_id)
       const appointment = paymentState?.appointment ?? null
       if (!appointment) return fail(res, 409, 'Lịch hẹn của lượt này không còn tồn tại, không thể cho vào phòng')
