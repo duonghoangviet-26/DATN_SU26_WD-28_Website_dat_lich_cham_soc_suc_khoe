@@ -96,6 +96,17 @@ export default function Profile() {
     }
   }, [activeTab, user])
 
+  function hasVitalsData(sh?: any) {
+    if (!sh) return false
+    return (
+      sh.nhip_tim != null ||
+      (sh.huyet_ap != null && String(sh.huyet_ap).trim() !== '') ||
+      sh.nhiet_do != null ||
+      sh.can_nang != null ||
+      sh.chieu_cao != null
+    )
+  }
+
   function calculateAge(dateStr?: string | null) {
     if (!dateStr) return null
     const dob = new Date(dateStr)
@@ -1264,7 +1275,7 @@ export default function Profile() {
                               </div>
 
                               {/* Vitals */}
-                              {result.ket_qua.sinh_hieu && (
+                              {hasVitalsData(result.ket_qua.sinh_hieu) && (
                                 <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
                                   <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-3 flex items-center gap-1.5">
                                     <span>❤️</span> Sinh hiệu
