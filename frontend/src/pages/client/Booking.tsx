@@ -186,8 +186,7 @@ export default function Booking() {
     for (let i = 0; i < 14 && datesList.length < 7; i++) {
       const nextDate = new Date(today)
       nextDate.setDate(today.getDate() + i)
-      // Demo 09/08/2026: DB co lich lam viec Chu nhat, nen tam thoi khong chan Chu nhat o client.
-      // if (nextDate.getDay() === 0) continue // Bo qua Chu nhat
+      if (nextDate.getDay() === 0) continue // Bỏ qua Chủ nhật
       const yyyy = nextDate.getFullYear()
       const mm = String(nextDate.getMonth() + 1).padStart(2, '0')
       const dd = String(nextDate.getDate()).padStart(2, '0')
@@ -608,12 +607,11 @@ export default function Booking() {
       return
     }
 
-    // Demo 09/08/2026: DB co lich lam viec Chu nhat, nen tam thoi khong chan Chu nhat o client.
-    // const picked = new Date(dateValue + 'T00:00:00')
-    // if (picked.getDay() === 0) {
-    //   setToast('Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
-    //   return
-    // }
+    const picked = new Date(dateValue + 'T00:00:00')
+    if (picked.getDay() === 0) {
+      setToast('Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
+      return
+    }
 
     if (selectedDate !== dateValue) {
       setSelectedDate(dateValue)

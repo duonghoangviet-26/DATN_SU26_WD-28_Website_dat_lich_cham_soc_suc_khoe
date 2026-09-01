@@ -642,11 +642,9 @@ export async function createBooking(req, res) {
       }
     }
 
-    // Demo 09/08/2026: DB co lich lam viec Chu nhat, nen tam thoi khong chan Chu nhat o backend.
-    // Giu lai guard cu de co the bat lai neu phong kham chot nghi co dinh Chu nhat.
-    // if (appointmentDate.getUTCDay() === 0) {
-    //   return rollbackFail(400, 'Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
-    // }
+    if (appointmentDate.getUTCDay() === 0) {
+      return rollbackFail(400, 'Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
+    }
 
     // ── Tự gán bác sĩ (rule mục 12) ─────────────────────────────────────────
     // Chạy TRƯỚC mọi kiểm tra khác để phần dưới không phải biết khách đã đi đường nào:
