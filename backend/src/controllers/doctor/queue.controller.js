@@ -309,11 +309,15 @@ export async function intoRoom(req, res) {
 
     // Khách đặt trước có thể check-in để giữ thứ tự, nhưng không được vào phòng khi
     // phí lịch hẹn chưa thanh toán. Walk-in được thu sau khám nên không áp dụng gate này.
-    if (entry.appointment_id && entry.nguon !== 'offline') {
+    if (entry.appointment_id) {
       const paymentState = await resolveAndSyncAppointmentPaymentState(entry.appointment_id)
       const appointment = paymentState?.appointment ?? null
       if (!appointment) return fail(res, 409, 'Lịch hẹn của lượt này không còn tồn tại, không thể cho vào phòng')
-      if (paymentState.payment_status !== 'paid') {
+      const isWalkIn = appointment.nguon === 'tai_cho'
+        || appointment.hinh_thuc_dat_lich === 'receptionist_walkin'
+        || appointment.hinh_thuc_dat_lich === 'walk_in'
+        || entry.loai_doi_tuong === 'walk_in_guest'
+      if (!isWalkIn && paymentState.payment_status !== 'paid') {
         return fail(res, 409, 'Lịch hẹn chưa thanh toán đủ. Mời thu ngân xác nhận thanh toán trước khi vào phòng.')
       }
     }
