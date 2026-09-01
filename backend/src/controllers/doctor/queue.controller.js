@@ -314,9 +314,12 @@ export async function intoRoom(req, res) {
       const appointment = paymentState?.appointment ?? null
       if (!appointment) return fail(res, 409, 'Lịch hẹn của lượt này không còn tồn tại, không thể cho vào phòng')
       const isWalkIn = appointment.nguon === 'tai_cho'
+        || appointment.nguon === 'offline'
+        || appointment.hinh_thuc_dat_lich === 'offline'
         || appointment.hinh_thuc_dat_lich === 'receptionist_walkin'
         || appointment.hinh_thuc_dat_lich === 'walk_in'
         || entry.loai_doi_tuong === 'walk_in_guest'
+        || entry.nguon === 'offline'
       if (!isWalkIn && paymentState.payment_status !== 'paid') {
         return fail(res, 409, 'Lịch hẹn chưa thanh toán đủ. Mời thu ngân xác nhận thanh toán trước khi vào phòng.')
       }
