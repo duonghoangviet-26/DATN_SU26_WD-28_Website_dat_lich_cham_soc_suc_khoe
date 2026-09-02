@@ -683,8 +683,8 @@ export default function DoctorAppointments() {
 
                             {/* Thông tin khám: dịch vụ (chính) + mã lịch hẹn (metadata) */}
                             <td className="px-4 py-3 align-top">
-                              <p className="truncate text-slate-700" title={appt.ten_dich_vu ?? undefined}>
-                                {appt.ten_dich_vu ?? (appt.loai_kham === 'home' ? LOAI_LABEL.home : '—')}
+                              <p className="truncate text-slate-700" title={appt.ten_dich_vu ?? appt.chuyen_khoa ?? undefined}>
+                                {appt.ten_dich_vu ?? appt.chuyen_khoa ?? (appt.loai_kham === 'home' ? LOAI_LABEL.home : '—')}
                               </p>
                               {appt.ma_lich_hen && (
                                 <p className="mt-0.5 truncate font-mono text-xs text-slate-400">{appt.ma_lich_hen}</p>
