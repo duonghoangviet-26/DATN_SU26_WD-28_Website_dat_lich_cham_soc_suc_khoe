@@ -1,4 +1,5 @@
 import { NhatKyThaoTac, ThongBao } from '../models/index.js'
+import { isMailConfigured, sendMail, renderNotificationEmail } from './mail.service.js'
 
 function formatDate(value) {
   if (!value) return null
@@ -74,6 +75,19 @@ export async function notifyAppointmentCustomerChange({
     action,
     reason,
     appointment: customerContactSnapshot(appointment),
+  }
+
+  const targetEmail = appointment.email_khach || appointment.user_id?.email
+  if (targetEmail && isMailConfigured()) {
+    const htmlContent = renderNotificationEmail({ title, content })
+    // Bắn lệnh gửi email chạy ngầm, không dùng await để tránh block luồng của lễ tân
+    sendMail({
+      to: targetEmail,
+      subject: title,
+      html: htmlContent
+    }).catch(err => {
+      console.error('[appointment-notification] Loi khi gui email thong bao khach hang:', err)
+    })
   }
 
   if (appointment.user_id) {
