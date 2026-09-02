@@ -5,6 +5,7 @@ import { isNgayTaiKhamHopLe } from '../../utils/validators.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 import { soSanhThuTuHangDoi, tinhBacUuTienDong } from '../../models/HangDoi.js'
 import { startOfDayUtc } from '../../utils/clinicTime.js'
+import { enrichAppointmentsWithPaymentData } from '../admin/appointment.controller.js'
 import {
   getOwnedOfflineQueue,
   layPhienKham,
@@ -109,8 +110,10 @@ export async function list(req, res) {
       .populate('specialty_id', 'ten')
       .sort({ ngay_kham: 1, gio_kham: 1 })
       .lean()
+      
+    const enrichedAppointments = await enrichAppointmentsWithPaymentData(appointments, { persist: true })
 
-    const result = await Promise.all(appointments.map(formatAppointment))
+    const result = await Promise.all(enrichedAppointments.map(formatAppointment))
     return ok(res, result)
   } catch (err) {
     return fail(res, 500, err.message)

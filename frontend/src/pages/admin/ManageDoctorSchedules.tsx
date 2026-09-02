@@ -942,10 +942,6 @@ export default function ManageDoctorSchedules() {
         </div>
       )}
 
-      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-        Lịch làm việc được tự động tạo khi backend khởi động và vào 00:00 Chủ nhật hằng tuần. Trạng thái `Chưa tạo lịch` chỉ còn là cảnh báo dữ liệu thiếu; nút chạy bù là phương án dự phòng khi cần xử lý ngay.
-      </div>
-
       <DoctorScheduleCalendar
         items={items}
         fromDate={fromDate}

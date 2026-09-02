@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose'
+import mongoose from 'mongoose'
 import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
@@ -11,6 +11,8 @@ import HoSoBenhNhan from '../../models/HoSoBenhNhan.js'
 import HangDoi from '../../models/HangDoi.js'
 import TrangThaiPhongKham from '../../models/TrangThaiPhongKham.js'
 import { emitDashboardAppointmentChanged } from '../../realtime/socket.js'
+
+import { enrichAppointmentsWithPaymentData } from '../admin/appointment.controller.js'
 import { checkInLichHen, layLichChoTiepNhan } from '../../services/checkIn.service.js'
 import { apDungPhuongAn } from '../../services/appointmentReschedule.service.js'
 import { duyetDonNghi, laDonNganHanChoLeTan, demAnhHuongCuaDonNghi } from '../../services/doctorLeaveApproval.service.js'
@@ -204,7 +206,10 @@ export const getAppointments = async (req, res) => {
     const suaGanNhatByAppointment = await layDongSuaGanNhatChoNhieuLichHen(
       appointments.map((appointment) => appointment._id),
     )
-    const data = appointments.map((appointment) => ({
+    // Enrich payment data and save back to DB if needed
+    const enrichedAppointments = await enrichAppointmentsWithPaymentData(appointments, { persist: true })
+
+    const data = enrichedAppointments.map((appointment) => ({
       ...appointment,
       ...buildReceptionistAppointmentActions(
         appointment,
