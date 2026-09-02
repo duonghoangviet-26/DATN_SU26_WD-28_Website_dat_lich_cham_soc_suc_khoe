@@ -100,11 +100,13 @@ function resolvePaymentDoctor(payment) {
 function resolvePaymentAppointmentId(payment) {
   const invoice = getPopulatedObject(payment.hoa_don_id)
   const invoiceAppointment = getPopulatedObject(invoice?.appointment_id)
+  const queue = getPopulatedObject(payment.hang_doi_id) ?? getPopulatedObject(invoice?.hang_doi_id)
 
   return payment.appointment_id?._id
     ?? payment.appointment_id
     ?? invoiceAppointment?._id
     ?? invoice?.appointment_id
+    ?? queue?.appointment_id
     ?? null
 }
 

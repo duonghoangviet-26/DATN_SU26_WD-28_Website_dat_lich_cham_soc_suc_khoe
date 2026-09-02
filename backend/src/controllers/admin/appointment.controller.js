@@ -6,6 +6,7 @@ import BacSi from '../../models/BacSi.js'
 import DichVu from '../../models/DichVu.js'
 import HoaDon from '../../models/HoaDon.js'
 import ThanhToan from '../../models/ThanhToan.js'
+import HangDoi from '../../models/HangDoi.js'
 import { ok, fail } from '../../utils/response.js'
 import { emitAdminRealtime, emitDashboardAppointmentChanged } from '../../realtime/socket.js'
 
@@ -501,13 +502,28 @@ export async function enrichAppointmentsWithPaymentData(appointments, { persist 
   }
 
   const appointmentIds = appointments.map((appointment) => appointment._id)
-  const invoices = await HoaDon.find({ appointment_id: { $in: appointmentIds } })
-    .select('_id appointment_id so_hoa_don trang_thai_hoa_don tong_thanh_toan')
+  const hangDoiIds = await HangDoi.find({ appointment_id: { $in: appointmentIds } }).select('_id appointment_id').lean()
+  const apptIdByHangDoiId = new Map(hangDoiIds.map(h => [String(h._id), String(h.appointment_id)]))
+  const queueIds = hangDoiIds.map(h => h._id)
+
+  const invoices = await HoaDon.find({
+    $or: [
+      { appointment_id: { $in: appointmentIds } },
+      ...(queueIds.length > 0 ? [{ hang_doi_id: { $in: queueIds } }] : [])
+    ]
+  })
+    .select('_id appointment_id hang_doi_id so_hoa_don trang_thai_hoa_don tong_thanh_toan')
     .lean()
 
-  const invoiceByAppointmentId = new Map(
-    invoices.map((invoice) => [String(invoice.appointment_id), invoice])
-  )
+  const invoiceByAppointmentId = new Map()
+  for (const invoice of invoices) {
+    const apptKey = invoice.appointment_id
+      ? String(invoice.appointment_id)
+      : apptIdByHangDoiId.get(String(invoice.hang_doi_id ?? ''))
+    if (apptKey && !invoiceByAppointmentId.has(apptKey)) {
+      invoiceByAppointmentId.set(apptKey, invoice)
+    }
+  }
   const invoiceById = new Map(invoices.map((invoice) => [String(invoice._id), invoice]))
   const invoiceIds = invoices.map((invoice) => invoice._id)
 

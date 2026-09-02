@@ -303,6 +303,7 @@ export async function createOfflineInvoice(req, res) {
     const tongThanhToan = gia_kham + tongTienPhatSinh
     const invoice = current ?? new HoaDon({
       hang_doi_id: entry._id,
+      ...(entry.appointment_id ? { appointment_id: entry.appointment_id } : {}),
       ho_so_benh_nhan_id: entry.ho_so_benh_nhan_id,
       so_hoa_don: await nextInvoiceNumber(new Date()),
     })
@@ -310,6 +311,9 @@ export async function createOfflineInvoice(req, res) {
     if (paid > tongThanhToan) throw loi(409, 'Tổng hóa đơn mới nhỏ hơn số tiền đã thu')
 
     invoice.ho_so_benh_nhan_id = entry.ho_so_benh_nhan_id
+    if (entry.appointment_id) {
+      invoice.appointment_id = entry.appointment_id
+    }
     invoice.specialty_id = entry.specialty_id
     invoice.tong_tien_kham = gia_kham
     invoice.chi_tiet_thu_phi = chiTietThuPhi
@@ -327,6 +331,7 @@ export async function createOfflineInvoice(req, res) {
       payment = await ThanhToan.create({
         hoa_don_id: invoice._id,
         hang_doi_id: entry._id,
+        ...(entry.appointment_id ? { appointment_id: entry.appointment_id } : {}),
         ho_so_benh_nhan_id: entry.ho_so_benh_nhan_id,
         so_tien: conPhaiThu,
         loai_thanh_toan: 'thanh_toan_bo_sung',

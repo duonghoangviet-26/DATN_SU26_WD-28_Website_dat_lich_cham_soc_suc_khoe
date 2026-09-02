@@ -462,6 +462,10 @@ export async function createBillingInvoice(req, res) {
     if (pending) throw loi(409, 'Hóa đơn đang có giao dịch chuyển khoản chờ xác nhận; hãy xác nhận hoặc hủy giao dịch đó trước')
     const paidBefore = invoice._id ? await paidTotal(invoice._id) : 0
 
+    const apptId = caseItem.appointment?._id ?? caseItem.queue?.appointment_id ?? (caseItem.source === 'online' ? caseItem.reference_id : null)
+    if (apptId) {
+      invoice.appointment_id = apptId
+    }
     invoice.ho_so_benh_nhan_id = caseItem.patient_id
     invoice.specialty_id = caseItem.specialty_id
     invoice.tong_tien_kham = fee
