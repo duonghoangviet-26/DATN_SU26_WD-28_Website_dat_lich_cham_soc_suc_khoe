@@ -1037,7 +1037,7 @@ export async function getPatientProfileHistory(req, res) {
         .sort({ ngay_kham: -1, gio_kham: -1 })
         .lean(),
       HangDoi.find({ doctor_id: docId, ho_so_benh_nhan_id: profile._id })
-        .select('checkin_time trang_thai nguon schedule_id slot_id')
+        .select('checkin_time trang_thai nguon schedule_id slot_id appointment_id')
         .sort({ checkin_time: -1 })
         .lean(),
     ])
@@ -1053,8 +1053,11 @@ export async function getPatientProfileHistory(req, res) {
     const resultByAppointment = new Map(results.filter((result) => result.appointment_id).map((result) => [String(result.appointment_id), result]))
     const resultByQueue = new Map(results.filter((result) => result.hang_doi_id).map((result) => [String(result.hang_doi_id), result]))
 
+    const queueApptIds = new Set(queueEntries.map(e => String(e.appointment_id)).filter(id => id !== 'undefined' && id !== 'null'))
+    const extraAppointments = appointments.filter(a => !queueApptIds.has(String(a._id)))
+
     const visits = [
-      ...appointments.map((appointment) => ({
+      ...extraAppointments.map((appointment) => ({
         source: 'online',
         appointment_id: appointment._id,
         hang_doi_id: null,
@@ -1067,19 +1070,22 @@ export async function getPatientProfileHistory(req, res) {
         ma_lich_hen: appointment.ma_lich_hen,
         ket_qua: resultByAppointment.get(String(appointment._id)) ?? null,
       })),
-      ...queueEntries.map((entry) => ({
-        source: 'offline',
-        appointment_id: null,
-        hang_doi_id: entry._id,
-        ngay_kham: entry.checkin_time,
-        gio_kham: null,
-        status: entry.trang_thai,
-        payment_status: null,
-        ten_dich_vu: null,
-        gia_kham: null,
-        ma_lich_hen: null,
-        ket_qua: resultByQueue.get(String(entry._id)) ?? null,
-      })),
+      ...queueEntries.map((entry) => {
+        const appt = appointments.find(a => String(a._id) === String(entry.appointment_id))
+        return {
+          source: entry.nguon || 'offline',
+          appointment_id: entry.appointment_id || null,
+          hang_doi_id: entry._id,
+          ngay_kham: entry.checkin_time,
+          gio_kham: appt ? appt.gio_kham : null,
+          status: entry.trang_thai,
+          payment_status: appt ? appt.payment_status : null,
+          ten_dich_vu: appt ? appt.ten_dich_vu : null,
+          gia_kham: appt ? appt.gia_kham : null,
+          ma_lich_hen: appt ? appt.ma_lich_hen : null,
+          ket_qua: resultByQueue.get(String(entry._id)) || (entry.appointment_id ? resultByAppointment.get(String(entry.appointment_id)) : null) || null,
+        }
+      }),
     ].sort((a, b) => new Date(b.ngay_kham).getTime() - new Date(a.ngay_kham).getTime())
 
     return ok(res, { profile, visits })
