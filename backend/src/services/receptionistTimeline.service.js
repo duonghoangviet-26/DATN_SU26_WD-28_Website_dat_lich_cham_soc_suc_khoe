@@ -187,10 +187,10 @@ export function tuLichSuLichHen(entry) {
     entry.tu_trang_thai !== entry.den_trang_thai
       ? { truong: 'trang_thai', cu: entry.tu_trang_thai, moi: entry.den_trang_thai }
       : null,
-    entry.gio_kham_cu !== entry.gio_kham_moi && (entry.gio_kham_cu || entry.gio_kham_moi)
+    (entry.loai_thay_doi === 'reschedule') || (entry.gio_kham_cu !== entry.gio_kham_moi && (entry.gio_kham_cu || entry.gio_kham_moi))
       ? { truong: 'gio_kham', cu: entry.gio_kham_cu, moi: entry.gio_kham_moi }
       : null,
-    ngayCuMs !== null && ngayMoiMs !== null && ngayCuMs !== ngayMoiMs
+    (entry.loai_thay_doi === 'reschedule') || (ngayCuMs !== null && ngayMoiMs !== null && ngayCuMs !== ngayMoiMs)
       ? { truong: 'ngay_kham', cu: entry.ngay_kham_cu, moi: entry.ngay_kham_moi }
       : null,
     String(entry.bac_si_cu_id ?? '') !== String(entry.bac_si_moi_id ?? '') && (entry.bac_si_cu_id || entry.bac_si_moi_id)
