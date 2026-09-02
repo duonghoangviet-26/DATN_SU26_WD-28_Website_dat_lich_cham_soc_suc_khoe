@@ -153,7 +153,6 @@ const VALUE_LABELS: Record<string, string> = {
   desk: 'Lễ tân tạo',
   quay: 'Lễ tân tạo',
   online: 'Đặt trực tuyến',
-  admin: 'Quản trị viên tạo',
   clinic: 'Phòng khám',
   home: 'Tại nhà',
   related: 'Dịch vụ liên quan',
@@ -175,10 +174,6 @@ const VALUE_LABELS: Record<string, string> = {
   note_change: 'Cập nhật ghi chú',
   appointment_update: 'Cập nhật lịch hẹn',
   dat_ho: 'Cập nhật thông tin đặt hộ',
-
-  admin: 'Quản trị viên',
-  doctor: 'Bác sĩ',
-  user: 'Bệnh nhân',
   system: 'Hệ thống',
 }
 
