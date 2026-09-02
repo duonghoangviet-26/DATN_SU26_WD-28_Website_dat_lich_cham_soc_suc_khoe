@@ -26,7 +26,7 @@ export function resolveAppointmentPaymentStatus({ appointment, invoice, payments
   const prepaymentPayments = linkedPayments.filter((payment) => PREPAYMENT_TYPES.includes(payment.loai_thanh_toan))
   const hasLinkedFinancialRecord = Boolean(invoice) || linkedPayments.length > 0
 
-  if (!hasLinkedFinancialRecord || prepaymentPayments.length === 0) {
+  if (!hasLinkedFinancialRecord) {
     return currentStatus
   }
 
@@ -39,12 +39,18 @@ export function resolveAppointmentPaymentStatus({ appointment, invoice, payments
     return 'refunded'
   }
 
-  if (invoice?.trang_thai_hoa_don === 'da_thanh_toan_du') {
-    return 'paid'
-  }
+  if (invoice) {
+    if (invoice.trang_thai_hoa_don === 'da_thanh_toan_du' && (invoice.da_xac_nhan_thu_ngan === true || invoice.da_xac_nhan_thu_ngan == null)) {
+      return 'paid'
+    }
 
-  if (invoice?.trang_thai_hoa_don === 'da_dat_coc') {
-    return 'partial'
+    if (invoice.trang_thai_hoa_don === 'da_dat_coc') {
+      return 'partial'
+    }
+
+    if (invoice.trang_thai_hoa_don === 'chua_thanh_toan' || invoice.da_xac_nhan_thu_ngan === false) {
+      return paidPayments.length > 0 ? 'partial' : 'unpaid'
+    }
   }
 
   if (paidPayments.length > 0) {
@@ -59,10 +65,6 @@ export function resolveAppointmentPaymentStatus({ appointment, invoice, payments
     return 'refunded'
   }
 
-  if (invoice?.trang_thai_hoa_don === 'chua_thanh_toan') {
-    return 'unpaid'
-  }
-
   return currentStatus
 }
 
@@ -73,7 +75,7 @@ async function loadPaymentStateMaps(appointmentIds, session = null) {
   }
 
   const invoiceQuery = HoaDon.find({ appointment_id: { $in: ids } })
-    .select('_id appointment_id so_hoa_don trang_thai_hoa_don tong_thanh_toan')
+    .select('_id appointment_id so_hoa_don trang_thai_hoa_don tong_thanh_toan da_xac_nhan_thu_ngan')
   if (session) invoiceQuery.session(session)
   const invoices = await invoiceQuery.lean()
 

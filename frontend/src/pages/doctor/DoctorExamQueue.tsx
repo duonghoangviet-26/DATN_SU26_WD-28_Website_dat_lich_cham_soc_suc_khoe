@@ -5,6 +5,7 @@ import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
 import Modal from '@/components/common/Modal'
 import Icon from '@/components/admin/icons'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
 import ExamHistoryDetailModal from '@/components/doctor/ExamHistoryDetailModal'
 import PatientHistoryModal from '@/components/doctor/PatientHistoryModal'
@@ -206,6 +207,16 @@ export default function DoctorExamQueue() {
   const [notifyError, setNotifyError] = useState<string | null>(null)
   const [notifySuccess, setNotifySuccess] = useState<string | null>(null)
 
+  // State cho Modal hủy ca khám
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; name: string } | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelSaving, setCancelSaving] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+
+  // Phân trang 10 bệnh nhân / 1 trang
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 10
+
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
     // Cảnh báo (chưa thanh toán, ca quá tải) dài hơn một dòng — để lâu hơn cho đọc kịp.
@@ -288,12 +299,27 @@ export default function DoctorExamQueue() {
     }
   }
 
-  // Hủy ca gồm rất nhiều tình huống khác nhau (khách bỏ về, không đủ điều kiện khám...) —
-  // bắt buộc nhập lý do để lưu lại đối chiếu sau này (rule mục 8, LichSuLichHen.ly_do_thay_doi).
-  async function handleHuyCa(r: DoctorExamQueueRow) {
-    const reason = window.prompt(`Lý do hủy ca của ${r.ten_benh_nhan}`)
-    if (!reason?.trim()) return
-    await runQueueAction(r.id, (id) => doctorAppointmentService.cancelQueue(id, reason.trim()), 'Đã hủy ca')
+  function handleHuyCa(r: DoctorExamQueueRow) {
+    setCancelTarget({ id: r.id, name: r.ten_benh_nhan })
+    setCancelReason('')
+    setCancelError(null)
+  }
+
+  async function confirmCancelQueue() {
+    if (!cancelTarget || !cancelReason.trim()) return
+    setCancelSaving(true)
+    setCancelError(null)
+    try {
+      await doctorAppointmentService.cancelQueue(cancelTarget.id, cancelReason.trim())
+      showToast('Đã hủy ca thành công')
+      setCancelTarget(null)
+      load()
+    } catch (e) {
+      setCancelError(extractApiMessage(e, 'Hủy ca thất bại, vui lòng thử lại'))
+    } finally {
+      setRoomRefreshKey((value) => value + 1)
+      setCancelSaving(false)
+    }
   }
 
   async function runQueueAction(id: string, action: (id: string) => Promise<unknown>, successMsg: string) {
@@ -314,6 +340,10 @@ export default function DoctorExamQueue() {
     }
   }
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, statusFilter])
+
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase()
     return rows.filter((r) => {
@@ -329,6 +359,16 @@ export default function DoctorExamQueue() {
       return true
     })
   }, [rows, search, statusFilter])
+
+  const totalItems = filtered.length
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1
+  const safePage = Math.min(currentPage, totalPages)
+
+  const paginatedFiltered = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, safePage])
+
   const soDaXongHomNay = useMemo(() => rows.filter((r) => r.trang_thai_tong_hop === 'da_xong').length, [rows])
 
   return (
@@ -399,7 +439,7 @@ export default function DoctorExamQueue() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((r) => (
+                {paginatedFiltered.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-800">{r.ten_benh_nhan}</p>
@@ -480,6 +520,16 @@ export default function DoctorExamQueue() {
               </tbody>
             </table>
           </div>
+
+          <TablePaginationFooter
+            currentPage={safePage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            currentItemCount={paginatedFiltered.length}
+            pageSize={PAGE_SIZE}
+            itemLabel="bệnh nhân"
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 
@@ -538,6 +588,83 @@ export default function DoctorExamQueue() {
               className="btn-primary disabled:opacity-40"
             >
               {notifySaving ? 'Đang gửi...' : 'Gửi lễ tân'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Hủy Ca Khám */}
+      <Modal
+        isOpen={Boolean(cancelTarget)}
+        onClose={() => { if (!cancelSaving) setCancelTarget(null) }}
+        title="Xác nhận hủy ca khám"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-rose-100 bg-rose-50/70 p-3.5 text-sm">
+            <p className="font-semibold text-rose-900">Bệnh nhân:</p>
+            <p className="mt-0.5 text-base font-bold text-slate-900">{cancelTarget?.name}</p>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Lý do hủy ca <span className="text-rose-500">*</span>
+            </label>
+            
+            {/* Gợi ý lý do nhanh */}
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
+              {[
+                'Khách bỏ về / không có mặt',
+                'Khách yêu cầu hủy ca',
+                'Không đủ điều kiện sức khỏe',
+                'Quá thời gian chờ khám',
+              ].map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => setCancelReason(suggestion)}
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                    cancelReason === suggestion
+                      ? 'border-brand-500 bg-brand-50 text-brand-700'
+                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={4}
+              placeholder="Nhập chi tiết lý do hủy ca..."
+              className="input w-full resize-none text-sm focus:border-rose-500 focus:ring-rose-500"
+            />
+          </div>
+
+          {cancelError && (
+            <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+              {cancelError}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              disabled={cancelSaving}
+              onClick={() => setCancelTarget(null)}
+              className="btn-secondary text-sm"
+            >
+              Quay lại
+            </button>
+            <button
+              type="button"
+              disabled={cancelSaving || !cancelReason.trim()}
+              onClick={confirmCancelQueue}
+              className="inline-flex min-h-10 items-center justify-center rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-40"
+            >
+              {cancelSaving ? 'Đang xử lý...' : 'Xác nhận hủy ca'}
             </button>
           </div>
         </div>

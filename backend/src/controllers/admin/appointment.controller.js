@@ -469,12 +469,18 @@ function resolveAppointmentPaymentStatus({ appointment, invoice, payments }) {
     return 'refunded'
   }
 
-  if (invoice?.trang_thai_hoa_don === 'da_thanh_toan_du') {
-    return 'paid'
-  }
+  if (invoice) {
+    if (invoice.trang_thai_hoa_don === 'da_thanh_toan_du' && (invoice.da_xac_nhan_thu_ngan === true || invoice.da_xac_nhan_thu_ngan == null)) {
+      return 'paid'
+    }
 
-  if (invoice?.trang_thai_hoa_don === 'da_dat_coc') {
-    return 'partial'
+    if (invoice.trang_thai_hoa_don === 'da_dat_coc') {
+      return 'partial'
+    }
+
+    if (invoice.trang_thai_hoa_don === 'chua_thanh_toan' || invoice.da_xac_nhan_thu_ngan === false) {
+      return paidPayments.length > 0 ? 'partial' : 'unpaid'
+    }
   }
 
   if (paidPayments.length > 0) {
@@ -487,10 +493,6 @@ function resolveAppointmentPaymentStatus({ appointment, invoice, payments }) {
 
   if (refundedPayments.length > 0 || currentStatus === 'refunded') {
     return 'refunded'
-  }
-
-  if (invoice?.trang_thai_hoa_don === 'chua_thanh_toan') {
-    return 'unpaid'
   }
 
   return currentStatus
@@ -512,7 +514,7 @@ export async function enrichAppointmentsWithPaymentData(appointments, { persist 
       ...(queueIds.length > 0 ? [{ hang_doi_id: { $in: queueIds } }] : [])
     ]
   })
-    .select('_id appointment_id hang_doi_id so_hoa_don trang_thai_hoa_don tong_thanh_toan')
+    .select('_id appointment_id hang_doi_id so_hoa_don trang_thai_hoa_don tong_thanh_toan da_xac_nhan_thu_ngan')
     .lean()
 
   const invoiceByAppointmentId = new Map()

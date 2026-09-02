@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Icon from '@/components/admin/icons'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import ExamHistoryDetailModal from '@/components/doctor/ExamHistoryDetailModal'
 import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
 import type { ExamHistoryRow } from '@/services/doctor-exam-session.service'
@@ -26,6 +27,10 @@ export default function DoctorExamHistory() {
   const [error, setError] = useState(false)
   const [activeQueueId, setActiveQueueId] = useState<string | null>(null)
 
+  // Phân trang 10 bệnh nhân / 1 trang
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 10
+
   function load() {
     setLoading(true); setError(false)
     const q = search.trim()
@@ -37,6 +42,19 @@ export default function DoctorExamHistory() {
   }
 
   useEffect(load, [date, search])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [date, search])
+
+  const totalItems = rows.length
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1
+  const safePage = Math.min(currentPage, totalPages)
+
+  const paginatedRows = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE
+    return rows.slice(start, start + PAGE_SIZE)
+  }, [rows, safePage])
 
   return (
     <div>
@@ -83,7 +101,7 @@ export default function DoctorExamHistory() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map((r) => {
+                {paginatedRows.map((r) => {
                   const payment = r.trang_thai_hoa_don ? NHAN_THANH_TOAN[r.trang_thai_hoa_don] : null
                   return (
                     <tr key={r.queue_id} className="hover:bg-slate-50">
@@ -118,6 +136,16 @@ export default function DoctorExamHistory() {
               </tbody>
             </table>
           </div>
+
+          <TablePaginationFooter
+            currentPage={safePage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            currentItemCount={paginatedRows.length}
+            pageSize={PAGE_SIZE}
+            itemLabel="bệnh nhân"
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 
