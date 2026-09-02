@@ -145,7 +145,15 @@ const VALUE_LABELS: Record<string, string> = {
   self: 'Tự đặt',
   proxy: 'Đặt hộ',
   patient: 'Bệnh nhân tự đặt',
-  receptionist: 'Lễ tân tạo lịch',
+  receptionist: 'Lễ tân tạo',
+  offline: 'Lễ tân tạo',
+  receptionist_walkin: 'Lễ tân tạo',
+  walk_in: 'Lễ tân tạo',
+  tai_cho: 'Lễ tân tạo',
+  desk: 'Lễ tân tạo',
+  quay: 'Lễ tân tạo',
+  online: 'Đặt trực tuyến',
+  admin: 'Quản trị viên tạo',
   clinic: 'Phòng khám',
   home: 'Tại nhà',
   related: 'Dịch vụ liên quan',
@@ -260,6 +268,13 @@ export function formatAdminValue(field: string, value: unknown): string {
 
   const stringValue = String(value)
   if (VALUE_LABELS[stringValue]) return VALUE_LABELS[stringValue]
+  if (field === 'hinh_thuc_dat_lich' || field === 'nguon') {
+    if (['receptionist', 'offline', 'receptionist_walkin', 'walk_in', 'tai_cho', 'desk', 'quay'].includes(stringValue) || stringValue.includes('reception') || stringValue.includes('offline')) {
+      return 'Lễ tân tạo'
+    }
+    if (stringValue === 'patient') return 'Bệnh nhân tự đặt'
+    if (stringValue === 'admin') return 'Quản trị viên tạo'
+  }
   if (ENUM_LIKE_FIELDS.has(field)) return 'Thông tin khác'
   if (typeof value === 'boolean') return value ? 'Có' : 'Không'
   if (Array.isArray(value)) {
