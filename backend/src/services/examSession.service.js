@@ -261,7 +261,6 @@ export async function layPhienKham({ queueId, docId }) {
   // Với bệnh nhân offline tái khám (không có lichHen), đọc trực tiếp từ HangDoi.loai_lich_hen
   const isTaiKham = lichHen?.loai_lich_hen === 'tai_kham' ||
     !!lichHen?.lich_hen_goc_id ||
-    !!(lichHen?.ly_do_kham && lichHen.ly_do_kham.toLowerCase().includes('tái khám')) ||
     entry.loai_lich_hen === 'tai_kham' ||
     !!entry.lich_hen_goc_id
 

@@ -364,8 +364,7 @@ function getSummaryBaseQuery(query) {
 
 function formatAppointmentItem(appointment) {
   const isTaiKham = appointment.loai_lich_hen === 'tai_kham' ||
-    !!appointment.lich_hen_goc_id ||
-    (!!appointment.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám'))
+    !!appointment.lich_hen_goc_id
 
   const patientName =
     appointment.member_id?.ho_ten ||

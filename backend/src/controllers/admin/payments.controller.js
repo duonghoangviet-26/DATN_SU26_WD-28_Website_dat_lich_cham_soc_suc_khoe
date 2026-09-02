@@ -128,7 +128,6 @@ function mapPaymentDetail(payment) {
   const queue = getPopulatedObject(invoice?.hang_doi_id)
   const isTaiKham = appointment?.loai_lich_hen === 'tai_kham' ||
     !!appointment?.lich_hen_goc_id ||
-    (!!appointment?.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám')) ||
     queue?.loai_lich_hen === 'tai_kham' ||
     !!queue?.lich_hen_goc_id
 
