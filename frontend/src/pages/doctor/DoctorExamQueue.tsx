@@ -5,6 +5,7 @@ import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
 import Modal from '@/components/common/Modal'
 import Icon from '@/components/admin/icons'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
 import ExamHistoryDetailModal from '@/components/doctor/ExamHistoryDetailModal'
 import PatientHistoryModal from '@/components/doctor/PatientHistoryModal'
@@ -212,6 +213,10 @@ export default function DoctorExamQueue() {
   const [cancelSaving, setCancelSaving] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
 
+  // Phân trang 10 bệnh nhân / 1 trang
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 10
+
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     setToast({ message, type })
     // Cảnh báo (chưa thanh toán, ca quá tải) dài hơn một dòng — để lâu hơn cho đọc kịp.
@@ -335,6 +340,10 @@ export default function DoctorExamQueue() {
     }
   }
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, statusFilter])
+
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase()
     return rows.filter((r) => {
@@ -350,6 +359,16 @@ export default function DoctorExamQueue() {
       return true
     })
   }, [rows, search, statusFilter])
+
+  const totalItems = filtered.length
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1
+  const safePage = Math.min(currentPage, totalPages)
+
+  const paginatedFiltered = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, safePage])
+
   const soDaXongHomNay = useMemo(() => rows.filter((r) => r.trang_thai_tong_hop === 'da_xong').length, [rows])
 
   return (
@@ -420,7 +439,7 @@ export default function DoctorExamQueue() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((r) => (
+                {paginatedFiltered.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-800">{r.ten_benh_nhan}</p>
@@ -501,6 +520,16 @@ export default function DoctorExamQueue() {
               </tbody>
             </table>
           </div>
+
+          <TablePaginationFooter
+            currentPage={safePage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            currentItemCount={paginatedFiltered.length}
+            pageSize={PAGE_SIZE}
+            itemLabel="bệnh nhân"
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 
