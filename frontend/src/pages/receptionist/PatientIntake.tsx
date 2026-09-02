@@ -1067,7 +1067,7 @@ function ExamSessionsHistoryTab() {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h3 className="text-lg font-bold text-slate-950">Danh sách đã khám</h3>
+          <h3 className="text-lg font-bold text-slate-950">Danh sách khám</h3>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
             Toàn bộ ca khám đã ghi nhận theo ngày, gồm cả lượt đặt online lẫn khách đến trực tiếp tại quầy. Chọn ngày để xem lại các ca trước đó.
           </p>
@@ -1781,7 +1781,7 @@ export default function PatientIntake() {
               onClick={() => setWorkspaceTab('today_sessions')}
               className={`min-h-12 rounded-xl px-4 text-left text-sm font-bold transition ${workspaceTab === 'today_sessions' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-50'}`}
             >
-              Danh sách đã khám
+              Danh sách khám
               <span className={`mt-0.5 block text-xs font-medium ${workspaceTab === 'today_sessions' ? 'text-slate-200' : 'text-slate-500'}`}>Toàn bộ ca khám đã ghi nhận, xem lại theo từng ngày</span>
             </button>
             <button
