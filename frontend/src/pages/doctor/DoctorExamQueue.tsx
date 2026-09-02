@@ -7,6 +7,7 @@ import Modal from '@/components/common/Modal'
 import Icon from '@/components/admin/icons'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
 import ExamHistoryDetailModal from '@/components/doctor/ExamHistoryDetailModal'
+import PatientHistoryModal from '@/components/doctor/PatientHistoryModal'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import { subscribeDoctorQueueRealtime } from '@/services/realtime.service'
 import type { MucDoThongBaoLeTan } from '@/services/doctor-exam-session.service'
@@ -192,6 +193,9 @@ export default function DoctorExamQueue() {
   const [viewHistoryQueueId, setViewHistoryQueueId] = useState<string | null>(null)
   const [choTiepNhan, setChoTiepNhan] = useState<LichChoTiepNhan[]>([])
   const [choTiepNhanLoading, setChoTiepNhanLoading] = useState(true)
+
+  const [historyPatientId, setHistoryPatientId] = useState<{ id: string; name: string } | null>(null)
+
   const [roomRefreshKey, setRoomRefreshKey] = useState(0)
   // Báo lễ tân KHÔNG gắn bệnh nhân cụ thể — cần gửi được bất cứ lúc nào (ca khám quá lâu, khám
   // nhanh có thể đưa bệnh nhân tiếp theo vào...), không chỉ khi đang đứng trong phòng khám.
@@ -462,8 +466,12 @@ export default function DoctorExamQueue() {
                           <Button variant="secondary" size="sm" onClick={() => setViewHistoryQueueId(r.id)}
                             icon={<Icon name="eye" className="h-3.5 w-3.5" />}>Xem hồ sơ</Button>
                         )}
-                        {['bo_luot', 'da_huy'].includes(r.trang_thai_tong_hop) && (
+                        {['bo_luot', 'da_huy'].includes(r.trang_thai_tong_hop) && !r.ho_so_benh_nhan_id && (
                           <span className="text-xs text-slate-400">—</span>
+                        )}
+                        {r.ho_so_benh_nhan_id && (
+                          <Button variant="secondary" size="sm" onClick={() => setHistoryPatientId({ id: r.ho_so_benh_nhan_id!, name: r.ten_benh_nhan })}
+                            icon={<Icon name="clock" className="h-3.5 w-3.5" />}>Lịch sử</Button>
                         )}
                       </div>
                     </td>
@@ -485,6 +493,10 @@ export default function DoctorExamQueue() {
       {viewHistoryQueueId && (
         <ExamHistoryDetailModal queueId={viewHistoryQueueId} onClose={() => setViewHistoryQueueId(null)}
           onAmended={() => { setViewHistoryQueueId(null); load() }} />
+      )}
+
+      {historyPatientId && (
+        <PatientHistoryModal patientProfileId={historyPatientId.id} patientName={historyPatientId.name} onClose={() => setHistoryPatientId(null)} />
       )}
 
       {/* Báo lễ tân — KHÔNG gắn bệnh nhân cụ thể, gửi được bất cứ lúc nào (VD: ca khám quá lâu,
