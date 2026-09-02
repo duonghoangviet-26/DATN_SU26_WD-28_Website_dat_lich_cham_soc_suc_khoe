@@ -39,7 +39,7 @@ export async function guiThongBaoChoLeTan({ mucDo, noiDung, relatedId = null, ex
     loai: 'system',
     related_id: relatedId,
     related_type: 'doctor_reception_message',
-    du_lieu_dinh_kem: { priority: mucDo, source: 'doctor_reception_message', url: '/receptionist/dashboard', ...extraData },
+    du_lieu_dinh_kem: { priority: mucDo, source: 'doctor_reception_message', url: '/receptionist/quan-ly-dieu-phoi', ...extraData },
     ngay_gui_du_kien: new Date(),
   })))
   return notifications.length

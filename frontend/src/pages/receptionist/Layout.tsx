@@ -147,7 +147,14 @@ export default function ReceptionistLayout() {
                             onClick={() => {
                               setShowDropdown(false);
                               const targetUrl = notif.du_lieu_dinh_kem?.url;
-                              navigate(typeof targetUrl === 'string' && targetUrl ? targetUrl : '/receptionist/appointments');
+                              const isDoctorMsg = notif.related_type === 'doctor_reception_message' || notif.du_lieu_dinh_kem?.source === 'doctor_reception_message';
+                              if (isDoctorMsg) {
+                                navigate('/receptionist/quan-ly-dieu-phoi');
+                              } else if (typeof targetUrl === 'string' && targetUrl && targetUrl !== '/receptionist/dashboard') {
+                                navigate(targetUrl);
+                              } else {
+                                navigate('/receptionist/quan-ly-dieu-phoi');
+                              }
                             }}
                             className={`cursor-pointer border-b p-4 transition-colors ${tone.item} ${isUnread ? 'ring-1 ring-inset ring-brand-100' : ''}`}
                           >
