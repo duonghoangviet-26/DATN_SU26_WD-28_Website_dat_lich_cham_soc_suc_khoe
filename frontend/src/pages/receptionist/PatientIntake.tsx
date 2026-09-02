@@ -182,7 +182,7 @@ function AppointmentDetailModal({
 }) {
   const patientName = appointment.member_id?.ho_ten || appointment.ten_khach || appointment.user_id?.ho_ten || 'Khách vãng lai'
   const patientPhone = appointment.user_id?.so_dien_thoai || appointment.so_dien_thoai_khach || ''
-  const isTaiKham = appointment.loai_lich_hen === 'tai_kham' || !!appointment.lich_hen_goc_id || (!!appointment.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám'))
+  const isTaiKham = appointment.loai_lich_hen === 'tai_kham' || !!appointment.lich_hen_goc_id
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
@@ -691,7 +691,7 @@ function AppointmentsTab({
                 const canReschedule = hasAppointmentAction(appointment, 'reschedule')
                 const canCancel = hasAppointmentAction(appointment, 'cancel')
                 const noActionsAvailable = !canCheckIn && !canLate && !canReschedule && !canCancel
-                const isTaiKham = appointment.loai_lich_hen === 'tai_kham' || !!appointment.lich_hen_goc_id || (!!appointment.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám'))
+                const isTaiKham = appointment.loai_lich_hen === 'tai_kham' || !!appointment.lich_hen_goc_id
                 return (
                   <tr key={appointment._id} className="align-top hover:bg-slate-50">
                     <td className="px-4 py-3">

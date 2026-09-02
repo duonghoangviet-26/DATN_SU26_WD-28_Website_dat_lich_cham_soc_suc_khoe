@@ -459,12 +459,16 @@ export default function Profile() {
 
     const targetId = bookedId || paymentId
     if (targetId && (justBooked || isPaymentSuccess || paymentId)) {
-      if (justBooked) {
-        setToast('🎉 Đặt lịch tái khám thành công! Chi phí đã được miễn phí 100% theo chỉ định của bác sĩ.')
-      }
       setDetailLoading(true)
       patientRecordsService.getAppointmentDetail(targetId)
         .then((detail) => {
+          if (justBooked) {
+            if (detail.gia_kham === 0) {
+              setToast('🎉 Đặt lịch tái khám thành công! Chi phí đã được miễn phí 100% theo chỉ định của bác sĩ.')
+            } else {
+              setToast('🎉 Đặt lịch thành công!')
+            }
+          }
           setSelectedAppointment(detail)
           setContactEditName(detail.ten_khach || '')
           setContactEditPhone(detail.so_dien_thoai_khach || '')
@@ -473,6 +477,9 @@ export default function Profile() {
         })
         .catch((error) => {
           console.error('Không tải được chi tiết lịch hẹn vừa đặt:', error)
+          if (justBooked) {
+            setToast('🎉 Đặt lịch thành công!')
+          }
         })
         .finally(() => {
           setDetailLoading(false)

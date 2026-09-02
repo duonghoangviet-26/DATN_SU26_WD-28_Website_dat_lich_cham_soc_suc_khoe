@@ -45,7 +45,7 @@ async function formatAppointment(a) {
     ? new Date().getFullYear() - new Date(ngay_sinh).getFullYear()
     : undefined
 
-  const isTaiKham = a.loai_lich_hen === 'tai_kham' || !!a.lich_hen_goc_id || (!!a.ly_do_kham && a.ly_do_kham.toLowerCase().includes('tái khám'))
+  const isTaiKham = a.loai_lich_hen === 'tai_kham' || !!a.lich_hen_goc_id
 
   return {
     id:               a._id,
@@ -189,9 +189,7 @@ export async function examQueue(req, res) {
         const isTaiKham = e.loai_lich_hen === 'tai_kham' ||
           !!e.lich_hen_goc_id ||
           appt?.loai_lich_hen === 'tai_kham' ||
-          !!appt?.lich_hen_goc_id ||
-          !!(appt?.ly_do_kham && appt.ly_do_kham.toLowerCase().includes('tái khám')) ||
-          (e.ho_so_benh_nhan_id && profileHasPrevExam.has(String(e.ho_so_benh_nhan_id)))
+          !!appt?.lich_hen_goc_id
 
         return {
           id: e._id,
