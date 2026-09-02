@@ -166,152 +166,154 @@ export default function OfflineQueue() {
         ) : rows.length === 0 ? (
           <EmptyBlock>Chưa có khách vãng lai nào trong ngày.</EmptyBlock>
         ) : (
-          <TableFrame>
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-bold text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Số / bệnh nhân</th>
-                  <th className="px-4 py-3">Chuyên khoa</th>
-                  <th className="px-4 py-3">Trạng thái</th>
-                  <th className="px-4 py-3">Bác sĩ / phòng</th>
-                  <th className="px-4 py-3">Gợi ý điều phối</th>
-                  <th className="px-4 py-3 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {paginatedRows.map((row) => {
-                  const suggestion = suggestionByQueueId.get(row.id)
-                  const best = suggestion?.de_xuat_tot_nhat
-                  return (
-                    <Fragment key={row.id}>
-                    <tr className="align-top hover:bg-slate-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-slate-950">{row.ma_so_thu_tu || '-'}</p>
-                          {(row.loai_lich_hen === 'tai_kham' || row.lich_hen_goc_id) && (
-                            <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-extrabold text-purple-800 border border-purple-200" title="Khách tái khám">
-                              🔁 Tái khám
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1 font-semibold text-slate-900">{row.ten_benh_nhan}</p>
-                        <p className="mt-1 text-xs text-slate-500">{row.so_dien_thoai || 'Chưa có SĐT'} - vào lúc {formatTime(row.thoi_diem_vao_hang_doi_trung_tam)}</p>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">{row.specialty?.ten || '-'}</td>
-                      <td className="px-4 py-3"><StatusBadge tone={statusTone(row.trang_thai)}>{statusLabel(row.trang_thai)}</StatusBadge></td>
-                      <td className="px-4 py-3">
-                        <p className="font-semibold text-slate-900">{row.doctor?.ho_ten || 'Chưa gán'}</p>
-                        <p className="mt-1 text-xs text-slate-500">{row.phong_kham || row.doctor?.phong_kham_mac_dinh || '-'}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        {row.trang_thai === 'cho_dieu_phoi' ? (
-                          best ? (
-                            <div>
-                              <p className="font-semibold text-slate-900">{best.bac_si || 'Bác sĩ phù hợp'}</p>
-                              <p className="mt-1 text-xs text-slate-500">{best.gio_bat_dau || '-'}-{best.gio_ket_thuc || '-'} - {best.phong_kham || '-'}</p>
-                            </div>
+          <>
+            <TableFrame>
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Số / bệnh nhân</th>
+                    <th className="px-4 py-3">Chuyên khoa</th>
+                    <th className="px-4 py-3">Trạng thái</th>
+                    <th className="px-4 py-3">Bác sĩ / phòng</th>
+                    <th className="px-4 py-3">Gợi ý điều phối</th>
+                    <th className="px-4 py-3 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedRows.map((row) => {
+                    const suggestion = suggestionByQueueId.get(row.id)
+                    const best = suggestion?.de_xuat_tot_nhat
+                    return (
+                      <Fragment key={row.id}>
+                      <tr className="align-top hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-950">{row.ma_so_thu_tu || '-'}</p>
+                            {(row.loai_lich_hen === 'tai_kham' || row.lich_hen_goc_id) && (
+                              <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-extrabold text-purple-800 border border-purple-200" title="Khách tái khám">
+                                🔁 Tái khám
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 font-semibold text-slate-900">{row.ten_benh_nhan}</p>
+                          <p className="mt-1 text-xs text-slate-500">{row.so_dien_thoai || 'Chưa có SĐT'} - vào lúc {formatTime(row.thoi_diem_vao_hang_doi_trung_tam)}</p>
+                        </td>
+                        <td className="px-4 py-3 text-slate-700">{row.specialty?.ten || '-'}</td>
+                        <td className="px-4 py-3"><StatusBadge tone={statusTone(row.trang_thai)}>{statusLabel(row.trang_thai)}</StatusBadge></td>
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-slate-900">{row.doctor?.ho_ten || 'Chưa gán'}</p>
+                          <p className="mt-1 text-xs text-slate-500">{row.phong_kham || row.doctor?.phong_kham_mac_dinh || '-'}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          {row.trang_thai === 'cho_dieu_phoi' ? (
+                            best ? (
+                              <div>
+                                <p className="font-semibold text-slate-900">{best.bac_si || 'Bác sĩ phù hợp'}</p>
+                                <p className="mt-1 text-xs text-slate-500">{best.gio_bat_dau || '-'}-{best.gio_ket_thuc || '-'} - {best.phong_kham || '-'}</p>
+                              </div>
+                            ) : (
+                              <span className="text-xs font-semibold text-amber-700">Chưa có bác sĩ an toàn</span>
+                            )
                           ) : (
-                            <span className="text-xs font-semibold text-amber-700">Chưa có bác sĩ an toàn</span>
-                          )
-                        ) : (
-                          <span className="text-xs text-slate-400">Không cần gợi ý</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          {row.trang_thai === 'cho_dieu_phoi' && (
-                            <>
+                            <span className="text-xs text-slate-400">Không cần gợi ý</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            {row.trang_thai === 'cho_dieu_phoi' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmingId(confirmingId === row.id ? null : row.id)}
+                                  disabled={actionId === row.id || !suggestion}
+                                  className="min-h-9 rounded-lg bg-brand-700 px-3 text-xs font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Chọn bác sĩ
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => cancelCentral(row)}
+                                  disabled={actionId === row.id}
+                                  className="min-h-9 rounded-lg border border-rose-200 px-3 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Hủy chờ
+                                </button>
+                              </>
+                            )}
+                            {row.trang_thai === 'dang_cho' && (
                               <button
                                 type="button"
-                                onClick={() => setConfirmingId(confirmingId === row.id ? null : row.id)}
-                                disabled={actionId === row.id || !suggestion}
-                                className="min-h-9 rounded-lg bg-brand-700 px-3 text-xs font-bold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                Chọn bác sĩ
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => cancelCentral(row)}
+                                onClick={() => returnCentral(row)}
                                 disabled={actionId === row.id}
-                                className="min-h-9 rounded-lg border border-rose-200 px-3 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="min-h-9 rounded-lg border border-amber-300 px-3 text-xs font-bold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                Hủy chờ
+                                Trả về hàng đợi
                               </button>
-                            </>
-                          )}
-                          {row.trang_thai === 'dang_cho' && (
-                            <button
-                              type="button"
-                              onClick={() => returnCentral(row)}
-                              disabled={actionId === row.id}
-                              className="min-h-9 rounded-lg border border-amber-300 px-3 text-xs font-bold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Trả về hàng đợi
-                            </button>
-                          )}
-                          {!['cho_dieu_phoi', 'dang_cho'].includes(row.trang_thai) && (
-                            <span className="text-xs font-semibold text-slate-400">Không có thao tác</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                      {confirmingId === row.id && suggestion && (
-                        <tr>
-                          <td colSpan={6} className="bg-slate-50 px-4 py-4">
-                            <p className="text-sm font-bold text-slate-800">Chọn bác sĩ điều phối cho {row.ten_benh_nhan}</p>
-                            <p className="mt-1 text-xs text-slate-500">Hệ thống chỉ gợi ý — lễ tân bấm chọn bác sĩ đang rảnh theo ý muốn, không tự động gán.</p>
-                            <div className="mt-3 grid gap-2">
-                              {suggestion.ung_vien.map((candidate: DispatchCandidate) => {
-                                const isSuggested = best?.doctor_id === candidate.doctor_id
-                                return (
-                                  <div key={candidate.doctor_id} className={`rounded-lg border p-3 text-xs ${candidate.hop_le ? 'border-emerald-200 bg-white' : 'border-slate-200 bg-slate-100 opacity-80'}`}>
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                      <span className="font-bold text-slate-900">
-                                        {candidate.bac_si || 'Bác sĩ'}
-                                        {isSuggested && <span className="ml-2 rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-700">Gợi ý</span>}
-                                      </span>
-                                      <span className="text-slate-500">Phòng {candidate.phong_kham || '-'} · {candidate.gio_bat_dau || '-'}-{candidate.gio_ket_thuc || '-'} · Đang xử lý {candidate.so_luot_dang_xu_ly} lượt</span>
+                            )}
+                            {!['cho_dieu_phoi', 'dang_cho'].includes(row.trang_thai) && (
+                              <span className="text-xs font-semibold text-slate-400">Không có thao tác</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                        {confirmingId === row.id && suggestion && (
+                          <tr>
+                            <td colSpan={6} className="bg-slate-50 px-4 py-4">
+                              <p className="text-sm font-bold text-slate-800">Chọn bác sĩ điều phối cho {row.ten_benh_nhan}</p>
+                              <p className="mt-1 text-xs text-slate-500">Hệ thống chỉ gợi ý — lễ tân bấm chọn bác sĩ đang rảnh theo ý muốn, không tự động gán.</p>
+                              <div className="mt-3 grid gap-2">
+                                {suggestion.ung_vien.map((candidate: DispatchCandidate) => {
+                                  const isSuggested = best?.doctor_id === candidate.doctor_id
+                                  return (
+                                    <div key={candidate.doctor_id} className={`rounded-lg border p-3 text-xs ${candidate.hop_le ? 'border-emerald-200 bg-white' : 'border-slate-200 bg-slate-100 opacity-80'}`}>
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className="font-bold text-slate-900">
+                                          {candidate.bac_si || 'Bác sĩ'}
+                                          {isSuggested && <span className="ml-2 rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase text-brand-700">Gợi ý</span>}
+                                        </span>
+                                        <span className="text-slate-500">Phòng {candidate.phong_kham || '-'} · {candidate.gio_bat_dau || '-'}-{candidate.gio_ket_thuc || '-'} · Đang xử lý {candidate.so_luot_dang_xu_ly} lượt</span>
+                                      </div>
+                                      {candidate.hop_le ? (
+                                        <p className="mt-1 font-semibold text-emerald-700">Phù hợp — còn khung an toàn, phòng sẵn sàng</p>
+                                      ) : (
+                                        <p className="mt-1 font-semibold text-rose-700">
+                                          Bị chặn: {candidate.ly_do_chan.map(dispatchBlockReasonLabel).join('; ')}
+                                        </p>
+                                      )}
+                                      {candidate.hop_le && (
+                                        <button
+                                          type="button"
+                                          onClick={() => assignDoctor(row, candidate, isSuggested)}
+                                          disabled={actionId === row.id}
+                                          className="mt-2 min-h-8 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          {actionId === row.id ? 'Đang gán...' : `Gán cho ${candidate.bac_si || 'bác sĩ này'}`}
+                                        </button>
+                                      )}
                                     </div>
-                                    {candidate.hop_le ? (
-                                      <p className="mt-1 font-semibold text-emerald-700">Phù hợp — còn khung an toàn, phòng sẵn sàng</p>
-                                    ) : (
-                                      <p className="mt-1 font-semibold text-rose-700">
-                                        Bị chặn: {candidate.ly_do_chan.map(dispatchBlockReasonLabel).join('; ')}
-                                      </p>
-                                    )}
-                                    {candidate.hop_le && (
-                                      <button
-                                        type="button"
-                                        onClick={() => assignDoctor(row, candidate, isSuggested)}
-                                        disabled={actionId === row.id}
-                                        className="mt-2 min-h-8 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        {actionId === row.id ? 'Đang gán...' : `Gán cho ${candidate.bac_si || 'bác sĩ này'}`}
-                                      </button>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </TableFrame>
+                                  )
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </TableFrame>
 
-          <TablePaginationFooter
-            currentPage={safePage}
-            totalPages={totalPages}
-            totalItems={totalItems}
-            currentItemCount={paginatedRows.length}
-            pageSize={PAGE_SIZE}
-            itemLabel="lượt chờ"
-            onPageChange={setCurrentPage}
-          />
+            <TablePaginationFooter
+              currentPage={safePage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              currentItemCount={paginatedRows.length}
+              pageSize={PAGE_SIZE}
+              itemLabel="lượt chờ"
+              onPageChange={setCurrentPage}
+            />
+          </>
         )}
       </Panel>
 
