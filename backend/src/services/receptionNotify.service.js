@@ -35,7 +35,7 @@ export async function guiThongBaoChoLeTan({ mucDo, noiDung, relatedId = null, ex
   const notifications = await ThongBao.insertMany(receptionists.map((receptionist) => ({
     user_id: receptionist._id,
     tieu_de: TIEU_DE_THEO_MUC_DO[mucDo],
-    noi_dung,
+    noi_dung: noiDung,
     loai: 'system',
     related_id: relatedId,
     related_type: 'doctor_reception_message',
