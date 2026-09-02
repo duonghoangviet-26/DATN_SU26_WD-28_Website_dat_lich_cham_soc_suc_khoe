@@ -811,16 +811,27 @@ export default function Profile() {
   }
 
   function getStatusBadge(status: PatientRecordListItem['status']) {
-    if (status === 'completed') return 'bg-emerald-50 text-emerald-600'
-    if (status === 'confirmed') return 'bg-blue-50 text-blue-600'
-    if (status === 'cancelled') return 'bg-red-50 text-red-600'
-    return 'bg-amber-50 text-amber-600'
+    if (status === 'completed') return 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+    if (status === 'in_progress') return 'bg-purple-50 text-purple-700 border border-purple-100'
+    if (status === 'waiting_record' || status === 'waiting_doctor_confirm') return 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+    if (status === 'checked_in') return 'bg-teal-50 text-teal-700 border border-teal-100'
+    if (status === 'confirmed') return 'bg-blue-50 text-blue-700 border border-blue-100'
+    if (status === 'cancelled') return 'bg-red-50 text-red-700 border border-red-100'
+    if (status === 'no_show') return 'bg-slate-100 text-slate-600 border border-slate-200'
+    if (status === 'skipped') return 'bg-orange-50 text-orange-700 border border-orange-100'
+    return 'bg-amber-50 text-amber-700 border border-amber-100'
   }
 
   function getStatusLabel(status: PatientRecordListItem['status']) {
     if (status === 'completed') return 'Hoàn thành'
+    if (status === 'in_progress') return 'Đang khám'
+    if (status === 'waiting_record') return 'Chờ hoàn tất hồ sơ'
+    if (status === 'waiting_doctor_confirm') return 'Chờ bác sĩ duyệt'
+    if (status === 'checked_in') return 'Đã tiếp nhận'
     if (status === 'confirmed') return 'Đã xác nhận'
     if (status === 'cancelled') return 'Đã hủy'
+    if (status === 'no_show') return 'Vắng mặt'
+    if (status === 'skipped') return 'Qua lượt'
     return 'Chờ xác nhận'
   }
 
