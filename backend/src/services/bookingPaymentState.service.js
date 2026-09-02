@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 
 import { buildSlotDateTime } from '../utils/clinicTime.js'
 import {
+  HangDoi,
   HoaDon,
   LichHen,
   LichLamViec,
@@ -76,6 +77,21 @@ async function syncInvoiceStatus(invoiceId, session = null) {
   if (invoice.trang_thai_hoa_don !== nextStatus) {
     invoice.trang_thai_hoa_don = nextStatus
     await invoice.save({ session })
+  }
+
+  if (nextStatus === 'da_thanh_toan_du') {
+    let apptId = invoice.appointment_id
+    if (!apptId && invoice.hang_doi_id) {
+      const hd = await HangDoi.findById(invoice.hang_doi_id).select('appointment_id').lean()
+      apptId = hd?.appointment_id
+    }
+    if (apptId) {
+      await LichHen.updateOne(
+        { _id: apptId, payment_status: { $ne: 'paid' } },
+        { $set: { payment_status: 'paid', thoi_diem_thanh_toan: new Date() } },
+        { session }
+      )
+    }
   }
 
   return {
