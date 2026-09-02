@@ -272,7 +272,7 @@ export default function ManageDoctorLeaves() {
         isOpen={!!historyLeave}
         onClose={() => setHistoryLeave(null)}
         title="Lịch sử duyệt đơn"
-        size="xl"
+        size="sm"
       >
         {historyLeave && (
           <div className="p-5 text-sm text-slate-600 space-y-4">

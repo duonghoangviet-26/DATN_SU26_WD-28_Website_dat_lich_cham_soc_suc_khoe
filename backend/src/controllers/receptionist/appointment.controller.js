@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose'
+import mongoose from 'mongoose'
 import LichHen from '../../models/LichHen.js'
 import NguoiDung from '../../models/NguoiDung.js'
 import LichLamViec from '../../models/LichLamViec.js'
@@ -764,16 +764,16 @@ export const rescheduleAppointment = async (req, res) => {
         })
       }
 
-      // Mốc `T-30'` của khung CŨ (mục 11). Chặn chiêu né mất tiền: sắp trễ mới xin dời thì
-      // slot không kịp bán cho ai.
-      const moc = cacMocCuaKhung(appointment.ngay_kham, appointment.gio_kham)
-      if (!moc || Date.now() >= moc.dongDatOnline.getTime()) {
-        return res.status(409).json({
-          success: false,
-          message: 'Đã quá hạn xin dời (trước giờ khám 30 phút). Khách vẫn được khám nếu tới trong ca '
-            + 'và KHÔNG mất tiền.',
-        })
-      }
+      // Mốc `T-30'` của khung CŨ (mục 11). Dành cho bệnh nhân tự dời trên web.
+      // Đối với Lễ tân: Đã gỡ bỏ chặn để lễ tân có thể dời lịch tự do bất kể thời gian
+      // const moc = cacMocCuaKhung(appointment.ngay_kham, appointment.gio_kham)
+      // if (!moc || Date.now() >= moc.dongDatOnline.getTime()) {
+      //   return res.status(409).json({
+      //     success: false,
+      //     message: 'Đã quá hạn xin dời (trước giờ khám 30 phút). Khách vẫn được khám nếu tới trong ca '
+      //       + 'và KHÔNG mất tiền.',
+      //   })
+      // }
     }
 
     // ── Tìm slot đích ────────────────────────────────────────────────────────

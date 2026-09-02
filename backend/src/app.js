@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import path from 'path'
 import apiRoutes from './routes/index.js'
 import { fail } from './utils/response.js'
 
@@ -9,6 +10,7 @@ const app = express()
 // ----- Middleware nền tảng -----
 app.use(cors()) // Cho phép tất cả trong môi trường Dev để tránh lỗi đổi port
 app.use(express.json()) // đọc JSON từ body request
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads'))) // Phục vụ file ảnh local
 
 // ----- Route kiểm tra sống -----
 app.get('/', (req, res) => {

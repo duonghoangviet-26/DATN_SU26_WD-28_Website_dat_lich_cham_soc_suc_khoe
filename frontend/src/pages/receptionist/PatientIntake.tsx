@@ -1711,22 +1711,20 @@ export default function PatientIntake() {
           } }
         : profile))
 
-      const specialtyName = specialties.find((item) => item.id === selectedSpecialtyId)?.ten
-      const assignedDoctor = isAutoAssigned ? intakeDoctors.find((d) => String(d.doctor_id) === String(result.entry.doctor_id))?.bac_si : undefined
-      setPrintData({
-        ticketType: isAutoAssigned ? 'da_gan_bac_si' : 'cho_dieu_phoi',
-        patientName: selectedProfile.ho_ten,
-        queueNumber: result.entry.ma_so_thu_tu || '-',
-        specialtyName,
-        doctorName: assignedDoctor || 'Chưa gán',
-        roomNumber: result.entry.phong_kham || 'Chưa gán',
-        appointmentTime: formatDateTime(result.entry.checkin_time ?? new Date().toISOString()),
-        note: isAutoAssigned 
-          ? `Đã xếp vào phòng ${result.entry.phong_kham}. Vui lòng chờ đến lượt.`
-          : (result.entry.thoi_gian_cho_uoc_tinh_phut
-              ? `Thời gian chờ ước tính: ${result.entry.thoi_gian_cho_uoc_tinh_phut} phút. Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.`
-              : 'Vui lòng chờ lễ tân điều phối bác sĩ phù hợp.'),
-      })
+      if (isAutoAssigned) {
+        const specialtyName = specialties.find((item) => item.id === selectedSpecialtyId)?.ten
+        const assignedDoctor = intakeDoctors.find((d) => String(d.doctor_id) === String(result.entry.doctor_id))?.bac_si
+        setPrintData({
+          ticketType: 'da_gan_bac_si',
+          patientName: selectedProfile.ho_ten,
+          queueNumber: result.entry.ma_so_thu_tu || '-',
+          specialtyName,
+          doctorName: assignedDoctor || 'Chưa gán',
+          roomNumber: result.entry.phong_kham || 'Chưa gán',
+          appointmentTime: formatDateTime(result.entry.checkin_time ?? new Date().toISOString()),
+          note: `Đã xếp vào phòng ${result.entry.phong_kham}. Vui lòng chờ đến lượt.`
+        })
+      }
 
       setPhone('')
       setProfiles([])

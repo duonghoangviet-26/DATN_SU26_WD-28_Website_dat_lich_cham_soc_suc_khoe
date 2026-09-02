@@ -11,7 +11,7 @@ interface ProfileUpdateData {
   so_nam_kinh_nghiem?: number
   gia_kham?: number
   tuoi_nhan_kham_tu?: number
-  chuc_danh?: string
+  chuc_danh?: string | null
   chuc_vu_hien_tai?: string
   ma_cchn?: string
   gioi_thieu_ngan?: string

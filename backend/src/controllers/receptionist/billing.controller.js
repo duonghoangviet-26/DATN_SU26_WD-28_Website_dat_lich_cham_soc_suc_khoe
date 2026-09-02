@@ -391,15 +391,16 @@ export async function listBillingCases(req, res) {
     const todayInstantEnd = todayDateEnd ? new Date(todayDateEnd.getTime() - clinicOffsetMs) : null
     const offlineQuery = { nguon: 'offline', trang_thai: { $in: OFFLINE_ELIGIBLE } }
     if (todayInstantStart && todayInstantEnd) offlineQuery.checkin_time = { $gte: todayInstantStart, $lt: todayInstantEnd }
-    const todayAppointmentIds = todayDateStart && todayDateEnd
-      ? await LichHen.find({
-        loai_kham: 'clinic',
-        status: { $in: ONLINE_ELIGIBLE },
-        ngay_kham: { $gte: todayDateStart, $lt: todayDateEnd },
-      }).distinct('_id')
-      : null
-    const onlineQuery = { status: 'da_xac_nhan', appointment_id: { $exists: true } }
-    if (todayAppointmentIds) onlineQuery.appointment_id = { $in: todayAppointmentIds }
+    const baseApptQuery = {
+      loai_kham: 'clinic',
+      status: { $in: ONLINE_ELIGIBLE },
+      hinh_thuc_dat_lich: { $ne: 'offline' },
+    }
+    if (todayDateStart && todayDateEnd) {
+      baseApptQuery.ngay_kham = { $gte: todayDateStart, $lt: todayDateEnd }
+    }
+    const onlineAppointmentIds = await LichHen.find(baseApptQuery).distinct('_id')
+    const onlineQuery = { status: 'da_xac_nhan', appointment_id: { $in: onlineAppointmentIds } }
 
     const [offlineEntries, onlineResults] = await Promise.all([
       HangDoi.find(offlineQuery).sort({ checkin_time: -1 }).limit(100).lean(),
