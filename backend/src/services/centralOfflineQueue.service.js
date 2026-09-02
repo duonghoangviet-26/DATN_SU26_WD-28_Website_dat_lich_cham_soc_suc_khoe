@@ -395,6 +395,9 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
   if (!profile) throw loi(404, 'Hồ sơ bệnh nhân không hợp lệ')
   if (!profile.so_dien_thoai) throw loi(400, 'Hồ sơ bệnh nhân chưa có số điện thoại')
 
+  const specialty = await ChuyenKhoa.findById(normalizedSpecialtyId).lean()
+  if (!specialty) throw loi(404, 'Chuyên khoa không hợp lệ')
+
   const { start, end } = khoangNgay(now)
   const activeVisit = await HangDoi.findOne({
     ho_so_benh_nhan_id: profile._id,
