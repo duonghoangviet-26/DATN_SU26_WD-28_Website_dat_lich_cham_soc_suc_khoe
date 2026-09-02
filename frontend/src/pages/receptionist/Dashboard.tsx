@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axiosInstance from '../../services/axiosInstance';
 import { receptionistNotificationService, VirtualNotification } from '../../services/receptionist-notification.service';
 import Icon from '../../components/admin/icons';
@@ -91,6 +91,7 @@ interface DoctorOperationalStatus {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [totalToday, setTotalToday] = useState(0);
   const [waiting, setWaiting] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
@@ -318,16 +319,24 @@ export default function Dashboard() {
             {notifications.length === 0 ? (
               <EmptyBlock>Không có thông báo mới.</EmptyBlock>
             ) : (
-              notifications.map(notif => (
-                <div key={notif.id} className={`rounded-lg border p-3 ${notificationTone(notif)}`}>
-                  <div className="mb-1 flex items-start justify-between gap-2">
-                    <p className="line-clamp-2 text-sm font-semibold">{notif.tieu_de}</p>
-                    <span className="shrink-0 rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-bold">{notificationLabel(notif)}</span>
+              notifications.map(notif => {
+                const isDoctorMsg = notif.related_type === 'doctor_reception_message' || notif.du_lieu_dinh_kem?.source === 'doctor_reception_message';
+                const targetUrl = isDoctorMsg ? '/receptionist/quan-ly-dieu-phoi' : (notif.du_lieu_dinh_kem?.url && notif.du_lieu_dinh_kem.url !== '/receptionist/dashboard' ? notif.du_lieu_dinh_kem.url : '/receptionist/quan-ly-dieu-phoi');
+                return (
+                  <div 
+                    key={notif.id} 
+                    onClick={() => navigate(targetUrl)}
+                    className={`cursor-pointer rounded-lg border p-3 transition-colors hover:shadow-sm ${notificationTone(notif)}`}
+                  >
+                    <div className="mb-1 flex items-start justify-between gap-2">
+                      <p className="line-clamp-2 text-sm font-semibold">{notif.tieu_de}</p>
+                      <span className="shrink-0 rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-bold">{notificationLabel(notif)}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">{notif.noi_dung}</p>
+                    <p className="text-[10px] text-slate-400 mt-2">{format(new Date(notif.ngay_tao), 'HH:mm dd/MM')}</p>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">{notif.noi_dung}</p>
-                  <p className="text-[10px] text-slate-400 mt-2">{format(new Date(notif.ngay_tao), 'HH:mm dd/MM')}</p>
-                </div>
-              ))
+                );
+              })
             )}
         </Panel>
 
