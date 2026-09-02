@@ -59,6 +59,59 @@ export function renderNotificationEmail({ title, content, url = null }) {
   `
 }
 
+export function renderDetailedAppointmentEmail({ title, introText, appointmentDetails, reason = null }) {
+  const safeTitle = escapeHtml(title)
+  const safeIntro = escapeHtml(introText)
+  const safeReason = reason ? escapeHtml(reason) : null
+
+  const detailsHtml = appointmentDetails.map(detail => `
+    <tr>
+      <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; color: #64748b; width: 40%; font-weight: 500;">
+        ${escapeHtml(detail.label)}
+      </td>
+      <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600;">
+        ${escapeHtml(detail.value)}
+      </td>
+    </tr>
+  `).join('')
+
+  return `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background-color: #ffffff;">
+      <div style="background-color: #2563eb; padding: 24px; text-align: center;">
+        <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600; letter-spacing: 0.5px;">Phòng khám ViteFamily</h1>
+      </div>
+      
+      <div style="padding: 32px 24px;">
+        <h2 style="margin: 0 0 16px; color: #1e293b; font-size: 18px;">${safeTitle}</h2>
+        <p style="margin: 0 0 24px; color: #475569; line-height: 1.6; font-size: 15px;">
+          ${safeIntro}
+        </p>
+
+        <div style="background-color: #f8fafc; border-radius: 6px; padding: 16px 20px; margin-bottom: 24px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            ${detailsHtml}
+          </table>
+        </div>
+
+        ${safeReason ? `
+          <div style="margin-bottom: 24px; padding: 12px 16px; border-left: 4px solid #f59e0b; background-color: #fffbeb; color: #b45309; font-size: 14px; line-height: 1.5;">
+            <strong>Lý do:</strong> ${safeReason}
+          </div>
+        ` : ''}
+
+        <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.6;">
+          Trân trọng,<br>
+          <strong>Đội ngũ Phòng khám ViteFamily</strong>
+        </p>
+      </div>
+      
+      <div style="background-color: #f1f5f9; padding: 16px; text-align: center; color: #94a3b8; font-size: 12px;">
+        Email này được gửi tự động. Vui lòng không trả lời trực tiếp email này.
+      </div>
+    </div>
+  `
+}
+
 export function renderResetPasswordEmail({ token }) {
   const resetUrl = `http://localhost:5173/reset-password?token=${token}`
   return `

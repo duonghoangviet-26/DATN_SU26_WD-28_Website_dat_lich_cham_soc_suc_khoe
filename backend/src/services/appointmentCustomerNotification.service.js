@@ -1,5 +1,6 @@
 import { NhatKyThaoTac, ThongBao } from '../models/index.js'
-import { isMailConfigured, sendMail, renderNotificationEmail } from './mail.service.js'
+import mongoose from 'mongoose'
+import { isMailConfigured, sendMail, renderDetailedAppointmentEmail } from './mail.service.js'
 
 function formatDate(value) {
   if (!value) return null
@@ -79,7 +80,48 @@ export async function notifyAppointmentCustomerChange({
 
   const targetEmail = appointment.email_khach || appointment.user_id?.email
   if (targetEmail && isMailConfigured()) {
-    const htmlContent = renderNotificationEmail({ title, content })
+    // Truy vấn thêm chi tiết bác sĩ và phòng khám để hiển thị email chuyên nghiệp
+    const fullAppointment = await mongoose.model('LichHen').findById(appointment._id)
+      .populate({ path: 'doctor_id', select: 'ho_ten' })
+      .populate({ path: 'schedule_id', select: 'slots' })
+      .lean()
+
+    let doctorName = 'Chưa xác định'
+    let roomNumber = 'Chưa phân phòng'
+    if (fullAppointment) {
+      if (fullAppointment.doctor_id?.ho_ten) {
+        doctorName = `BS. ${fullAppointment.doctor_id.ho_ten}`
+      }
+      if (fullAppointment.schedule_id?.slots && fullAppointment.slot_id) {
+        const slot = fullAppointment.schedule_id.slots.find(s => String(s._id) === String(fullAppointment.slot_id))
+        if (slot && slot.phong_kham) {
+          roomNumber = `Phòng ${slot.phong_kham}`
+        }
+      }
+    }
+
+    const appointmentDetails = [
+      { label: 'Tên bệnh nhân', value: appointment.ten_khach || 'Không rõ' },
+      { label: 'Mã lịch hẹn', value: appointment.ma_lich_hen || 'Không có mã' },
+      { label: 'Ngày khám', value: formatDate(appointment.ngay_kham) || 'Chưa rõ' },
+      { label: 'Giờ khám', value: appointment.gio_kham || 'Chưa rõ' },
+      { label: 'Bác sĩ phụ trách', value: doctorName },
+      { label: 'Phòng khám', value: roomNumber }
+    ]
+
+    let introText = ''
+    if (action === 'cancel') introText = 'Rất tiếc phải thông báo rằng lịch khám của bạn đã bị hủy.'
+    else if (action === 'reschedule') introText = 'Lịch khám của bạn đã được dời thành công sang khung giờ mới.'
+    else if (action === 'doctor_changed') introText = 'Bác sĩ phụ trách lịch khám của bạn vừa được cập nhật.'
+    else introText = 'Thông tin lịch khám của bạn vừa được cập nhật trên hệ thống.'
+
+    const htmlContent = renderDetailedAppointmentEmail({
+      title,
+      introText,
+      appointmentDetails,
+      reason
+    })
+
     // Bắn lệnh gửi email chạy ngầm, không dùng await để tránh block luồng của lễ tân
     sendMail({
       to: targetEmail,
