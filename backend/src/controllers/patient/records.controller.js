@@ -1,4 +1,4 @@
-import { LichHen, KetQuaKham, SinhHieuKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen, KetQuaKhamTai, KetQuaKhamMui, KetQuaKhamHong } from '../../models/index.js'
+import { LichHen, KetQuaKham, SinhHieuKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen, KetQuaKhamTai, KetQuaKhamMui, KetQuaKhamHong, HoSoBenhNhan, ThanhVien } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { buildSlotDateTime } from '../../utils/clinicTime.js'
 import { withOptionalTransaction } from '../../services/bookingPaymentState.service.js'
@@ -8,14 +8,27 @@ import { withOptionalTransaction } from '../../services/bookingPaymentState.serv
 // Routes: /api/patient/records
 // ============================================================
 
-function ownedByUser(userId) {
+async function ownedByUser(userId) {
+  const user = await NguoiDung.findById(userId).select('so_dien_thoai').lean()
+  const profiles = await HoSoBenhNhan.find({
+    $or: [
+      { tai_khoan_id: userId },
+      { nguoi_giam_ho_id: userId },
+      ...(user?.so_dien_thoai ? [{ so_dien_thoai: user.so_dien_thoai }] : [])
+    ]
+  }).select('_id').lean()
+  const profileIds = profiles.map((p) => p._id)
+
+  const members = await ThanhVien.find({ tai_khoan_id: userId }).select('_id').lean()
+  const memberIds = members.map((m) => m._id)
+
   return {
     $or: [
       { user_id: userId },
-      // Hỗ trợ dữ liệu lịch cũ được tạo qua luồng đặt hộ / lễ tân nhưng vẫn
-      // thuộc tài khoản này. Không dùng họ tên vì tên có thể thay đổi.
       { nguoi_tao_id: userId },
       { nguoi_dat_ho_id: userId },
+      ...(profileIds.length > 0 ? [{ ho_so_benh_nhan_id: { $in: profileIds } }] : []),
+      ...(memberIds.length > 0 ? [{ member_id: { $in: memberIds } }] : []),
     ],
     da_xoa_boi_benh_nhan: { $ne: true },
   }
@@ -33,7 +46,7 @@ function appointmentError(statusCode, message) {
 export async function listRecords(req, res) {
   try {
     const { status, page = 1, limit = 100 } = req.query
-    const filter = ownedByUser(req.user.id)
+    const filter = await ownedByUser(req.user.id)
     if (status) filter.status = status
 
     const skip  = (Number(page) - 1) * Number(limit)
@@ -102,7 +115,7 @@ export async function listRecords(req, res) {
 export async function listMedicalResults(req, res) {
   try {
     const { page = 1, limit = 10, startDate, endDate } = req.query
-    const filter = { ...ownedByUser(req.user.id), status: 'completed' }
+    const filter = { ...(await ownedByUser(req.user.id)), status: 'completed' }
 
     if (startDate || endDate) {
       filter.ngay_kham = {}
@@ -273,7 +286,8 @@ function extractEndoscopyImages(ketQua, specialtyRecords = []) {
 // ─── GET /api/patient/records/:id ───────────────────────────────────────────
 export async function getRecord(req, res) {
   try {
-    const a = await LichHen.findOne({ _id: req.params.id, ...ownedByUser(req.user.id) }).lean()
+    const userFilter = await ownedByUser(req.user.id)
+    const a = await LichHen.findOne({ _id: req.params.id, ...userFilter }).lean()
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
 
     const [doc, ketQua, taiResults, muiResults, hongResults, sinhHieu] = await Promise.all([
@@ -355,10 +369,11 @@ export async function updateAppointmentContact(req, res) {
       return fail(res, 400, 'Số điện thoại phải gồm 10 số và bắt đầu bằng số 0')
     }
 
+    const userFilter = await ownedByUser(req.user.id)
     const updated = await withOptionalTransaction(async (session) => {
       const appointment = await LichHen.findOne({
         _id: req.params.id,
-        ...ownedByUser(req.user.id),
+        ...userFilter,
       }).session(session)
 
       if (!appointment) throw appointmentError(404, 'Không tìm thấy lịch hẹn')
@@ -411,9 +426,10 @@ export async function updateAppointmentContact(req, res) {
 // DELETE /api/patient/records/batch-cancelled
 export async function deleteBatchCancelledAppointments(req, res) {
   try {
+    const userFilter = await ownedByUser(req.user.id)
     const result = await LichHen.updateMany(
       {
-        ...ownedByUser(req.user.id),
+        ...userFilter,
         status: { $in: ['cancelled', 'no_show', 'skipped'] },
       },
       { $set: { da_xoa_boi_benh_nhan: true } }
@@ -428,9 +444,10 @@ export async function deleteBatchCancelledAppointments(req, res) {
 // DELETE /api/patient/records/:id
 export async function deleteCancelledAppointment(req, res) {
   try {
+    const userFilter = await ownedByUser(req.user.id)
     const appointment = await LichHen.findOne({
       _id: req.params.id,
-      ...ownedByUser(req.user.id),
+      ...userFilter,
     })
 
     if (!appointment) {

@@ -666,20 +666,35 @@ export async function getPatientExamHistory(req, res) {
     if (!patient) return null
 
     const { memberIds } = await getPatientMemberIds(patient._id)
+    const patientProfiles = await HoSoBenhNhan.find({
+      $or: [
+        { tai_khoan_id: patient._id },
+        { nguoi_giam_ho_id: patient._id },
+        ...(patient.so_dien_thoai ? [{ so_dien_thoai: patient.so_dien_thoai }] : [])
+      ]
+    }).select('_id').lean()
+    const profileIds = patientProfiles.map((p) => p._id)
+
     const appointmentQuery = {
       $or: [
         { user_id: patient._id },
         ...(memberIds.length > 0 ? [{ member_id: { $in: memberIds } }] : []),
+        ...(profileIds.length > 0 ? [{ ho_so_benh_nhan_id: { $in: profileIds } }] : []),
       ],
     }
     const appointments = await LichHen.find(appointmentQuery).select('_id').lean()
     const appointmentIds = appointments.map((appointment) => appointment._id)
-    const queues = memberIds.length > 0
-      ? await HangDoi.find({ member_id: { $in: memberIds } }).select('_id').lean()
+    const queues = (memberIds.length > 0 || profileIds.length > 0)
+      ? await HangDoi.find({
+          $or: [
+            ...(memberIds.length > 0 ? [{ member_id: { $in: memberIds } }] : []),
+            ...(profileIds.length > 0 ? [{ ho_so_benh_nhan_id: { $in: profileIds } }] : []),
+          ]
+        }).select('_id').lean()
       : []
     const queueIds = queues.map((queue) => queue._id)
 
-    if (appointmentIds.length === 0 && queueIds.length === 0) {
+    if (appointmentIds.length === 0 && queueIds.length === 0 && profileIds.length === 0) {
       return ok(res, [], 'Lay lich su kham benh thanh cong')
     }
 
@@ -687,6 +702,7 @@ export async function getPatientExamHistory(req, res) {
       $or: [
         ...(appointmentIds.length > 0 ? [{ appointment_id: { $in: appointmentIds } }] : []),
         ...(queueIds.length > 0 ? [{ hang_doi_id: { $in: queueIds } }] : []),
+        ...(profileIds.length > 0 ? [{ ho_so_benh_nhan_id: { $in: profileIds } }] : []),
       ],
     })
       .populate({
