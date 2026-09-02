@@ -529,7 +529,9 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
       const payment_status = isFollowUpPatient ? 'paid' : 'unpaid'
 
       const appointmentCode = `LH-${String(now.getUTCFullYear()).slice(-2)}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}-${String(await Counter.nextSeq('lich_hen')).padStart(4, '0')}`
-      
+      const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000)
+      const currentGioKham = `${String(vnTime.getUTCHours()).padStart(2, '0')}:${String(vnTime.getUTCMinutes()).padStart(2, '0')}`
+
       const [createdAppt] = await LichHen.create([{
         ho_so_benh_nhan_id: profile._id,
         ten_khach: profile.ho_ten,
@@ -541,13 +543,14 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
         lich_hen_goc_id: resolvedLichHenGocId,
         loai_kham: 'clinic',
         ngay_kham: now,
-        gio_kham: `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`,
+        gio_kham: currentGioKham,
         status: 'checked_in',
         payment_status: payment_status,
         gia_kham: gia_kham,
         phong_kham: autoAssignedPhongKham || null,
         doctor_id: autoAssignedDoctorId || null,
         specialty_id: normalizedSpecialtyId,
+        ten_dich_vu: specialty?.ten ?? null,
         ghi_chu_tiep_nhan: 'Khách vãng lai đăng ký trực tiếp tại quầy',
       }], { session })
 
@@ -911,8 +914,8 @@ export async function ganKhachOfflineChoBacSi({
 
       if (updatedEntry.appointment_id) {
         await LichHen.updateOne(
-          { _id: updatedEntry.appointment_id, doctor_id: null },
-          { $set: { doctor_id: normalizedDoctorId } },
+          { _id: updatedEntry.appointment_id },
+          { $set: { doctor_id: normalizedDoctorId, phong_kham: selected.phong_kham } },
           { session }
         )
       }
