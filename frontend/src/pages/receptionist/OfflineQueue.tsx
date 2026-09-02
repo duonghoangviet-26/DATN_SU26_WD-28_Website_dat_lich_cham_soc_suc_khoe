@@ -21,8 +21,14 @@ export default function OfflineQueue() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   const PAGE_SIZE = 10
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, statusFilter])
 
   useEffect(() => {
     if (printData) printTicket()
@@ -57,14 +63,36 @@ export default function OfflineQueue() {
     done: rows.filter((row) => row.trang_thai === 'hoan_thanh').length,
   }), [rows])
 
-  const totalItems = rows.length
+  const filteredRows = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    return rows.filter((row) => {
+      if (statusFilter !== 'all' && row.trang_thai !== statusFilter) {
+        return false
+      }
+
+      if (query) {
+        const matchName = row.ten_benh_nhan.toLowerCase().includes(query)
+        const matchPhone = row.so_dien_thoai?.toLowerCase().includes(query) ?? false
+        const matchCode = row.ma_so_thu_tu?.toLowerCase().includes(query) ?? false
+        const matchDoctor = row.doctor?.ho_ten?.toLowerCase().includes(query) ?? false
+        const matchSpecialty = row.specialty?.ten?.toLowerCase().includes(query) ?? false
+        if (!matchName && !matchPhone && !matchCode && !matchDoctor && !matchSpecialty) {
+          return false
+        }
+      }
+
+      return true
+    })
+  }, [rows, searchQuery, statusFilter])
+
+  const totalItems = filteredRows.length
   const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1
   const safePage = Math.min(currentPage, totalPages)
 
   const paginatedRows = useMemo(() => {
     const start = (safePage - 1) * PAGE_SIZE
-    return rows.slice(start, start + PAGE_SIZE)
-  }, [rows, safePage])
+    return filteredRows.slice(start, start + PAGE_SIZE)
+  }, [filteredRows, safePage])
 
   const assignDoctor = async (row: OfflineQueueRow, candidate: DispatchCandidate, isSuggested: boolean) => {
     setActionId(row.id)
@@ -161,10 +189,66 @@ export default function OfflineQueue() {
       )}
 
       <Panel title="Danh sách trong ngày" description="Khách ở trạng thái chờ điều phối chưa xuất hiện trong hàng đợi bác sĩ cho đến khi lễ tân gán bác sĩ.">
+        {/* Thanh lọc & tìm kiếm */}
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 max-w-md">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tìm kiếm tên bệnh nhân, SĐT, mã lượt..."
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-8 text-sm placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+            <svg className="absolute left-3 top-3 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-3 text-xs font-bold text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-white py-2.5 px-3 text-sm font-medium text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="cho_dieu_phoi">Chờ điều phối</option>
+              <option value="dang_cho">Đang chờ khám</option>
+              <option value="da_goi">Đang gọi khám</option>
+              <option value="trong_phong">Đang trong phòng khám</option>
+              <option value="hoan_thanh">Đã khám xong</option>
+              <option value="cancelled">Đã hủy</option>
+            </select>
+
+            {(searchQuery || statusFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('')
+                  setStatusFilter('all')
+                }}
+                className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200"
+              >
+                Xóa lọc
+              </button>
+            )}
+          </div>
+        </div>
+
         {loading ? (
           <LoadingBlock />
         ) : rows.length === 0 ? (
           <EmptyBlock>Chưa có khách vãng lai nào trong ngày.</EmptyBlock>
+        ) : filteredRows.length === 0 ? (
+          <EmptyBlock>Không tìm thấy kết quả phù hợp với bộ lọc.</EmptyBlock>
         ) : (
           <>
             <TableFrame>
