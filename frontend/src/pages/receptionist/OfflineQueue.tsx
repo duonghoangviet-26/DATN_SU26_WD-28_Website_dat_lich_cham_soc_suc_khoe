@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { EmptyBlock, LoadingBlock, MetricCard, PageShell, Panel, ReceptionistHeader, StatusBadge, TableFrame } from '@/components/receptionist/ReceptionistUI'
+import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import { DispatchCandidate, DispatchSuggestion, OfflineQueueRow, receptionistOfflineQueueService } from '@/services/receptionist-offline-queue.service'
 import QueueTicketTemplate, { QueueTicketData } from '@/components/receptionist/QueueTicketTemplate'
 import { examSessionStatusLabel as statusLabel, examSessionStatusTone as statusTone, dispatchBlockReasonLabel } from '@/utils/receptionistLabels'
@@ -19,6 +20,9 @@ export default function OfflineQueue() {
   const [error, setError] = useState('')
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [printData, setPrintData] = useState<QueueTicketData | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const PAGE_SIZE = 10
 
   useEffect(() => {
     if (printData) printTicket()
@@ -52,6 +56,15 @@ export default function OfflineQueue() {
     assigned: rows.filter((row) => ['dang_cho', 'da_goi', 'trong_phong'].includes(row.trang_thai)).length,
     done: rows.filter((row) => row.trang_thai === 'hoan_thanh').length,
   }), [rows])
+
+  const totalItems = rows.length
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE) || 1
+  const safePage = Math.min(currentPage, totalPages)
+
+  const paginatedRows = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE
+    return rows.slice(start, start + PAGE_SIZE)
+  }, [rows, safePage])
 
   const assignDoctor = async (row: OfflineQueueRow, candidate: DispatchCandidate, isSuggested: boolean) => {
     setActionId(row.id)
@@ -166,7 +179,7 @@ export default function OfflineQueue() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map((row) => {
+                {paginatedRows.map((row) => {
                   const suggestion = suggestionByQueueId.get(row.id)
                   const best = suggestion?.de_xuat_tot_nhat
                   return (
@@ -289,6 +302,16 @@ export default function OfflineQueue() {
               </tbody>
             </table>
           </TableFrame>
+
+          <TablePaginationFooter
+            currentPage={safePage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            currentItemCount={paginatedRows.length}
+            pageSize={PAGE_SIZE}
+            itemLabel="lượt chờ"
+            onPageChange={setCurrentPage}
+          />
         )}
       </Panel>
 
