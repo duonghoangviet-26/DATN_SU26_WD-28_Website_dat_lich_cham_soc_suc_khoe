@@ -118,6 +118,7 @@ export function buildReceptionistAppointmentActions(appointment, queueEntry = nu
     return { allowed_actions: allowed, lock_reason: APPOINTMENT_LOCK_REASONS.CANCELLED, queue_state: queueState }
   }
   if (status === 'no_show') {
+    allowed.push(RECEPTIONIST_APPOINTMENT_ACTIONS.RESCHEDULE)
     return { allowed_actions: allowed, lock_reason: APPOINTMENT_LOCK_REASONS.NO_SHOW, queue_state: queueState }
   }
   if (status === 'skipped') {
@@ -142,6 +143,7 @@ export function buildReceptionistAppointmentActions(appointment, queueEntry = nu
   // "dời/hủy/check-in" được vô thời hạn — đây chính là lỗi nghiệp vụ "lịch hẹn đã qua lâu vẫn
   // thao tác được" (rule mục 8). Khoá ở đây có hiệu lực NGAY LẬP TỨC, không phụ thuộc cron.
   if ((status === 'confirmed' || status === 'pending') && isAppointmentPastShiftEnd(appointment)) {
+    allowed.push(RECEPTIONIST_APPOINTMENT_ACTIONS.RESCHEDULE)
     return { allowed_actions: allowed, lock_reason: APPOINTMENT_LOCK_REASONS.OVERDUE_PENDING_SWEEP, queue_state: queueState }
   }
 
