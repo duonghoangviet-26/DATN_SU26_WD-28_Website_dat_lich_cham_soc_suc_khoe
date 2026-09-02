@@ -2,6 +2,7 @@ import { BacSi, NghiPhepBacSi, LichHen, ThongBao, NguoiDung } from '../../models
 import { ok, created, fail } from '../../utils/response.js'
 import { AFFECTED_BY_LEAVE_STATUSES } from '../../utils/appointmentStatus.js'
 import { emitAdminRealtime } from '../../realtime/socket.js'
+import { tuDongHuyDonNghiQuaHan } from '../../services/doctorLeaveApproval.service.js'
 
 // ============================================================
 // Bác sĩ gửi yêu cầu nghỉ — Routes: /api/doctor/leaves
@@ -55,6 +56,7 @@ async function demLichHenAnhHuong(docId, start, end, gio_bat_dau, gio_ket_thuc) 
 // Chỉ danh sách yêu cầu nghỉ của chính bác sĩ đang đăng nhập.
 export async function listMyLeaveRequests(req, res) {
   try {
+    await tuDongHuyDonNghiQuaHan()
     const docId = await getDocId(req.user.id)
     if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
 

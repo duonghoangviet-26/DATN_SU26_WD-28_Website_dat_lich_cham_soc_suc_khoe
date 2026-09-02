@@ -107,7 +107,7 @@ export default function DoctorRevenueDetail() {
               <ArrowLeft className="h-5 w-5" />
             </button>
             <PageHeader 
-              title="Chi tiết doanh thu bác sĩ" 
+              title={data ? `Chi tiết doanh thu bác sĩ: ${data.ten_bac_si}` : "Chi tiết doanh thu bác sĩ"}
               description="Xem chi tiết doanh thu và thống kê bệnh nhân của bác sĩ"
               className="mb-0"
             />

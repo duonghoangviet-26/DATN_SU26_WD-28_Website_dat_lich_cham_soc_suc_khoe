@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { doctorExamSessionService } from '@/services/doctor-exam-session.service'
 import type { BuocKham, KetQuaHoanTat, PhienKham } from '@/services/doctor-exam-session.service'
 import { doctorAppointmentService } from '@/services/doctor-appointment.service'
 import { formatPrice, NHAN_KET_CUC_THAT } from '@/utils/format'
+import KhoiTomTat, { MAU_AMBER, MAU_EMERALD, MAU_SKY, MAU_VIOLET, nhanBuoiUong } from '@/components/doctor/exam/KhoiThongTin'
 
 // Props giữ đúng { phien, saving, onNext } như 4 bước còn lại để là component thay thế
 // trực tiếp cho ô placeholder trong ExamSessionPage. Thêm DUY NHẤT onEditStep — bắt buộc
@@ -20,30 +21,6 @@ interface Props {
 function extractApiMessage(err: unknown, fallback: string) {
   const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
   return message?.trim() || fallback
-}
-
-function KhoiTomTat({
-  tieuDe, onSua, children,
-}: {
-  tieuDe: string
-  onSua: () => void
-  children: ReactNode
-}) {
-  return (
-    <section className="rounded-lg border border-slate-200 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">{tieuDe}</h3>
-        <button
-          type="button"
-          onClick={onSua}
-          className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
-        >
-          Sửa
-        </button>
-      </div>
-      {children}
-    </section>
-  )
 }
 
 export default function StepXacNhan({ phien, onEditStep }: Props) {
@@ -132,54 +109,78 @@ export default function StepXacNhan({ phien, onEditStep }: Props) {
     )
   }
 
+  const tongTienDichVu = hoSo?.dich_vu_phat_sinh?.reduce((s, dv) => s + dv.thanh_tien, 0) ?? 0
+
   return (
     <div className="space-y-4">
-      <KhoiTomTat tieuDe="1. Tiếp nhận" onSua={() => onEditStep('tiep_nhan')}>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm lg:grid-cols-4">
-          <div><dt className="text-slate-400">Cân nặng</dt><dd className="text-slate-800">{sinhHieu?.can_nang ?? '—'} kg</dd></div>
-          <div><dt className="text-slate-400">Chiều cao</dt><dd className="text-slate-800">{sinhHieu?.chieu_cao ?? '—'} cm</dd></div>
-          <div><dt className="text-slate-400">BMI</dt><dd className="text-slate-800">{phien.bmi ?? '—'}</dd></div>
-          <div><dt className="text-slate-400">Huyết áp</dt><dd className="text-slate-800">{sinhHieu?.huyet_ap ?? '—'}</dd></div>
-        </dl>
-        <p className="mt-2 text-sm">
+      <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+        <h2 className="text-sm font-semibold text-slate-900">Tổng kết hồ sơ khám</h2>
+        <p className="mt-0.5 text-xs text-slate-500">Kiểm tra lại 4 bước trước khi hoàn tất — bấm "Sửa" ở khối nào để quay lại đúng bước đó.</p>
+      </div>
+
+      <KhoiTomTat buoc={1} tieuDe="Tiếp nhận" icon="stethoscope" mau={MAU_SKY} action={{ label: 'Sửa', onClick: () => onEditStep('tiep_nhan') }}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { nhan: 'Cân nặng', gt: sinhHieu?.can_nang, dv: 'kg' },
+            { nhan: 'Chiều cao', gt: sinhHieu?.chieu_cao, dv: 'cm' },
+            { nhan: 'BMI', gt: phien.bmi, dv: '' },
+            { nhan: 'Huyết áp', gt: sinhHieu?.huyet_ap, dv: '' },
+          ].map((o) => (
+            <div key={o.nhan} className="rounded-lg bg-sky-50 px-3 py-2.5 text-center">
+              <p className="text-lg font-bold text-slate-900">
+                {o.gt ?? '—'}
+                {o.gt && o.dv ? <span className="ml-0.5 text-xs font-medium text-slate-400">{o.dv}</span> : null}
+              </p>
+              <p className="mt-0.5 text-[11px] font-medium text-slate-500">{o.nhan}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-sm">
           <span className="text-slate-400">Triệu chứng: </span>
           <span className="text-slate-800">{hoSo?.trieu_chung_ban_dau || '—'}</span>
         </p>
       </KhoiTomTat>
 
-      <KhoiTomTat tieuDe="2. Chẩn đoán" onSua={() => onEditStep('chan_doan')}>
-        <div className="space-y-1 text-sm">
-          <p><span className="text-slate-400">Chẩn đoán: </span><span className="text-slate-800">{hoSo?.chan_doan || '—'}</span></p>
-          <p><span className="text-slate-400">Hướng dẫn điều trị: </span><span className="text-slate-800">{hoSo?.huong_dan_dieu_tri || '—'}</span></p>
-          <p><span className="text-slate-400">Lưu ý: </span><span className="text-slate-800">{hoSo?.ghi_chu || '—'}</span></p>
-          <p><span className="text-slate-400">Tái khám: </span><span className="text-slate-800">{hoSo?.ngay_tai_kham ? new Date(hoSo.ngay_tai_kham).toLocaleDateString('vi-VN') : '—'}</span></p>
-          <p>
+      <KhoiTomTat buoc={2} tieuDe="Chẩn đoán" icon="edit" mau={MAU_VIOLET} action={{ label: 'Sửa', onClick: () => onEditStep('chan_doan') }}>
+        <div className="space-y-2 divide-y divide-slate-100 text-sm">
+          <p className="pb-2"><span className="text-slate-400">Chẩn đoán: </span><span className="font-medium text-slate-800">{hoSo?.chan_doan || '—'}</span></p>
+          <p className="pt-2"><span className="text-slate-400">Hướng dẫn điều trị: </span><span className="text-slate-800">{hoSo?.huong_dan_dieu_tri || '—'}</span></p>
+          <p className="pt-2"><span className="text-slate-400">Lưu ý: </span><span className="text-slate-800">{hoSo?.ghi_chu || '—'}</span></p>
+          <p className="pt-2">
+            <span className="text-slate-400">Tái khám: </span>
+            <span className="text-slate-800">
+              {hoSo?.chi_dinh_tai_kham 
+                ? (hoSo?.ngay_tai_kham ? new Date(hoSo.ngay_tai_kham).toLocaleDateString('vi-VN') : 'Có (Không hẹn ngày)')
+                : 'Không'}
+            </span>
+          </p>
+          <p className="pt-2">
             <span className="text-slate-400">Kết cục: </span>
             <span className={hoSo?.ket_cuc && hoSo.ket_cuc !== 'dieu_tri_thuong' ? 'font-semibold text-amber-700' : 'text-slate-800'}>
               {NHAN_KET_CUC_THAT[hoSo?.ket_cuc ?? 'dieu_tri_thuong'] ?? hoSo?.ket_cuc}
             </span>
           </p>
-          {hoSo?.chuyen_vien_thong_tin && (
-            <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              <p>Nơi chuyển: {hoSo.chuyen_vien_thong_tin.noi_chuyen_den}</p>
-              <p>Lý do: {hoSo.chuyen_vien_thong_tin.ly_do}</p>
-              {hoSo.chuyen_vien_thong_tin.tinh_trang_luc_chuyen && (
-                <p>Tình trạng: {hoSo.chuyen_vien_thong_tin.tinh_trang_luc_chuyen}</p>
-              )}
-            </div>
-          )}
         </div>
+        {hoSo?.chuyen_vien_thong_tin && (
+          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p>Nơi chuyển: {hoSo.chuyen_vien_thong_tin.noi_chuyen_den}</p>
+            <p>Lý do: {hoSo.chuyen_vien_thong_tin.ly_do}</p>
+            {hoSo.chuyen_vien_thong_tin.tinh_trang_luc_chuyen && (
+              <p>Tình trạng: {hoSo.chuyen_vien_thong_tin.tinh_trang_luc_chuyen}</p>
+            )}
+          </div>
+        )}
       </KhoiTomTat>
 
-      <KhoiTomTat tieuDe="3. Dịch vụ" onSua={() => onEditStep('dich_vu')}>
+      <KhoiTomTat buoc={3} tieuDe="Dịch vụ" icon="service" mau={MAU_AMBER} action={{ label: 'Sửa', onClick: () => onEditStep('dich_vu') }}>
         {hoSo?.dich_vu_phat_sinh?.length ? (
           <>
-            <ul className="space-y-3 text-sm text-slate-800">
+            <ul className="divide-y divide-slate-100 text-sm text-slate-800">
               {hoSo.dich_vu_phat_sinh.map((dv) => (
-                <li key={dv.service_id}>
+                <li key={dv.service_id} className="py-2 first:pt-0 last:pb-0">
                   <div className="flex justify-between gap-3">
                     <span>{dv.ten} × {dv.so_luong}</span>
-                    <span className="text-slate-500">{formatPrice(dv.thanh_tien)}</span>
+                    <span className="font-medium text-slate-600">{formatPrice(dv.thanh_tien)}</span>
                   </div>
                   {dv.hinh_anh?.length ? (
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -193,24 +194,40 @@ export default function StepXacNhan({ phien, onEditStep }: Props) {
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-right text-sm font-semibold text-slate-900">
-              Tổng: {formatPrice(hoSo.dich_vu_phat_sinh.reduce((s, dv) => s + dv.thanh_tien, 0))}
-            </p>
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2">
+              <span className="text-sm font-semibold text-amber-900">Tổng tiền dịch vụ</span>
+              <span className="text-base font-bold text-amber-900">{formatPrice(tongTienDichVu)}</span>
+            </div>
           </>
         ) : (
           <p className="text-sm text-slate-400">Không có dịch vụ phát sinh</p>
         )}
       </KhoiTomTat>
 
-      <KhoiTomTat tieuDe="4. Kê đơn" onSua={() => onEditStep('ke_don')}>
+      <KhoiTomTat buoc={4} tieuDe="Kê đơn" icon="receipt" mau={MAU_EMERALD} action={{ label: 'Sửa', onClick: () => onEditStep('ke_don') }}>
         {phien.thuoc.length ? (
-          <ul className="space-y-1 text-sm text-slate-800">
+          <div className="space-y-2">
             {phien.thuoc.map((t, i) => (
-              <li key={i}>
-                {t.ten_thuoc} — {t.lieu_luong || '—'}, {t.tan_suat || '—'}, {t.so_ngay} ngày
-              </li>
+              <div key={i} className="rounded-lg bg-emerald-50 px-3 py-2.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <span className="text-sm font-semibold text-slate-900">{t.ten_thuoc}</span>
+                  <span className="text-xs text-slate-500">{t.so_ngay} ngày</span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  {[t.lieu_luong, t.tan_suat].filter(Boolean).join(' · ') || '—'}
+                </p>
+                {t.gio_uong?.length ? (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {t.gio_uong.map((g) => (
+                      <span key={g} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                        {nhanBuoiUong(g)}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ))}
-          </ul>
+          </div>
         ) : (
           <p className="text-sm text-slate-400">Không kê đơn</p>
         )}
@@ -225,7 +242,7 @@ export default function StepXacNhan({ phien, onEditStep }: Props) {
           type="button"
           disabled={completing}
           onClick={hoanTat}
-          className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-card-md disabled:opacity-40"
         >
           {completing ? 'Đang hoàn tất...' : 'Hoàn tất ca khám & mời bệnh nhân tiếp theo'}
         </button>

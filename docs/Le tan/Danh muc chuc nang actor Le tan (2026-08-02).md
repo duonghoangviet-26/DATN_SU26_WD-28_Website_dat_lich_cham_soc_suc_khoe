@@ -80,7 +80,8 @@ Lễ tân hiện có 5 màn hình: **Tổng quan** · **Lịch hẹn (Phòng kh�
 | 3.4 | Dời lịch — khách yêu cầu (trần 1 lần) | Lịch hẹn | `PATCH /appointments/:id/reschedule` | ✅ |
 | 3.5 | Dời lịch — lỗi phòng khám (không tính hạn mức) | Lịch hẹn | (cùng trên) | ✅ |
 | 3.6 | Hủy lịch + trả slot lại pool ngay | Lịch hẹn | `PATCH /appointments/:id/cancel` | ✅ |
-| 3.7 | Thao tác hàng loạt (hủy / dời nhiều lịch) | Lịch hẹn | `POST /appointments/bulk-*` | ✅ |
+| 3.7 | Thao tác hàng loạt — hủy nhiều lịch | Lịch hẹn | `POST /appointments/bulk-cancel` | ✅ |
+| 3.7b | ~~Thao tác hàng loạt — dời nhiều lịch (Auto-fill)~~ | Lịch hẹn | ~~`POST /appointments/bulk-reschedule`~~ | **đã gỡ 2026-08-23** (crash 100% + bỏ qua rule mục 5/11/15). Thay bằng luồng `de_xuat_doi` trên trang **Điều phối lịch hẹn**. |
 | 3.8 | Chỉ hiện nút hợp lệ theo trạng thái lịch | Lịch hẹn | `allowed_actions` | ✅ |
 | 3.9 | Khoá thao tác khi bệnh nhân đang trong phòng | Lịch hẹn | `lock_reason` | ✅ |
 
@@ -94,7 +95,7 @@ Nhóm này đã hoàn chỉnh.
 |---|---|---|---|---|
 | 4.1 | Báo bác sĩ nghỉ đột xuất | Lịch hẹn | `POST /appointments/doctor-unavailable` | ✅ |
 | 4.2 | Sinh đề xuất dời cho các lịch bị ảnh hưởng | Lịch hẹn | (cùng trên) | ✅ |
-| 4.3 | Chuyển khách sang bác sĩ khác cùng chuyên khoa | Lịch hẹn | `POST /appointments/bulk-reschedule` | ✅ |
+| 4.3 | ~~Chuyển khách sang bác sĩ khác cùng chuyên khoa~~ | Lịch hẹn | ~~`POST /appointments/bulk-reschedule`~~ | **đã gỡ 2026-08-23** (crash 100% + bỏ qua rule mục 5/11/15). Thay bằng luồng `de_xuat_doi` trên trang **Điều phối lịch hẹn**. |
 | 4.4 | Khách đến muộn — đưa xuống cuối ca | Lịch hẹn | `PATCH /appointments/:id/mark-late` | ✅ |
 | 4.5 | Khách đến muộn — slot trống gần nhất trong ngày | Lịch hẹn | (cùng trên) | ✅ |
 | 4.6 | Khách đến muộn — dời sang ngày hôm sau | Lịch hẹn | (cùng trên) | ✅ |

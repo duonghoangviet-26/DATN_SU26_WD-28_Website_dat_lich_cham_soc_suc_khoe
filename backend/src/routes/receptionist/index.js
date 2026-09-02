@@ -18,6 +18,8 @@ import activityLogRoutes from './activity-log.routes.js'
 import contactTasksRoutes from './contact-tasks.routes.js'
 import doctorLeavesRoutes from './doctor-leaves.routes.js'
 import offlineQueueRoutes from './offline-queue.routes.js'
+import followupRoutes from './followup.routes.js'
+import rescheduleApprovalsRoutes from '../admin/reschedule-approvals.routes.js'
 
 const router = Router()
 
@@ -49,7 +51,12 @@ router.use('/timeline', timelineRoutes)
 router.use('/activity-log', activityLogRoutes)
 router.use('/contact-tasks', contactTasksRoutes)
 router.use('/doctor-leaves', doctorLeavesRoutes)
+// Duyệt / chọn tay phương án dời lịch cho khách đã thanh toán (rule mục 15, chốt 2026-08-22
+// — trước đây chỉ admin duyệt được nhưng không có UI admin nào gọi, đề xuất bị kẹt tới khi
+// cron tự áp). Router dùng chung controller với /api/admin/reschedule-approvals.
+router.use('/reschedule-approvals', rescheduleApprovalsRoutes)
 router.use('/payments/offline', offlinePaymentRoutes)
 router.use('/news', newsRoutes)
+router.use('/followup', followupRoutes)
 
 export default router

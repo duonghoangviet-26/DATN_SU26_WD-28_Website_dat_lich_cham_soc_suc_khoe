@@ -33,6 +33,8 @@ function mapPaymentItem(item: Partial<PaymentItem> & { id?: string | number; _id
     id: item.id ?? item._id ?? '',
     ma_giao_dich: item.ma_giao_dich ?? '',
     benh_nhan: item.benh_nhan ?? 'Không rõ',
+    so_dien_thoai_benh_nhan: item.so_dien_thoai_benh_nhan ?? null,
+    nguoi_thanh_toan: item.nguoi_thanh_toan ?? 'Không rõ',
     bac_si: item.bac_si ?? 'Không rõ',
     so_tien: Number(item.so_tien ?? 0),
     phuong_thuc: item.phuong_thuc ?? 'chuyen_khoan',
@@ -48,6 +50,7 @@ function mapPaymentItem(item: Partial<PaymentItem> & { id?: string | number; _id
     thoi_diem_thanh_toan: item.thoi_diem_thanh_toan ?? null,
     ngay_thanh_toan: item.ngay_thanh_toan ?? null,
     trang_thai_hoa_don: item.trang_thai_hoa_don ?? null,
+    chi_tiet_thu_phi: item.chi_tiet_thu_phi ?? [],
   }
 }
 

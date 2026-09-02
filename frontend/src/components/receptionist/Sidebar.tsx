@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import Icon from '@/components/admin/icons';
 import { receptionistContactTasksService } from '../../services/receptionist-contact-tasks.service';
+import { receptionistRescheduleApprovalsService } from '@/services/receptionist-reschedule-approvals.service';
 
 interface Props {
   open: boolean;
@@ -12,7 +13,7 @@ const receptionistMenu = [
   { path: '/receptionist', label: 'Tổng quan tiếp đón', icon: 'dashboard', end: true },
   { path: '/receptionist/patient-intake', label: 'Tiếp nhận & lịch hẹn', icon: 'user-check' },
   { path: '/receptionist/offline-queue', label: 'Hàng đợi vãng lai', icon: 'clipboard-list' },
-  { path: '/receptionist/doctor-day-view', label: 'Điều phối bác sĩ', icon: 'stethoscope' },
+  { path: '/receptionist/quan-ly-dieu-phoi', label: 'Quản lý và điều phối', icon: 'stethoscope' },
   { path: '/receptionist/contact-tasks', label: 'Liên hệ bệnh nhân', icon: 'phone-call' },
   { path: '/receptionist/activity-log', label: 'Nhật ký ca trực lễ tân', icon: 'clipboard-list' },
   { path: '/receptionist/payments', label: 'Viện phí & hóa đơn', icon: 'receipt' },
@@ -21,6 +22,7 @@ const receptionistMenu = [
 
 export default function Sidebar({ open, onClose }: Props) {
   const [chuaGoiCount, setChuaGoiCount] = useState(0);
+  const [canDieuPhoiCount, setCanDieuPhoiCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +30,13 @@ export default function Sidebar({ open, onClose }: Props) {
       receptionistContactTasksService
         .list({ trang_thai: 'chua_goi' })
         .then((tasks) => { if (!cancelled) setChuaGoiCount(tasks.length); })
+        .catch(() => {});
+      // Badge "Điều phối lịch hẹn" = tổng số lịch còn đề xuất dời chưa xử lý.
+      receptionistRescheduleApprovalsService
+        .danhSachDonNghi()
+        .then((danhSach) => {
+          if (!cancelled) setCanDieuPhoiCount(danhSach.reduce((tong, don) => tong + don.so_lich_chua_xu_ly, 0));
+        })
         .catch(() => {});
     };
     load();
@@ -81,6 +90,9 @@ export default function Sidebar({ open, onClose }: Props) {
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {item.path === '/receptionist/contact-tasks' && chuaGoiCount > 0 && (
                 <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-rose-600 px-1.5 text-[10px] font-bold text-white">{chuaGoiCount > 99 ? '99+' : chuaGoiCount}</span>
+              )}
+              {item.path === '/receptionist/quan-ly-dieu-phoi' && canDieuPhoiCount > 0 && (
+                <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-amber-500 px-1.5 text-[10px] font-bold text-white">{canDieuPhoiCount > 99 ? '99+' : canDieuPhoiCount}</span>
               )}
             </NavLink>
           ))}

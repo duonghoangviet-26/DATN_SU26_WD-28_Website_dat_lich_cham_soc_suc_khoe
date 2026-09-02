@@ -11,9 +11,11 @@ import {
 import { adminDoctorLeavesService } from '@/services/admin-doctor-leaves.service'
 import QueueTransferModal, { QueueTransferCandidate } from '@/components/receptionist/QueueTransferModal'
 import TimelinePanel from '@/components/receptionist/TimelinePanel'
+import RescheduleNeedsApprovalList from '@/components/receptionist/RescheduleNeedsApprovalList'
 
 interface Props {
   apiMode?: 'receptionist' | 'admin'
+  initialMode?: 'confirm' | 'reject-reason'
   leave: PendingDoctorLeave
   onClose: () => void
   onDone: () => void
@@ -44,8 +46,8 @@ function moTaKhoangNgay(leave: PendingDoctorLeave) {
   return khoang + gio
 }
 
-export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', leave, onClose, onDone }: Props) {
-  const [mode, setMode] = useState<'confirm' | 'reject-reason'>('confirm')
+export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', initialMode = 'confirm', leave, onClose, onDone }: Props) {
+  const [mode, setMode] = useState<'confirm' | 'reject-reason'>(initialMode)
   const [rejectReason, setRejectReason] = useState('')
   const [approveNote, setApproveNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -100,13 +102,13 @@ export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', lea
   const canDieuPhoi = result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'da_checkin_can_dieu_phoi_tai_quay') ?? []
   const dangTrongPhong = result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'benh_nhan_dang_trong_phong') ?? []
   const canLienHeThuCong = (result?.de_xuat_doi.filter((p) => p.can_lien_he_thu_cong).length ?? 0)
-    + (result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'trang_thai_khong_cho_phep_tao_de_xuat' || item.ly_do_bo_qua === 'dang_co_de_xuat_doi_mo').length ?? 0)
+    + (result?.can_dieu_phoi_tai_quay.filter((item) => item.ly_do_bo_qua === 'trang_thai_khong_cho_phep_tao_de_xuat' || item.ly_do_bo_qua === 'de_xuat_doi_da_xu_ly').length ?? 0)
   const daTuDongDeXuat = result?.de_xuat_doi.filter((p) => !p.can_lien_he_thu_cong).length ?? 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-lg">
-        <h3 className="text-xl font-bold text-slate-800">Duyệt đơn xin nghỉ</h3>
+        <h3 className="text-xl font-bold text-slate-800">{mode === 'reject-reason' ? 'Từ chối đơn xin nghỉ' : 'Duyệt đơn xin nghỉ'}</h3>
         <p className="mt-1 text-sm text-slate-500">{leave.bac_si?.ho_ten ?? 'Bác sĩ'}</p>
 
         {!result ? (
@@ -186,9 +188,11 @@ export default function DoctorLeaveApprovalModal({ apiMode = 'receptionist', lea
               <p className="text-xs text-slate-500">{dangTrongPhong.length} lịch đang trong phòng khám — không cần điều phối.</p>
             )}
 
+            {result && <RescheduleNeedsApprovalList items={result.de_xuat_doi} defaultDate={leave.tu_ngay.slice(0, 10)} onChanged={() => {}} />}
+
             {canLienHeThuCong > 0 && (
               <div className="rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-800">
-                {canLienHeThuCong} lượt cần lễ tân liên hệ trực tiếp (khách không có tài khoản, hoặc chờ admin duyệt). Xem tại{' '}
+                {canLienHeThuCong} lượt cần lễ tân liên hệ trực tiếp (khách không có tài khoản, không tìm được phương án, hoặc chờ duyệt ở trên). Xem tại{' '}
                 <a href="/receptionist/contact-tasks" className="font-semibold underline">Liên Hệ Khách Hàng</a>.
               </div>
             )}

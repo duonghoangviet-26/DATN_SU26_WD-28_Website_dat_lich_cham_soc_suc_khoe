@@ -1,5 +1,5 @@
 import { BacSi, HangDoi, LichHen, LichLamViec, NguoiDung, NhatKyThaoTac, ThongBao } from '../models/index.js'
-import { caTheoGio, CA_SANG } from '../models/MauLichLamViec.js'
+import { caTheoGio, CA_SANG, GIO_KET_THUC_CA_MAC_DINH } from '../models/MauLichLamViec.js'
 import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
 
 // ============================================================
@@ -49,9 +49,16 @@ export const BAT_QUET_NO_SHOW = docCongTac(
   process.env.NODE_ENV === 'production',
 )
 
-// Giờ kết thúc ca mặc định, dùng khi không tra được lịch làm việc thật.
-// Khớp `DEFAULT_SLOT_TIMES` của `scheduleGenerator`: ca sáng 08:00–11:30, chiều 13:30–17:30.
-const GIO_KET_THUC_CA_MAC_DINH = { sang: '11:30', chieu: '17:30' }
+// Số ngày lùi lại mà lượt quét ĐỊNH KỲ (cron) sẽ dùng — mặc định vẫn là 1 (chỉ hôm nay),
+// GIỮ NGUYÊN hành vi an toàn cũ. Chỉ đổi khi ai đó CHỦ ĐỘNG cấu hình
+// `NO_SHOW_SWEEP_LOOKBACK_DAYS` (vd: sau một đợt cron bị tắt nhiều ngày, cần dọn tồn đọng) —
+// không tự ý quét ngược lịch sử nếu không có cấu hình rõ ràng, tránh lặp lại sự cố 2026-07-26.
+function docSoNgayQuet(giaTri, macDinh) {
+  const so = parseInt(giaTri, 10)
+  return Number.isFinite(so) && so >= 1 ? so : macDinh
+}
+
+export const SO_NGAY_QUET_NO_SHOW_MAC_DINH = docSoNgayQuet(process.env.NO_SHOW_SWEEP_LOOKBACK_DAYS, 1)
 
 // Chỉ hai trạng thái này mới có thể thành `no_show`.
 //

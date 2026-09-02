@@ -26,10 +26,35 @@ export default function StepTiepNhan({ phien, saving, onNext }: Props) {
   const bmi = useMemo(() => bmiCua(canNang, chieuCao), [canNang, chieuCao])
   const thieuTheTrang = !canNang || !chieuCao
 
+  const sinhHieuCu = phien.ho_so_cu?.sinh_hieu ?? null
+  const coSinhHieuCu = sinhHieuCu && (
+    sinhHieuCu.can_nang != null || sinhHieuCu.chieu_cao != null || sinhHieuCu.huyet_ap || sinhHieuCu.nhiet_do != null || sinhHieuCu.nhip_tim != null
+  )
+
+  function saoChepSinhHieuCu() {
+    if (!sinhHieuCu) return
+    if (sinhHieuCu.can_nang != null) setCanNang(String(sinhHieuCu.can_nang))
+    if (sinhHieuCu.chieu_cao != null) setChieuCao(String(sinhHieuCu.chieu_cao))
+    if (sinhHieuCu.huyet_ap) setHuyetAp(sinhHieuCu.huyet_ap)
+    if (sinhHieuCu.nhiet_do != null) setNhietDo(String(sinhHieuCu.nhiet_do))
+    if (sinhHieuCu.nhip_tim != null) setNhipTim(String(sinhHieuCu.nhip_tim))
+  }
+
   return (
     <div className="space-y-6">
       <section>
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Chỉ số thể trạng</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-slate-900">Chỉ số thể trạng</h2>
+          {coSinhHieuCu && (
+            <button
+              type="button"
+              onClick={saoChepSinhHieuCu}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 transition-colors"
+            >
+              📋 Sao chép sinh hiệu đợt trước
+            </button>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           {[
             { label: 'Cân nặng (kg)', value: canNang, set: setCanNang, type: 'number' },
@@ -67,7 +92,7 @@ export default function StepTiepNhan({ phien, saving, onNext }: Props) {
         </h2>
         {lyDoKhamDaDat && !phien.ho_so?.trieu_chung_ban_dau && (
           <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-            Da tu dien tu ly do kham khi dat lich online. Bac si hoi lai va bo sung them neu can truoc khi luu.
+            Đã tự điền từ lý do khám khi đặt lịch online. Bác sĩ hỏi lại và bổ sung thêm nếu cần trước khi lưu.
           </div>
         )}
         <textarea

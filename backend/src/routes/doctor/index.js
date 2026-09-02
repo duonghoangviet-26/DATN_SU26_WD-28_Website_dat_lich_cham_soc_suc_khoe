@@ -10,7 +10,7 @@ import roomStatusRoutes   from './room-status.routes.js'
 import examSessionRoutes  from './exam-session.routes.js'
 import examHistoryRoutes  from './exam-history.routes.js'
 import { list as queueEntriesList } from '../../controllers/doctor/queue.controller.js'
-import { upload } from '../../utils/cloudinary.js'
+import { upload, getFileUrl } from '../../utils/cloudinary.js'
 import { ok, fail } from '../../utils/response.js'
 
 // ============================================================
@@ -32,7 +32,7 @@ router.use('/exam-history',  examHistoryRoutes)
 router.post('/upload', upload.single('image'), (req, res) => {
   try {
     if (!req.file) return fail(res, 400, 'Không tìm thấy file ảnh')
-    return ok(res, { url: req.file.path }, 'Tải ảnh thành công')
+    return ok(res, { url: getFileUrl(req.file) }, 'Tải ảnh thành công')
   } catch (err) {
     return fail(res, 500, err.message)
   }

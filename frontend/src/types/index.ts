@@ -140,7 +140,8 @@ export interface DoctorProfile {
     ly_do_tu_choi?: string | null;
     // specialist = bác sĩ khám clinic | home_staff = nhân viên lấy mẫu tại nhà
     loai?: "specialist" | "home_staff";
-    // Bảo hiểm bác sĩ chấp nhận — hiển thị ở trang chọn bác sĩ theo chuyên khoa
+    // Field cũ còn trong DB, KHÔNG còn hiển thị ở giao diện nào (gỡ 2026-08-26):
+    // mô hình đã chốt là phòng khám tư, không áp dụng bảo hiểm y tế.
     bao_hiem?: { nha_nuoc: boolean; bao_lanh: boolean };
     // Dịch vụ liên quan (loai='related') mà bác sĩ này có thể chỉ định — hiển thị tham khảo
     related_services?: { id: string; ten: string; gia: number }[];
@@ -196,6 +197,18 @@ export interface DoctorSelfProfile {
     }[];
     thanh_vien_hoi: string[];
     giai_thuong: { ten: string; nam: number | null }[];
+}
+
+export interface PendingFollowUp {
+  _id: string
+  chan_doan: string
+  ngay_tai_kham?: string | null
+  appointment_id?: string | null
+  hang_doi_id?: string | null
+  bac_si_cu?: {
+    id: string
+    ho_ten: string | null
+  } | null
 }
 
 export interface ClinicItem {
@@ -368,6 +381,9 @@ export interface ServiceFormData {
 export interface AppointmentItem {
     _id: string;
     ma_lich_hen?: string | null;
+    loai_lich_hen?: 'kham_moi' | 'tai_kham';
+    is_tai_kham?: boolean;
+    lich_hen_goc_id?: string | null;
     user_id?: string | null;
     member_id?: string | null;
     user_email?: string | null;
@@ -640,6 +656,8 @@ export interface PaymentItem {
     id: string | number;
     ma_giao_dich: string; // "TXN0001" — auto-gen bởi backend (GAP-21)
     benh_nhan: string;
+    so_dien_thoai_benh_nhan?: string | null;
+    nguoi_thanh_toan: string;
     bac_si: string;
     so_tien: number;
     phuong_thuc: PaymentMethod;
@@ -647,6 +665,8 @@ export interface PaymentItem {
     ngay_tao: string;
     hoa_don_id?: string | null;
     appointment_id?: string | null;
+    loai_lich_hen?: 'kham_moi' | 'tai_kham';
+    is_tai_kham?: boolean;
     so_hoa_don?: string | null;
     loai_thanh_toan?: string | null;
     email?: string | null;
@@ -655,6 +675,14 @@ export interface PaymentItem {
     thoi_diem_thanh_toan?: string | null;
     ngay_thanh_toan?: string | null;
     trang_thai_hoa_don?: string | null;
+    chi_tiet_thu_phi?: {
+        loai: string;
+        ten?: string | null;
+        so_tien: number;
+        so_luong: number;
+        thanh_tien: number;
+        ghi_chu?: string | null;
+    }[];
 }
 
 export interface UpcomingAppointmentItem {
@@ -931,6 +959,7 @@ export type ExamQueueStatus =
 export interface DoctorExamQueueRow {
     id: string; // HangDoiKham._id
     appointment_id: string | null; // null nếu là lượt vãng lai (offline)
+    loai_lich_hen?: 'kham_moi' | 'tai_kham';
     ho_so_benh_nhan_id?: string | null;
     nguon: "online" | "offline";
     ten_benh_nhan: string;
@@ -1058,6 +1087,8 @@ export interface QueueActionResult {
 export interface DoctorAppointmentDetail {
     id: string | number; // Mongo ObjectId từ API; mock cũ có thể dùng number
     ma_lich_hen?: string | null;
+    loai_lich_hen?: 'kham_moi' | 'tai_kham';
+    is_tai_kham?: boolean;
     benh_nhan: string;
     benh_nhan_id: string | number;
     ho_so_benh_nhan_id?: string | null;

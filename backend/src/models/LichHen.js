@@ -77,6 +77,7 @@ const appointmentSchema = new mongoose.Schema(
     ly_do_doi_lich: { type: String, default: null }, 
     huy_boi: { type: String, default: null },
     nguoi_huy_id: { type: mongoose.Schema.Types.ObjectId, ref: 'NguoiDung', default: null },
+    da_xoa_boi_benh_nhan: { type: Boolean, default: false },
     thoi_diem_huy: { type: Date, default: null },
     expired_at: { type: Date, default: null },
     so_lan_thay_doi: { type: Number, default: 0, min: 0 },
@@ -198,9 +199,11 @@ appointmentSchema.pre('validate', function () {
     if (!this.slot_id) throw new Error('Kham tai nha (home) bat buoc co slot_id')
     this.phong_kham = null
   } else if (this.loai_kham === 'clinic') {
-    if (!this.doctor_id) throw new Error('Kham tai phong kham (clinic) bat buoc co doctor_id')
-    if (!this.schedule_id) throw new Error('Kham tai phong kham (clinic) bat buoc co schedule_id')
-    if (!this.slot_id) throw new Error('Kham tai phong kham (clinic) bat buoc co slot_id')
+    if (this.hinh_thuc_dat_lich !== 'offline') {
+      if (!this.doctor_id) throw new Error('Kham tai phong kham (clinic) bat buoc co doctor_id')
+      if (!this.schedule_id) throw new Error('Kham tai phong kham (clinic) bat buoc co schedule_id')
+      if (!this.slot_id) throw new Error('Kham tai phong kham (clinic) bat buoc co slot_id')
+    }
     this.dia_chi_kham = null
     this.service_id = null
     this.ket_qua_url = null

@@ -2,8 +2,12 @@ import {
   BacSi, LichHen, LichLamViec, NguoiDung, NhatKyThaoTac, ThongBao,
 } from '../models/index.js'
 import { caCuaKhung } from '../models/MauLichLamViec.js'
-import { daQuaCutoffOnline, isSlotInPast } from '../utils/clinicTime.js'
+import { daQuaCutoffOnline, isSlotInPast, quaSatGioBatDau } from '../utils/clinicTime.js'
 import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
+import {
+  dieuKienChiemSlot, capNhatSlotCuSauKhiDoi, TRANG_THAI_DE_XUAT_MO,
+  SO_NGAY_TIM_PHUONG_AN, diemLechPhuongAn, khoangCachKhung,
+} from './rescheduleRules.js'
 
 // ============================================================
 // ĐIỀU PHỐI DỜI LỊCH — rule mục 14 (bác sĩ nghỉ cả ca) + mục 15 (bận một khung)
@@ -12,12 +16,15 @@ import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
 // dạng QUYỀN DỜI LỊCH. Vì vậy khi phòng khám làm hỏng kế hoạch của khách, hệ thống phải
 // tự tìm được chỗ thay thế — không thể đẩy khách vào thế "mất chỗ mà cũng không lấy lại tiền".
 //
-// Thang đề xuất, ưu tiên ÍT PHIỀN KHÁCH NHẤT trước:
-//   1. Bác sĩ khác cùng chuyên khoa, GIỮ NGUYÊN khung giờ  → khách chỉ đổi người
-//   2. Khung khác trong cùng ngày                          → khách đổi giờ
+// Thang đề xuất (chốt 2026-08-22, thay thế thứ tự bước-1/bước-2 cũ): MỘT danh sách ứng
+// viên gộp (mọi bác sĩ cùng chuyên khoa × mọi slot còn trống trong ngày, kể cả bác sĩ cũ),
+// sắp theo ĐỘ LỆCH PHÚT TUYỆT ĐỐI so với khung gốc tăng dần — ưu tiên ÍT LỆCH GIỜ NHẤT,
+// không còn cứng nhắc "đổi người trước, đổi giờ sau". Lệch bằng nhau thì ưu tiên GIỮ BÁC SĨ
+// CŨ (khách quen bác sĩ). Ứng viên bắt đầu trong vòng PHUT_DEM_DOI_LICH_TOI_THIEU tới bị
+// loại vô điều kiện — ràng buộc vật lý "khách kịp tới nơi", áp cho mọi loại kể cả giữ giờ.
 //
-// Phương án số 1 luôn được GIỮ CHỖ SẴN: quá hạn khách không phản hồi thì áp dụng nó,
-// khách không bao giờ mất chỗ (mục 15).
+// Phương án số 1 (sau khi sắp) luôn được GIỮ CHỖ SẴN: quá hạn khách không phản hồi thì áp
+// dụng nó, khách không bao giờ mất chỗ (mục 15).
 
 /** Hạn khách phản hồi đề xuất, tính bằng giờ. Quá hạn → tự áp phương án đã giữ sẵn. */
 export const GIO_HAN_PHAN_HOI = Number(process.env.DOI_LICH_HAN_PHAN_HOI_GIO || 12)
@@ -35,7 +42,7 @@ function addDays(date, days) {
   return new Date(date.getTime() + days * 86400000)
 }
 
-function slotConTrong(slot) {
+export function slotConTrong(slot) {
   return slot.status === 'active' && !slot.benh_nhan_id && !slot.bi_khoa_boi_nghi_phep
 }
 
@@ -46,7 +53,9 @@ function slotConTrong(slot) {
  * @param {object} opts.appointment - lịch hẹn cần dời
  * @param {boolean} opts.duocLanWalkIn - cho phép lấn slot walk-in (chỉ khi lỗi PHÒNG KHÁM)
  */
-export async function sinhPhuongAnDoi({ appointment, duocLanWalkIn = false, now = new Date(), session = null }) {
+export async function sinhPhuongAnDoi({
+  appointment, duocLanWalkIn = false, now = new Date(), session = null, _chanDoan = null,
+}) {
   const ngay = appointment.ngay_kham
   const gio = appointment.gio_kham
   const specialtyId = appointment.specialty_id
@@ -59,12 +68,15 @@ export async function sinhPhuongAnDoi({ appointment, duocLanWalkIn = false, now 
   }).populate('user_id', 'ho_ten').select('user_id').lean()
 
   const scheduleQuery = LichLamViec.find({
-    ngay: { $gte: ngay, $lt: addDays(ngay, 1) },
+    // Mở rộng ra SO_NGAY_TIM_PHUONG_AN ngày (A3). Bác sĩ nghỉ cả ngày mà không có đồng
+    // nghiệp cùng chuyên khoa trực hôm đó thì tìm trong ngày là chắc chắn ra rỗng.
+    ngay: { $gte: ngay, $lt: addDays(ngay, SO_NGAY_TIM_PHUONG_AN) },
     trang_thai_ngay: 'lam_viec',
     trang_thai_xac_nhan: { $ne: 'tu_choi' },
   })
   if (session) scheduleQuery.session(session)
   const schedules = await scheduleQuery.lean()
+  if (_chanDoan) _chanDoan.soLichLamViec = schedules.length
 
   const daDat = new Set(
     (await LichHen.find({
@@ -77,80 +89,71 @@ export async function sinhPhuongAnDoi({ appointment, duocLanWalkIn = false, now 
 
   const tenBacSi = new Map(doctors.map((d) => [String(d._id), d.user_id?.ho_ten ?? 'Bác sĩ']))
   const idBacSiKhac = new Set(doctors.map((d) => String(d._id)))
-  const phuongAn = []
 
-  // ── Bước 1: bác sĩ khác, GIỮ NGUYÊN giờ ──────────────────────────────────
-  for (const schedule of schedules) {
-    if (!idBacSiKhac.has(String(schedule.doctor_id))) continue
-    const slot = schedule.slots.find(
-      (s) => s.gio_bat_dau === gio && slotConTrong(s) && !daDat.has(String(s._id))
-        && (s.loai_slot !== 'walk_in' || duocLanWalkIn),
-    )
-    if (!slot) continue
-
-    phuongAn.push({
-      loai: 'doi_bac_si',
-      doctor_id: schedule.doctor_id,
-      schedule_id: schedule._id,
-      slot_id: slot._id,
-      ngay: schedule.ngay,
-      gio_bat_dau: slot.gio_bat_dau,
-      bac_si_ten: tenBacSi.get(String(schedule.doctor_id)) ?? 'Bác sĩ',
-      mo_ta: `Giữ nguyên ${gio}, đổi sang ${tenBacSi.get(String(schedule.doctor_id)) ?? 'bác sĩ khác'}`,
-      lan_walk_in: slot.loai_slot === 'walk_in',
-    })
-  }
-
-  // ── Bước 2: khung khác trong ngày (kể cả chính bác sĩ cũ, khung khác) ────
-  // Ưu tiên khung GẦN giờ cũ nhất để khách ít phải xoay lịch.
-  const ungVienKhungKhac = []
+  // ── Một vòng lặp duy nhất: mọi bác sĩ (kể cả bác sĩ cũ) × mọi slot còn trống ─────────
+  const ungVien = []
   for (const schedule of schedules) {
     const laBacSiCu = String(schedule.doctor_id) === String(appointment.doctor_id)
     if (!laBacSiCu && !idBacSiKhac.has(String(schedule.doctor_id))) continue
 
     for (const slot of schedule.slots) {
-      if (slot.gio_bat_dau === gio) continue
       if (!slotConTrong(slot) || daDat.has(String(slot._id))) continue
       if (slot.loai_slot === 'walk_in' && !duocLanWalkIn) continue
       if (isSlotInPast(schedule.ngay, slot.gio_bat_dau, now)) continue
       // Mốc T-30' KHÔNG áp cho phòng khám dời (mục 15) — mốc đó chỉ để chặn khách né mất
-      // tiền. Nhưng vẫn không xếp vào khung đã bắt đầu: khách không kịp tới.
+      // tiền. Nhưng ngưỡng đệm vật lý bên dưới vẫn áp dụng vô điều kiện.
       if (daQuaCutoffOnline(schedule.ngay, slot.gio_bat_dau, now) && !duocLanWalkIn) continue
+      // Ràng buộc "khách kịp tới nơi" — áp cho MỌI ứng viên, kể cả lấn walk-in.
+      if (quaSatGioBatDau(schedule.ngay, slot.gio_bat_dau, now)) continue
 
-      ungVienKhungKhac.push({
-        loai: 'doi_khung',
+      const giuGio = slot.gio_bat_dau === gio
+      const soNgayLech = Math.round((new Date(schedule.ngay) - new Date(ngay)) / 86400000)
+      const cungNgay = soNgayLech === 0
+      const lechPhut = diemLechPhuongAn({ gioSlot: slot.gio_bat_dau, gioGoc: gio, soNgayLech })
+      const ten = tenBacSi.get(String(schedule.doctor_id)) ?? 'Bác sĩ'
+
+      const nhanNgay = cungNgay
+        ? ''
+        : ` ${new Date(schedule.ngay).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`
+        + (soNgayLech === 1 ? ' (mai)' : '')
+
+      let moTa
+      if (laBacSiCu && giuGio && cungNgay) moTa = `Giữ nguyên ${gio}, cùng bác sĩ`
+      else if (laBacSiCu) moTa = `Cùng bác sĩ,${nhanNgay || ''} ${slot.gio_bat_dau}`.replace('  ', ' ')
+      else if (giuGio && cungNgay) moTa = `Giữ nguyên ${gio}, đổi sang ${ten}`
+      else moTa = `${ten},${nhanNgay || ''} ${slot.gio_bat_dau}`.replace('  ', ' ')
+
+      ungVien.push({
+        loai: (giuGio && cungNgay && !laBacSiCu) ? 'doi_bac_si' : 'doi_khung', // enum chỉ có 2 giá trị — mô tả chi tiết nằm ở mo_ta
         doctor_id: schedule.doctor_id,
         schedule_id: schedule._id,
         slot_id: slot._id,
         ngay: schedule.ngay,
         gio_bat_dau: slot.gio_bat_dau,
-        bac_si_ten: laBacSiCu ? null : (tenBacSi.get(String(schedule.doctor_id)) ?? 'Bác sĩ'),
-        mo_ta: laBacSiCu
-          ? `Cùng bác sĩ, đổi sang ${slot.gio_bat_dau}`
-          : `${tenBacSi.get(String(schedule.doctor_id)) ?? 'Bác sĩ khác'}, ${slot.gio_bat_dau}`,
+        bac_si_ten: laBacSiCu ? null : ten,
+        mo_ta: moTa,
         lan_walk_in: slot.loai_slot === 'walk_in',
-        _lechPhut: Math.abs(khoangCachKhung(slot.gio_bat_dau, gio)),
+        _lechPhut: lechPhut,
+        _giuBacSiCu: laBacSiCu,
       })
     }
   }
-  ungVienKhungKhac.sort((a, b) => a._lechPhut - b._lechPhut || a.gio_bat_dau.localeCompare(b.gio_bat_dau))
 
-  // Giới hạn số phương án: đưa 10 lựa chọn cho khách chỉ làm họ khó chọn hơn.
-  for (const item of ungVienKhungKhac.slice(0, 6)) {
-    delete item._lechPhut
-    phuongAn.push(item)
-  }
+  ungVien.sort((a, b) => a._lechPhut - b._lechPhut
+    || Number(b._giuBacSiCu) - Number(a._giuBacSiCu)
+    || String(a.ngay).localeCompare(String(b.ngay))
+    || a.gio_bat_dau.localeCompare(b.gio_bat_dau))
 
-  // Trần lấn walk-in: 1 slot/khung, và chỉ khi lỗi phòng khám (mục 15).
-  return capTranLanWalkIn(gopPhuongAnTrung(phuongAn)).slice(0, 4)
-}
+  if (_chanDoan) _chanDoan.soUngVienTruocLoc = ungVien.length
 
-function khoangCachKhung(a, b) {
-  const phut = (hhmm) => {
-    const [h, m] = hhmm.split(':').map(Number)
-    return h * 60 + m
-  }
-  return phut(a) - phut(b)
+  // P1-7: TRƯỚC ĐÂY cắt slice(0,6) NGAY TẠI ĐÂY rồi mới gộp trùng và cắt trần walk-in —
+  // một khung TMH có 2 slot giống hệt nhau nên 6 ứng viên có thể co lại còn 1 phương án.
+  // Nay gộp và cắt trần TRƯỚC, cắt số lượng SAU CÙNG.
+  const daLoc = capTranLanWalkIn(gopPhuongAnTrung(ungVien))
+  return daLoc.slice(0, 4).map((pa) => {
+    const { _lechPhut, _giuBacSiCu, ...rest } = pa
+    return rest
+  })
 }
 
 // Một khung chứa NHIỀU slot (TMH 2 slot/khung), nên cùng một bác sĩ ở cùng một giờ sẽ
@@ -176,6 +179,30 @@ function capTranLanWalkIn(phuongAn) {
     demTheoKhung.set(key, da + 1)
     return true
   })
+}
+
+/**
+ * Lý do CỤ THỂ vì sao không tìm được phương án (A5). "Khong tim duoc phuong an nao" là câu
+ * vô dụng với lễ tân đang cầm điện thoại — họ cần biết nên gọi khách hẹn ngày khác, hay chỉ
+ * cần đợi vài phút vì đơn giản là quá sát giờ.
+ */
+export function moTaLyDoKhongCoPhuongAn({ soLichLamViec, soUngVienTruocLoc }) {
+  if (soLichLamViec === 0) {
+    return `Khong co bac si nao cung chuyen khoa truc trong ${SO_NGAY_TIM_PHUONG_AN} ngay toi — phai lien he khach de xep lai.`
+  }
+  if (soUngVienTruocLoc === 0) {
+    return 'Co bac si truc nhung moi slot deu da kin hoac qua sat gio (<15 phut) — phai lien he khach.'
+  }
+  return 'Chi tim duoc it hon 2 phuong an — nen goi khach de thoa thuan truc tiep.'
+}
+
+/**
+ * Như `sinhPhuongAnDoi` nhưng trả kèm chẩn đoán, để nơi gọi ghi được `ghi_chu` cụ thể.
+ */
+export async function sinhPhuongAnDoiKemChanDoan(opts) {
+  const chanDoan = { soLichLamViec: 0, soUngVienTruocLoc: 0 }
+  const phuongAn = await sinhPhuongAnDoi({ ...opts, _chanDoan: chanDoan })
+  return { phuongAn, chanDoan }
 }
 
 /**
@@ -216,8 +243,9 @@ export async function nhaChoDaGiu(phuongAn, session = null) {
 /**
  * Áp dụng một phương án: chuyển lịch hẹn sang slot mới.
  *
- * Slot CŨ chuyển `locked`, KHÔNG trả về pool (mục 15) — bác sĩ bận thật, không bán lại
- * cho ai. Trả về pool sẽ khiến khách khác đặt vào rồi lại phải dời tiếp.
+ * Slot CŨ: mặc định `khoaSlotCu = true` chuyển `locked`, KHÔNG trả về pool (mục 15) — bác
+ * sĩ bận thật, không bán lại cho ai. Khi khách TỰ dời (`khoaSlotCu = false`, mục 11), slot
+ * cũ được trả về pool để bán lại — không thì mỗi lần khách dời là mất hẳn một chỗ bán được.
  */
 export async function apDungPhuongAn({
   appointment,
@@ -226,14 +254,18 @@ export async function apDungPhuongAn({
   actorUserId = null,
   actorRole = null,
   session = null,
+  hauToNhatKy = '',
+  // Slot CŨ: khoá lại (lỗi phòng khám — mục 15) hay trả về pool (khách tự dời — mục 11).
+  khoaSlotCu = true,
 }) {
   const slotCu = { schedule_id: appointment.schedule_id, slot_id: appointment.slot_id }
 
   const chiem = await LichLamViec.updateOne(
     {
       _id: phuongAn.schedule_id,
-      // Chấp nhận cả `locked` (chỗ đã giữ sẵn cho chính khách này) lẫn `active`.
-      slots: { $elemMatch: { _id: phuongAn.slot_id, status: { $in: ['active', 'locked'] } } },
+      // Điều kiện chi tiết ở rescheduleRules.dieuKienChiemSlot — phân biệt `locked` do
+      // GIỮ CHỖ cho chính lịch này với `locked` do bác sĩ NGHỈ (không bao giờ chiếm).
+      slots: { $elemMatch: dieuKienChiemSlot(phuongAn) },
     },
     {
       $set: {
@@ -249,11 +281,11 @@ export async function apDungPhuongAn({
     throw Object.assign(new Error('Chỗ này vừa có người khác nhận. Vui lòng chọn phương án khác.'), { statusCode: 409 })
   }
 
-  // Slot cũ: khoá lại, không trả pool.
+  // Slot cũ: khoá lại (lỗi phòng khám) hoặc trả về pool (khách tự dời) — mục 11 vs mục 15.
   if (slotCu.schedule_id && slotCu.slot_id) {
     await LichLamViec.updateOne(
       { _id: slotCu.schedule_id, 'slots._id': slotCu.slot_id },
-      { $set: { 'slots.$.status': 'locked', 'slots.$.benh_nhan_id': null, 'slots.$.benh_nhan_tam_giu_id': null } },
+      { $set: capNhatSlotCuSauKhiDoi(khoaSlotCu) },
       session ? { session } : {},
     )
   }
@@ -286,7 +318,8 @@ export async function apDungPhuongAn({
     du_lieu_cu: { doctor_id: bacSiCu, gio_kham: gioCu },
     du_lieu_moi: { doctor_id: phuongAn.doctor_id, gio_kham: phuongAn.gio_bat_dau, ly_do_doi: lyDoDoi },
     ly_do: `Doi lich ${appointment.ma_lich_hen ?? ''} tu ${gioCu} sang ${phuongAn.gio_bat_dau}`
-      + (phuongAn.lan_walk_in ? ' (LAN slot walk-in — ngoai le muc 15)' : ''),
+      + (phuongAn.lan_walk_in ? ' (LAN slot walk-in — ngoai le muc 15)' : '')
+      + hauToNhatKy,
   }], session ? { session } : {})
 
   // Bổ sung cho DOI_LICH_HEN ở trên: DOI_LICH_HEN ghi việc gì xảy ra với lịch hẹn, LT_DOI_LICH
@@ -305,6 +338,75 @@ export async function apDungPhuongAn({
   }
 
   return appointment
+}
+
+/**
+ * Chọn tay TỰ DO một slot ngoài danh sách gợi ý (mục 15, chốt 2026-08-22) — dùng khi khách
+ * có yêu cầu riêng mà `sinhPhuongAnDoi()` không (hoặc chưa) đề xuất tới. CHỈ áp dụng cho
+ * lịch hẹn đang có `de_xuat_doi` mở do nghỉ đột xuất; không dùng cho dời lịch thủ công khác
+ * (đó vẫn là `rescheduleAppointment` cũ, ngoài phạm vi hàm này).
+ */
+export async function chonPhuongAnTuDo({
+  appointment, doctorId, scheduleId, slotId, actorUserId = null, actorRole = null, now = new Date(), session = null,
+}) {
+  if (!['cho_khach_chon', 'cho_admin_duyet'].includes(appointment.de_xuat_doi?.trang_thai)) {
+    throw Object.assign(new Error('Lich hen khong co de xuat doi lich dang mo.'), { statusCode: 409 })
+  }
+
+  const scheduleQuery = LichLamViec.findOne({ _id: scheduleId, doctor_id: doctorId })
+  if (session) scheduleQuery.session(session)
+  const schedule = await scheduleQuery.lean()
+  if (!schedule) throw Object.assign(new Error('Khong tim thay lich lam viec cua bac si nay.'), { statusCode: 400 })
+
+  const slot = schedule.slots.find((s) => String(s._id) === String(slotId))
+  if (!slot) throw Object.assign(new Error('Khong tim thay slot.'), { statusCode: 400 })
+  if (!slotConTrong(slot)) throw Object.assign(new Error('Slot nay khong con trong.'), { statusCode: 409 })
+
+  // Không được đổi chuyên khoa — ràng buộc y khoa, không phải tuỳ chọn thương mại.
+  const specialtyIdGoc = String(appointment.specialty_id?._id ?? appointment.specialty_id ?? '')
+  if (slot.specialty_id && specialtyIdGoc && String(slot.specialty_id) !== specialtyIdGoc) {
+    throw Object.assign(new Error('Slot nay khac chuyen khoa voi lich hen goc.'), { statusCode: 400 })
+  }
+  if (isSlotInPast(schedule.ngay, slot.gio_bat_dau, now)) {
+    throw Object.assign(new Error('Slot da qua gio, khong the chon.'), { statusCode: 400 })
+  }
+  if (quaSatGioBatDau(schedule.ngay, slot.gio_bat_dau, now)) {
+    throw Object.assign(new Error('Slot qua sat gio hien tai, khach khong kip toi.'), { statusCode: 400 })
+  }
+
+  const trung = await LichHen.exists({
+    schedule_id: schedule._id,
+    slot_id: slot._id,
+    status: { $ne: 'cancelled' },
+    _id: { $ne: appointment._id },
+  })
+  if (trung) throw Object.assign(new Error('Slot nay vua co lich hen khac chiem.'), { statusCode: 409 })
+
+  const phuongAn = {
+    loai: slot.gio_bat_dau === appointment.gio_kham ? 'doi_bac_si' : 'doi_khung',
+    doctor_id: schedule.doctor_id,
+    schedule_id: schedule._id,
+    slot_id: slot._id,
+    ngay: schedule.ngay,
+    gio_bat_dau: slot.gio_bat_dau,
+    lan_walk_in: slot.loai_slot === 'walk_in',
+  }
+
+  // Đóng phương án đang giữ sẵn (nếu có) trước khi chuyển sang slot khác do lễ tân chọn tay.
+  const dangGiuCho = (appointment.de_xuat_doi.phuong_an ?? []).find(
+    (pa) => pa.da_giu_cho && String(pa.slot_id) !== String(slot._id),
+  )
+  if (dangGiuCho) await nhaChoDaGiu(dangGiuCho, session)
+
+  return apDungPhuongAn({
+    appointment,
+    phuongAn,
+    lyDoDoi: 'phong_kham',
+    actorUserId,
+    actorRole,
+    session,
+    hauToNhatKy: ' (CHON TAY)',
+  })
 }
 
 /**
@@ -335,8 +437,17 @@ export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new 
 
   const ketQua = []
   for (const appointment of appointments) {
+    // P1-6: lịch hẹn đã có đề xuất CÒN MỞ (dính hai đơn nghỉ liên tiếp) nay được sinh lại.
+    // Phải nhả chỗ đã giữ ở đề xuất cũ trước, nếu không một lịch hẹn giữ hai chỗ cùng lúc.
+    const dxCu = appointment.de_xuat_doi
+    if (dxCu && TRANG_THAI_DE_XUAT_MO.includes(dxCu.trang_thai)) {
+      for (const pa of dxCu.phuong_an ?? []) await nhaChoDaGiu(pa, session)
+    }
+
     // Lỗi thuộc phòng khám nên khách được lấn slot walk-in (ngoại lệ duy nhất, mục 15).
-    const phuongAn = await sinhPhuongAnDoi({ appointment, duocLanWalkIn: true, now, session })
+    const { phuongAn, chanDoan } = await sinhPhuongAnDoiKemChanDoan({
+      appointment, duocLanWalkIn: true, now, session,
+    })
 
     if (phuongAn.length > 0) {
       phuongAn[0].da_giu_cho = await giuChoPhuongAn(phuongAn[0], appointment, session)
@@ -352,9 +463,7 @@ export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new 
       han_phan_hoi: new Date(now.getTime() + (daThanhToan ? GIO_HAN_PHAN_HOI_ADMIN : GIO_HAN_PHAN_HOI) * 3600_000),
       phuong_an: phuongAn,
       phuong_an_khach_chon: null,
-      ghi_chu: phuongAn.length === 0
-        ? 'Khong tim duoc phuong an nao trong ngay — phai lien he khach de xep ngay khac.'
-        : null,
+      ghi_chu: phuongAn.length === 0 ? moTaLyDoKhongCoPhuongAn(chanDoan) : null,
     }
     await appointment.save({ session })
 
@@ -363,6 +472,55 @@ export async function taoDeXuatDoiChoDonNghi(leave, { session = null, now = new 
     // admin duyệt chỉ để xác nhận phương án cuối chứ không phải cổng chặn thông tin.
     await guiThongBaoDeXuat(appointment, session)
     ketQua.push({ appointment_id: appointment._id, so_phuong_an: phuongAn.length, cho_admin_duyet: daThanhToan })
+  }
+
+  return ketQua
+}
+
+/**
+ * Sinh lại phương án cho những lịch hẹn có chỗ GIỮ SẴN vừa bị một đơn nghỉ khác vô hiệu
+ * (P0-3). Những lịch này thuộc bác sĩ KHÁC — chúng chỉ mượn slot của bác sĩ vừa báo nghỉ.
+ *
+ * PHẢI gọi SAU khi đã khoá slot, để `sinhPhuongAnDoi` nhìn thấy slot mới khoá là không
+ * khả dụng. Giữ nguyên `nghi_phep_id` gốc — đề xuất vẫn thuộc về đơn nghỉ ban đầu.
+ */
+export async function sinhLaiDeXuatChoLichMatCho(slotIds, { session = null, now = new Date() } = {}) {
+  if (!Array.isArray(slotIds) || slotIds.length === 0) return []
+
+  const danhSach = await LichHen.find({
+    'de_xuat_doi.trang_thai': { $in: TRANG_THAI_DE_XUAT_MO },
+    // Chỉ khớp phương án ĐANG THỰC SỰ GIỮ CHỖ (da_giu_cho: true) — không phải bất kỳ phương
+    // án nào trong danh sách gợi ý. Nếu chỉ lọc theo slot_id, một phương án KHÔNG được chọn
+    // (chưa từng giữ chỗ thật) của lịch hẹn X có thể trùng slot vừa bị đơn nghỉ KHÁC vô hiệu,
+    // khiến X bị nhả nhầm chỗ đang giữ hợp lệ của chính nó (vi phạm mục 15: khách không được
+    // mất chỗ khi không có lý do chính đáng).
+    'de_xuat_doi.phuong_an': { $elemMatch: { slot_id: { $in: slotIds }, da_giu_cho: true } },
+    status: { $in: ['pending', 'confirmed'] },
+  }).session(session)
+
+  const ketQua = []
+  for (const appointment of danhSach) {
+    // Nhả nốt các chỗ giữ sẵn CÒN hợp lệ ở phương án cũ — sắp thay bằng phương án mới.
+    for (const pa of appointment.de_xuat_doi.phuong_an ?? []) await nhaChoDaGiu(pa, session)
+
+    const phuongAn = await sinhPhuongAnDoi({ appointment, duocLanWalkIn: true, now, session })
+    if (phuongAn.length > 0) {
+      phuongAn[0].da_giu_cho = await giuChoPhuongAn(phuongAn[0], appointment, session)
+    }
+
+    const choAdminDuyet = appointment.de_xuat_doi.trang_thai === 'cho_admin_duyet'
+    appointment.de_xuat_doi.phuong_an = phuongAn
+    appointment.de_xuat_doi.phuong_an_khach_chon = null
+    appointment.de_xuat_doi.han_phan_hoi = new Date(
+      now.getTime() + (choAdminDuyet ? GIO_HAN_PHAN_HOI_ADMIN : GIO_HAN_PHAN_HOI) * 3600_000,
+    )
+    appointment.de_xuat_doi.ghi_chu = phuongAn.length === 0
+      ? 'Cho giu san mat vi mot bac si khac cung bao nghi — khong tim duoc phuong an moi, phai lien he khach.'
+      : 'Cho giu san mat vi mot bac si khac cung bao nghi — da sinh phuong an moi va giu cho lai.'
+    await appointment.save({ session })
+
+    await guiThongBaoDeXuat(appointment, session)
+    ketQua.push({ appointment_id: appointment._id, so_phuong_an: phuongAn.length })
   }
 
   return ketQua
@@ -421,9 +579,62 @@ export async function xuLyThanhToanTrungLichNghi({ appointment, slot, session })
  * kể cả khách có tài khoản — vì đây là nhóm cần lễ tân theo dõi tới khi admin duyệt xong,
  * khác cho_khach_chon vốn khách tự xử lý được qua app.
  */
+async function coYeuCauLienHeChuaXuLy(appointmentId, session) {
+  // Guard chống trùng (review 2026-08-25, mở rộng 2026-08-28): guiThongBaoDeXuat() có thể
+  // được gọi NHIỀU LẦN cho cùng một lịch hẹn — lần 1 lúc taoDeXuatDoiChoDonNghi (bác sĩ báo
+  // nghỉ), lần 2 lúc lễ tân approve()/bulkApprove() duyệt phương án, hoặc khi dính hai đơn
+  // nghỉ liên tiếp (sinhLaiDeXuatChoLichMatCho). Không canh thì mỗi lần gọi lại tạo thêm một
+  // CUSTOMER_CONTACT_REQUIRED trùng doi_tuong_id — hiển thị 2 dòng "chưa gọi" cho cùng 1 lịch
+  // hẹn ở tab Liên hệ. Theo đúng quy ước "REQUIRED coi là chưa xử lý nếu KHÔNG có CONTACTED
+  // nào mới hơn nó" đã dùng ở contactTasks.service.js — chỉ tạo bản ghi mới khi yêu cầu GẦN
+  // NHẤT (nếu có) đã được xử lý.
+  const yeuCauGanNhat = await NhatKyThaoTac.findOne({
+    hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
+    doi_tuong_id: appointmentId,
+  }).sort({ ngay_tao: -1 }).session(session).lean()
+
+  if (!yeuCauGanNhat) return false
+
+  const daXuLy = await NhatKyThaoTac.exists({
+    hanh_dong: 'CUSTOMER_CONTACTED',
+    doi_tuong_id: appointmentId,
+    ngay_tao: { $gt: yeuCauGanNhat.ngay_tao },
+  }).session(session)
+
+  return !daXuLy
+}
+
 export async function guiThongBaoDeXuat(appointment, session = null) {
   const dx = appointment.de_xuat_doi
-  if (!dx?.phuong_an?.length) return
+  if (!dx) return
+
+  // Đ4 (2026-08-25): 0 phương án — không có gì để báo KHÁCH, nhưng LỄ TÂN phải biết để liên
+  // hệ tay xếp lịch thủ công. Trước đây hàm thoát ngay ở đây, nhóm "so_khong_co_cho" không
+  // bao giờ xuất hiện trong /receptionist/contact-tasks — không có nơi nào đánh dấu đã xử lý.
+  if (!dx.phuong_an?.length) {
+    const conYeuCauChuaXuLy = await coYeuCauLienHeChuaXuLy(appointment._id, session)
+
+    if (!conYeuCauChuaXuLy) {
+      await NhatKyThaoTac.create([{
+        nguoi_thuc_hien_id: null,
+        vai_tro: 'system',
+        hanh_dong: 'CUSTOMER_CONTACT_REQUIRED',
+        loai_doi_tuong: 'appointment',
+        doi_tuong_id: appointment._id,
+        ly_do: 'Khong tim duoc phuong an doi lich nao — phai lien he khach truc tiep de xep tay',
+        du_lieu_moi: {
+          action: 'reschedule_khong_co_phuong_an',
+          appointment_id: appointment._id,
+          ma_lich_hen: appointment.ma_lich_hen ?? null,
+          ten_khach: appointment.ten_khach ?? null,
+          so_dien_thoai_khach: appointment.so_dien_thoai_khach ?? null,
+          email_khach: appointment.email_khach ?? null,
+          noi_dung: dx.ghi_chu || 'Khong tim duoc phuong an doi lich phu hop trong pham vi tim kiem.',
+        },
+      }], session ? { session } : {})
+    }
+    return
+  }
 
   const choAdminDuyet = dx.trang_thai === 'cho_admin_duyet'
   const danhSach = dx.phuong_an.map((pa, i) => `${i + 1}. ${pa.mo_ta}`).join('\n')
@@ -447,7 +658,11 @@ export async function guiThongBaoDeXuat(appointment, session = null) {
     }], session ? { session } : {})
   }
 
-  if (choAdminDuyet || !appointment.user_id) {
+  // Cùng guard chống trùng như nhánh "0 phương án" phía trên — guiThongBaoDeXuat() bị gọi lại
+  // lúc lễ tân approve()/bulkApprove() (trang_thai đổi cho_admin_duyet -> cho_khach_chon), nên
+  // với khách KHÔNG có tài khoản (!appointment.user_id luôn đúng bất kể trang_thai) nếu không
+  // canh sẽ tạo thêm một CUSTOMER_CONTACT_REQUIRED trùng mỗi lần gọi lại.
+  if ((choAdminDuyet || !appointment.user_id) && !(await coYeuCauLienHeChuaXuLy(appointment._id, session))) {
     await NhatKyThaoTac.create([{
       nguoi_thuc_hien_id: null,
       vai_tro: 'system',

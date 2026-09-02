@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import QRCode from 'qrcode'
 import {
   AlertCircle,
   CheckCircle2,
@@ -6,6 +7,7 @@ import {
   CreditCard,
   FileSpreadsheet,
   Landmark,
+  QrCode,
   RefreshCcw,
   Search,
   X,
@@ -16,6 +18,8 @@ import {
   receptionistPatientIntakeService,
 } from '@/services/receptionist-patient-intake.service'
 import { PageShell, ReceptionistHeader } from '@/components/receptionist/ReceptionistUI'
+import InvoiceReceiptTemplate from '@/components/receptionist/InvoiceReceiptTemplate'
+import { printInvoice } from '@/utils/printInvoice'
 
 type PaymentView = 'pending' | 'paid'
 type BillingScope = 'today' | 'all'
@@ -52,6 +56,15 @@ function paymentTypeLabel(type: BillingCase['payments'][number]['loai_thanh_toan
 function formatCaseDate(value?: string | null) {
   if (!value) return 'Chưa rõ ngày'
   return new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function isOverdueCase(caseItem: BillingCase): boolean {
+  if (!caseItem.ngay_kham) return false
+  const examDay = new Date(caseItem.ngay_kham)
+  examDay.setHours(0, 0, 0, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return examDay.getTime() < today.getTime()
 }
 
 function formatDateTime(value?: string | null) {
@@ -104,29 +117,12 @@ function MetricTile({
   )
 }
 
-function SectionTitle({
-  index,
-  title,
-  hint,
-}: {
-  index: number
-  title: string
-  hint: string
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-700">{index}</span>
-      <div>
-        <h3 className="text-base font-bold text-slate-950">{title}</h3>
-        <p className="mt-1 text-sm text-slate-600">{hint}</p>
-      </div>
-    </div>
-  )
-}
-
 export default function Payments() {
   const [view, setView] = useState<PaymentView>('pending')
-  const [scope, setScope] = useState<BillingScope>('today')
+  // Mặc định 'all': lọc theo hôm nay từng khiến ca chưa được lễ tân đối chiếu (đặc biệt case
+  // đã thanh toán online, "còn phải thu" = 0đ) biến mất khỏi danh sách "Chờ thu" khi qua ngày,
+  // dẫn tới bị bỏ quên vô thời hạn dù hóa đơn thật sự chưa được xác nhận thu ngân.
+  const [scope, setScope] = useState<BillingScope>('all')
   const [cases, setCases] = useState<BillingCase[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selected, setSelected] = useState<BillingCase | null>(null)
@@ -136,6 +132,7 @@ export default function Payments() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
 
   async function loadCases(targetView = view, targetScope = scope) {
     setLoading(true)
@@ -153,6 +150,27 @@ export default function Payments() {
     void loadCases()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    const payload = selected?.pending_payment?.gateway?.qr_payload
+    if (!payload) {
+      setQrCodeDataUrl('')
+      return
+    }
+
+    let cancelled = false
+    QRCode.toDataURL(payload, { width: 220, margin: 1, errorCorrectionLevel: 'M' })
+      .then((url) => {
+        if (!cancelled) setQrCodeDataUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) setQrCodeDataUrl('')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [selected?.pending_payment?.gateway?.qr_payload])
 
   async function changeView(nextView: PaymentView) {
     if (nextView === view) return
@@ -220,6 +238,24 @@ export default function Payments() {
     }
   }
 
+  async function regenerateTransferQr() {
+    if (!selected?.pending_payment) return
+    setSaving(true)
+    setError('')
+    try {
+      const fresh = await receptionistPatientIntakeService.createTransferVnpaySession(
+        selected.id,
+        selected.source,
+        selected.pending_payment.id,
+      )
+      setSelected(fresh)
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.message || 'Không tạo lại được mã QR')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function printReceipt() {
     if (!selected) return
     setSaving(true)
@@ -227,7 +263,9 @@ export default function Payments() {
     try {
       const fresh = await receptionistPatientIntakeService.markBillingReceiptPrinted(selected.id, selected.source)
       setSelected(fresh)
-      window.print()
+      // Doi 1 tick de #invoice-print nhan du lieu `fresh` truoc khi in — tranh in nham
+      // ban hoa don cu (hoac rong) do setSelected chua kip render lai.
+      requestAnimationFrame(() => printInvoice())
       setMessage('Đã ghi nhận in hoặc giao lại hóa đơn.')
     } catch (requestError: any) {
       setError(requestError?.response?.data?.message || 'Chưa thể in hóa đơn')
@@ -264,6 +302,9 @@ export default function Payments() {
   const pendingCount = filteredCases.filter((item) => !item.billing_summary.da_xac_nhan_thu_ngan).length
   const transferCount = filteredCases.filter((item) => Boolean(item.pending_payment)).length
   const remainingTotal = filteredCases.reduce((sum, item) => sum + Number(item.billing_summary.con_phai_thu || 0), 0)
+  // Ca đã qua ngày khám nhưng vẫn chưa được lễ tân xác nhận thu ngân — dễ bị quên vì mọi nơi
+  // khác trong hệ thống (trang bệnh nhân, màn khám bác sĩ) đã hiển thị "đã thanh toán" từ trước.
+  const overdueCases = view === 'pending' ? filteredCases.filter(isOverdueCase) : []
   const actionLabel = !summary
     ? 'Chọn ca khám'
     : summary.con_phai_thu <= 0
@@ -274,25 +315,31 @@ export default function Payments() {
 
   return (
     <PageShell>
+        <InvoiceReceiptTemplate data={selected} />
+
         <ReceptionistHeader
           eyebrow="Viện phí & hóa đơn"
           title="Thanh toán tại quầy"
           description="Tra cứu hóa đơn, đối chiếu khoản thu và xác nhận thanh toán."
           metrics={
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricTile
                 label={scope === 'today' ? `Ca đang xem · ${todayLabel}` : 'Ca đang xem'}
                 value={`${pendingCount} ca`}
               />
               <MetricTile
+                label="Quá hạn xác nhận"
+                value={`${overdueCases.length} ca`}
+                tone={overdueCases.length > 0 ? 'border-rose-200 bg-rose-50/80' : 'border-slate-200 bg-white'}
+              />
+              <MetricTile
                 label="Chờ chuyển khoản"
                 value={`${transferCount} GD`}
-                tone="border-amber-200 bg-amber-50/80"
+                tone={transferCount > 0 ? 'border-amber-200 bg-amber-50/80' : 'border-slate-200 bg-white'}
               />
               <MetricTile
                 label="Tổng còn phải thu"
                 value={money(remainingTotal)}
-                tone="border-cyan-200 bg-cyan-50/80"
               />
             </div>
           }
@@ -409,6 +456,11 @@ export default function Payments() {
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(caseItem, view)}`}>
                             {casePaymentLabel(caseItem, view)}
                           </span>
+                          {view === 'pending' && isOverdueCase(caseItem) && (
+                            <span className="ml-2 inline-flex rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800">
+                              Quá hạn xác nhận
+                            </span>
+                          )}
                           <p className="mt-2 text-xs text-slate-500">{sourceLabel(caseItem.source)}</p>
                         </div>
 
@@ -477,25 +529,11 @@ export default function Payments() {
                 <MetricTile label="Số hóa đơn" value={invoice?.so_hoa_don || 'Chưa lập'} />
                 <MetricTile label="Tổng hóa đơn" value={money(summary.tong_thanh_toan)} />
                 <MetricTile label="Đã thu" value={money(summary.tong_da_thu)} tone="border-emerald-200 bg-emerald-50" />
-                <MetricTile label="Còn phải thu" value={money(summary.con_phai_thu)} tone={summary.con_phai_thu > 0 ? 'border-amber-200 bg-amber-50' : 'border-brand-100 bg-brand-50'} />
+                <MetricTile label="Còn phải thu" value={money(summary.con_phai_thu)} tone={summary.con_phai_thu > 0 ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'} />
               </div>
 
               <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="space-y-5">
-                  <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-                    <SectionTitle
-                      index={1}
-                      title="Đối chiếu số tiền phải thu"
-                      hint="Kiểm tra phí khám, dịch vụ phát sinh và số còn thiếu trước khi xác nhận."
-                    />
-
-                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      <MetricTile label="Phí khám" value={money(summary.tong_tien_kham)} />
-                      <MetricTile label="Dịch vụ phát sinh" value={money(summary.tong_tien_phat_sinh)} />
-                      <MetricTile label="Cần thu sau khám" value={money(summary.con_phai_thu_sau_kham)} tone={summary.con_phai_thu_sau_kham > 0 ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'} />
-                    </div>
-                  </section>
-
                   <section className="rounded-lg border border-slate-200 bg-white">
                     <div className="border-b border-slate-100 px-4 py-3">
                       <h3 className="font-semibold text-slate-950">Chi tiết thu phí</h3>
@@ -538,39 +576,84 @@ export default function Payments() {
                   </section>
                 </div>
 
-                <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-                  <SectionTitle
-                    index={2}
-                    title="Thao tác thu ngân"
-                    hint="Chỉ hiện hành động phù hợp với ca đang chọn."
-                  />
+                <section className="rounded-lg border border-slate-200 bg-white p-5">
+                  <div className="flex items-start gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                      <CircleDollarSign className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-950">Thao tác thu ngân</h3>
+                      <p className="mt-1 text-sm text-slate-600">Chỉ hiện hành động phù hợp với ca đang chọn.</p>
+                    </div>
+                  </div>
 
                   {selected.pending_payment ? (
-                    <div className="mt-4 space-y-4">
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                        <div className="flex items-start gap-3">
-                          <Landmark className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-                          <div>
-                            <p className="font-semibold text-amber-950">Chờ xác nhận chuyển khoản</p>
-                            <p className="mt-1 text-sm text-amber-900">{money(selected.pending_payment.so_tien)} · {selected.pending_payment.ma_giao_dich || selected.pending_payment.id}</p>
-                            <p className="mt-2 text-xs leading-5 text-amber-800">Chỉ xác nhận sau khi đối chiếu tiền vào thực tế.</p>
-                          </div>
-                        </div>
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                          <Landmark className="h-3.5 w-3.5" />
+                          Chờ xác nhận chuyển khoản
+                        </span>
+                        <span className="truncate text-xs text-slate-500">{selected.pending_payment.ma_giao_dich || selected.pending_payment.id}</span>
                       </div>
 
-                      <button type="button" disabled={saving} onClick={() => void resolveTransfer('confirm')} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-60">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Xác nhận đã nhận tiền
-                      </button>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Số tiền khách cần chuyển</p>
+                        <p className="mt-1 text-2xl font-bold text-slate-950">{money(selected.pending_payment.so_tien)}</p>
+                      </div>
 
-                      <button type="button" disabled={saving} onClick={() => void resolveTransfer('cancel')} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60">
-                        <AlertCircle className="h-4 w-4" />
-                        Hủy yêu cầu chuyển khoản
-                      </button>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex justify-center">
+                          {selected.pending_payment.gateway?.qr_payload && qrCodeDataUrl ? (
+                            <img
+                              src={qrCodeDataUrl}
+                              alt="Mã QR thanh toán VNPAY"
+                              className="h-[200px] w-[200px] rounded-lg border border-slate-100"
+                            />
+                          ) : (
+                            <div className="grid h-[200px] w-[200px] place-items-center rounded-lg border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                              <span className="flex flex-col items-center gap-2 px-4">
+                                <QrCode className="h-6 w-6 text-slate-300" />
+                                {selected.pending_payment.gateway?.qr_payload ? 'Đang tạo mã QR...' : 'Chưa có mã QR'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {selected.pending_payment.gateway?.is_expired ? (
+                          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2">
+                            <span className="text-xs font-medium text-rose-700">Mã QR đã hết hạn</span>
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => void regenerateTransferQr()}
+                              className="text-xs font-semibold text-brand-700 hover:underline disabled:opacity-60"
+                            >
+                              Tạo lại mã
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-center text-xs leading-5 text-slate-500">
+                            Khách quét mã bằng app ngân hàng để chuyển đúng số tiền trên. Bấm "Đã nhận tiền" bên dưới sau khi kiểm tra tài khoản.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 pt-1">
+                        <button type="button" disabled={saving} onClick={() => void resolveTransfer('confirm')} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-60">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Đã nhận tiền, xác nhận
+                        </button>
+
+                        <button type="button" disabled={saving} onClick={() => void resolveTransfer('cancel')} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-rose-700 disabled:opacity-60">
+                          <AlertCircle className="h-4 w-4" />
+                          Hủy yêu cầu chuyển khoản
+                        </button>
+                      </div>
                     </div>
                   ) : needsCashierConfirmation ? (
                     <div className="mt-4 space-y-4">
-                      <div className="rounded-lg border border-slate-200 bg-white p-4">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                         <p className="text-sm font-semibold text-slate-900">Số tiền cần xử lý</p>
                         <p className="mt-2 text-2xl font-bold text-slate-950">{money(summary.con_phai_thu)}</p>
                         <p className="mt-2 text-xs leading-5 text-slate-500">
@@ -579,7 +662,7 @@ export default function Payments() {
                       </div>
 
                       {summary.con_phai_thu > 0 && (
-                        <div className="rounded-lg border border-slate-200 bg-white p-4">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                           <p className="text-sm font-semibold text-slate-900">Phương thức thanh toán</p>
                           <div className="mt-3 grid gap-2">
                             <button type="button" onClick={() => setPaymentMethod('tien_mat')} className={`flex items-center justify-between rounded-lg border px-3 py-3 text-left transition ${paymentMethod === 'tien_mat' ? 'border-brand-500 bg-brand-50 text-brand-900' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-200 hover:bg-slate-50'}`}>

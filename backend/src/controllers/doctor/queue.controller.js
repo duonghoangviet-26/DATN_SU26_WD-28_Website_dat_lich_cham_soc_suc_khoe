@@ -15,6 +15,11 @@ import { traSlotVePool } from '../../services/offlineIntake.service.js'
 import { bacSiDangTrongCaLamViec, getTodayRange } from '../../services/doctorAvailability.service.js'
 import { huyLuotHangDoi } from '../../services/queueCancel.service.js'
 import { resolveAndSyncAppointmentPaymentState } from '../../services/appointmentPaymentStatus.service.js'
+import {
+  chuanHoaMucDoBaoLeTan,
+  chuanHoaNoiDungBaoLeTan,
+  guiThongBaoChoLeTan,
+} from '../../services/receptionNotify.service.js'
 
 // ============================================================
 // Hàng đợi động (Bác sĩ) — Routes: /api/doctor/queue
@@ -188,7 +193,9 @@ export async function list(req, res) {
     const filter = { doctor_id: docId }
     filter.trang_thai = status || { $in: [...DANG_XU_LY, 'skipped', 'cancelled', 'hoan_thanh'] }
 
-    const entries = await HangDoi.find(filter).lean()
+    const entries = await HangDoi.find(filter)
+      .populate('appointment_id', 'loai_lich_hen')
+      .lean()
     const room = await TrangThaiPhongKham.findOne({ doctor_id: docId }).lean()
     const tbPhut = room?.thoi_gian_kham_tb_phut ?? 20
     const now = new Date()
@@ -200,6 +207,8 @@ export async function list(req, res) {
       if (isWaiting) viTriChoDangCho++
       return {
         id: e._id,
+        appointment_id: e.appointment_id ? e.appointment_id._id : null,
+        loai_lich_hen: e.appointment_id ? (e.appointment_id.loai_lich_hen ?? e.loai_lich_hen ?? 'kham_moi') : (e.loai_lich_hen ?? 'kham_moi'),
         nguon: e.nguon,
         ten_benh_nhan: e.ten_benh_nhan,
         tuoi: e.tuoi,
@@ -304,7 +313,14 @@ export async function intoRoom(req, res) {
       const paymentState = await resolveAndSyncAppointmentPaymentState(entry.appointment_id)
       const appointment = paymentState?.appointment ?? null
       if (!appointment) return fail(res, 409, 'Lịch hẹn của lượt này không còn tồn tại, không thể cho vào phòng')
-      if (paymentState.payment_status !== 'paid') {
+      const isWalkIn = appointment.nguon === 'tai_cho'
+        || appointment.nguon === 'offline'
+        || appointment.hinh_thuc_dat_lich === 'offline'
+        || appointment.hinh_thuc_dat_lich === 'receptionist_walkin'
+        || appointment.hinh_thuc_dat_lich === 'walk_in'
+        || entry.loai_doi_tuong === 'walk_in_guest'
+        || entry.nguon === 'offline'
+      if (!isWalkIn && paymentState.payment_status !== 'paid') {
         return fail(res, 409, 'Lịch hẹn chưa thanh toán đủ. Mời thu ngân xác nhận thanh toán trước khi vào phòng.')
       }
     }
@@ -453,6 +469,40 @@ export async function cancel(req, res) {
     })
 
     return ok(res, { id: entry._id, trang_thai: entry.trang_thai }, 'Đã hủy lượt khám')
+  } catch (err) {
+    return fail(res, err.statusCode ?? 500, err.message)
+  }
+}
+
+// ─── POST /api/doctor/queue/notify-reception ─────────────────────────────────
+// Báo lễ tân KHÔNG gắn với một bệnh nhân cụ thể — ví dụ ca khám quá lâu (nhờ báo trước cho
+// người đang chờ) hoặc khám nhanh hơn dự kiến (có thể đưa bệnh nhân tiếp theo vào sớm). Trước
+// đây "Báo lễ tân" CHỈ có trong phòng khám, gắn theo queueId (doctor/exam-session.controller.js)
+// — sai nghiệp vụ vì bác sĩ cần báo được BẤT CỨ LÚC NÀO, kể cả khi chưa có bệnh nhân nào
+// đang trong phòng. Dùng chung `guiThongBaoChoLeTan` với luồng trong phòng khám.
+export async function notifyReceptionGeneral(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+    const noiDung = chuanHoaNoiDungBaoLeTan(req.body?.noi_dung)
+    const mucDo = chuanHoaMucDoBaoLeTan(req.body?.muc_do)
+
+    const [bacSi, room] = await Promise.all([
+      NguoiDung.findById(req.user.id).select('ho_ten').lean(),
+      findOrCreateRoomStatus(docId),
+    ])
+    const tenBacSi = bacSi?.ho_ten ? `BS. ${bacSi.ho_ten}` : 'Bác sĩ'
+    const ngucanhPhong = room.phong_kham ? ` (phòng ${room.phong_kham})` : ''
+
+    const sent = await guiThongBaoChoLeTan({
+      mucDo,
+      noiDung: `${tenBacSi}${ngucanhPhong}: ${noiDung}`,
+      relatedId: docId,
+      extraData: { doctor_id: String(docId), room: room.phong_kham ?? null },
+    })
+
+    return ok(res, { sent }, 'Đã gửi thông báo cho lễ tân')
   } catch (err) {
     return fail(res, err.statusCode ?? 500, err.message)
   }

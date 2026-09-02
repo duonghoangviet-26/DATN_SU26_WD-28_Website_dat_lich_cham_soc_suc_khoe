@@ -45,6 +45,12 @@ export function caTheoGio(gioBatDau) {
   return String(gioBatDau) >= GIO_BAT_DAU_CA_CHIEU ? CA_CHIEU : CA_SANG
 }
 
+// Giờ kết thúc CA mặc định khi không (hoặc không muốn) tra lịch làm việc thật — khớp
+// `DEFAULT_SLOT_TIMES` của `scheduleGenerator`: ca sáng 08:00–11:30, chiều 13:30–17:30.
+// Dùng ở `services/noShowSweep.service.js` (quyết định no_show thật) VÀ
+// `utils/appointmentStatus.js` (ước lượng khoá nút bấm, không tra lịch làm việc để tránh N+1).
+export const GIO_KET_THUC_CA_MAC_DINH = { [CA_SANG]: '11:30', [CA_CHIEU]: '17:30' }
+
 const mauLichLamViecSchema = new mongoose.Schema(
   {
     bac_si_id: {

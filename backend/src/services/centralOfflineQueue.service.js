@@ -1,11 +1,12 @@
 import mongoose from 'mongoose'
-import { BacSi, ChuyenKhoa, HangDoi, HoSoBenhNhan, LichHen, LichLamViec, TrangThaiPhongKham } from '../models/index.js'
+import { BacSi, ChuyenKhoa, HangDoi, HoSoBenhNhan, LichHen, LichLamViec, TrangThaiPhongKham, KetQuaKham, HoaDon, ThanhToan, Counter } from '../models/index.js'
 import { buildSlotDateTime, startOfDayUtc } from '../utils/clinicTime.js'
 import { MAC_DINH_THOI_GIAN_KHAM_PHUT } from '../utils/slotConfig.js'
 import { capSoThuTuCheckin } from './checkInNumber.service.js'
 import { layCauHinhHangDoiOffline } from './offlineQueueConfig.service.js'
 import { ghiNhatKyLeTan } from './receptionistAudit.service.js'
 import { notifyDoctorQueueUpdated } from './doctorQueueRealtime.service.js'
+import { layGiaKhamChuyenKhoa } from './doctorAssignment.service.js'
 
 export const TRANG_THAI_OFFLINE_TRUNG_TAM = 'cho_dieu_phoi'
 export const TRANG_THAI_HANG_DOI_DANG_MO = [
@@ -48,7 +49,7 @@ function khoangNgay(now) {
 
 function normalizeObjectId(value, fieldName) {
   if (!value) return null
-  if (!mongoose.Types.ObjectId.isValid(value)) throw loi(400, `${fieldName} khong hop le`)
+  if (!mongoose.Types.ObjectId.isValid(value)) throw loi(400, `${fieldName} không hợp lệ`)
   return value
 }
 
@@ -238,37 +239,37 @@ export function ketLuanSucChuaHangDoiOfflineTrungTam({
   if (doctorCount === 0) {
     return {
       trangThai: 'tam_dung_nhan',
-      lyDo: 'Khong co bac si hop le dang lam viec theo chuyen khoa hom nay.',
+      lyDo: 'Không có bác sĩ hợp lệ đang làm việc theo chuyên khoa hôm nay.',
     }
   }
   if (usableDoctorCount === 0) {
     return {
       trangThai: 'tam_dung_nhan',
-      lyDo: 'Khong con bac si co du thoi gian an toan de nhan them khach vang lai.',
+      lyDo: 'Không còn bác sĩ có đủ thời gian an toàn để nhận thêm khách vãng lai.',
     }
   }
   if (centralAhead >= maxCentralOfflineQueueSize) {
     return {
       trangThai: 'tam_dung_nhan',
-      lyDo: 'Hang doi trung tam da dat gioi han so khach dang cho.',
+      lyDo: 'Hàng đợi trung tâm đã đạt giới hạn số khách đang chờ.',
     }
   }
   if (centralAhead >= maxOfflinePerShiftPerSpecialty) {
     return {
       trangThai: 'tam_dung_nhan',
-      lyDo: 'Chuyen khoa da dat gioi han khach vang lai trong ca.',
+      lyDo: 'Chuyên khoa đã đạt giới hạn khách vãng lai trong ca.',
     }
   }
   if (estimatedWaitMinutes !== null && estimatedWaitMinutes > maxOfflineWaitMinutes) {
     return {
       trangThai: 'tam_dung_nhan',
-      lyDo: `Thoi gian cho uoc tinh ${estimatedWaitMinutes} phut vuot nguong ${maxOfflineWaitMinutes} phut.`,
+      lyDo: `Thời gian chờ ước tính ${estimatedWaitMinutes} phút vượt ngưỡng ${maxOfflineWaitMinutes} phút.`,
     }
   }
   if (estimatedWaitMinutes !== null && estimatedWaitMinutes >= offlineWarningWaitMinutes) {
     return {
       trangThai: 'canh_bao_day',
-      lyDo: `Thoi gian cho uoc tinh ${estimatedWaitMinutes} phut, can thong bao khach truoc khi tiep nhan.`,
+      lyDo: `Thời gian chờ ước tính ${estimatedWaitMinutes} phút, cần thông báo khách trước khi tiếp nhận.`,
     }
   }
   return { trangThai: 'co_the_nhan', lyDo: null }
@@ -364,23 +365,35 @@ export async function tinhSucChuaHangDoiOfflineTrungTam({
   }
 }
 
+function ngayHoaDonPart(date) {
+  return `${String(date.getUTCFullYear()).slice(-2)}${String(date.getUTCMonth() + 1).padStart(2, '0')}${String(date.getUTCDate()).padStart(2, '0')}`
+}
+
+async function nextInvoiceNumber(date) {
+  const part = ngayHoaDonPart(date)
+  const seq = await Counter.nextSeq(`so_hoa_don_${part}`)
+  return `HD-${part}-${String(seq).padStart(4, '0')}`
+}
+
 export async function tiepNhanOfflineVaoHangDoiTrungTam({
   hoSoBenhNhanId,
   specialtyId,
+  lich_hen_goc_id = null,
+  ket_qua_kham_id = null,
   xacNhanCanhBao = false,
+  forceDoctorId = null,
   actorUserId = null,
-  actorRole = 'receptionist',
+  actorRole = null,
   now = new Date(),
 } = {}) {
   const normalizedProfileId = normalizeObjectId(hoSoBenhNhanId, 'ho_so_benh_nhan_id')
   const normalizedSpecialtyId = normalizeObjectId(specialtyId, 'specialty_id')
-  if (!normalizedProfileId) throw loi(400, 'Can chon ho so benh nhan')
-  if (!normalizedSpecialtyId) throw loi(400, 'Can chon chuyen khoa')
+  if (!normalizedProfileId) throw loi(400, 'Cần chọn hồ sơ bệnh nhân')
+  if (!normalizedSpecialtyId) throw loi(400, 'Cần chọn chuyên khoa')
 
   const profile = await HoSoBenhNhan.findOne({ _id: normalizedProfileId, trang_thai: 'active' }).lean()
-  if (!profile) throw loi(404, 'Ho so benh nhan khong hop le')
-  // D81 — ho so tam (khong SDT) duoc nhan neu co ma_tam thay the (xem HangDoi.pre('validate')).
-  if (!profile.so_dien_thoai && !profile.ma_tam) throw loi(400, 'Ho so benh nhan chua co so dien thoai')
+  if (!profile) throw loi(404, 'Hồ sơ bệnh nhân không hợp lệ')
+  if (!profile.so_dien_thoai) throw loi(400, 'Hồ sơ bệnh nhân chưa có số điện thoại')
 
   const { start, end } = khoangNgay(now)
   const activeVisit = await HangDoi.findOne({
@@ -389,7 +402,7 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
     trang_thai: { $in: TRANG_THAI_HANG_DOI_DANG_MO },
   }).select('_id trang_thai doctor_id phong_kham ma_so_thu_tu').lean()
   if (activeVisit) {
-    throw loi(409, 'Ho so nay da co mot luot kham dang duoc tiep nhan trong ngay hom nay', { entry: activeVisit })
+    throw loi(409, 'Hồ sơ này đã có một lượt khám đang được tiếp nhận trong ngày hôm nay', { entry: activeVisit })
   }
 
   const capacity = await tinhSucChuaHangDoiOfflineTrungTam({
@@ -397,9 +410,96 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
     includeNewPatient: true,
     now,
   })
-  if (!capacity.co_the_nhan) throw loi(409, capacity.ly_do || 'Tam dung nhan khach vang lai', { capacity })
+  if (!capacity.co_the_nhan) throw loi(409, capacity.ly_do || 'Tạm dừng nhận khách vãng lai', { capacity })
   if (capacity.can_xac_nhan_qua_tai && !xacNhanCanhBao) {
-    throw loi(409, 'Hang doi dang gan day, can xac nhan voi khach truoc khi tiep nhan', { capacity, require_confirmation: true })
+    throw loi(409, 'Hàng đợi đang gần đầy, cần xác nhận với khách trước khi tiếp nhận', { capacity, require_confirmation: true })
+  }
+
+  let resolvedLichHenGocId = lich_hen_goc_id || null
+  let isFollowUpPatient = Boolean(lich_hen_goc_id || ket_qua_kham_id)
+  let lastExamDoctorId = null
+
+  // Tự động nhận diện tái khám nếu hồ sơ đã từng có kết quả khám hoặc lịch hẹn trước đó
+  const prevRecord = await KetQuaKham.findOne({
+    ho_so_benh_nhan_id: profile._id,
+    $or: [{ status: 'da_xac_nhan' }, { buoc_hien_tai: 'hoan_tat' }]
+  }).sort({ ngay_tao: -1 }).lean()
+
+  if (prevRecord) {
+    let isValidFollowUp = false
+    if (prevRecord.chi_dinh_tai_kham && !prevRecord.da_dat_lich_tai_kham) {
+      const ngayTaiKham = prevRecord.ngay_tai_kham ? new Date(prevRecord.ngay_tai_kham) : null
+      if (ngayTaiKham) {
+        ngayTaiKham.setUTCHours(0, 0, 0, 0)
+        const hanCuoi = new Date(ngayTaiKham.getTime() + 14 * 86400000)
+        if (now.getTime() <= hanCuoi.getTime()) {
+          isValidFollowUp = true
+        }
+      }
+    }
+    
+    if (isValidFollowUp || isFollowUpPatient) {
+      isFollowUpPatient = true
+      if (!resolvedLichHenGocId) {
+        resolvedLichHenGocId = prevRecord.appointment_id || null
+      }
+      lastExamDoctorId = prevRecord.bac_si_phu_trach_id || null
+      
+      if (isValidFollowUp && prevRecord._id) {
+        ket_qua_kham_id = prevRecord._id
+      }
+    } else {
+      isFollowUpPatient = false
+    }
+  } else {
+    const prevAppt = await LichHen.findOne({
+      ho_so_benh_nhan_id: profile._id,
+      status: 'completed'
+    }).sort({ ngay_kham: -1 }).lean()
+
+    if (prevAppt) {
+      const ngayKham = new Date(prevAppt.ngay_kham)
+      ngayKham.setUTCHours(0, 0, 0, 0)
+      const hanCuoi = new Date(ngayKham.getTime() + 14 * 86400000)
+      
+      if (now.getTime() <= hanCuoi.getTime() || isFollowUpPatient) {
+        isFollowUpPatient = true
+        if (!resolvedLichHenGocId) {
+          resolvedLichHenGocId = prevAppt._id
+        }
+        lastExamDoctorId = prevAppt.doctor_id || null
+      } else {
+        isFollowUpPatient = false
+      }
+    }
+  }
+
+  let autoAssignedDoctorId = null
+  let autoAssignedPhongKham = null
+  let autoAssignedScheduleId = null
+  let autoAssignedSlotId = null
+  let autoAssignedKhungIndex = null
+  
+  const targetDoctorId = forceDoctorId || (isFollowUpPatient ? lastExamDoctorId : null)
+
+  if (targetDoctorId) {
+    const candidates = await layUngVienBacSiChoDieuPhoi({ specialty_id: normalizedSpecialtyId }, now)
+    const targetCandidate = candidates.find((c) => String(c.doctor_id) === String(targetDoctorId))
+    
+    if (targetCandidate && targetCandidate.hop_le) {
+      autoAssignedDoctorId = targetCandidate.doctor_id
+      autoAssignedPhongKham = targetCandidate.phong_kham || null
+      autoAssignedScheduleId = targetCandidate.schedule_id || null
+      autoAssignedSlotId = targetCandidate.slot_id || null
+      autoAssignedKhungIndex = targetCandidate.khung_index || null
+    } else if (forceDoctorId) {
+      if (!targetCandidate) {
+        throw loi(400, 'Bác sĩ không hợp lệ hoặc không thuộc chuyên khoa này')
+      }
+      if (!targetCandidate.hop_le) {
+        throw loi(409, 'Bác sĩ hiện không thể tiếp nhận thêm bệnh nhân', { ly_do_chan: targetCandidate.ly_do_chan })
+      }
+    }
   }
 
   let entry
@@ -411,7 +511,7 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
         { $set: { ngay_cap_nhat: now } },
         { new: false, session },
       ).select('_id').lean()
-      if (!profileLock) throw loi(409, 'Ho so benh nhan vua thay doi, vui long tai lai du lieu')
+      if (!profileLock) throw loi(409, 'Hồ sơ bệnh nhân vừa thay đổi, vui lòng tải lại dữ liệu')
 
       const activeInTransaction = await HangDoi.findOne({
         ho_so_benh_nhan_id: profile._id,
@@ -419,16 +519,44 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
         trang_thai: { $in: TRANG_THAI_HANG_DOI_DANG_MO },
       }).session(session).select('_id').lean()
       if (activeInTransaction) {
-        throw loi(409, 'Ho so nay vua duoc tiep nhan o mot luot khac, vui long tai lai hang doi')
+        throw loi(409, 'Hồ sơ này vừa được tiếp nhận ở một lượt khác, vui lòng tải lại hàng đợi')
       }
 
       const checkInNumber = await capSoThuTuCheckin(now)
+      
+      const bangGia = await layGiaKhamChuyenKhoa(normalizedSpecialtyId, session)
+      const gia_kham = isFollowUpPatient ? 0 : bangGia.gia_kham
+      const payment_status = isFollowUpPatient ? 'paid' : 'unpaid'
+
+      const appointmentCode = `LH-${String(now.getUTCFullYear()).slice(-2)}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}-${String(await Counter.nextSeq('lich_hen')).padStart(4, '0')}`
+      
+      const [createdAppt] = await LichHen.create([{
+        ho_so_benh_nhan_id: profile._id,
+        ten_khach: profile.ho_ten,
+        so_dien_thoai_khach: profile.so_dien_thoai,
+        nguoi_tao_id: actorUserId,
+        hinh_thuc_dat_lich: 'offline',
+        ma_lich_hen: appointmentCode,
+        loai_lich_hen: isFollowUpPatient ? 'tai_kham' : 'kham_moi',
+        lich_hen_goc_id: resolvedLichHenGocId,
+        loai_kham: 'clinic',
+        ngay_kham: now,
+        gio_kham: `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`,
+        status: 'checked_in',
+        payment_status: payment_status,
+        gia_kham: gia_kham,
+        phong_kham: autoAssignedPhongKham || null,
+        doctor_id: autoAssignedDoctorId || null,
+        specialty_id: normalizedSpecialtyId,
+        ghi_chu_tiep_nhan: 'Khách vãng lai đăng ký trực tiếp tại quầy',
+      }], { session })
+
       const [createdEntry] = await HangDoi.create([{
         nguon: 'offline',
+        appointment_id: createdAppt._id,
         ho_so_benh_nhan_id: profile._id,
         ten_benh_nhan: profile.ho_ten,
         so_dien_thoai: profile.so_dien_thoai,
-        ma_tam: profile.ma_tam ?? null,
         ngay_sinh: profile.ngay_sinh,
         tuoi: profile.ngay_sinh ? Math.max(0, now.getUTCFullYear() - new Date(profile.ngay_sinh).getUTCFullYear()) : null,
         gioi_tinh: profile.gioi_tinh,
@@ -439,15 +567,61 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
         ghi_chu: profile.ghi_chu,
         specialty_id: normalizedSpecialtyId,
         muc_uu_tien: 'offline',
-        trang_thai: TRANG_THAI_OFFLINE_TRUNG_TAM,
-        thoi_diem_vao_hang_doi_trung_tam: now,
+        trang_thai: autoAssignedDoctorId ? 'dang_cho' : TRANG_THAI_OFFLINE_TRUNG_TAM,
+        doctor_id: autoAssignedDoctorId || null,
+        phong_kham: autoAssignedPhongKham || null,
+        schedule_id: autoAssignedScheduleId || null,
+        slot_id: autoAssignedSlotId || null,
+        khung_index: autoAssignedKhungIndex || null,
+        thoi_diem_vao_hang_doi_trung_tam: autoAssignedDoctorId ? null : now,
+        thoi_diem_dieu_phoi_bac_si: autoAssignedDoctorId ? now : null,
         thoi_gian_cho_uoc_tinh_phut: capacity.thong_ke.thoi_gian_cho_uoc_tinh_phut,
+        loai_lich_hen: isFollowUpPatient ? 'tai_kham' : 'kham_moi',
+        lich_hen_goc_id: resolvedLichHenGocId,
         ...checkInNumber,
         checkin_time: now,
         nguoi_tiep_nhan_id: actorUserId,
         vai_tro_tiep_nhan: actorRole,
       }], { session })
       entry = createdEntry
+
+      if (ket_qua_kham_id) {
+        await KetQuaKham.updateOne(
+          { _id: ket_qua_kham_id },
+          { $set: { da_dat_lich_tai_kham: true } },
+          { session }
+        )
+      }
+
+      if (isFollowUpPatient) {
+        const soHoaDon = await nextInvoiceNumber(now)
+        const [invoice] = await HoaDon.create([{
+          hang_doi_id: entry._id,
+          appointment_id: createdAppt._id,
+          ho_so_benh_nhan_id: profile._id,
+          so_hoa_don: soHoaDon,
+          specialty_id: normalizedSpecialtyId,
+          tong_tien_kham: 0,
+          chi_tiet_thu_phi: [{ loai: 'phi_kham', ten: 'Phí khám Tái khám (Miễn phí)', so_tien: 0, so_luong: 1, thanh_tien: 0, created_at: now }],
+          tong_tien_phat_sinh: 0,
+          tong_thanh_toan: 0,
+          trang_thai_hoa_don: 'da_thanh_toan_du',
+        }], { session })
+
+        await ThanhToan.create([{
+          hoa_don_id: invoice._id,
+          hang_doi_id: entry._id,
+          appointment_id: createdAppt._id,
+          ho_so_benh_nhan_id: profile._id,
+          so_tien: 0,
+          loai_thanh_toan: 'thanh_toan_bo_sung',
+          phuong_thuc: 'mien_phi_tai_kham',
+          status: 'paid',
+          ngay_thanh_toan: now,
+          thoi_diem_thanh_toan: now,
+          nguoi_thu_id: actorUserId,
+        }], { session })
+      }
     })
   } finally {
     await session.endSession()
@@ -470,13 +644,25 @@ export async function tiepNhanOfflineVaoHangDoiTrungTam({
     },
   })
 
+  // Ném thông báo webhook tới frontend cho doctor (vì status = dang_cho thay vì cho_dieu_phoi)
+  if (autoAssignedDoctorId) {
+    // Notify doctor so their queue updates instantly in UI
+    await notifyDoctorQueueUpdated(autoAssignedDoctorId, {
+      action: 'central_offline_assigned',
+      queue_id: entry._id,
+      nguon: 'offline',
+    })
+  }
+
   return {
     entry,
     capacity,
     phieu_cho: {
       ma_so_thu_tu: entry.ma_so_thu_tu ?? null,
-      trang_thai: 'cho_dieu_phoi_bac_si',
-      thong_bao: 'Khach dang o hang doi trung tam, le tan se dieu phoi khi co bac si phu hop.',
+      trang_thai: autoAssignedDoctorId ? 'da_gan_bac_si' : 'cho_dieu_phoi_bac_si',
+      thong_bao: autoAssignedDoctorId
+        ? `Đã xếp vào phòng ${entry.phong_kham}. Vui lòng chờ đến lượt.`
+        : 'Khách đang ở hàng đợi trung tâm, lễ tân sẽ điều phối khi có bác sĩ phù hợp.',
     },
   }
 }
@@ -491,7 +677,7 @@ export function sapXepHangDoiTrungTam(a, b) {
     - new Date(b.thoi_diem_vao_hang_doi_trung_tam ?? b.checkin_time)
 }
 
-async function layUngVienBacSiChoDieuPhoi(entry, now) {
+export async function layUngVienBacSiChoDieuPhoi(entry, now) {
   const config = layCauHinhHangDoiOffline()
   const cards = await layBacSiHopLeTheoLich({ specialtyId: entry.specialty_id, now })
   const activeRows = await HangDoi.find({
@@ -587,18 +773,21 @@ export async function layGoiYDieuPhoiOffline({
 }
 
 // `nguon = 'offline'` giu nguyen hanh vi cu (trang OfflineQueue.tsx chi xem khach vang lai).
-// Truyen `nguon: null` de lay CA HAI nguon — dung cho tab "Ca kham hom nay" (gom online + offline).
+// Truyen `nguon: null` de lay CA HAI nguon — dung cho tab "Danh sach da kham" (gom online + offline).
+// `date`: ngay can xem (tuy chinh, mac dinh hom nay) — tab "Danh sach da kham" cho phep tra cuu
+// bat ky ngay nao, khong con khoa cung "hom nay" nhu ban cu.
 export async function layDanhSachHangDoiOffline({
   specialtyId = null,
   status = null,
   doctorId = null,
   nguon = 'offline',
   search = null,
+  date = null,
   now = new Date(),
 } = {}) {
   const normalizedSpecialtyId = normalizeObjectId(specialtyId, 'specialty_id')
   const normalizedDoctorId = normalizeObjectId(doctorId, 'doctor_id')
-  const { start, end } = khoangNgay(now)
+  const { start, end } = khoangNgay(date ? new Date(date) : now)
   const statuses = status
     ? String(status).split(',').map((item) => item.trim()).filter(Boolean)
     : TRANG_THAI_OFFLINE_THEO_DOI
@@ -619,7 +808,7 @@ export async function layDanhSachHangDoiOffline({
         }
       : {}),
   })
-    .select('nguon appointment_id ten_benh_nhan so_dien_thoai specialty_id doctor_id phong_kham trang_thai checkin_time thoi_diem_vao_hang_doi_trung_tam thoi_diem_duoc_dieu_phoi ma_so_thu_tu so_thu_tu_checkin thoi_gian_cho_uoc_tinh_phut')
+    .select('nguon appointment_id ten_benh_nhan so_dien_thoai specialty_id doctor_id phong_kham trang_thai checkin_time thoi_diem_vao_hang_doi_trung_tam thoi_diem_duoc_dieu_phoi ma_so_thu_tu so_thu_tu_checkin thoi_gian_cho_uoc_tinh_phut loai_lich_hen lich_hen_goc_id')
     .populate('specialty_id', 'ten')
     .populate({ path: 'doctor_id', select: 'user_id phong_kham_mac_dinh', populate: { path: 'user_id', select: 'ho_ten' } })
     .lean()
@@ -634,6 +823,8 @@ export async function layDanhSachHangDoiOffline({
       so_dien_thoai: row.so_dien_thoai ?? null,
       ma_so_thu_tu: row.ma_so_thu_tu ?? null,
       trang_thai: row.trang_thai,
+      loai_lich_hen: row.loai_lich_hen ?? null,
+      lich_hen_goc_id: row.lich_hen_goc_id ? String(row.lich_hen_goc_id) : null,
       checkin_time: row.checkin_time,
       thoi_diem_vao_hang_doi_trung_tam: row.thoi_diem_vao_hang_doi_trung_tam ?? row.checkin_time,
       thoi_diem_duoc_dieu_phoi: row.thoi_diem_duoc_dieu_phoi ?? null,
@@ -662,20 +853,20 @@ export async function ganKhachOfflineChoBacSi({
 } = {}) {
   const normalizedEntryId = normalizeObjectId(entryId, 'queue_id')
   const normalizedDoctorId = normalizeObjectId(doctorId, 'doctor_id')
-  if (!normalizedEntryId) throw loi(400, 'Can chon luot hang doi')
-  if (!normalizedDoctorId) throw loi(400, 'Can chon bac si')
+  if (!normalizedEntryId) throw loi(400, 'Cần chọn lượt hàng đợi')
+  if (!normalizedDoctorId) throw loi(400, 'Cần chọn bác sĩ')
 
   const entryBefore = await HangDoi.findById(normalizedEntryId).lean()
-  if (!entryBefore) throw loi(404, 'Khong tim thay luot hang doi')
+  if (!entryBefore) throw loi(404, 'Không tìm thấy lượt hàng đợi')
   if (entryBefore.trang_thai !== TRANG_THAI_OFFLINE_TRUNG_TAM) {
-    throw loi(409, `Luot nay dang o trang thai "${entryBefore.trang_thai}", khong the dieu phoi`)
+    throw loi(409, `Lượt này đang ở trạng thái "${entryBefore.trang_thai}", không thể điều phối`)
   }
 
   const candidates = await layUngVienBacSiChoDieuPhoi(entryBefore, now)
   const selected = candidates.find((candidate) => candidate.doctor_id === String(normalizedDoctorId))
-  if (!selected) throw loi(409, 'Bac si khong phu hop voi chuyen khoa cua luot nay')
+  if (!selected) throw loi(409, 'Bác sĩ không phù hợp với chuyên khoa của lượt này')
   if (!selected.hop_le) {
-    throw loi(409, `Chua the dieu phoi cho bac si nay: ${selected.ly_do_chan.join(', ')}`, { candidate: selected })
+    throw loi(409, `Chưa thể điều phối cho bác sĩ này: ${selected.ly_do_chan.join(', ')}`, { candidate: selected })
   }
 
   let updatedEntry
@@ -683,11 +874,11 @@ export async function ganKhachOfflineChoBacSi({
   try {
     await session.withTransaction(async () => {
       if (await coDangTrongPhong(normalizedDoctorId, now, session)) {
-        throw loi(409, 'Bac si vua co benh nhan vao phong, vui long tai lai goi y dieu phoi')
+        throw loi(409, 'Bác sĩ vừa có bệnh nhân vào phòng, vui lòng tải lại gợi ý điều phối')
       }
       const config = layCauHinhHangDoiOffline()
       if (await coOnlineTrongHangDoiCanBaoVe(normalizedDoctorId, now, config, session)) {
-        throw loi(409, 'Vua co khach online can uu tien, vui long tai lai goi y dieu phoi')
+        throw loi(409, 'Vừa có khách online cần ưu tiên, vui lòng tải lại gợi ý điều phối')
       }
 
       updatedEntry = await HangDoi.findOneAndUpdate(
@@ -716,7 +907,7 @@ export async function ganKhachOfflineChoBacSi({
         },
         { new: true, session },
       )
-      if (!updatedEntry) throw loi(409, 'Luot nay vua duoc nguoi khac xu ly, vui long tai lai')
+      if (!updatedEntry) throw loi(409, 'Lượt này vừa được người khác xử lý, vui lòng tải lại')
     })
   } finally {
     await session.endSession()
@@ -754,15 +945,15 @@ export async function traKhachOfflineVeHangDoiTrungTam({
   now = new Date(),
 } = {}) {
   const normalizedEntryId = normalizeObjectId(entryId, 'queue_id')
-  if (!normalizedEntryId) throw loi(400, 'Can chon luot hang doi')
+  if (!normalizedEntryId) throw loi(400, 'Cần chọn lượt hàng đợi')
   const reason = String(lyDo ?? '').trim()
-  if (!reason) throw loi(400, 'Can nhap ly do tra khach ve hang doi trung tam')
+  if (!reason) throw loi(400, 'Cần nhập lý do trả khách về hàng đợi trung tâm')
 
   const entry = await HangDoi.findById(normalizedEntryId).lean()
-  if (!entry) throw loi(404, 'Khong tim thay luot hang doi')
-  if (entry.nguon !== 'offline') throw loi(409, 'Chi khach offline moi co the tra ve hang doi trung tam')
+  if (!entry) throw loi(404, 'Không tìm thấy lượt hàng đợi')
+  if (entry.nguon !== 'offline') throw loi(409, 'Chỉ khách offline mới có thể trả về hàng đợi trung tâm')
   if (entry.trang_thai !== 'dang_cho') {
-    throw loi(409, `Luot nay dang o trang thai "${entry.trang_thai}", khong the tra ve hang doi trung tam`)
+    throw loi(409, `Lượt này đang ở trạng thái "${entry.trang_thai}", không thể trả về hàng đợi trung tâm`)
   }
 
   const doctorIdCu = entry.doctor_id
@@ -782,7 +973,7 @@ export async function traKhachOfflineVeHangDoiTrungTam({
     },
     { new: true },
   )
-  if (!updated) throw loi(409, 'Luot nay vua duoc nguoi khac xu ly, vui long tai lai')
+  if (!updated) throw loi(409, 'Lượt này vừa được người khác xử lý, vui lòng tải lại')
 
   await notifyDoctorQueueUpdated(doctorIdCu, {
     action: 'central_offline_returned',
@@ -809,14 +1000,14 @@ export async function huyKhachOfflineTrungTam({
   actorRole = 'receptionist',
 } = {}) {
   const normalizedEntryId = normalizeObjectId(entryId, 'queue_id')
-  if (!normalizedEntryId) throw loi(400, 'Can chon luot hang doi')
+  if (!normalizedEntryId) throw loi(400, 'Cần chọn lượt hàng đợi')
   const reason = String(lyDo ?? '').trim()
-  if (!reason) throw loi(400, 'Can nhap ly do huy luot cho')
+  if (!reason) throw loi(400, 'Cần nhập lý do hủy lượt chờ')
 
   const entry = await HangDoi.findById(normalizedEntryId).lean()
-  if (!entry) throw loi(404, 'Khong tim thay luot hang doi')
+  if (!entry) throw loi(404, 'Không tìm thấy lượt hàng đợi')
   if (entry.nguon !== 'offline' || entry.trang_thai !== TRANG_THAI_OFFLINE_TRUNG_TAM) {
-    throw loi(409, `Luot nay dang o trang thai "${entry.trang_thai}", khong the huy theo hang doi trung tam`)
+    throw loi(409, `Lượt này đang ở trạng thái "${entry.trang_thai}", không thể hủy theo hàng đợi trung tâm`)
   }
 
   const updated = await HangDoi.findOneAndUpdate(
@@ -824,7 +1015,7 @@ export async function huyKhachOfflineTrungTam({
     { $set: { trang_thai: 'cancelled' } },
     { new: true },
   )
-  if (!updated) throw loi(409, 'Luot nay vua duoc nguoi khac xu ly, vui long tai lai')
+  if (!updated) throw loi(409, 'Lượt này vừa được người khác xử lý, vui lòng tải lại')
 
   await ghiNhatKyLeTan({
     hanhDong: 'LT_OFFLINE_CANCEL_CENTRAL',

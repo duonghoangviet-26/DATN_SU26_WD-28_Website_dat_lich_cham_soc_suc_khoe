@@ -12,6 +12,18 @@ interface ProfileUpdateData {
   gia_kham?: number
   tuoi_nhan_kham_tu?: number
   chuc_danh?: string | null
+  chuc_vu_hien_tai?: string
+  ma_cchn?: string
+  gioi_thieu_ngan?: string
+  bang_cap_hoc_vi_tags?: string[]
+  ngon_ngu?: string[]
+  the_manh_chuyen_mon?: string[]
+  benh_ly_dieu_tri?: string[]
+  thanh_vien_hoi?: string[]
+  qua_trinh_dao_tao?: { ten_bang: string; truong: string; tu_nam: number | null; den_nam: number | null }[]
+  qua_trinh_cong_tac?: { noi_cong_tac: string; chuc_vu: string; tu_nam: number | null; den_nam: number | null }[]
+  giai_thuong?: { ten: string; nam: number | null }[]
+>>>>>>> 39ee11b38b52964bc38cc95216f2f9adb46dea9e
 }
 
 export const doctorProfileService = {

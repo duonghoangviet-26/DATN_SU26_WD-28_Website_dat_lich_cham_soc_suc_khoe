@@ -17,6 +17,8 @@ export interface OfflineQueueRow {
   specialty?: { id: string; ten?: string | null } | null
   doctor?: { id: string; ho_ten?: string | null; phong_kham_mac_dinh?: string | null } | null
   phong_kham?: string | null
+  loai_lich_hen?: string | null
+  lich_hen_goc_id?: string | null
 }
 
 export interface DispatchCandidate {
@@ -51,7 +53,8 @@ export const receptionistOfflineQueueService = {
     return response.data.data ?? []
   },
 
-  async listToday(params?: { specialty_id?: string; status?: string; doctor_id?: string; nguon?: string; search?: string }): Promise<OfflineQueueRow[]> {
+  // "Danh sách đã khám" — tra cứu ca khám theo ngày bất kỳ (mặc định hôm nay nếu không truyền `date`).
+  async listSessions(params?: { specialty_id?: string; status?: string; doctor_id?: string; nguon?: string; search?: string; date?: string }): Promise<OfflineQueueRow[]> {
     const response = await axiosInstance.get<ApiResponse<OfflineQueueRow[]>>('/receptionist/offline-queue/sessions-today', { params })
     return response.data.data ?? []
   },

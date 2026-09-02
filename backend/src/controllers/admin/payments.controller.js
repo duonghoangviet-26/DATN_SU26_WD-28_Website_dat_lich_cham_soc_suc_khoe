@@ -55,11 +55,11 @@ function getPopulatedObject(value) {
     : null
 }
 
-function resolvePaymentPatient(payment) {
+function resolvePaymentPayerAndPatient(payment) {
   const directPatient = getPopulatedObject(payment.benh_nhan_id)
   const invoice = getPopulatedObject(payment.hoa_don_id)
   const appointment = getPopulatedObject(payment.appointment_id) ?? getPopulatedObject(invoice?.appointment_id)
-  const appointmentPatient = getPopulatedObject(appointment?.user_id)
+  const appointmentUser = getPopulatedObject(appointment?.user_id)
   const queue = getPopulatedObject(invoice?.hang_doi_id)
   const profile =
     getPopulatedObject(payment.ho_so_benh_nhan_id)
@@ -67,17 +67,23 @@ function resolvePaymentPatient(payment) {
     ?? getPopulatedObject(appointment?.ho_so_benh_nhan_id)
     ?? getPopulatedObject(queue?.ho_so_benh_nhan_id)
 
+  const patientName = profile?.ho_ten ?? queue?.ten_benh_nhan ?? appointment?.ten_khach ?? appointmentUser?.ho_ten ?? directPatient?.ho_ten ?? null
+  const patientPhone = profile?.so_dien_thoai ?? queue?.so_dien_thoai ?? appointment?.so_dien_thoai_khach ?? appointmentUser?.so_dien_thoai ?? directPatient?.so_dien_thoai ?? null
+
+  const payerName = appointmentUser?.ho_ten ?? directPatient?.ho_ten ?? patientName
+  const payerPhone = appointmentUser?.so_dien_thoai ?? appointment?.nguoi_dat_sdt ?? directPatient?.so_dien_thoai ?? patientPhone
+  const payerEmail = appointmentUser?.email ?? appointment?.email_khach ?? directPatient?.email ?? null
+
   return {
-    ho_ten: directPatient?.ho_ten ?? appointmentPatient?.ho_ten ?? profile?.ho_ten ?? queue?.ten_benh_nhan ?? appointment?.ten_khach ?? null,
-    email: directPatient?.email ?? appointmentPatient?.email ?? appointment?.email_khach ?? null,
-    so_dien_thoai:
-      directPatient?.so_dien_thoai
-      ?? appointmentPatient?.so_dien_thoai
-      ?? profile?.so_dien_thoai
-      ?? queue?.so_dien_thoai
-      ?? appointment?.so_dien_thoai_khach
-      ?? appointment?.nguoi_dat_sdt
-      ?? null,
+    patient: {
+      ho_ten: patientName,
+      so_dien_thoai: patientPhone,
+    },
+    payer: {
+      ho_ten: payerName,
+      so_dien_thoai: payerPhone,
+      email: payerEmail,
+    }
   }
 }
 
@@ -116,16 +122,28 @@ async function validateInvoiceOrThrow(hoaDonId) {
 }
 
 function mapPaymentDetail(payment) {
-  const patient = resolvePaymentPatient(payment)
+  const resolved = resolvePaymentPayerAndPatient(payment)
+  const invoice = getPopulatedObject(payment.hoa_don_id)
+  const appointment = getPopulatedObject(payment.appointment_id) ?? getPopulatedObject(invoice?.appointment_id)
+  const queue = getPopulatedObject(invoice?.hang_doi_id)
+  const isTaiKham = appointment?.loai_lich_hen === 'tai_kham' ||
+    !!appointment?.lich_hen_goc_id ||
+    (!!appointment?.ly_do_kham && appointment.ly_do_kham.toLowerCase().includes('tái khám')) ||
+    queue?.loai_lich_hen === 'tai_kham' ||
+    !!queue?.lich_hen_goc_id
 
   return {
     id: payment._id,
     hoa_don_id: payment.hoa_don_id?._id ?? payment.hoa_don_id ?? null,
     appointment_id: resolvePaymentAppointmentId(payment),
+    loai_lich_hen: appointment?.loai_lich_hen ?? queue?.loai_lich_hen ?? (isTaiKham ? 'tai_kham' : 'kham_moi'),
+    is_tai_kham: isTaiKham,
     ma_giao_dich: payment.ma_giao_dich,
-    benh_nhan: patient.ho_ten,
-    email: patient.email,
-    so_dien_thoai: patient.so_dien_thoai,
+    benh_nhan: resolved.patient.ho_ten,
+    so_dien_thoai_benh_nhan: resolved.patient.so_dien_thoai,
+    nguoi_thanh_toan: resolved.payer.ho_ten,
+    email: resolved.payer.email,
+    so_dien_thoai: resolved.payer.so_dien_thoai,
     bac_si: resolvePaymentDoctor(payment),
     so_tien: payment.so_tien,
     loai_thanh_toan: payment.loai_thanh_toan,
@@ -136,12 +154,13 @@ function mapPaymentDetail(payment) {
     ngay_thanh_toan: payment.ngay_thanh_toan,
     ngay_tao: payment.ngay_tao,
     trang_thai_hoa_don: payment.hoa_don_id?.trang_thai_hoa_don ?? null,
+    chi_tiet_thu_phi: payment.hoa_don_id?.chi_tiet_thu_phi ?? [],
   }
 }
 
 const appointmentPopulate = {
   path: 'appointment_id',
-  select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id',
+  select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id loai_lich_hen lich_hen_goc_id ly_do_kham',
   populate: [
     { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
     { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
@@ -151,11 +170,11 @@ const appointmentPopulate = {
 
 const invoicePopulate = {
   path: 'hoa_don_id',
-  select: 'so_hoa_don trang_thai_hoa_don appointment_id hang_doi_id ho_so_benh_nhan_id',
+  select: 'so_hoa_don trang_thai_hoa_don appointment_id hang_doi_id ho_so_benh_nhan_id chi_tiet_thu_phi',
   populate: [
     {
       path: 'appointment_id',
-      select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id',
+      select: 'doctor_id user_id ten_khach so_dien_thoai_khach email_khach nguoi_dat_sdt ho_so_benh_nhan_id loai_lich_hen lich_hen_goc_id ly_do_kham',
       populate: [
         { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
         { path: 'user_id', select: 'ho_ten email so_dien_thoai' },
@@ -164,7 +183,7 @@ const invoicePopulate = {
     },
     {
       path: 'hang_doi_id',
-      select: 'ten_benh_nhan so_dien_thoai doctor_id ho_so_benh_nhan_id',
+      select: 'ten_benh_nhan so_dien_thoai doctor_id ho_so_benh_nhan_id loai_lich_hen lich_hen_goc_id',
       populate: [
         { path: 'doctor_id', populate: { path: 'user_id', select: 'ho_ten' } },
         { path: 'ho_so_benh_nhan_id', select: 'ho_ten so_dien_thoai' },
@@ -270,16 +289,18 @@ export async function list(req, res) {
     ])
 
     const result = payments.map((p) => {
-      const patient = resolvePaymentPatient(p)
+      const resolved = resolvePaymentPayerAndPatient(p)
 
       return {
         id: p._id,
         hoa_don_id: p.hoa_don_id?._id ?? p.hoa_don_id ?? null,
         so_hoa_don: p.hoa_don_id?.so_hoa_don ?? null,
         ma_giao_dich: p.ma_giao_dich,
-        benh_nhan: patient.ho_ten ?? 'Không rõ',
-        email: patient.email,
-        so_dien_thoai: patient.so_dien_thoai,
+        benh_nhan: resolved.patient.ho_ten ?? 'Không rõ',
+        so_dien_thoai_benh_nhan: resolved.patient.so_dien_thoai,
+        nguoi_thanh_toan: resolved.payer.ho_ten ?? 'Không rõ',
+        email: resolved.payer.email,
+        so_dien_thoai: resolved.payer.so_dien_thoai,
         so_tien: p.so_tien,
         loai_thanh_toan: p.loai_thanh_toan,
         phuong_thuc: p.phuong_thuc,
@@ -289,6 +310,7 @@ export async function list(req, res) {
         bac_si: resolvePaymentDoctor(p) ?? 'Không rõ',
         appointment_id: resolvePaymentAppointmentId(p),
         trang_thai_hoa_don: p.hoa_don_id?.trang_thai_hoa_don ?? null,
+        chi_tiet_thu_phi: p.hoa_don_id?.chi_tiet_thu_phi ?? [],
       }
     })
     return res.status(200).json({

@@ -8,6 +8,7 @@ import notificationRoutes from "./notifications.routes.js";
 import paymentsRoutes from "./payments.routes.js";
 import rescheduleRoutes from "./reschedule.routes.js";
 import reviewRoutes from "./review.routes.js";
+import followupRoutes from "./followup.routes.js";
 
 // ============================================================
 // Patient routes — mount tại /api/patient
@@ -32,5 +33,6 @@ router.use("/notifications", notificationRoutes);
 router.use("/payments", paymentsRoutes);
 router.use("/appointments", rescheduleRoutes);
 router.use("/reviews", reviewRoutes);
+router.use("/followup", followupRoutes);
 
 export default router;

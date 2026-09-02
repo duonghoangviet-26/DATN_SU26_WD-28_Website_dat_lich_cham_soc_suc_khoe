@@ -7,6 +7,7 @@ import { soSanhThuTuHangDoi, tinhBacUuTienDong } from '../../models/HangDoi.js'
 import { startOfDayUtc } from '../../utils/clinicTime.js'
 import {
   getOwnedOfflineQueue,
+  layPhienKham,
   taoChiDinhDichVu,
   upsertVitals,
 } from '../../services/examSession.service.js'
@@ -44,9 +45,13 @@ async function formatAppointment(a) {
     ? new Date().getFullYear() - new Date(ngay_sinh).getFullYear()
     : undefined
 
+  const isTaiKham = a.loai_lich_hen === 'tai_kham' || !!a.lich_hen_goc_id || (!!a.ly_do_kham && a.ly_do_kham.toLowerCase().includes('tái khám'))
+
   return {
     id:               a._id,
     ma_lich_hen:      a.ma_lich_hen ?? null,
+    loai_lich_hen:    isTaiKham ? 'tai_kham' : (a.loai_lich_hen || 'kham_moi'),
+    is_tai_kham:      isTaiKham,
     benh_nhan:        benh_nhan_ho_ten,
     benh_nhan_id:     a.user_id,
     ho_so_benh_nhan_id: a.ho_so_benh_nhan_id ?? null,
@@ -145,7 +150,7 @@ export async function examQueue(req, res) {
     const apptIds = entries.filter((e) => e.appointment_id).map((e) => e.appointment_id)
     const profileIds = entries.filter((e) => e.ho_so_benh_nhan_id).map((e) => e.ho_so_benh_nhan_id)
     const memberIds = entries.filter((e) => e.member_id).map((e) => e.member_id)
-    const [profiles, members, results] = await Promise.all([
+    const [profiles, members, results, appts, prevKetQuaKhams] = await Promise.all([
       profileIds.length
         ? HoSoBenhNhan.find({ _id: { $in: profileIds } }).select('ho_ten so_dien_thoai ngay_sinh gioi_tinh nhom_mau di_ung benh_nen dia_chi ghi_chu').lean()
         : [],
@@ -155,11 +160,19 @@ export async function examQueue(req, res) {
       KetQuaKham.find({
         $or: [{ hang_doi_id: { $in: hangDoiIds } }, { appointment_id: { $in: apptIds } }],
       }).select('hang_doi_id appointment_id status').lean(),
+      apptIds.length
+        ? LichHen.find({ _id: { $in: apptIds } }).select('loai_lich_hen lich_hen_goc_id ly_do_kham').lean()
+        : [],
+      profileIds.length
+        ? KetQuaKham.find({ ho_so_benh_nhan_id: { $in: profileIds } }).select('ho_so_benh_nhan_id').lean()
+        : [],
     ])
     const profileById = new Map(profiles.map((profile) => [String(profile._id), profile]))
     const memberById = new Map(members.map((member) => [String(member._id), member]))
+    const apptById = new Map(appts.map((a) => [String(a._id), a]))
     const kqByHangDoi = new Map(results.filter((r) => r.hang_doi_id).map((r) => [String(r.hang_doi_id), r]))
     const kqByAppt = new Map(results.filter((r) => r.appointment_id).map((r) => [String(r.appointment_id), r]))
+    const profileHasPrevExam = new Set(prevKetQuaKhams.map((k) => String(k.ho_so_benh_nhan_id)))
 
     // Bậc ưu tiên tính ĐỘNG (rule mục 6) — `muc_uu_tien` trong DB chỉ là snapshot lúc
     // check-in, dùng nó để xếp thứ tự sẽ phạt oan người đến sớm.
@@ -171,11 +184,21 @@ export async function examQueue(req, res) {
         const member = e.member_id ? memberById.get(String(e.member_id)) : null
         const ngaySinh = e.ngay_sinh ?? member?.ngay_sinh ?? profile?.ngay_sinh ?? null
         const kq = kqByHangDoi.get(String(e._id)) || (e.appointment_id ? kqByAppt.get(String(e.appointment_id)) : null)
+        const appt = e.appointment_id ? apptById.get(String(e.appointment_id)) : null
+
+        const isTaiKham = e.loai_lich_hen === 'tai_kham' ||
+          !!e.lich_hen_goc_id ||
+          appt?.loai_lich_hen === 'tai_kham' ||
+          !!appt?.lich_hen_goc_id ||
+          !!(appt?.ly_do_kham && appt.ly_do_kham.toLowerCase().includes('tái khám')) ||
+          (e.ho_so_benh_nhan_id && profileHasPrevExam.has(String(e.ho_so_benh_nhan_id)))
+
         return {
           id: e._id,
           appointment_id: e.appointment_id ?? null,
           ho_so_benh_nhan_id: e.ho_so_benh_nhan_id ?? null,
           nguon: e.nguon,
+          loai_lich_hen: isTaiKham ? 'tai_kham' : 'kham_moi',
           ten_benh_nhan: e.ten_benh_nhan,
           so_dien_thoai: e.so_dien_thoai ?? profile?.so_dien_thoai ?? null,
           ngay_sinh: ngaySinh,
@@ -195,6 +218,7 @@ export async function examQueue(req, res) {
           trang_thai_tong_hop: trangThaiTongHop(e, kq),
         }
       })
+    return ok(res, rows)
     return ok(res, rows)
   } catch (err) { return fail(res, 500, err.message) }
 }
@@ -594,10 +618,10 @@ export async function listRelatedServices(req, res) {
 export async function getResultByQueue(req, res) {
   try {
     const docId = await getDocId(req.user.id)
-    if (!docId) return fail(res, 404, 'Khong tim thay ho so bac si')
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
     const entry = await getOwnedOfflineQueue(req.params.hangDoiId, docId)
     const result = await KetQuaKham.findOne({ hang_doi_id: entry._id }).lean()
-    if (!result) return fail(res, 404, 'Chua co ket qua kham')
+    if (!result) return fail(res, 404, 'Chưa có kết quả khám')
     const prescription = await DonThuoc.findOne({ medical_record_id: result._id }).lean()
     return ok(res, { ...result, id: result._id, thuoc: prescription?.items ?? [] })
   } catch (err) {
@@ -610,16 +634,16 @@ export async function createResultByQueue(req, res) {
   let result = null
   try {
     const docId = await getDocId(req.user.id)
-    if (!docId) return fail(res, 404, 'Khong tim thay ho so bac si')
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
     const entry = await getOwnedOfflineQueue(req.params.hangDoiId, docId)
     if (await KetQuaKham.exists({ hang_doi_id: entry._id })) {
-      return fail(res, 409, 'Ket qua kham da ton tai, hay dung chuc nang xem ket qua')
+      return fail(res, 409, 'Kết quả khám đã tồn tại, hãy dùng chức năng xem kết quả')
     }
 
     const { chan_doan, huong_dan_dieu_tri, ghi_chu, ngay_tai_kham, thuoc, sinh_hieu, dich_vu_phat_sinh = [] } = req.body
-    if (!chan_doan?.trim()) return fail(res, 400, 'Chan doan la bat buoc')
+    if (!chan_doan?.trim()) return fail(res, 400, 'Chẩn đoán là bắt buộc')
     if (ngay_tai_kham && !isNgayTaiKhamHopLe(ngay_tai_kham, entry.checkin_time)) {
-      return fail(res, 400, 'Ngay tai kham phai tu ngay tiep theo sau ngay kham')
+      return fail(res, 400, 'Ngày tái khám phải từ ngày tiếp theo sau ngày khám')
     }
 
     const chiDinh = await taoChiDinhDichVu(dich_vu_phat_sinh, entry.specialty_id, docId)
@@ -641,7 +665,7 @@ export async function createResultByQueue(req, res) {
       lich_su_sua: [{
         nguoi_sua_id: req.user.id,
         thoi_diem_sua: new Date(),
-        noi_dung: 'Bac si nhap va xac nhan ho so kham offline',
+        noi_dung: 'Bác sĩ nhập và xác nhận hồ sơ khám offline',
       }],
     })
 
@@ -662,7 +686,7 @@ export async function createResultByQueue(req, res) {
       })
     }
 
-    return created(res, { ...result.toObject(), id: result._id, thuoc: prescription?.items ?? [] }, 'Da luu ket qua kham offline')
+    return created(res, { ...result.toObject(), id: result._id, thuoc: prescription?.items ?? [] }, 'Đã lưu kết quả khám offline')
   } catch (err) {
     if (result?._id) {
       await Promise.all([
@@ -671,7 +695,7 @@ export async function createResultByQueue(req, res) {
         KetQuaKham.deleteOne({ _id: result._id }),
       ]).catch(() => {})
     }
-    if (err.code === 11000) return fail(res, 409, 'Ket qua kham da ton tai, hay dung chuc nang xem ket qua')
+    if (err.code === 11000) return fail(res, 409, 'Kết quả khám đã tồn tại, hãy dùng chức năng xem kết quả')
     if (err.httpStatus) return fail(res, err.httpStatus, err.message)
     if (err.name === 'ValidationError') return fail(res, 400, err.message)
     return fail(res, 500, err.message)
@@ -833,6 +857,59 @@ export async function confirmResultByRecord(req, res) {
   } catch (err) {
     if (err.name === 'ValidationError') return fail(res, 400, err.message)
     return fail(res, 500, err.message)
+  }
+}
+
+// ─── GET /api/doctor/appointments/result/:ketQuaId/print ─────────────────────
+// Dữ liệu để in "Hồ sơ bệnh án" đưa cho bệnh nhân — chỉ hồ sơ ĐÃ XÁC NHẬN (chốt lâm sàng
+// xong mới in). Dùng chung ketQuaId nên hoạt động cho cả online lẫn offline, khớp cách
+// confirmResultByRecord đã định danh hồ sơ. Tái dùng layPhienKham() (đã có sẵn tính toán
+// hoá đơn/đã thu/còn thiếu, dùng chung với "Bệnh nhân đã khám") thay vì tính lại từ đầu.
+// LƯỢC BỎ hinh_anh khỏi dịch vụ phát sinh trước khi trả về: ảnh (vd nội soi) chỉ lưu DB để
+// đối chiếu sau, không được đưa vào bản in cho bệnh nhân.
+export async function getPrintData(req, res) {
+  try {
+    const docId = await getDocId(req.user.id)
+    if (!docId) return fail(res, 404, 'Không tìm thấy hồ sơ bác sĩ')
+
+    const result = await KetQuaKham.findOne({ _id: req.params.ketQuaId, bac_si_phu_trach_id: docId })
+      .select('status hang_doi_id appointment_id')
+      .lean()
+    if (!result) return fail(res, 404, 'Không tìm thấy hồ sơ khám')
+    if (result.status !== 'da_xac_nhan') {
+      return fail(res, 409, 'Chỉ in được hồ sơ đã xác nhận')
+    }
+
+    let hangDoiId = result.hang_doi_id
+    if (!hangDoiId && result.appointment_id) {
+      const entry = await HangDoi.findOne({ appointment_id: result.appointment_id }).select('_id').lean()
+      hangDoiId = entry?._id ?? null
+    }
+    if (!hangDoiId) return fail(res, 404, 'Không tìm thấy lượt khám tương ứng để in')
+
+    const [phien, doctor, entry] = await Promise.all([
+      layPhienKham({ queueId: hangDoiId, docId }),
+      BacSi.findById(docId).select('user_id specialties')
+        .populate('user_id', 'ho_ten')
+        .populate('specialties', 'ten')
+        .lean(),
+      HangDoi.findById(hangDoiId).select('checkin_time').lean(),
+    ])
+
+    return ok(res, {
+      ...phien,
+      ho_so: phien.ho_so ? {
+        ...phien.ho_so,
+        dich_vu_phat_sinh: (phien.ho_so.dich_vu_phat_sinh ?? []).map(({ hinh_anh, ...line }) => line),
+      } : null,
+      bac_si: {
+        ho_ten: doctor?.user_id?.ho_ten ?? null,
+        chuyen_khoa: (doctor?.specialties ?? []).map((s) => s.ten).join(', ') || null,
+      },
+      ngay_kham: entry?.checkin_time ?? null,
+    })
+  } catch (err) {
+    return fail(res, err.httpStatus ?? err.statusCode ?? 500, err.message)
   }
 }
 

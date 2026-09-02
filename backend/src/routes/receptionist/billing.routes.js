@@ -8,6 +8,7 @@ router.get('/:referenceId', billing.getBillingCase)
 router.post('/:referenceId/invoice', billing.createBillingInvoice)
 router.patch('/:referenceId/payments/:paymentId/confirm', billing.confirmTransfer)
 router.patch('/:referenceId/payments/:paymentId/cancel', billing.cancelTransfer)
+router.post('/:referenceId/payments/:paymentId/vnpay-session', billing.createTransferVnpaySession)
 router.post('/:referenceId/receipt-print', billing.markReceiptPrinted)
 
 export default router

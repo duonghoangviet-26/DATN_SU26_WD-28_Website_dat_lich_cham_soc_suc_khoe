@@ -155,10 +155,19 @@ export default function AppointmentList({
                   <p className="text-xs text-slate-400">{EXAM_TYPE_LABEL[appointment.loai_kham] || formatAdminValue('loai_kham', appointment.loai_kham)}</p>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <p className="font-medium text-slate-800">{appointment.benh_nhan}</p>
                     {appointment.dat_ho && (
                       <Badge color="blue">Đặt hộ</Badge>
+                    )}
+                    {appointment.is_tai_kham || appointment.loai_lich_hen === 'tai_kham' ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-purple-100 border border-purple-200 px-2 py-0.5 text-xs font-bold text-purple-800">
+                        🔁 Tái khám
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        📋 Khám mới
+                      </span>
                     )}
                   </div>
                   {appointment.dat_ho && appointment.nguoi_dat_ho_ten && appointment.nguoi_dat_ho_ten !== appointment.benh_nhan && (

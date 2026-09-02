@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 import {
   BacSi, LichLamViec, LichHen,
   ChuyenKhoa, DichVu, GiaDinh, ThanhVien, HoaDon, ThanhToan, DanhGia, NguoiDung, HoSoChiTietBacSi,
-  HoSoBenhNhan,
+  HoSoBenhNhan, KetQuaKham,
 } from '../../models/index.js'
 import {
   cancelAppointmentWithPaymentSync,
@@ -23,6 +23,7 @@ import {
   layGiaKhamChuyenKhoa,
   layKhungTrongCuaChuyenKhoa,
 } from '../../services/doctorAssignment.service.js'
+import { validateFollowUpBooking } from '../../services/followupValidation.service.js'
 import { ok, created, fail } from '../../utils/response.js'
 import {
   emitAdminRealtime,
@@ -348,6 +349,7 @@ export async function getServices(req, res) {
       mo_ta:      s.mo_ta,
       mo_ta_ngan: s.mo_ta_ngan,
       hinh_anh:   s.hinh_anh ?? null,
+      image_url:  s.image_url ?? null,
       thoi_gian_phut:        s.thoi_gian_phut,
       gio_dat_truoc_toi_thieu: s.gio_dat_truoc_toi_thieu,
       khu_vuc:    s.khu_vuc,
@@ -578,6 +580,7 @@ export async function createBooking(req, res) {
       // Đường TỰ GÁN (rule mục 12): khách chỉ chọn chuyên khoa + khung giờ.
       // `gio_kham` là tên cũ do nhánh client dùng — nhận cả hai để FE của họ không vỡ.
       specialty_id: specialtyYeuCau, gio_bat_dau, gio_kham,
+      lich_hen_goc_id,
     } = req.body
     let { doctor_id, schedule_id, slot_id } = req.body
     const gioYeuCau = gio_bat_dau ?? gio_kham
@@ -605,7 +608,7 @@ export async function createBooking(req, res) {
     // ⛔ Không có bằng chứng khách đồng ý điều khoản KHÔNG HOÀN TIỀN thì KHÔNG được thu
     // tiền (rule mục 5). Thu trước rồi mới tranh cãi là phòng khám thua — phải chặn ở đây,
     // không phải nhắc nhở ở giao diện.
-    if (req.body.dong_y_dieu_khoan !== true) {
+    if (req.body.dong_y_dieu_khoan !== true && !lich_hen_goc_id) {
       return rollbackFail(
         400,
         'Vui lòng xác nhận đã đọc và đồng ý điều khoản đặt lịch (bao gồm chính sách không hoàn tiền) trước khi giữ chỗ.',
@@ -615,11 +618,33 @@ export async function createBooking(req, res) {
     const appointmentDate = parseDateOnly(ngay_kham)
     if (!appointmentDate) return rollbackFail(400, 'Ngày khám không hợp lệ')
 
-    // Demo 09/08/2026: DB co lich lam viec Chu nhat, nen tam thoi khong chan Chu nhat o backend.
-    // Giu lai guard cu de co the bat lai neu phong kham chot nghi co dinh Chu nhat.
-    // if (appointmentDate.getUTCDay() === 0) {
-    //   return rollbackFail(400, 'Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
-    // }
+    // Xử lý xác thực tái khám (nếu có)
+    let isFollowUp = false
+    if (lich_hen_goc_id) {
+      try {
+        const { doctor_id_uu_tien, ketQuaKham } = await validateFollowUpBooking({
+          lich_hen_goc_id,
+          userId: req.user.id,
+          ngay_kham: appointmentDate,
+          specialty_id: specialtyYeuCau,
+          session,
+          isReceptionist: false
+        })
+        isFollowUp = true
+        // Ưu tiên bác sĩ
+        if (doctor_id_uu_tien && (!doctor_id || doctor_id === 'auto' || doctor_id === 'all')) {
+          doctor_id = doctor_id_uu_tien
+        }
+        // Luu tru ket qua kham de update phan sau
+        req.ketQuaKhamTaiKham = ketQuaKham
+      } catch (err) {
+        return rollbackFail(err.statusCode || 400, err.message)
+      }
+    }
+
+    if (appointmentDate.getUTCDay() === 0) {
+      return rollbackFail(400, 'Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 – Thứ 7).')
+    }
 
     // ── Tự gán bác sĩ (rule mục 12) ─────────────────────────────────────────
     // Chạy TRƯỚC mọi kiểm tra khác để phần dưới không phải biết khách đã đi đường nào:
@@ -772,10 +797,27 @@ export async function createBooking(req, res) {
           .populate('specialties', 'ten')
           .session(session)
         if (!doc) return rollbackFail(404, 'Bác sĩ không tồn tại hoặc chưa được duyệt')
+
+        // Nếu chưa có schedule_id hoặc slot_id (VD: Tái khám được gán bác sĩ ưu tiên), tự tìm slot theo gioYeuCau
+        if ((!schedule_id || !slot_id) && gioYeuCau) {
+          const sch = await LichLamViec.findOne({
+            doctor_id: doc._id,
+            ngay: { $gte: appointmentDate, $lt: addDays(appointmentDate, 1) },
+            trang_thai_ngay: 'lam_viec',
+            trang_thai_xac_nhan: { $ne: 'tu_choi' },
+          }).session(session)
+          if (sch) {
+            const slotMatch = sch.slots.find((s) => s.gio_bat_dau === gioYeuCau && s.status === 'active' && !s.benh_nhan_id && !s.bi_khoa_boi_nghi_phep)
+            if (slotMatch) {
+              schedule_id = sch._id
+              slot_id = slotMatch._id
+            }
+          }
+        }
       }
 
       if (!schedule_id || !slot_id) {
-        return rollbackFail(400, 'Khám tại phòng khám yêu cầu schedule_id và slot_id')
+        return rollbackFail(400, 'Khung giờ này hiện không có suất khám khả dụng. Vui lòng chọn khung giờ khác.')
       }
 
       // Atomic claim slot để tránh double-booking
@@ -842,21 +884,24 @@ export async function createBooking(req, res) {
         session,
       })
 
-      const luotTrung = await timLuotTrungTrongNgay({
-        userId: req.user.id,
-        memberId: member_id || null,
-        tenKhach: ten_khach,
-        soDienThoaiKhach: so_dien_thoai_khach,
-        bookingFor: booking_for,
-        ngay: appointmentDate,
-        session,
-      })
-      if (luotTrung) {
-        return rollbackFail(
-          409,
-          `Người được khám đã có lịch ${luotTrung.ma_lich_hen ?? ''} lúc ${luotTrung.gio_kham} trong ngày này. `
-          + 'Mỗi người chỉ được đặt 1 lịch khám / ngày — vui lòng chọn ngày khác hoặc hủy lịch cũ.',
-        )
+      // Nếu KHÔNG phải tái khám thì mới check luotTrung
+      if (!isFollowUp) {
+        const luotTrung = await timLuotTrungTrongNgay({
+          userId: req.user.id,
+          memberId: member_id || null,
+          tenKhach: ten_khach,
+          soDienThoaiKhach: so_dien_thoai_khach,
+          bookingFor: booking_for,
+          ngay: appointmentDate,
+          session,
+        })
+        if (luotTrung) {
+          return rollbackFail(
+            409,
+            `Người được khám đã có lịch ${luotTrung.ma_lich_hen ?? ''} lúc ${luotTrung.gio_kham} trong ngày này. `
+            + 'Mỗi người chỉ được đặt 1 lịch khám / ngày — vui lòng chọn ngày khác hoặc hủy lịch cũ.',
+          )
+        }
       }
 
       // ⚠️ PHAI gói mọi điều kiện về slot trong MỘT $elemMatch. Viết rời từng khoá
@@ -906,7 +951,7 @@ export async function createBooking(req, res) {
       // khách đâu có chọn ai. `BacSi.gia_kham` giữ lại nhưng không dùng để tính tiền.
       try {
         const bangGia = await layGiaKhamChuyenKhoa(specialty_id, session)
-        gia_kham = bangGia.gia_kham
+        gia_kham = isFollowUp ? 0 : bangGia.gia_kham
         ten_dich_vu = bangGia.ten_chuyen_khoa
       } catch (err) {
         return rollbackFail(err.statusCode ?? 400, err.message)
@@ -946,9 +991,11 @@ export async function createBooking(req, res) {
       ly_do_kham:   ly_do_kham?.trim() || null,
       phong_kham:   loai_kham === 'clinic' ? phong_kham   : null,
       dia_chi_kham: null,
-      status:         'pending',
-      payment_status: 'unpaid',
-      payment_deadline: paymentDeadline,
+      status:         isFollowUp ? 'confirmed' : 'pending',
+      payment_status: isFollowUp ? 'paid' : 'unpaid',
+      payment_deadline: isFollowUp ? null : paymentDeadline,
+      loai_lich_hen:  isFollowUp ? 'tai_kham' : 'kham_moi',
+      lich_hen_goc_id: isFollowUp ? lich_hen_goc_id : null,
       gia_kham,
       ten_dich_vu,
       ten_khach:           ten_khach?.trim().replace(/\s+/g, ' ') || null,
@@ -987,8 +1034,8 @@ export async function createBooking(req, res) {
       ],
       tong_tien_phat_sinh: 0,
       tong_thanh_toan: gia_kham,
-      trang_thai_hoa_don: 'chua_thanh_toan',
-      ghi_chu_ke_toan: 'Tao tu luong dat lich online - cho xac nhan thanh toan',
+      trang_thai_hoa_don: isFollowUp ? 'da_thanh_toan_du' : 'chua_thanh_toan',
+      ghi_chu_ke_toan: isFollowUp ? 'Tao tu luong dat lich online - mien phi tai kham' : 'Tao tu luong dat lich online - cho xac nhan thanh toan',
     }], { session })
 
     const [payment] = await ThanhToan.create([{
@@ -997,14 +1044,23 @@ export async function createBooking(req, res) {
       benh_nhan_id: req.user.id,
       so_tien: gia_kham,
       loai_thanh_toan: 'phi_dat_lich',
-      phuong_thuc: req.body.phuong_thuc || 'chuyen_khoan',
-      status: 'pending',
-      ngay_thanh_toan: null,
+      phuong_thuc: isFollowUp ? 'mien_phi_tai_kham' : (req.body.phuong_thuc || 'chuyen_khoan'),
+      status: isFollowUp ? 'paid' : 'pending',
+      ngay_thanh_toan: isFollowUp ? new Date() : null,
       gateway_response: {
         provider: 'fake_gateway',
         created_from: 'patient_booking',
       },
     }], { session })
+
+    // Neu tai kham => danh dau lich hen goc da dat tai kham
+    if (isFollowUp && req.ketQuaKhamTaiKham) {
+      await KetQuaKham.findByIdAndUpdate(
+        req.ketQuaKhamTaiKham._id,
+        { da_dat_lich_tai_kham: true },
+        { session }
+      )
+    }
 
     await session.commitTransaction()
     session.endSession()
@@ -1041,7 +1097,8 @@ export async function createBooking(req, res) {
       ten_dich_vu:    appointment.ten_dich_vu,
       ngay_kham:      appointment.ngay_kham,
       gio_kham:       appointment.gio_kham,
-    }, 'Tao lich hen thanh cong, vui long tiep tuc xac nhan thanh toan')
+      loai_lich_hen:  appointment.loai_lich_hen,
+    }, 'Tao lich hen thanh cong' + (isFollowUp ? '' : ', vui long tiep tuc xac nhan thanh toan'))
   } catch (err) {
     await session.abortTransaction()
     session.endSession()
@@ -1068,7 +1125,7 @@ export async function cancelBooking(req, res) {
       return fail(res, 400, 'Không thể hủy lịch hẹn đã qua thời gian khám')
     }
 
-    if (a.payment_status === 'paid') {
+    if (a.payment_status === 'paid' && a.gia_kham > 0) {
       return fail(res, 400, 'Lịch hẹn đã thanh toán không thể tự hủy trên ứng dụng, vui lòng liên hệ hotline phòng khám để được hỗ trợ hoàn tiền')
     }
 
@@ -1076,7 +1133,7 @@ export async function cancelBooking(req, res) {
     const isWithin24h = diffMs < 24 * 3600 * 1000
 
     let refundPolicyNote = ''
-    if (a.payment_status === 'paid') {
+    if (a.payment_status === 'paid' && a.gia_kham > 0) {
       refundPolicyNote = isWithin24h 
         ? ' (Hoàn tiền 50% theo chính sách hủy < 24h)' 
         : ' (Hoàn tiền 100% theo chính sách hủy > 24h)'

@@ -9,7 +9,7 @@ import {
   nhaSlotQuaHanToanHeThong,
 } from '../services/slotRelease.service.js'
 import { apDungDeXuatQuaHan } from '../services/appointmentReschedule.service.js'
-import { BAT_QUET_NO_SHOW, quetNoShowHetCa } from '../services/noShowSweep.service.js'
+import { BAT_QUET_NO_SHOW, quetNoShowHetCa, SO_NGAY_QUET_NO_SHOW_MAC_DINH } from '../services/noShowSweep.service.js'
 
 const CLINIC_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
@@ -87,12 +87,14 @@ export function startCronJobs() {
     }
 
     // Het ca ma khong co ban ghi HangDoi -> `no_show` (rule muc 8). CHI tu dong, khong ai
-    // set tay duoc, vi no_show = mat 100% tien (muc 5). Chi quet NGAY HOM NAY (soNgay=1
-    // mac dinh) — khong quet nguoc lich su, xem chu thich trong service.
+    // set tay duoc, vi no_show = mat 100% tien (muc 5). Mac dinh chi quet NGAY HOM NAY
+    // (soNgay=1) — khong tu quet nguoc lich su, xem chu thich trong service. Chinh
+    // NO_SHOW_SWEEP_LOOKBACK_DAYS de quet tồn đọng nhiều ngày khi CHU DONG can (vd: cron
+    // vua duoc bat lai sau mot dot tat lau).
     // Tat bang NO_SHOW_SWEEP_ENABLED=false khi demo (xem BAT_QUET_NO_SHOW).
     if (BAT_QUET_NO_SHOW) {
       try {
-        const { daDanhDau } = await quetNoShowHetCa({ soNgay: 3 })
+        const { daDanhDau } = await quetNoShowHetCa({ soNgay: SO_NGAY_QUET_NO_SHOW_MAC_DINH })
         if (daDanhDau > 0) console.log(`[cron] Da danh dau ${daDanhDau} lich hen 'no_show' (het ca, khong toi quay)`)
       } catch (err) {
         console.error('[cron] Loi quet no_show:', err.message)

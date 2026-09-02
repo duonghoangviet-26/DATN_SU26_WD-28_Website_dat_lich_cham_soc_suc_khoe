@@ -27,9 +27,19 @@ export interface PatientProfile {
   luot_dang_cho_hom_nay?: ActiveQueue | null
   sua_gan_nhat?: TimelineRow | null
   lich_su_kham?: VisitHistory | null
-  // D81 — hồ sơ tạm cho bệnh nhân không có số điện thoại.
-  la_ho_so_tam?: boolean
-  ma_tam?: string | null
+  pending_follow_ups?: PendingFollowUp[]
+}
+
+export interface PendingFollowUp {
+  _id: string
+  chan_doan: string
+  ngay_tai_kham?: string | null
+  appointment_id?: string | null
+  hang_doi_id?: string | null
+  bac_si_cu?: {
+    id: string
+    ho_ten: string | null
+  } | null
 }
 
 export interface VisitHistory {
@@ -99,19 +109,6 @@ export interface CreatePatientProfilePayload {
   ngay_sinh?: string
   gioi_tinh?: 'nam' | 'nu' | 'khac'
   tai_khoan_id?: string
-}
-
-// D81 — hồ sơ tạm: bù số điện thoại bằng 3 thứ nhận diện bắt buộc (ngày sinh, giới tính,
-// ghi chú đặc điểm). Không có tai_khoan_id — không xác minh được chủ tài khoản qua SĐT.
-export interface CreateTempProfilePayload {
-  ho_ten: string
-  ngay_sinh: string
-  gioi_tinh: 'nam' | 'nu' | 'khac'
-  ghi_chu: string
-  nhom_mau?: 'A' | 'B' | 'AB' | 'O'
-  di_ung?: string
-  benh_nen?: string
-  dia_chi?: string
 }
 
 // 9 trường hành chính lễ tân được sửa (LT-10). Không có trường chuyên môn —
@@ -238,6 +235,11 @@ export interface OfflinePendingPayment {
   ma_giao_dich?: string
   ngay_tao?: string
   ngay_thanh_toan?: string | null
+  gateway?: {
+    qr_payload: string | null
+    expires_at: string | null
+    is_expired: boolean
+  } | null
 }
 
 export interface OfflineRelatedService {
@@ -339,24 +341,6 @@ export const receptionistPatientIntakeService = {
     return response.data.data.profile
   },
 
-  // D81 — cùng endpoint tạo hồ sơ, chỉ khác cờ khong_co_so_dien_thoai để backend chuyển
-  // sang nhánh hồ sơ tạm (sinh ma_tam thay vì bắt buộc SĐT).
-  async createTempProfile(payload: CreateTempProfilePayload): Promise<PatientProfile> {
-    const response = await axiosInstance.post<ApiResponse<{ profile: PatientProfile }>>(
-      '/receptionist/patient-intake/profiles',
-      { ...payload, khong_co_so_dien_thoai: true },
-    )
-    return response.data.data.profile
-  },
-
-  async searchByTempCode(maTam: string): Promise<PatientProfile> {
-    const response = await axiosInstance.get<ApiResponse<{ profile: PatientProfile }>>(
-      '/receptionist/patient-intake/search-temp',
-      { params: { ma_tam: maTam } },
-    )
-    return response.data.data.profile
-  },
-
   async updateProfileAdministrative(id: string, payload: UpdateProfileAdministrativePayload): Promise<{ profile: PatientProfile; audit_id: string; changed_fields: string[] }> {
     const response = await axiosInstance.patch<ApiResponse<{ profile: PatientProfile; audit_id: string; changed_fields: string[] }>>(
       `/receptionist/patient-intake/profiles/${id}`,
@@ -384,15 +368,27 @@ export const receptionistPatientIntakeService = {
     return response.data.data as CentralOfflineCapacity
   },
 
+  async getDoctorsForIntake(specialtyId: string) {
+    const response = await axiosInstance.get<ApiResponse<any[]>>('/receptionist/offline-queue/doctors', {
+      params: { specialty_id: specialtyId }
+    })
+    return response.data.data
+  },
+
   async intakeCentralOffline(payload: {
     ho_so_benh_nhan_id: string
     specialty_id: string
     xac_nhan_canh_bao?: boolean
+    lich_hen_goc_id?: string
+    ket_qua_kham_id?: string
+    force_doctor_id?: string
   }) {
     const response = await axiosInstance.post<ApiResponse<{
       entry: {
         _id: string
-        trang_thai: 'cho_dieu_phoi'
+        trang_thai: 'cho_dieu_phoi' | 'dang_cho'
+        doctor_id?: string | null
+        phong_kham?: string | null
         checkin_time?: string
         so_thu_tu_checkin?: number | null
         ma_so_thu_tu?: string | null
@@ -493,6 +489,11 @@ export const receptionistPatientIntakeService = {
 
   async cancelBillingPayment(referenceId: string, source: BillingCase['source'], paymentId: string): Promise<BillingCase> {
     const response = await axiosInstance.patch<ApiResponse<BillingCase>>(`/receptionist/payments/cases/${referenceId}/payments/${paymentId}/cancel`, { source })
+    return response.data.data
+  },
+
+  async createTransferVnpaySession(referenceId: string, source: BillingCase['source'], paymentId: string): Promise<BillingCase> {
+    const response = await axiosInstance.post<ApiResponse<BillingCase>>(`/receptionist/payments/cases/${referenceId}/payments/${paymentId}/vnpay-session`, { source })
     return response.data.data
   },
 

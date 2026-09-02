@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import mongoose from 'mongoose'
 import {
   Counter,
@@ -20,8 +21,118 @@ const SOURCES = ['online', 'offline']
 const OFFLINE_ELIGIBLE = ['hoan_thanh', 'cho_dich_vu']
 const ONLINE_ELIGIBLE = ['waiting_record', 'completed']
 
+const VNPAY_SESSION_MINUTES = Number(process.env.VNPAY_SESSION_MINUTES || process.env.PAYMENT_HOLD_MINUTES || 15)
+const DEFAULT_CLIENT_BASE_URL = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'
+
 function loi(statusCode, message) {
   return Object.assign(new Error(message), { statusCode })
+}
+
+function getGatewayResponseObject(payment) {
+  return payment?.gateway_response && typeof payment.gateway_response === 'object'
+    ? payment.gateway_response
+    : {}
+}
+
+function toDateOrNull(value) {
+  if (!value) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function isGatewaySessionExpired(gateway) {
+  const expiresAt = toDateOrNull(gateway?.expires_at)
+  if (!expiresAt) return false
+  return expiresAt.getTime() <= Date.now()
+}
+
+function formatVnpDate(date) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+
+  const parts = formatter.formatToParts(date)
+  let y = '', m = '', d = '', h = '', min = '', s = ''
+
+  parts.forEach(part => {
+    if (part.type === 'year') y = part.value
+    if (part.type === 'month') m = part.value
+    if (part.type === 'day') d = part.value
+    if (part.type === 'hour') h = part.value
+    if (part.type === 'minute') min = part.value
+    if (part.type === 'second') s = part.value
+  })
+
+  if (h === '24') h = '00'
+
+  return `${y}${m}${d}${h}${min}${s}`
+}
+
+// Sinh URL thanh toán VNPAY sandbox cho giao dịch "thanh_toan_bo_sung" (thu bổ sung sau khám,
+// mục 10 rule lịch làm việc — hóa đơn không gắn appointment_id nên KHÔNG dùng chung được với
+// buildMockVnpayUrl của patient/receptionist payment.controller.js, vốn bắt buộc appointment).
+function buildTransferVnpayUrl({ payment, invoice, vnpTxnRef, createdAt, expiresAt }) {
+  const tmnCode = process.env.VNP_TMNCODE || 'WVZUTWIX'
+  const secretKey = process.env.VNP_HASHSECRET || 'MPCYVPEZAQLIXFLZLGWBKOIXOPTHNWVA'
+  const vnpUrl = process.env.VNP_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
+
+  const rawParams = {
+    vnp_Version: '2.1.0',
+    vnp_Command: 'pay',
+    vnp_TmnCode: tmnCode,
+    vnp_Amount: String(Math.round((payment.so_tien || 0) * 100)),
+    vnp_CurrCode: 'VND',
+    vnp_TxnRef: vnpTxnRef,
+    vnp_OrderInfo: invoice?.so_hoa_don ? `Thanh toan ${invoice.so_hoa_don}` : `Thanh toan giao dich ${payment.ma_giao_dich}`,
+    vnp_OrderType: 'other',
+    vnp_Locale: 'vn',
+    vnp_BankCode: 'NCB',
+    vnp_IpAddr: '127.0.0.1',
+    vnp_CreateDate: formatVnpDate(createdAt),
+    vnp_ExpireDate: formatVnpDate(expiresAt),
+    vnp_ReturnUrl: `${DEFAULT_CLIENT_BASE_URL}/receptionist/payments?payment_id=${payment._id}&gateway=vnpay`,
+  }
+
+  const sortedKeys = Object.keys(rawParams).sort()
+  const sortedParams = new URLSearchParams()
+  sortedKeys.forEach((key) => {
+    sortedParams.append(key, rawParams[key])
+  })
+
+  if (secretKey) {
+    const hmac = crypto.createHmac('sha512', secretKey)
+    const signed = hmac.update(Buffer.from(sortedParams.toString(), 'utf-8')).digest('hex')
+    sortedParams.append('vnp_SecureHash', signed)
+  }
+
+  return `${vnpUrl}?${sortedParams.toString()}`
+}
+
+function buildTransferGateway({ payment, invoice, now }) {
+  const expiresAt = new Date(now.getTime() + VNPAY_SESSION_MINUTES * 60 * 1000)
+  const vnpTxnRef = `VNPAY-${payment.ma_giao_dich}-${now.getTime().toString().slice(-6)}`
+  const paymentUrl = buildTransferVnpayUrl({ payment, invoice, vnpTxnRef, createdAt: now, expiresAt })
+  return {
+    provider: 'vnpay',
+    mode: 'mock',
+    merchant_name: 'ViteFamily',
+    merchant_code: 'VITAFAMILY',
+    note: invoice?.so_hoa_don || payment.ma_giao_dich,
+    bank_code: 'VNBANK',
+    locale: 'vn',
+    vnp_txn_ref: vnpTxnRef,
+    payment_url: paymentUrl,
+    qr_payload: paymentUrl,
+    expires_at: expiresAt.toISOString(),
+    session_created_at: now.toISOString(),
+  }
 }
 
 function sourceFrom(req) {
@@ -67,6 +178,7 @@ async function confirmCashierReview(invoiceId, userId) {
 
 function serializePendingPayment(payment) {
   if (!payment) return null
+  const gateway = getGatewayResponseObject(payment)
   return {
     id: String(payment._id),
     hoa_don_id: String(payment.hoa_don_id),
@@ -77,6 +189,11 @@ function serializePendingPayment(payment) {
     ma_giao_dich: payment.ma_giao_dich ?? null,
     ngay_tao: payment.ngay_tao,
     ngay_thanh_toan: payment.ngay_thanh_toan,
+    gateway: payment.phuong_thuc === 'chuyen_khoan' ? {
+      qr_payload: gateway.qr_payload ?? null,
+      expires_at: gateway.expires_at ?? null,
+      is_expired: isGatewaySessionExpired(gateway),
+    } : null,
   }
 }
 
@@ -147,9 +264,15 @@ async function resolveBillingCase(referenceId, source) {
 }
 
 function invoiceFilter(caseItem) {
-  return caseItem.source === 'online'
-    ? { appointment_id: caseItem.reference_id }
-    : { hang_doi_id: caseItem.reference_id }
+  const apptId = caseItem.appointment?._id ?? caseItem.queue?.appointment_id ?? null
+  const queueId = caseItem.queue?._id ?? null
+
+  const conditions = []
+  if (queueId) conditions.push({ hang_doi_id: queueId })
+  if (apptId) conditions.push({ appointment_id: apptId })
+
+  if (conditions.length === 0) return { _id: null }
+  return conditions.length === 1 ? conditions[0] : { $or: conditions }
 }
 
 async function attachOnlinePrepayment(caseItem, invoiceId) {
@@ -182,6 +305,10 @@ function invoiceLines(caseItem, fee) {
 
 async function getFee(caseItem) {
   if (caseItem.source === 'online') return Number(caseItem.appointment.gia_kham ?? 0)
+
+  const isFollowUp = caseItem.queue && (caseItem.queue.loai_lich_hen === 'tai_kham' || caseItem.queue.lich_hen_goc_id != null)
+  if (isFollowUp) return 0
+
   return Number((await layGiaKhamChuyenKhoa(caseItem.specialty_id)).gia_kham ?? 0)
 }
 
@@ -361,6 +488,14 @@ export async function createBillingInvoice(req, res) {
         nguoi_thu_id: req.user?._id ?? req.user?.id ?? null,
       })
 
+      // Giao dịch chuyển khoản chờ xác nhận: sinh sẵn URL thanh toán VNPAY sandbox đúng số tiền
+      // `due` để lễ tân hiển thị QR cho khách quét — khách chuyển đúng số tiền, lễ tân vẫn tự
+      // xác nhận thủ công sau khi đối chiếu (không tự động hoá xác nhận qua IPN/return).
+      if (!paid) {
+        const gateway = buildTransferGateway({ payment, invoice, now: new Date() })
+        await ThanhToan.updateOne({ _id: payment._id }, { $set: { gateway_response: gateway } })
+      }
+
       // Thanh toán tiền mặt được chốt NGAY lúc lập hóa đơn (không qua bước xác nhận riêng như
       // chuyển khoản), nên phải ghi nhật ký ở đây — nếu không, nguồn thu tiền mặt (phổ biến nhất
       // ở quầy) sẽ không có dấu vết ai thu. Chỉ ghi khi ĐÃ thu thật (paid); giao dịch chuyển
@@ -436,6 +571,25 @@ export async function confirmTransfer(req, res) {
     }
     await hoanTatLuotKhamOnlineNeuDaThuDu(caseItem, trangThaiHoaDon)
     return ok(res, await serializeCase(caseItem), 'Đã xác nhận chuyển khoản')
+  } catch (error) {
+    return fail(res, error.statusCode ?? 500, error.message)
+  }
+}
+
+export async function createTransferVnpaySession(req, res) {
+  try {
+    const source = sourceFrom(req)
+    const { caseItem, invoice, payment } = await getPendingForCase(req.params.referenceId, source, req.params.paymentId)
+    if (payment.phuong_thuc !== 'chuyen_khoan') throw loi(400, 'Chỉ tạo mã QR cho giao dịch chuyển khoản')
+
+    const gateway = getGatewayResponseObject(payment)
+    const canReuse = Boolean(gateway.qr_payload) && !isGatewaySessionExpired(gateway)
+    if (!canReuse) {
+      const fresh = buildTransferGateway({ payment, invoice, now: new Date() })
+      await ThanhToan.updateOne({ _id: payment._id }, { $set: { gateway_response: fresh } })
+    }
+
+    return ok(res, await serializeCase(caseItem), 'Đã tạo mã QR chuyển khoản')
   } catch (error) {
     return fail(res, error.statusCode ?? 500, error.message)
   }

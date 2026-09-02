@@ -84,19 +84,17 @@ export const doctorService = {
     return data.data
   },
 
-  // Sửa nhanh field liên quan dịch vụ (giá khám, bảo hiểm, dịch vụ liên quan đã áp dụng)
+  // Sửa nhanh field liên quan dịch vụ (giá khám, dịch vụ liên quan đã áp dụng)
   // — dùng từ trang Quản lý dịch vụ > chi tiết chuyên khoa. Không sửa hồ sơ bác sĩ (bằng cấp, kinh nghiệm...).
   // MOCK — chưa có endpoint backend thật.
   async updateServiceFields(id: string, data: {
     gia_kham: number
-    bao_hiem: { nha_nuoc: boolean; bao_lanh: boolean }
     related_services: { id: string; ten: string; gia: number }[]
   }): Promise<DoctorProfile> {
     await delay()
     const doc = mockDoctorsState.find(d => String(d.id) === String(id))
     if (!doc) throw new Error('Không tìm thấy bác sĩ')
     doc.gia_kham = data.gia_kham
-    doc.bao_hiem = data.bao_hiem
     doc.related_services = data.related_services
     return { ...doc }
     // Real API:

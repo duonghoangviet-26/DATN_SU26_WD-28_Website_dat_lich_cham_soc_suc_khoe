@@ -23,7 +23,9 @@ function throwErr(statusCode, message) {
   throw Object.assign(new Error(message), { statusCode })
 }
 
-/** Lễ tân bắt buộc phải nhập lý do; bác sĩ giữ hành vi cũ (không bắt buộc). */
+/** Mọi vai trò đều bắt buộc phải nhập lý do khi hủy ca (2026-08-21) — hủy ca có nhiều tình
+ * huống khác nhau, cần ghi chú lại để đối chiếu sau này. `batBuocLyDo` giữ lại làm tham số
+ * cho service, không hardcode `true` bên trong để lời gọi vẫn đọc rõ ý định. */
 export function chuanHoaLyDoHuyLuot(lyDo, batBuocLyDo) {
   const reason = String(lyDo ?? '').trim()
   if (batBuocLyDo && !reason) throwErr(400, 'Cần nhập lý do khi đóng lượt')
@@ -32,7 +34,10 @@ export function chuanHoaLyDoHuyLuot(lyDo, batBuocLyDo) {
 
 export async function huyLuotHangDoi({ entryId, lyDo = null, actorUserId, actorRole, restrictToDoctorId = null }) {
   if (!mongoose.Types.ObjectId.isValid(entryId)) throwErr(400, 'Mã lượt chờ không hợp lệ')
-  const reason = chuanHoaLyDoHuyLuot(lyDo, actorRole === 'receptionist')
+  // Bắt buộc lý do cho MỌI vai trò (trước đây chỉ bắt buộc với lễ tân) — hủy ca gồm rất nhiều
+  // tình huống khác nhau (khách bỏ về, bác sĩ từ chối, lỗi phòng khám...), cần ghi chú để đối
+  // chiếu sau này, không riêng gì lễ tân mới cần.
+  const reason = chuanHoaLyDoHuyLuot(lyDo, true)
 
   const entry = await HangDoi.findById(entryId).lean()
   if (!entry) throwErr(404, 'Không tìm thấy hàng đợi')
@@ -70,6 +75,7 @@ export async function huyLuotHangDoi({ entryId, lyDo = null, actorUserId, actorR
             den_trang_thai: 'cancelled',
             loai_thay_doi: 'queue_cancel',
             ly_do_thay_doi: reason,
+            nguoi_thay_doi_id: actorUserId,
             nguoi_thuc_hien_id: actorUserId,
             vai_tro: actorRole,
             kenh_thay_doi: actorRole,

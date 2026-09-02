@@ -42,12 +42,12 @@ const paymentSchema = new mongoose.Schema(
     },
     loai_thanh_toan: {
       type: String,
-      enum: ['phi_dat_lich', 'dat_coc', 'thanh_toan_bo_sung'],
+      enum: ['phi_dat_lich', 'dat_coc', 'thanh_toan_bo_sung', 'mien_phi_tai_kham'],
       required: true,
     },
     phuong_thuc: {
       type: String,
-      enum: ['tien_mat', 'chuyen_khoan', 'vi_dien_tu', 'the_ngan_hang'],
+      enum: ['tien_mat', 'chuyen_khoan', 'vi_dien_tu', 'the_ngan_hang', 'mien_phi_tai_kham', 'mien_phi'],
       required: true,
     },
     status: {

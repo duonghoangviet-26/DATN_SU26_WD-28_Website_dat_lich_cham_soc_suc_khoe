@@ -65,7 +65,7 @@ export default function DoctorSidebar({ open, onClose }: Props) {
 
         {/* Footer */}
         <div className="shrink-0 border-t border-slate-100 px-4 py-3">
-          <p className="text-[10px] text-slate-400">ViteFamily v1.0 · Cổng bác sĩ</p>
+          <p className="text-[10px] text-slate-400">ViteFamily Cổng bác sĩ</p>
         </div>
       </aside>
     </>

@@ -9,6 +9,15 @@ interface Props {
 
 const SO_DONG_TOI_DA = 10 // giới hạn cứng của DonThuoc ở backend
 
+// Backend (`DonThuoc.js`) bắt buộc `gio_uong` là mảng giờ HH:MM — không đổi được validator đó.
+// Thay vì bắt bác sĩ gõ giờ chính xác, cho chọn nhanh theo buổi; mỗi buổi ánh xạ 1 giờ đại diện
+// nên dữ liệu gửi lên backend vẫn hợp lệ như trước.
+const BUOI_UONG: { key: string; nhan: string; gio: string }[] = [
+  { key: 'sang', nhan: 'Sáng', gio: '07:00' },
+  { key: 'trua', nhan: 'Trưa', gio: '12:00' },
+  { key: 'toi', nhan: 'Tối', gio: '19:00' },
+]
+
 interface DongThuoc {
   ten_thuoc: string
   lieu_luong: string
@@ -46,17 +55,12 @@ export default function StepKeDon({ phien, saving, onNext }: Props) {
     setDsThuoc((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function themGioUong(index: number) {
-    suaDong(index, { gio_uong: [...dsThuoc[index].gio_uong, ''] })
-  }
-
-  function suaGioUong(index: number, gioIndex: number, value: string) {
-    const gioMoi = dsThuoc[index].gio_uong.map((g, i) => (i === gioIndex ? value : g))
+  function toggleBuoiUong(index: number, gio: string) {
+    const dangChon = dsThuoc[index].gio_uong.includes(gio)
+    const gioMoi = dangChon
+      ? dsThuoc[index].gio_uong.filter((g) => g !== gio)
+      : [...dsThuoc[index].gio_uong, gio]
     suaDong(index, { gio_uong: gioMoi })
-  }
-
-  function xoaGioUong(index: number, gioIndex: number) {
-    suaDong(index, { gio_uong: dsThuoc[index].gio_uong.filter((_, i) => i !== gioIndex) })
   }
 
   const dongThieuTen = dsThuoc.some((d) => !d.ten_thuoc.trim())
@@ -79,13 +83,55 @@ export default function StepKeDon({ phien, saving, onNext }: Props) {
     }
   }
 
+  const thuocCu = phien.ho_so_cu?.thuoc ?? []
+
+  function taiLaiDonThuocCu() {
+    if (!thuocCu.length) return
+    setDsThuoc(thuocCu.slice(0, SO_DONG_TOI_DA).map((t) => ({
+      ten_thuoc: t.ten_thuoc,
+      lieu_luong: t.lieu_luong ?? '',
+      tan_suat: t.tan_suat ?? '',
+      so_ngay: String(t.so_ngay ?? 7),
+      gio_uong: t.gio_uong ?? [],
+      ghi_chu: t.ghi_chu ?? '',
+    })))
+  }
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_260px]">
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-slate-900">Đơn thuốc</h2>
           <span className="text-xs text-slate-400">{dsThuoc.length}/{SO_DONG_TOI_DA} dòng</span>
         </div>
+
+        {/* Đơn thuốc đợt trước — chỉ hiển thị khi tái khám có dữ liệu */}
+        {thuocCu.length > 0 && (
+          <div className="mb-4 rounded-lg border border-violet-200 bg-violet-50 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-600">
+                📋 Đơn thuốc đợt trước (tham khảo)
+              </p>
+              <button
+                type="button"
+                onClick={taiLaiDonThuocCu}
+                className="inline-flex items-center gap-1 rounded-lg border border-violet-300 bg-white px-3 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-100 transition-colors"
+              >
+                Tải lại đơn thuốc đợt trước
+              </button>
+            </div>
+            <ul className="space-y-1">
+              {thuocCu.map((t, i) => (
+                <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                  <span className="font-semibold text-slate-800">{t.ten_thuoc}</span>
+                  {t.lieu_luong && <span className="text-slate-600">{t.lieu_luong}</span>}
+                  {t.tan_suat && <span className="text-slate-500">— {t.tan_suat}</span>}
+                  {t.so_ngay && <span className="text-xs text-slate-400">({t.so_ngay} ngày)</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="space-y-4">
           {dsThuoc.map((d, index) => (
@@ -155,32 +201,26 @@ export default function StepKeDon({ phien, saving, onNext }: Props) {
               </div>
 
               <div className="mt-3">
-                <span className="mb-1 block text-sm font-medium text-slate-600">Giờ uống</span>
+                <span className="mb-1 block text-sm font-medium text-slate-600">Buổi uống</span>
                 <div className="flex flex-wrap items-center gap-2">
-                  {d.gio_uong.map((gio, gioIndex) => (
-                    <div key={gioIndex} className="flex items-center gap-1">
-                      <input
-                        type="time"
-                        value={gio}
-                        onChange={(e) => suaGioUong(index, gioIndex, e.target.value)}
-                        className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                      />
+                  {BUOI_UONG.map((buoi) => {
+                    const daChon = d.gio_uong.includes(buoi.gio)
+                    return (
                       <button
+                        key={buoi.key}
                         type="button"
-                        onClick={() => xoaGioUong(index, gioIndex)}
-                        className="text-xs text-slate-400 hover:text-red-500"
+                        onClick={() => toggleBuoiUong(index, buoi.gio)}
+                        aria-pressed={daChon}
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                          daChon
+                            ? 'border-brand-500 bg-brand-50 text-brand-700'
+                            : 'border-slate-300 text-slate-600 hover:border-brand-400 hover:text-brand-600'
+                        }`}
                       >
-                        ×
+                        {buoi.nhan}
                       </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => themGioUong(index)}
-                    className="rounded-lg border border-dashed border-slate-300 px-2 py-1 text-xs text-slate-500 hover:border-brand-400 hover:text-brand-600"
-                  >
-                    + Giờ uống
-                  </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>

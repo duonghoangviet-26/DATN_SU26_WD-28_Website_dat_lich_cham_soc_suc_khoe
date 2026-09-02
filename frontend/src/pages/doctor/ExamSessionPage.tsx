@@ -65,6 +65,102 @@ function coGiaTriYTe(value: string | null) {
   return !['không', 'khong', 'không có', 'khong co', 'none', 'n/a'].includes(text.toLowerCase())
 }
 
+function dinhDangNgay(iso: string | null) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('vi-VN')
+}
+
+// ─── Banner hồ sơ đợt trước cho ca tái khám ──────────────────────────────────
+function HoSoCuBanner({ hoSoCu }: { hoSoCu: NonNullable<PhienKham['ho_so_cu']> }) {
+  const [expanded, setExpanded] = useState(true)
+  const ngay = dinhDangNgay(hoSoCu.ngay_kham)
+
+  return (
+    <div className="card mb-4 overflow-hidden border-l-4 border-violet-500">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between bg-violet-50 px-4 py-3 text-left hover:bg-violet-100 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-base">📜</span>
+          <span className="text-sm font-bold text-violet-800">HỒ SƠ ĐỢT TRƯỚC</span>
+          {ngay && <span className="text-xs text-violet-600 font-medium">— Ngày khám: {ngay}</span>}
+          {hoSoCu.ten_bac_si && <span className="text-xs text-violet-600">| BS: {hoSoCu.ten_bac_si}</span>}
+        </div>
+        <span className="text-xs font-semibold text-violet-600">{expanded ? '▲ Thu gọn' : '▼ Xem chi tiết'}</span>
+      </button>
+
+      {expanded && (
+        <div className="grid gap-4 p-4 lg:grid-cols-3 bg-white">
+          {/* Chẩn đoán & hướng dẫn */}
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-400">Chẩn đoán cũ</p>
+              <p className="text-sm text-slate-800 whitespace-pre-wrap">{hoSoCu.chan_doan || '—'}</p>
+            </div>
+            {hoSoCu.huong_dan_dieu_tri && (
+              <div>
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-400">Hướng dẫn điều trị cũ</p>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">{hoSoCu.huong_dan_dieu_tri}</p>
+              </div>
+            )}
+            {hoSoCu.ghi_chu && (
+              <div>
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-400">Lưu ý đợt trước</p>
+                <p className="text-sm text-slate-600 italic">{hoSoCu.ghi_chu}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Sinh hiệu cũ */}
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Sinh hiệu đợt trước</p>
+            {hoSoCu.sinh_hieu ? (
+              <dl className="space-y-1">
+                {[
+                  { label: 'Cân nặng', value: hoSoCu.sinh_hieu.can_nang ? `${hoSoCu.sinh_hieu.can_nang} kg` : null },
+                  { label: 'Chiều cao', value: hoSoCu.sinh_hieu.chieu_cao ? `${hoSoCu.sinh_hieu.chieu_cao} cm` : null },
+                  { label: 'Huyết áp', value: hoSoCu.sinh_hieu.huyet_ap },
+                  { label: 'Nhiệt độ', value: hoSoCu.sinh_hieu.nhiet_do ? `${hoSoCu.sinh_hieu.nhiet_do} °C` : null },
+                  { label: 'Nhịp tim', value: hoSoCu.sinh_hieu.nhip_tim ? `${hoSoCu.sinh_hieu.nhip_tim} bpm` : null },
+                ].map(({ label, value }) => value ? (
+                  <div key={label} className="flex justify-between text-sm border-b border-slate-100 pb-0.5">
+                    <span className="text-slate-500">{label}</span>
+                    <span className="font-semibold text-slate-800">{value}</span>
+                  </div>
+                ) : null)}
+              </dl>
+            ) : (
+              <p className="text-sm text-slate-400">Chưa có dữ liệu sinh hiệu</p>
+            )}
+          </div>
+
+          {/* Đơn thuốc cũ */}
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Đơn thuốc đợt trước</p>
+            {hoSoCu.thuoc.length > 0 ? (
+              <ul className="space-y-1.5">
+                {hoSoCu.thuoc.map((t, i) => (
+                  <li key={i} className="rounded-md bg-slate-50 px-3 py-1.5 text-sm">
+                    <span className="font-semibold text-slate-800">{t.ten_thuoc}</span>
+                    {t.lieu_luong && <span className="text-slate-500"> — {t.lieu_luong}</span>}
+                    {t.so_ngay && <span className="text-slate-400 text-xs"> ({t.so_ngay} ngày)</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-400">Không có đơn thuốc đợt trước</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ExamSessionPage() {
   const { queueId } = useParams<{ queueId: string }>()
   const navigate = useNavigate()
@@ -196,6 +292,8 @@ export default function ExamSessionPage() {
   ].filter(Boolean)
   const coCanhBaoDiUng = coGiaTriYTe(phien.queue.di_ung)
   const coBenhNen = coGiaTriYTe(phien.queue.benh_nen)
+  const isTaiKham = phien.is_tai_kham ?? false
+  const hoSoCu = phien.ho_so_cu ?? null
 
   return (
     <div>
@@ -222,6 +320,15 @@ export default function ExamSessionPage() {
               <h2 className="text-sm font-semibold text-slate-900">{phien.queue.ten_benh_nhan}</h2>
               {phien.queue.ma_so_thu_tu && <Badge color="gray">STT {phien.queue.ma_so_thu_tu}</Badge>}
               <Badge color={phien.queue.nguon === 'online' ? 'blue' : 'yellow'}>{nhanNguon(phien.queue.nguon)}</Badge>
+              {isTaiKham ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-violet-100 border border-violet-200 px-2.5 py-0.5 text-xs font-extrabold text-violet-800">
+                  🔁 TÁI KHÁM
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-bold text-blue-700">
+                  📋 KHÁM MỚI
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
               <span>{thongTinNhanDien.join(' · ') || 'Chưa có tuổi/giới tính/nhóm máu'}</span>
@@ -264,6 +371,16 @@ export default function ExamSessionPage() {
           </div>
         </div>
       </section>
+
+      {/* Banner hồ sơ đợt trước — chỉ hiển thị khi là tái khám có dữ liệu cũ */}
+      {isTaiKham && hoSoCu && (
+        <HoSoCuBanner hoSoCu={hoSoCu} />
+      )}
+      {isTaiKham && !hoSoCu && (
+        <div className="card mb-4 flex items-center gap-3 border-l-4 border-violet-400 bg-violet-50 p-4">
+          <span className="text-violet-600 font-medium text-sm">🔁 Đây là ca tái khám — chưa tìm thấy hồ sơ đợt trước đã xác nhận trong hệ thống.</span>
+        </div>
+      )}
 
       {/* Thanh 5 bước — chỉ bấm được bước đã tới (không cho nhảy trước, khớp rule backend) */}
       <div className="card mb-4 flex flex-wrap items-center gap-1 p-2">

@@ -187,7 +187,18 @@ export default function DoctorAppointmentGroupList({
                       ) : categorizedAppointments && categorizedAppointments[activeTab].map(a => (
                         <tr key={a._id} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-medium text-slate-800">
-                            {a.benh_nhan}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span>{a.benh_nhan}</span>
+                              {a.is_tai_kham || a.loai_lich_hen === 'tai_kham' ? (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-purple-100 border border-purple-200 px-2 py-0.5 text-xs font-bold text-purple-800">
+                                  🔁 Tái khám
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                  📋 Khám mới
+                                </span>
+                              )}
+                            </div>
                             {a.sdt_benh_nhan && <div className="text-xs font-normal text-slate-500">{a.sdt_benh_nhan}</div>}
                           </td>
                           <td className="px-4 py-3 text-slate-600">

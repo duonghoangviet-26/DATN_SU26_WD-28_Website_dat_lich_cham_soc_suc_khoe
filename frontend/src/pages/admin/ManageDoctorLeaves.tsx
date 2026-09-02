@@ -23,7 +23,11 @@ export default function ManageDoctorLeaves() {
   const [approvingLeave, setApprovingLeave] = useState<AdminDoctorLeave | null>(null)
   const [historyLeave, setHistoryLeave] = useState<AdminDoctorLeave | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('')
-  const [dateFilter, setDateFilter] = useState<string>('')
+  const [dateFromFilter, setDateFromFilter] = useState<string>('')
+  const [dateToFilter, setDateToFilter] = useState<string>('')
+  const [doctorNameFilter, setDoctorNameFilter] = useState<string>('')
+  const [appliedDoctorName, setAppliedDoctorName] = useState<string>('')
+  const [rejectingLeave, setRejectingLeave] = useState<AdminDoctorLeave | null>(null)
   
   // Phân trang
   const [currentPage, setCurrentPage] = useState(1)
@@ -35,7 +39,9 @@ export default function ManageDoctorLeaves() {
     try {
       const filters: any = {}
       if (statusFilter) filters.trang_thai = statusFilter
-      if (dateFilter) filters.ngay = dateFilter
+      if (dateFromFilter) filters.tu_ngay = dateFromFilter
+      if (dateToFilter) filters.den_ngay = dateToFilter
+      if (appliedDoctorName) filters.ten_bac_si = appliedDoctorName
       const data = await adminDoctorLeavesService.list(filters)
       setLeaves(data)
       setCurrentPage(1)
@@ -44,11 +50,11 @@ export default function ManageDoctorLeaves() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter])
+  }, [statusFilter, dateFromFilter, dateToFilter, appliedDoctorName])
 
   useEffect(() => {
     fetchLeaves()
-  }, [fetchLeaves, dateFilter, statusFilter])
+  }, [fetchLeaves])
 
   const totalItems = leaves.length
   const totalPages = Math.ceil(totalItems / itemsPerPage)
@@ -77,19 +83,47 @@ export default function ManageDoctorLeaves() {
             </button>
           ))}
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center">
           <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            type="text"
+            placeholder="Tìm tên bác sĩ..."
+            value={doctorNameFilter}
+            onChange={(e) => setDoctorNameFilter(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && setAppliedDoctorName(doctorNameFilter)}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 min-w-[180px]"
           />
+          <div className="flex items-center gap-1 text-sm text-slate-500">
+            Từ
+            <input
+              type="date"
+              value={dateFromFilter}
+              onChange={(e) => setDateFromFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            />
+            đến
+            <input
+              type="date"
+              value={dateToFilter}
+              onChange={(e) => setDateToFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setAppliedDoctorName(doctorNameFilter)}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            Tìm kiếm
+          </button>
           <button
             type="button"
             onClick={() => {
               setStatusFilter('')
-              setDateFilter('')
-              fetchLeaves()
+              setDateFromFilter('')
+              setDateToFilter('')
+              setDoctorNameFilter('')
+              setAppliedDoctorName('')
             }}
             disabled={loading}
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -159,13 +193,22 @@ export default function ManageDoctorLeaves() {
                     </td>
                     <td className="p-4 text-right">
                       {leave.trang_thai === 'cho_duyet' ? (
-                        <button
-                          type="button"
-                          onClick={() => setApprovingLeave(leave)}
-                          className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-100"
-                        >
-                          Duyệt đơn
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setRejectingLeave(leave)}
+                            className="inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                          >
+                            Từ chối
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setApprovingLeave(leave)}
+                            className="inline-flex items-center justify-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-100"
+                          >
+                            Duyệt đơn
+                          </button>
+                        </div>
                       ) : (
                         <button
                           type="button"
@@ -203,6 +246,20 @@ export default function ManageDoctorLeaves() {
             apiMode="admin"
             leave={approvingLeave}
             onClose={() => setApprovingLeave(null)}
+            onDone={() => {
+              fetchLeaves()
+            }}
+          />,
+          document.body
+        )}
+
+      {rejectingLeave &&
+        createPortal(
+          <DoctorLeaveApprovalModal
+            apiMode="admin"
+            initialMode="reject-reason"
+            leave={rejectingLeave}
+            onClose={() => setRejectingLeave(null)}
             onDone={() => {
               fetchLeaves()
             }}

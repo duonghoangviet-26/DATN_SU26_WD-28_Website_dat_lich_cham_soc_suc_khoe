@@ -21,5 +21,5 @@ export function detectReceptionistMedicalPatchViolation(body = {}) {
 export async function denyDirectMedicalRecordPatch(req, res) {
   const fields = detectReceptionistMedicalPatchViolation(req.body)
   const suffix = fields.length ? `: ${fields.join(', ')}` : ''
-  return fail(res, 403, `Le tan khong duoc cap nhat truc tiep noi dung chuyen mon${suffix}`)
+  return fail(res, 403, `Lễ tân không được cập nhật trực tiếp nội dung chuyên môn${suffix}`)
 }

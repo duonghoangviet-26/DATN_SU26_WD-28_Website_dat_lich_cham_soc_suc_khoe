@@ -40,6 +40,13 @@ export interface PatientRecordDetail extends PatientRecordListItem {
     ghi_chu?: string | null
     ngay_tai_kham?: string | null
     ngay_tao: string
+    sinh_hieu?: {
+      can_nang?: number | null
+      chieu_cao?: number | null
+      huyet_ap?: string | null
+      nhiet_do?: number | null
+      nhip_tim?: number | null
+    } | null
     thuoc: Array<{
       ten_thuoc?: string
       lieu_luong?: string
@@ -50,6 +57,11 @@ export interface PatientRecordDetail extends PatientRecordListItem {
       ngay_ket_thuc?: string
       ghi_chu?: string | null
     } | string>
+    hinh_anh_noi_soi?: Array<{
+      url: string
+      mo_ta?: string | null
+      uploaded_at?: string | null
+    }>
   }
 }
 
@@ -81,6 +93,13 @@ export interface MedicalResultItem {
     ghi_chu?: string | null
     ngay_tai_kham?: string | null
     ngay_tao: string
+    sinh_hieu?: {
+      can_nang?: number | null
+      chieu_cao?: number | null
+      huyet_ap?: string | null
+      nhiet_do?: number | null
+      nhip_tim?: number | null
+    } | null
     thuoc: Array<{
       ten_thuoc?: string
       lieu_luong?: string
@@ -91,6 +110,11 @@ export interface MedicalResultItem {
       ngay_ket_thuc?: string
       ghi_chu?: string | null
     } | string>
+    hinh_anh_noi_soi?: Array<{
+      url: string
+      mo_ta?: string | null
+      uploaded_at?: string | null
+    }>
   }
 }
 
@@ -102,9 +126,9 @@ interface MedicalResultListResponse {
 }
 
 export const patientRecordsService = {
-  async getAppointments(status?: string): Promise<PatientRecordListResponse> {
+  async getAppointments(status?: string, limit: number = 100): Promise<PatientRecordListResponse> {
     const res = await axiosInstance.get<ApiResponse<PatientRecordListResponse>>('/patient/records', {
-      params: status ? { status } : undefined,
+      params: { ...(status ? { status } : {}), limit },
     })
     return res.data.data
   },
@@ -134,6 +158,16 @@ export const patientRecordsService = {
       `/patient/booking/${id}/cancel`,
       { ly_do }
     )
+    return res.data.data
+  },
+
+  async deleteAppointment(id: string): Promise<{ id: string }> {
+    const res = await axiosInstance.delete<ApiResponse<{ id: string }>>(`/patient/records/${id}`)
+    return res.data.data
+  },
+
+  async deleteBatchCancelledAppointments(): Promise<{ deletedCount: number }> {
+    const res = await axiosInstance.delete<ApiResponse<{ deletedCount: number }>>('/patient/records/batch-cancelled')
     return res.data.data
   },
 }

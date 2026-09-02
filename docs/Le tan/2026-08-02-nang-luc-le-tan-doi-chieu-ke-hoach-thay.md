@@ -20,7 +20,7 @@ Cột "Kế hoạch" là trạng thái tự khai trong tài liệu của thầy.
 | Task | Backend | Frontend lễ tân | Kiểm chứng |
 |---|---|---|---|
 | **LT-00** Contract trạng thái + quyền | ✅ | ✅ | `utils/appointmentStatus.js` trả `allowed_actions` / `lock_reason` / `queue_state`; `Appointments.tsx:83` dùng qua `hasAction()` |
-| **LT-01** Bác sĩ nghỉ đột xuất, chuyển bác sĩ | ✅ | ✅ | `reportDoctorUnavailable` + `bulkRescheduleAppointments`; UI có `bulkDoctorLeaveModal` |
+| **LT-01** Bác sĩ nghỉ đột xuất, chuyển bác sĩ | ✅ | ✅ | `reportDoctorUnavailable` + ~~`bulkRescheduleAppointments`~~ (**đã gỡ 2026-08-23** — crash 100% + bỏ qua rule mục 5/11/15; thay bằng luồng `de_xuat_doi` trên trang **Điều phối lịch hẹn**); UI có `bulkDoctorLeaveModal` |
 | **LT-02** Khách đến muộn | ✅ | ✅ | `markLateArrival` đủ 3 phương án `end_of_shift` / `nearest_available` / `tomorrow`; UI có `lateModal` |
 | **LT-03** Bác sĩ khám kéo dài | ⚠️ một phần | ⚠️ một phần | Cảnh báo có (`queueOverflow.service.js`, `doctor-statuses`); **chuyển lượt chờ sang bác sĩ khác CHƯA CÓ** |
 | **LT-04** Hủy lịch trả slot ngay | ✅ | ✅ | `releaseAppointmentSlot()` trong transaction; UI có `cancelModal` |
@@ -68,7 +68,7 @@ chưa có), và 1 task backend thiếu thật (LT-03).
 | Thấy cảnh báo quá tải / khám kéo dài | Tổng quan | cùng API trên | ✅ chạy |
 | Thấy lượt đang chờ + lịch chưa check-in bị ảnh hưởng | Tổng quan | cùng API trên | ✅ chạy |
 | Báo bác sĩ nghỉ đột xuất + sinh đề xuất dời hàng loạt | Lịch hẹn | `POST /appointments/doctor-unavailable` | ✅ chạy |
-| Dời hàng loạt | Lịch hẹn | `POST /appointments/bulk-reschedule` | ✅ chạy |
+| ~~Dời hàng loạt (Auto-fill)~~ | Lịch hẹn | ~~`POST /appointments/bulk-reschedule`~~ | **đã gỡ 2026-08-23** (crash 100% + bỏ qua rule mục 5/11/15). Thay bằng luồng `de_xuat_doi` trên trang **Điều phối lịch hẹn**. |
 | Xem danh sách chờ tiếp nhận | Lịch hẹn | `GET /appointments/pending-checkin` | ✅ chạy |
 | **Chuyển lượt đang chờ sang bác sĩ khác** | — | — | ❌ **chưa có cả BE lẫn FE** |
 

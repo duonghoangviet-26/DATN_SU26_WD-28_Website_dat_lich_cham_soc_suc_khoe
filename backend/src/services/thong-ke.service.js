@@ -163,6 +163,7 @@ export async function getDoanhThuTheoBacSi(range = {}) {
       },
     },
     { $unwind: '$_doctor' },
+    { $match: { '_doctor.trang_thai_duyet': { $ne: 'suspended' } } },
     {
       $lookup: {
         from: NguoiDung.collection.name,
@@ -681,32 +682,47 @@ export async function getChiTietDoanhThuBacSi(doctorId, range = {}) {
     },
   ])
 
-  // 4. Rating của bác sĩ
-  const ratingData = await DanhGia.aggregate([
+  const totalRevenue = revenueData.reduce((sum, item) => sum + item.doanh_thu, 0)
+  const totalAppointments = revenueData.reduce((sum, item) => sum + item.so_luot_kham, 0)
+
+  // 4. Lấy thông tin bác sĩ và rating tổng thể
+  const BacSiModel = mongoose.model('BacSi')
+  const bacSiRecord = await BacSiModel.findById(doctorObjectId)
+  let ten_bac_si = 'Bác sĩ chưa xác định'
+  
+  if (bacSiRecord && bacSiRecord.user_id) {
+    const userRecord = await NguoiDung.findById(bacSiRecord.user_id)
+    if (userRecord) {
+      ten_bac_si = userRecord.ho_ten
+    }
+  }
+
+  const ratingAgg = await DanhGia.aggregate([
     {
       $match: {
         doctor_id: doctorObjectId,
         status: 'visible',
+        ngay_xoa: null,
         ...dateRangeMatch('ngay_tao', range)
       }
     },
     {
       $group: {
         _id: null,
-        trung_binh: { $avg: '$so_sao' },
-        so_luong: { $sum: 1 }
+        trungBinhSao: { $avg: '$so_sao' },
+        tongSo: { $sum: 1 }
       }
     }
   ])
-  const rating = ratingData.length > 0 ? {
-    trung_binh: Math.round(ratingData[0].trung_binh * 10) / 10,
-    so_luong: ratingData[0].so_luong
-  } : { trung_binh: 0, so_luong: 0 }
 
-  const totalRevenue = revenueData.reduce((sum, item) => sum + item.doanh_thu, 0)
-  const totalAppointments = revenueData.reduce((sum, item) => sum + item.so_luot_kham, 0)
+  const ratingInfo = ratingAgg[0] || { trungBinhSao: 0, tongSo: 0 }
+  const rating = {
+    trung_binh: Math.round(ratingInfo.trungBinhSao * 10) / 10,
+    so_luong: ratingInfo.tongSo
+  }
 
   return {
+    ten_bac_si,
     chartData: revenueData,
     topServices,
     rating,
