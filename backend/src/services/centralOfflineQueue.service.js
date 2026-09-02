@@ -908,6 +908,14 @@ export async function ganKhachOfflineChoBacSi({
         { new: true, session },
       )
       if (!updatedEntry) throw loi(409, 'Lượt này vừa được người khác xử lý, vui lòng tải lại')
+
+      if (updatedEntry.appointment_id) {
+        await LichHen.updateOne(
+          { _id: updatedEntry.appointment_id, doctor_id: null },
+          { $set: { doctor_id: normalizedDoctorId } },
+          { session }
+        )
+      }
     })
   } finally {
     await session.endSession()

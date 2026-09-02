@@ -502,6 +502,13 @@ export async function createBillingInvoice(req, res) {
       // ở quầy) sẽ không có dấu vết ai thu. Chỉ ghi khi ĐÃ thu thật (paid); giao dịch chuyển
       // khoản `pending` chưa thu, không được ghi LT_XAC_NHAN_THANH_TOAN ở đây.
       if (paid) {
+        const apptId = caseItem.appointment?._id ?? caseItem.queue?.appointment_id ?? (caseItem.source === 'online' ? caseItem.reference_id : null)
+        if (apptId) {
+          await LichHen.updateOne(
+            { _id: apptId },
+            { $set: { payment_status: 'paid', thoi_diem_thanh_toan: new Date() } }
+          )
+        }
         await ghiNhatKyLeTan({
           hanhDong: 'LT_XAC_NHAN_THANH_TOAN',
           actorUserId: req.user.id,
