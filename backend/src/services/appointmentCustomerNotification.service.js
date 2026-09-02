@@ -78,14 +78,16 @@ export async function notifyAppointmentCustomerChange({
     appointment: customerContactSnapshot(appointment),
   }
 
-  const targetEmail = appointment.email_khach || appointment.user_id?.email
-  if (targetEmail && isMailConfigured()) {
-    // Truy vấn thêm chi tiết bác sĩ và phòng khám để hiển thị email chuyên nghiệp
-    const fullAppointment = await mongoose.model('LichHen').findById(appointment._id)
-      .populate({ path: 'doctor_id', select: 'ho_ten' })
-      .populate({ path: 'schedule_id', select: 'slots' })
-      .lean()
+  // Truy vấn thêm chi tiết bác sĩ, phòng khám và user (để lấy email nếu thiếu)
+  const fullAppointment = await mongoose.model('LichHen').findById(appointment._id)
+    .populate({ path: 'doctor_id', select: 'ho_ten' })
+    .populate({ path: 'schedule_id', select: 'slots' })
+    .populate({ path: 'user_id', select: 'email' })
+    .lean()
 
+  const targetEmail = appointment.email_khach || appointment.user_id?.email || fullAppointment?.user_id?.email
+
+  if (targetEmail && isMailConfigured()) {
     let doctorName = 'Chưa xác định'
     let roomNumber = 'Chưa phân phòng'
     if (fullAppointment) {
