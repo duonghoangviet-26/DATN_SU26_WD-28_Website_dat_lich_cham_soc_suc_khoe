@@ -455,9 +455,7 @@ function resolveAppointmentPaymentStatus({ appointment, invoice, payments }) {
   const prepaymentPayments = linkedPayments.filter((payment) => ['phi_dat_lich', 'dat_coc'].includes(payment.loai_thanh_toan))
   const hasLinkedFinancialRecord = Boolean(invoice) || linkedPayments.length > 0
 
-  // Lịch hẹn chỉ hiển thị khoản phí đặt lịch/phí khám trả trước. Các khoản
-  // `thanh_toan_bo_sung` thuộc hóa đơn sau khám và không được làm đổi nhãn này.
-  if (!hasLinkedFinancialRecord || prepaymentPayments.length === 0) {
+  if (!hasLinkedFinancialRecord) {
     return currentStatus
   }
 
@@ -497,7 +495,7 @@ function resolveAppointmentPaymentStatus({ appointment, invoice, payments }) {
   return currentStatus
 }
 
-async function enrichAppointmentsWithPaymentData(appointments, { persist = false } = {}) {
+export async function enrichAppointmentsWithPaymentData(appointments, { persist = false } = {}) {
   if (!Array.isArray(appointments) || appointments.length === 0) {
     return []
   }

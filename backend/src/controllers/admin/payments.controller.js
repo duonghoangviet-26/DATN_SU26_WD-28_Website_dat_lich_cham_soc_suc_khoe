@@ -204,12 +204,8 @@ async function syncAppointmentPaymentStatusFromPayment(payment, invoiceState = n
     return
   }
 
-  // `LichHen.payment_status` là trạng thái phí đặt lịch/phí khám trả trước.
-  // Khoản `thanh_toan_bo_sung` chỉ thuộc hóa đơn sau khám, không được ghi đè
-  // trạng thái đã trả trước của lịch hẹn.
-  if (!['phi_dat_lich', 'dat_coc'].includes(payment.loai_thanh_toan)) {
-    return
-  }
+  // Cho phép tất cả các loại thanh toán (bao gồm cả hóa đơn sau khám)
+  // cập nhật trạng thái thanh toán của lịch hẹn để đồng bộ.
 
   let nextPaymentStatus = 'unpaid'
   if (payment.status === 'refunded') {
@@ -276,7 +272,13 @@ export async function list(req, res) {
         .limit(limitNum)
         .lean(),
       ThanhToan.aggregate([
-        { $match: filter },
+        {
+          $match: (() => {
+            const summaryFilter = { ...filter }
+            delete summaryFilter.status
+            return summaryFilter
+          })(),
+        },
         {
           $group: {
             _id: null,

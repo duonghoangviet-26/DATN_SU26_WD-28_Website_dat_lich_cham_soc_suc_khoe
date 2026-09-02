@@ -461,7 +461,6 @@ export async function createBillingInvoice(req, res) {
     const pending = invoice._id ? await pendingPayment(invoice._id) : null
     if (pending) throw loi(409, 'Hóa đơn đang có giao dịch chuyển khoản chờ xác nhận; hãy xác nhận hoặc hủy giao dịch đó trước')
     const paidBefore = invoice._id ? await paidTotal(invoice._id) : 0
-    if (paidBefore > total) throw loi(409, 'Tổng hóa đơn mới nhỏ hơn số tiền đã thu')
 
     invoice.ho_so_benh_nhan_id = caseItem.patient_id
     invoice.specialty_id = caseItem.specialty_id
