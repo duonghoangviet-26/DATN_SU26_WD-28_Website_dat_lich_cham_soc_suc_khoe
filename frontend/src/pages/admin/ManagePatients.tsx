@@ -117,12 +117,21 @@ function InfoItem({ label, value }: { label: string; value?: string | number | n
 export default function ManagePatients() {
   const [patients, setPatients] = useState<AdminPatient[]>([])
   const [stats, setStats] = useState(EMPTY_STATS)
+  const [searchInput, setSearchInput] = useState('')
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setKeyword(searchInput.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(handler)
+  }, [searchInput])
 
   const [selectedPatient, setSelectedPatient] = useState<AdminPatient | null>(null)
   const [activeTab, setActiveTab] = useState<DetailTab>('info')
@@ -134,10 +143,17 @@ export default function ManagePatients() {
   const [activeImage, setActiveImage] = useState<{ url: string; mo_ta?: string | null } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
+  const [memberFilter, setMemberFilter] = useState<string | null>(null)
+
+  const filteredExamHistory = useMemo(() => {
+    if (!memberFilter) return examHistory
+    return examHistory.filter((item) =>
+      item.benh_nhan?.toLowerCase().includes(memberFilter.toLowerCase())
+    )
+  }, [examHistory, memberFilter])
 
   const loadPatients = useCallback(async () => {
     setLoading(true)
-    setError('')
     try {
       const [list, nextStats] = await Promise.all([
         adminPatientService.getAll({
@@ -152,7 +168,9 @@ export default function ManagePatients() {
       setPatients(list.data)
       setPagination({ total: list.pagination.total, totalPages: list.pagination.totalPages })
       setStats(nextStats)
+      setError('')
     } catch (err: any) {
+      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return
       setError(err.response?.data?.message || 'Không thể tải danh sách bệnh nhân')
     } finally {
       setLoading(false)
@@ -166,6 +184,7 @@ export default function ManagePatients() {
   async function openPatient(patient: AdminPatient, tab: DetailTab = 'info') {
     setSelectedPatient(patient)
     setActiveTab(tab)
+    setMemberFilter(null)
     setDetailLoading(true)
     try {
       const [detail, history, logs] = await Promise.all([
@@ -319,11 +338,8 @@ export default function ManagePatients() {
             <input
               className="input w-full pl-10 pr-4 bg-slate-50 border-slate-200 focus:bg-white focus:border-brand-500 transition-all text-sm rounded-xl py-2.5"
               placeholder="Tìm theo tên, email hoặc số điện thoại..."
-              value={keyword}
-              onChange={(event) => {
-                setKeyword(event.target.value)
-                setPage(1)
-              }}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
             />
           </div>
 
@@ -401,9 +417,6 @@ export default function ManagePatients() {
                     </td>
                     <td className="table-cell">
                       <p className="font-semibold text-slate-800">{patient.family_member_count} thành viên</p>
-                      <p className="text-xs text-slate-500">
-                        {patient.appointment_count} lịch hẹn · {patient.medical_record_count} hồ sơ khám
-                      </p>
                     </td>
                     <td className="table-cell">{formatDate(patient.last_exam_at)}</td>
                     <td className="table-cell">
@@ -499,7 +512,10 @@ export default function ManagePatients() {
                   <button
                     key={key}
                     className={`border-b-2 px-4 py-3 text-sm font-semibold ${activeTab === key ? 'border-brand-500 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                    onClick={() => setActiveTab(key as DetailTab)}
+                    onClick={() => {
+                      if (key !== 'history') setMemberFilter(null)
+                      setActiveTab(key as DetailTab)
+                    }}
                   >
                     {label}
                   </button>
@@ -525,7 +541,7 @@ export default function ManagePatients() {
                     <InfoItem label="Nhóm máu" value={selectedPatient.primary_member?.nhom_mau} />
                     <InfoItem label="Dị ứng" value={selectedPatient.primary_member?.di_ung} />
                     <InfoItem label="Bệnh nền" value={selectedPatient.primary_member?.benh_nen} />
-                    <InfoItem label="Số hồ sơ khám" value={selectedPatient.medical_record_count} />
+                    <InfoItem label="Kết quả khám" value={selectedPatient.medical_record_count} />
                   </div>
                   <div className="rounded-xl border border-slate-200 p-4">
                     <div className="mb-3 flex items-center justify-between">
@@ -537,11 +553,25 @@ export default function ManagePatients() {
                         <p className="text-sm text-slate-500">Chưa có thành viên gia đình.</p>
                       ) : (
                         selectedPatient.family_members?.map((member) => (
-                          <div key={member.id} className="rounded-lg bg-slate-50 p-3">
-                            <p className="font-semibold text-slate-800">{member.ho_ten}</p>
-                            <p className="text-xs text-slate-500">
-                              {member.quan_he || 'Chưa rõ quan hệ'} · {member.gioi_tinh ? GENDER_LABEL[member.gioi_tinh] : 'Chưa rõ giới tính'}
-                            </p>
+                          <div key={member.id} className="rounded-lg bg-slate-50 p-3 flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-800 truncate">{member.ho_ten}</p>
+                              <p className="text-xs text-slate-500 truncate">
+                                {member.quan_he || 'Chưa rõ quan hệ'} · {member.gioi_tinh ? GENDER_LABEL[member.gioi_tinh] : 'Chưa rõ giới tính'}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMemberFilter(member.ho_ten)
+                                setActiveTab('history')
+                              }}
+                              className="btn-secondary py-1 px-2.5 text-xs font-semibold text-brand-700 bg-brand-50 border-brand-200 hover:bg-brand-100 flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                              title={`Xem hồ sơ khám của ${member.ho_ten}`}
+                            >
+                              <Icon name="file-text" className="h-3.5 w-3.5 text-brand-600" />
+                              Xem bệnh án
+                            </button>
                           </div>
                         ))
                       )}
@@ -550,10 +580,28 @@ export default function ManagePatients() {
                 </div>
               ) : activeTab === 'history' ? (
                 <div className="space-y-4">
-                  {examHistory.length === 0 ? (
-                    <div className="empty-state">Chưa có lịch sử khám bệnh.</div>
+                  {memberFilter && (
+                    <div className="flex items-center justify-between rounded-xl bg-brand-50/80 border border-brand-200 px-4 py-2.5 text-xs font-semibold text-brand-800">
+                      <span className="flex items-center gap-2">
+                        <Icon name="file-text" className="h-4 w-4 text-brand-600" />
+                        Đang lọc bệnh án của thành viên: <strong className="text-brand-900 font-bold underline">{memberFilter}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setMemberFilter(null)}
+                        className="text-brand-700 hover:text-brand-900 font-bold underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Icon name="x" className="h-3.5 w-3.5" />
+                        Xem tất cả thành viên
+                      </button>
+                    </div>
+                  )}
+                  {filteredExamHistory.length === 0 ? (
+                    <div className="empty-state">
+                      {memberFilter ? `Chưa có lịch sử khám bệnh cho thành viên "${memberFilter}".` : 'Chưa có lịch sử khám bệnh.'}
+                    </div>
                   ) : (
-                    examHistory.map((item) => (
+                    filteredExamHistory.map((item) => (
                       <div key={item.id} className="rounded-xl border border-slate-200 p-4">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>

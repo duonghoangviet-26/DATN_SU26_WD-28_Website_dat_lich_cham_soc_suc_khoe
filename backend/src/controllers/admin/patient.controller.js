@@ -106,27 +106,56 @@ async function findPatientOr404(res, id) {
     role: { $in: PATIENT_ROLES },
     $nor: DOCTOR_ACCOUNT_SIGNAL_QUERY,
   }).lean()
-  if (!patient) {
-    fail(res, 404, 'Khong tim thay benh nhan')
-    return null
+
+  if (patient) {
+    const doctorProfile = await BacSi.exists({ user_id: patient._id })
+    if (doctorProfile) {
+      fail(res, 404, 'Khong tim thay benh nhan')
+      return null
+    }
+    return patient
   }
 
-  const doctorProfile = await BacSi.exists({ user_id: patient._id })
-  if (doctorProfile) {
-    fail(res, 404, 'Khong tim thay benh nhan')
-    return null
+  // Fallback check standalone walk-in profile in HoSoBenhNhan
+  const profile = await HoSoBenhNhan.findOne({ _id: id, trang_thai: 'active' }).lean()
+  if (profile) {
+    return {
+      _id: profile._id,
+      ho_ten: profile.ho_ten,
+      so_dien_thoai: profile.so_dien_thoai || null,
+      email: profile.email || null,
+      role: 'patient',
+      status: 'active',
+      ngay_tao: profile.ngay_tao || profile.createdAt || new Date(),
+      is_walk_in: true,
+      profile_obj: profile,
+    }
   }
 
-  return patient
+  fail(res, 404, 'Khong tim thay benh nhan')
+  return null
 }
 
 async function getPatientMemberIds(patientId) {
-  const families = await GiaDinh.find({ user_id: patientId }).select('_id').lean()
-  const familyIds = families.map((family) => family._id)
+  let families = await GiaDinh.find({ user_id: patientId }).select('_id').lean()
+  let familyIds = families.map((family) => family._id)
+
+  if (familyIds.length === 0) {
+    const linkedMember = await ThanhVien.findOne({
+      ngay_xoa: null,
+      $or: [{ ho_so_benh_nhan_id: patientId }, { tai_khoan_id: patientId }],
+    }).select('family_id').lean()
+
+    if (linkedMember?.family_id) {
+      familyIds = [linkedMember.family_id]
+    }
+  }
+
   const members = await ThanhVien.find({
     ngay_xoa: null,
     $or: [
       { tai_khoan_id: patientId },
+      { ho_so_benh_nhan_id: patientId },
       ...(familyIds.length > 0 ? [{ family_id: { $in: familyIds } }] : []),
     ],
   }).lean()
@@ -139,6 +168,49 @@ async function getPatientMemberIds(patientId) {
 }
 
 async function buildPatientSummary(patient) {
+  if (patient.is_walk_in && patient.profile_obj) {
+    const profile = patient.profile_obj
+    const { members } = await getPatientMemberIds(profile._id)
+
+    const appointments = await LichHen.find({ ho_so_benh_nhan_id: profile._id })
+      .select('_id ngay_kham')
+      .sort('-ngay_kham')
+      .limit(1)
+      .lean()
+    const appointmentCount = await LichHen.countDocuments({ ho_so_benh_nhan_id: profile._id })
+    const recordCount = await KetQuaKham.countDocuments({ ho_so_benh_nhan_id: profile._id })
+
+    const primaryMember = {
+      id: normalizeId(profile._id),
+      ho_ten: profile.ho_ten,
+      ngay_sinh: profile.ngay_sinh || null,
+      gioi_tinh: profile.gioi_tinh || null,
+      quan_he: 'Chủ hộ',
+      nhom_mau: profile.nhom_mau || null,
+      di_ung: profile.di_ung || null,
+      benh_nen: profile.benh_nen || null,
+      la_chu_ho: true,
+    }
+
+    const familyMemberList = members.length > 0 ? members : [primaryMember]
+
+    return {
+      id: normalizeId(profile._id),
+      email: profile.email || null,
+      ho_ten: profile.ho_ten,
+      so_dien_thoai: profile.so_dien_thoai || null,
+      anh_dai_dien: null,
+      role: 'patient',
+      status: 'active',
+      primary_member: primaryMember,
+      family_member_count: familyMemberList.length,
+      appointment_count: appointmentCount,
+      medical_record_count: recordCount,
+      last_exam_at: appointments[0]?.ngay_kham || null,
+      family_members: familyMemberList.map(normalizeMember),
+    }
+  }
+
   const { members, memberIds } = await getPatientMemberIds(patient._id)
   const appointmentQuery = {
     $or: [
@@ -322,16 +394,52 @@ export async function getPatients(req, res) {
     }
     if (status) query.status = status
 
-    const [patients, total] = await Promise.all([
-      NguoiDung.find(query)
-        .sort(sort)
-        .skip((pageNumber - 1) * limitNumber)
-        .limit(limitNumber)
-        .lean(),
-      NguoiDung.countDocuments(query),
-    ])
+    const users = await NguoiDung.find(query).lean()
+    const userPhoneSet = new Set(users.map((u) => u.so_dien_thoai).filter(Boolean))
 
-    const data = await Promise.all(patients.map(buildPatientSummary))
+    let virtualPatients = []
+    if (isDeleted !== 'true' && (!status || status === 'active')) {
+      const profileQuery = {
+        trang_thai: 'active',
+        tai_khoan_id: null,
+      }
+      if (keyword) {
+        profileQuery.$or = [
+          { ho_ten: { $regex: keyword, $options: 'i' } },
+          { so_dien_thoai: { $regex: keyword, $options: 'i' } },
+          { email: { $regex: keyword, $options: 'i' } },
+        ]
+      }
+
+      const standaloneProfiles = await HoSoBenhNhan.find(profileQuery).lean()
+      const filteredProfiles = standaloneProfiles.filter(
+        (p) => !p.so_dien_thoai || !userPhoneSet.has(p.so_dien_thoai)
+      )
+
+      virtualPatients = filteredProfiles.map((p) => ({
+        _id: p._id,
+        ho_ten: p.ho_ten,
+        so_dien_thoai: p.so_dien_thoai || null,
+        email: p.email || null,
+        role: 'patient',
+        status: 'active',
+        ngay_tao: p.ngay_tao || p.createdAt || new Date(),
+        is_walk_in: true,
+        profile_obj: p,
+      }))
+    }
+
+    const allPatients = [...users, ...virtualPatients]
+    const isDesc = sort.startsWith('-')
+    allPatients.sort((a, b) => {
+      const timeA = new Date(a.ngay_tao || 0).getTime()
+      const timeB = new Date(b.ngay_tao || 0).getTime()
+      return isDesc ? timeB - timeA : timeA - timeB
+    })
+
+    const total = allPatients.length
+    const paginatedPatients = allPatients.slice((pageNumber - 1) * limitNumber, pageNumber * limitNumber)
+    const data = await Promise.all(paginatedPatients.map(buildPatientSummary))
 
     return res.status(200).json({
       success: true,
@@ -357,12 +465,21 @@ export async function getPatientStatistics(req, res) {
       ...(doctorUserIds.length > 0 ? { _id: { $nin: doctorUserIds } } : {}),
       $nor: DOCTOR_ACCOUNT_SIGNAL_QUERY,
     }
-    const [total, active, locked, deleted] = await Promise.all([
-      NguoiDung.countDocuments({ ...baseQuery, ngay_xoa: null }),
-      NguoiDung.countDocuments({ ...baseQuery, status: 'active', ngay_xoa: null }),
-      NguoiDung.countDocuments({ ...baseQuery, status: 'locked', ngay_xoa: null }),
-      NguoiDung.countDocuments({ ...baseQuery, ngay_xoa: { $ne: null } }),
-    ])
+
+    const users = await NguoiDung.find({ ...baseQuery, ngay_xoa: null }).lean()
+    const userPhoneSet = new Set(users.map((u) => u.so_dien_thoai).filter(Boolean))
+
+    const standaloneProfiles = await HoSoBenhNhan.find({ trang_thai: 'active', tai_khoan_id: null }).lean()
+    const walkInCount = standaloneProfiles.filter((p) => !p.so_dien_thoai || !userPhoneSet.has(p.so_dien_thoai)).length
+
+    const activeUsers = users.filter((u) => u.status === 'active').length
+    const lockedUsers = users.filter((u) => u.status === 'locked').length
+    const deletedUsers = await NguoiDung.countDocuments({ ...baseQuery, ngay_xoa: { $ne: null } })
+
+    const total = users.length + walkInCount
+    const active = activeUsers + walkInCount
+    const locked = lockedUsers
+    const deleted = deletedUsers
 
     return ok(res, { total, active, locked, deleted }, 'Lay thong ke benh nhan thanh cong')
   } catch (error) {
@@ -409,6 +526,14 @@ export async function updatePatient(req, res) {
         if (!phoneRegex.test(phoneStr)) {
           return fail(res, 400, 'So dien thoai khong hop le (phai la 10 chu so hop le, bat dau bang 03, 05, 07, 08, 09 hoac +84)')
         }
+        const existingUser = await NguoiDung.findOne({
+          _id: { $ne: patient._id },
+          so_dien_thoai: phoneStr,
+          ngay_xoa: null,
+        })
+        if (existingUser) {
+          return fail(res, 400, 'Số điện thoại này đã được sử dụng bởi bệnh nhân khác')
+        }
         userUpdate.so_dien_thoai = phoneStr
       } else {
         userUpdate.so_dien_thoai = null
@@ -444,6 +569,52 @@ export async function updatePatient(req, res) {
     }
     if (memberUpdate.nhom_mau !== undefined && memberUpdate.nhom_mau !== null && !['A', 'B', 'AB', 'O'].includes(memberUpdate.nhom_mau)) {
       return fail(res, 400, 'Nhom mau benh nhan khong hop le')
+    }
+
+    if (patient.is_walk_in) {
+      const profileSyncData = {}
+      if (userUpdate.ho_ten) profileSyncData.ho_ten = userUpdate.ho_ten
+      if (userUpdate.so_dien_thoai !== undefined) {
+        profileSyncData.so_dien_thoai = userUpdate.so_dien_thoai
+        profileSyncData.so_dien_thoai_tim_kiem = userUpdate.so_dien_thoai
+      }
+      if (memberUpdate.ngay_sinh !== undefined) profileSyncData.ngay_sinh = memberUpdate.ngay_sinh
+      if (memberUpdate.gioi_tinh !== undefined) profileSyncData.gioi_tinh = memberUpdate.gioi_tinh
+      if (memberUpdate.nhom_mau !== undefined) profileSyncData.nhom_mau = memberUpdate.nhom_mau
+      if (memberUpdate.di_ung !== undefined) profileSyncData.di_ung = memberUpdate.di_ung
+      if (memberUpdate.benh_nen !== undefined) profileSyncData.benh_nen = memberUpdate.benh_nen
+
+      if (Object.keys(profileSyncData).length > 0) {
+        const oldProfile = patient.profile_obj || {}
+        await HoSoBenhNhan.findByIdAndUpdate(patient._id, { $set: profileSyncData }, { runValidators: true })
+
+        await NhatKyThaoTac.create({
+          nguoi_thuc_hien_id: req.user.id,
+          vai_tro: req.user.role,
+          hanh_dong: 'UPDATE_PATIENT',
+          loai_doi_tuong: 'patient',
+          doi_tuong_id: patient._id,
+          du_lieu_cu: pickChangedFields(oldProfile, profileSyncData, Object.keys(profileSyncData)).oldLogData,
+          du_lieu_moi: pickChangedFields(oldProfile, profileSyncData, Object.keys(profileSyncData)).newLogData,
+        })
+      }
+
+      const linkedMember = await ThanhVien.findOne({ ho_so_benh_nhan_id: patient._id })
+      if (linkedMember) {
+        const memberSync = {}
+        if (userUpdate.ho_ten) memberSync.ho_ten = userUpdate.ho_ten
+        if (memberUpdate.ngay_sinh !== undefined) memberSync.ngay_sinh = memberUpdate.ngay_sinh
+        if (memberUpdate.gioi_tinh !== undefined) memberSync.gioi_tinh = memberUpdate.gioi_tinh
+        if (memberUpdate.nhom_mau !== undefined) memberSync.nhom_mau = memberUpdate.nhom_mau
+        if (memberUpdate.di_ung !== undefined) memberSync.di_ung = memberUpdate.di_ung
+        if (memberUpdate.benh_nen !== undefined) memberSync.benh_nen = memberUpdate.benh_nen
+        if (Object.keys(memberSync).length > 0) {
+          await ThanhVien.findByIdAndUpdate(linkedMember._id, { $set: memberSync }, { runValidators: true })
+        }
+      }
+
+      const updated = await getPatientById(req, res)
+      return updated
     }
 
     if (!primaryMember) {
