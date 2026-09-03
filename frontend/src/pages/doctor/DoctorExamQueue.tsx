@@ -4,6 +4,7 @@ import PageHeader from '@/components/common/PageHeader'
 import Badge from '@/components/common/Badge'
 import Button from '@/components/common/Button'
 import Modal from '@/components/common/Modal'
+import ConfirmDialog from '@/components/common/ConfirmDialog'
 import Icon from '@/components/admin/icons'
 import TablePaginationFooter from '@/components/common/TablePaginationFooter'
 import ExamResultModal from '@/components/doctor/ExamResultModal'
@@ -322,12 +323,10 @@ export default function DoctorExamQueue() {
     }
   }
 
-  const [confirmQueueAction, setConfirmQueueAction] = useState<{ id: string; message: string } | null>(null)
-
-  async function runQueueAction(id: string, action: (id: string, force?: boolean) => Promise<unknown>, successMsg: string, force = false) {
+  async function runQueueAction(id: string, action: (id: string) => Promise<unknown>, successMsg: string) {
     setActionLoadingId(id)
     try {
-      await action(id, force)
+      await action(id)
       showToast(successMsg)
       if (action === doctorAppointmentService.intoRoomQueue) {
         navigate(`/doctor/exam/${id}`)
@@ -335,13 +334,6 @@ export default function DoctorExamQueue() {
       }
       load()
     } catch (e: any) {
-      if (e.response?.data?.requires_confirmation) {
-        setConfirmQueueAction({
-          id,
-          message: e.response.data.message || 'Có bệnh nhân khác đang đứng trước. Bạn có chắc chắn muốn gọi bệnh nhân này vào trước không?',
-        })
-        return
-      }
       showToast(extractApiMessage(e, 'Thao tác thất bại, vui lòng thử lại'), 'error')
     } finally {
       setRoomRefreshKey((value) => value + 1)
@@ -679,23 +671,7 @@ export default function DoctorExamQueue() {
         </div>
       </Modal>
 
-      {/* ConfirmDialog - Cảnh báo nhảy lượt gọi khám */}
-      {confirmQueueAction && (
-        <ConfirmDialog
-          isOpen={true}
-          title="⚠️ Cảnh báo thứ tự hàng đợi"
-          message={confirmQueueAction.message}
-          confirmText="Vẫn gọi vào khám"
-          cancelText="Hủy"
-          type="warning"
-          onConfirm={() => {
-            const targetId = confirmQueueAction.id
-            setConfirmQueueAction(null)
-            runQueueAction(targetId, doctorAppointmentService.intoRoomQueue, 'Bệnh nhân đã vào phòng', true)
-          }}
-          onClose={() => setConfirmQueueAction(null)}
-        />
-      )}
+
 
       {/* Toast — góc trên phải, tự mất sau 3 giây */}
       {toast && (

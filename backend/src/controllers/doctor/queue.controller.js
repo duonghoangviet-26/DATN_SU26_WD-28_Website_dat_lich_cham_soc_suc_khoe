@@ -307,34 +307,6 @@ export async function intoRoom(req, res) {
       return fail(res, 409, `Phòng chưa sẵn sàng (đang: ${room.trang_thai})`)
     }
 
-    // Cảnh báo nếu gọi nhảy lượt (bệnh nhân khác đang xếp trên do đến trước hoặc đúng giờ hơn)
-    const force = Boolean(req.body?.force)
-    if (!force) {
-      const waitingList = await HangDoi.find({
-        doctor_id: docId,
-        trang_thai: { $in: CON_HIEN_DIEN },
-      }).lean()
-
-      const { tinhBacUuTienDong, THU_TU_UU_TIEN } = await import('../../models/HangDoi.js')
-      waitingList.sort((a, b) => {
-        const bacA = THU_TU_UU_TIEN[tinhBacUuTienDong(a, now)] ?? 9
-        const bacB = THU_TU_UU_TIEN[tinhBacUuTienDong(b, now)] ?? 9
-        if (bacA !== bacB) return bacA - bacB
-        return new Date(a.checkin_time).getTime() - new Date(b.checkin_time).getTime()
-      })
-
-      const topPatient = waitingList[0]
-      if (topPatient && String(topPatient._id) !== String(entry._id)) {
-        return res.status(409).json({
-          success: false,
-          requires_confirmation: true,
-          top_patient_name: topPatient.ten_benh_nhan,
-          selected_patient_name: entry.ten_benh_nhan,
-          message: `Bệnh nhân "${topPatient.ten_benh_nhan}" đang xếp trên (đến trước / đúng giờ hẹn). Bạn có chắc chắn muốn gọi bệnh nhân "${entry.ten_benh_nhan}" vào trước không?`,
-        })
-      }
-    }
-
     // Khách đặt trước có thể check-in để giữ thứ tự, nhưng không được vào phòng khi
     // phí lịch hẹn chưa thanh toán. Walk-in được thu sau khám nên không áp dụng gate này.
     if (entry.appointment_id) {
