@@ -1,4 +1,4 @@
-import { LichHen, KetQuaKham, SinhHieuKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen, KetQuaKhamTai, KetQuaKhamMui, KetQuaKhamHong, HoSoBenhNhan, ThanhVien } from '../../models/index.js'
+import { LichHen, KetQuaKham, SinhHieuKham, DonThuoc, BacSi, NguoiDung, LichSuLichHen, KetQuaKhamTai, KetQuaKhamMui, KetQuaKhamHong, HoSoBenhNhan, ThanhVien, HoaDon } from '../../models/index.js'
 import { ok, fail } from '../../utils/response.js'
 import { buildSlotDateTime } from '../../utils/clinicTime.js'
 import { withOptionalTransaction } from '../../services/bookingPaymentState.service.js'
@@ -105,7 +105,7 @@ export async function listRecords(req, res) {
       da_co_ket_qua:  resultAppIds.has(a._id.toString()),
     }))
 
-    return ok(res, { total, page: Number(page), limit: Number(limit), data })
+    return ok(res, { total, page: Number(page), limit: Number(limit), server_time: new Date().toISOString(), data })
   } catch (err) {
     return fail(res, 500, err.message)
   }
@@ -290,13 +290,14 @@ export async function getRecord(req, res) {
     const a = await LichHen.findOne({ _id: req.params.id, ...userFilter }).lean()
     if (!a) return fail(res, 404, 'Không tìm thấy lịch hẹn')
 
-    const [doc, ketQua, taiResults, muiResults, hongResults, sinhHieu] = await Promise.all([
+    const [doc, ketQua, taiResults, muiResults, hongResults, sinhHieu, hoaDon] = await Promise.all([
       BacSi.findById(a.doctor_id).populate('user_id', 'ho_ten anh_dai_dien so_dien_thoai').select('user_id').lean(),
       a.status === 'completed' ? KetQuaKham.findOne({ appointment_id: a._id }).lean() : null,
       a.status === 'completed' ? KetQuaKhamTai.find({ appointment_id: a._id }).lean() : [],
       a.status === 'completed' ? KetQuaKhamMui.find({ appointment_id: a._id }).lean() : [],
       a.status === 'completed' ? KetQuaKhamHong.find({ appointment_id: a._id }).lean() : [],
       a.status === 'completed' ? SinhHieuKham.findOne({ appointment_id: a._id }).lean() : null,
+      HoaDon.findOne({ appointment_id: a._id }).lean(),
     ])
 
     let prescription = null
@@ -345,6 +346,15 @@ export async function getRecord(req, res) {
         sinh_hieu: sinhHieu || null,
         thuoc: prescription?.items ?? [],
         hinh_anh_noi_soi: hinhAnhNoiSoi,
+        dich_vu_phat_sinh: ketQua.dich_vu_phat_sinh || [],
+      } : null,
+      hoa_don: hoaDon ? {
+        so_hoa_don: hoaDon.so_hoa_don,
+        tong_tien_kham: hoaDon.tong_tien_kham ?? a.gia_kham ?? 0,
+        tong_tien_phat_sinh: hoaDon.tong_tien_phat_sinh ?? 0,
+        tong_thanh_toan: hoaDon.tong_thanh_toan ?? a.gia_kham ?? 0,
+        trang_thai_hoa_don: hoaDon.trang_thai_hoa_don,
+        chi_tiet_thu_phi: hoaDon.chi_tiet_thu_phi ?? [],
       } : null,
     })
   } catch (err) {

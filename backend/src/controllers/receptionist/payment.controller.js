@@ -273,48 +273,44 @@ export const createMockVnpaySession = async (req, res) => {
       return fail(res, 409, `Chỉ tạo QR thanh toán cho lịch đang chờ xử lý (hiện tại: ${appointment.status})`)
     }
 
-    const gateway = getGatewayResponseObject(payment)
-    const existingExpiry = toDateOrNull(gateway.expires_at)
-    const canReuse =
-      gateway.provider === 'vnpay' &&
-      gateway.payment_url &&
-      existingExpiry &&
-      existingExpiry.getTime() > Date.now() &&
-      gateway.mock_status !== 'paid'
+    const now = getRealTime()
+    let expiresAt = toDateOrNull(appointment.payment_deadline)
 
-    if (!canReuse) {
-      const now = getRealTime()
-      const expiresAt = new Date(now.getTime() + VNPAY_SESSION_MINUTES * 60 * 1000)
-      const vnpTxnRef = `VNPAY-${payment.ma_giao_dich}-${now.getTime().toString().slice(-6)}`
-      const paymentUrl = buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, createdAt: now, expiresAt })
-
-      payment.gateway_response = {
-        ...gateway,
-        provider: 'vnpay',
-        mode: 'mock',
-        merchant_name: 'ViteFamily',
-        merchant_code: 'VITAFAMILY',
-        note: invoice?.so_hoa_don || payment.ma_giao_dich,
-        bank_code: 'VNBANK',
-        locale: 'vn',
-        vnp_txn_ref: vnpTxnRef,
-        payment_url: paymentUrl,
-        qr_payload: paymentUrl,
-        expires_at: expiresAt.toISOString(),
-        session_created_at: now.toISOString(),
-        mock_status: 'waiting_for_customer',
-      }
-      await payment.save()
-
+    if (!expiresAt || isNaN(expiresAt.getTime())) {
+      expiresAt = new Date(now.getTime() + VNPAY_SESSION_MINUTES * 60 * 1000)
       appointment.payment_deadline = expiresAt
       await appointment.save()
+    }
 
-      if (appointment.schedule_id && appointment.slot_id) {
-        await LichLamViec.findOneAndUpdate(
-          { _id: appointment.schedule_id, 'slots._id': appointment.slot_id, 'slots.status': 'pending_payment' },
-          { $set: { 'slots.$.pending_expired_at': expiresAt } }
-        )
-      }
+    const gateway = getGatewayResponseObject(payment)
+    const createdAt = payment.ngay_tao ? new Date(payment.ngay_tao) : (appointment.createdAt ? new Date(appointment.createdAt) : new Date(expiresAt.getTime() - VNPAY_SESSION_MINUTES * 60 * 1000))
+    const vnpTxnRef = gateway.vnp_txn_ref || `VNPAY-${payment.ma_giao_dich}-${createdAt.getTime().toString().slice(-6)}`
+
+    const paymentUrl = buildMockVnpayUrl({ payment, appointment, invoice, vnpTxnRef, createdAt, expiresAt })
+
+    payment.gateway_response = {
+      ...gateway,
+      provider: 'vnpay',
+      mode: 'mock',
+      merchant_name: 'ViteFamily',
+      merchant_code: 'VITAFAMILY',
+      note: invoice?.so_hoa_don || payment.ma_giao_dich,
+      bank_code: 'VNBANK',
+      locale: 'vn',
+      vnp_txn_ref: vnpTxnRef,
+      payment_url: paymentUrl,
+      qr_payload: paymentUrl,
+      expires_at: expiresAt.toISOString(),
+      session_created_at: createdAt.toISOString(),
+      mock_status: 'waiting_for_customer',
+    }
+    await payment.save()
+
+    if (appointment.schedule_id && appointment.slot_id) {
+      await LichLamViec.findOneAndUpdate(
+        { _id: appointment.schedule_id, 'slots._id': appointment.slot_id, 'slots.status': 'pending_payment' },
+        { $set: { 'slots.$.pending_expired_at': expiresAt } }
+      )
     }
 
     return ok(res, serializePaymentStatus({ payment, appointment, invoice }), 'Tạo session VNPAY mock thành công')

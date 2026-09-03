@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 
 export interface QueueTicketData {
-  ticketType: 'kham' | 'cho_dieu_phoi';
+  ticketType: 'kham' | 'cho_dieu_phoi' | 'da_gan_bac_si';
   patientName: string;
   queueNumber: string;
   doctorName?: string | null;

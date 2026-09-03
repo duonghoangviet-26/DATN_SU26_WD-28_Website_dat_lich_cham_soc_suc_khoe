@@ -5,6 +5,7 @@ import { ThanhToan, HoaDon, LichHen, LichLamViec, LichSuLichHen, NguoiDung, BacS
 import { tinhTrangThaiHoaDon } from '../../services/hoaDon.service.js'
 import { sendBookingSuccessEmail } from '../../services/mail.service.js'
 import { xuLyThanhToanTrungLichNghi } from '../../services/appointmentReschedule.service.js'
+import { expirePendingBookingPayment, withOptionalTransaction } from '../../services/bookingPaymentState.service.js'
 import { ok, fail } from '../../utils/response.js'
 import {
   emitAdminRealtime,
@@ -153,10 +154,19 @@ function buildMockVnpayUrl({
   return `${vnpUrl}?${sortedParams.toString()}`
 }
 
-async function loadOwnedPaymentBundle(paymentId, userId, session = null) {
-  const paymentQuery = ThanhToan.findById(paymentId)
-  if (session) paymentQuery.session(session)
-  const payment = await paymentQuery
+async function loadOwnedPaymentBundle(id, userId, session = null) {
+  let payment = null
+  if (isValidObjectId(id)) {
+    const queryById = ThanhToan.findById(id)
+    if (session) queryById.session(session)
+    payment = await queryById
+  }
+
+  if (!payment && isValidObjectId(id)) {
+    const queryByAppt = ThanhToan.findOne({ appointment_id: id }).sort({ ngay_tao: -1 })
+    if (session) queryByAppt.session(session)
+    payment = await queryByAppt
+  }
 
   if (!payment) {
     return { error: { status: 404, message: 'Khong tim thay giao dich' } }
@@ -417,67 +427,80 @@ export async function createMockVnpaySession(req, res) {
     }
 
     const { payment, appointment, invoice } = bundle
-    if (payment.status !== 'pending') {
-      return fail(res, 409, 'Giao dich nay khong con o trang thai cho thanh toan')
+    if (payment.status !== 'pending' || appointment.status === 'cancelled') {
+      return fail(res, 409, 'Ghi nhận giao dịch không ở trạng thái chờ thanh toán')
+    }
+
+    // Single source of truth cho thời gian hết hạn thanh toán: appointment.payment_deadline
+    const now = getRealTime()
+    let expiresAt = toDateOrNull(appointment.payment_deadline)
+
+    if (!expiresAt || isNaN(expiresAt.getTime())) {
+      expiresAt = new Date(now.getTime() + VNPAY_SESSION_MINUTES * 60 * 1000)
+      appointment.payment_deadline = expiresAt
+      await appointment.save()
+    }
+
+    const isDeadlineExpired = expiresAt.getTime() <= now.getTime()
+    if (isDeadlineExpired) {
+      try {
+        await withOptionalTransaction((session) =>
+          expirePendingBookingPayment({
+            appointmentId: appointment._id,
+            actorRole: 'system',
+            channel: 'patient_vnpay_session_check_expired',
+            reason: 'Quá hạn 15 phút thanh toán - tự động hủy lịch',
+            session,
+          })
+        )
+      } catch (_) {}
+      return fail(res, 409, 'Lịch hẹn đã quá hạn 15 phút thanh toán và bị hủy. Vui lòng đặt lịch mới.')
     }
 
     const gateway = getGatewayResponseObject(payment)
-    const existingExpiry = toDateOrNull(gateway.expires_at)
-    const canReuse =
-      gateway.provider === 'vnpay' &&
-      gateway.payment_url &&
-      existingExpiry &&
-      existingExpiry.getTime() > Date.now() &&
-      gateway.mock_status !== 'paid'
+    const createdAt = payment.ngay_tao ? new Date(payment.ngay_tao) : (appointment.createdAt ? new Date(appointment.createdAt) : new Date(expiresAt.getTime() - VNPAY_SESSION_MINUTES * 60 * 1000))
+    const vnpTxnRef = gateway.vnp_txn_ref || `VNPAY-${payment.ma_giao_dich}-${createdAt.getTime().toString().slice(-6)}`
 
-    if (!canReuse) {
-      const now = getRealTime()
-      const expiresAt = new Date(now.getTime() + VNPAY_SESSION_MINUTES * 60 * 1000)
-      const vnpTxnRef = `VNPAY-${payment.ma_giao_dich}-${now.getTime().toString().slice(-6)}`
-      const paymentUrl = buildMockVnpayUrl({
-        payment,
-        appointment,
-        invoice,
-        vnpTxnRef,
-        createdAt: now,
-        expiresAt,
-      })
+    const paymentUrl = buildMockVnpayUrl({
+      payment,
+      appointment,
+      invoice,
+      vnpTxnRef,
+      createdAt,
+      expiresAt,
+    })
 
-      payment.gateway_response = {
-        ...gateway,
-        provider: 'vnpay',
-        mode: 'mock',
-        merchant_name: 'ViteFamily',
-        merchant_code: 'VITAFAMILY',
-        note: invoice?.so_hoa_don || payment.ma_giao_dich,
-        bank_code: 'VNBANK',
-        locale: 'vn',
-        vnp_txn_ref: vnpTxnRef,
-        payment_url: paymentUrl,
-        qr_payload: paymentUrl,
-        expires_at: expiresAt.toISOString(),
-        session_created_at: now.toISOString(),
-        mock_status: 'waiting_for_customer',
-      }
-      await payment.save()
+    payment.gateway_response = {
+      ...gateway,
+      provider: 'vnpay',
+      mode: 'mock',
+      merchant_name: 'ViteFamily',
+      merchant_code: 'VITAFAMILY',
+      note: invoice?.so_hoa_don || payment.ma_giao_dich,
+      bank_code: 'VNBANK',
+      locale: 'vn',
+      vnp_txn_ref: vnpTxnRef,
+      payment_url: paymentUrl,
+      qr_payload: paymentUrl,
+      expires_at: expiresAt.toISOString(),
+      session_created_at: createdAt.toISOString(),
+      mock_status: 'waiting_for_customer',
+    }
+    await payment.save()
 
-      appointment.payment_deadline = expiresAt
-      await appointment.save()
-
-      if (appointment.schedule_id && appointment.slot_id) {
-        await LichLamViec.findOneAndUpdate(
-          {
-            _id: appointment.schedule_id,
-            'slots._id': appointment.slot_id,
-            'slots.status': 'pending_payment',
+    if (appointment.schedule_id && appointment.slot_id) {
+      await LichLamViec.findOneAndUpdate(
+        {
+          _id: appointment.schedule_id,
+          'slots._id': appointment.slot_id,
+          'slots.status': 'pending_payment',
+        },
+        {
+          $set: {
+            'slots.$.pending_expired_at': expiresAt,
           },
-          {
-            $set: {
-              'slots.$.pending_expired_at': expiresAt,
-            },
-          }
-        )
-      }
+        }
+      )
     }
 
     return ok(res, serializePaymentStatus({ payment, appointment, invoice }), 'Tao session VNPAY mock thanh cong')
