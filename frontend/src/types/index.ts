@@ -1088,6 +1088,7 @@ export interface DoctorAppointmentDetail {
     id: string | number; // Mongo ObjectId từ API; mock cũ có thể dùng number
     ma_lich_hen?: string | null;
     loai_lich_hen?: 'kham_moi' | 'tai_kham';
+    lich_hen_goc_id?: string | null;
     is_tai_kham?: boolean;
     benh_nhan: string;
     benh_nhan_id: string | number;

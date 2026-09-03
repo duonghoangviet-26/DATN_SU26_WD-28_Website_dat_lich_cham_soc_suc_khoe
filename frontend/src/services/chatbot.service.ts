@@ -19,7 +19,7 @@ export const fallbackLLM = async (prompt: string, _contextData?: string): Promis
   }
 
   try {
-    const res = await axiosInstance.post('/chatbot/message', { message: prompt })
+    const res = await axiosInstance.post('/chatbot/message', { message: prompt }, { timeout: 30000 })
     if (res.data && res.data.success && res.data.data.reply) {
       return res.data.data.reply
     }

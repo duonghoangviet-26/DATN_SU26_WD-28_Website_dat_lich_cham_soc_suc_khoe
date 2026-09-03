@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import QRCode from 'qrcode'
 
 import { Star } from 'lucide-react'
 import Breadcrumb from '@/components/common/Breadcrumb'
@@ -30,6 +31,7 @@ import {
 } from '@/services/patient-records.service'
 import {
   patientBookingService,
+  type PatientPaymentStatusResult,
   type FamilyGroup,
   type FamilyMember,
 } from '@/services/patient-booking.service'
@@ -255,6 +257,97 @@ export default function Profile() {
   const [rescheduleAppId, setRescheduleAppId] = useState<string | null>(null)
   const [refundHelpAppId, setRefundHelpAppId] = useState<string | null>(null)
 
+  // Ticker thời gian thực đếm ngược 15 phút cho lịch hẹn pending
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const [serverTimeOffset, setServerTimeOffset] = useState(0)
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  function getPaymentDeadlineCountdown(deadline?: string | null, currentMs: number = Date.now(), offsetMs: number = 0) {
+    if (!deadline) return null
+    const currentServerMs = currentMs + offsetMs
+    const distance = new Date(deadline).getTime() - currentServerMs
+    if (distance <= 0) return null
+    const totalSeconds = Math.floor(distance / 1000)
+    const mins = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
+    const secs = String(totalSeconds % 60).padStart(2, '0')
+    return `${mins}:${secs}`
+  }
+
+  // Modal Thanh toán lại VNPAY
+  const [payModalApp, setPayModalApp] = useState<PatientRecordListItem | null>(null)
+  const [paySnapshot, setPaySnapshot] = useState<PatientPaymentStatusResult | null>(null)
+  const [payLoading, setPayLoading] = useState(false)
+  const [payQrUrl, setPayQrUrl] = useState('')
+
+  async function handleOpenPayModal(app: PatientRecordListItem) {
+    setPayModalApp(app)
+    setPaySnapshot(null)
+    setPayQrUrl('')
+    setPayLoading(true)
+    try {
+      const data = await patientBookingService.createVnpaySession(app.id)
+      setPaySnapshot(data)
+      if (data?.server_time) {
+        setServerTimeOffset(new Date(data.server_time).getTime() - Date.now())
+      }
+      if (data?.gateway?.expires_at) {
+        setAppointments((prev) =>
+          prev.map((item) => (item.id === app.id ? { ...item, payment_deadline: data.gateway.expires_at } : item))
+        )
+      }
+    } catch (err: any) {
+      setToast(err.response?.data?.message || err.message || 'Lịch hẹn đã quá hạn 15 phút và bị hủy.')
+      setPayModalApp(null)
+      loadAppointments()
+    } finally {
+      setPayLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!paySnapshot?.gateway?.qr_payload) {
+      setPayQrUrl('')
+      return
+    }
+    let cancelled = false
+    QRCode.toDataURL(paySnapshot.gateway.qr_payload, {
+      width: 280,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    })
+      .then((url) => {
+        if (!cancelled) setPayQrUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) setPayQrUrl('')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [paySnapshot?.gateway?.qr_payload])
+
+  useEffect(() => {
+    if (!payModalApp || paySnapshot?.payment_status === 'paid') return
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const snapshot = await patientBookingService.getPaymentStatus(payModalApp.id)
+        setPaySnapshot(snapshot)
+        if (snapshot.payment_status === 'paid' && snapshot.appointment_status === 'confirmed') {
+          setToast('Thanh toán VNPAY thành công!')
+          setPayModalApp(null)
+          loadAppointments()
+        }
+      } catch (_) {}
+    }, 5000)
+
+    return () => window.clearInterval(intervalId)
+  }, [payModalApp, paySnapshot?.payment_status])
+
   const ownerMemberId = familyGroup?.members?.find((m) => m.la_chu_ho)?.id || null
   const [appStatusFilter, setAppStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all')
   const [activeEndoscopyImage, setActiveEndoscopyImage] = useState<{ url: string; mo_ta?: string | null } | null>(null)
@@ -318,6 +411,9 @@ export default function Profile() {
   async function loadAppointments() {
     try {
       const result = await patientRecordsService.getAppointments()
+      if (result?.server_time) {
+        setServerTimeOffset(new Date(result.server_time).getTime() - Date.now())
+      }
       setAppointments(Array.isArray(result?.data) ? result.data : [])
     } catch (error: any) {
       setToast(error.response?.data?.message || error.message || 'Không tải được lịch hẹn của bạn.')
@@ -1033,113 +1129,160 @@ export default function Profile() {
                   </div>
                 ) : (
                   <>
-                    {paginatedAppointments.map((appointment) => (
-                      <div
-                        key={appointment.id}
-                      className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:border-brand-100"
-                    >
-                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                              Mã: {appointment.id.slice(-6).toUpperCase()}
-                            </span>
-                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${getStatusBadge(appointment.status)}`}>
-                              {getStatusLabel(appointment.status)}
-                            </span>
-                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600">
-                              {getPaymentLabel(appointment.payment_status)}
-                            </span>
-                          </div>
+                    {paginatedAppointments.map((appointment) => {
+                      const deadlineCountdown = getPaymentDeadlineCountdown(appointment.payment_deadline, nowMs, serverTimeOffset)
+                      const canPayNow = appointment.status === 'pending' && appointment.payment_status === 'unpaid' && Boolean(deadlineCountdown)
+                      const isExpiredPending = appointment.status === 'pending' && appointment.payment_status === 'unpaid' && !deadlineCountdown
+                      const isCancelledOrNoShow = ['cancelled', 'no_show', 'skipped'].includes(appointment.status)
+                      const isPast = isAppointmentInPast(appointment.ngay_kham, appointment.gio_kham)
+                      const isNormalValidAppointment = ['pending', 'confirmed'].includes(appointment.status) && !isExpiredPending && !isPast
 
-                          <h4 className="text-sm font-bold text-slate-800">
-                            {appointment.ten_dich_vu || 'Khám lâm sàng Tai Mũi Họng'}
-                          </h4>
-                          <p className="text-xs text-slate-600 font-medium">
-                            👤 Bệnh nhân: <span className="font-bold text-slate-800">{appointment.ten_khach || user?.ho_ten}</span>{' '}
-                            {appointment.member_id ? (
-                              <span className="inline-flex items-center rounded bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 ml-1">
-                                Thành viên gia đình
-                              </span>
-                            ) : appointment.ten_khach && appointment.ten_khach !== user?.ho_ten ? (
-                              <span className="inline-flex items-center rounded bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ml-1">
-                                Đặt hộ người thân
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ml-1">
-                                Bản thân
-                              </span>
-                            )}
-                            {appointment.so_dien_thoai_khach && (
-                              <span className="text-slate-500 font-normal ml-2">
-                                • SĐT: <strong className="text-slate-700">{appointment.so_dien_thoai_khach}</strong>
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            Bác sĩ phụ trách: <span className="font-semibold text-slate-700">{appointment.bac_si.ho_ten}</span>
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            Thời gian: <span className="font-semibold text-brand-600">{appointment.gio_kham}</span>, ngày {new Date(appointment.ngay_kham).toLocaleDateString('vi-VN')}
-                          </p>
-                        </div>
+                      return (
+                        <div
+                          key={appointment.id}
+                          className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:border-brand-100 hover:shadow-md"
+                        >
+                          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                            <div className="space-y-2 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                                  Mã: {appointment.id.slice(-6).toUpperCase()}
+                                </span>
 
-                        <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-3 md:border-t-0 md:pt-0">
-                          <div className="text-left md:text-right">
-                            <p className="text-[10px] font-semibold uppercase text-slate-400">Phí thanh toán</p>
-                            <p className="text-sm font-extrabold text-slate-800">{appointment.gia_kham.toLocaleString('vi-VN')} đ</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleOpenAppointmentDetail(appointment.id)}
-                              disabled={detailLoading}
-                              className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
-                            >
-                              {detailLoading ? 'Đang tải...' : appointment.status === 'completed' ? 'Xem kết quả' : 'Chi tiết'}
-                            </button>
-                            {['cancelled', 'no_show', 'skipped'].includes(appointment.status) && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteAppointment(appointment.id)}
-                                className="px-3 py-1.5 rounded-lg border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition flex items-center gap-1"
-                                title="Xóa lịch hẹn đã hủy này khỏi danh sách của bạn"
-                              >
-                                <span className="text-xs">🗑️</span> Xóa
-                              </button>
-                            )}
-                            {['pending', 'confirmed'].includes(appointment.status) && !isAppointmentInPast(appointment.ngay_kham, appointment.gio_kham) && (
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="secondary"
-                                  onClick={() => setRescheduleAppId(appointment.id)}
-                                  className="border-blue-100 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                                >
-                                  Dời lịch
-                                </Button>
-                                {appointment.payment_status === 'paid' ? (
-                                  <Button
-                                    variant="secondary"
-                                    onClick={() => setRefundHelpAppId(appointment.id)}
-                                    className="border-red-100 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
-                                  >
-                                    Hủy lịch
-                                  </Button>
+                                {isExpiredPending ? (
+                                  <span className="inline-flex items-center rounded-full bg-red-50 text-red-700 border border-red-200 px-2.5 py-0.5 text-[10px] font-bold">
+                                    ⚠️ Quá hạn 15 phút - Đã tự động hủy
+                                  </span>
                                 ) : (
-                                  <Button
-                                    variant="secondary"
-                                    onClick={() => handleCancelClick(appointment.id)}
-                                    className="border-red-100 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
-                                  >
-                                    Hủy lịch
-                                  </Button>
+                                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${getStatusBadge(appointment.status)}`}>
+                                    {getStatusLabel(appointment.status)}
+                                  </span>
+                                )}
+
+                                <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600">
+                                  {getPaymentLabel(appointment.payment_status)}
+                                </span>
+
+                                {canPayNow && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-0.5 text-[10px] font-bold animate-pulse">
+                                    ⏱️ Giữ chỗ còn {deadlineCountdown}
+                                  </span>
                                 )}
                               </div>
-                            )}
+
+                              <h4 className="text-base font-bold text-slate-800">
+                                {appointment.ten_dich_vu || 'Khám lâm sàng Tai Mũi Họng'}
+                              </h4>
+                              <p className="text-xs text-slate-600 font-medium">
+                                👤 Bệnh nhân: <span className="font-bold text-slate-800">{appointment.ten_khach || user?.ho_ten}</span>{' '}
+                                {appointment.member_id ? (
+                                  <span className="inline-flex items-center rounded bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 ml-1">
+                                    Thành viên gia đình
+                                  </span>
+                                ) : appointment.ten_khach && appointment.ten_khach !== user?.ho_ten ? (
+                                  <span className="inline-flex items-center rounded bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ml-1">
+                                    Đặt hộ người thân
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ml-1">
+                                    Bản thân
+                                  </span>
+                                )}
+                                {appointment.so_dien_thoai_khach && (
+                                  <span className="text-slate-500 font-normal ml-2">
+                                    • SĐT: <strong className="text-slate-700">{appointment.so_dien_thoai_khach}</strong>
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                Bác sĩ phụ trách: <span className="font-semibold text-slate-700">{appointment.bac_si.ho_ten}</span>
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                Thời gian: <span className="font-semibold text-brand-600">{appointment.gio_kham}</span>, ngày {new Date(appointment.ngay_kham).toLocaleDateString('vi-VN')}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col items-start md:items-end gap-3 border-t border-slate-100 pt-3 md:border-t-0 md:pt-0">
+                              <div className="text-left md:text-right">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Phí thanh toán</p>
+                                <p className="text-base font-extrabold text-slate-900">{appointment.gia_kham.toLocaleString('vi-VN')} đ</p>
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-start md:justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAppointmentDetail(appointment.id)}
+                                  disabled={detailLoading}
+                                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs"
+                                >
+                                  {detailLoading ? 'Đang tải...' : appointment.status === 'completed' ? 'Xem kết quả' : 'Chi tiết'}
+                                </button>
+
+                                {canPayNow && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenPayModal(appointment)}
+                                    className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95"
+                                    title="Thanh toán VNPAY ngay để giữ chỗ lượt khám này"
+                                  >
+                                    <span>💳 Thanh toán ngay</span>
+                                    <span className="bg-teal-800/60 px-1.5 py-0.5 rounded text-[10px] font-mono tracking-tight">{deadlineCountdown}</span>
+                                  </button>
+                                )}
+
+                                {isNormalValidAppointment && (
+                                  <>
+                                    <Button
+                                      variant="secondary"
+                                      onClick={() => setRescheduleAppId(appointment.id)}
+                                      className="border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                                    >
+                                      Dời lịch
+                                    </Button>
+                                    {appointment.payment_status === 'paid' ? (
+                                      <Button
+                                        variant="secondary"
+                                        onClick={() => setRefundHelpAppId(appointment.id)}
+                                        className="border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                      >
+                                        Hủy lịch
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        variant="secondary"
+                                        onClick={() => handleCancelClick(appointment.id)}
+                                        className="border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                      >
+                                        Hủy lịch
+                                      </Button>
+                                    )}
+                                  </>
+                                )}
+
+                                {(isExpiredPending || isCancelledOrNoShow) && (
+                                  <>
+                                    <Link
+                                      to="/booking"
+                                      className="px-3.5 py-1.5 rounded-xl border border-teal-200 bg-teal-50 text-xs font-bold text-teal-700 hover:bg-teal-100 transition inline-flex items-center gap-1 shadow-2xs"
+                                    >
+                                      🔄 Đặt lịch mới
+                                    </Link>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteAppointment(appointment.id)}
+                                      className="px-3 py-1.5 rounded-xl border border-red-200 bg-red-50/50 text-xs font-semibold text-red-600 hover:bg-red-100 hover:border-red-300 transition flex items-center gap-1"
+                                      title="Xóa lịch hẹn này khỏi danh sách của bạn"
+                                    >
+                                      <span className="text-xs">🗑️</span> Xóa
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      )
+                    })}
                   {totalPages > 0 && (
                     <div className="pt-2">
                       <Pagination
@@ -2254,14 +2397,77 @@ export default function Profile() {
                 </div>
               )}
 
-              <div className="flex justify-between items-center bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Chi phí khám</p>
-                  <p className="text-xs text-slate-500">Đã thanh toán online</p>
+              {/* Bảng kê chi phí dịch vụ khám & thanh toán */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <span>🧾</span> Chi phí dịch vụ khám
+                  </p>
+                  {selectedAppointment.hoa_don?.so_hoa_don && (
+                    <span className="text-[10px] font-mono font-semibold text-slate-400 bg-slate-200/60 px-2 py-0.5 rounded">
+                      HĐ: {selectedAppointment.hoa_don.so_hoa_don}
+                    </span>
+                  )}
                 </div>
-                <p className="text-lg font-black text-brand-600">
-                  {selectedAppointment.gia_kham.toLocaleString('vi-VN')} đ
-                </p>
+
+                <div className="space-y-2 text-xs">
+                  {/* Phí khám ban đầu */}
+                  <div className="flex justify-between items-center text-slate-700 font-medium">
+                    <span>Phí dịch vụ khám ({selectedAppointment.ten_dich_vu || 'Khám chuyên khoa'})</span>
+                    <span className="font-semibold text-slate-800">
+                      {(selectedAppointment.hoa_don?.tong_tien_kham ?? selectedAppointment.gia_kham).toLocaleString('vi-VN')} đ
+                    </span>
+                  </div>
+
+                  {/* Chi tiết các dịch vụ phát sinh do bác sĩ chỉ định (nếu có) */}
+                  {((selectedAppointment.hoa_don?.chi_tiet_thu_phi && selectedAppointment.hoa_don.chi_tiet_thu_phi.filter((item) => item.loai !== 'phi_kham').length > 0) ||
+                    (selectedAppointment.ket_qua?.dich_vu_phat_sinh && selectedAppointment.ket_qua.dich_vu_phat_sinh.length > 0)) && (
+                    <div className="pt-2 border-t border-slate-200/50 space-y-1.5">
+                      <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">Dịch vụ chỉ định phát sinh:</p>
+
+                      {selectedAppointment.hoa_don?.chi_tiet_thu_phi && selectedAppointment.hoa_don.chi_tiet_thu_phi.filter((item) => item.loai !== 'phi_kham').length > 0
+                        ? selectedAppointment.hoa_don.chi_tiet_thu_phi
+                            .filter((item) => item.loai !== 'phi_kham')
+                            .map((item, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-slate-600 pl-2.5 border-l-2 border-teal-500">
+                                <span>
+                                  {item.ten || 'Dịch vụ chỉ định'} {item.so_luong && item.so_luong > 1 ? `(x${item.so_luong})` : ''}
+                                </span>
+                                <span className="font-semibold text-slate-800">{(item.thanh_tien || (item.so_tien || 0) * (item.so_luong || 1)).toLocaleString('vi-VN')} đ</span>
+                              </div>
+                            ))
+                        : selectedAppointment.ket_qua?.dich_vu_phat_sinh?.map((dv, idx) => (
+                            <div key={idx} className="flex justify-between items-center text-slate-600 pl-2.5 border-l-2 border-teal-500">
+                              <span>
+                                {dv.ten} {dv.so_luong && dv.so_luong > 1 ? `(x${dv.so_luong})` : ''}
+                              </span>
+                              <span className="font-semibold text-slate-800">{(dv.thanh_tien || (dv.don_gia || 0) * (dv.so_luong || 1)).toLocaleString('vi-VN')} đ</span>
+                            </div>
+                          ))}
+                    </div>
+                  )}
+
+                  {/* Tổng chi phí thanh toán */}
+                  <div className="flex justify-between items-center pt-2.5 border-t border-slate-200">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">TỔNG CHI PHÍ KHÁM</p>
+                      <p className="text-[10px] text-teal-700 font-medium">
+                        {selectedAppointment.payment_status === 'paid' || selectedAppointment.hoa_don?.trang_thai_hoa_don === 'da_thanh_toan_du'
+                          ? '✓ Đã thanh toán đầy đủ'
+                          : 'Đã thanh toán online'}
+                      </p>
+                    </div>
+                    <p className="text-base font-black text-teal-700">
+                      {(
+                        selectedAppointment.hoa_don?.tong_thanh_toan ??
+                        ((selectedAppointment.hoa_don?.tong_tien_kham ?? selectedAppointment.gia_kham) +
+                          (selectedAppointment.hoa_don?.tong_tien_phat_sinh ??
+                            (selectedAppointment.ket_qua?.dich_vu_phat_sinh?.reduce((acc, curr) => acc + (curr.thanh_tien || (curr.don_gia || 0) * (curr.so_luong || 1)), 0) || 0)))
+                      ).toLocaleString('vi-VN')}{' '}
+                      đ
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2410,6 +2616,64 @@ export default function Profile() {
             fetchReviews(reviewPage)
           }}
         />
+      )}
+
+      {/* Modal Thanh toán VNPAY lại khi bấm Thanh toán ngay */}
+      {payModalApp && (
+        <Modal
+          isOpen={Boolean(payModalApp)}
+          onClose={() => setPayModalApp(null)}
+          title="Thanh toán VNPAY cho lịch hẹn"
+        >
+          <div className="space-y-4 text-center">
+            <div className="rounded-xl bg-slate-50 p-3 text-left text-xs space-y-1 border border-slate-200">
+              <p><strong className="text-slate-700">Mã lịch hẹn:</strong> {payModalApp.id.slice(-6).toUpperCase()}</p>
+              <p><strong className="text-slate-700">Bệnh nhân:</strong> {payModalApp.ten_khach || user?.ho_ten}</p>
+              <p><strong className="text-slate-700">Dịch vụ:</strong> {payModalApp.ten_dich_vu}</p>
+              <p><strong className="text-slate-700">Thời gian:</strong> {payModalApp.gio_kham}, ngày {new Date(payModalApp.ngay_kham).toLocaleDateString('vi-VN')}</p>
+              <p className="text-sm font-extrabold text-teal-700 pt-1">
+                Phí thanh toán: {payModalApp.gia_kham.toLocaleString('vi-VN')} đ
+              </p>
+            </div>
+
+            {payLoading ? (
+              <div className="py-8 text-sm text-slate-500 font-medium">Đang khởi tạo mã QR VNPAY...</div>
+            ) : payQrUrl ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative rounded-2xl border-2 border-teal-200 bg-white p-3 shadow-md">
+                  <img src={payQrUrl} alt="Mã QR VNPAY" className="h-56 w-56 object-contain" />
+                </div>
+                <p className="text-xs text-slate-500">
+                  Quét mã QR bằng ứng dụng ngân hàng hoặc VNPAY để hoàn tất thanh toán.
+                </p>
+                {paySnapshot?.gateway?.expires_at && (
+                  <p className="text-xs font-semibold text-amber-800 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                    ⏱️ Thời gian giữ chỗ còn: <strong>{getPaymentDeadlineCountdown(paySnapshot.gateway.expires_at, nowMs, serverTimeOffset) || 'Đã hết hạn'}</strong>
+                  </p>
+                )}
+                {paySnapshot?.gateway?.payment_url && (
+                  <Button
+                    variant="primary"
+                    onClick={() => window.open(paySnapshot.gateway.payment_url!, '_blank', 'noopener,noreferrer')}
+                    className="mt-1 bg-teal-700 hover:bg-teal-800 text-xs font-bold"
+                  >
+                    Mở trang thanh toán VNPAY
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="py-4 text-sm text-red-600 font-medium">
+                Không thể tạo được mã QR VNPAY cho lịch hẹn này.
+              </div>
+            )}
+
+            <div className="pt-2 flex justify-end">
+              <Button variant="secondary" onClick={() => setPayModalApp(null)}>
+                Đóng
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {toast && <Toast message={toast} type="success" onClose={() => setToast(null)} />}

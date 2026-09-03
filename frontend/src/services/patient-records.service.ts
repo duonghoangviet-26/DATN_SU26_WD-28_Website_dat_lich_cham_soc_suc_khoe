@@ -9,7 +9,7 @@ export interface PatientRecordListItem {
   ten_dich_vu: string
   phong_kham?: string | null
   dia_chi_kham?: string | null
-  status: 'pending' | 'confirmed' | 'checked_in' | 'in_progress' | 'completed' | 'cancelled' | 'no_show'
+  status: 'pending' | 'confirmed' | 'checked_in' | 'in_progress' | 'completed' | 'cancelled' | 'no_show' | 'waiting_record' | 'waiting_doctor_confirm' | 'skipped' | string
   payment_status: 'unpaid' | 'partial' | 'paid' | 'refunded'
   gia_kham: number
   payment_deadline?: string | null
@@ -62,6 +62,26 @@ export interface PatientRecordDetail extends PatientRecordListItem {
       mo_ta?: string | null
       uploaded_at?: string | null
     }>
+    dich_vu_phat_sinh?: Array<{
+      ten: string
+      so_luong?: number
+      don_gia?: number
+      thanh_tien?: number
+    }>
+  }
+  hoa_don?: null | {
+    so_hoa_don?: string
+    tong_tien_kham?: number
+    tong_tien_phat_sinh?: number
+    tong_thanh_toan?: number
+    trang_thai_hoa_don?: string
+    chi_tiet_thu_phi?: Array<{
+      loai?: string
+      ten?: string
+      so_tien?: number
+      so_luong?: number
+      thanh_tien?: number
+    }>
   }
 }
 
@@ -69,6 +89,7 @@ interface PatientRecordListResponse {
   total: number
   page: number
   limit: number
+  server_time?: string
   data: PatientRecordListItem[]
 }
 
