@@ -166,6 +166,20 @@ export async function checkInLichHen({
   if (appt.ngay_kham < start || appt.ngay_kham >= end) {
     throw loi(409, 'Lịch hẹn không phải của hôm nay')
   }
+
+  // Kiểm tra phân chia ca khám (Ca sáng 08:00-11:30 vs Ca chiều 13:30-17:30)
+  if (appt.gio_kham) {
+    const [apptHour] = appt.gio_kham.split(':').map(Number)
+    const clinicHour = new Date(now.getTime() + 7 * 60 * 60 * 1000).getUTCHours()
+
+    if (apptHour >= 12 && clinicHour < 12) {
+      throw loi(409, `Lịch hẹn thuộc ca chiều (${appt.gio_kham}). Hiện tại đang là ca sáng, phòng khám chỉ tiếp nhận ca chiều từ 13:30.`)
+    }
+    if (apptHour < 12 && clinicHour >= 13) {
+      throw loi(409, `Lịch hẹn thuộc ca sáng (${appt.gio_kham}) đã trôi qua. Ca sáng đã kết thúc tiếp nhận từ 11:30.`)
+    }
+  }
+
   if (TRANG_THAI_KHONG_CHECKIN.includes(appt.status) || !TRANG_THAI_DUOC_CHECKIN.includes(appt.status)) {
     throw loi(409, `Chỉ check-in được lịch đã xác nhận (hiện tại: ${appt.status})`)
   }

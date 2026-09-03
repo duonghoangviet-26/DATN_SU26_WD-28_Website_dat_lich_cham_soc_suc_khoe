@@ -143,8 +143,8 @@ export const doctorAppointmentService = {
     return res.data.data
   },
 
-  async intoRoomQueue(id: string): Promise<QueueActionResult> {
-    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/into-room`)
+  async intoRoomQueue(id: string, force = false): Promise<QueueActionResult> {
+    const res = await axiosInstance.patch<ApiResponse<QueueActionResult>>(`/doctor/queue/${id}/into-room`, { force })
     return res.data.data
   },
 
